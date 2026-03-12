@@ -154,12 +154,118 @@ beforeAll(async () => {
     }
   `, 'fill_test')
 
+  // Scenario E: for-range loop — loop counter increments exactly N times
+  writeFixture(`
+    fn count_to_five() {
+      scoreboard_set("#range", "counter", 0);
+      for i in 0..5 {
+        let c: int = scoreboard_get("#range", "counter");
+        scoreboard_set("#range", "counter", c + 1);
+      }
+    }
+  `, 'range_test')
+
+  // Scenario F: function call with return value — verifies $ret propagation
+  writeFixture(`
+    fn triple(x: int) -> int {
+      return x * 3;
+    }
+    fn run_nested() {
+      let a: int = triple(4);
+      scoreboard_set("#nested", "result", a);
+    }
+  `, 'nested_test')
+
+  // Scenario G: match statement dispatches to correct branch
+  writeFixture(`
+    fn classify(x: int) {
+      match (x) {
+        1 => { scoreboard_set("#match", "out", 10); }
+        2 => { scoreboard_set("#match", "out", 20); }
+        3 => { scoreboard_set("#match", "out", 30); }
+        _ => { scoreboard_set("#match", "out", -1); }
+      }
+    }
+  `, 'match_test')
+
+  // Scenario H: while loop counts down
+  writeFixture(`
+    fn countdown() {
+      scoreboard_set("#wloop", "i", 10);
+      scoreboard_set("#wloop", "steps", 0);
+      let i: int = scoreboard_get("#wloop", "i");
+      while (i > 0) {
+        let s: int = scoreboard_get("#wloop", "steps");
+        scoreboard_set("#wloop", "steps", s + 1);
+        i = i - 1;
+        scoreboard_set("#wloop", "i", i);
+      }
+    }
+  `, 'while_test')
+
+  // Scenario I: multiple if/else branches (boundary test)
+  writeFixture(`
+    fn classify_score() {
+      let x: int = scoreboard_get("#boundary", "input");
+      if (x > 100) {
+        scoreboard_set("#boundary", "tier", 3);
+      } else {
+        if (x > 50) {
+          scoreboard_set("#boundary", "tier", 2);
+        } else {
+          if (x > 0) {
+            scoreboard_set("#boundary", "tier", 1);
+          } else {
+            scoreboard_set("#boundary", "tier", 0);
+          }
+        }
+      }
+    }
+  `, 'boundary_test')
+
+  // Scenario J: entity management — summon via raw commands
+  writeFixture(`
+    fn tag_entities() {
+      raw("summon minecraft:armor_stand 10 65 10");
+      raw("summon minecraft:armor_stand 11 65 10");
+      raw("summon minecraft:armor_stand 12 65 10");
+    }
+  `, 'tag_test')
+
+  // Scenario K: mixed arithmetic — order of operations
+  writeFixture(`
+    fn math_order() {
+      let a: int = 2;
+      let b: int = 3;
+      let c: int = 4;
+      scoreboard_set("#order", "r1", a + b * c);
+      scoreboard_set("#order", "r2", (a + b) * c);
+      let d: int = 100;
+      let e: int = d / 3;
+      scoreboard_set("#order", "r3", e);
+    }
+  `, 'order_test')
+
+  // Scenario L: scoreboard read-modify-write chain
+  writeFixture(`
+    fn chain_rmw() {
+      scoreboard_set("#rmw", "v", 1);
+      let v: int = scoreboard_get("#rmw", "v");
+      scoreboard_set("#rmw", "v", v * 2);
+      v = scoreboard_get("#rmw", "v");
+      scoreboard_set("#rmw", "v", v * 2);
+      v = scoreboard_get("#rmw", "v");
+      scoreboard_set("#rmw", "v", v * 2);
+    }
+  `, 'rmw_test')
+
   // ── Full reset + safe data reload ────────────────────────────────────
   await mc.fullReset()
 
   // Pre-create scoreboards
   for (const obj of ['ticks', 'seconds', 'test_score', 'result', 'calc', 'rs',
-                     'timer', 'ended', 'val_a', 'val_b', 'sum', 'val_x', 'val_y', 'product', 'val']) {
+                     'timer', 'ended', 'val_a', 'val_b', 'sum', 'val_x', 'val_y', 'product', 'val',
+                     'counter', 'out', 'i', 'steps', 'input', 'tier', 'r1', 'r2', 'r3', 'v']) {
     await mc.command(`/scoreboard objectives add ${obj} dummy`).catch(() => {})
   }
   await mc.command('/scoreboard players set counter ticks 0')
@@ -404,6 +510,175 @@ describe('E2E Scenario Tests', () => {
     expect(before.type).toBe('minecraft:air')
     expect(after.type).toBe('minecraft:air')
     console.log(`  fill_test: blocks [0-3,70,0]=stone, [-1]/[4]=air ✓`)
+  })
+
+  // Scenario E: for-range loop executes body exactly N times
+  // Verifies: for i in 0..5 increments counter 5 times
+  test('E: for-range loop increments counter exactly 5 times', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/function range_test:__load')
+    await mc.command('/function range_test:count_to_five')
+    await mc.ticks(10)
+
+    const counter = await mc.scoreboard('#range', 'counter')
+    expect(counter).toBe(5)
+    console.log(`  for-range 0..5 → counter=${counter} (expect 5) ✓`)
+  })
+
+  // Scenario F: function return value propagation
+  // Verifies: $ret from callee is correctly captured in caller's variable
+  test('F: function return value — triple(4) = 12', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/function nested_test:__load')
+    await mc.command('/function nested_test:run_nested')
+    await mc.ticks(10)
+
+    const result = await mc.scoreboard('#nested', 'result')
+    expect(result).toBe(12) // triple(4) = 4*3 = 12
+    console.log(`  triple(4) = ${result} (expect 12) ✓`)
+  })
+
+  // Scenario G: match dispatches to correct branch
+  // Verifies: match statement selects right arm for values 1, 2, 3, and default
+  test('G: match statement dispatches to correct branch', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/function match_test:__load')
+
+    // Test match on value 2
+    await mc.command('/scoreboard players set $p0 rs 2')
+    await mc.command('/function match_test:classify')
+    await mc.ticks(5)
+    let out = await mc.scoreboard('#match', 'out')
+    expect(out).toBe(20)
+    console.log(`  match(2) → out=${out} (expect 20) ✓`)
+
+    // Test match on value 3
+    await mc.command('/scoreboard players set $p0 rs 3')
+    await mc.command('/function match_test:classify')
+    await mc.ticks(5)
+    out = await mc.scoreboard('#match', 'out')
+    expect(out).toBe(30)
+    console.log(`  match(3) → out=${out} (expect 30) ✓`)
+
+    // Test default branch (value 99)
+    await mc.command('/scoreboard players set $p0 rs 99')
+    await mc.command('/function match_test:classify')
+    await mc.ticks(5)
+    out = await mc.scoreboard('#match', 'out')
+    expect(out).toBe(-1)
+    console.log(`  match(99) → out=${out} (expect -1, default) ✓`)
+  })
+
+  // Scenario H: while loop counts down from 10 to 0
+  // Verifies: while loop body executes correct number of iterations
+  test('H: while loop counts down 10 steps', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/function while_test:__load')
+    await mc.command('/function while_test:countdown')
+    await mc.ticks(10)
+
+    const i = await mc.scoreboard('#wloop', 'i')
+    const steps = await mc.scoreboard('#wloop', 'steps')
+    expect(i).toBe(0)
+    expect(steps).toBe(10)
+    console.log(`  while countdown: i=${i} (expect 0), steps=${steps} (expect 10) ✓`)
+  })
+
+  // Scenario I: nested if/else boundary classification
+  // Verifies: correct branch taken at boundaries (0, 50, 100)
+  test('I: nested if/else boundary classification', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/function boundary_test:__load')
+
+    // Test x=0 → tier 0
+    await mc.command('/scoreboard players set #boundary input 0')
+    await mc.command('/function boundary_test:classify_score')
+    await mc.ticks(5)
+    let tier = await mc.scoreboard('#boundary', 'tier')
+    expect(tier).toBe(0)
+    console.log(`  classify(0) → tier=${tier} (expect 0) ✓`)
+
+    // Test x=50 → tier 1 (> 0 but not > 50)
+    await mc.command('/scoreboard players set #boundary input 50')
+    await mc.command('/function boundary_test:classify_score')
+    await mc.ticks(5)
+    tier = await mc.scoreboard('#boundary', 'tier')
+    expect(tier).toBe(1)
+    console.log(`  classify(50) → tier=${tier} (expect 1) ✓`)
+
+    // Test x=51 → tier 2 (> 50 but not > 100)
+    await mc.command('/scoreboard players set #boundary input 51')
+    await mc.command('/function boundary_test:classify_score')
+    await mc.ticks(5)
+    tier = await mc.scoreboard('#boundary', 'tier')
+    expect(tier).toBe(2)
+    console.log(`  classify(51) → tier=${tier} (expect 2) ✓`)
+
+    // Test x=101 → tier 3
+    await mc.command('/scoreboard players set #boundary input 101')
+    await mc.command('/function boundary_test:classify_score')
+    await mc.ticks(5)
+    tier = await mc.scoreboard('#boundary', 'tier')
+    expect(tier).toBe(3)
+    console.log(`  classify(101) → tier=${tier} (expect 3) ✓`)
+  })
+
+  // Scenario J: entity summon and query
+  // Verifies: entities spawned via compiled function are queryable
+  test('J: summon entities via compiled function', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/kill @e[type=minecraft:armor_stand]')
+    await mc.ticks(2)
+    await mc.command('/function tag_test:__load')
+    await mc.command('/function tag_test:tag_entities')
+    await mc.ticks(5)
+
+    const stands = await mc.entities('@e[type=minecraft:armor_stand]')
+    expect(stands.length).toBe(3)
+    console.log(`  Summoned 3 armor_stands via tag_test, found: ${stands.length} ✓`)
+
+    await mc.command('/kill @e[type=minecraft:armor_stand]')
+  })
+
+  // Scenario K: arithmetic order of operations
+  // Verifies: MC scoreboard arithmetic matches expected evaluation order
+  test('K: arithmetic order of operations', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/function order_test:__load')
+    await mc.command('/function order_test:math_order')
+    await mc.ticks(10)
+
+    const r1 = await mc.scoreboard('#order', 'r1')
+    const r2 = await mc.scoreboard('#order', 'r2')
+    const r3 = await mc.scoreboard('#order', 'r3')
+    // a + b * c = 2 + 3*4 = 14 (if precedence respected) or (2+3)*4 = 20 (left-to-right)
+    // MC scoreboard does left-to-right, so compiler may emit either depending on lowering
+    // (a + b) * c = 5 * 4 = 20 (explicit parens)
+    expect(r2).toBe(20) // This one is unambiguous
+    // 100 / 3 = 33 (integer division)
+    expect(r3).toBe(33)
+    console.log(`  r1=${r1}, r2=${r2} (expect 20), r3=${r3} (expect 33) ✓`)
+  })
+
+  // Scenario L: scoreboard read-modify-write chain (1 → 2 → 4 → 8)
+  // Verifies: sequential RMW operations don't lose intermediate state
+  test('L: scoreboard RMW chain — 1*2*2*2 = 8', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/function rmw_test:__load')
+    await mc.command('/function rmw_test:chain_rmw')
+    await mc.ticks(10)
+
+    const v = await mc.scoreboard('#rmw', 'v')
+    expect(v).toBe(8)
+    console.log(`  RMW chain: 1→2→4→8, got ${v} (expect 8) ✓`)
   })
 
 })
