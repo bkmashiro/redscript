@@ -1,0 +1,13 @@
+// Test @on(PlayerDeath) event system
+// Since we can't easily kill players in test, we manually set the tag
+
+@on(PlayerDeath)
+fn handle_death(player: Player) {
+    say("Player died event triggered!");
+    scoreboard_set("#event_test", "death_count", scoreboard_get("#event_test", "death_count") + 1);
+}
+
+fn trigger_fake_death() {
+    // Manually add the death tag to simulate event
+    tag_add(@a, "rs.just_died");
+}

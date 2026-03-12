@@ -271,6 +271,7 @@ beforeAll(async () => {
   writeFixtureFile('timeout-test.mcrs', 'timeout_test')
   writeFixtureFile('interval-test.mcrs', 'interval_test')
   writeFixtureFile('is-check-test.mcrs', 'is_check_test')
+  writeFixtureFile('event-test.mcrs', 'event_test')
 
   // ── Full reset + safe data reload ────────────────────────────────────
   await mc.fullReset()
@@ -765,5 +766,21 @@ describe('MC Integration - New Features', () => {
     expect(standEntities).toHaveLength(1)
 
     await mc.command('/kill @e[tag=is_check_target]').catch(() => {})
+  })
+
+  test('event-test.mcrs: @on(PlayerDeath) compiles and loads', async () => {
+    if (!serverOnline) return
+
+    // Verify the event system compiles correctly
+    await mc.command('/function event_test:__load').catch(() => {})
+    await mc.ticks(5)
+
+    // Verify the trigger function exists
+    const result = await mc.command('/function event_test:trigger_fake_death')
+    expect(result.ok).toBe(true)
+
+    // Verify __tick exists (event dispatcher)
+    const tickResult = await mc.command('/function event_test:__tick').catch(() => ({ ok: false }))
+    expect(tickResult.ok).toBe(true)
   })
 })

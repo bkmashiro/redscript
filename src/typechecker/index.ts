@@ -1112,6 +1112,12 @@ export class TypeChecker {
     if ((type.kind === 'struct' || type.kind === 'enum') && this.enums.has(type.name)) {
       return { kind: 'enum', name: type.name }
     }
+    if (type.kind === 'struct' && type.name in ENTITY_HIERARCHY) {
+      return { kind: 'entity', entityType: type.name as EntityTypeName }
+    }
+    if (type.kind === 'named' && type.name in ENTITY_HIERARCHY) {
+      return { kind: 'entity', entityType: type.name as EntityTypeName }
+    }
     return type
   }
 }
