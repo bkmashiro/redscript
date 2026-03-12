@@ -17,6 +17,7 @@
  */
 
 import type { IRBlock, IRFunction, IRModule, Operand, Terminator } from '../../ir/types'
+import { applyLICM } from '../../optimizer/commands'
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -189,6 +190,50 @@ export interface DatapackFile {
   content: string
 }
 
+function toFunctionName(file: DatapackFile): string | null {
+  const match = file.path.match(/^data\/[^/]+\/function\/(.+)\.mcfunction$/)
+  return match?.[1] ?? null
+}
+
+function applyFunctionOptimization(
+  files: DatapackFile[],
+  optimize: (functions: Array<{ name: string; commands: Array<{ cmd: string }> }>) => {
+    functions: Array<{ name: string; commands: Array<{ cmd: string }> }>
+  }
+): DatapackFile[] {
+  const functionFiles = files
+    .map(file => {
+      const functionName = toFunctionName(file)
+      if (!functionName) return null
+      const commands = file.content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line !== '' && !line.startsWith('#'))
+        .map(cmd => ({ cmd }))
+      return { file, functionName, commands }
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+
+  const optimized = optimize(functionFiles.map(entry => ({
+    name: entry.functionName,
+    commands: entry.commands,
+  })))
+  const commandMap = new Map(optimized.functions.map(fn => [fn.name, fn.commands]))
+
+  return files.map(file => {
+    const functionName = toFunctionName(file)
+    if (!functionName) return file
+    const commands = commandMap.get(functionName)
+    if (!commands) return file
+    const lines = file.content.split('\n')
+    const header = lines.filter(line => line.trim().startsWith('#'))
+    return {
+      ...file,
+      content: [...header, ...commands.map(command => command.cmd)].join('\n'),
+    }
+  })
+}
+
 export function generateDatapack(module: IRModule): DatapackFile[] {
   const files: DatapackFile[] = []
   const ns = module.namespace
@@ -324,5 +369,5 @@ export function generateDatapack(module: IRModule): DatapackFile[] {
     })
   }
 
-  return files
+  return applyFunctionOptimization(files, applyLICM)
 }

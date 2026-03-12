@@ -1,4 +1,5 @@
 import type { IRBlock, IRCommand, IRFunction, IRInstr, Operand, Terminator } from '../ir/types'
+import { applyLICM } from './commands'
 
 const OBJ = 'rs'
 const INLINE_THRESHOLD = 8
@@ -414,5 +415,15 @@ export function optimizeForStructure(functions: IRFunction[], namespace = 'redsc
     fn.commands = optimizeFunctionForStructure(fn, staged, namespace)
   }
 
-  return Array.from(staged.values())
+  const licm = applyLICM(
+    Array.from(staged.values()).map(fn => ({
+      name: fn.name,
+      commands: fn.commands ?? [],
+    }))
+  )
+
+  return Array.from(staged.values()).map(fn => ({
+    ...fn,
+    commands: licm.functions.find(candidate => candidate.name === fn.name)?.commands ?? fn.commands,
+  }))
 }
