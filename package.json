@@ -1,10 +1,11 @@
 {
-  "name": "redscript",
-  "version": "0.1.0",
-  "description": "A compiler from a high-level language to Minecraft Java Edition commands (mcfunction / command blocks)",
+  "name": "redscript-mc",
+  "version": "1.0.0",
+  "description": "A high-level programming language that compiles to Minecraft datapacks",
   "main": "dist/index.js",
   "bin": {
-    "redscript": "dist/cli.js"
+    "redscript": "dist/cli.js",
+    "rsc": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
@@ -21,5 +22,17 @@
     "ts-node": "^10.9.0",
     "typescript": "^5.4.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [
+    "minecraft",
+    "datapack",
+    "mcfunction",
+    "compiler",
+    "redscript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bkmashiro/redscript.git"
+  },
+  "author": "bkmashiro"
 }
