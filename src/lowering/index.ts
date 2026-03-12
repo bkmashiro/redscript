@@ -85,6 +85,8 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
 export interface Warning {
   message: string
   code: string
+  line?: number
+  col?: number
 }
 
 const NAMESPACED_ENTITY_TYPE_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/

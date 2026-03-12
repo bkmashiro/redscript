@@ -104,14 +104,15 @@ function validateDocument(
 
     // Convert warnings to VS Code diagnostics
     for (const w of result.warnings ?? []) {
-      const line = Math.max(0, (w.line ?? 1) - 1)
-      const col = Math.max(0, (w.column ?? 1) - 1)
-      const range = new vscode.Range(line, col, line, col + 50)
+      // Compiler doesn't yet emit line/col on warnings — try to find the
+      // relevant token by scanning the source for a keyword in the message.
+      const range = findWarningRange(w.message, w.code, source, doc)
       docDiagnostics.push({
         message: w.message,
         range,
         severity: vscode.DiagnosticSeverity.Warning,
-        source: 'redscript'
+        source: 'redscript',
+        code: w.code
       })
     }
   } catch (err: unknown) {
@@ -127,6 +128,55 @@ function validateDocument(
   }
 
   collection.set(doc.uri, docDiagnostics)
+}
+
+/**
+ * For warnings without position info, search the source for the relevant token
+ * mentioned in the warning message.
+ */
+function findWarningRange(
+  message: string,
+  code: string | undefined,
+  source: string,
+  doc: vscode.TextDocument
+): vscode.Range {
+  // W_UNNAMESPACED_TYPE: message contains the unqualified type name in quotes
+  // e.g. 'Unnamespaced entity type "zombie"'
+  if (code === 'W_UNNAMESPACED_TYPE') {
+    const m = message.match(/"([^"]+)"/)
+    if (m) return searchToken(source, doc, `type=${m[1]}`) ?? searchToken(source, doc, m[1]) ?? topLine(doc)
+  }
+
+  // W_QUOTED_SELECTOR: message contains the quoted selector
+  // e.g. 'Quoted selector "@a" is deprecated'
+  if (code === 'W_QUOTED_SELECTOR') {
+    const m = message.match(/"(@[^"]+)"/)
+    if (m) return searchToken(source, doc, `"${m[1]}"`) ?? topLine(doc)
+  }
+
+  // W_DEPRECATED: usually about tp_to
+  if (code === 'W_DEPRECATED') {
+    const m = message.match(/^(\w+) is deprecated/)
+    if (m) return searchToken(source, doc, m[1]) ?? topLine(doc)
+  }
+
+  return topLine(doc)
+}
+
+/** Search source for a literal string, return range of first match. */
+function searchToken(
+  source: string,
+  doc: vscode.TextDocument,
+  token: string
+): vscode.Range | null {
+  const idx = source.indexOf(token)
+  if (idx < 0) return null
+  const pos = doc.positionAt(idx)
+  return new vscode.Range(pos, doc.positionAt(idx + token.length))
+}
+
+function topLine(doc: vscode.TextDocument): vscode.Range {
+  return new vscode.Range(0, 0, 0, doc.lineAt(0).text.length)
 }
 
 /**

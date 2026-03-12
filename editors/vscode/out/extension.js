@@ -6315,14 +6315,13 @@ function validateDocument(doc, collection) {
   try {
     const result = compile(source, { filePath: doc.uri.fsPath });
     for (const w of result.warnings ?? []) {
-      const line = Math.max(0, (w.line ?? 1) - 1);
-      const col = Math.max(0, (w.column ?? 1) - 1);
-      const range = new vscode2.Range(line, col, line, col + 50);
+      const range = findWarningRange(w.message, w.code, source, doc);
       docDiagnostics.push({
         message: w.message,
         range,
         severity: vscode2.DiagnosticSeverity.Warning,
-        source: "redscript"
+        source: "redscript",
+        code: w.code
       });
     }
   } catch (err) {
@@ -6336,6 +6335,30 @@ function validateDocument(doc, collection) {
     });
   }
   collection.set(doc.uri, docDiagnostics);
+}
+function findWarningRange(message, code, source, doc) {
+  if (code === "W_UNNAMESPACED_TYPE") {
+    const m = message.match(/"([^"]+)"/);
+    if (m) return searchToken(source, doc, `type=${m[1]}`) ?? searchToken(source, doc, m[1]) ?? topLine(doc);
+  }
+  if (code === "W_QUOTED_SELECTOR") {
+    const m = message.match(/"(@[^"]+)"/);
+    if (m) return searchToken(source, doc, `"${m[1]}"`) ?? topLine(doc);
+  }
+  if (code === "W_DEPRECATED") {
+    const m = message.match(/^(\w+) is deprecated/);
+    if (m) return searchToken(source, doc, m[1]) ?? topLine(doc);
+  }
+  return topLine(doc);
+}
+function searchToken(source, doc, token) {
+  const idx = source.indexOf(token);
+  if (idx < 0) return null;
+  const pos = doc.positionAt(idx);
+  return new vscode2.Range(pos, doc.positionAt(idx + token.length));
+}
+function topLine(doc) {
+  return new vscode2.Range(0, 0, 0, doc.lineAt(0).text.length);
 }
 function extractRange(msg, doc) {
   let m = msg.match(/line[: ]+(\d+)[,\s]+col(?:umn)?[: ]+(\d+)/i);
