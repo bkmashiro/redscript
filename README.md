@@ -11,7 +11,7 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-[中文版](./README.zh.md) · [Quick Start](#quick-start) · [Wiki](https://github.com/bkmashiro/redscript/wiki)
+[中文版](./README.zh.md) · [Quick Start](#quick-start) · [Docs](https://redscript-docs.pages.dev)
 
 ### 🚀 [Try it online — no install needed!](https://redscript-ide.pages.dev)
 
@@ -250,10 +250,10 @@ import "stdlib/mobs.mcrs"       // ZOMBIE, SKELETON, CREEPER, ... (60+ constants
 | | |
 |---|---|
 | 📖 [Language Reference](docs/LANGUAGE_REFERENCE.md) | Full syntax & type system |
-| 🔧 [Builtins](https://github.com/bkmashiro/redscript/wiki/Builtins) | All 34+ MC builtin functions |
-| ⚡ [Optimizer](https://github.com/bkmashiro/redscript/wiki/Optimizer) | How the optimizer works |
+| 🔧 [Builtins](https://redscript-docs.pages.dev/Builtins) | All 34+ MC builtin functions |
+| ⚡ [Optimizer](https://redscript-docs.pages.dev/Optimizer) | How the optimizer works |
 | 🧱 [Structure Target](docs/STRUCTURE_TARGET.md) | Compile to NBT command block structures |
-| 🧪 [Integration Testing](https://github.com/bkmashiro/redscript/wiki/Integration-Testing) | Test against a real Paper server |
+| 🧪 [Integration Testing](https://redscript-docs.pages.dev/Integration-Testing) | Test against a real Paper server |
 | 🏗 [Implementation Guide](docs/IMPLEMENTATION_GUIDE.md) | Compiler internals |
 
 ---
