@@ -1571,4 +1571,83 @@ fn tick_game() {
       expect(errors).toHaveLength(0)
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // Type Inference
+  // ---------------------------------------------------------------------------
+
+  describe('Type inference', () => {
+    it('infers int type', () => {
+      const errors = typeCheck(`
+        fn test() {
+          let x = 5;
+          let y: int = x + 1;
+        }
+      `)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('infers string type', () => {
+      const errors = typeCheck(`
+        fn test() {
+          let x = "hello";
+          let y: string = x;
+        }
+      `)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('infers bool type', () => {
+      const errors = typeCheck(`
+        fn test() {
+          let x = true;
+          let y: bool = x;
+        }
+      `)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('infers from function return', () => {
+      const errors = typeCheck(`
+        fn get_value() -> int { return 42; }
+        fn test() {
+          let x = get_value();
+          let y: int = x + 1;
+        }
+      `)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('infers NBT types from suffix', () => {
+      const files = compile(`
+        fn test() {
+          let a = 20b;
+          let b = 100s;
+          let c = 1000L;
+          let d = 3.14d;
+        }
+      `)
+      expect(files.length).toBeGreaterThan(0)
+    })
+
+    it('detects type mismatch with inferred type', () => {
+      const errors = typeCheck(`
+        fn test() {
+          let x = 5;
+          let y: string = x;
+        }
+      `)
+      expect(errors.length).toBeGreaterThan(0)
+    })
+
+    it('compiles let without type annotation', () => {
+      const files = compile(`
+        fn test() {
+          let x = 5;
+          let y = x + 1;
+        }
+      `)
+      expect(files.length).toBeGreaterThan(0)
+    })
+  })
 })
