@@ -77,6 +77,7 @@ export type Expr =
   | { kind: 'member_assign'; obj: Expr; field: string; op: AssignOp; value: Expr }
   | { kind: 'index';      obj: Expr; index: Expr }
   | { kind: 'array_lit';  elements: Expr[] }
+  | { kind: 'static_call'; type: string; method: string; args: Expr[] }
 
 // ---------------------------------------------------------------------------
 // Statements

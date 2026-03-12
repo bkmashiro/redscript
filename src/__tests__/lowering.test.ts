@@ -309,6 +309,55 @@ describe('Lowering', () => {
         cmd.includes('execute store result score') && cmd.includes('random value 1..100')
       )).toBe(true)
     })
+
+    it('lowers data_get from entity', () => {
+      const ir = compile('fn test() { let item_count: int = data_get("entity", "@s", "SelectedItem.Count"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute store result score') && 
+        cmd.includes('run data get entity @s SelectedItem.Count 1')
+      )).toBe(true)
+    })
+
+    it('lowers data_get from block', () => {
+      const ir = compile('fn test() { let furnace_fuel: int = data_get("block", "~ ~ ~", "BurnTime"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run data get block ~ ~ ~ BurnTime 1')
+      )).toBe(true)
+    })
+
+    it('lowers data_get from storage', () => {
+      const ir = compile('fn test() { let val: int = data_get("storage", "mypack:globals", "player_count"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run data get storage mypack:globals player_count 1')
+      )).toBe(true)
+    })
+
+    it('lowers data_get with scale factor', () => {
+      const ir = compile('fn test() { let scaled: int = data_get("entity", "@s", "Pos[0]", "1000"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run data get entity @s Pos[0] 1000')
+      )).toBe(true)
+    })
+
+    it('data_get result can be used in expressions', () => {
+      const ir = compile(`
+        fn test() {
+          let count: int = data_get("entity", "@s", "SelectedItem.Count");
+          let doubled: int = count * 2;
+        }
+      `)
+      const fn = getFunction(ir, 'test')!
+      const instrs = getInstructions(fn)
+      expect(instrs.some(i => i.op === 'binop' && (i as any).bop === '*')).toBe(true)
+    })
   })
 
   describe('decorators', () => {

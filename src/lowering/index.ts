@@ -38,6 +38,7 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   scoreboard_get: () => null, // Special handling (returns value)
   scoreboard_set: () => null, // Special handling
   score: () => null, // Special handling (same as scoreboard_get)
+  data_get: () => null, // Special handling (returns value from NBT)
 }
 
 // ---------------------------------------------------------------------------
@@ -965,6 +966,19 @@ export class Lowering {
         this.builder.emitRaw(`execute store result score ${player} ${objective} run scoreboard players get ${temp} rs`)
       }
       return { kind: 'const', value: 0 }
+    }
+
+    // Special case: data_get — read NBT data into a variable
+    // data_get(target_type, target, path, scale?)
+    // target_type: "entity", "block", "storage"
+    if (name === 'data_get') {
+      const dst = this.builder.freshTemp()
+      const targetType = this.exprToString(args[0])
+      const target = this.exprToString(args[1])
+      const path = this.exprToString(args[2])
+      const scale = args[3] ? this.exprToString(args[3]) : '1'
+      this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`)
+      return { kind: 'var', name: dst }
     }
 
     // Convert args to strings for builtin
