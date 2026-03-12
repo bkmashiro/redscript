@@ -6382,6 +6382,7 @@ function registerSymbolProviders(context) {
   context.subscriptions.push(
     vscode2.languages.registerDefinitionProvider(selector, {
       provideDefinition(doc, position) {
+        if (isMcName(doc, position)) return null;
         const wordRange = doc.getWordRangeAtPosition(position);
         if (!wordRange) return null;
         const word = doc.getText(wordRange);
@@ -6395,13 +6396,36 @@ function registerSymbolProviders(context) {
   context.subscriptions.push(
     vscode2.languages.registerReferenceProvider(selector, {
       provideReferences(doc, position) {
+        if (isMcName(doc, position)) {
+          const mcRange = doc.getWordRangeAtPosition(position, /#[a-zA-Z_][a-zA-Z0-9_]*/);
+          if (!mcRange) return null;
+          const mcWord = doc.getText(mcRange);
+          return findAllOccurrences(doc, mcWord);
+        }
         const wordRange = doc.getWordRangeAtPosition(position);
         if (!wordRange) return null;
         const word = doc.getText(wordRange);
-        return findAllOccurrences(doc, word);
+        return findAllOccurrences(doc, word).filter((loc) => {
+          const charBefore = loc.range.start.character > 0 ? doc.getText(new vscode2.Range(
+            loc.range.start.translate(0, -1),
+            loc.range.start
+          )) : "";
+          return charBefore !== "#";
+        });
       }
     })
   );
+}
+function isMcName(doc, position) {
+  if (position.character === 0) return false;
+  const charBefore = doc.getText(new vscode2.Range(
+    position.translate(0, -1),
+    position
+  ));
+  if (charBefore === "#") return true;
+  const linePrefix = doc.lineAt(position.line).text.slice(0, position.character);
+  const match = linePrefix.match(/#[a-zA-Z_][a-zA-Z0-9_]*$/);
+  return match !== null;
 }
 
 // src/extension.ts

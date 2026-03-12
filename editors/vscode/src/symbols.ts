@@ -49,6 +49,9 @@ export function registerSymbolProviders(context: vscode.ExtensionContext): void 
   context.subscriptions.push(
     vscode.languages.registerDefinitionProvider(selector, {
       provideDefinition(doc, position) {
+        // If cursor is preceded by '#', it's a #mc_name — no definition to jump to
+        if (isMcName(doc, position)) return null
+
         const wordRange = doc.getWordRangeAtPosition(position)
         if (!wordRange) return null
         const word = doc.getText(wordRange)
@@ -65,12 +68,44 @@ export function registerSymbolProviders(context: vscode.ExtensionContext): void 
   context.subscriptions.push(
     vscode.languages.registerReferenceProvider(selector, {
       provideReferences(doc, position) {
+        // For #mc_name, find all occurrences of the full #name token
+        if (isMcName(doc, position)) {
+          const mcRange = doc.getWordRangeAtPosition(position, /#[a-zA-Z_][a-zA-Z0-9_]*/)
+          if (!mcRange) return null
+          const mcWord = doc.getText(mcRange)
+          return findAllOccurrences(doc, mcWord)
+        }
+
         const wordRange = doc.getWordRangeAtPosition(position)
         if (!wordRange) return null
         const word = doc.getText(wordRange)
 
-        return findAllOccurrences(doc, word)
+        // Exclude bare names that appear as #name elsewhere (they're different things)
+        return findAllOccurrences(doc, word).filter(loc => {
+          // Don't include occurrences that are actually #word
+          const charBefore = loc.range.start.character > 0
+            ? doc.getText(new vscode.Range(
+                loc.range.start.translate(0, -1),
+                loc.range.start
+              ))
+            : ''
+          return charBefore !== '#'
+        })
       }
     })
   )
+}
+
+/** Returns true if the cursor is on the identifier part of a #mc_name token. */
+function isMcName(doc: vscode.TextDocument, position: vscode.Position): boolean {
+  if (position.character === 0) return false
+  const charBefore = doc.getText(new vscode.Range(
+    position.translate(0, -1),
+    position
+  ))
+  if (charBefore === '#') return true
+  // Also check if we're in the middle of an #ident — look for # to the left
+  const linePrefix = doc.lineAt(position.line).text.slice(0, position.character)
+  const match = linePrefix.match(/#[a-zA-Z_][a-zA-Z0-9_]*$/)
+  return match !== null
 }
