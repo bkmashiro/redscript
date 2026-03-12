@@ -34,6 +34,7 @@ export type TokenKind =
   | 'long_lit'      // 1000L
   | 'double_lit'    // 3.14d
   | 'string_lit'    // "hello"
+  | 'f_string'      // f"hello {name}"
   | 'range_lit'     // ..5  1..  1..10
   // Operators
   | '+' | '-' | '*' | '/' | '%'
@@ -289,6 +290,13 @@ export class Lexer {
       return
     }
 
+    // f-string literal
+    if (char === 'f' && this.peek() === '"') {
+      this.advance()
+      this.scanFString(startLine, startCol)
+      return
+    }
+
     // String literal
     if (char === '"') {
       this.scanString(startLine, startCol)
@@ -430,6 +438,53 @@ export class Lexer {
 
     this.advance() // closing quote
     this.addToken('string_lit', value, startLine, startCol)
+  }
+
+  private scanFString(startLine: number, startCol: number): void {
+    let value = ''
+    let interpolationDepth = 0
+    let interpolationString = false
+
+    while (!this.isAtEnd()) {
+      if (interpolationDepth === 0 && this.peek() === '"') {
+        break
+      }
+
+      if (this.peek() === '\\' && this.peek(1) === '"') {
+        this.advance()
+        value += this.advance()
+        continue
+      }
+
+      if (interpolationDepth === 0 && this.peek() === '{') {
+        value += this.advance()
+        interpolationDepth = 1
+        interpolationString = false
+        continue
+      }
+
+      const char = this.advance()
+      value += char
+
+      if (interpolationDepth === 0) continue
+
+      if (char === '"' && this.source[this.pos - 2] !== '\\') {
+        interpolationString = !interpolationString
+        continue
+      }
+
+      if (interpolationString) continue
+
+      if (char === '{') interpolationDepth++
+      if (char === '}') interpolationDepth--
+    }
+
+    if (this.isAtEnd()) {
+      this.error('Unterminated f-string', startLine, startCol)
+    }
+
+    this.advance() // closing quote
+    this.addToken('f_string', value, startLine, startCol)
   }
 
   private scanNumber(firstChar: string, startLine: number, startCol: number): void {

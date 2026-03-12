@@ -73,6 +73,8 @@ const MC_TYPE_TO_ENTITY: Record<string, EntityTypeName> = {
 
 const VOID_TYPE: TypeNode = { kind: 'named', name: 'void' }
 const INT_TYPE: TypeNode = { kind: 'named', name: 'int' }
+const STRING_TYPE: TypeNode = { kind: 'named', name: 'string' }
+const FORMAT_STRING_TYPE: TypeNode = { kind: 'named', name: 'format_string' }
 
 const BUILTIN_SIGNATURES: Record<string, BuiltinSignature> = {
   setTimeout: {
@@ -105,6 +107,16 @@ export class TypeChecker {
   private scope: Map<string, ScopeSymbol> = new Map()
   // Stack for tracking @s type in different contexts
   private selfTypeStack: EntityTypeName[] = ['entity']
+
+  private readonly richTextBuiltins = new Map<string, { messageIndex: number }>([
+    ['say', { messageIndex: 0 }],
+    ['announce', { messageIndex: 0 }],
+    ['tell', { messageIndex: 1 }],
+    ['tellraw', { messageIndex: 1 }],
+    ['title', { messageIndex: 1 }],
+    ['actionbar', { messageIndex: 1 }],
+    ['subtitle', { messageIndex: 1 }],
+  ])
 
   constructor(source?: string, filePath?: string) {
     this.collector = new DiagnosticCollector(source, filePath)
@@ -510,6 +522,24 @@ export class TypeChecker {
         }
         break
 
+      case 'f_string':
+        for (const part of expr.parts) {
+          if (part.kind !== 'expr') {
+            continue
+          }
+          this.checkExpr(part.expr)
+          const partType = this.inferType(part.expr)
+          if (
+            !(partType.kind === 'named' && (partType.name === 'int' || partType.name === 'string' || partType.name === 'format_string'))
+          ) {
+            this.report(
+              `f-string placeholder must be int or string, got ${this.typeToString(partType)}`,
+              part.expr
+            )
+          }
+        }
+        break
+
       case 'array_lit':
         for (const elem of expr.elements) {
           this.checkExpr(elem)
@@ -542,6 +572,12 @@ export class TypeChecker {
   private checkCallExpr(expr: Extract<Expr, { kind: 'call' }>): void {
     if (expr.fn === 'tp' || expr.fn === 'tp_to') {
       this.checkTpCall(expr)
+    }
+
+    const richTextBuiltin = this.richTextBuiltins.get(expr.fn)
+    if (richTextBuiltin) {
+      this.checkRichTextBuiltinCall(expr, richTextBuiltin.messageIndex)
+      return
     }
 
     const builtin = BUILTIN_SIGNATURES[expr.fn]
@@ -600,6 +636,28 @@ export class TypeChecker {
       this.checkExpr(arg)
     }
     // Built-in functions are not checked for arg count
+  }
+
+  private checkRichTextBuiltinCall(expr: Extract<Expr, { kind: 'call' }>, messageIndex: number): void {
+    for (let i = 0; i < expr.args.length; i++) {
+      this.checkExpr(expr.args[i], i === messageIndex ? undefined : STRING_TYPE)
+    }
+
+    const message = expr.args[messageIndex]
+    if (!message) {
+      return
+    }
+
+    const messageType = this.inferType(message)
+    if (
+      messageType.kind !== 'named' ||
+      (messageType.name !== 'string' && messageType.name !== 'format_string')
+    ) {
+      this.report(
+        `Argument ${messageIndex + 1} of '${expr.fn}' expects string or format_string, got ${this.typeToString(messageType)}`,
+        message
+      )
+    }
   }
 
   private checkInvokeExpr(expr: Extract<Expr, { kind: 'invoke' }>): void {
@@ -838,6 +896,13 @@ export class TypeChecker {
           }
         }
         return { kind: 'named', name: 'string' }
+      case 'f_string':
+        for (const part of expr.parts) {
+          if (part.kind === 'expr') {
+            this.checkExpr(part.expr)
+          }
+        }
+        return FORMAT_STRING_TYPE
       case 'blockpos':
         return { kind: 'named', name: 'BlockPos' }
       case 'ident':

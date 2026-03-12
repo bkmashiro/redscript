@@ -989,6 +989,11 @@ export class Parser {
       return this.parseStringExpr(token)
     }
 
+    if (token.kind === 'f_string') {
+      this.advance()
+      return this.parseFStringExpr(token)
+    }
+
     // MC name literal: #health → mc_name node (value = "health", without #)
     if (token.kind === 'mc_name') {
       this.advance()
@@ -1167,6 +1172,67 @@ export class Parser {
     }
 
     return this.withLoc({ kind: 'str_interp', parts }, token)
+  }
+
+  private parseFStringExpr(token: Token): Expr {
+    const parts: Array<{ kind: 'text'; value: string } | { kind: 'expr'; expr: Expr }> = []
+    let current = ''
+    let index = 0
+
+    while (index < token.value.length) {
+      if (token.value[index] === '{') {
+        if (current) {
+          parts.push({ kind: 'text', value: current })
+          current = ''
+        }
+
+        index++
+        let depth = 1
+        let exprSource = ''
+        let inString = false
+
+        while (index < token.value.length && depth > 0) {
+          const char = token.value[index]
+
+          if (char === '"' && token.value[index - 1] !== '\\') {
+            inString = !inString
+          }
+
+          if (!inString) {
+            if (char === '{') {
+              depth++
+            } else if (char === '}') {
+              depth--
+              if (depth === 0) {
+                index++
+                break
+              }
+            }
+          }
+
+          if (depth > 0) {
+            exprSource += char
+          }
+          index++
+        }
+
+        if (depth !== 0) {
+          this.error('Unterminated f-string interpolation')
+        }
+
+        parts.push({ kind: 'expr', expr: this.parseEmbeddedExpr(exprSource) })
+        continue
+      }
+
+      current += token.value[index]
+      index++
+    }
+
+    if (current) {
+      parts.push({ kind: 'text', value: current })
+    }
+
+    return this.withLoc({ kind: 'f_string', parts }, token)
   }
 
   private parseEmbeddedExpr(source: string): Expr {

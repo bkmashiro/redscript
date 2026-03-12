@@ -22,7 +22,7 @@ export interface Span {
 // Type Nodes
 // ---------------------------------------------------------------------------
 
-export type PrimitiveType = 'int' | 'bool' | 'float' | 'string' | 'void' | 'BlockPos' | 'byte' | 'short' | 'long' | 'double'
+export type PrimitiveType = 'int' | 'bool' | 'float' | 'string' | 'void' | 'BlockPos' | 'byte' | 'short' | 'long' | 'double' | 'format_string'
 
 // Entity type hierarchy
 export type EntityTypeName = 
@@ -55,6 +55,16 @@ export interface LambdaExpr {
   params: LambdaParam[]
   returnType?: TypeNode
   body: Expr | Block
+}
+
+export type FStringPart =
+  | { kind: 'text'; value: string }
+  | { kind: 'expr'; expr: Expr }
+
+export interface FStringExpr {
+  kind: 'f_string'
+  parts: FStringPart[]
+  span?: Span
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +143,7 @@ export type Expr =
   | { kind: 'str_lit';    value: string; span?: Span }
   | { kind: 'mc_name';   value: string; span?: Span }  // #health → "health" (MC identifier)
   | { kind: 'str_interp'; parts: Array<string | Expr>; span?: Span }
+  | FStringExpr
   | { kind: 'range_lit';  range: RangeExpr; span?: Span }
   | (BlockPosExpr & { span?: Span })
   | { kind: 'ident';      name: string; span?: Span }

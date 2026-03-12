@@ -582,6 +582,15 @@ fn choose(dir: Direction) {
       expect(rawCmds).toContain('tellraw @a ["",{"text":"You have "},{"score":{"name":"$score","objective":"rs"}},{"text":" points"}]')
     })
 
+    it('lowers f-string output builtins to tellraw/title JSON components', () => {
+      const ir = compile('fn test() { let score: int = 7; say(f"Score: {score}"); tellraw(@a, f"Score: {score}"); actionbar(@s, f"Score: {score}"); title(@s, f"Score: {score}"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('tellraw @a ["",{"text":"Score: "},{"score":{"name":"$score","objective":"rs"}}]')
+      expect(rawCmds).toContain('title @s actionbar ["",{"text":"Score: "},{"score":{"name":"$score","objective":"rs"}}]')
+      expect(rawCmds).toContain('title @s title ["",{"text":"Score: "},{"score":{"name":"$score","objective":"rs"}}]')
+    })
+
     it('lowers summon()', () => {
       const ir = compile('fn test() { summon("zombie"); }')
       const fn = getFunction(ir, 'test')!

@@ -481,6 +481,17 @@ impl Point {
       })
     })
 
+    it('parses f-string literal', () => {
+      const expr = parseExpr('f"Score: {x}"')
+      expect(expr).toEqual({
+        kind: 'f_string',
+        parts: [
+          { kind: 'text', value: 'Score: ' },
+          { kind: 'expr', expr: { kind: 'ident', name: 'x' } },
+        ],
+      })
+    })
+
       it('parses boolean literals', () => {
         expect(parseExpr('true')).toEqual({ kind: 'bool_lit', value: true })
         expect(parseExpr('false')).toEqual({ kind: 'bool_lit', value: false })

@@ -88,6 +88,14 @@ describe('Lexer', () => {
       ])
     })
 
+    it('tokenizes f-strings as a dedicated token', () => {
+      const tokens = tokenize('f"Hello {name}!"')
+      expect(tokens.map(t => [t.kind, t.value])).toEqual([
+        ['f_string', 'Hello {name}!'],
+        ['eof', ''],
+      ])
+    })
+
     it('tokenizes byte literals (b suffix)', () => {
       const tokens = tokenize('20b 0B 127b')
       expect(tokens.map(t => [t.kind, t.value])).toEqual([

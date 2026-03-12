@@ -120,6 +120,39 @@ fn test() {
       expect(errors).toHaveLength(0)
     })
 
+    it('allows f-strings in runtime output builtins', () => {
+      const errors = typeCheck(`
+fn test() {
+    let score: int = 5;
+    say(f"Score: {score}");
+    tellraw(@a, f"Score: {score}");
+    actionbar(@s, f"Score: {score}");
+    title(@s, f"Score: {score}");
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('rejects f-strings outside runtime output builtins', () => {
+      const errors = typeCheck(`
+fn test() {
+    let msg: string = f"Score";
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('expected string, got format_string')
+    })
+
+    it('rejects unsupported f-string placeholder types', () => {
+      const errors = typeCheck(`
+fn test() {
+    say(f"Flag: {true}");
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('f-string placeholder must be int or string')
+    })
+
     it('detects too many arguments', () => {
       const errors = typeCheck(`
 fn greet() {

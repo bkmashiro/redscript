@@ -97,6 +97,22 @@ fn chat() {
     ])
   })
 
+  it('renders f-strings through tellraw score components', () => {
+    const runtime = loadCompiledProgram(`
+fn chat() {
+    let score: int = 7;
+    say(f"You have {score} points");
+}
+`)
+
+    runtime.load()
+    runtime.execFunction('chat')
+
+    expect(runtime.getChatLog()).toEqual([
+      'You have 7 points',
+    ])
+  })
+
   it('kills only entities matched by a foreach selector', () => {
     const runtime = loadCompiledProgram(`
 fn purge_zombies() {

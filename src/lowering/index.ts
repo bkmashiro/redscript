@@ -25,6 +25,7 @@ import { EVENT_TYPES, getEventParamSpecs, isEventTypeName } from '../events/type
 const BUILTINS: Record<string, (args: string[]) => string | null> = {
   say:         ([msg]) => `say ${msg}`,
   tell:        ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
+  tellraw:     ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
   title:       ([sel, msg]) => `title ${sel} title {"text":"${msg}"}`,
   actionbar:   ([sel, msg]) => `title ${sel} actionbar {"text":"${msg}"}`,
   subtitle:    ([sel, msg]) => `title ${sel} subtitle {"text":"${msg}"}`,
@@ -1234,6 +1235,7 @@ export class Lowering {
         return { kind: 'const', value: 0 } // Handled inline in exprToString
 
       case 'str_interp':
+      case 'f_string':
         // Interpolated strings are handled inline in message builtins.
         return { kind: 'const', value: 0 }
 
@@ -2265,7 +2267,7 @@ export class Lowering {
     }
 
     const messageExpr = args[messageArgIndex]
-    if (!messageExpr || messageExpr.kind !== 'str_interp') {
+    if (!messageExpr || (messageExpr.kind !== 'str_interp' && messageExpr.kind !== 'f_string')) {
       return null
     }
 
@@ -2276,6 +2278,7 @@ export class Lowering {
       case 'announce':
         return `tellraw @a ${json}`
       case 'tell':
+      case 'tellraw':
         return `tellraw ${this.exprToString(args[0])} ${json}`
       case 'title':
         return `title ${this.exprToString(args[0])} title ${json}`
@@ -2294,6 +2297,7 @@ export class Lowering {
       case 'announce':
         return 0
       case 'tell':
+      case 'tellraw':
       case 'title':
       case 'actionbar':
       case 'subtitle':
@@ -2303,8 +2307,21 @@ export class Lowering {
     }
   }
 
-  private buildRichTextJson(expr: Extract<Expr, { kind: 'str_interp' }>): string {
+  private buildRichTextJson(expr: Extract<Expr, { kind: 'str_interp' | 'f_string' }>): string {
     const components: Array<string | Record<string, unknown>> = ['']
+
+    if (expr.kind === 'f_string') {
+      for (const part of expr.parts) {
+        if (part.kind === 'text') {
+          if (part.value.length > 0) {
+            components.push({ text: part.value })
+          }
+          continue
+        }
+        this.appendRichTextExpr(components, part.expr)
+      }
+      return JSON.stringify(components)
+    }
 
     for (const part of expr.parts) {
       if (typeof part === 'string') {
@@ -2349,6 +2366,19 @@ export class Lowering {
           }
         } else {
           this.appendRichTextExpr(components, part)
+        }
+      }
+      return
+    }
+
+    if (expr.kind === 'f_string') {
+      for (const part of expr.parts) {
+        if (part.kind === 'text') {
+          if (part.value.length > 0) {
+            components.push({ text: part.value })
+          }
+        } else {
+          this.appendRichTextExpr(components, part.expr)
         }
       }
       return
@@ -2399,6 +2429,7 @@ export class Lowering {
       case 'mc_name':
         return expr.value   // #health → "health" (no quotes, used as bare MC name)
       case 'str_interp':
+      case 'f_string':
         return this.buildRichTextJson(expr)
       case 'blockpos':
         return emitBlockPos(expr)
@@ -2732,6 +2763,7 @@ export class Lowering {
     if (expr.kind === 'float_lit') return { kind: 'named', name: 'float' }
     if (expr.kind === 'bool_lit') return { kind: 'named', name: 'bool' }
     if (expr.kind === 'str_lit' || expr.kind === 'str_interp') return { kind: 'named', name: 'string' }
+    if (expr.kind === 'f_string') return { kind: 'named', name: 'format_string' }
     if (expr.kind === 'blockpos') return { kind: 'named', name: 'BlockPos' }
     if (expr.kind === 'ident') {
       const constValue = this.constValues.get(expr.name)

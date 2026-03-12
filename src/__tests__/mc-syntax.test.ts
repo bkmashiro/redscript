@@ -62,6 +62,20 @@ fn chat() {
     expect(errors).toHaveLength(0)
   })
 
+  test('f-strings generate valid tellraw/title commands', () => {
+    const errors = validateSource(validator, `
+fn chat() {
+    let score: int = 7;
+    say(f"You have {score} points");
+    tellraw(@a, f"Score: {score}");
+    actionbar(@s, f"Score: {score}");
+    title(@s, f"Score: {score}");
+}
+`, 'f-string')
+
+    expect(errors).toHaveLength(0)
+  })
+
   test('array operations generate valid data commands', () => {
     const errors = validateSource(validator, `
 fn arrays() {
