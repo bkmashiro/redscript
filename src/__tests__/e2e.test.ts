@@ -1456,3 +1456,71 @@ fn test_kill() {
     })
   })
 })
+
+describe('#mc_name syntax', () => {
+  describe('scoreboard with #mc_name objective', () => {
+    const source = `
+fn heal(amount: int) {
+    let health: int = scoreboard_get(@p, #health);
+    let next: int = health + amount;
+    scoreboard_set(@p, #health, next);
+}
+`
+    it('compiles #health to bare objective name (no quotes)', () => {
+      const files = compile(source, 'mcname')
+      const fn = getFunction(files, 'heal')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('scoreboard players get @p health')
+    })
+    it('does not produce quoted "health" in output', () => {
+      const files = compile(source, 'mcname')
+      const fn = getFunction(files, 'heal')
+      expect(fn).not.toContain('"health"')
+    })
+  })
+
+  describe('backward compat: string objective still works', () => {
+    const source = `fn test() { let x: int = scoreboard_get(@s, "kills"); }`
+    it('compiles "kills" string to bare objective name', () => {
+      const files = compile(source, 'compat')
+      const fn = getFunction(files, 'test')
+      expect(fn).toContain('scoreboard players get @s kills')
+    })
+  })
+
+  describe('#mc_name with fake player target', () => {
+    const source = `
+fn tick_game() {
+    let timer: int = scoreboard_get(#game, #timer);
+    scoreboard_set(#game, #timer, timer - 1);
+}
+`
+    it('compiles #game fake player and #timer objective correctly', () => {
+      const files = compile(source, 'fakeplay')
+      const fn = getFunction(files, 'tick_game')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('scoreboard players get game timer')
+      expect(fn).toContain('game timer')
+    })
+  })
+
+  describe('tag_add with #mc_name', () => {
+    const source = `fn mark() { tag_add(@s, #hasKey); }`
+    it('compiles tag_add with #mc_name', () => {
+      const files = compile(source, 'tagname')
+      const fn = getFunction(files, 'mark')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('tag @s add hasKey')
+    })
+  })
+
+  describe('gamerule with #mc_name', () => {
+    const source = `fn setup() { gamerule(#keepInventory, true); }`
+    it('compiles gamerule with #mc_name', () => {
+      const files = compile(source, 'gamerule')
+      const fn = getFunction(files, 'setup')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('gamerule keepInventory')
+    })
+  })
+})

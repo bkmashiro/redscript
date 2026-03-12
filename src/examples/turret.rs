@@ -10,7 +10,7 @@ fn deploy_turret() {
 
     let state: TurretState = { health: 40 };
     let hp = state.health;
-    scoreboard_set("turret", "health", hp);
+    scoreboard_set("turret", #health, hp);
 
     say("Turret deployed.");
 }

@@ -5,17 +5,17 @@ struct FighterState {
 }
 
 fn snapshot_fighter() -> FighterState {
-    let health: int = scoreboard_get(@s, "arena_health");
-    let eliminations: int = scoreboard_get(@s, "arena_elims");
-    let alive: int = scoreboard_get(@s, "arena_alive");
+    let health: int = scoreboard_get(@s, #arena_health);
+    let eliminations: int = scoreboard_get(@s, #arena_elims);
+    let alive: int = scoreboard_get(@s, #arena_alive);
     let state: FighterState = { health: health, eliminations: eliminations, alive: alive };
     return state;
 }
 
 fn save_fighter(state: FighterState) {
-    scoreboard_set(@s, "arena_health", state.health);
-    scoreboard_set(@s, "arena_elims", state.eliminations);
-    scoreboard_set(@s, "arena_alive", state.alive);
+    scoreboard_set(@s, #arena_health, state.health);
+    scoreboard_set(@s, #arena_elims, state.eliminations);
+    scoreboard_set(@s, #arena_alive, state.alive);
 }
 
 fn count_team(tagName: string) -> int {
@@ -70,7 +70,7 @@ fn award_elimination() {
 
 fn check_milestones() {
     let milestones: int[] = [1, 3, 5];
-    let kills: int = scoreboard_get(@s, "arena_elims");
+    let kills: int = scoreboard_get(@s, #arena_elims);
 
     foreach (milestone in milestones) {
         if (kills == milestone) {
@@ -93,9 +93,9 @@ fn arena_assign_red() {
     @s.tag("arena_alive");
     @s.untag("arena_blue");
     @s.untag("arena_out");
-    scoreboard_set(@s, "arena_health", 20);
-    scoreboard_set(@s, "arena_elims", 0);
-    scoreboard_set(@s, "arena_alive", 1);
+    scoreboard_set(@s, #arena_health, 20);
+    scoreboard_set(@s, #arena_elims, 0);
+    scoreboard_set(@s, #arena_alive, 1);
     title(@s, "Red Team");
 }
 
@@ -105,9 +105,9 @@ fn arena_assign_blue() {
     @s.tag("arena_alive");
     @s.untag("arena_red");
     @s.untag("arena_out");
-    scoreboard_set(@s, "arena_health", 20);
-    scoreboard_set(@s, "arena_elims", 0);
-    scoreboard_set(@s, "arena_alive", 1);
+    scoreboard_set(@s, #arena_health, 20);
+    scoreboard_set(@s, #arena_elims, 0);
+    scoreboard_set(@s, #arena_alive, 1);
     title(@s, "Blue Team");
 }
 

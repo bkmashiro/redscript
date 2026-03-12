@@ -10,8 +10,8 @@ fn reset_lobby_platform() {
 fn configure_world() {
     weather("clear");
     time_set("day");
-    gamerule("doWeatherCycle", "false");
-    gamerule("doDaylightCycle", "false");
+    gamerule(#doWeatherCycle, "false");
+    gamerule(#doDaylightCycle, "false");
     announce("World manager refreshed the lobby.");
 }
 

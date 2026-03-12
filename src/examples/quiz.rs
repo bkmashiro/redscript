@@ -3,13 +3,13 @@
 
 @on_trigger("quiz_start")
 fn start_quiz() {
-    scoreboard_set(@s, "quiz_score", 0);
-    scoreboard_set(@s, "quiz_question", 1);
+    scoreboard_set(@s, #quiz_score, 0);
+    scoreboard_set(@s, #quiz_question, 1);
     ask_question();
 }
 
 fn ask_question() {
-    let question: int = scoreboard_get(@s, "quiz_question");
+    let question: int = scoreboard_get(@s, #quiz_question);
 
     if (question == 1) {
         tell(@s, "Question 1: Which block drops diamonds?");
@@ -30,8 +30,8 @@ fn ask_question() {
 }
 
 fn handle_answer(choice: int) {
-    let question: int = scoreboard_get(@s, "quiz_question");
-    let score: int = scoreboard_get(@s, "quiz_score");
+    let question: int = scoreboard_get(@s, #quiz_question);
+    let score: int = scoreboard_get(@s, #quiz_score);
 
     if (question == 1) {
         if (choice == 1) {
@@ -60,18 +60,18 @@ fn handle_answer(choice: int) {
         }
     }
 
-    scoreboard_set(@s, "quiz_score", score);
+    scoreboard_set(@s, #quiz_score, score);
     question = question + 1;
-    scoreboard_set(@s, "quiz_question", question);
+    scoreboard_set(@s, #quiz_question, question);
     ask_question();
 }
 
 fn finish_quiz() {
-    let score: int = scoreboard_get(@s, "quiz_score");
+    let score: int = scoreboard_get(@s, #quiz_score);
     title(@s, "Quiz Complete");
     tell(@s, "Your final quiz score is recorded in quiz_score.");
-    scoreboard_set(@s, "quiz_question", 0);
-    scoreboard_set(@s, "quiz_score", score);
+    scoreboard_set(@s, #quiz_question, 0);
+    scoreboard_set(@s, #quiz_score, score);
 }
 
 @on_trigger("quiz_a")

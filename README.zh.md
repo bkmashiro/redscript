@@ -31,33 +31,33 @@ const GAME_TIME: int = 300;
 
 @tick(rate=20)
 fn every_second() {
-    let time: int = scoreboard_get("#game", "timer");
+    let time: int = scoreboard_get(#game, #timer);
 
     if (time <= 0) {
         end_game();
         return;
     }
 
-    scoreboard_set("#game", "timer", time - 1);
+    scoreboard_set(#game, #timer, time - 1);
     actionbar(@a, "⏱ 剩余 ${time} 秒");
 }
 
 fn start_game() {
-    scoreboard_set("#game", "timer", GAME_TIME);
-    scoreboard_set("#game", "running", 1);
+    scoreboard_set(#game, #timer, GAME_TIME);
+    scoreboard_set(#game, #running, 1);
     title(@a, "开始战斗！", "游戏已开始");
     tp(@a, (0, 64, 0));
 }
 
 fn end_game() {
-    scoreboard_set("#game", "running", 0);
+    scoreboard_set(#game, #running, 0);
     title(@a, "游戏结束！");
     announce("感谢游玩！");
 }
 
 @on_death
 fn on_kill() {
-    scoreboard_add(@s, "kills", 1);
+    scoreboard_add(@s, #kills, 1);
 }
 ```
 
@@ -105,6 +105,22 @@ let nearby: BlockPos = (~5, ~0, ~5);   // 相对坐标
 const MAX: int = 100;                  // 编译期常量
 ```
 
+#### MC 名称（Objective / Tag / Team）
+
+用 `#name` 表示 Minecraft 标识符，不需要引号：
+
+```rs
+// Objective、fake player、tag、team 名都不用引号
+let hp: int = scoreboard_get(@s, #health);
+scoreboard_set(#game, #timer, 300);      // fake player #game，objective timer
+tag_add(@s, #hasKey);
+team_join(#red, @s);
+gamerule(#keepInventory, true);
+
+// 字符串仍然兼容（向后兼容）
+scoreboard_get(@s, "health")             // 和 #health 编译结果相同
+```
+
 #### 函数与默认参数
 
 ```rs
@@ -132,7 +148,7 @@ fn on_diamond() {
 
 @on_death
 fn on_death() {
-    scoreboard_add(@s, "deaths", 1);
+    scoreboard_add(@s, #deaths, 1);
 }
 ```
 
