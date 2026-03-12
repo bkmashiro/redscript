@@ -18,6 +18,19 @@ export type TypeNode =
   | { kind: 'array'; elem: TypeNode }
   | { kind: 'struct'; name: string }
   | { kind: 'enum'; name: string }
+  | { kind: 'function_type'; params: TypeNode[]; return: TypeNode }
+
+export interface LambdaParam {
+  name: string
+  type?: TypeNode
+}
+
+export interface LambdaExpr {
+  kind: 'lambda'
+  params: LambdaParam[]
+  returnType?: TypeNode
+  body: Expr | Block
+}
 
 // ---------------------------------------------------------------------------
 // Range Expression
@@ -91,12 +104,14 @@ export type Expr =
   | { kind: 'unary';      op: '!' | '-'; operand: Expr }
   | { kind: 'assign';     target: string; op: AssignOp; value: Expr }
   | { kind: 'call';       fn: string; args: Expr[] }
+  | { kind: 'invoke';     callee: Expr; args: Expr[] }
   | { kind: 'member';     obj: Expr; field: string }
   | { kind: 'struct_lit'; fields: { name: string; value: Expr }[] }
   | { kind: 'member_assign'; obj: Expr; field: string; op: AssignOp; value: Expr }
   | { kind: 'index';      obj: Expr; index: Expr }
   | { kind: 'array_lit';  elements: Expr[] }
   | { kind: 'static_call'; type: string; method: string; args: Expr[] }
+  | LambdaExpr
 
 export type LiteralExpr =
   | Extract<Expr, { kind: 'int_lit' }>
