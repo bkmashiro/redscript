@@ -10,7 +10,7 @@ import { buildModule } from '../ir/builder'
 import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
 import type {
-  Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Stmt,
+  Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Span, Stmt,
   StructDecl, TypeNode, ExecuteSubcommand, BlockPosExpr, CoordComponent
 } from '../ast/types'
 
@@ -87,6 +87,10 @@ export interface Warning {
   code: string
   line?: number
   col?: number
+}
+
+function getSpan(node: unknown): Span | undefined {
+  return (node as { span?: Span } | undefined)?.span
 }
 
 const NAMESPACED_ENTITY_TYPE_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/
@@ -1235,7 +1239,7 @@ export class Lowering {
 
     // Check for builtin
     if (expr.fn in BUILTINS) {
-      return this.lowerBuiltinCall(expr.fn, expr.args)
+      return this.lowerBuiltinCall(expr.fn, expr.args, getSpan(expr))
     }
 
     // Handle entity methods: __entity_tag, __entity_untag, __entity_has_tag
@@ -1483,7 +1487,7 @@ export class Lowering {
     }
   }
 
-  private lowerBuiltinCall(name: string, args: Expr[]): Operand {
+  private lowerBuiltinCall(name: string, args: Expr[], callSpan?: Span): Operand {
     const richTextCommand = this.lowerRichTextBuiltin(name, args)
     if (richTextCommand) {
       this.builder.emitRaw(richTextCommand)
@@ -1672,6 +1676,7 @@ export class Lowering {
       this.warnings.push({
         message: 'tp_to is deprecated; use tp instead',
         code: 'W_DEPRECATED',
+        ...(callSpan ? { line: callSpan.line, col: callSpan.col } : {}),
       })
       const tpCommand = this.lowerTpCommand(args)
       if (tpCommand) {
@@ -1859,9 +1864,11 @@ export class Lowering {
     }
 
     if (expr.kind === 'str_lit' && expr.value.startsWith('@')) {
+      const span = getSpan(expr)
       this.warnings.push({
         message: `Quoted selector "${expr.value}" is deprecated; pass ${expr.value} without quotes`,
         code: 'W_QUOTED_SELECTOR',
+        ...(span ? { line: span.line, col: span.col } : {}),
       })
       return expr.value
     }
