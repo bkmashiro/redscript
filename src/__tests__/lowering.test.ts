@@ -180,6 +180,68 @@ describe('Lowering', () => {
       const rawCmds = getRawCommands(subFn)
       expect(rawCmds.some(cmd => cmd === 'kill @s')).toBe(true)
     })
+
+    it('lowers foreach over array into a counting loop', () => {
+      const ir = compile('fn walk() { let arr: int[] = [1, 2, 3]; foreach (x in arr) { let y: int = x; } }')
+      const fn = getFunction(ir, 'walk')!
+      expect(fn.blocks.some(b => b.label.includes('foreach_array_check'))).toBe(true)
+      expect(fn.blocks.some(b => b.label.includes('foreach_array_body'))).toBe(true)
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd => cmd.includes('data get storage rs:heap arr'))).toBe(true)
+    })
+  })
+
+  describe('arrays', () => {
+    it('lowers array literal initialization', () => {
+      const ir = compile('fn test() { let arr: int[] = [1, 2, 3]; }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('data modify storage rs:heap arr set value []')
+      expect(rawCmds).toContain('data modify storage rs:heap arr append value 1')
+      expect(rawCmds).toContain('data modify storage rs:heap arr append value 2')
+      expect(rawCmds).toContain('data modify storage rs:heap arr append value 3')
+    })
+
+    it('lowers array len property', () => {
+      const ir = compile('fn test() { let arr: int[] = [1]; let n: int = arr.len; }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute store result score') && cmd.includes('run data get storage rs:heap arr')
+      )).toBe(true)
+    })
+
+    it('lowers static array indexing', () => {
+      const ir = compile('fn test() { let arr: int[] = [7, 8]; let x: int = arr[0]; }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd => cmd.includes('run data get storage rs:heap arr[0]'))).toBe(true)
+    })
+
+    it('lowers dynamic array indexing via macro helper', () => {
+      const ir = compile('fn test() { let arr: int[] = [7, 8]; let i: int = 1; let x: int = arr[i]; }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd => cmd.includes('with storage rs:heap'))).toBe(true)
+      const helperFn = ir.functions.find(f => f.name.includes('array_get_'))
+      expect(helperFn).toBeDefined()
+      expect(getRawCommands(helperFn!).some(cmd => cmd.includes('arr[$('))).toBe(true)
+    })
+
+    it('lowers array push', () => {
+      const ir = compile('fn test() { let arr: int[] = []; arr.push(4); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('data modify storage rs:heap arr append value 4')
+    })
+
+    it('lowers array pop', () => {
+      const ir = compile('fn test() { let arr: int[] = [1, 2]; let x: int = arr.pop(); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd => cmd.includes('run data get storage rs:heap arr[-1]'))).toBe(true)
+      expect(rawCmds).toContain('data remove storage rs:heap arr[-1]')
+    })
   })
 
   describe('as/at blocks', () => {
@@ -287,6 +349,22 @@ describe('Lowering', () => {
       expect(rawCmds).toContain('give @p diamond 64')
     })
 
+    it('lowers actionbar(), subtitle(), and title_times()', () => {
+      const ir = compile('fn test() { actionbar(@a, "Fight!"); subtitle(@a, "Next wave"); title_times(@a, 10, 40, 10); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('title @a actionbar {"text":"Fight!"}')
+      expect(rawCmds).toContain('title @a subtitle {"text":"Next wave"}')
+      expect(rawCmds).toContain('title @a times 10 40 10')
+    })
+
+    it('lowers announce()', () => {
+      const ir = compile('fn test() { announce("Server event starting"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('tellraw @a {"text":"Server event starting"}')
+    })
+
     it('lowers summon()', () => {
       const ir = compile('fn test() { summon("zombie"); }')
       const fn = getFunction(ir, 'test')!
@@ -299,6 +377,62 @@ describe('Lowering', () => {
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
       expect(rawCmds.some(cmd => cmd.includes('effect give @a speed 30 1'))).toBe(true)
+    })
+
+    it('lowers tp() and tp_to()', () => {
+      const ir = compile('fn test() { tp(@s, "~", "~1", "~"); tp_to(@s, @p); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('tp @s ~ ~1 ~')
+      expect(rawCmds).toContain('tp @s @p')
+    })
+
+    it('lowers inventory and player admin commands', () => {
+      const ir = compile('fn test() { clear(@s); clear(@s, "minecraft:stick"); kick(@p); kick(@p, "AFK"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('clear @s')
+      expect(rawCmds).toContain('clear @s minecraft:stick')
+      expect(rawCmds).toContain('kick @p')
+      expect(rawCmds).toContain('kick @p AFK')
+    })
+
+    it('lowers world management commands', () => {
+      const ir = compile('fn test() { weather("rain"); time_set("day"); time_add(1000); gamerule("doDaylightCycle", "false"); difficulty("hard"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('weather rain')
+      expect(rawCmds).toContain('time set day')
+      expect(rawCmds).toContain('time add 1000')
+      expect(rawCmds).toContain('gamerule doDaylightCycle false')
+      expect(rawCmds).toContain('difficulty hard')
+    })
+
+    it('lowers tag_add() and tag_remove()', () => {
+      const ir = compile('fn test() { tag_add(@s, "boss"); tag_remove(@s, "boss"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('tag @s add boss')
+      expect(rawCmds).toContain('tag @s remove boss')
+    })
+
+    it('lowers setblock(), fill(), and clone()', () => {
+      const ir = compile('fn test() { setblock("~", "~", "~", "stone"); fill("~", "~", "~", "~3", "~3", "~3", "glass"); clone("0", "64", "0", "4", "68", "4", "10", "64", "10"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('setblock ~ ~ ~ stone')
+      expect(rawCmds).toContain('fill ~ ~ ~ ~3 ~3 ~3 glass')
+      expect(rawCmds).toContain('clone 0 64 0 4 68 4 10 64 10')
+    })
+
+    it('lowers xp_add() and xp_set()', () => {
+      const ir = compile('fn test() { xp_add(@s, 5); xp_add(@s, 2, "levels"); xp_set(@s, 0); xp_set(@s, 3, "levels"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('xp add @s 5 points')
+      expect(rawCmds).toContain('xp add @s 2 levels')
+      expect(rawCmds).toContain('xp set @s 0 points')
+      expect(rawCmds).toContain('xp set @s 3 levels')
     })
 
     it('lowers random()', () => {

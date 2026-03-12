@@ -18,12 +18,16 @@ import type {
 // ---------------------------------------------------------------------------
 
 const BUILTINS: Record<string, (args: string[]) => string | null> = {
-  say:    ([msg]) => `say ${msg}`,
-  tell:   ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
-  title:  ([sel, msg]) => `title ${sel} title {"text":"${msg}"}`,
-  give:   ([sel, item, count]) => `give ${sel} ${item} ${count ?? '1'}`,
-  kill:   ([sel]) => `kill ${sel ?? '@s'}`,
-  effect: ([sel, eff, dur, amp]) => `effect give ${sel} ${eff} ${dur ?? '30'} ${amp ?? '0'}`,
+  say:         ([msg]) => `say ${msg}`,
+  tell:        ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
+  title:       ([sel, msg]) => `title ${sel} title {"text":"${msg}"}`,
+  actionbar:   ([sel, msg]) => `title ${sel} actionbar {"text":"${msg}"}`,
+  subtitle:    ([sel, msg]) => `title ${sel} subtitle {"text":"${msg}"}`,
+  title_times: ([sel, fadeIn, stay, fadeOut]) => `title ${sel} times ${fadeIn} ${stay} ${fadeOut}`,
+  announce:    ([msg]) => `tellraw @a {"text":"${msg}"}`,
+  give:        ([sel, item, count]) => `give ${sel} ${item} ${count ?? '1'}`,
+  kill:        ([sel]) => `kill ${sel ?? '@s'}`,
+  effect:      ([sel, eff, dur, amp]) => `effect give ${sel} ${eff} ${dur ?? '30'} ${amp ?? '0'}`,
   summon: ([type, x, y, z, nbt]) => {
     const pos = [x ?? '~', y ?? '~', z ?? '~'].join(' ')
     return nbt ? `summon ${type} ${pos} ${nbt}` : `summon ${type} ${pos}`
@@ -32,8 +36,24 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
     const pos = [x ?? '~', y ?? '~', z ?? '~'].join(' ')
     return `particle ${name} ${pos}`
   },
-  tp: ([sel, x, y, z]) => `tp ${sel} ${x ?? '~'} ${y ?? '~'} ${z ?? '~'}`,
-  setblock: ([x, y, z, block]) => `setblock ${x} ${y} ${z} ${block}`,
+  playsound:  ([sound, source, sel, x, y, z, volume, pitch, minVolume]) =>
+    ['playsound', sound, source, sel, x, y, z, volume, pitch, minVolume].filter(Boolean).join(' '),
+  tp:         ([sel, x, y, z]) => `tp ${sel} ${x} ${y} ${z}`,
+  tp_to:      ([sel, target]) => `tp ${sel} ${target}`,
+  clear:      ([sel, item]) => `clear ${sel} ${item ?? ''}`.trim(),
+  weather:    ([type]) => `weather ${type}`,
+  time_set:   ([val]) => `time set ${val}`,
+  time_add:   ([val]) => `time add ${val}`,
+  gamerule:   ([rule, val]) => `gamerule ${rule} ${val}`,
+  tag_add:    ([sel, tag]) => `tag ${sel} add ${tag}`,
+  tag_remove: ([sel, tag]) => `tag ${sel} remove ${tag}`,
+  kick:       ([player, reason]) => `kick ${player} ${reason ?? ''}`.trim(),
+  setblock:   ([x, y, z, block]) => `setblock ${x} ${y} ${z} ${block}`,
+  fill:       ([x1, y1, z1, x2, y2, z2, block]) => `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}`,
+  clone:      ([x1, y1, z1, x2, y2, z2, dx, dy, dz]) => `clone ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${dx} ${dy} ${dz}`,
+  difficulty: ([level]) => `difficulty ${level}`,
+  xp_add:     ([sel, amount, type]) => `xp add ${sel} ${amount} ${type ?? 'points'}`,
+  xp_set:     ([sel, amount, type]) => `xp set ${sel} ${amount} ${type ?? 'points'}`,
   random: () => null, // Special handling
   scoreboard_get: () => null, // Special handling (returns value)
   scoreboard_set: () => null, // Special handling
@@ -293,11 +313,8 @@ export class Lowering {
         if (elemValue.kind === 'const') {
           this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value ${elemValue.value}`)
         } else if (elemValue.kind === 'var') {
-          const temp = this.builder.freshTemp()
-          this.builder.emitAssign(temp, elemValue)
-          this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${temp} rs`)
           this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value 0`)
-          this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${temp} rs`)
+          this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${elemValue.name} rs`)
         }
       }
       return
@@ -416,9 +433,14 @@ export class Lowering {
   }
 
   private lowerForeachStmt(stmt: Extract<Stmt, { kind: 'foreach' }>): void {
+    if (stmt.iterable.kind !== 'selector') {
+      this.lowerArrayForeachStmt(stmt)
+      return
+    }
+
     // Extract body into a separate function
     const subFnName = `${this.currentFn}/foreach_${this.foreachCounter++}`
-    const selector = this.selectorToString(stmt.selector)
+    const selector = this.exprToString(stmt.iterable)
 
     // Emit execute as ... run function ...
     this.builder.emitRaw(`execute as ${selector} run function ${this.namespace}:${subFnName}`)
@@ -448,6 +470,66 @@ export class Lowering {
     this.builder = savedBuilder
     this.varMap = savedVarMap
     this.currentContext = savedContext
+  }
+
+  private lowerArrayForeachStmt(stmt: Extract<Stmt, { kind: 'foreach' }>): void {
+    const arrayName = this.getArrayStorageName(stmt.iterable)
+    if (!arrayName) {
+      this.builder.emitRaw('# Unsupported foreach iterable')
+      return
+    }
+
+    const arrayType = this.inferExprType(stmt.iterable)
+    const bindingVar = `$${stmt.binding}`
+    const indexVar = this.builder.freshTemp()
+    const lengthVar = this.builder.freshTemp()
+    const condVar = this.builder.freshTemp()
+    const oneVar = this.builder.freshTemp()
+
+    const savedBinding = this.varMap.get(stmt.binding)
+    const savedType = this.varTypes.get(stmt.binding)
+
+    this.varMap.set(stmt.binding, bindingVar)
+    if (arrayType?.kind === 'array') {
+      this.varTypes.set(stmt.binding, arrayType.elem)
+    }
+
+    this.builder.emitAssign(indexVar, { kind: 'const', value: 0 })
+    this.builder.emitAssign(oneVar, { kind: 'const', value: 1 })
+    this.builder.emitRaw(`execute store result score ${lengthVar} rs run data get storage rs:heap ${arrayName}`)
+
+    const checkLabel = this.builder.freshLabel('foreach_array_check')
+    const bodyLabel = this.builder.freshLabel('foreach_array_body')
+    const exitLabel = this.builder.freshLabel('foreach_array_exit')
+
+    this.builder.emitJump(checkLabel)
+
+    this.builder.startBlock(checkLabel)
+    this.builder.emitCmp(condVar, { kind: 'var', name: indexVar }, '<', { kind: 'var', name: lengthVar })
+    this.builder.emitJumpIf(condVar, bodyLabel, exitLabel)
+
+    this.builder.startBlock(bodyLabel)
+    const element = this.readArrayElement(arrayName, { kind: 'var', name: indexVar })
+    this.builder.emitAssign(bindingVar, element)
+    this.lowerBlock(stmt.body)
+    if (!this.builder.isBlockSealed()) {
+      this.builder.emitRaw(`scoreboard players operation ${indexVar} rs += ${oneVar} rs`)
+      this.builder.emitJump(checkLabel)
+    }
+
+    this.builder.startBlock(exitLabel)
+
+    if (savedBinding) {
+      this.varMap.set(stmt.binding, savedBinding)
+    } else {
+      this.varMap.delete(stmt.binding)
+    }
+
+    if (savedType) {
+      this.varTypes.set(stmt.binding, savedType)
+    } else {
+      this.varTypes.delete(stmt.binding)
+    }
   }
 
   private lowerAsBlockStmt(stmt: Extract<Stmt, { kind: 'as_block' }>): void {
@@ -672,7 +754,7 @@ export class Lowering {
       }
 
       // Array length property
-      if (varType?.kind === 'array' && expr.field === 'length') {
+      if (varType?.kind === 'array' && expr.field === 'len') {
         const dst = this.builder.freshTemp()
         this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${expr.obj.name}`)
         return { kind: 'var', name: dst }
@@ -743,20 +825,9 @@ export class Lowering {
   }
 
   private lowerIndexExpr(expr: Extract<Expr, { kind: 'index' }>): Operand {
-    if (expr.obj.kind === 'ident') {
-      const varName = expr.obj.name
-      const dst = this.builder.freshTemp()
-
-      if (expr.index.kind === 'int_lit') {
-        // Static index: arr[0]
-        const idx = expr.index.value
-        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${varName}[${idx}]`)
-      } else {
-        // Dynamic index not fully supported in vanilla MC - emit placeholder
-        this.builder.emitRaw(`# Dynamic array indexing not supported in vanilla MC`)
-        this.builder.emitAssign(dst, { kind: 'const', value: 0 })
-      }
-      return { kind: 'var', name: dst }
+    const arrayName = this.getArrayStorageName(expr.obj)
+    if (arrayName) {
+      return this.readArrayElement(arrayName, this.lowerExpr(expr.index))
     }
     return { kind: 'const', value: 0 }
   }
@@ -893,18 +964,29 @@ export class Lowering {
     if (expr.fn === '__array_push') {
       const arrExpr = expr.args[0]
       const valueExpr = expr.args[1]
-      if (arrExpr.kind === 'ident') {
-        const arrName = arrExpr.name
+      const arrName = this.getArrayStorageName(arrExpr)
+      if (arrName) {
         const value = this.lowerExpr(valueExpr)
         if (value.kind === 'const') {
           this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value ${value.value}`)
         } else if (value.kind === 'var') {
-          // Need to use a temp value and then copy
           this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value 0`)
           this.builder.emitRaw(`execute store result storage rs:heap ${arrName}[-1] int 1 run scoreboard players get ${value.name} rs`)
         }
       }
       return { kind: 'const', value: 0 }
+    }
+
+    if (expr.fn === '__array_pop') {
+      const arrName = this.getArrayStorageName(expr.args[0])
+      const dst = this.builder.freshTemp()
+      if (arrName) {
+        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${arrName}[-1]`)
+        this.builder.emitRaw(`data remove storage rs:heap ${arrName}[-1]`)
+      } else {
+        this.builder.emitAssign(dst, { kind: 'const', value: 0 })
+      }
+      return { kind: 'var', name: dst }
     }
 
     // Handle spawn_object - creates world object (invisible armor stand)
@@ -1020,6 +1102,50 @@ export class Lowering {
     if (expr.kind === 'int_lit') return expr.value.toString()
     if (expr.kind === 'float_lit') return Math.trunc(expr.value).toString()
     return '0'
+  }
+
+  private getArrayStorageName(expr: Expr): string | null {
+    if (expr.kind === 'ident') {
+      return expr.name
+    }
+    return null
+  }
+
+  private inferExprType(expr: Expr): TypeNode | undefined {
+    if (expr.kind === 'ident') {
+      return this.varTypes.get(expr.name)
+    }
+    return undefined
+  }
+
+  private readArrayElement(arrayName: string, index: Operand): Operand {
+    const dst = this.builder.freshTemp()
+
+    if (index.kind === 'const') {
+      this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[${index.value}]`)
+      return { kind: 'var', name: dst }
+    }
+
+    const macroKey = `__rs_index_${this.foreachCounter++}`
+    const subFnName = `${this.currentFn}/array_get_${this.foreachCounter++}`
+    const indexVar = index.kind === 'var' ? index.name : this.operandToVar(index)
+    this.builder.emitRaw(`execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} rs`)
+    this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
+    this.emitRawSubFunction(
+      subFnName,
+      `$execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[$(${macroKey})]`
+    )
+    return { kind: 'var', name: dst }
+  }
+
+  private emitRawSubFunction(name: string, ...commands: string[]): void {
+    const builder = new LoweringBuilder()
+    builder.startBlock('entry')
+    for (const cmd of commands) {
+      builder.emitRaw(cmd)
+    }
+    builder.emitReturn()
+    this.functions.push(builder.build(name, [], false))
   }
 
   // -------------------------------------------------------------------------
