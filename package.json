@@ -1,0 +1,23 @@
+{
+  "name": "redscript",
+  "version": "0.1.0",
+  "description": "A compiler from a high-level language to Minecraft Java Edition commands (mcfunction / command blocks)",
+  "main": "dist/index.js",
+  "bin": {
+    "redscript": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w",
+    "test": "jest",
+    "cli": "ts-node src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0"
+  }
+}
