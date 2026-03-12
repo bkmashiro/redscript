@@ -26,7 +26,7 @@ function printUsage(): void {
 RedScript Compiler
 
 Usage:
-  redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>] [--target <target>]
+  redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>] [--target <target>] [--no-dce]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
   redscript fmt <file.mcrs> [file2.mcrs ...]
@@ -46,6 +46,7 @@ Options:
   --output-nbt <file>    Output .nbt file path for structure target
   --namespace <ns>       Datapack namespace (default: derived from filename)
   --target <target>      Output target: datapack (default), cmdblock, or structure
+  --no-dce               Disable AST dead code elimination
   --stats                Print optimizer statistics
   --hot-reload <url>     After each successful compile, POST to <url>/reload
                          (use with redscript-testharness; e.g. http://localhost:25561)
@@ -78,8 +79,9 @@ function parseArgs(args: string[]): {
   stats?: boolean
   help?: boolean
   hotReload?: string
+  dce?: boolean
 } {
-  const result: ReturnType<typeof parseArgs> = {}
+  const result: ReturnType<typeof parseArgs> = { dce: true }
   let i = 0
 
   while (i < args.length) {
@@ -102,6 +104,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--stats') {
       result.stats = true
+      i++
+    } else if (arg === '--no-dce') {
+      result.dce = false
       i++
     } else if (arg === '--hot-reload') {
       result.hotReload = args[++i]
@@ -153,7 +158,14 @@ function printOptimizationStats(stats: OptimizationStats | undefined): void {
   console.log(`  Total mcfunction commands: ${stats.totalCommandsBefore} -> ${stats.totalCommandsAfter} (${formatReduction(stats.totalCommandsBefore, stats.totalCommandsAfter)} reduction)`)
 }
 
-function compileCommand(file: string, output: string, namespace: string, target: string = 'datapack', showStats = false): void {
+function compileCommand(
+  file: string,
+  output: string,
+  namespace: string,
+  target: string = 'datapack',
+  showStats = false,
+  dce = true
+): void {
   // Read source file
   if (!fs.existsSync(file)) {
     console.error(`Error: File not found: ${file}`)
@@ -164,7 +176,7 @@ function compileCommand(file: string, output: string, namespace: string, target:
 
   try {
     if (target === 'cmdblock') {
-      const result = compile(source, { namespace, filePath: file })
+      const result = compile(source, { namespace, filePath: file, dce })
       printWarnings(result.warnings)
 
       // Generate command block JSON
@@ -184,7 +196,7 @@ function compileCommand(file: string, output: string, namespace: string, target:
         printOptimizationStats(result.stats)
       }
     } else if (target === 'structure') {
-      const structure = compileToStructure(source, namespace, file)
+      const structure = compileToStructure(source, namespace, file, { dce })
       fs.mkdirSync(path.dirname(output), { recursive: true })
       fs.writeFileSync(output, structure.buffer)
 
@@ -195,7 +207,7 @@ function compileCommand(file: string, output: string, namespace: string, target:
         printOptimizationStats(structure.stats)
       }
     } else {
-      const result = compile(source, { namespace, filePath: file })
+      const result = compile(source, { namespace, filePath: file, dce })
       printWarnings(result.warnings)
 
       // Default: generate datapack
@@ -255,7 +267,7 @@ async function hotReload(url: string): Promise<void> {
   }
 }
 
-function watchCommand(dir: string, output: string, namespace?: string, hotReloadUrl?: string): void {
+function watchCommand(dir: string, output: string, namespace?: string, hotReloadUrl?: string, dce = true): void {
   // Check if directory exists
   if (!fs.existsSync(dir)) {
     console.error(`Error: Directory not found: ${dir}`)
@@ -290,7 +302,7 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
       try {
         source = fs.readFileSync(file, 'utf-8')
         const ns = namespace ?? deriveNamespace(file)
-        const result = compile(source, { namespace: ns, filePath: file })
+        const result = compile(source, { namespace: ns, filePath: file, dce })
         printWarnings(result.warnings)
 
         // Create output directory
@@ -382,7 +394,8 @@ async function main(): Promise<void> {
         output,
         namespace,
         target,
-        parsed.stats
+        parsed.stats,
+        parsed.dce
       )
       }
       break
@@ -397,7 +410,8 @@ async function main(): Promise<void> {
         parsed.file,
         parsed.output ?? './dist',
         parsed.namespace,
-        parsed.hotReload
+        parsed.hotReload,
+        parsed.dce
       )
       break
 

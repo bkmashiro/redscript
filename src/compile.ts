@@ -11,6 +11,7 @@ import { Lexer } from './lexer'
 import { Parser } from './parser'
 import { Lowering } from './lowering'
 import { optimize } from './optimizer/passes'
+import { eliminateDeadCode } from './optimizer/dce'
 import { generateDatapackWithStats, DatapackFile } from './codegen/mcfunction'
 import { DiagnosticError, formatError, parseErrorMessage } from './diagnostics'
 import type { IRModule } from './ir/types'
@@ -24,6 +25,7 @@ export interface CompileOptions {
   namespace?: string
   filePath?: string
   optimize?: boolean
+  dce?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +162,7 @@ export function preprocessSource(source: string, options: PreprocessOptions = {}
 
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
   const { namespace = 'redscript', filePath, optimize: shouldOptimize = true } = options
+  const shouldRunDce = options.dce ?? shouldOptimize
   let sourceLines = source.split('\n')
 
   try {
@@ -171,7 +174,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const tokens = new Lexer(preprocessedSource, filePath).tokenize()
 
     // Parsing
-    const ast = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+    const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+    const ast = shouldRunDce ? eliminateDeadCode(parsedAst) : parsedAst
 
     // Lowering
     const ir = new Lowering(namespace, preprocessed.ranges).lower(ast)

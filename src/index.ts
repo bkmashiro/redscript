@@ -14,6 +14,7 @@ import {
   copyPropagation,
   deadCodeEliminationWithStats,
 } from './optimizer/passes'
+import { eliminateDeadCode } from './optimizer/dce'
 import {
   countMcfunctionCommands,
   generateDatapackWithStats,
@@ -30,6 +31,7 @@ export interface CompileOptions {
   optimize?: boolean
   typeCheck?: boolean
   filePath?: string
+  dce?: boolean
 }
 
 export interface CompileResult {
@@ -53,6 +55,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const namespace = options.namespace ?? 'redscript'
   const shouldOptimize = options.optimize ?? true
   const shouldTypeCheck = options.typeCheck ?? true
+  const shouldRunDce = options.dce ?? shouldOptimize
   const filePath = options.filePath
   const preprocessed = preprocessSourceWithMetadata(source, { filePath })
   const preprocessedSource = preprocessed.source
@@ -61,7 +64,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const tokens = new Lexer(preprocessedSource, filePath).tokenize()
 
   // Parsing
-  const ast = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+  const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+  const ast = shouldRunDce ? eliminateDeadCode(parsedAst) : parsedAst
 
   // Type checking (warn mode - collect errors but don't block)
   let typeErrors: DiagnosticError[] | undefined

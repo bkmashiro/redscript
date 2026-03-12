@@ -5,6 +5,7 @@ import { nbt, TagType, writeNbt, type CompoundTag, type NbtTag } from '../../nbt
 import { createEmptyOptimizationStats, mergeOptimizationStats, type OptimizationStats } from '../../optimizer/commands'
 import { optimizeWithStats } from '../../optimizer/passes'
 import { optimizeForStructure, optimizeForStructureWithStats } from '../../optimizer/structure'
+import { eliminateDeadCode } from '../../optimizer/dce'
 import { preprocessSource } from '../../compile'
 import type { IRCommand, IRFunction, IRModule } from '../../ir/types'
 import type { DatapackFile } from '../mcfunction'
@@ -49,6 +50,10 @@ export interface StructureCompileResult {
   blockCount: number
   blocks: StructureBlockInfo[]
   stats?: OptimizationStats
+}
+
+export interface StructureCompileOptions {
+  dce?: boolean
 }
 
 function escapeJsonString(value: string): string {
@@ -315,10 +320,16 @@ export function generateStructure(input: IRModule | DatapackFile[]): StructureCo
   }
 }
 
-export function compileToStructure(source: string, namespace: string, filePath?: string): StructureCompileResult {
+export function compileToStructure(
+  source: string,
+  namespace: string,
+  filePath?: string,
+  options: StructureCompileOptions = {}
+): StructureCompileResult {
   const preprocessedSource = preprocessSource(source, { filePath })
   const tokens = new Lexer(preprocessedSource, filePath).tokenize()
-  const ast = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+  const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+  const ast = options.dce ?? true ? eliminateDeadCode(parsedAst) : parsedAst
   const ir = new Lowering(namespace).lower(ast)
   const stats = createEmptyOptimizationStats()
   const optimizedIRFunctions = ir.functions.map(fn => {
