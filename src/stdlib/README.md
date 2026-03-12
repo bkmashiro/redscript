@@ -140,3 +140,25 @@ Bossbar for timers and progress.
 - `hide_bar(id)`, `show_bar(id)` — Visibility
 - `remove_bar(id)` — Delete bossbar
 - `update_bar_color(id, percent)` — Color by percentage
+
+### interactions.mcrs
+Player input detection (right click, sneak, look direction).
+- `interactions_init()` — Setup scoreboards (call on @load)
+- `on_right_click()` — Detect carrot-on-stick right click
+- `is_sneaking(target)` — Check if sneaking
+- `on_sneak_start()` — Detect sneak start (first tick)
+- `check_look_up()` — Tag players looking up
+- `check_look_down()` — Tag players looking down
+- `on_sneak_click()` — Detect sneak + right click combo
+- `on_double_sneak()` — Detect double-tap sneak
+
+**New selector filters:**
+```mcrs
+// Rotation (pitch/yaw)
+@a[x_rotation=-90..-45]  // Looking up
+@a[x_rotation=45..90]    // Looking down
+@a[y_rotation=0..90]     // Facing east
+
+// Position ranges
+@a[x=-5..5, y=62..68, z=-5..5]  // In specific area
+```
