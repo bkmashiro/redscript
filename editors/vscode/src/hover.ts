@@ -662,6 +662,31 @@ const SELECTOR_DOCS: Record<string, { name: string; desc: string; tip?: string }
   '@n': { name: '@n — Nearest Entity',desc: 'The single nearest entity (including non-players).',                tip: 'MC 1.21+ only.' },
 }
 
+/** Selector argument documentation (MC built-in selector arguments). */
+const SELECTOR_ARG_DOCS: Record<string, { name: string; desc: string; example?: string }> = {
+  'type':       { name: 'type',       desc: 'Filter by entity type.',                                       example: 'type=minecraft:zombie' },
+  'tag':        { name: 'tag',        desc: 'Filter by scoreboard tag. Use `tag=!name` to exclude.',        example: 'tag=my_tag, tag=!excluded' },
+  'name':       { name: 'name',       desc: 'Filter by entity custom name.',                                example: 'name="Steve"' },
+  'team':       { name: 'team',       desc: 'Filter by team membership. Empty string = no team.',           example: 'team=red, team=' },
+  'scores':     { name: 'scores',     desc: 'Filter by scoreboard scores. Uses `{obj=range}` syntax.',      example: 'scores={kills=1..}' },
+  'nbt':        { name: 'nbt',        desc: 'Filter by NBT data match.',                                    example: 'nbt={OnGround:1b}' },
+  'predicate':  { name: 'predicate',  desc: 'Filter by datapack predicate.',                                example: 'predicate=my_pack:is_valid' },
+  'gamemode':   { name: 'gamemode',   desc: 'Filter players by gamemode.',                                  example: 'gamemode=survival, gamemode=!creative' },
+  'distance':   { name: 'distance',   desc: 'Filter by distance from command origin. Supports ranges.',     example: 'distance=..10, distance=5..20' },
+  'level':      { name: 'level',      desc: 'Filter players by XP level.',                                  example: 'level=10.., level=1..5' },
+  'x_rotation': { name: 'x_rotation', desc: 'Filter by vertical head rotation (pitch). -90=up, 90=down.',   example: 'x_rotation=-90..0' },
+  'y_rotation': { name: 'y_rotation', desc: 'Filter by horizontal head rotation (yaw). South=0.',           example: 'y_rotation=0..90' },
+  'x':          { name: 'x',          desc: 'Override X coordinate for distance/volume calculations.',      example: 'x=100' },
+  'y':          { name: 'y',          desc: 'Override Y coordinate for distance/volume calculations.',      example: 'y=64' },
+  'z':          { name: 'z',          desc: 'Override Z coordinate for distance/volume calculations.',      example: 'z=-200' },
+  'dx':         { name: 'dx',         desc: 'X-size of selection box from x,y,z.',                          example: 'dx=10' },
+  'dy':         { name: 'dy',         desc: 'Y-size of selection box from x,y,z.',                          example: 'dy=5' },
+  'dz':         { name: 'dz',         desc: 'Z-size of selection box from x,y,z.',                          example: 'dz=10' },
+  'limit':      { name: 'limit',      desc: 'Maximum number of entities to select.',                        example: 'limit=1, limit=5' },
+  'sort':       { name: 'sort',       desc: 'Sort order: nearest, furthest, random, arbitrary.',            example: 'sort=random' },
+  'advancements':{ name: 'advancements', desc: 'Filter by advancement completion.',                         example: 'advancements={story/mine_diamond=true}' },
+}
+
 function formatSelectorHover(raw: string): vscode.MarkdownString {
   const key = raw.replace(/\[.*/, '') as keyof typeof SELECTOR_DOCS
   const info = SELECTOR_DOCS[key]
@@ -672,6 +697,19 @@ function formatSelectorHover(raw: string): vscode.MarkdownString {
     if (info.tip) md.appendMarkdown(`\n> 💡 ${info.tip}`)
   } else {
     md.appendMarkdown(`**Selector** \`${raw}\`\n\nEntity target selector.`)
+  }
+  return md
+}
+
+function formatSelectorArgHover(arg: string): vscode.MarkdownString | null {
+  const info = SELECTOR_ARG_DOCS[arg]
+  if (!info) return null
+  const md = new vscode.MarkdownString('', true)
+  md.appendMarkdown(`**${info.name}** (selector argument)\n\n`)
+  md.appendMarkdown(info.desc)
+  if (info.example) {
+    md.appendText('\n\n')
+    md.appendCodeblock(info.example, 'redscript')
   }
   return md
 }
@@ -859,12 +897,40 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
           return new vscode.Hover(formatMcNameHover(raw.slice(1)), mcRange)
         }
 
-        // ── Selector hover ──────────────────────────────────────
-        const selectorRange = document.getWordRangeAtPosition(
-          position, /@[aesprnAESPRN](?:\[[^\]]*\])?/
-        )
-        if (selectorRange) {
-          return new vscode.Hover(formatSelectorHover(document.getText(selectorRange)), selectorRange)
+        // ── Selector base hover (@a, @e, @s, etc.) ─────────────
+        // Match just the @x part (2 chars)
+        const baseSelectorRange = document.getWordRangeAtPosition(position, /@[aesprnAESPRN]/)
+        if (baseSelectorRange) {
+          const base = document.getText(baseSelectorRange)
+          return new vscode.Hover(formatSelectorHover(base), baseSelectorRange)
+        }
+
+        // ── Selector argument hover (inside [...]) ──────────────
+        // First get the word at cursor
+        const wordAtCursor = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/)
+        if (wordAtCursor) {
+          const wordText = document.getText(wordAtCursor)
+          // Check if this word is a known selector argument AND is followed by '='
+          if (SELECTOR_ARG_DOCS[wordText]) {
+            const afterWord = line.slice(wordAtCursor.end.character).trimStart()
+            if (afterWord.startsWith('=')) {
+              // Verify we're actually inside selector brackets by looking backwards for @x[
+              const beforeWord = line.slice(0, wordAtCursor.start.character)
+              // Check if there's an unclosed @x[ before this word
+              const openBracket = beforeWord.lastIndexOf('[')
+              const closeBracket = beforeWord.lastIndexOf(']')
+              if (openBracket > closeBracket) {
+                // We're inside brackets, check if preceded by @x
+                const beforeBracket = beforeWord.slice(0, openBracket)
+                if (/@[aesprnAESPRN]\s*$/.test(beforeBracket)) {
+                  const argDoc = formatSelectorArgHover(wordText)
+                  if (argDoc) {
+                    return new vscode.Hover(argDoc, wordAtCursor)
+                  }
+                }
+              }
+            }
+          }
         }
 
         const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/)
