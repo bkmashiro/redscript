@@ -1,191 +1,5738 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// ../../dist/diagnostics/index.js
+var require_diagnostics = __commonJS({
+  "../../dist/diagnostics/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.DiagnosticCollector = exports2.DiagnosticError = void 0;
+    exports2.parseErrorMessage = parseErrorMessage;
+    exports2.formatError = formatError;
+    function formatSourcePointer(sourceLines, line, col) {
+      const lineIdx = line - 1;
+      if (lineIdx < 0 || lineIdx >= sourceLines.length) {
+        return [];
+      }
+      const sourceLine = sourceLines[lineIdx];
+      const safeCol = Math.max(1, Math.min(col, sourceLine.length + 1));
+      const pointer = `  ${" ".repeat(safeCol - 1)}^`;
+      return [`  ${sourceLine}`, pointer];
     }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
+    var DiagnosticError = class extends Error {
+      constructor(kind, message, location, sourceLines) {
+        super(message);
+        this.name = "DiagnosticError";
+        this.kind = kind;
+        this.location = location;
+        this.sourceLines = sourceLines;
+      }
+      /**
+       * Format the error for display:
+       * ```
+       * Error: [ParseError] line 5, col 12: Expected ';' after statement
+       *   5 |   let x = 42
+       *                   ^ expected ';'
+       * ```
+       */
+      format() {
+        const { kind, message, location, sourceLines } = this;
+        const filePart = location.file ? `${location.file}:` : "";
+        const header = `Error: [${kind}] ${filePart}line ${location.line}, col ${location.col}: ${message}`;
+        if (!sourceLines || sourceLines.length === 0) {
+          return header;
+        }
+        const pointerLines = formatSourcePointer(sourceLines, location.line, location.col);
+        if (pointerLines.length === 0) {
+          return header;
+        }
+        const lineNum = String(location.line).padStart(3);
+        const prefix = `${lineNum} | `;
+        const sourceLine = sourceLines[location.line - 1];
+        const safeCol = Math.max(1, Math.min(location.col, sourceLine.length + 1));
+        const pointer = " ".repeat(prefix.length + safeCol - 1) + "^";
+        const hint = message.toLowerCase().includes("expected") ? message.split(":").pop()?.trim() || "" : "";
+        return [
+          header,
+          `${prefix}${sourceLine}`,
+          `${pointer}${hint ? ` ${hint}` : ""}`
+        ].join("\n");
+      }
+      toString() {
+        return this.format();
+      }
+    };
+    exports2.DiagnosticError = DiagnosticError;
+    var DiagnosticCollector = class {
+      constructor(source, filePath) {
+        this.diagnostics = [];
+        this.sourceLines = [];
+        if (source) {
+          this.sourceLines = source.split("\n");
+        }
+        this.filePath = filePath;
+      }
+      error(kind, message, line, col) {
+        const diagnostic = new DiagnosticError(kind, message, { file: this.filePath, line, col }, this.sourceLines);
+        this.diagnostics.push(diagnostic);
+      }
+      hasErrors() {
+        return this.diagnostics.length > 0;
+      }
+      getErrors() {
+        return this.diagnostics;
+      }
+      formatAll() {
+        return this.diagnostics.map((d) => d.format()).join("\n\n");
+      }
+      throwFirst() {
+        if (this.diagnostics.length > 0) {
+          throw this.diagnostics[0];
+        }
+        throw new Error("No diagnostics to throw");
+      }
+    };
+    exports2.DiagnosticCollector = DiagnosticCollector;
+    function parseErrorMessage(kind, rawMessage, sourceLines, filePath) {
+      const match = rawMessage.match(/at line (\d+), col (\d+)/);
+      if (match) {
+        const line = parseInt(match[1], 10);
+        const col = parseInt(match[2], 10);
+        const message = rawMessage.replace(/ at line \d+, col \d+$/, "").trim();
+        return new DiagnosticError(kind, message, { file: filePath, line, col }, sourceLines);
+      }
+      return new DiagnosticError(kind, rawMessage, { file: filePath, line: 1, col: 1 }, sourceLines);
+    }
+    function formatError(error, source) {
+      if (error instanceof DiagnosticError) {
+        const sourceLines = source?.split("\n") ?? error.sourceLines ?? [];
+        const { file, line, col } = error.location;
+        const locationPart = file ? ` in ${file} at line ${line}, col ${col}` : ` at line ${line}, col ${col}`;
+        const lines = [`Error${locationPart}:`];
+        const pointerLines = formatSourcePointer(sourceLines, line, col);
+        if (pointerLines.length > 0) {
+          lines.push(...pointerLines);
+        }
+        lines.push(error.message);
+        return lines.join("\n");
+      }
+      if (!source) {
+        return error.message;
+      }
+      const parsed = parseErrorMessage("ParseError", error.message, source.split("\n"));
+      return formatError(parsed, source);
+    }
+  }
 });
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
+
+// ../../dist/lexer/index.js
+var require_lexer = __commonJS({
+  "../../dist/lexer/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.Lexer = void 0;
+    var diagnostics_1 = require_diagnostics();
+    var KEYWORDS = {
+      fn: "fn",
+      let: "let",
+      const: "const",
+      if: "if",
+      else: "else",
+      while: "while",
+      for: "for",
+      foreach: "foreach",
+      match: "match",
+      return: "return",
+      as: "as",
+      at: "at",
+      in: "in",
+      struct: "struct",
+      enum: "enum",
+      trigger: "trigger",
+      namespace: "namespace",
+      execute: "execute",
+      run: "run",
+      unless: "unless",
+      int: "int",
+      bool: "bool",
+      float: "float",
+      string: "string",
+      void: "void",
+      BlockPos: "BlockPos",
+      true: "true",
+      false: "false"
+    };
+    var SELECTOR_CHARS = /* @__PURE__ */ new Set(["a", "e", "s", "p", "r", "n"]);
+    var Lexer = class {
+      constructor(source, filePath) {
+        this.pos = 0;
+        this.line = 1;
+        this.col = 1;
+        this.tokens = [];
+        this.source = source;
+        this.sourceLines = source.split("\n");
+        this.filePath = filePath;
+      }
+      error(message, line, col) {
+        throw new diagnostics_1.DiagnosticError("LexError", message, { file: this.filePath, line: line ?? this.line, col: col ?? this.col }, this.sourceLines);
+      }
+      tokenize() {
+        while (!this.isAtEnd()) {
+          this.scanToken();
+        }
+        this.tokens.push({ kind: "eof", value: "", line: this.line, col: this.col });
+        return this.tokens;
+      }
+      isAtEnd() {
+        return this.pos >= this.source.length;
+      }
+      peek(offset = 0) {
+        const idx = this.pos + offset;
+        if (idx >= this.source.length)
+          return "\0";
+        return this.source[idx];
+      }
+      advance() {
+        const char = this.source[this.pos++];
+        if (char === "\n") {
+          this.line++;
+          this.col = 1;
+        } else {
+          this.col++;
+        }
+        return char;
+      }
+      addToken(kind, value, line, col) {
+        this.tokens.push({ kind, value, line, col });
+      }
+      scanToken() {
+        const startLine = this.line;
+        const startCol = this.col;
+        const char = this.advance();
+        if (/\s/.test(char))
+          return;
+        if (char === "/" && this.peek() === "/") {
+          while (!this.isAtEnd() && this.peek() !== "\n") {
+            this.advance();
+          }
+          return;
+        }
+        if (char === "-" && this.peek() === ">") {
+          this.advance();
+          this.addToken("->", "->", startLine, startCol);
+          return;
+        }
+        if (char === "=" && this.peek() === ">") {
+          this.advance();
+          this.addToken("=>", "=>", startLine, startCol);
+          return;
+        }
+        if (char === "=" && this.peek() === "=") {
+          this.advance();
+          this.addToken("==", "==", startLine, startCol);
+          return;
+        }
+        if (char === "!" && this.peek() === "=") {
+          this.advance();
+          this.addToken("!=", "!=", startLine, startCol);
+          return;
+        }
+        if (char === "<" && this.peek() === "=") {
+          this.advance();
+          this.addToken("<=", "<=", startLine, startCol);
+          return;
+        }
+        if (char === ">" && this.peek() === "=") {
+          this.advance();
+          this.addToken(">=", ">=", startLine, startCol);
+          return;
+        }
+        if (char === "&" && this.peek() === "&") {
+          this.advance();
+          this.addToken("&&", "&&", startLine, startCol);
+          return;
+        }
+        if (char === "|" && this.peek() === "|") {
+          this.advance();
+          this.addToken("||", "||", startLine, startCol);
+          return;
+        }
+        if (char === "+" && this.peek() === "=") {
+          this.advance();
+          this.addToken("+=", "+=", startLine, startCol);
+          return;
+        }
+        if (char === "-" && this.peek() === "=") {
+          this.advance();
+          this.addToken("-=", "-=", startLine, startCol);
+          return;
+        }
+        if (char === "*" && this.peek() === "=") {
+          this.advance();
+          this.addToken("*=", "*=", startLine, startCol);
+          return;
+        }
+        if (char === "/" && this.peek() === "=") {
+          this.advance();
+          this.addToken("/=", "/=", startLine, startCol);
+          return;
+        }
+        if (char === "%" && this.peek() === "=") {
+          this.advance();
+          this.addToken("%=", "%=", startLine, startCol);
+          return;
+        }
+        if (char === ":" && this.peek() === ":") {
+          this.advance();
+          this.addToken("::", "::", startLine, startCol);
+          return;
+        }
+        if (char === "." && this.peek() === ".") {
+          this.advance();
+          let value = "..";
+          while (/[0-9]/.test(this.peek())) {
+            value += this.advance();
+          }
+          this.addToken("range_lit", value, startLine, startCol);
+          return;
+        }
+        const singleChar = [
+          "+",
+          "-",
+          "*",
+          "/",
+          "%",
+          "~",
+          "^",
+          "<",
+          ">",
+          "!",
+          "=",
+          "{",
+          "}",
+          "(",
+          ")",
+          "[",
+          "]",
+          ",",
+          ";",
+          ":",
+          "."
+        ];
+        if (singleChar.includes(char)) {
+          this.addToken(char, char, startLine, startCol);
+          return;
+        }
+        if (char === "@") {
+          this.scanAtToken(startLine, startCol);
+          return;
+        }
+        if (char === '"') {
+          this.scanString(startLine, startCol);
+          return;
+        }
+        if (/[0-9]/.test(char)) {
+          this.scanNumber(char, startLine, startCol);
+          return;
+        }
+        if (/[a-zA-Z_]/.test(char)) {
+          this.scanIdentifier(char, startLine, startCol);
+          return;
+        }
+        this.error(`Unexpected character '${char}'`, startLine, startCol);
+      }
+      scanAtToken(startLine, startCol) {
+        const nextChar = this.peek();
+        const afterNext = this.peek(1);
+        if (SELECTOR_CHARS.has(nextChar) && !/[a-zA-Z_0-9]/.test(afterNext)) {
+          const selectorChar = this.advance();
+          let value2 = "@" + selectorChar;
+          if (this.peek() === "[") {
+            value2 += this.scanSelectorParams();
+          }
+          this.addToken("selector", value2, startLine, startCol);
+          return;
+        }
+        let value = "@";
+        while (/[a-zA-Z_0-9]/.test(this.peek())) {
+          value += this.advance();
+        }
+        if (this.peek() === "(") {
+          value += this.advance();
+          let parenDepth = 1;
+          while (!this.isAtEnd() && parenDepth > 0) {
+            const c = this.advance();
+            value += c;
+            if (c === "(")
+              parenDepth++;
+            if (c === ")")
+              parenDepth--;
+          }
+        }
+        this.addToken("decorator", value, startLine, startCol);
+      }
+      scanSelectorParams() {
+        let result = this.advance();
+        let depth = 1;
+        let braceDepth = 0;
+        while (!this.isAtEnd() && depth > 0) {
+          const c = this.advance();
+          result += c;
+          if (c === "{")
+            braceDepth++;
+          else if (c === "}")
+            braceDepth--;
+          else if (c === "[" && braceDepth === 0)
+            depth++;
+          else if (c === "]" && braceDepth === 0)
+            depth--;
+        }
+        return result;
+      }
+      scanString(startLine, startCol) {
+        let value = "";
+        let interpolationDepth = 0;
+        let interpolationString = false;
+        while (!this.isAtEnd()) {
+          if (interpolationDepth === 0 && this.peek() === '"') {
+            break;
+          }
+          if (this.peek() === "\\" && this.peek(1) === '"') {
+            this.advance();
+            value += this.advance();
+            continue;
+          }
+          if (interpolationDepth === 0 && this.peek() === "$" && this.peek(1) === "{") {
+            value += this.advance();
+            value += this.advance();
+            interpolationDepth = 1;
+            interpolationString = false;
+            continue;
+          }
+          const char = this.advance();
+          value += char;
+          if (interpolationDepth === 0)
+            continue;
+          if (char === '"') {
+            interpolationString = !interpolationString;
+            continue;
+          }
+          if (interpolationString)
+            continue;
+          if (char === "{")
+            interpolationDepth++;
+          if (char === "}")
+            interpolationDepth--;
+        }
+        if (this.isAtEnd()) {
+          this.error(`Unterminated string`, startLine, startCol);
+        }
+        this.advance();
+        this.addToken("string_lit", value, startLine, startCol);
+      }
+      scanNumber(firstChar, startLine, startCol) {
+        let value = firstChar;
+        while (/[0-9]/.test(this.peek())) {
+          value += this.advance();
+        }
+        if (this.peek() === "." && this.peek(1) === ".") {
+          value += this.advance();
+          value += this.advance();
+          while (/[0-9]/.test(this.peek())) {
+            value += this.advance();
+          }
+          this.addToken("range_lit", value, startLine, startCol);
+          return;
+        }
+        if (this.peek() === "." && /[0-9]/.test(this.peek(1))) {
+          value += this.advance();
+          while (/[0-9]/.test(this.peek())) {
+            value += this.advance();
+          }
+          this.addToken("float_lit", value, startLine, startCol);
+          return;
+        }
+        this.addToken("int_lit", value, startLine, startCol);
+      }
+      scanIdentifier(firstChar, startLine, startCol) {
+        let value = firstChar;
+        while (/[a-zA-Z_0-9]/.test(this.peek())) {
+          value += this.advance();
+        }
+        if (value === "raw" && this.peek() === "(") {
+          this.advance();
+          while (/\s/.test(this.peek())) {
+            this.advance();
+          }
+          if (this.peek() === '"') {
+            this.advance();
+            let rawContent = "";
+            while (!this.isAtEnd() && this.peek() !== '"') {
+              if (this.peek() === "\\" && this.peek(1) === '"') {
+                this.advance();
+                rawContent += this.advance();
+              } else {
+                rawContent += this.advance();
+              }
+            }
+            if (this.peek() === '"') {
+              this.advance();
+            }
+            while (/\s/.test(this.peek())) {
+              this.advance();
+            }
+            if (this.peek() === ")") {
+              this.advance();
+            }
+            this.addToken("raw_cmd", rawContent, startLine, startCol);
+            return;
+          }
+        }
+        const keyword = KEYWORDS[value];
+        if (keyword) {
+          this.addToken(keyword, value, startLine, startCol);
+        } else {
+          this.addToken("ident", value, startLine, startCol);
+        }
+      }
+    };
+    exports2.Lexer = Lexer;
+  }
+});
+
+// ../../dist/parser/index.js
+var require_parser = __commonJS({
+  "../../dist/parser/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.Parser = void 0;
+    var lexer_1 = require_lexer();
+    var diagnostics_1 = require_diagnostics();
+    var PRECEDENCE = {
+      "||": 1,
+      "&&": 2,
+      "==": 3,
+      "!=": 3,
+      "<": 4,
+      "<=": 4,
+      ">": 4,
+      ">=": 4,
+      "+": 5,
+      "-": 5,
+      "*": 6,
+      "/": 6,
+      "%": 6
+    };
+    var BINARY_OPS = /* @__PURE__ */ new Set(["||", "&&", "==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"]);
+    function computeIsSingle(raw) {
+      if (/^@[spr](\[|$)/.test(raw))
+        return true;
+      if (/[\[,\s]limit=1[,\]\s]/.test(raw))
+        return true;
+      return false;
+    }
+    var Parser = class _Parser {
+      constructor(tokens, source, filePath) {
+        this.pos = 0;
+        this.tokens = tokens;
+        this.sourceLines = source?.split("\n") ?? [];
+        this.filePath = filePath;
+      }
+      // -------------------------------------------------------------------------
+      // Utilities
+      // -------------------------------------------------------------------------
+      peek(offset = 0) {
+        const idx = this.pos + offset;
+        if (idx >= this.tokens.length) {
+          return this.tokens[this.tokens.length - 1];
+        }
+        return this.tokens[idx];
+      }
+      advance() {
+        const token = this.tokens[this.pos];
+        if (token.kind !== "eof")
+          this.pos++;
+        return token;
+      }
+      check(kind) {
+        return this.peek().kind === kind;
+      }
+      match(...kinds) {
+        for (const kind of kinds) {
+          if (this.check(kind)) {
+            this.advance();
+            return true;
+          }
+        }
+        return false;
+      }
+      expect(kind) {
+        const token = this.peek();
+        if (token.kind !== kind) {
+          throw new diagnostics_1.DiagnosticError("ParseError", `Expected '${kind}' but got '${token.kind}'`, { file: this.filePath, line: token.line, col: token.col }, this.sourceLines);
+        }
+        return this.advance();
+      }
+      error(message) {
+        const token = this.peek();
+        throw new diagnostics_1.DiagnosticError("ParseError", message, { file: this.filePath, line: token.line, col: token.col }, this.sourceLines);
+      }
+      withLoc(node, token) {
+        Object.defineProperty(node, "loc", {
+          value: { line: token.line, col: token.col },
+          enumerable: false,
+          configurable: true
+        });
+        return node;
+      }
+      getLocToken(node) {
+        const loc = node.loc;
+        if (!loc) {
+          return null;
+        }
+        return { kind: "eof", value: "", line: loc.line, col: loc.col };
+      }
+      // -------------------------------------------------------------------------
+      // Program
+      // -------------------------------------------------------------------------
+      parse(defaultNamespace = "redscript") {
+        let namespace = defaultNamespace;
+        const declarations = [];
+        const structs = [];
+        const enums = [];
+        const consts = [];
+        if (this.check("namespace")) {
+          this.advance();
+          const name = this.expect("ident");
+          namespace = name.value;
+          this.expect(";");
+        }
+        while (!this.check("eof")) {
+          if (this.check("struct")) {
+            structs.push(this.parseStructDecl());
+          } else if (this.check("enum")) {
+            enums.push(this.parseEnumDecl());
+          } else if (this.check("const")) {
+            consts.push(this.parseConstDecl());
+          } else {
+            declarations.push(this.parseFnDecl());
+          }
+        }
+        return { namespace, declarations, structs, enums, consts };
+      }
+      // -------------------------------------------------------------------------
+      // Struct Declaration
+      // -------------------------------------------------------------------------
+      parseStructDecl() {
+        const structToken = this.expect("struct");
+        const name = this.expect("ident").value;
+        this.expect("{");
+        const fields = [];
+        while (!this.check("}") && !this.check("eof")) {
+          const fieldName = this.expect("ident").value;
+          this.expect(":");
+          const fieldType = this.parseType();
+          fields.push({ name: fieldName, type: fieldType });
+          this.match(",");
+        }
+        this.expect("}");
+        return this.withLoc({ name, fields }, structToken);
+      }
+      parseEnumDecl() {
+        const enumToken = this.expect("enum");
+        const name = this.expect("ident").value;
+        this.expect("{");
+        const variants = [];
+        let nextValue = 0;
+        while (!this.check("}") && !this.check("eof")) {
+          const variantToken = this.expect("ident");
+          const variant = { name: variantToken.value };
+          if (this.match("=")) {
+            const valueToken = this.expect("int_lit");
+            variant.value = parseInt(valueToken.value, 10);
+            nextValue = variant.value + 1;
+          } else {
+            variant.value = nextValue++;
+          }
+          variants.push(variant);
+          if (!this.match(",")) {
+            break;
+          }
+        }
+        this.expect("}");
+        return this.withLoc({ name, variants }, enumToken);
+      }
+      parseConstDecl() {
+        const constToken = this.expect("const");
+        const name = this.expect("ident").value;
+        this.expect(":");
+        const type = this.parseType();
+        this.expect("=");
+        const value = this.parseLiteralExpr();
+        this.match(";");
+        return this.withLoc({ name, type, value }, constToken);
+      }
+      // -------------------------------------------------------------------------
+      // Function Declaration
+      // -------------------------------------------------------------------------
+      parseFnDecl() {
+        const decorators = this.parseDecorators();
+        const fnToken = this.expect("fn");
+        const name = this.expect("ident").value;
+        this.expect("(");
+        const params = this.parseParams();
+        this.expect(")");
+        let returnType = { kind: "named", name: "void" };
+        if (this.match("->")) {
+          returnType = this.parseType();
+        }
+        const body = this.parseBlock();
+        return this.withLoc({ name, params, returnType, decorators, body }, fnToken);
+      }
+      parseDecorators() {
+        const decorators = [];
+        while (this.check("decorator")) {
+          const token = this.advance();
+          const decorator = this.parseDecoratorValue(token.value);
+          decorators.push(decorator);
+        }
+        return decorators;
+      }
+      parseDecoratorValue(value) {
+        const match = value.match(/^@(\w+)(?:\(([^)]*)\))?$/);
+        if (!match) {
+          this.error(`Invalid decorator: ${value}`);
+        }
+        const name = match[1];
+        const argsStr = match[2];
+        if (!argsStr) {
+          return { name };
+        }
+        const args = {};
+        if (name === "on_trigger" || name === "on_advancement" || name === "on_craft" || name === "on_join_team") {
+          const strMatch = argsStr.match(/^"([^"]*)"$/);
+          if (strMatch) {
+            if (name === "on_trigger") {
+              args.trigger = strMatch[1];
+            } else if (name === "on_advancement") {
+              args.advancement = strMatch[1];
+            } else if (name === "on_craft") {
+              args.item = strMatch[1];
+            } else if (name === "on_join_team") {
+              args.team = strMatch[1];
+            }
+            return { name, args };
+          }
+        }
+        for (const part of argsStr.split(",")) {
+          const [key, val] = part.split("=").map((s) => s.trim());
+          if (key === "rate") {
+            args.rate = parseInt(val, 10);
+          } else if (key === "trigger") {
+            args.trigger = val;
+          } else if (key === "advancement") {
+            args.advancement = val;
+          } else if (key === "item") {
+            args.item = val;
+          } else if (key === "team") {
+            args.team = val;
+          }
+        }
+        return { name, args };
+      }
+      parseParams() {
+        const params = [];
+        if (!this.check(")")) {
+          do {
+            const paramToken = this.expect("ident");
+            const name = paramToken.value;
+            this.expect(":");
+            const type = this.parseType();
+            let defaultValue;
+            if (this.match("=")) {
+              defaultValue = this.parseExpr();
+            }
+            params.push(this.withLoc({ name, type, default: defaultValue }, paramToken));
+          } while (this.match(","));
+        }
+        return params;
+      }
+      parseType() {
+        const token = this.peek();
+        let type;
+        if (token.kind === "(") {
+          return this.parseFunctionType();
+        }
+        if (token.kind === "int" || token.kind === "bool" || token.kind === "float" || token.kind === "string" || token.kind === "void" || token.kind === "BlockPos") {
+          this.advance();
+          type = { kind: "named", name: token.kind };
+        } else if (token.kind === "ident") {
+          this.advance();
+          type = { kind: "struct", name: token.value };
+        } else {
+          this.error(`Expected type, got '${token.kind}'`);
+        }
+        while (this.match("[")) {
+          this.expect("]");
+          type = { kind: "array", elem: type };
+        }
+        return type;
+      }
+      parseFunctionType() {
+        this.expect("(");
+        const params = [];
+        if (!this.check(")")) {
+          do {
+            params.push(this.parseType());
+          } while (this.match(","));
+        }
+        this.expect(")");
+        this.expect("->");
+        const returnType = this.parseType();
+        return { kind: "function_type", params, return: returnType };
+      }
+      // -------------------------------------------------------------------------
+      // Block & Statements
+      // -------------------------------------------------------------------------
+      parseBlock() {
+        this.expect("{");
+        const stmts = [];
+        while (!this.check("}") && !this.check("eof")) {
+          stmts.push(this.parseStmt());
+        }
+        this.expect("}");
+        return stmts;
+      }
+      parseStmt() {
+        if (this.check("let")) {
+          return this.parseLetStmt();
+        }
+        if (this.check("return")) {
+          return this.parseReturnStmt();
+        }
+        if (this.check("if")) {
+          return this.parseIfStmt();
+        }
+        if (this.check("while")) {
+          return this.parseWhileStmt();
+        }
+        if (this.check("for")) {
+          return this.parseForStmt();
+        }
+        if (this.check("foreach")) {
+          return this.parseForeachStmt();
+        }
+        if (this.check("match")) {
+          return this.parseMatchStmt();
+        }
+        if (this.check("as")) {
+          return this.parseAsStmt();
+        }
+        if (this.check("at")) {
+          return this.parseAtStmt();
+        }
+        if (this.check("execute")) {
+          return this.parseExecuteStmt();
+        }
+        if (this.check("raw_cmd")) {
+          const token = this.advance();
+          const cmd = token.value;
+          this.match(";");
+          return this.withLoc({ kind: "raw", cmd }, token);
+        }
+        return this.parseExprStmt();
+      }
+      parseLetStmt() {
+        const letToken = this.expect("let");
+        const name = this.expect("ident").value;
+        let type;
+        if (this.match(":")) {
+          type = this.parseType();
+        }
+        this.expect("=");
+        const init = this.parseExpr();
+        this.expect(";");
+        return this.withLoc({ kind: "let", name, type, init }, letToken);
+      }
+      parseReturnStmt() {
+        const returnToken = this.expect("return");
+        let value;
+        if (!this.check(";")) {
+          value = this.parseExpr();
+        }
+        this.expect(";");
+        return this.withLoc({ kind: "return", value }, returnToken);
+      }
+      parseIfStmt() {
+        const ifToken = this.expect("if");
+        this.expect("(");
+        const cond = this.parseExpr();
+        this.expect(")");
+        const then = this.parseBlock();
+        let else_;
+        if (this.match("else")) {
+          if (this.check("if")) {
+            else_ = [this.parseIfStmt()];
+          } else {
+            else_ = this.parseBlock();
+          }
+        }
+        return this.withLoc({ kind: "if", cond, then, else_ }, ifToken);
+      }
+      parseWhileStmt() {
+        const whileToken = this.expect("while");
+        this.expect("(");
+        const cond = this.parseExpr();
+        this.expect(")");
+        const body = this.parseBlock();
+        return this.withLoc({ kind: "while", cond, body }, whileToken);
+      }
+      parseForStmt() {
+        const forToken = this.expect("for");
+        this.expect("(");
+        let init;
+        if (this.check("let")) {
+          const letToken = this.expect("let");
+          const name = this.expect("ident").value;
+          let type;
+          if (this.match(":")) {
+            type = this.parseType();
+          }
+          this.expect("=");
+          const initExpr = this.parseExpr();
+          const initStmt = { kind: "let", name, type, init: initExpr };
+          init = this.withLoc(initStmt, letToken);
+        }
+        this.expect(";");
+        const cond = this.parseExpr();
+        this.expect(";");
+        const step = this.parseExpr();
+        this.expect(")");
+        const body = this.parseBlock();
+        return this.withLoc({ kind: "for", init, cond, step, body }, forToken);
+      }
+      parseForeachStmt() {
+        const foreachToken = this.expect("foreach");
+        this.expect("(");
+        const binding = this.expect("ident").value;
+        this.expect("in");
+        const iterable = this.parseExpr();
+        this.expect(")");
+        const body = this.parseBlock();
+        return this.withLoc({ kind: "foreach", binding, iterable, body }, foreachToken);
+      }
+      parseMatchStmt() {
+        const matchToken = this.expect("match");
+        this.expect("(");
+        const expr = this.parseExpr();
+        this.expect(")");
+        this.expect("{");
+        const arms = [];
+        while (!this.check("}") && !this.check("eof")) {
+          let pattern;
+          if (this.check("ident") && this.peek().value === "_") {
+            this.advance();
+            pattern = null;
+          } else {
+            pattern = this.parseExpr();
+          }
+          this.expect("=>");
+          const body = this.parseBlock();
+          arms.push({ pattern, body });
+        }
+        this.expect("}");
+        return this.withLoc({ kind: "match", expr, arms }, matchToken);
+      }
+      parseAsStmt() {
+        const asToken = this.expect("as");
+        const as_sel = this.parseSelector();
+        if (this.match("at")) {
+          const at_sel = this.parseSelector();
+          const body2 = this.parseBlock();
+          return this.withLoc({ kind: "as_at", as_sel, at_sel, body: body2 }, asToken);
+        }
+        const body = this.parseBlock();
+        return this.withLoc({ kind: "as_block", selector: as_sel, body }, asToken);
+      }
+      parseAtStmt() {
+        const atToken = this.expect("at");
+        const selector = this.parseSelector();
+        const body = this.parseBlock();
+        return this.withLoc({ kind: "at_block", selector, body }, atToken);
+      }
+      parseExecuteStmt() {
+        const executeToken = this.expect("execute");
+        const subcommands = [];
+        while (!this.check("run") && !this.check("eof")) {
+          if (this.match("as")) {
+            const selector = this.parseSelector();
+            subcommands.push({ kind: "as", selector });
+          } else if (this.match("at")) {
+            const selector = this.parseSelector();
+            subcommands.push({ kind: "at", selector });
+          } else if (this.match("if")) {
+            if (this.peek().kind === "ident" && this.peek().value === "entity") {
+              this.advance();
+            }
+            const selector = this.parseSelector();
+            subcommands.push({ kind: "if_entity", selector });
+          } else if (this.match("unless")) {
+            if (this.peek().kind === "ident" && this.peek().value === "entity") {
+              this.advance();
+            }
+            const selector = this.parseSelector();
+            subcommands.push({ kind: "unless_entity", selector });
+          } else if (this.match("in")) {
+            const dim = this.expect("ident").value;
+            subcommands.push({ kind: "in", dimension: dim });
+          } else {
+            this.error(`Unexpected token in execute statement: ${this.peek().kind}`);
+          }
+        }
+        this.expect("run");
+        const body = this.parseBlock();
+        return this.withLoc({ kind: "execute", subcommands, body }, executeToken);
+      }
+      parseExprStmt() {
+        const expr = this.parseExpr();
+        this.expect(";");
+        const exprToken = this.getLocToken(expr) ?? this.peek();
+        return this.withLoc({ kind: "expr", expr }, exprToken);
+      }
+      // -------------------------------------------------------------------------
+      // Expressions (Precedence Climbing)
+      // -------------------------------------------------------------------------
+      parseExpr() {
+        return this.parseAssignment();
+      }
+      parseAssignment() {
+        const left = this.parseBinaryExpr(1);
+        const token = this.peek();
+        if (token.kind === "=" || token.kind === "+=" || token.kind === "-=" || token.kind === "*=" || token.kind === "/=" || token.kind === "%=") {
+          const op = this.advance().kind;
+          if (left.kind === "ident") {
+            const value = this.parseAssignment();
+            return this.withLoc({ kind: "assign", target: left.name, op, value }, this.getLocToken(left) ?? token);
+          }
+          if (left.kind === "member") {
+            const value = this.parseAssignment();
+            return this.withLoc({ kind: "member_assign", obj: left.obj, field: left.field, op, value }, this.getLocToken(left) ?? token);
+          }
+        }
+        return left;
+      }
+      parseBinaryExpr(minPrec) {
+        let left = this.parseUnaryExpr();
+        while (true) {
+          const op = this.peek().kind;
+          if (!BINARY_OPS.has(op))
+            break;
+          const prec = PRECEDENCE[op];
+          if (prec < minPrec)
+            break;
+          const opToken = this.advance();
+          const right = this.parseBinaryExpr(prec + 1);
+          left = this.withLoc({ kind: "binary", op, left, right }, this.getLocToken(left) ?? opToken);
+        }
+        return left;
+      }
+      parseUnaryExpr() {
+        if (this.match("!")) {
+          const bangToken = this.tokens[this.pos - 1];
+          const operand = this.parseUnaryExpr();
+          return this.withLoc({ kind: "unary", op: "!", operand }, bangToken);
+        }
+        if (this.check("-") && !this.isSubtraction()) {
+          const minusToken = this.advance();
+          const operand = this.parseUnaryExpr();
+          return this.withLoc({ kind: "unary", op: "-", operand }, minusToken);
+        }
+        return this.parsePostfixExpr();
+      }
+      isSubtraction() {
+        if (this.pos === 0)
+          return false;
+        const prev = this.tokens[this.pos - 1];
+        return ["int_lit", "float_lit", "ident", ")", "]"].includes(prev.kind);
+      }
+      parsePostfixExpr() {
+        let expr = this.parsePrimaryExpr();
+        while (true) {
+          if (this.match("(")) {
+            const openParenToken = this.tokens[this.pos - 1];
+            if (expr.kind === "ident") {
+              const args2 = this.parseArgs();
+              this.expect(")");
+              expr = this.withLoc({ kind: "call", fn: expr.name, args: args2 }, this.getLocToken(expr) ?? openParenToken);
+              continue;
+            }
+            if (expr.kind === "member") {
+              const methodMap = {
+                "tag": "__entity_tag",
+                "untag": "__entity_untag",
+                "has_tag": "__entity_has_tag",
+                "push": "__array_push",
+                "pop": "__array_pop"
+              };
+              const internalFn = methodMap[expr.field];
+              if (internalFn) {
+                const args2 = this.parseArgs();
+                this.expect(")");
+                expr = this.withLoc({ kind: "call", fn: internalFn, args: [expr.obj, ...args2] }, this.getLocToken(expr) ?? openParenToken);
+                continue;
+              }
+              this.error(`Unknown method '${expr.field}'`);
+            }
+            const args = this.parseArgs();
+            this.expect(")");
+            expr = this.withLoc({ kind: "invoke", callee: expr, args }, this.getLocToken(expr) ?? openParenToken);
+            continue;
+          }
+          if (this.match("[")) {
+            const index = this.parseExpr();
+            this.expect("]");
+            expr = this.withLoc({ kind: "index", obj: expr, index }, this.getLocToken(expr) ?? this.tokens[this.pos - 1]);
+            continue;
+          }
+          if (this.match(".")) {
+            const field = this.expect("ident").value;
+            expr = this.withLoc({ kind: "member", obj: expr, field }, this.getLocToken(expr) ?? this.tokens[this.pos - 1]);
+            continue;
+          }
+          break;
+        }
+        return expr;
+      }
+      parseArgs() {
+        const args = [];
+        if (!this.check(")")) {
+          do {
+            args.push(this.parseExpr());
+          } while (this.match(","));
+        }
+        return args;
+      }
+      parsePrimaryExpr() {
+        const token = this.peek();
+        if (token.kind === "ident" && this.peek(1).kind === "=>") {
+          return this.parseSingleParamLambda();
+        }
+        if (token.kind === "int_lit") {
+          this.advance();
+          return this.withLoc({ kind: "int_lit", value: parseInt(token.value, 10) }, token);
+        }
+        if (token.kind === "float_lit") {
+          this.advance();
+          return this.withLoc({ kind: "float_lit", value: parseFloat(token.value) }, token);
+        }
+        if (token.kind === "string_lit") {
+          this.advance();
+          return this.parseStringExpr(token);
+        }
+        if (token.kind === "true") {
+          this.advance();
+          return this.withLoc({ kind: "bool_lit", value: true }, token);
+        }
+        if (token.kind === "false") {
+          this.advance();
+          return this.withLoc({ kind: "bool_lit", value: false }, token);
+        }
+        if (token.kind === "range_lit") {
+          this.advance();
+          return this.withLoc({ kind: "range_lit", range: this.parseRangeValue(token.value) }, token);
+        }
+        if (token.kind === "selector") {
+          this.advance();
+          return this.withLoc({
+            kind: "selector",
+            raw: token.value,
+            isSingle: computeIsSingle(token.value),
+            sel: this.parseSelectorValue(token.value)
+          }, token);
+        }
+        if (token.kind === "ident") {
+          this.advance();
+          return this.withLoc({ kind: "ident", name: token.value }, token);
+        }
+        if (token.kind === "(") {
+          if (this.isBlockPosLiteral()) {
+            return this.parseBlockPos();
+          }
+          if (this.isLambdaStart()) {
+            return this.parseLambdaExpr();
+          }
+          this.advance();
+          const expr = this.parseExpr();
+          this.expect(")");
+          return expr;
+        }
+        if (token.kind === "{") {
+          return this.parseStructLit();
+        }
+        if (token.kind === "[") {
+          return this.parseArrayLit();
+        }
+        this.error(`Unexpected token '${token.kind}'`);
+      }
+      parseLiteralExpr() {
+        const expr = this.parsePrimaryExpr();
+        if (expr.kind === "int_lit" || expr.kind === "float_lit" || expr.kind === "bool_lit" || expr.kind === "str_lit") {
+          return expr;
+        }
+        this.error("Const value must be a literal");
+      }
+      parseSingleParamLambda() {
+        const paramToken = this.expect("ident");
+        const params = [{ name: paramToken.value }];
+        this.expect("=>");
+        return this.finishLambdaExpr(params, paramToken);
+      }
+      parseLambdaExpr() {
+        const openParenToken = this.expect("(");
+        const params = [];
+        if (!this.check(")")) {
+          do {
+            const name = this.expect("ident").value;
+            let type;
+            if (this.match(":")) {
+              type = this.parseType();
+            }
+            params.push({ name, type });
+          } while (this.match(","));
+        }
+        this.expect(")");
+        let returnType;
+        if (this.match("->")) {
+          returnType = this.parseType();
+        }
+        this.expect("=>");
+        return this.finishLambdaExpr(params, openParenToken, returnType);
+      }
+      finishLambdaExpr(params, token, returnType) {
+        const body = this.check("{") ? this.parseBlock() : this.parseExpr();
+        return this.withLoc({ kind: "lambda", params, returnType, body }, token);
+      }
+      parseStringExpr(token) {
+        if (!token.value.includes("${")) {
+          return this.withLoc({ kind: "str_lit", value: token.value }, token);
+        }
+        const parts = [];
+        let current = "";
+        let index = 0;
+        while (index < token.value.length) {
+          if (token.value[index] === "$" && token.value[index + 1] === "{") {
+            if (current) {
+              parts.push(current);
+              current = "";
+            }
+            index += 2;
+            let depth = 1;
+            let exprSource = "";
+            let inString = false;
+            while (index < token.value.length && depth > 0) {
+              const char = token.value[index];
+              if (char === '"' && token.value[index - 1] !== "\\") {
+                inString = !inString;
+              }
+              if (!inString) {
+                if (char === "{") {
+                  depth++;
+                } else if (char === "}") {
+                  depth--;
+                  if (depth === 0) {
+                    index++;
+                    break;
+                  }
+                }
+              }
+              if (depth > 0) {
+                exprSource += char;
+              }
+              index++;
+            }
+            if (depth !== 0) {
+              this.error("Unterminated string interpolation");
+            }
+            parts.push(this.parseEmbeddedExpr(exprSource));
+            continue;
+          }
+          current += token.value[index];
+          index++;
+        }
+        if (current) {
+          parts.push(current);
+        }
+        return this.withLoc({ kind: "str_interp", parts }, token);
+      }
+      parseEmbeddedExpr(source) {
+        const tokens = new lexer_1.Lexer(source, this.filePath).tokenize();
+        const parser = new _Parser(tokens, source, this.filePath);
+        const expr = parser.parseExpr();
+        if (!parser.check("eof")) {
+          parser.error(`Unexpected token '${parser.peek().kind}' in string interpolation`);
+        }
+        return expr;
+      }
+      parseStructLit() {
+        const braceToken = this.expect("{");
+        const fields = [];
+        if (!this.check("}")) {
+          do {
+            const name = this.expect("ident").value;
+            this.expect(":");
+            const value = this.parseExpr();
+            fields.push({ name, value });
+          } while (this.match(","));
+        }
+        this.expect("}");
+        return this.withLoc({ kind: "struct_lit", fields }, braceToken);
+      }
+      parseArrayLit() {
+        const bracketToken = this.expect("[");
+        const elements = [];
+        if (!this.check("]")) {
+          do {
+            elements.push(this.parseExpr());
+          } while (this.match(","));
+        }
+        this.expect("]");
+        return this.withLoc({ kind: "array_lit", elements }, bracketToken);
+      }
+      isLambdaStart() {
+        if (!this.check("("))
+          return false;
+        let offset = 1;
+        if (this.peek(offset).kind !== ")") {
+          while (true) {
+            if (this.peek(offset).kind !== "ident") {
+              return false;
+            }
+            offset += 1;
+            if (this.peek(offset).kind === ":") {
+              offset += 1;
+              const consumed = this.typeTokenLength(offset);
+              if (consumed === 0) {
+                return false;
+              }
+              offset += consumed;
+            }
+            if (this.peek(offset).kind === ",") {
+              offset += 1;
+              continue;
+            }
+            break;
+          }
+        }
+        if (this.peek(offset).kind !== ")") {
+          return false;
+        }
+        offset += 1;
+        if (this.peek(offset).kind === "=>") {
+          return true;
+        }
+        if (this.peek(offset).kind === "->") {
+          offset += 1;
+          const consumed = this.typeTokenLength(offset);
+          if (consumed === 0) {
+            return false;
+          }
+          offset += consumed;
+          return this.peek(offset).kind === "=>";
+        }
+        return false;
+      }
+      typeTokenLength(offset) {
+        const token = this.peek(offset);
+        if (token.kind === "(") {
+          let inner = offset + 1;
+          if (this.peek(inner).kind !== ")") {
+            while (true) {
+              const consumed = this.typeTokenLength(inner);
+              if (consumed === 0) {
+                return 0;
+              }
+              inner += consumed;
+              if (this.peek(inner).kind === ",") {
+                inner += 1;
+                continue;
+              }
+              break;
+            }
+          }
+          if (this.peek(inner).kind !== ")") {
+            return 0;
+          }
+          inner += 1;
+          if (this.peek(inner).kind !== "->") {
+            return 0;
+          }
+          inner += 1;
+          const returnLen = this.typeTokenLength(inner);
+          return returnLen === 0 ? 0 : inner + returnLen - offset;
+        }
+        const isNamedType = token.kind === "int" || token.kind === "bool" || token.kind === "float" || token.kind === "string" || token.kind === "void" || token.kind === "BlockPos" || token.kind === "ident";
+        if (!isNamedType) {
+          return 0;
+        }
+        let length = 1;
+        while (this.peek(offset + length).kind === "[" && this.peek(offset + length + 1).kind === "]") {
+          length += 2;
+        }
+        return length;
+      }
+      isBlockPosLiteral() {
+        if (!this.check("("))
+          return false;
+        let offset = 1;
+        for (let i = 0; i < 3; i++) {
+          const consumed = this.coordComponentTokenLength(offset);
+          if (consumed === 0)
+            return false;
+          offset += consumed;
+          if (i < 2) {
+            if (this.peek(offset).kind !== ",")
+              return false;
+            offset += 1;
+          }
+        }
+        return this.peek(offset).kind === ")";
+      }
+      coordComponentTokenLength(offset) {
+        const token = this.peek(offset);
+        if (token.kind === "int_lit") {
+          return 1;
+        }
+        if (token.kind === "-") {
+          return this.peek(offset + 1).kind === "int_lit" ? 2 : 0;
+        }
+        if (token.kind !== "~" && token.kind !== "^") {
+          return 0;
+        }
+        const next = this.peek(offset + 1);
+        if (next.kind === "," || next.kind === ")") {
+          return 1;
+        }
+        if (next.kind === "int_lit") {
+          return 2;
+        }
+        if (next.kind === "-" && this.peek(offset + 2).kind === "int_lit") {
+          return 3;
+        }
+        return 0;
+      }
+      parseBlockPos() {
+        const openParenToken = this.expect("(");
+        const x = this.parseCoordComponent();
+        this.expect(",");
+        const y = this.parseCoordComponent();
+        this.expect(",");
+        const z = this.parseCoordComponent();
+        this.expect(")");
+        return this.withLoc({ kind: "blockpos", x, y, z }, openParenToken);
+      }
+      parseCoordComponent() {
+        const token = this.peek();
+        if (token.kind === "~" || token.kind === "^") {
+          this.advance();
+          const offset = this.parseSignedCoordOffset();
+          return token.kind === "~" ? { kind: "relative", offset } : { kind: "local", offset };
+        }
+        return { kind: "absolute", value: this.parseSignedCoordOffset(true) };
+      }
+      parseSignedCoordOffset(requireValue = false) {
+        let sign = 1;
+        if (this.match("-")) {
+          sign = -1;
+        }
+        if (this.check("int_lit")) {
+          return sign * parseInt(this.advance().value, 10);
+        }
+        if (requireValue) {
+          this.error("Expected integer coordinate component");
+        }
+        return 0;
+      }
+      // -------------------------------------------------------------------------
+      // Selector Parsing
+      // -------------------------------------------------------------------------
+      parseSelector() {
+        const token = this.expect("selector");
+        return this.parseSelectorValue(token.value);
+      }
+      parseSelectorValue(value) {
+        const bracketIndex = value.indexOf("[");
+        if (bracketIndex === -1) {
+          return { kind: value };
+        }
+        const kind = value.slice(0, bracketIndex);
+        const paramsStr = value.slice(bracketIndex + 1, -1);
+        const filters = this.parseSelectorFilters(paramsStr);
+        return { kind, filters };
+      }
+      parseSelectorFilters(paramsStr) {
+        const filters = {};
+        const parts = this.splitSelectorParams(paramsStr);
+        for (const part of parts) {
+          const eqIndex = part.indexOf("=");
+          if (eqIndex === -1)
+            continue;
+          const key = part.slice(0, eqIndex).trim();
+          const val = part.slice(eqIndex + 1).trim();
+          switch (key) {
+            case "type":
+              filters.type = val;
+              break;
+            case "distance":
+              filters.distance = this.parseRangeValue(val);
+              break;
+            case "tag":
+              if (val.startsWith("!")) {
+                filters.notTag = filters.notTag ?? [];
+                filters.notTag.push(val.slice(1));
+              } else {
+                filters.tag = filters.tag ?? [];
+                filters.tag.push(val);
+              }
+              break;
+            case "limit":
+              filters.limit = parseInt(val, 10);
+              break;
+            case "sort":
+              filters.sort = val;
+              break;
+            case "nbt":
+              filters.nbt = val;
+              break;
+            case "gamemode":
+              filters.gamemode = val;
+              break;
+            case "scores":
+              filters.scores = this.parseScoresFilter(val);
+              break;
+          }
+        }
+        return filters;
+      }
+      splitSelectorParams(str) {
+        const parts = [];
+        let current = "";
+        let depth = 0;
+        for (const char of str) {
+          if (char === "{" || char === "[")
+            depth++;
+          else if (char === "}" || char === "]")
+            depth--;
+          else if (char === "," && depth === 0) {
+            parts.push(current.trim());
+            current = "";
+            continue;
+          }
+          current += char;
+        }
+        if (current.trim()) {
+          parts.push(current.trim());
+        }
+        return parts;
+      }
+      parseScoresFilter(val) {
+        const scores = {};
+        const inner = val.slice(1, -1);
+        const parts = inner.split(",");
+        for (const part of parts) {
+          const [name, range] = part.split("=").map((s) => s.trim());
+          scores[name] = this.parseRangeValue(range);
+        }
+        return scores;
+      }
+      parseRangeValue(value) {
+        if (value.startsWith("..")) {
+          const max = parseInt(value.slice(2), 10);
+          return { max };
+        }
+        if (value.endsWith("..")) {
+          const min = parseInt(value.slice(0, -2), 10);
+          return { min };
+        }
+        const dotIndex = value.indexOf("..");
+        if (dotIndex !== -1) {
+          const min = parseInt(value.slice(0, dotIndex), 10);
+          const max = parseInt(value.slice(dotIndex + 2), 10);
+          return { min, max };
+        }
+        const val = parseInt(value, 10);
+        return { min: val, max: val };
+      }
+    };
+    exports2.Parser = Parser;
+  }
+});
+
+// ../../dist/typechecker/index.js
+var require_typechecker = __commonJS({
+  "../../dist/typechecker/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.TypeChecker = void 0;
+    var diagnostics_1 = require_diagnostics();
+    var TypeChecker = class {
+      constructor(source, filePath) {
+        this.functions = /* @__PURE__ */ new Map();
+        this.structs = /* @__PURE__ */ new Map();
+        this.enums = /* @__PURE__ */ new Map();
+        this.consts = /* @__PURE__ */ new Map();
+        this.currentFn = null;
+        this.currentReturnType = null;
+        this.scope = /* @__PURE__ */ new Map();
+        this.collector = new diagnostics_1.DiagnosticCollector(source, filePath);
+      }
+      getNodeLocation(node) {
+        const loc = node?.loc;
+        return {
+          line: loc?.line ?? 1,
+          col: loc?.col ?? 1
+        };
+      }
+      report(message, node) {
+        const { line, col } = this.getNodeLocation(node);
+        this.collector.error("TypeError", message, line, col);
+      }
+      /**
+       * Type check a program. Returns collected errors.
+       */
+      check(program) {
+        for (const fn of program.declarations) {
+          this.functions.set(fn.name, fn);
+        }
+        for (const struct of program.structs ?? []) {
+          const fields = /* @__PURE__ */ new Map();
+          for (const field of struct.fields) {
+            fields.set(field.name, field.type);
+          }
+          this.structs.set(struct.name, fields);
+        }
+        for (const enumDecl of program.enums ?? []) {
+          const variants = /* @__PURE__ */ new Map();
+          for (const variant of enumDecl.variants) {
+            variants.set(variant.name, variant.value ?? 0);
+          }
+          this.enums.set(enumDecl.name, variants);
+        }
+        for (const constDecl of program.consts ?? []) {
+          const constType = this.normalizeType(constDecl.type);
+          const actualType = this.inferType(constDecl.value);
+          if (!this.typesMatch(constType, actualType)) {
+            this.report(`Type mismatch: expected ${this.typeToString(constType)}, got ${this.typeToString(actualType)}`, constDecl.value);
+          }
+          this.consts.set(constDecl.name, constType);
+        }
+        for (const fn of program.declarations) {
+          this.checkFunction(fn);
+        }
+        return this.collector.getErrors();
+      }
+      checkFunction(fn) {
+        this.currentFn = fn;
+        this.currentReturnType = this.normalizeType(fn.returnType);
+        this.scope = /* @__PURE__ */ new Map();
+        let seenDefault = false;
+        for (const [name, type] of this.consts.entries()) {
+          this.scope.set(name, { type, mutable: false });
+        }
+        for (const param of fn.params) {
+          this.scope.set(param.name, { type: this.normalizeType(param.type), mutable: true });
+          if (param.default) {
+            seenDefault = true;
+            this.checkExpr(param.default);
+            const defaultType = this.inferType(param.default);
+            const paramType = this.normalizeType(param.type);
+            if (!this.typesMatch(paramType, defaultType)) {
+              this.report(`Default value for '${param.name}' must be ${this.typeToString(paramType)}, got ${this.typeToString(defaultType)}`, param.default);
+            }
+          } else if (seenDefault) {
+            this.report(`Parameter '${param.name}' cannot follow a default parameter`, param);
+          }
+        }
+        this.checkBlock(fn.body);
+        this.currentFn = null;
+        this.currentReturnType = null;
+      }
+      checkBlock(stmts) {
+        for (const stmt of stmts) {
+          this.checkStmt(stmt);
+        }
+      }
+      checkStmt(stmt) {
+        switch (stmt.kind) {
+          case "let":
+            this.checkLetStmt(stmt);
+            break;
+          case "return":
+            this.checkReturnStmt(stmt);
+            break;
+          case "if":
+            this.checkExpr(stmt.cond);
+            this.checkBlock(stmt.then);
+            if (stmt.else_)
+              this.checkBlock(stmt.else_);
+            break;
+          case "while":
+            this.checkExpr(stmt.cond);
+            this.checkBlock(stmt.body);
+            break;
+          case "for":
+            if (stmt.init)
+              this.checkStmt(stmt.init);
+            this.checkExpr(stmt.cond);
+            this.checkExpr(stmt.step);
+            this.checkBlock(stmt.body);
+            break;
+          case "foreach":
+            this.checkExpr(stmt.iterable);
+            if (stmt.iterable.kind === "selector") {
+              this.scope.set(stmt.binding, { type: { kind: "named", name: "void" }, mutable: true });
+            } else {
+              const iterableType = this.inferType(stmt.iterable);
+              if (iterableType.kind === "array") {
+                this.scope.set(stmt.binding, { type: iterableType.elem, mutable: true });
+              } else {
+                this.scope.set(stmt.binding, { type: { kind: "named", name: "void" }, mutable: true });
+              }
+            }
+            this.checkBlock(stmt.body);
+            break;
+          case "match":
+            this.checkExpr(stmt.expr);
+            for (const arm of stmt.arms) {
+              if (arm.pattern) {
+                this.checkExpr(arm.pattern);
+                if (!this.typesMatch(this.inferType(stmt.expr), this.inferType(arm.pattern))) {
+                  this.report("Match arm pattern type must match subject type", arm.pattern);
+                }
+              }
+              this.checkBlock(arm.body);
+            }
+            break;
+          case "as_block":
+          case "at_block":
+            this.checkBlock(stmt.body);
+            break;
+          case "as_at":
+            this.checkBlock(stmt.body);
+            break;
+          case "execute":
+            this.checkBlock(stmt.body);
+            break;
+          case "expr":
+            this.checkExpr(stmt.expr);
+            break;
+          case "raw":
+            break;
+        }
+      }
+      checkLetStmt(stmt) {
+        const expectedType = stmt.type ? this.normalizeType(stmt.type) : void 0;
+        this.checkExpr(stmt.init, expectedType);
+        const type = expectedType ?? this.inferType(stmt.init);
+        this.scope.set(stmt.name, { type, mutable: true });
+        const actualType = this.inferType(stmt.init, expectedType);
+        if (expectedType && stmt.init.kind !== "struct_lit" && stmt.init.kind !== "array_lit" && !(actualType.kind === "named" && actualType.name === "void") && !this.typesMatch(expectedType, actualType)) {
+          this.report(`Type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`, stmt);
+        }
+      }
+      checkReturnStmt(stmt) {
+        if (!this.currentReturnType)
+          return;
+        const expectedType = this.currentReturnType;
+        if (stmt.value) {
+          const actualType = this.inferType(stmt.value, expectedType);
+          this.checkExpr(stmt.value, expectedType);
+          if (!this.typesMatch(expectedType, actualType)) {
+            this.report(`Return type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`, stmt);
+          }
+        } else {
+          if (expectedType.kind !== "named" || expectedType.name !== "void") {
+            this.report(`Missing return value: expected ${this.typeToString(expectedType)}`, stmt);
+          }
+        }
+      }
+      checkExpr(expr, expectedType) {
+        switch (expr.kind) {
+          case "ident":
+            if (!this.scope.has(expr.name)) {
+              this.report(`Variable '${expr.name}' used before declaration`, expr);
+            }
+            break;
+          case "call":
+            this.checkCallExpr(expr);
+            break;
+          case "invoke":
+            this.checkInvokeExpr(expr);
+            break;
+          case "member":
+            this.checkMemberExpr(expr);
+            break;
+          case "binary":
+            this.checkExpr(expr.left);
+            this.checkExpr(expr.right);
+            break;
+          case "unary":
+            this.checkExpr(expr.operand);
+            break;
+          case "assign":
+            if (!this.scope.has(expr.target)) {
+              this.report(`Variable '${expr.target}' used before declaration`, expr);
+            } else if (!this.scope.get(expr.target)?.mutable) {
+              this.report(`Cannot assign to const '${expr.target}'`, expr);
+            }
+            this.checkExpr(expr.value, this.scope.get(expr.target)?.type);
+            break;
+          case "member_assign":
+            this.checkExpr(expr.obj);
+            this.checkExpr(expr.value);
+            break;
+          case "index":
+            this.checkExpr(expr.obj);
+            this.checkExpr(expr.index);
+            const indexType = this.inferType(expr.index);
+            if (indexType.kind !== "named" || indexType.name !== "int") {
+              this.report("Array index must be int", expr.index);
+            }
+            break;
+          case "struct_lit":
+            for (const field of expr.fields) {
+              this.checkExpr(field.value);
+            }
+            break;
+          case "str_interp":
+            for (const part of expr.parts) {
+              if (typeof part !== "string") {
+                this.checkExpr(part);
+              }
+            }
+            break;
+          case "array_lit":
+            for (const elem of expr.elements) {
+              this.checkExpr(elem);
+            }
+            break;
+          case "lambda":
+            this.checkLambdaExpr(expr, expectedType);
+            break;
+          case "blockpos":
+            break;
+          case "static_call":
+            for (const arg of expr.args) {
+              this.checkExpr(arg);
+            }
+            break;
+          // Literals don't need checking
+          case "int_lit":
+          case "float_lit":
+          case "bool_lit":
+          case "str_lit":
+          case "range_lit":
+          case "selector":
+            break;
+        }
+      }
+      checkCallExpr(expr) {
+        if (expr.fn === "tp" || expr.fn === "tp_to") {
+          this.checkTpCall(expr);
+        }
+        const fn = this.functions.get(expr.fn);
+        if (fn) {
+          const requiredParams = fn.params.filter((param) => !param.default).length;
+          if (expr.args.length < requiredParams || expr.args.length > fn.params.length) {
+            const expectedRange = requiredParams === fn.params.length ? `${fn.params.length}` : `${requiredParams}-${fn.params.length}`;
+            this.report(`Function '${expr.fn}' expects ${expectedRange} arguments, got ${expr.args.length}`, expr);
+          }
+          for (let i = 0; i < expr.args.length; i++) {
+            const paramType = fn.params[i] ? this.normalizeType(fn.params[i].type) : void 0;
+            if (paramType) {
+              this.checkExpr(expr.args[i], paramType);
+            }
+            const argType = this.inferType(expr.args[i], paramType);
+            if (paramType && !this.typesMatch(paramType, argType)) {
+              this.report(`Argument ${i + 1} of '${expr.fn}' expects ${this.typeToString(paramType)}, got ${this.typeToString(argType)}`, expr.args[i]);
+            }
+          }
+          return;
+        }
+        const varType = this.scope.get(expr.fn)?.type;
+        if (varType?.kind === "function_type") {
+          this.checkFunctionCallArgs(expr.args, varType.params, expr.fn, expr);
+          return;
+        }
+        for (const arg of expr.args) {
+          this.checkExpr(arg);
+        }
+      }
+      checkInvokeExpr(expr) {
+        this.checkExpr(expr.callee);
+        const calleeType = this.inferType(expr.callee);
+        if (calleeType.kind !== "function_type") {
+          this.report("Attempted to call a non-function value", expr.callee);
+          for (const arg of expr.args) {
+            this.checkExpr(arg);
+          }
+          return;
+        }
+        this.checkFunctionCallArgs(expr.args, calleeType.params, "lambda", expr);
+      }
+      checkFunctionCallArgs(args, params, calleeName, node) {
+        if (args.length !== params.length) {
+          this.report(`Function '${calleeName}' expects ${params.length} arguments, got ${args.length}`, node);
+        }
+        for (let i = 0; i < args.length; i++) {
+          const paramType = params[i];
+          if (!paramType) {
+            this.checkExpr(args[i]);
+            continue;
+          }
+          this.checkExpr(args[i], paramType);
+          const argType = this.inferType(args[i], paramType);
+          if (!this.typesMatch(paramType, argType)) {
+            this.report(`Argument ${i + 1} of '${calleeName}' expects ${this.typeToString(paramType)}, got ${this.typeToString(argType)}`, args[i]);
+          }
+        }
+      }
+      checkTpCall(expr) {
+        const dest = expr.args[1];
+        if (!dest) {
+          return;
+        }
+        const destType = this.inferType(dest);
+        if (destType.kind === "named" && destType.name === "BlockPos") {
+          return;
+        }
+        if (dest.kind === "selector" && !dest.isSingle) {
+          this.report("tp destination must be a single-entity selector (@s, @p, @r, or limit=1)", dest);
+        }
+      }
+      checkMemberExpr(expr) {
+        if (!(expr.obj.kind === "ident" && this.enums.has(expr.obj.name))) {
+          this.checkExpr(expr.obj);
+        }
+        if (expr.obj.kind === "ident") {
+          if (this.enums.has(expr.obj.name)) {
+            const enumVariants = this.enums.get(expr.obj.name);
+            if (!enumVariants.has(expr.field)) {
+              this.report(`Enum '${expr.obj.name}' has no variant '${expr.field}'`, expr);
+            }
+            return;
+          }
+          const varSymbol = this.scope.get(expr.obj.name);
+          const varType = varSymbol?.type;
+          if (varType) {
+            if (varType.kind === "struct") {
+              const structFields = this.structs.get(varType.name);
+              if (structFields && !structFields.has(expr.field)) {
+                this.report(`Struct '${varType.name}' has no field '${expr.field}'`, expr);
+              }
+            } else if (varType.kind === "array") {
+              if (expr.field !== "len" && expr.field !== "push" && expr.field !== "pop") {
+                this.report(`Array has no field '${expr.field}'`, expr);
+              }
+            } else if (varType.kind === "named") {
+              if (varType.name !== "void") {
+                if (["int", "bool", "float", "string"].includes(varType.name)) {
+                  this.report(`Cannot access member '${expr.field}' on ${this.typeToString(varType)}`, expr);
+                }
+              }
+            }
+          }
+        }
+      }
+      checkLambdaExpr(expr, expectedType) {
+        const normalizedExpected = expectedType ? this.normalizeType(expectedType) : void 0;
+        const expectedFnType = normalizedExpected?.kind === "function_type" ? normalizedExpected : void 0;
+        const lambdaType = this.inferLambdaType(expr, expectedFnType);
+        if (expectedFnType && !this.typesMatch(expectedFnType, lambdaType)) {
+          this.report(`Type mismatch: expected ${this.typeToString(expectedFnType)}, got ${this.typeToString(lambdaType)}`, expr);
+          return;
+        }
+        const outerScope = this.scope;
+        const outerReturnType = this.currentReturnType;
+        const lambdaScope = new Map(this.scope);
+        const paramTypes = expectedFnType?.params ?? lambdaType.params;
+        for (let i = 0; i < expr.params.length; i++) {
+          lambdaScope.set(expr.params[i].name, {
+            type: paramTypes[i] ?? { kind: "named", name: "void" },
+            mutable: true
+          });
+        }
+        this.scope = lambdaScope;
+        this.currentReturnType = expr.returnType ? this.normalizeType(expr.returnType) : expectedFnType?.return ?? lambdaType.return;
+        if (Array.isArray(expr.body)) {
+          this.checkBlock(expr.body);
+        } else {
+          this.checkExpr(expr.body, this.currentReturnType);
+          const actualType = this.inferType(expr.body, this.currentReturnType);
+          if (!this.typesMatch(this.currentReturnType, actualType)) {
+            this.report(`Return type mismatch: expected ${this.typeToString(this.currentReturnType)}, got ${this.typeToString(actualType)}`, expr.body);
+          }
+        }
+        this.scope = outerScope;
+        this.currentReturnType = outerReturnType;
+      }
+      inferType(expr, expectedType) {
+        switch (expr.kind) {
+          case "int_lit":
+            return { kind: "named", name: "int" };
+          case "float_lit":
+            return { kind: "named", name: "float" };
+          case "bool_lit":
+            return { kind: "named", name: "bool" };
+          case "str_lit":
+            return { kind: "named", name: "string" };
+          case "str_interp":
+            for (const part of expr.parts) {
+              if (typeof part !== "string") {
+                this.checkExpr(part);
+              }
+            }
+            return { kind: "named", name: "string" };
+          case "blockpos":
+            return { kind: "named", name: "BlockPos" };
+          case "ident":
+            return this.scope.get(expr.name)?.type ?? { kind: "named", name: "void" };
+          case "call": {
+            if (expr.fn === "__array_push") {
+              return { kind: "named", name: "void" };
+            }
+            if (expr.fn === "__array_pop") {
+              const target = expr.args[0];
+              if (target && target.kind === "ident") {
+                const targetType = this.scope.get(target.name)?.type;
+                if (targetType?.kind === "array")
+                  return targetType.elem;
+              }
+              return { kind: "named", name: "int" };
+            }
+            if (expr.fn === "bossbar_get_value") {
+              return { kind: "named", name: "int" };
+            }
+            if (expr.fn === "random_sequence") {
+              return { kind: "named", name: "void" };
+            }
+            const varType = this.scope.get(expr.fn)?.type;
+            if (varType?.kind === "function_type") {
+              return varType.return;
+            }
+            const fn = this.functions.get(expr.fn);
+            return fn?.returnType ?? { kind: "named", name: "int" };
+          }
+          case "invoke": {
+            const calleeType = this.inferType(expr.callee);
+            if (calleeType.kind === "function_type") {
+              return calleeType.return;
+            }
+            return { kind: "named", name: "void" };
+          }
+          case "member":
+            if (expr.obj.kind === "ident" && this.enums.has(expr.obj.name)) {
+              return { kind: "enum", name: expr.obj.name };
+            }
+            if (expr.obj.kind === "ident") {
+              const objTypeNode = this.scope.get(expr.obj.name)?.type;
+              if (objTypeNode?.kind === "array" && expr.field === "len") {
+                return { kind: "named", name: "int" };
+              }
+            }
+            return { kind: "named", name: "void" };
+          case "index": {
+            const objType = this.inferType(expr.obj);
+            if (objType.kind === "array")
+              return objType.elem;
+            return { kind: "named", name: "void" };
+          }
+          case "binary":
+            if (["==", "!=", "<", "<=", ">", ">=", "&&", "||"].includes(expr.op)) {
+              return { kind: "named", name: "bool" };
+            }
+            return this.inferType(expr.left);
+          case "unary":
+            if (expr.op === "!")
+              return { kind: "named", name: "bool" };
+            return this.inferType(expr.operand);
+          case "array_lit":
+            if (expr.elements.length > 0) {
+              return { kind: "array", elem: this.inferType(expr.elements[0]) };
+            }
+            return { kind: "array", elem: { kind: "named", name: "int" } };
+          case "lambda":
+            return this.inferLambdaType(expr, expectedType && this.normalizeType(expectedType).kind === "function_type" ? this.normalizeType(expectedType) : void 0);
+          default:
+            return { kind: "named", name: "void" };
+        }
+      }
+      inferLambdaType(expr, expectedType) {
+        const params = expr.params.map((param, index) => {
+          if (param.type) {
+            return this.normalizeType(param.type);
+          }
+          const inferred = expectedType?.params[index];
+          if (inferred) {
+            return inferred;
+          }
+          this.report(`Lambda parameter '${param.name}' requires a type annotation`, expr);
+          return { kind: "named", name: "void" };
+        });
+        let returnType = expr.returnType ? this.normalizeType(expr.returnType) : expectedType?.return;
+        if (!returnType) {
+          returnType = Array.isArray(expr.body) ? { kind: "named", name: "void" } : this.inferType(expr.body);
+        }
+        return { kind: "function_type", params, return: returnType };
+      }
+      typesMatch(expected, actual) {
+        if (expected.kind !== actual.kind)
+          return false;
+        if (expected.kind === "named" && actual.kind === "named") {
+          if (actual.name === "void")
+            return true;
+          return expected.name === actual.name;
+        }
+        if (expected.kind === "array" && actual.kind === "array") {
+          return this.typesMatch(expected.elem, actual.elem);
+        }
+        if (expected.kind === "struct" && actual.kind === "struct") {
+          return expected.name === actual.name;
+        }
+        if (expected.kind === "enum" && actual.kind === "enum") {
+          return expected.name === actual.name;
+        }
+        if (expected.kind === "function_type" && actual.kind === "function_type") {
+          return expected.params.length === actual.params.length && expected.params.every((param, index) => this.typesMatch(param, actual.params[index])) && this.typesMatch(expected.return, actual.return);
+        }
+        return false;
+      }
+      typeToString(type) {
+        switch (type.kind) {
+          case "named":
+            return type.name;
+          case "array":
+            return `${this.typeToString(type.elem)}[]`;
+          case "struct":
+            return type.name;
+          case "enum":
+            return type.name;
+          case "function_type":
+            return `(${type.params.map((param) => this.typeToString(param)).join(", ")}) -> ${this.typeToString(type.return)}`;
+        }
+      }
+      normalizeType(type) {
+        if (type.kind === "array") {
+          return { kind: "array", elem: this.normalizeType(type.elem) };
+        }
+        if (type.kind === "function_type") {
+          return {
+            kind: "function_type",
+            params: type.params.map((param) => this.normalizeType(param)),
+            return: this.normalizeType(type.return)
+          };
+        }
+        if ((type.kind === "struct" || type.kind === "enum") && this.enums.has(type.name)) {
+          return { kind: "enum", name: type.name };
+        }
+        return type;
+      }
+    };
+    exports2.TypeChecker = TypeChecker;
+  }
+});
+
+// ../../dist/ir/builder.js
+var require_builder = __commonJS({
+  "../../dist/ir/builder.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.IRBuilder = void 0;
+    exports2.buildModule = buildModule;
+    var IRBuilder = class {
+      constructor() {
+        this.tempCount = 0;
+        this.labelCount = 0;
+        this.currentBlock = null;
+        this.blocks = [];
+        this.locals = /* @__PURE__ */ new Set();
+      }
+      // -------------------------------------------------------------------------
+      // Names
+      // -------------------------------------------------------------------------
+      freshTemp() {
+        const name = `$t${this.tempCount++}`;
+        this.locals.add(name);
+        return name;
+      }
+      freshLabel(hint = "L") {
+        return `${hint}_${this.labelCount++}`;
+      }
+      // -------------------------------------------------------------------------
+      // Block management
+      // -------------------------------------------------------------------------
+      startBlock(label) {
+        this.currentBlock = { label, instrs: [], term: { op: "return" } };
+      }
+      get block() {
+        if (!this.currentBlock)
+          throw new Error("No active block");
+        return this.currentBlock;
+      }
+      sealBlock(term) {
+        this.block.term = term;
+        this.blocks.push(this.block);
+        this.currentBlock = null;
+      }
+      // -------------------------------------------------------------------------
+      // Emit instructions
+      // -------------------------------------------------------------------------
+      emitAssign(dst, src) {
+        this.locals.add(dst);
+        this.block.instrs.push({ op: "assign", dst, src });
+      }
+      emitBinop(dst, lhs, bop, rhs) {
+        this.locals.add(dst);
+        this.block.instrs.push({ op: "binop", dst, lhs, bop, rhs });
+      }
+      emitCmp(dst, lhs, cop, rhs) {
+        this.locals.add(dst);
+        this.block.instrs.push({ op: "cmp", dst, lhs, cop, rhs });
+      }
+      emitCall(fn, args, dst) {
+        if (dst)
+          this.locals.add(dst);
+        this.block.instrs.push({ op: "call", fn, args, dst });
+      }
+      emitRaw(cmd) {
+        this.block.instrs.push({ op: "raw", cmd });
+      }
+      // -------------------------------------------------------------------------
+      // Terminators
+      // -------------------------------------------------------------------------
+      emitJump(target) {
+        this.sealBlock({ op: "jump", target });
+      }
+      emitJumpIf(cond, then, else_) {
+        this.sealBlock({ op: "jump_if", cond, then, else_ });
+      }
+      emitReturn(value) {
+        this.sealBlock({ op: "return", value });
+      }
+      emitTickYield(continuation) {
+        this.sealBlock({ op: "tick_yield", continuation });
+      }
+      // -------------------------------------------------------------------------
+      // Build
+      // -------------------------------------------------------------------------
+      build(name, params, isTickLoop = false) {
+        return {
+          name,
+          params,
+          locals: Array.from(this.locals),
+          blocks: this.blocks,
+          isTickLoop
+        };
+      }
+    };
+    exports2.IRBuilder = IRBuilder;
+    function buildModule(namespace, fns, globals = []) {
+      return { namespace, functions: fns, globals };
+    }
+  }
+});
+
+// ../../dist/lowering/index.js
+var require_lowering = __commonJS({
+  "../../dist/lowering/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.Lowering = void 0;
+    var builder_1 = require_builder();
+    var diagnostics_1 = require_diagnostics();
+    var BUILTINS = {
+      say: ([msg]) => `say ${msg}`,
+      tell: ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
+      title: ([sel, msg]) => `title ${sel} title {"text":"${msg}"}`,
+      actionbar: ([sel, msg]) => `title ${sel} actionbar {"text":"${msg}"}`,
+      subtitle: ([sel, msg]) => `title ${sel} subtitle {"text":"${msg}"}`,
+      title_times: ([sel, fadeIn, stay, fadeOut]) => `title ${sel} times ${fadeIn} ${stay} ${fadeOut}`,
+      announce: ([msg]) => `tellraw @a {"text":"${msg}"}`,
+      give: ([sel, item, count]) => `give ${sel} ${item} ${count ?? "1"}`,
+      kill: ([sel]) => `kill ${sel ?? "@s"}`,
+      effect: ([sel, eff, dur, amp]) => `effect give ${sel} ${eff} ${dur ?? "30"} ${amp ?? "0"}`,
+      summon: ([type, x, y, z, nbt]) => {
+        const pos = [x ?? "~", y ?? "~", z ?? "~"].join(" ");
+        return nbt ? `summon ${type} ${pos} ${nbt}` : `summon ${type} ${pos}`;
+      },
+      particle: ([name, x, y, z]) => {
+        const pos = [x ?? "~", y ?? "~", z ?? "~"].join(" ");
+        return `particle ${name} ${pos}`;
+      },
+      playsound: ([sound, source, sel, x, y, z, volume, pitch, minVolume]) => ["playsound", sound, source, sel, x, y, z, volume, pitch, minVolume].filter(Boolean).join(" "),
+      tp: () => null,
+      // Special handling
+      tp_to: () => null,
+      // Special handling (deprecated alias)
+      clear: ([sel, item]) => `clear ${sel} ${item ?? ""}`.trim(),
+      weather: ([type]) => `weather ${type}`,
+      time_set: ([val]) => `time set ${val}`,
+      time_add: ([val]) => `time add ${val}`,
+      gamerule: ([rule, val]) => `gamerule ${rule} ${val}`,
+      tag_add: ([sel, tag]) => `tag ${sel} add ${tag}`,
+      tag_remove: ([sel, tag]) => `tag ${sel} remove ${tag}`,
+      kick: ([player, reason]) => `kick ${player} ${reason ?? ""}`.trim(),
+      setblock: ([x, y, z, block]) => `setblock ${x} ${y} ${z} ${block}`,
+      fill: ([x1, y1, z1, x2, y2, z2, block]) => `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}`,
+      clone: ([x1, y1, z1, x2, y2, z2, dx, dy, dz]) => `clone ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${dx} ${dy} ${dz}`,
+      difficulty: ([level]) => `difficulty ${level}`,
+      xp_add: ([sel, amount, type]) => `xp add ${sel} ${amount} ${type ?? "points"}`,
+      xp_set: ([sel, amount, type]) => `xp set ${sel} ${amount} ${type ?? "points"}`,
+      random: () => null,
+      // Special handling
+      random_native: () => null,
+      // Special handling
+      random_sequence: () => null,
+      // Special handling
+      scoreboard_get: () => null,
+      // Special handling (returns value)
+      scoreboard_set: () => null,
+      // Special handling
+      score: () => null,
+      // Special handling (same as scoreboard_get)
+      scoreboard_display: () => null,
+      // Special handling
+      scoreboard_hide: () => null,
+      // Special handling
+      scoreboard_add_objective: () => null,
+      // Special handling
+      scoreboard_remove_objective: () => null,
+      // Special handling
+      bossbar_add: () => null,
+      // Special handling
+      bossbar_set_value: () => null,
+      // Special handling
+      bossbar_set_max: () => null,
+      // Special handling
+      bossbar_set_color: () => null,
+      // Special handling
+      bossbar_set_style: () => null,
+      // Special handling
+      bossbar_set_visible: () => null,
+      // Special handling
+      bossbar_set_players: () => null,
+      // Special handling
+      bossbar_remove: () => null,
+      // Special handling
+      bossbar_get_value: () => null,
+      // Special handling
+      team_add: () => null,
+      // Special handling
+      team_remove: () => null,
+      // Special handling
+      team_join: () => null,
+      // Special handling
+      team_leave: () => null,
+      // Special handling
+      team_option: () => null,
+      // Special handling
+      data_get: () => null
+      // Special handling (returns value from NBT)
+    };
+    var NAMESPACED_ENTITY_TYPE_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/;
+    var BARE_ENTITY_TYPE_RE = /^[a-z0-9_./-]+$/;
+    function normalizeSelector(selector, warnings) {
+      return selector.replace(/type=([^,\]]+)/g, (match, entityType) => {
+        const trimmed = entityType.trim();
+        if (trimmed.includes(":")) {
+          if (!NAMESPACED_ENTITY_TYPE_RE.test(trimmed)) {
+            throw new diagnostics_1.DiagnosticError("LoweringError", `Invalid entity type format: "${trimmed}" (must be namespace:name)`, { line: 1, col: 1 });
+          }
+          return match;
+        }
+        if (!BARE_ENTITY_TYPE_RE.test(trimmed)) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", `Invalid entity type format: "${trimmed}" (must be namespace:name or bare_name)`, { line: 1, col: 1 });
+        }
+        warnings.push({
+          message: `Unnamespaced entity type "${trimmed}", auto-qualifying to "minecraft:${trimmed}"`,
+          code: "W_UNNAMESPACED_TYPE"
+        });
+        return `type=minecraft:${trimmed}`;
+      });
+    }
+    function emitCoord(component) {
+      switch (component.kind) {
+        case "absolute":
+          return String(component.value);
+        case "relative":
+          return component.offset === 0 ? "~" : `~${component.offset}`;
+        case "local":
+          return component.offset === 0 ? "^" : `^${component.offset}`;
+      }
+    }
+    function emitBlockPos(pos) {
+      return `${emitCoord(pos.x)} ${emitCoord(pos.y)} ${emitCoord(pos.z)}`;
+    }
+    var Lowering = class {
+      constructor(namespace) {
+        this.functions = [];
+        this.globals = [];
+        this.fnDecls = /* @__PURE__ */ new Map();
+        this.specializedFunctions = /* @__PURE__ */ new Map();
+        this.currentFn = "";
+        this.foreachCounter = 0;
+        this.lambdaCounter = 0;
+        this.warnings = [];
+        this.varMap = /* @__PURE__ */ new Map();
+        this.lambdaBindings = /* @__PURE__ */ new Map();
+        this.currentCallbackBindings = /* @__PURE__ */ new Map();
+        this.currentContext = {};
+        this.blockPosVars = /* @__PURE__ */ new Map();
+        this.structDefs = /* @__PURE__ */ new Map();
+        this.enumDefs = /* @__PURE__ */ new Map();
+        this.functionDefaults = /* @__PURE__ */ new Map();
+        this.constValues = /* @__PURE__ */ new Map();
+        this.stringValues = /* @__PURE__ */ new Map();
+        this.varTypes = /* @__PURE__ */ new Map();
+        this.floatVars = /* @__PURE__ */ new Set();
+        this.worldObjCounter = 0;
+        this.namespace = namespace;
+      }
+      lower(program) {
+        this.namespace = program.namespace;
+        for (const struct of program.structs ?? []) {
+          const fields = /* @__PURE__ */ new Map();
+          for (const field of struct.fields) {
+            fields.set(field.name, field.type);
+          }
+          this.structDefs.set(struct.name, fields);
+        }
+        for (const enumDecl of program.enums ?? []) {
+          const variants = /* @__PURE__ */ new Map();
+          for (const variant of enumDecl.variants) {
+            variants.set(variant.name, variant.value ?? 0);
+          }
+          this.enumDefs.set(enumDecl.name, variants);
+        }
+        for (const constDecl of program.consts ?? []) {
+          this.constValues.set(constDecl.name, constDecl.value);
+          this.varTypes.set(constDecl.name, this.normalizeType(constDecl.type));
+        }
+        for (const fn of program.declarations) {
+          this.fnDecls.set(fn.name, fn);
+          this.functionDefaults.set(fn.name, fn.params.map((param) => param.default));
+        }
+        for (const fn of program.declarations) {
+          this.lowerFn(fn);
+        }
+        return (0, builder_1.buildModule)(this.namespace, this.functions, this.globals);
+      }
+      // -------------------------------------------------------------------------
+      // Function Lowering
+      // -------------------------------------------------------------------------
+      lowerFn(fn, options = {}) {
+        const loweredName = options.name ?? fn.name;
+        const callbackBindings = options.callbackBindings ?? /* @__PURE__ */ new Map();
+        const runtimeParams = fn.params.filter((param) => !callbackBindings.has(param.name));
+        this.currentFn = loweredName;
+        this.foreachCounter = 0;
+        this.varMap = /* @__PURE__ */ new Map();
+        this.lambdaBindings = /* @__PURE__ */ new Map();
+        this.currentCallbackBindings = new Map(callbackBindings);
+        this.currentContext = {};
+        this.blockPosVars = /* @__PURE__ */ new Map();
+        this.stringValues = /* @__PURE__ */ new Map();
+        this.builder = new LoweringBuilder();
+        for (const param of runtimeParams) {
+          const paramName = param.name;
+          this.varMap.set(paramName, `$${paramName}`);
+          this.varTypes.set(paramName, this.normalizeType(param.type));
+        }
+        for (const param of fn.params) {
+          if (callbackBindings.has(param.name)) {
+            this.varTypes.set(param.name, this.normalizeType(param.type));
+          }
+        }
+        this.builder.startBlock("entry");
+        for (let i = 0; i < runtimeParams.length; i++) {
+          const paramName = runtimeParams[i].name;
+          const varName = `$${paramName}`;
+          this.builder.emitAssign(varName, { kind: "var", name: `$p${i}` });
+        }
+        this.lowerBlock(fn.body);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitReturn();
+        }
+        const isTickLoop = fn.decorators.some((d) => d.name === "tick");
+        const tickRate = this.getTickRate(fn.decorators);
+        const triggerDec = fn.decorators.find((d) => d.name === "on_trigger");
+        const isTriggerHandler = !!triggerDec;
+        const triggerName = triggerDec?.args?.trigger;
+        const irFn = this.builder.build(loweredName, runtimeParams.map((p) => `$${p.name}`), isTickLoop);
+        if (isTriggerHandler && triggerName) {
+          irFn.isTriggerHandler = true;
+          irFn.triggerName = triggerName;
+        }
+        const eventDec = fn.decorators.find((d) => d.name === "on_advancement" || d.name === "on_craft" || d.name === "on_death" || d.name === "on_login" || d.name === "on_join_team");
+        if (eventDec) {
+          switch (eventDec.name) {
+            case "on_advancement":
+              irFn.eventTrigger = { kind: "advancement", value: eventDec.args?.advancement };
+              break;
+            case "on_craft":
+              irFn.eventTrigger = { kind: "craft", value: eventDec.args?.item };
+              break;
+            case "on_death":
+              irFn.eventTrigger = { kind: "death" };
+              break;
+            case "on_login":
+              irFn.eventTrigger = { kind: "login" };
+              break;
+            case "on_join_team":
+              irFn.eventTrigger = { kind: "join_team", value: eventDec.args?.team };
+              break;
+          }
+        }
+        if (tickRate && tickRate > 1) {
+          this.wrapWithTickRate(irFn, tickRate);
+        }
+        this.functions.push(irFn);
+      }
+      getTickRate(decorators) {
+        const tickDec = decorators.find((d) => d.name === "tick");
+        return tickDec?.args?.rate;
+      }
+      wrapWithTickRate(fn, rate) {
+        const counterVar = `$__tick_${fn.name}`;
+        this.globals.push(counterVar);
+        const entry = fn.blocks[0];
+        const originalInstrs = [...entry.instrs];
+        const originalTerm = entry.term;
+        entry.instrs = [
+          { op: "raw", cmd: `scoreboard players add ${counterVar} rs 1` }
+        ];
+        const bodyLabel = "tick_body";
+        const skipLabel = "tick_skip";
+        entry.term = {
+          op: "jump_if",
+          cond: `${counterVar}_check`,
+          then: bodyLabel,
+          else_: skipLabel
+        };
+        entry.instrs.push({
+          op: "raw",
+          cmd: `execute store success score ${counterVar}_check rs if score ${counterVar} rs matches ${rate}..`
+        });
+        fn.blocks.push({
+          label: bodyLabel,
+          instrs: [
+            { op: "raw", cmd: `scoreboard players set ${counterVar} rs 0` },
+            ...originalInstrs
+          ],
+          term: originalTerm
+        });
+        fn.blocks.push({
+          label: skipLabel,
+          instrs: [],
+          term: { op: "return" }
+        });
+      }
+      // -------------------------------------------------------------------------
+      // Statement Lowering
+      // -------------------------------------------------------------------------
+      lowerBlock(stmts) {
+        for (const stmt of stmts) {
+          this.lowerStmt(stmt);
+        }
+      }
+      lowerStmt(stmt) {
+        switch (stmt.kind) {
+          case "let":
+            this.lowerLetStmt(stmt);
+            break;
+          case "expr":
+            this.lowerExpr(stmt.expr);
+            break;
+          case "return":
+            this.lowerReturnStmt(stmt);
+            break;
+          case "if":
+            this.lowerIfStmt(stmt);
+            break;
+          case "while":
+            this.lowerWhileStmt(stmt);
+            break;
+          case "for":
+            this.lowerForStmt(stmt);
+            break;
+          case "foreach":
+            this.lowerForeachStmt(stmt);
+            break;
+          case "match":
+            this.lowerMatchStmt(stmt);
+            break;
+          case "as_block":
+            this.lowerAsBlockStmt(stmt);
+            break;
+          case "at_block":
+            this.lowerAtBlockStmt(stmt);
+            break;
+          case "as_at":
+            this.lowerAsAtStmt(stmt);
+            break;
+          case "execute":
+            this.lowerExecuteStmt(stmt);
+            break;
+          case "raw":
+            this.builder.emitRaw(stmt.cmd);
+            break;
+        }
+      }
+      lowerLetStmt(stmt) {
+        const varName = `$${stmt.name}`;
+        this.varMap.set(stmt.name, varName);
+        const declaredType = stmt.type ? this.normalizeType(stmt.type) : this.inferExprType(stmt.init);
+        if (declaredType) {
+          this.varTypes.set(stmt.name, declaredType);
+          if (declaredType.kind === "named" && declaredType.name === "float") {
+            this.floatVars.add(stmt.name);
+          }
+        }
+        if (stmt.init.kind === "lambda") {
+          const lambdaName = this.lowerLambdaExpr(stmt.init);
+          this.lambdaBindings.set(stmt.name, lambdaName);
+          return;
+        }
+        if (stmt.init.kind === "struct_lit" && stmt.type?.kind === "struct") {
+          const structName = stmt.type.name.toLowerCase();
+          for (const field of stmt.init.fields) {
+            const path = `rs:heap ${structName}_${stmt.name}.${field.name}`;
+            const fieldValue = this.lowerExpr(field.value);
+            if (fieldValue.kind === "const") {
+              this.builder.emitRaw(`data modify storage ${path} set value ${fieldValue.value}`);
+            } else if (fieldValue.kind === "var") {
+              this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${fieldValue.name} rs`);
+            }
+          }
+          return;
+        }
+        if (stmt.init.kind === "array_lit") {
+          this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} set value []`);
+          for (const elem of stmt.init.elements) {
+            const elemValue = this.lowerExpr(elem);
+            if (elemValue.kind === "const") {
+              this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value ${elemValue.value}`);
+            } else if (elemValue.kind === "var") {
+              this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value 0`);
+              this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${elemValue.name} rs`);
+            }
+          }
+          return;
+        }
+        if (stmt.init.kind === "call" && stmt.init.fn === "spawn_object") {
+          const value2 = this.lowerExpr(stmt.init);
+          if (value2.kind === "var" && value2.name.startsWith("@e[tag=__rs_obj_")) {
+            this.varMap.set(stmt.name, value2.name);
+            this.varTypes.set(stmt.name, { kind: "named", name: "void" });
+          }
+          return;
+        }
+        const blockPosValue = this.resolveBlockPosExpr(stmt.init);
+        if (blockPosValue) {
+          this.blockPosVars.set(stmt.name, blockPosValue);
+          return;
+        }
+        const stmtType = stmt.type ? this.normalizeType(stmt.type) : this.inferExprType(stmt.init);
+        if (stmtType?.kind === "named" && stmtType.name === "string" && this.storeStringValue(stmt.name, stmt.init)) {
+          return;
+        }
+        const value = this.lowerExpr(stmt.init);
+        this.builder.emitAssign(varName, value);
+      }
+      lowerReturnStmt(stmt) {
+        if (stmt.value) {
+          const value = this.lowerExpr(stmt.value);
+          this.builder.emitReturn(value);
+        } else {
+          this.builder.emitReturn();
+        }
+      }
+      lowerIfStmt(stmt) {
+        const condVar = this.lowerExpr(stmt.cond);
+        const condName = this.operandToVar(condVar);
+        const thenLabel = this.builder.freshLabel("then");
+        const elseLabel = this.builder.freshLabel("else");
+        const mergeLabel = this.builder.freshLabel("merge");
+        this.builder.emitJumpIf(condName, thenLabel, stmt.else_ ? elseLabel : mergeLabel);
+        this.builder.startBlock(thenLabel);
+        this.lowerBlock(stmt.then);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitJump(mergeLabel);
+        }
+        if (stmt.else_) {
+          this.builder.startBlock(elseLabel);
+          this.lowerBlock(stmt.else_);
+          if (!this.builder.isBlockSealed()) {
+            this.builder.emitJump(mergeLabel);
+          }
+        }
+        this.builder.startBlock(mergeLabel);
+      }
+      lowerWhileStmt(stmt) {
+        const checkLabel = this.builder.freshLabel("loop_check");
+        const bodyLabel = this.builder.freshLabel("loop_body");
+        const exitLabel = this.builder.freshLabel("loop_exit");
+        this.builder.emitJump(checkLabel);
+        this.builder.startBlock(checkLabel);
+        const condVar = this.lowerExpr(stmt.cond);
+        const condName = this.operandToVar(condVar);
+        this.builder.emitJumpIf(condName, bodyLabel, exitLabel);
+        this.builder.startBlock(bodyLabel);
+        this.lowerBlock(stmt.body);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitJump(checkLabel);
+        }
+        this.builder.startBlock(exitLabel);
+      }
+      lowerForStmt(stmt) {
+        if (stmt.init) {
+          this.lowerStmt(stmt.init);
+        }
+        const checkLabel = this.builder.freshLabel("for_check");
+        const bodyLabel = this.builder.freshLabel("for_body");
+        const exitLabel = this.builder.freshLabel("for_exit");
+        this.builder.emitJump(checkLabel);
+        this.builder.startBlock(checkLabel);
+        const condVar = this.lowerExpr(stmt.cond);
+        const condName = this.operandToVar(condVar);
+        this.builder.emitJumpIf(condName, bodyLabel, exitLabel);
+        this.builder.startBlock(bodyLabel);
+        this.lowerBlock(stmt.body);
+        this.lowerExpr(stmt.step);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitJump(checkLabel);
+        }
+        this.builder.startBlock(exitLabel);
+      }
+      lowerForeachStmt(stmt) {
+        if (stmt.iterable.kind !== "selector") {
+          this.lowerArrayForeachStmt(stmt);
+          return;
+        }
+        const subFnName = `${this.currentFn}/foreach_${this.foreachCounter++}`;
+        const selector = this.exprToString(stmt.iterable);
+        this.builder.emitRaw(`execute as ${selector} run function ${this.namespace}:${subFnName}`);
+        const savedBuilder = this.builder;
+        const savedVarMap = new Map(this.varMap);
+        const savedContext = this.currentContext;
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        this.builder = new LoweringBuilder();
+        this.varMap = new Map(savedVarMap);
+        this.currentContext = { binding: stmt.binding };
+        this.blockPosVars = new Map(savedBlockPosVars);
+        this.varMap.set(stmt.binding, "@s");
+        this.builder.startBlock("entry");
+        this.lowerBlock(stmt.body);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitReturn();
+        }
+        const subFn = this.builder.build(subFnName, [], false);
+        this.functions.push(subFn);
+        this.builder = savedBuilder;
+        this.varMap = savedVarMap;
+        this.currentContext = savedContext;
+        this.blockPosVars = savedBlockPosVars;
+      }
+      lowerMatchStmt(stmt) {
+        const subject = this.operandToVar(this.lowerExpr(stmt.expr));
+        const matchedVar = this.builder.freshTemp();
+        this.builder.emitAssign(matchedVar, { kind: "const", value: 0 });
+        let defaultArm = null;
+        for (const arm of stmt.arms) {
+          if (arm.pattern === null) {
+            defaultArm = arm;
+            continue;
+          }
+          const patternValue = this.lowerExpr(arm.pattern);
+          if (patternValue.kind !== "const") {
+            throw new Error("Match patterns must lower to compile-time constants");
+          }
+          const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`;
+          this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${patternValue.value} run function ${this.namespace}:${subFnName}`);
+          this.emitMatchArmSubFunction(subFnName, matchedVar, arm.body, true);
+        }
+        if (defaultArm) {
+          const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`;
+          this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 run function ${this.namespace}:${subFnName}`);
+          this.emitMatchArmSubFunction(subFnName, matchedVar, defaultArm.body, false);
+        }
+      }
+      emitMatchArmSubFunction(name, matchedVar, body, setMatched) {
+        const savedBuilder = this.builder;
+        const savedVarMap = new Map(this.varMap);
+        const savedContext = this.currentContext;
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        this.builder = new LoweringBuilder();
+        this.varMap = new Map(savedVarMap);
+        this.currentContext = savedContext;
+        this.blockPosVars = new Map(savedBlockPosVars);
+        this.builder.startBlock("entry");
+        if (setMatched) {
+          this.builder.emitRaw(`scoreboard players set ${matchedVar} rs 1`);
+        }
+        this.lowerBlock(body);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitReturn();
+        }
+        this.functions.push(this.builder.build(name, [], false));
+        this.builder = savedBuilder;
+        this.varMap = savedVarMap;
+        this.currentContext = savedContext;
+        this.blockPosVars = savedBlockPosVars;
+      }
+      lowerArrayForeachStmt(stmt) {
+        const arrayName = this.getArrayStorageName(stmt.iterable);
+        if (!arrayName) {
+          this.builder.emitRaw("# Unsupported foreach iterable");
+          return;
+        }
+        const arrayType = this.inferExprType(stmt.iterable);
+        const bindingVar = `$${stmt.binding}`;
+        const indexVar = this.builder.freshTemp();
+        const lengthVar = this.builder.freshTemp();
+        const condVar = this.builder.freshTemp();
+        const oneVar = this.builder.freshTemp();
+        const savedBinding = this.varMap.get(stmt.binding);
+        const savedType = this.varTypes.get(stmt.binding);
+        this.varMap.set(stmt.binding, bindingVar);
+        if (arrayType?.kind === "array") {
+          this.varTypes.set(stmt.binding, arrayType.elem);
+        }
+        this.builder.emitAssign(indexVar, { kind: "const", value: 0 });
+        this.builder.emitAssign(oneVar, { kind: "const", value: 1 });
+        this.builder.emitRaw(`execute store result score ${lengthVar} rs run data get storage rs:heap ${arrayName}`);
+        const checkLabel = this.builder.freshLabel("foreach_array_check");
+        const bodyLabel = this.builder.freshLabel("foreach_array_body");
+        const exitLabel = this.builder.freshLabel("foreach_array_exit");
+        this.builder.emitJump(checkLabel);
+        this.builder.startBlock(checkLabel);
+        this.builder.emitCmp(condVar, { kind: "var", name: indexVar }, "<", { kind: "var", name: lengthVar });
+        this.builder.emitJumpIf(condVar, bodyLabel, exitLabel);
+        this.builder.startBlock(bodyLabel);
+        const element = this.readArrayElement(arrayName, { kind: "var", name: indexVar });
+        this.builder.emitAssign(bindingVar, element);
+        this.lowerBlock(stmt.body);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitRaw(`scoreboard players operation ${indexVar} rs += ${oneVar} rs`);
+          this.builder.emitJump(checkLabel);
+        }
+        this.builder.startBlock(exitLabel);
+        if (savedBinding) {
+          this.varMap.set(stmt.binding, savedBinding);
+        } else {
+          this.varMap.delete(stmt.binding);
+        }
+        if (savedType) {
+          this.varTypes.set(stmt.binding, savedType);
+        } else {
+          this.varTypes.delete(stmt.binding);
+        }
+      }
+      lowerAsBlockStmt(stmt) {
+        const selector = this.selectorToString(stmt.selector);
+        const subFnName = `${this.currentFn}/as_${this.foreachCounter++}`;
+        this.builder.emitRaw(`execute as ${selector} run function ${this.namespace}:${subFnName}`);
+        const savedBuilder = this.builder;
+        const savedVarMap = new Map(this.varMap);
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        this.builder = new LoweringBuilder();
+        this.varMap = new Map(savedVarMap);
+        this.blockPosVars = new Map(savedBlockPosVars);
+        this.builder.startBlock("entry");
+        this.lowerBlock(stmt.body);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitReturn();
+        }
+        const subFn = this.builder.build(subFnName, [], false);
+        this.functions.push(subFn);
+        this.builder = savedBuilder;
+        this.varMap = savedVarMap;
+        this.blockPosVars = savedBlockPosVars;
+      }
+      lowerAtBlockStmt(stmt) {
+        const selector = this.selectorToString(stmt.selector);
+        const subFnName = `${this.currentFn}/at_${this.foreachCounter++}`;
+        this.builder.emitRaw(`execute at ${selector} run function ${this.namespace}:${subFnName}`);
+        const savedBuilder = this.builder;
+        const savedVarMap = new Map(this.varMap);
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        this.builder = new LoweringBuilder();
+        this.varMap = new Map(savedVarMap);
+        this.blockPosVars = new Map(savedBlockPosVars);
+        this.builder.startBlock("entry");
+        this.lowerBlock(stmt.body);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitReturn();
+        }
+        const subFn = this.builder.build(subFnName, [], false);
+        this.functions.push(subFn);
+        this.builder = savedBuilder;
+        this.varMap = savedVarMap;
+        this.blockPosVars = savedBlockPosVars;
+      }
+      lowerAsAtStmt(stmt) {
+        const asSel = this.selectorToString(stmt.as_sel);
+        const atSel = this.selectorToString(stmt.at_sel);
+        const subFnName = `${this.currentFn}/as_at_${this.foreachCounter++}`;
+        this.builder.emitRaw(`execute as ${asSel} at ${atSel} run function ${this.namespace}:${subFnName}`);
+        const savedBuilder = this.builder;
+        const savedVarMap = new Map(this.varMap);
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        this.builder = new LoweringBuilder();
+        this.varMap = new Map(savedVarMap);
+        this.blockPosVars = new Map(savedBlockPosVars);
+        this.builder.startBlock("entry");
+        this.lowerBlock(stmt.body);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitReturn();
+        }
+        const subFn = this.builder.build(subFnName, [], false);
+        this.functions.push(subFn);
+        this.builder = savedBuilder;
+        this.varMap = savedVarMap;
+        this.blockPosVars = savedBlockPosVars;
+      }
+      lowerExecuteStmt(stmt) {
+        const parts = ["execute"];
+        for (const sub of stmt.subcommands) {
+          switch (sub.kind) {
+            case "as":
+              parts.push(`as ${this.selectorToString(sub.selector)}`);
+              break;
+            case "at":
+              parts.push(`at ${this.selectorToString(sub.selector)}`);
+              break;
+            case "if_entity":
+              parts.push(`if entity ${this.selectorToString(sub.selector)}`);
+              break;
+            case "unless_entity":
+              parts.push(`unless entity ${this.selectorToString(sub.selector)}`);
+              break;
+            case "in":
+              parts.push(`in ${sub.dimension}`);
+              break;
+          }
+        }
+        const subFnName = `${this.currentFn}/exec_${this.foreachCounter++}`;
+        this.builder.emitRaw(`${parts.join(" ")} run function ${this.namespace}:${subFnName}`);
+        const savedBuilder = this.builder;
+        const savedVarMap = new Map(this.varMap);
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        this.builder = new LoweringBuilder();
+        this.varMap = new Map(savedVarMap);
+        this.blockPosVars = new Map(savedBlockPosVars);
+        this.builder.startBlock("entry");
+        this.lowerBlock(stmt.body);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitReturn();
+        }
+        const subFn = this.builder.build(subFnName, [], false);
+        this.functions.push(subFn);
+        this.builder = savedBuilder;
+        this.varMap = savedVarMap;
+        this.blockPosVars = savedBlockPosVars;
+      }
+      // -------------------------------------------------------------------------
+      // Expression Lowering
+      // -------------------------------------------------------------------------
+      lowerExpr(expr) {
+        switch (expr.kind) {
+          case "int_lit":
+            return { kind: "const", value: expr.value };
+          case "float_lit":
+            return { kind: "const", value: Math.round(expr.value * 1e3) };
+          case "bool_lit":
+            return { kind: "const", value: expr.value ? 1 : 0 };
+          case "str_lit":
+            return { kind: "const", value: 0 };
+          // Placeholder
+          case "str_interp":
+            return { kind: "const", value: 0 };
+          case "range_lit":
+            return { kind: "const", value: 0 };
+          case "blockpos":
+            return { kind: "const", value: 0 };
+          case "ident": {
+            const constValue = this.constValues.get(expr.name);
+            if (constValue) {
+              return this.lowerConstLiteral(constValue);
+            }
+            const mapped = this.varMap.get(expr.name);
+            if (mapped) {
+              if (mapped.startsWith("@")) {
+                return { kind: "var", name: mapped };
+              }
+              return { kind: "var", name: mapped };
+            }
+            return { kind: "var", name: `$${expr.name}` };
+          }
+          case "member":
+            if (expr.obj.kind === "ident" && this.enumDefs.has(expr.obj.name)) {
+              const variants = this.enumDefs.get(expr.obj.name);
+              const value = variants.get(expr.field);
+              if (value === void 0) {
+                throw new Error(`Unknown enum variant ${expr.obj.name}.${expr.field}`);
+              }
+              return { kind: "const", value };
+            }
+            return this.lowerMemberExpr(expr);
+          case "selector":
+            return { kind: "var", name: this.selectorToString(expr.sel) };
+          case "binary":
+            return this.lowerBinaryExpr(expr);
+          case "unary":
+            return this.lowerUnaryExpr(expr);
+          case "assign":
+            return this.lowerAssignExpr(expr);
+          case "call":
+            return this.lowerCallExpr(expr);
+          case "invoke":
+            return this.lowerInvokeExpr(expr);
+          case "member_assign":
+            return this.lowerMemberAssign(expr);
+          case "index":
+            return this.lowerIndexExpr(expr);
+          case "struct_lit":
+            return { kind: "const", value: 0 };
+          case "array_lit":
+            return { kind: "const", value: 0 };
+          case "lambda":
+            throw new Error("Lambda expressions must be used in a function context");
+        }
+        throw new Error(`Unhandled expression kind: ${expr.kind}`);
+      }
+      lowerMemberExpr(expr) {
+        if (expr.obj.kind === "ident") {
+          const varType = this.varTypes.get(expr.obj.name);
+          const mapped = this.varMap.get(expr.obj.name);
+          if (mapped && mapped.startsWith("@e[tag=__rs_obj_")) {
+            const dst = this.builder.freshTemp();
+            this.builder.emitRaw(`scoreboard players operation ${dst} rs = ${mapped} rs`);
+            return { kind: "var", name: dst };
+          }
+          if (varType?.kind === "struct") {
+            const structName = varType.name.toLowerCase();
+            const path = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
+            const dst = this.builder.freshTemp();
+            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path}`);
+            return { kind: "var", name: dst };
+          }
+          if (varType?.kind === "array" && expr.field === "len") {
+            const dst = this.builder.freshTemp();
+            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${expr.obj.name}`);
+            return { kind: "var", name: dst };
+          }
+        }
+        return { kind: "var", name: `$${expr.obj.name}_${expr.field}` };
+      }
+      lowerMemberAssign(expr) {
+        if (expr.obj.kind === "ident") {
+          const varType = this.varTypes.get(expr.obj.name);
+          const mapped = this.varMap.get(expr.obj.name);
+          if (mapped && mapped.startsWith("@e[tag=__rs_obj_")) {
+            const value2 = this.lowerExpr(expr.value);
+            if (expr.op === "=") {
+              if (value2.kind === "const") {
+                this.builder.emitRaw(`scoreboard players set ${mapped} rs ${value2.value}`);
+              } else if (value2.kind === "var") {
+                this.builder.emitRaw(`scoreboard players operation ${mapped} rs = ${value2.name} rs`);
+              }
+            } else {
+              const binOp = expr.op.slice(0, -1);
+              const opMap = { "+": "+=", "-": "-=", "*": "*=", "/": "/=", "%": "%=" };
+              if (value2.kind === "const") {
+                const constTemp = this.builder.freshTemp();
+                this.builder.emitAssign(constTemp, value2);
+                this.builder.emitRaw(`scoreboard players operation ${mapped} rs ${opMap[binOp]} ${constTemp} rs`);
+              } else if (value2.kind === "var") {
+                this.builder.emitRaw(`scoreboard players operation ${mapped} rs ${opMap[binOp]} ${value2.name} rs`);
+              }
+            }
+            return { kind: "const", value: 0 };
+          }
+          if (varType?.kind === "struct") {
+            const structName = varType.name.toLowerCase();
+            const path = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
+            const value2 = this.lowerExpr(expr.value);
+            if (expr.op === "=") {
+              if (value2.kind === "const") {
+                this.builder.emitRaw(`data modify storage ${path} set value ${value2.value}`);
+              } else if (value2.kind === "var") {
+                this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${value2.name} rs`);
+              }
+            } else {
+              const dst = this.builder.freshTemp();
+              this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path}`);
+              const binOp = expr.op.slice(0, -1);
+              this.builder.emitBinop(dst, { kind: "var", name: dst }, binOp, value2);
+              this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${dst} rs`);
+            }
+            return { kind: "const", value: 0 };
+          }
+        }
+        const varName = `$${expr.obj.name}_${expr.field}`;
+        const value = this.lowerExpr(expr.value);
+        this.builder.emitAssign(varName, value);
+        return { kind: "var", name: varName };
+      }
+      lowerIndexExpr(expr) {
+        const arrayName = this.getArrayStorageName(expr.obj);
+        if (arrayName) {
+          return this.readArrayElement(arrayName, this.lowerExpr(expr.index));
+        }
+        return { kind: "const", value: 0 };
+      }
+      lowerBinaryExpr(expr) {
+        const left = this.lowerExpr(expr.left);
+        const right = this.lowerExpr(expr.right);
+        const dst = this.builder.freshTemp();
+        if (["&&", "||"].includes(expr.op)) {
+          if (expr.op === "&&") {
+            this.builder.emitAssign(dst, left);
+            const rightVar = this.operandToVar(right);
+            this.builder.emitRaw(`execute if score ${dst} rs matches 1.. run scoreboard players operation ${dst} rs = ${rightVar} rs`);
+          } else {
+            this.builder.emitAssign(dst, left);
+            const rightVar = this.operandToVar(right);
+            this.builder.emitRaw(`execute if score ${dst} rs matches ..0 run scoreboard players operation ${dst} rs = ${rightVar} rs`);
+          }
+          return { kind: "var", name: dst };
+        }
+        if (["==", "!=", "<", "<=", ">", ">="].includes(expr.op)) {
+          this.builder.emitCmp(dst, left, expr.op, right);
+        } else {
+          const isFloatOp = this.isFloatExpr(expr.left) || this.isFloatExpr(expr.right);
+          if (isFloatOp && (expr.op === "*" || expr.op === "/")) {
+            if (expr.op === "*") {
+              this.builder.emitBinop(dst, left, "*", right);
+              const constDiv = this.builder.freshTemp();
+              this.builder.emitAssign(constDiv, { kind: "const", value: 1e3 });
+              this.builder.emitRaw(`scoreboard players operation ${dst} rs /= ${constDiv} rs`);
+            } else {
+              const constMul = this.builder.freshTemp();
+              this.builder.emitAssign(constMul, { kind: "const", value: 1e3 });
+              this.builder.emitAssign(dst, left);
+              this.builder.emitRaw(`scoreboard players operation ${dst} rs *= ${constMul} rs`);
+              const rightVar = this.operandToVar(right);
+              this.builder.emitRaw(`scoreboard players operation ${dst} rs /= ${rightVar} rs`);
+            }
+            return { kind: "var", name: dst };
+          }
+          this.builder.emitBinop(dst, left, expr.op, right);
+        }
+        return { kind: "var", name: dst };
+      }
+      isFloatExpr(expr) {
+        if (expr.kind === "float_lit")
+          return true;
+        if (expr.kind === "ident") {
+          return this.floatVars.has(expr.name);
+        }
+        if (expr.kind === "binary") {
+          return this.isFloatExpr(expr.left) || this.isFloatExpr(expr.right);
+        }
+        return false;
+      }
+      lowerUnaryExpr(expr) {
+        const operand = this.lowerExpr(expr.operand);
+        const dst = this.builder.freshTemp();
+        if (expr.op === "!") {
+          this.builder.emitCmp(dst, operand, "==", { kind: "const", value: 0 });
+        } else if (expr.op === "-") {
+          this.builder.emitBinop(dst, { kind: "const", value: 0 }, "-", operand);
+        }
+        return { kind: "var", name: dst };
+      }
+      lowerAssignExpr(expr) {
+        const blockPosValue = this.resolveBlockPosExpr(expr.value);
+        if (blockPosValue) {
+          this.blockPosVars.set(expr.target, blockPosValue);
+          return { kind: "const", value: 0 };
+        }
+        this.blockPosVars.delete(expr.target);
+        const targetType = this.varTypes.get(expr.target);
+        if (targetType?.kind === "named" && targetType.name === "string" && this.storeStringValue(expr.target, expr.value)) {
+          return { kind: "const", value: 0 };
+        }
+        const varName = this.varMap.get(expr.target) ?? `$${expr.target}`;
+        const value = this.lowerExpr(expr.value);
+        if (expr.op === "=") {
+          this.builder.emitAssign(varName, value);
+        } else {
+          const binOp = expr.op.slice(0, -1);
+          const dst = this.builder.freshTemp();
+          this.builder.emitBinop(dst, { kind: "var", name: varName }, binOp, value);
+          this.builder.emitAssign(varName, { kind: "var", name: dst });
+        }
+        return { kind: "var", name: varName };
+      }
+      lowerCallExpr(expr) {
+        if (expr.fn === "str_len") {
+          const storagePath = this.getStringStoragePath(expr.args[0]);
+          if (storagePath) {
+            const dst = this.builder.freshTemp();
+            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${storagePath}`);
+            return { kind: "var", name: dst };
+          }
+          const staticString = this.resolveStaticString(expr.args[0]);
+          if (staticString !== null) {
+            return { kind: "const", value: Array.from(staticString).length };
+          } else {
+            const dst = this.builder.freshTemp();
+            this.builder.emitAssign(dst, { kind: "const", value: 0 });
+            return { kind: "var", name: dst };
+          }
+        }
+        if (expr.fn in BUILTINS) {
+          return this.lowerBuiltinCall(expr.fn, expr.args);
+        }
+        if (expr.fn === "__entity_tag") {
+          const entity = this.exprToString(expr.args[0]);
+          const tagName = this.exprToString(expr.args[1]);
+          this.builder.emitRaw(`tag ${entity} add ${tagName}`);
+          return { kind: "const", value: 0 };
+        }
+        if (expr.fn === "__entity_untag") {
+          const entity = this.exprToString(expr.args[0]);
+          const tagName = this.exprToString(expr.args[1]);
+          this.builder.emitRaw(`tag ${entity} remove ${tagName}`);
+          return { kind: "const", value: 0 };
+        }
+        if (expr.fn === "__entity_has_tag") {
+          const entity = this.exprToString(expr.args[0]);
+          const tagName = this.exprToString(expr.args[1]);
+          const dst = this.builder.freshTemp();
+          this.builder.emitRaw(`execute store result score ${dst} rs if entity ${entity}[tag=${tagName}]`);
+          return { kind: "var", name: dst };
+        }
+        if (expr.fn === "__array_push") {
+          const arrExpr = expr.args[0];
+          const valueExpr = expr.args[1];
+          const arrName = this.getArrayStorageName(arrExpr);
+          if (arrName) {
+            const value = this.lowerExpr(valueExpr);
+            if (value.kind === "const") {
+              this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value ${value.value}`);
+            } else if (value.kind === "var") {
+              this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value 0`);
+              this.builder.emitRaw(`execute store result storage rs:heap ${arrName}[-1] int 1 run scoreboard players get ${value.name} rs`);
+            }
+          }
+          return { kind: "const", value: 0 };
+        }
+        if (expr.fn === "__array_pop") {
+          const arrName = this.getArrayStorageName(expr.args[0]);
+          const dst = this.builder.freshTemp();
+          if (arrName) {
+            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${arrName}[-1]`);
+            this.builder.emitRaw(`data remove storage rs:heap ${arrName}[-1]`);
+          } else {
+            this.builder.emitAssign(dst, { kind: "const", value: 0 });
+          }
+          return { kind: "var", name: dst };
+        }
+        if (expr.fn === "spawn_object") {
+          const x = this.exprToString(expr.args[0]);
+          const y = this.exprToString(expr.args[1]);
+          const z = this.exprToString(expr.args[2]);
+          const tag = `__rs_obj_${this.worldObjCounter++}`;
+          this.builder.emitRaw(`summon minecraft:armor_stand ${x} ${y} ${z} {Invisible:1b,Marker:1b,NoGravity:1b,Tags:["${tag}"]}`);
+          const selector = `@e[tag=${tag},limit=1]`;
+          return { kind: "var", name: selector };
+        }
+        if (expr.fn === "kill" && expr.args.length === 1 && expr.args[0].kind === "ident") {
+          const mapped = this.varMap.get(expr.args[0].name);
+          if (mapped && mapped.startsWith("@e[tag=__rs_obj_")) {
+            this.builder.emitRaw(`kill ${mapped}`);
+            return { kind: "const", value: 0 };
+          }
+        }
+        const callbackTarget = this.resolveFunctionRefByName(expr.fn);
+        if (callbackTarget) {
+          return this.emitDirectFunctionCall(callbackTarget, expr.args);
+        }
+        const fnDecl = this.fnDecls.get(expr.fn);
+        const defaultArgs = this.functionDefaults.get(expr.fn) ?? [];
+        const fullArgs = [...expr.args];
+        for (let i = fullArgs.length; i < defaultArgs.length; i++) {
+          const defaultExpr = defaultArgs[i];
+          if (!defaultExpr) {
+            break;
+          }
+          fullArgs.push(defaultExpr);
+        }
+        if (fnDecl) {
+          const callbackBindings = /* @__PURE__ */ new Map();
+          const runtimeArgs = [];
+          for (let i = 0; i < fullArgs.length; i++) {
+            const param = fnDecl.params[i];
+            if (param && this.normalizeType(param.type).kind === "function_type") {
+              const functionRef = this.resolveFunctionRefExpr(fullArgs[i]);
+              if (!functionRef) {
+                throw new Error(`Cannot lower callback argument for parameter '${param.name}'`);
+              }
+              callbackBindings.set(param.name, functionRef);
+              continue;
+            }
+            runtimeArgs.push(fullArgs[i]);
+          }
+          const targetFn = callbackBindings.size > 0 ? this.ensureSpecializedFunction(fnDecl, callbackBindings) : expr.fn;
+          return this.emitDirectFunctionCall(targetFn, runtimeArgs);
+        }
+        return this.emitDirectFunctionCall(expr.fn, fullArgs);
+      }
+      lowerInvokeExpr(expr) {
+        if (expr.callee.kind === "lambda") {
+          if (!Array.isArray(expr.callee.body)) {
+            return this.inlineLambdaInvoke(expr.callee, expr.args);
+          }
+          const lambdaName = this.lowerLambdaExpr(expr.callee);
+          return this.emitDirectFunctionCall(lambdaName, expr.args);
+        }
+        const functionRef = this.resolveFunctionRefExpr(expr.callee);
+        if (!functionRef) {
+          throw new Error("Cannot invoke a non-function value");
+        }
+        return this.emitDirectFunctionCall(functionRef, expr.args);
+      }
+      inlineLambdaInvoke(expr, args) {
+        const savedVarMap = new Map(this.varMap);
+        const savedVarTypes = new Map(this.varTypes);
+        const savedLambdaBindings = new Map(this.lambdaBindings);
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        for (let i = 0; i < expr.params.length; i++) {
+          const param = expr.params[i];
+          const temp = this.builder.freshTemp();
+          const arg = args[i];
+          this.builder.emitAssign(temp, arg ? this.lowerExpr(arg) : { kind: "const", value: 0 });
+          this.varMap.set(param.name, temp);
+          if (param.type) {
+            this.varTypes.set(param.name, this.normalizeType(param.type));
+          }
+          this.lambdaBindings.delete(param.name);
+          this.blockPosVars.delete(param.name);
+        }
+        const result = this.lowerExpr(expr.body);
+        this.varMap = savedVarMap;
+        this.varTypes = savedVarTypes;
+        this.lambdaBindings = savedLambdaBindings;
+        this.blockPosVars = savedBlockPosVars;
+        return result;
+      }
+      emitDirectFunctionCall(fn, args) {
+        const loweredArgs = args.map((arg) => this.lowerExpr(arg));
+        const dst = this.builder.freshTemp();
+        this.builder.emitCall(fn, loweredArgs, dst);
+        return { kind: "var", name: dst };
+      }
+      resolveFunctionRefExpr(expr) {
+        if (expr.kind === "lambda") {
+          return this.lowerLambdaExpr(expr);
+        }
+        if (expr.kind === "ident") {
+          return this.resolveFunctionRefByName(expr.name) ?? (this.fnDecls.has(expr.name) ? expr.name : null);
+        }
+        return null;
+      }
+      resolveFunctionRefByName(name) {
+        return this.lambdaBindings.get(name) ?? this.currentCallbackBindings.get(name) ?? null;
+      }
+      ensureSpecializedFunction(fn, callbackBindings) {
+        const parts = [...callbackBindings.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([param, target]) => `${param}_${target.replace(/[^a-zA-Z0-9_]/g, "_")}`);
+        const key = `${fn.name}::${parts.join("::")}`;
+        const cached = this.specializedFunctions.get(key);
+        if (cached) {
+          return cached;
+        }
+        const specializedName = `${fn.name}__${parts.join("__")}`;
+        this.specializedFunctions.set(key, specializedName);
+        this.withSavedFunctionState(() => {
+          this.lowerFn(fn, { name: specializedName, callbackBindings });
+        });
+        return specializedName;
+      }
+      lowerLambdaExpr(expr) {
+        const lambdaName = `__lambda_${this.lambdaCounter++}`;
+        const lambdaFn = {
+          name: lambdaName,
+          params: expr.params.map((param) => ({
+            name: param.name,
+            type: param.type ?? { kind: "named", name: "int" }
+          })),
+          returnType: expr.returnType ?? this.inferLambdaReturnType(expr),
+          decorators: [],
+          body: Array.isArray(expr.body) ? expr.body : [{ kind: "return", value: expr.body }]
+        };
+        this.withSavedFunctionState(() => {
+          this.lowerFn(lambdaFn);
+        });
+        return lambdaName;
+      }
+      withSavedFunctionState(callback) {
+        const savedCurrentFn = this.currentFn;
+        const savedForeachCounter = this.foreachCounter;
+        const savedBuilder = this.builder;
+        const savedVarMap = new Map(this.varMap);
+        const savedLambdaBindings = new Map(this.lambdaBindings);
+        const savedCallbackBindings = new Map(this.currentCallbackBindings);
+        const savedContext = this.currentContext;
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        const savedStringValues = new Map(this.stringValues);
+        const savedVarTypes = new Map(this.varTypes);
+        try {
+          return callback();
+        } finally {
+          this.currentFn = savedCurrentFn;
+          this.foreachCounter = savedForeachCounter;
+          this.builder = savedBuilder;
+          this.varMap = savedVarMap;
+          this.lambdaBindings = savedLambdaBindings;
+          this.currentCallbackBindings = savedCallbackBindings;
+          this.currentContext = savedContext;
+          this.blockPosVars = savedBlockPosVars;
+          this.stringValues = savedStringValues;
+          this.varTypes = savedVarTypes;
+        }
+      }
+      lowerBuiltinCall(name, args) {
+        const richTextCommand = this.lowerRichTextBuiltin(name, args);
+        if (richTextCommand) {
+          this.builder.emitRaw(richTextCommand);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "random") {
+          const dst = this.builder.freshTemp();
+          const min = args[0] ? this.exprToLiteral(args[0]) : "0";
+          const max = args[1] ? this.exprToLiteral(args[1]) : "100";
+          this.builder.emitRaw(`scoreboard players random ${dst} rs ${min} ${max}`);
+          return { kind: "var", name: dst };
+        }
+        if (name === "random_native") {
+          const dst = this.builder.freshTemp();
+          const min = args[0] ? this.exprToLiteral(args[0]) : "0";
+          const max = args[1] ? this.exprToLiteral(args[1]) : "100";
+          this.builder.emitRaw(`execute store result score ${dst} rs run random value ${min} ${max}`);
+          return { kind: "var", name: dst };
+        }
+        if (name === "random_sequence") {
+          const sequence = this.exprToString(args[0]);
+          const seed = args[1] ? this.exprToLiteral(args[1]) : "0";
+          this.builder.emitRaw(`random reset ${sequence} ${seed}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "scoreboard_get" || name === "score") {
+          const dst = this.builder.freshTemp();
+          const player = this.exprToTargetString(args[0]);
+          const objective = this.exprToString(args[1]);
+          this.builder.emitRaw(`execute store result score ${dst} rs run scoreboard players get ${player} ${objective}`);
+          return { kind: "var", name: dst };
+        }
+        if (name === "scoreboard_set") {
+          const player = this.exprToTargetString(args[0]);
+          const objective = this.exprToString(args[1]);
+          const value = this.lowerExpr(args[2]);
+          if (value.kind === "const") {
+            this.builder.emitRaw(`scoreboard players set ${player} ${objective} ${value.value}`);
+          } else if (value.kind === "var") {
+            this.builder.emitRaw(`execute store result score ${player} ${objective} run scoreboard players get ${value.name} rs`);
+          }
+          return { kind: "const", value: 0 };
+        }
+        if (name === "scoreboard_display") {
+          const slot = this.exprToString(args[0]);
+          const objective = this.exprToString(args[1]);
+          this.builder.emitRaw(`scoreboard objectives setdisplay ${slot} ${objective}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "scoreboard_hide") {
+          const slot = this.exprToString(args[0]);
+          this.builder.emitRaw(`scoreboard objectives setdisplay ${slot}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "scoreboard_add_objective") {
+          const objective = this.exprToString(args[0]);
+          const criteria = this.exprToString(args[1]);
+          const displayName = args[2] ? ` ${this.exprToQuotedString(args[2])}` : "";
+          this.builder.emitRaw(`scoreboard objectives add ${objective} ${criteria}${displayName}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "scoreboard_remove_objective") {
+          const objective = this.exprToString(args[0]);
+          this.builder.emitRaw(`scoreboard objectives remove ${objective}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "bossbar_add") {
+          const id = this.exprToString(args[0]);
+          const title = this.exprToTextComponent(args[1]);
+          this.builder.emitRaw(`bossbar add ${id} ${title}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "bossbar_set_value") {
+          this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} value ${this.exprToString(args[1])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "bossbar_set_max") {
+          this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} max ${this.exprToString(args[1])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "bossbar_set_color") {
+          this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} color ${this.exprToString(args[1])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "bossbar_set_style") {
+          this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} style ${this.exprToString(args[1])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "bossbar_set_visible") {
+          this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} visible ${this.exprToBoolString(args[1])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "bossbar_set_players") {
+          this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} players ${this.exprToTargetString(args[1])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "bossbar_remove") {
+          this.builder.emitRaw(`bossbar remove ${this.exprToString(args[0])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "bossbar_get_value") {
+          const dst = this.builder.freshTemp();
+          this.builder.emitRaw(`execute store result score ${dst} rs run bossbar get ${this.exprToString(args[0])} value`);
+          return { kind: "var", name: dst };
+        }
+        if (name === "team_add") {
+          const team = this.exprToString(args[0]);
+          const displayName = args[1] ? ` ${this.exprToTextComponent(args[1])}` : "";
+          this.builder.emitRaw(`team add ${team}${displayName}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "team_remove") {
+          this.builder.emitRaw(`team remove ${this.exprToString(args[0])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "team_join") {
+          this.builder.emitRaw(`team join ${this.exprToString(args[0])} ${this.exprToTargetString(args[1])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "team_leave") {
+          this.builder.emitRaw(`team leave ${this.exprToTargetString(args[0])}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "team_option") {
+          const team = this.exprToString(args[0]);
+          const option = this.exprToString(args[1]);
+          const value = this.isTeamTextOption(option) ? this.exprToTextComponent(args[2]) : this.exprToString(args[2]);
+          this.builder.emitRaw(`team modify ${team} ${option} ${value}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "data_get") {
+          const dst = this.builder.freshTemp();
+          const targetType = this.exprToString(args[0]);
+          const target = targetType === "entity" ? this.exprToTargetString(args[1]) : this.exprToString(args[1]);
+          const path = this.exprToString(args[2]);
+          const scale = args[3] ? this.exprToString(args[3]) : "1";
+          this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`);
+          return { kind: "var", name: dst };
+        }
+        const coordCommand = this.lowerCoordinateBuiltin(name, args);
+        if (coordCommand) {
+          this.builder.emitRaw(coordCommand);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "tp_to") {
+          this.warnings.push({
+            message: "tp_to is deprecated; use tp instead",
+            code: "W_DEPRECATED"
+          });
+          const tpCommand = this.lowerTpCommand(args);
+          if (tpCommand) {
+            this.builder.emitRaw(tpCommand);
+          }
+          return { kind: "const", value: 0 };
+        }
+        if (name === "tp") {
+          const tpCommand = this.lowerTpCommand(args);
+          if (tpCommand) {
+            this.builder.emitRaw(tpCommand);
+          }
+          return { kind: "const", value: 0 };
+        }
+        const strArgs = args.map((arg) => this.exprToString(arg));
+        const cmd = BUILTINS[name](strArgs);
+        if (cmd) {
+          this.builder.emitRaw(cmd);
+        }
+        return { kind: "const", value: 0 };
+      }
+      lowerRichTextBuiltin(name, args) {
+        const messageArgIndex = this.getRichTextArgIndex(name);
+        if (messageArgIndex === null) {
+          return null;
+        }
+        const messageExpr = args[messageArgIndex];
+        if (!messageExpr || messageExpr.kind !== "str_interp") {
+          return null;
+        }
+        const json = this.buildRichTextJson(messageExpr);
+        switch (name) {
+          case "say":
+          case "announce":
+            return `tellraw @a ${json}`;
+          case "tell":
+            return `tellraw ${this.exprToString(args[0])} ${json}`;
+          case "title":
+            return `title ${this.exprToString(args[0])} title ${json}`;
+          case "actionbar":
+            return `title ${this.exprToString(args[0])} actionbar ${json}`;
+          case "subtitle":
+            return `title ${this.exprToString(args[0])} subtitle ${json}`;
+          default:
+            return null;
+        }
+      }
+      getRichTextArgIndex(name) {
+        switch (name) {
+          case "say":
+          case "announce":
+            return 0;
+          case "tell":
+          case "title":
+          case "actionbar":
+          case "subtitle":
+            return 1;
+          default:
+            return null;
+        }
+      }
+      buildRichTextJson(expr) {
+        const components = [""];
+        for (const part of expr.parts) {
+          if (typeof part === "string") {
+            if (part.length > 0) {
+              components.push({ text: part });
+            }
+            continue;
+          }
+          this.appendRichTextExpr(components, part);
+        }
+        return JSON.stringify(components);
+      }
+      appendRichTextExpr(components, expr) {
+        if (expr.kind === "ident") {
+          const constValue = this.constValues.get(expr.name);
+          if (constValue) {
+            this.appendRichTextExpr(components, constValue);
+            return;
+          }
+          const stringValue = this.stringValues.get(expr.name);
+          if (stringValue !== void 0) {
+            components.push({ text: stringValue });
+            return;
+          }
+        }
+        if (expr.kind === "str_lit") {
+          if (expr.value.length > 0) {
+            components.push({ text: expr.value });
+          }
+          return;
+        }
+        if (expr.kind === "str_interp") {
+          for (const part of expr.parts) {
+            if (typeof part === "string") {
+              if (part.length > 0) {
+                components.push({ text: part });
+              }
+            } else {
+              this.appendRichTextExpr(components, part);
+            }
+          }
+          return;
+        }
+        if (expr.kind === "bool_lit") {
+          components.push({ text: expr.value ? "true" : "false" });
+          return;
+        }
+        if (expr.kind === "int_lit") {
+          components.push({ text: expr.value.toString() });
+          return;
+        }
+        if (expr.kind === "float_lit") {
+          components.push({ text: expr.value.toString() });
+          return;
+        }
+        const operand = this.lowerExpr(expr);
+        if (operand.kind === "const") {
+          components.push({ text: operand.value.toString() });
+          return;
+        }
+        components.push({ score: { name: this.operandToVar(operand), objective: "rs" } });
+      }
+      exprToString(expr) {
+        switch (expr.kind) {
+          case "int_lit":
+            return expr.value.toString();
+          case "float_lit":
+            return Math.trunc(expr.value).toString();
+          case "bool_lit":
+            return expr.value ? "1" : "0";
+          case "str_lit":
+            return expr.value;
+          case "str_interp":
+            return this.buildRichTextJson(expr);
+          case "blockpos":
+            return emitBlockPos(expr);
+          case "ident": {
+            const constValue = this.constValues.get(expr.name);
+            if (constValue) {
+              return this.exprToString(constValue);
+            }
+            const stringValue = this.stringValues.get(expr.name);
+            if (stringValue !== void 0) {
+              return stringValue;
+            }
+            const mapped = this.varMap.get(expr.name);
+            return mapped ?? `$${expr.name}`;
+          }
+          case "selector":
+            return this.selectorToString(expr.sel);
+          default:
+            const op = this.lowerExpr(expr);
+            return this.operandToVar(op);
+        }
+      }
+      exprToTargetString(expr) {
+        if (expr.kind === "selector") {
+          return this.selectorToString(expr.sel);
+        }
+        if (expr.kind === "str_lit" && expr.value.startsWith("@")) {
+          this.warnings.push({
+            message: `Quoted selector "${expr.value}" is deprecated; pass ${expr.value} without quotes`,
+            code: "W_QUOTED_SELECTOR"
+          });
+          return expr.value;
+        }
+        return this.exprToString(expr);
+      }
+      exprToLiteral(expr) {
+        if (expr.kind === "int_lit")
+          return expr.value.toString();
+        if (expr.kind === "float_lit")
+          return Math.trunc(expr.value).toString();
+        return "0";
+      }
+      exprToQuotedString(expr) {
+        return JSON.stringify(this.exprToString(expr));
+      }
+      exprToTextComponent(expr) {
+        return JSON.stringify({ text: this.exprToString(expr) });
+      }
+      exprToBoolString(expr) {
+        if (expr.kind === "bool_lit") {
+          return expr.value ? "true" : "false";
+        }
+        return this.exprToString(expr);
+      }
+      isTeamTextOption(option) {
+        return option === "displayName" || option === "prefix" || option === "suffix";
+      }
+      lowerCoordinateBuiltin(name, args) {
+        const pos0 = args[0] ? this.resolveBlockPosExpr(args[0]) : null;
+        const pos1 = args[1] ? this.resolveBlockPosExpr(args[1]) : null;
+        const pos2 = args[2] ? this.resolveBlockPosExpr(args[2]) : null;
+        if (name === "setblock") {
+          if (args.length === 2 && pos0) {
+            return `setblock ${emitBlockPos(pos0)} ${this.exprToString(args[1])}`;
+          }
+          return null;
+        }
+        if (name === "fill") {
+          if (args.length === 3 && pos0 && pos1) {
+            return `fill ${emitBlockPos(pos0)} ${emitBlockPos(pos1)} ${this.exprToString(args[2])}`;
+          }
+          return null;
+        }
+        if (name === "clone") {
+          if (args.length === 3 && pos0 && pos1 && pos2) {
+            return `clone ${emitBlockPos(pos0)} ${emitBlockPos(pos1)} ${emitBlockPos(pos2)}`;
+          }
+          return null;
+        }
+        return null;
+      }
+      lowerTpCommand(args) {
+        const pos0 = args[0] ? this.resolveBlockPosExpr(args[0]) : null;
+        const pos1 = args[1] ? this.resolveBlockPosExpr(args[1]) : null;
+        if (args.length === 1 && pos0) {
+          return `tp ${emitBlockPos(pos0)}`;
+        }
+        if (args.length === 2) {
+          if (pos1) {
+            return `tp ${this.exprToString(args[0])} ${emitBlockPos(pos1)}`;
+          }
+          return `tp ${this.exprToString(args[0])} ${this.exprToString(args[1])}`;
+        }
+        if (args.length === 4) {
+          return `tp ${this.exprToString(args[0])} ${this.exprToString(args[1])} ${this.exprToString(args[2])} ${this.exprToString(args[3])}`;
+        }
+        return null;
+      }
+      resolveBlockPosExpr(expr) {
+        if (expr.kind === "blockpos") {
+          return expr;
+        }
+        if (expr.kind === "ident") {
+          return this.blockPosVars.get(expr.name) ?? null;
+        }
+        return null;
+      }
+      getArrayStorageName(expr) {
+        if (expr.kind === "ident") {
+          return expr.name;
+        }
+        return null;
+      }
+      inferLambdaReturnType(expr) {
+        if (expr.returnType) {
+          return this.normalizeType(expr.returnType);
+        }
+        if (Array.isArray(expr.body)) {
+          return { kind: "named", name: "void" };
+        }
+        return this.inferExprType(expr.body) ?? { kind: "named", name: "void" };
+      }
+      inferExprType(expr) {
+        if (expr.kind === "int_lit")
+          return { kind: "named", name: "int" };
+        if (expr.kind === "float_lit")
+          return { kind: "named", name: "float" };
+        if (expr.kind === "bool_lit")
+          return { kind: "named", name: "bool" };
+        if (expr.kind === "str_lit" || expr.kind === "str_interp")
+          return { kind: "named", name: "string" };
+        if (expr.kind === "blockpos")
+          return { kind: "named", name: "BlockPos" };
+        if (expr.kind === "ident") {
+          const constValue = this.constValues.get(expr.name);
+          if (constValue) {
+            switch (constValue.kind) {
+              case "int_lit":
+                return { kind: "named", name: "int" };
+              case "float_lit":
+                return { kind: "named", name: "float" };
+              case "bool_lit":
+                return { kind: "named", name: "bool" };
+              case "str_lit":
+                return { kind: "named", name: "string" };
+            }
+          }
+          return this.varTypes.get(expr.name);
+        }
+        if (expr.kind === "lambda") {
+          return {
+            kind: "function_type",
+            params: expr.params.map((param) => this.normalizeType(param.type ?? { kind: "named", name: "int" })),
+            return: this.inferLambdaReturnType(expr)
+          };
+        }
+        if (expr.kind === "call") {
+          return this.fnDecls.get(this.resolveFunctionRefByName(expr.fn) ?? expr.fn)?.returnType;
+        }
+        if (expr.kind === "invoke") {
+          const calleeType = this.inferExprType(expr.callee);
+          if (calleeType?.kind === "function_type") {
+            return calleeType.return;
+          }
+        }
+        if (expr.kind === "binary") {
+          if (["==", "!=", "<", "<=", ">", ">=", "&&", "||"].includes(expr.op)) {
+            return { kind: "named", name: "bool" };
+          }
+          return this.inferExprType(expr.left);
+        }
+        if (expr.kind === "unary") {
+          return expr.op === "!" ? { kind: "named", name: "bool" } : this.inferExprType(expr.operand);
+        }
+        if (expr.kind === "array_lit") {
+          return {
+            kind: "array",
+            elem: expr.elements[0] ? this.inferExprType(expr.elements[0]) ?? { kind: "named", name: "int" } : { kind: "named", name: "int" }
+          };
+        }
+        if (expr.kind === "member" && expr.obj.kind === "ident" && this.enumDefs.has(expr.obj.name)) {
+          return { kind: "enum", name: expr.obj.name };
+        }
+        return void 0;
+      }
+      normalizeType(type) {
+        if (type.kind === "array") {
+          return { kind: "array", elem: this.normalizeType(type.elem) };
+        }
+        if (type.kind === "function_type") {
+          return {
+            kind: "function_type",
+            params: type.params.map((param) => this.normalizeType(param)),
+            return: this.normalizeType(type.return)
+          };
+        }
+        if ((type.kind === "struct" || type.kind === "enum") && this.enumDefs.has(type.name)) {
+          return { kind: "enum", name: type.name };
+        }
+        return type;
+      }
+      readArrayElement(arrayName, index) {
+        const dst = this.builder.freshTemp();
+        if (index.kind === "const") {
+          this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[${index.value}]`);
+          return { kind: "var", name: dst };
+        }
+        const macroKey = `__rs_index_${this.foreachCounter++}`;
+        const subFnName = `${this.currentFn}/array_get_${this.foreachCounter++}`;
+        const indexVar = index.kind === "var" ? index.name : this.operandToVar(index);
+        this.builder.emitRaw(`execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} rs`);
+        this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`);
+        this.emitRawSubFunction(subFnName, `$execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[$(${macroKey})]`);
+        return { kind: "var", name: dst };
+      }
+      emitRawSubFunction(name, ...commands) {
+        const builder = new LoweringBuilder();
+        builder.startBlock("entry");
+        for (const cmd of commands) {
+          builder.emitRaw(cmd);
+        }
+        builder.emitReturn();
+        this.functions.push(builder.build(name, [], false));
+      }
+      // -------------------------------------------------------------------------
+      // Helpers
+      // -------------------------------------------------------------------------
+      storeStringValue(name, expr) {
+        const value = this.resolveStaticString(expr);
+        if (value === null) {
+          this.stringValues.delete(name);
+          return false;
+        }
+        this.stringValues.set(name, value);
+        this.builder.emitRaw(`data modify storage rs:strings ${name} set value ${JSON.stringify(value)}`);
+        return true;
+      }
+      resolveStaticString(expr) {
+        if (!expr) {
+          return null;
+        }
+        if (expr.kind === "str_lit") {
+          return expr.value;
+        }
+        if (expr.kind === "ident") {
+          const constValue = this.constValues.get(expr.name);
+          if (constValue?.kind === "str_lit") {
+            return constValue.value;
+          }
+          return this.stringValues.get(expr.name) ?? null;
+        }
+        return null;
+      }
+      getStringStoragePath(expr) {
+        if (!expr || expr.kind !== "ident") {
+          return null;
+        }
+        if (this.stringValues.has(expr.name)) {
+          return `rs:strings ${expr.name}`;
+        }
+        return null;
+      }
+      lowerConstLiteral(expr) {
+        switch (expr.kind) {
+          case "int_lit":
+            return { kind: "const", value: expr.value };
+          case "float_lit":
+            return { kind: "const", value: Math.round(expr.value * 1e3) };
+          case "bool_lit":
+            return { kind: "const", value: expr.value ? 1 : 0 };
+          case "str_lit":
+            return { kind: "const", value: 0 };
+        }
+      }
+      operandToVar(op) {
+        if (op.kind === "var")
+          return op.name;
+        const dst = this.builder.freshTemp();
+        this.builder.emitAssign(dst, op);
+        return dst;
+      }
+      selectorToString(sel) {
+        const { kind, filters } = sel;
+        if (!filters)
+          return this.finalizeSelector(kind);
+        const parts = [];
+        if (filters.type)
+          parts.push(`type=${filters.type}`);
+        if (filters.distance)
+          parts.push(`distance=${this.rangeToString(filters.distance)}`);
+        if (filters.tag)
+          filters.tag.forEach((t) => parts.push(`tag=${t}`));
+        if (filters.notTag)
+          filters.notTag.forEach((t) => parts.push(`tag=!${t}`));
+        if (filters.limit !== void 0)
+          parts.push(`limit=${filters.limit}`);
+        if (filters.sort)
+          parts.push(`sort=${filters.sort}`);
+        if (filters.scores) {
+          const scoreStr = Object.entries(filters.scores).map(([k, v]) => `${k}=${this.rangeToString(v)}`).join(",");
+          parts.push(`scores={${scoreStr}}`);
+        }
+        if (filters.nbt)
+          parts.push(`nbt=${filters.nbt}`);
+        if (filters.gamemode)
+          parts.push(`gamemode=${filters.gamemode}`);
+        return this.finalizeSelector(parts.length ? `${kind}[${parts.join(",")}]` : kind);
+      }
+      finalizeSelector(selector) {
+        return normalizeSelector(selector, this.warnings);
+      }
+      rangeToString(r) {
+        if (r.min !== void 0 && r.max !== void 0) {
+          if (r.min === r.max)
+            return `${r.min}`;
+          return `${r.min}..${r.max}`;
+        }
+        if (r.min !== void 0)
+          return `${r.min}..`;
+        if (r.max !== void 0)
+          return `..${r.max}`;
+        return "..";
+      }
+    };
+    exports2.Lowering = Lowering;
+    var LoweringBuilder = class {
+      constructor() {
+        this.tempCount = 0;
+        this.labelCount = 0;
+        this.blocks = [];
+        this.currentBlock = null;
+        this.locals = /* @__PURE__ */ new Set();
+      }
+      freshTemp() {
+        const name = `$t${this.tempCount++}`;
+        this.locals.add(name);
+        return name;
+      }
+      freshLabel(hint = "L") {
+        return `${hint}_${this.labelCount++}`;
+      }
+      startBlock(label) {
+        this.currentBlock = { label, instrs: [], term: null };
+      }
+      isBlockSealed() {
+        return this.currentBlock === null || this.currentBlock.term !== null;
+      }
+      sealBlock(term) {
+        if (this.currentBlock) {
+          this.currentBlock.term = term;
+          this.blocks.push(this.currentBlock);
+          this.currentBlock = null;
+        }
+      }
+      emitAssign(dst, src) {
+        if (!dst.startsWith("$") && !dst.startsWith("@")) {
+          dst = "$" + dst;
+        }
+        this.locals.add(dst);
+        this.currentBlock?.instrs.push({ op: "assign", dst, src });
+      }
+      emitBinop(dst, lhs, bop, rhs) {
+        this.locals.add(dst);
+        this.currentBlock?.instrs.push({ op: "binop", dst, lhs, bop, rhs });
+      }
+      emitCmp(dst, lhs, cop, rhs) {
+        this.locals.add(dst);
+        this.currentBlock?.instrs.push({ op: "cmp", dst, lhs, cop, rhs });
+      }
+      emitCall(fn, args, dst) {
+        if (dst)
+          this.locals.add(dst);
+        this.currentBlock?.instrs.push({ op: "call", fn, args, dst });
+      }
+      emitRaw(cmd) {
+        this.currentBlock?.instrs.push({ op: "raw", cmd });
+      }
+      emitJump(target) {
+        this.sealBlock({ op: "jump", target });
+      }
+      emitJumpIf(cond, then, else_) {
+        this.sealBlock({ op: "jump_if", cond, then, else_ });
+      }
+      emitReturn(value) {
+        this.sealBlock({ op: "return", value });
+      }
+      build(name, params, isTickLoop = false) {
+        if (this.currentBlock && !this.currentBlock.term) {
+          this.sealBlock({ op: "return" });
+        }
+        return {
+          name,
+          params,
+          locals: Array.from(this.locals),
+          blocks: this.blocks,
+          isTickLoop
+        };
+      }
+    };
+  }
+});
+
+// ../../dist/optimizer/commands.js
+var require_commands = __commonJS({
+  "../../dist/optimizer/commands.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.createEmptyOptimizationStats = createEmptyOptimizationStats;
+    exports2.mergeOptimizationStats = mergeOptimizationStats;
+    exports2.applyLICM = applyLICM;
+    exports2.applyCSE = applyCSE;
+    exports2.batchSetblocks = batchSetblocks;
+    exports2.optimizeCommandFunctions = optimizeCommandFunctions;
+    var SCOREBOARD_READ_RE = /^execute store result score (\$[A-Za-z0-9_]+) rs run scoreboard players get (\S+) (\S+)$/;
+    var SCOREBOARD_WRITE_RE = /^(?:scoreboard players (?:set|add|remove|reset)\s+(\S+)\s+(\S+)|scoreboard players operation\s+(\S+)\s+(\S+)\s+[+\-*/%]?= )/;
+    var EXECUTE_STORE_SCORE_RE = /^execute store result score (\S+) (\S+) run /;
+    var FUNCTION_CALL_RE = /^execute as (.+) run function ([^:]+):(.+)$/;
+    var TEMP_RE = /\$[A-Za-z0-9_]+/g;
+    var SETBLOCK_RE = /^setblock (-?\d+) (-?\d+) (-?\d+) (\S+)$/;
+    function createEmptyOptimizationStats() {
+      return {
+        licmHoists: 0,
+        licmLoopBodies: 0,
+        cseRedundantReads: 0,
+        cseArithmetic: 0,
+        setblockMergedCommands: 0,
+        setblockFillCommands: 0,
+        setblockSavedCommands: 0,
+        deadCodeRemoved: 0,
+        constantFolds: 0,
+        totalCommandsBefore: 0,
+        totalCommandsAfter: 0
+      };
+    }
+    function cloneCommand(command) {
+      return { ...command };
+    }
+    function cloneFunctions(functions) {
+      return functions.map((fn) => ({
+        name: fn.name,
+        commands: fn.commands.map(cloneCommand)
+      }));
+    }
+    function mergeOptimizationStats(base, delta) {
+      for (const [key, value] of Object.entries(delta)) {
+        base[key] += value;
+      }
+    }
+    function parseScoreboardWrite(command) {
+      const executeStoreMatch = command.match(EXECUTE_STORE_SCORE_RE);
+      if (executeStoreMatch) {
+        return { player: executeStoreMatch[1], objective: executeStoreMatch[2] };
+      }
+      const match = command.match(SCOREBOARD_WRITE_RE);
+      if (!match) {
+        return null;
+      }
+      if (match[1] && match[2]) {
+        return { player: match[1], objective: match[2] };
+      }
+      if (match[3] && match[4]) {
+        return { player: match[3], objective: match[4] };
+      }
+      return null;
+    }
+    function collectObjectiveWrites(functions) {
+      const writes = /* @__PURE__ */ new Map();
+      for (const fn of functions) {
+        for (const command of fn.commands) {
+          const write = parseScoreboardWrite(command.cmd);
+          if (!write)
+            continue;
+          writes.set(write.objective, (writes.get(write.objective) ?? 0) + 1);
+        }
+      }
+      return writes;
+    }
+    function applyLICMInternal(functions) {
+      const stats = { licmHoists: 0, licmLoopBodies: 0 };
+      const functionMap = new Map(functions.map((fn) => [fn.name, fn]));
+      const objectiveWrites = collectObjectiveWrites(functions);
+      for (const fn of functions) {
+        const nextCommands = [];
+        for (const command of fn.commands) {
+          const match = command.cmd.match(FUNCTION_CALL_RE);
+          if (!match) {
+            nextCommands.push(command);
+            continue;
+          }
+          const loopFn = functionMap.get(match[3]);
+          if (!loopFn) {
+            nextCommands.push(command);
+            continue;
+          }
+          const readInfo = /* @__PURE__ */ new Map();
+          const scoreboardWrites = /* @__PURE__ */ new Set();
+          for (const inner of loopFn.commands) {
+            const readMatch = inner.cmd.match(SCOREBOARD_READ_RE);
+            if (readMatch) {
+              const [, temp, player, objective] = readMatch;
+              const key = `${player} ${objective}`;
+              readInfo.set(key, { temp, player, objective, uses: 0 });
+            }
+            const write = parseScoreboardWrite(inner.cmd);
+            if (write) {
+              scoreboardWrites.add(`${write.player} ${write.objective}`);
+            }
+          }
+          for (const inner of loopFn.commands) {
+            for (const info of readInfo.values()) {
+              const matches = inner.cmd.match(TEMP_RE) ?? [];
+              const usageCount = matches.filter((name) => name === info.temp).length;
+              const isDef = inner.cmd.startsWith(`execute store result score ${info.temp} rs run scoreboard players get `);
+              if (!isDef) {
+                info.uses += usageCount;
+              }
+            }
+          }
+          const hoistable = Array.from(readInfo.entries()).filter(([key, info]) => {
+            if (info.uses < 2)
+              return false;
+            if ((objectiveWrites.get(info.objective) ?? 0) !== 0)
+              return false;
+            if (scoreboardWrites.has(key))
+              return false;
+            return true;
+          }).map(([, info]) => info);
+          if (hoistable.length === 0) {
+            nextCommands.push(command);
+            continue;
+          }
+          const hoistedTemps = new Set(hoistable.map((item) => item.temp));
+          const rewrittenLoopCommands = [];
+          for (const inner of loopFn.commands) {
+            const readMatch = inner.cmd.match(SCOREBOARD_READ_RE);
+            if (readMatch && hoistedTemps.has(readMatch[1])) {
+              continue;
+            }
+            rewrittenLoopCommands.push(inner);
+          }
+          loopFn.commands = rewrittenLoopCommands;
+          nextCommands.push(...hoistable.map((item) => ({
+            cmd: `execute store result score ${item.temp} rs run scoreboard players get ${item.player} ${item.objective}`
+          })), command);
+          stats.licmHoists = (stats.licmHoists ?? 0) + hoistable.length;
+          stats.licmLoopBodies = (stats.licmLoopBodies ?? 0) + 1;
+        }
+        fn.commands = nextCommands;
+      }
+      return stats;
+    }
+    function extractArithmeticExpression(commands, index) {
+      const assign = commands[index]?.cmd.match(/^scoreboard players operation (\$[A-Za-z0-9_]+) rs = (\$[A-Za-z0-9_]+|\$const_-?\d+) rs$/) ?? commands[index]?.cmd.match(/^scoreboard players set (\$[A-Za-z0-9_]+) rs (-?\d+)$/);
+      const op = commands[index + 1]?.cmd.match(/^scoreboard players operation (\$[A-Za-z0-9_]+) rs ([+\-*/%]=) (\$[A-Za-z0-9_]+|\$const_-?\d+) rs$/);
+      if (!assign || !op || assign[1] !== op[1]) {
+        return null;
+      }
+      return {
+        key: `${assign[2]} ${op[2]} ${op[3]}`,
+        dst: assign[1]
+      };
+    }
+    function applyCSEInternal(functions) {
+      const stats = { cseRedundantReads: 0, cseArithmetic: 0 };
+      for (const fn of functions) {
+        let invalidateByTemp = function(temp) {
+          for (const [key, value] of readCache.entries()) {
+            if (value === temp || key.includes(`${temp} `) || key.endsWith(` ${temp}`)) {
+              readCache.delete(key);
+            }
+          }
+          for (const [key, value] of exprCache.entries()) {
+            if (value === temp || key.includes(temp)) {
+              exprCache.delete(key);
+            }
+          }
+        };
+        const commands = fn.commands.map(cloneCommand);
+        const readCache = /* @__PURE__ */ new Map();
+        const exprCache = /* @__PURE__ */ new Map();
+        const rewritten = [];
+        for (let i = 0; i < commands.length; i++) {
+          const command = commands[i];
+          const readMatch = command.cmd.match(SCOREBOARD_READ_RE);
+          if (readMatch) {
+            const [, dst, player, objective] = readMatch;
+            const key = `${player} ${objective}`;
+            const cached = readCache.get(key);
+            if (cached) {
+              stats.cseRedundantReads = (stats.cseRedundantReads ?? 0) + 1;
+              rewritten.push({ ...command, cmd: `scoreboard players operation ${dst} rs = ${cached} rs` });
+            } else {
+              readCache.set(key, dst);
+              rewritten.push(command);
+            }
+            invalidateByTemp(dst);
+            readCache.set(key, dst);
+            continue;
+          }
+          const expr = extractArithmeticExpression(commands, i);
+          if (expr) {
+            const cached = exprCache.get(expr.key);
+            if (cached) {
+              rewritten.push({ ...commands[i], cmd: `scoreboard players operation ${expr.dst} rs = ${cached} rs` });
+              stats.cseArithmetic = (stats.cseArithmetic ?? 0) + 1;
+              i += 1;
+            } else {
+              rewritten.push(command);
+              rewritten.push(commands[i + 1]);
+              exprCache.set(expr.key, expr.dst);
+              i += 1;
+            }
+            invalidateByTemp(expr.dst);
+            exprCache.set(expr.key, expr.dst);
+            continue;
+          }
+          const write = parseScoreboardWrite(command.cmd);
+          if (write) {
+            readCache.delete(`${write.player} ${write.objective}`);
+            if (write.player.startsWith("$")) {
+              invalidateByTemp(write.player);
+            }
+          }
+          rewritten.push(command);
+        }
+        fn.commands = rewritten;
+      }
+      return stats;
+    }
+    function batchSetblocksInCommands(commands) {
+      const rewritten = [];
+      const stats = {
+        setblockMergedCommands: 0,
+        setblockFillCommands: 0,
+        setblockSavedCommands: 0
+      };
+      for (let i = 0; i < commands.length; ) {
+        const start = commands[i].cmd.match(SETBLOCK_RE);
+        if (!start) {
+          rewritten.push(commands[i]);
+          i++;
+          continue;
+        }
+        const block = start[4];
+        const run = [{ index: i, x: Number(start[1]), y: Number(start[2]), z: Number(start[3]) }];
+        let axis = null;
+        let j = i + 1;
+        while (j < commands.length) {
+          const next = commands[j].cmd.match(SETBLOCK_RE);
+          if (!next || next[4] !== block)
+            break;
+          const point = { x: Number(next[1]), y: Number(next[2]), z: Number(next[3]) };
+          const prev = run[run.length - 1];
+          if (point.y !== prev.y)
+            break;
+          const stepX = point.x - prev.x;
+          const stepZ = point.z - prev.z;
+          if (axis === null) {
+            if (stepX === 1 && stepZ === 0)
+              axis = "x";
+            else if (stepX === 0 && stepZ === 1)
+              axis = "z";
+            else
+              break;
+          }
+          const valid = axis === "x" ? point.z === prev.z && stepX === 1 && stepZ === 0 : point.x === prev.x && stepX === 0 && stepZ === 1;
+          if (!valid)
+            break;
+          run.push({ index: j, ...point });
+          j++;
+        }
+        if (run.length >= 2) {
+          const first = run[0];
+          const last = run[run.length - 1];
+          rewritten.push({
+            ...commands[i],
+            cmd: `fill ${first.x} ${first.y} ${first.z} ${last.x} ${last.y} ${last.z} ${block}`
+          });
+          stats.setblockMergedCommands = (stats.setblockMergedCommands ?? 0) + run.length;
+          stats.setblockFillCommands = (stats.setblockFillCommands ?? 0) + 1;
+          stats.setblockSavedCommands = (stats.setblockSavedCommands ?? 0) + (run.length - 1);
+          i = j;
+          continue;
+        }
+        rewritten.push(commands[i]);
+        i++;
+      }
+      return { commands: rewritten, stats };
+    }
+    function applySetblockBatchingInternal(functions) {
+      const stats = {
+        setblockMergedCommands: 0,
+        setblockFillCommands: 0,
+        setblockSavedCommands: 0
+      };
+      for (const fn of functions) {
+        const batched = batchSetblocksInCommands(fn.commands);
+        fn.commands = batched.commands;
+        mergeOptimizationStats(stats, batched.stats);
+      }
+      return stats;
+    }
+    function applyLICM(functions) {
+      const optimized = cloneFunctions(functions);
+      const stats = createEmptyOptimizationStats();
+      stats.totalCommandsBefore = optimized.reduce((sum, fn) => sum + fn.commands.length, 0);
+      mergeOptimizationStats(stats, applyLICMInternal(optimized));
+      stats.totalCommandsAfter = optimized.reduce((sum, fn) => sum + fn.commands.length, 0);
+      return { functions: optimized, stats };
+    }
+    function applyCSE(functions) {
+      const optimized = cloneFunctions(functions);
+      const stats = createEmptyOptimizationStats();
+      stats.totalCommandsBefore = optimized.reduce((sum, fn) => sum + fn.commands.length, 0);
+      mergeOptimizationStats(stats, applyCSEInternal(optimized));
+      stats.totalCommandsAfter = optimized.reduce((sum, fn) => sum + fn.commands.length, 0);
+      return { functions: optimized, stats };
+    }
+    function batchSetblocks(functions) {
+      const optimized = cloneFunctions(functions);
+      const stats = createEmptyOptimizationStats();
+      stats.totalCommandsBefore = optimized.reduce((sum, fn) => sum + fn.commands.length, 0);
+      mergeOptimizationStats(stats, applySetblockBatchingInternal(optimized));
+      stats.totalCommandsAfter = optimized.reduce((sum, fn) => sum + fn.commands.length, 0);
+      return { functions: optimized, stats };
+    }
+    function optimizeCommandFunctions(functions) {
+      const initial = cloneFunctions(functions);
+      const stats = createEmptyOptimizationStats();
+      stats.totalCommandsBefore = initial.reduce((sum, fn) => sum + fn.commands.length, 0);
+      const licm = applyLICM(initial);
+      mergeOptimizationStats(stats, licm.stats);
+      const cse = applyCSE(licm.functions);
+      mergeOptimizationStats(stats, cse.stats);
+      const batched = batchSetblocks(cse.functions);
+      mergeOptimizationStats(stats, batched.stats);
+      stats.totalCommandsAfter = batched.functions.reduce((sum, fn) => sum + fn.commands.length, 0);
+      return {
+        functions: batched.functions,
+        stats
+      };
+    }
+  }
+});
+
+// ../../dist/optimizer/passes.js
+var require_passes = __commonJS({
+  "../../dist/optimizer/passes.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.defaultPipeline = void 0;
+    exports2.constantFolding = constantFolding;
+    exports2.constantFoldingWithStats = constantFoldingWithStats;
+    exports2.copyPropagation = copyPropagation;
+    exports2.deadCodeElimination = deadCodeElimination;
+    exports2.deadCodeEliminationWithStats = deadCodeEliminationWithStats;
+    exports2.optimize = optimize;
+    exports2.optimizeWithStats = optimizeWithStats;
+    var commands_1 = require_commands();
+    function isConst(op) {
+      return op.kind === "const";
+    }
+    function evalBinop(lhs, bop, rhs) {
+      switch (bop) {
+        case "+":
+          return lhs + rhs;
+        case "-":
+          return lhs - rhs;
+        case "*":
+          return lhs * rhs;
+        case "/":
+          return rhs === 0 ? null : Math.trunc(lhs / rhs);
+        // MC uses truncated int division
+        case "%":
+          return rhs === 0 ? null : lhs % rhs;
+        default:
+          return null;
+      }
+    }
+    function evalCmp(lhs, cop, rhs) {
+      switch (cop) {
+        case "==":
+          return lhs === rhs ? 1 : 0;
+        case "!=":
+          return lhs !== rhs ? 1 : 0;
+        case "<":
+          return lhs < rhs ? 1 : 0;
+        case "<=":
+          return lhs <= rhs ? 1 : 0;
+        case ">":
+          return lhs > rhs ? 1 : 0;
+        case ">=":
+          return lhs >= rhs ? 1 : 0;
+        default:
+          return 0;
+      }
+    }
+    function constantFolding(fn) {
+      return constantFoldingWithStats(fn).fn;
+    }
+    function constantFoldingWithStats(fn) {
+      let folded = 0;
+      const newBlocks = fn.blocks.map((block) => {
+        const newInstrs = [];
+        for (const instr of block.instrs) {
+          if (instr.op === "binop" && isConst(instr.lhs) && isConst(instr.rhs)) {
+            const result = evalBinop(instr.lhs.value, instr.bop, instr.rhs.value);
+            if (result !== null) {
+              folded++;
+              newInstrs.push({ op: "assign", dst: instr.dst, src: { kind: "const", value: result } });
+              continue;
+            }
+          }
+          if (instr.op === "cmp" && isConst(instr.lhs) && isConst(instr.rhs)) {
+            const result = evalCmp(instr.lhs.value, instr.cop, instr.rhs.value);
+            folded++;
+            newInstrs.push({ op: "assign", dst: instr.dst, src: { kind: "const", value: result } });
+            continue;
+          }
+          newInstrs.push(instr);
+        }
+        return { ...block, instrs: newInstrs };
+      });
+      return { fn: { ...fn, blocks: newBlocks }, stats: { constantFolds: folded } };
+    }
+    function copyPropagation(fn) {
+      const newBlocks = fn.blocks.map((block) => {
+        const copies = /* @__PURE__ */ new Map();
+        function resolve(op) {
+          if (op.kind !== "var")
+            return op;
+          return copies.get(op.name) ?? op;
+        }
+        const newInstrs = [];
+        for (const instr of block.instrs) {
+          switch (instr.op) {
+            case "assign": {
+              const src = resolve(instr.src);
+              if (src.kind === "var" || src.kind === "const") {
+                copies.set(instr.dst, src);
+              } else {
+                copies.delete(instr.dst);
+              }
+              newInstrs.push({ ...instr, src });
+              break;
+            }
+            case "binop":
+              copies.delete(instr.dst);
+              newInstrs.push({ ...instr, lhs: resolve(instr.lhs), rhs: resolve(instr.rhs) });
+              break;
+            case "cmp":
+              copies.delete(instr.dst);
+              newInstrs.push({ ...instr, lhs: resolve(instr.lhs), rhs: resolve(instr.rhs) });
+              break;
+            case "call":
+              if (instr.dst)
+                copies.delete(instr.dst);
+              newInstrs.push({ ...instr, args: instr.args.map(resolve) });
+              break;
+            default:
+              newInstrs.push(instr);
+          }
+        }
+        return { ...block, instrs: newInstrs };
+      });
+      return { ...fn, blocks: newBlocks };
+    }
+    function deadCodeElimination(fn) {
+      return deadCodeEliminationWithStats(fn).fn;
+    }
+    function deadCodeEliminationWithStats(fn) {
+      const readVars = /* @__PURE__ */ new Set();
+      function markRead(op) {
+        if (op.kind === "var")
+          readVars.add(op.name);
+      }
+      function markRawReads(cmd) {
+        for (const match of cmd.matchAll(/\$[A-Za-z0-9_]+/g)) {
+          readVars.add(match[0]);
+        }
+      }
+      for (const block of fn.blocks) {
+        for (const instr of block.instrs) {
+          if (instr.op === "binop") {
+            markRead(instr.lhs);
+            markRead(instr.rhs);
+          }
+          if (instr.op === "cmp") {
+            markRead(instr.lhs);
+            markRead(instr.rhs);
+          }
+          if (instr.op === "call") {
+            instr.args.forEach(markRead);
+          }
+          if (instr.op === "assign") {
+            markRead(instr.src);
+          }
+          if (instr.op === "raw") {
+            markRawReads(instr.cmd);
+          }
+        }
+        const t = block.term;
+        if (t.op === "jump_if" || t.op === "jump_unless")
+          readVars.add(t.cond);
+        if (t.op === "return" && t.value)
+          markRead(t.value);
+        if (t.op === "tick_yield") {
+        }
+      }
+      fn.params.forEach((p) => readVars.add(p));
+      let removed = 0;
+      const newBlocks = fn.blocks.map((block) => ({
+        ...block,
+        instrs: block.instrs.filter((instr) => {
+          if (instr.op === "assign" || instr.op === "binop" || instr.op === "cmp") {
+            const keep = readVars.has(instr.dst);
+            if (!keep)
+              removed++;
+            return keep;
+          }
+          return true;
+        })
+      }));
+      return { fn: { ...fn, blocks: newBlocks }, stats: { deadCodeRemoved: removed } };
+    }
+    exports2.defaultPipeline = [
+      { name: "constant-folding", run: constantFolding },
+      { name: "copy-propagation", run: copyPropagation },
+      { name: "dead-code-elimination", run: deadCodeElimination }
+      // commandMerging is applied during codegen (MC-specific)
+    ];
+    function optimize(fn, passes = exports2.defaultPipeline) {
+      return optimizeWithStats(fn, passes).fn;
+    }
+    function optimizeWithStats(fn, passes = exports2.defaultPipeline) {
+      let current = fn;
+      const stats = (0, commands_1.createEmptyOptimizationStats)();
+      for (const pass of passes) {
+        if (pass.name === "constant-folding") {
+          const result = constantFoldingWithStats(current);
+          current = result.fn;
+          (0, commands_1.mergeOptimizationStats)(stats, result.stats);
+          continue;
+        }
+        if (pass.name === "dead-code-elimination") {
+          const result = deadCodeEliminationWithStats(current);
+          current = result.fn;
+          (0, commands_1.mergeOptimizationStats)(stats, result.stats);
+          continue;
+        }
+        current = pass.run(current);
+      }
+      return { fn: current, stats };
+    }
+  }
+});
+
+// ../../dist/codegen/mcfunction/index.js
+var require_mcfunction = __commonJS({
+  "../../dist/codegen/mcfunction/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.countMcfunctionCommands = countMcfunctionCommands;
+    exports2.generateDatapackWithStats = generateDatapackWithStats;
+    exports2.generateDatapack = generateDatapack;
+    var commands_1 = require_commands();
+    var OBJ = "rs";
+    function varRef(name) {
+      return name.startsWith("$") ? name : `$${name}`;
+    }
+    function operandToScore(op) {
+      if (op.kind === "var")
+        return `${varRef(op.name)} ${OBJ}`;
+      if (op.kind === "const")
+        return `$const_${op.value} ${OBJ}`;
+      throw new Error(`Cannot convert storage operand to score: ${op.path}`);
+    }
+    function constSetup(value) {
+      return `scoreboard players set $const_${value} ${OBJ} ${value}`;
+    }
+    function collectConsts(fn) {
+      const consts = /* @__PURE__ */ new Set();
+      for (const block of fn.blocks) {
+        for (const instr of block.instrs) {
+          if (instr.op === "assign" && instr.src.kind === "const")
+            consts.add(instr.src.value);
+          if (instr.op === "binop") {
+            if (instr.lhs.kind === "const")
+              consts.add(instr.lhs.value);
+            if (instr.rhs.kind === "const")
+              consts.add(instr.rhs.value);
+          }
+          if (instr.op === "cmp") {
+            if (instr.lhs.kind === "const")
+              consts.add(instr.lhs.value);
+            if (instr.rhs.kind === "const")
+              consts.add(instr.rhs.value);
+          }
+        }
+        const t = block.term;
+        if (t.op === "return" && t.value?.kind === "const")
+          consts.add(t.value.value);
+      }
+      return consts;
+    }
+    var BOP_OP = {
+      "+": "+=",
+      "-": "-=",
+      "*": "*=",
+      "/": "/=",
+      "%": "%="
+    };
+    function emitInstr(instr, ns) {
+      const lines = [];
+      switch (instr.op) {
+        case "assign": {
+          const dst = varRef(instr.dst);
+          const src = instr.src;
+          if (src.kind === "const") {
+            lines.push(`scoreboard players set ${dst} ${OBJ} ${src.value}`);
+          } else if (src.kind === "var") {
+            lines.push(`scoreboard players operation ${dst} ${OBJ} = ${varRef(src.name)} ${OBJ}`);
+          } else {
+            lines.push(`execute store result score ${dst} ${OBJ} run data get storage ${src.path}`);
+          }
+          break;
+        }
+        case "binop": {
+          const dst = varRef(instr.dst);
+          const bop = BOP_OP[instr.bop] ?? "+=";
+          lines.push(...emitInstr({ op: "assign", dst: instr.dst, src: instr.lhs }, ns));
+          lines.push(`scoreboard players operation ${dst} ${OBJ} ${bop} ${operandToScore(instr.rhs)}`);
+          break;
+        }
+        case "cmp": {
+          const dst = varRef(instr.dst);
+          const lhsScore = operandToScore(instr.lhs);
+          const rhsScore = operandToScore(instr.rhs);
+          lines.push(`scoreboard players set ${dst} ${OBJ} 0`);
+          switch (instr.cop) {
+            case "==":
+              lines.push(`execute if score ${lhsScore} = ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case "!=":
+              lines.push(`execute unless score ${lhsScore} = ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case "<":
+              lines.push(`execute if score ${lhsScore} < ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case "<=":
+              lines.push(`execute if score ${lhsScore} <= ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case ">":
+              lines.push(`execute if score ${lhsScore} > ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case ">=":
+              lines.push(`execute if score ${lhsScore} >= ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+          }
+          break;
+        }
+        case "call": {
+          for (let i = 0; i < instr.args.length; i++) {
+            lines.push(...emitInstr({ op: "assign", dst: `$p${i}`, src: instr.args[i] }, ns));
+          }
+          lines.push(`function ${ns}:${instr.fn}`);
+          if (instr.dst) {
+            lines.push(`scoreboard players operation ${varRef(instr.dst)} ${OBJ} = $ret ${OBJ}`);
+          }
+          break;
+        }
+        case "raw":
+          lines.push(instr.cmd);
+          break;
+      }
+      return lines;
+    }
+    function emitTerm(term, ns, fnName) {
+      const lines = [];
+      switch (term.op) {
+        case "jump":
+          lines.push(`function ${ns}:${fnName}/${term.target}`);
+          break;
+        case "jump_if":
+          lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.then}`);
+          lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.else_}`);
+          break;
+        case "jump_unless":
+          lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.then}`);
+          lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.else_}`);
+          break;
+        case "return":
+          if (term.value) {
+            lines.push(...emitInstr({ op: "assign", dst: "$ret", src: term.value }, ns));
+          }
+          if (term.value?.kind === "const") {
+            lines.push(`return ${term.value.value}`);
+          } else if (term.value?.kind === "var") {
+            lines.push(`return run scoreboard players get ${varRef(term.value.name)} ${OBJ}`);
+          }
+          break;
+        case "tick_yield":
+          lines.push(`schedule function ${ns}:${fnName}/${term.continuation} 1t replace`);
+          break;
+      }
+      return lines;
+    }
+    function toFunctionName(file) {
+      const match = file.path.match(/^data\/[^/]+\/function\/(.+)\.mcfunction$/);
+      return match?.[1] ?? null;
+    }
+    function applyFunctionOptimization(files) {
+      const functionFiles = files.map((file) => {
+        const functionName = toFunctionName(file);
+        if (!functionName)
+          return null;
+        const commands = file.content.split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#")).map((cmd) => ({ cmd }));
+        return { file, functionName, commands };
+      }).filter((entry) => entry !== null);
+      const optimized = (0, commands_1.optimizeCommandFunctions)(functionFiles.map((entry) => ({
+        name: entry.functionName,
+        commands: entry.commands
+      })));
+      const commandMap = new Map(optimized.functions.map((fn) => [fn.name, fn.commands]));
+      return {
+        files: files.map((file) => {
+          const functionName = toFunctionName(file);
+          if (!functionName)
+            return file;
+          const commands = commandMap.get(functionName);
+          if (!commands)
+            return file;
+          const lines = file.content.split("\n");
+          const header = lines.filter((line) => line.trim().startsWith("#"));
+          return {
+            ...file,
+            content: [...header, ...commands.map((command) => command.cmd)].join("\n")
+          };
+        }),
+        stats: optimized.stats
+      };
+    }
+    function countMcfunctionCommands(files) {
+      return files.reduce((sum, file) => {
+        if (!toFunctionName(file)) {
+          return sum;
+        }
+        return sum + file.content.split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#")).length;
+      }, 0);
+    }
+    function generateDatapackWithStats(module3, options = {}) {
+      const { optimizeCommands = true } = options;
+      const files = [];
+      const advancements = [];
+      const ns = module3.namespace;
+      const triggerHandlers = module3.functions.filter((fn) => fn.isTriggerHandler && fn.triggerName);
+      const triggerNames = new Set(triggerHandlers.map((fn) => fn.triggerName));
+      const tickFunctionNames = [];
+      for (const fn of module3.functions) {
+        if (fn.isTickLoop) {
+          tickFunctionNames.push(fn.name);
+        }
+      }
+      files.push({
+        path: "pack.mcmeta",
+        content: JSON.stringify({
+          pack: { pack_format: 26, description: `${ns} datapack \u2014 compiled by redscript` }
+        }, null, 2)
+      });
+      const loadLines = [
+        `# RedScript runtime init`,
+        `scoreboard objectives add ${OBJ} dummy`
+      ];
+      for (const g of module3.globals) {
+        loadLines.push(`scoreboard players set ${varRef(g)} ${OBJ} 0`);
+      }
+      for (const triggerName of triggerNames) {
+        loadLines.push(`scoreboard objectives add ${triggerName} trigger`);
+        loadLines.push(`scoreboard players enable @a ${triggerName}`);
+      }
+      for (const triggerName of triggerNames) {
+        const handlers = triggerHandlers.filter((fn) => fn.triggerName === triggerName);
+        const dispatchLines = [
+          `# Trigger dispatch for ${triggerName}`
+        ];
+        for (const handler of handlers) {
+          dispatchLines.push(`function ${ns}:${handler.name}`);
+        }
+        dispatchLines.push(`scoreboard players set @s ${triggerName} 0`);
+        dispatchLines.push(`scoreboard players enable @s ${triggerName}`);
+        files.push({
+          path: `data/${ns}/function/__trigger_${triggerName}_dispatch.mcfunction`,
+          content: dispatchLines.join("\n")
+        });
+      }
+      for (const fn of module3.functions) {
+        const consts = collectConsts(fn);
+        if (consts.size > 0) {
+          loadLines.push(...Array.from(consts).map(constSetup));
+        }
+        for (let i = 0; i < fn.blocks.length; i++) {
+          const block = fn.blocks[i];
+          const lines = [`# block: ${block.label}`];
+          if (i === 0) {
+            for (let j = 0; j < fn.params.length; j++) {
+              lines.push(`scoreboard players operation ${varRef(fn.params[j])} ${OBJ} = $p${j} ${OBJ}`);
+            }
+          }
+          for (const instr of block.instrs) {
+            lines.push(...emitInstr(instr, ns));
+          }
+          lines.push(...emitTerm(block.term, ns, fn.name));
+          const filePath = i === 0 ? `data/${ns}/function/${fn.name}.mcfunction` : `data/${ns}/function/${fn.name}/${block.label}.mcfunction`;
+          files.push({ path: filePath, content: lines.join("\n") });
+        }
+      }
+      files.push({
+        path: `data/${ns}/function/__load.mcfunction`,
+        content: loadLines.join("\n")
+      });
+      files.push({
+        path: `data/minecraft/tags/function/load.json`,
+        content: JSON.stringify({ values: [`${ns}:__load`] }, null, 2)
+      });
+      const tickLines = ["# RedScript tick dispatcher"];
+      for (const fnName of tickFunctionNames) {
+        tickLines.push(`function ${ns}:${fnName}`);
+      }
+      if (triggerNames.size > 0) {
+        tickLines.push(`# Trigger checks`);
+        for (const triggerName of triggerNames) {
+          tickLines.push(`execute as @a[scores={${triggerName}=1..}] run function ${ns}:__trigger_${triggerName}_dispatch`);
+        }
+      }
+      if (tickFunctionNames.length > 0 || triggerNames.size > 0) {
+        files.push({
+          path: `data/${ns}/function/__tick.mcfunction`,
+          content: tickLines.join("\n")
+        });
+        files.push({
+          path: `data/minecraft/tags/function/tick.json`,
+          content: JSON.stringify({ values: [`${ns}:__tick`] }, null, 2)
+        });
+      }
+      for (const fn of module3.functions) {
+        const eventTrigger = fn.eventTrigger;
+        if (!eventTrigger) {
+          continue;
+        }
+        let path = "";
+        let criteria = {};
+        switch (eventTrigger.kind) {
+          case "advancement":
+            path = `data/${ns}/advancements/on_advancement_${fn.name}.json`;
+            criteria = {
+              trigger: {
+                trigger: `minecraft:${eventTrigger.value}`
+              }
+            };
+            break;
+          case "craft":
+            path = `data/${ns}/advancements/on_craft_${fn.name}.json`;
+            criteria = {
+              crafted: {
+                trigger: "minecraft:inventory_changed",
+                conditions: {
+                  items: [
+                    {
+                      items: [eventTrigger.value]
+                    }
+                  ]
+                }
+              }
+            };
+            break;
+          case "death":
+            path = `data/${ns}/advancements/on_death_${fn.name}.json`;
+            criteria = {
+              death: {
+                trigger: "minecraft:entity_killed_player"
+              }
+            };
+            break;
+          case "login":
+          case "join_team":
+            continue;
+        }
+        advancements.push({
+          path,
+          content: JSON.stringify({
+            criteria,
+            rewards: {
+              function: `${ns}:${fn.name}`
+            }
+          }, null, 2)
+        });
+      }
+      const stats = (0, commands_1.createEmptyOptimizationStats)();
+      if (!optimizeCommands) {
+        return { files, advancements, stats };
+      }
+      const optimized = applyFunctionOptimization(files);
+      (0, commands_1.mergeOptimizationStats)(stats, optimized.stats);
+      return { files: optimized.files, advancements, stats };
+    }
+    function generateDatapack(module3) {
+      const generated = generateDatapackWithStats(module3);
+      return [...generated.files, ...generated.advancements];
+    }
+  }
+});
+
+// ../../dist/compile.js
+var require_compile = __commonJS({
+  "../../dist/compile.js"(exports2) {
+    "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
         };
         return ownKeys(o);
-    };
-    return function (mod) {
+      };
+      return function(mod) {
         if (mod && mod.__esModule) return mod;
         var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        }
         __setModuleDefault(result, mod);
         return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.activate = activate;
-exports.deactivate = deactivate;
-const vscode = __importStar(require("vscode"));
-const path = __importStar(require("path"));
-// Lazy-load the compiler so it doesn't slow down VS Code startup.
-// We use require() at runtime since it's CommonJS inside the extension.
-let _compile = null;
-function getCompile() {
-    if (!_compile) {
-        try {
-            // Resolve the redscript package relative to this extension
-            const pkgPath = path.join(__dirname, '..', 'node_modules', 'redscript');
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const mod = require(pkgPath);
-            _compile = mod.compile;
-        }
-        catch {
-            // Fallback: try global install
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.preprocessSource = preprocessSource;
+    exports2.compile = compile;
+    exports2.formatCompileError = formatCompileError;
+    var fs = __importStar(require("fs"));
+    var path = __importStar(require("path"));
+    var lexer_1 = require_lexer();
+    var parser_1 = require_parser();
+    var lowering_1 = require_lowering();
+    var passes_1 = require_passes();
+    var mcfunction_1 = require_mcfunction();
+    var diagnostics_1 = require_diagnostics();
+    var IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/;
+    function preprocessSource(source, options = {}) {
+      const { filePath } = options;
+      const seen = options.seen ?? /* @__PURE__ */ new Set();
+      if (filePath) {
+        seen.add(path.resolve(filePath));
+      }
+      const lines = source.split("\n");
+      const imports = [];
+      const bodyLines = [];
+      let parsingHeader = true;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        const match = line.match(IMPORT_RE);
+        if (parsingHeader && match) {
+          if (!filePath) {
+            throw new diagnostics_1.DiagnosticError("ParseError", "Import statements require a file path", { line: i + 1, col: 1 }, lines);
+          }
+          const importPath = path.resolve(path.dirname(filePath), match[1]);
+          if (!seen.has(importPath)) {
+            seen.add(importPath);
+            let importedSource;
             try {
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
-                _compile = require('redscript').compile;
+              importedSource = fs.readFileSync(importPath, "utf-8");
+            } catch {
+              throw new diagnostics_1.DiagnosticError("ParseError", `Cannot import '${match[1]}'`, { file: filePath, line: i + 1, col: 1 }, lines);
             }
-            catch {
-                return null;
-            }
+            imports.push(preprocessSource(importedSource, { filePath: importPath, seen }));
+          }
+          continue;
         }
+        if (parsingHeader && (trimmed === "" || trimmed.startsWith("//"))) {
+          bodyLines.push(line);
+          continue;
+        }
+        parsingHeader = false;
+        bodyLines.push(line);
+      }
+      return [...imports, bodyLines.join("\n")].filter(Boolean).join("\n");
     }
-    return _compile;
+    function compile(source, options = {}) {
+      const { namespace = "redscript", filePath, optimize: shouldOptimize = true } = options;
+      let sourceLines = source.split("\n");
+      try {
+        const preprocessedSource = preprocessSource(source, { filePath });
+        sourceLines = preprocessedSource.split("\n");
+        const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
+        const ast = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
+        const ir = new lowering_1.Lowering(namespace).lower(ast);
+        const optimized = shouldOptimize ? { ...ir, functions: ir.functions.map((fn) => (0, passes_1.optimize)(fn)) } : ir;
+        const generated = (0, mcfunction_1.generateDatapackWithStats)(optimized);
+        return {
+          success: true,
+          files: [...generated.files, ...generated.advancements],
+          advancements: generated.advancements,
+          ast,
+          ir: optimized
+        };
+      } catch (err) {
+        if (err instanceof diagnostics_1.DiagnosticError) {
+          return { success: false, error: err };
+        }
+        if (err instanceof Error) {
+          const diagnostic = (0, diagnostics_1.parseErrorMessage)("ParseError", err.message, sourceLines, filePath);
+          return { success: false, error: diagnostic };
+        }
+        return {
+          success: false,
+          error: new diagnostics_1.DiagnosticError("ParseError", String(err), { file: filePath, line: 1, col: 1 }, sourceLines)
+        };
+      }
+    }
+    function formatCompileError(result) {
+      if (result.success) {
+        return "Compilation successful";
+      }
+      if (result.error) {
+        return (0, diagnostics_1.formatError)(result.error, result.error.sourceLines?.join("\n"));
+      }
+      return "Unknown error";
+    }
+  }
+});
+
+// ../../dist/mc-validator/index.js
+var require_mc_validator = __commonJS({
+  "../../dist/mc-validator/index.js"(exports2) {
+    "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        }
+        __setModuleDefault(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.MCCommandValidator = void 0;
+    var fs = __importStar(require("fs"));
+    var FUNCTION_ID_RE = /^[0-9a-z_.-]+:[0-9a-z_./-]+$/i;
+    var INTEGER_RE = /^-?\d+$/;
+    var SCORE_RANGE_RE = /^-?\d+\.\.$|^\.\.-?\d+$|^-?\d+\.\.-?\d+$|^-?\d+$/;
+    var COMMENT_PREFIXES = [
+      "# RedScript runtime init",
+      "# block:",
+      "# RedScript tick dispatcher"
+    ];
+    var SCOREBOARD_PLAYER_ACTIONS = /* @__PURE__ */ new Set(["set", "add", "remove", "get", "operation", "enable"]);
+    var SCOREBOARD_OPERATIONS = /* @__PURE__ */ new Set(["=", "+=", "-=", "*=", "/=", "%=", "<", ">", "><"]);
+    var MCCommandValidator = class {
+      constructor(commandsPath) {
+        const parsed = JSON.parse(fs.readFileSync(commandsPath, "utf-8"));
+        this.root = parsed.root;
+        this.rootChildren = parsed.root.children ?? [];
+      }
+      validate(line) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#") || COMMENT_PREFIXES.some((prefix) => trimmed.startsWith(prefix))) {
+          return { valid: true };
+        }
+        const tokens = tokenize(trimmed);
+        if (tokens.length === 0) {
+          return { valid: true };
+        }
+        if (!this.hasRootCommand(tokens[0])) {
+          return { valid: false, error: `Unknown root command: ${tokens[0]}` };
+        }
+        switch (tokens[0]) {
+          case "execute":
+            return this.validateExecute(tokens);
+          case "scoreboard":
+            return this.validateScoreboard(tokens);
+          case "function":
+            return this.validateFunction(tokens);
+          case "data":
+            return this.validateData(tokens);
+          case "return":
+            return this.validateReturn(tokens);
+          default:
+            return this.validateAgainstTree(tokens);
+        }
+      }
+      hasRootCommand(command) {
+        return this.rootChildren.some((child) => child.type === "literal" && child.name === command);
+      }
+      validateExecute(tokens) {
+        const runIndex = tokens.indexOf("run");
+        if (runIndex === 1 || runIndex === tokens.length - 1) {
+          return { valid: false, error: "Malformed execute run clause" };
+        }
+        if (runIndex !== -1) {
+          const chainResult = this.validateAgainstTree(tokens.slice(0, runIndex));
+          if (!chainResult.valid) {
+            return chainResult;
+          }
+          return this.validate(tokens.slice(runIndex + 1).join(" "));
+        }
+        return this.validateAgainstTree(tokens);
+      }
+      validateScoreboard(tokens) {
+        if (tokens[1] === "objectives" && tokens[2] === "add") {
+          if (tokens.length < 5) {
+            return { valid: false, error: "scoreboard objectives add requires name and criteria" };
+          }
+          return this.validateAgainstTree(tokens);
+        }
+        if (tokens[1] !== "players" || !SCOREBOARD_PLAYER_ACTIONS.has(tokens[2] ?? "")) {
+          return this.validateAgainstTree(tokens);
+        }
+        const action = tokens[2];
+        if (action === "enable") {
+          if (tokens.length !== 5) {
+            return { valid: false, error: "scoreboard players enable requires target and objective" };
+          }
+          return this.validateAgainstTree(tokens);
+        }
+        if (action === "get") {
+          if (tokens.length !== 5) {
+            return { valid: false, error: "scoreboard players get requires target and objective" };
+          }
+          return this.validateAgainstTree(tokens);
+        }
+        if (action === "operation") {
+          if (tokens.length !== 8) {
+            return { valid: false, error: "scoreboard players operation requires 5 operands" };
+          }
+          if (!SCOREBOARD_OPERATIONS.has(tokens[5])) {
+            return { valid: false, error: `Unknown scoreboard operation: ${tokens[5]}` };
+          }
+          return this.validateAgainstTree(tokens);
+        }
+        if (tokens.length !== 6) {
+          return { valid: false, error: `scoreboard players ${action} requires target, objective, and value` };
+        }
+        if (!INTEGER_RE.test(tokens[5])) {
+          return { valid: false, error: `Expected integer value, got: ${tokens[5]}` };
+        }
+        return this.validateAgainstTree(tokens);
+      }
+      validateFunction(tokens) {
+        if (tokens.length !== 2 || !FUNCTION_ID_RE.test(tokens[1])) {
+          return { valid: false, error: "function requires a namespaced function id" };
+        }
+        return this.validateAgainstTree(tokens);
+      }
+      validateData(tokens) {
+        if (tokens.length < 5) {
+          return { valid: false, error: "data command is incomplete" };
+        }
+        const action = tokens[1];
+        if (!["get", "modify", "merge", "remove"].includes(action)) {
+          return this.validateAgainstTree(tokens);
+        }
+        const targetType = tokens[2];
+        if (!["storage", "entity", "block"].includes(targetType)) {
+          return { valid: false, error: `Unsupported data target: ${targetType}` };
+        }
+        if (action === "get") {
+          if (tokens.length < 5) {
+            return { valid: false, error: "data get requires target and path" };
+          }
+          if (tokens[5] && !isNumberish(tokens[5])) {
+            return { valid: false, error: `Invalid data get scale: ${tokens[5]}` };
+          }
+          return this.validateAgainstTree(tokens);
+        }
+        if (action === "modify") {
+          if (tokens.length < 7) {
+            return { valid: false, error: "data modify is incomplete" };
+          }
+          if (!["set", "append", "prepend", "insert", "merge"].includes(tokens[5])) {
+            return { valid: false, error: `Unsupported data modify mode: ${tokens[5]}` };
+          }
+          return this.validateAgainstTree(tokens);
+        }
+        return this.validateAgainstTree(tokens);
+      }
+      validateReturn(tokens) {
+        if (tokens.length < 2) {
+          return { valid: false, error: "return requires a value or run clause" };
+        }
+        if (tokens[1] === "run") {
+          if (tokens.length < 3) {
+            return { valid: false, error: "return run requires an inner command" };
+          }
+          return this.validate(tokens.slice(2).join(" "));
+        }
+        if (!INTEGER_RE.test(tokens[1])) {
+          return { valid: false, error: `Invalid return value: ${tokens[1]}` };
+        }
+        return this.validateAgainstTree(tokens);
+      }
+      validateAgainstTree(tokens) {
+        const memo = /* @__PURE__ */ new Map();
+        const isValid = walk(this.root, tokens, 0, memo, this.rootChildren);
+        return isValid ? { valid: true } : { valid: false, error: `Command does not match Brigadier tree: ${tokens.join(" ")}` };
+      }
+    };
+    exports2.MCCommandValidator = MCCommandValidator;
+    function walk(node, tokens, index, memo, rootChildren) {
+      const key = `${node.name ?? "<root>"}:${index}`;
+      const cached = memo.get(key);
+      if (cached !== void 0) {
+        return cached;
+      }
+      if (index === tokens.length) {
+        const done = node.executable === true || (node.children ?? []).length === 0;
+        memo.set(key, done);
+        return done;
+      }
+      const children = node.children ?? [];
+      for (const child of children) {
+        if (child.type === "literal") {
+          if (child.name === tokens[index] && walk(child, tokens, index + 1, memo, rootChildren)) {
+            memo.set(key, true);
+            return true;
+          }
+          continue;
+        }
+        if (child.type !== "argument") {
+          continue;
+        }
+        const parser = child.parser?.parser;
+        const modifier = child.parser?.modifier?.type;
+        if (parserConsumesRest(parser, modifier)) {
+          const done = child.executable === true || (child.children ?? []).length === 0;
+          if (done) {
+            memo.set(key, true);
+            return true;
+          }
+        }
+        const width = parserTokenWidth(parser, tokens, index);
+        if (width === null) {
+          continue;
+        }
+        const nextIndex = index + width;
+        if (walk(child, tokens, nextIndex, memo, rootChildren)) {
+          memo.set(key, true);
+          return true;
+        }
+        for (const redirect of child.redirects ?? []) {
+          const target = rootChildren.find((candidate) => candidate.name === redirect);
+          if (target && walk(target, tokens, nextIndex, memo, rootChildren)) {
+            memo.set(key, true);
+            return true;
+          }
+        }
+      }
+      memo.set(key, false);
+      return false;
+    }
+    function parserConsumesRest(parser, modifier) {
+      return parser === "brigadier:string" && modifier === "greedy" || parser === "minecraft:message";
+    }
+    function parserTokenWidth(parser, tokens, index) {
+      switch (parser) {
+        case "minecraft:vec3":
+        case "minecraft:block_pos":
+          return index + 3 <= tokens.length ? 3 : null;
+        case "minecraft:vec2":
+        case "minecraft:column_pos":
+        case "minecraft:rotation":
+          return index + 2 <= tokens.length ? 2 : null;
+        default:
+          return index < tokens.length ? 1 : null;
+      }
+    }
+    function tokenize(line) {
+      const tokens = [];
+      let current = "";
+      let quote = null;
+      let escape = false;
+      let bracketDepth = 0;
+      let braceDepth = 0;
+      for (const char of line) {
+        if (escape) {
+          current += char;
+          escape = false;
+          continue;
+        }
+        if (quote) {
+          current += char;
+          if (char === "\\") {
+            escape = true;
+          } else if (char === quote) {
+            quote = null;
+          }
+          continue;
+        }
+        if (char === '"' || char === "'") {
+          quote = char;
+          current += char;
+          continue;
+        }
+        if (char === "[")
+          bracketDepth += 1;
+        if (char === "]")
+          bracketDepth = Math.max(0, bracketDepth - 1);
+        if (char === "{")
+          braceDepth += 1;
+        if (char === "}")
+          braceDepth = Math.max(0, braceDepth - 1);
+        if (/\s/.test(char) && bracketDepth === 0 && braceDepth === 0) {
+          if (current) {
+            tokens.push(current);
+            current = "";
+          }
+          continue;
+        }
+        current += char;
+      }
+      if (current) {
+        tokens.push(current);
+      }
+      return tokens;
+    }
+    function isNumberish(value) {
+      return /^-?\d+(\.\d+)?$/.test(value) || SCORE_RANGE_RE.test(value);
+    }
+  }
+});
+
+// ../../dist/index.js
+var require_dist = __commonJS({
+  "../../dist/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.MCCommandValidator = exports2.generateDatapack = exports2.optimize = exports2.Lowering = exports2.TypeChecker = exports2.Parser = exports2.Lexer = void 0;
+    exports2.compile = compile;
+    exports2.check = check;
+    var lexer_1 = require_lexer();
+    var parser_1 = require_parser();
+    var typechecker_1 = require_typechecker();
+    var lowering_1 = require_lowering();
+    var passes_1 = require_passes();
+    var mcfunction_1 = require_mcfunction();
+    var compile_1 = require_compile();
+    var commands_1 = require_commands();
+    function compile(source, options = {}) {
+      const namespace = options.namespace ?? "redscript";
+      const shouldOptimize = options.optimize ?? true;
+      const shouldTypeCheck = options.typeCheck ?? true;
+      const filePath = options.filePath;
+      const preprocessedSource = (0, compile_1.preprocessSource)(source, { filePath });
+      const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
+      const ast = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
+      let typeErrors;
+      if (shouldTypeCheck) {
+        const checker = new typechecker_1.TypeChecker(preprocessedSource, filePath);
+        typeErrors = checker.check(ast);
+      }
+      const lowering = new lowering_1.Lowering(namespace);
+      const ir = lowering.lower(ast);
+      let optimizedIR = ir;
+      let generated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: shouldOptimize });
+      let optimizationStats;
+      if (shouldOptimize) {
+        const stats = (0, commands_1.createEmptyOptimizationStats)();
+        const copyPropagatedFunctions = [];
+        const deadCodeEliminatedFunctions = [];
+        for (const fn of ir.functions) {
+          const folded = (0, passes_1.constantFoldingWithStats)(fn);
+          stats.constantFolds += folded.stats.constantFolds ?? 0;
+          const propagated = (0, passes_1.copyPropagation)(folded.fn);
+          copyPropagatedFunctions.push(propagated);
+          const dce = (0, passes_1.deadCodeEliminationWithStats)(propagated);
+          deadCodeEliminatedFunctions.push(dce.fn);
+        }
+        const copyPropagatedIR = { ...ir, functions: copyPropagatedFunctions };
+        optimizedIR = { ...ir, functions: deadCodeEliminatedFunctions };
+        const baselineGenerated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: false });
+        const beforeDceGenerated = (0, mcfunction_1.generateDatapackWithStats)(copyPropagatedIR, { optimizeCommands: false });
+        const afterDceGenerated = (0, mcfunction_1.generateDatapackWithStats)(optimizedIR, { optimizeCommands: false });
+        generated = (0, mcfunction_1.generateDatapackWithStats)(optimizedIR, { optimizeCommands: true });
+        stats.deadCodeRemoved = (0, mcfunction_1.countMcfunctionCommands)(beforeDceGenerated.files) - (0, mcfunction_1.countMcfunctionCommands)(afterDceGenerated.files);
+        stats.licmHoists = generated.stats.licmHoists;
+        stats.licmLoopBodies = generated.stats.licmLoopBodies;
+        stats.cseRedundantReads = generated.stats.cseRedundantReads;
+        stats.cseArithmetic = generated.stats.cseArithmetic;
+        stats.setblockMergedCommands = generated.stats.setblockMergedCommands;
+        stats.setblockFillCommands = generated.stats.setblockFillCommands;
+        stats.setblockSavedCommands = generated.stats.setblockSavedCommands;
+        stats.totalCommandsBefore = (0, mcfunction_1.countMcfunctionCommands)(baselineGenerated.files);
+        stats.totalCommandsAfter = (0, mcfunction_1.countMcfunctionCommands)(generated.files);
+        optimizationStats = stats;
+      } else {
+        optimizedIR = ir;
+        generated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: false });
+      }
+      return {
+        files: [...generated.files, ...generated.advancements],
+        advancements: generated.advancements,
+        ast,
+        ir: optimizedIR,
+        typeErrors,
+        warnings: lowering.warnings,
+        stats: optimizationStats
+      };
+    }
+    function check(source, namespace = "redscript", filePath) {
+      try {
+        const preprocessedSource = (0, compile_1.preprocessSource)(source, { filePath });
+        const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
+        new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
+        return null;
+      } catch (err) {
+        return err;
+      }
+    }
+    var lexer_2 = require_lexer();
+    Object.defineProperty(exports2, "Lexer", { enumerable: true, get: function() {
+      return lexer_2.Lexer;
+    } });
+    var parser_2 = require_parser();
+    Object.defineProperty(exports2, "Parser", { enumerable: true, get: function() {
+      return parser_2.Parser;
+    } });
+    var typechecker_2 = require_typechecker();
+    Object.defineProperty(exports2, "TypeChecker", { enumerable: true, get: function() {
+      return typechecker_2.TypeChecker;
+    } });
+    var lowering_2 = require_lowering();
+    Object.defineProperty(exports2, "Lowering", { enumerable: true, get: function() {
+      return lowering_2.Lowering;
+    } });
+    var passes_2 = require_passes();
+    Object.defineProperty(exports2, "optimize", { enumerable: true, get: function() {
+      return passes_2.optimize;
+    } });
+    var mcfunction_2 = require_mcfunction();
+    Object.defineProperty(exports2, "generateDatapack", { enumerable: true, get: function() {
+      return mcfunction_2.generateDatapack;
+    } });
+    var mc_validator_1 = require_mc_validator();
+    Object.defineProperty(exports2, "MCCommandValidator", { enumerable: true, get: function() {
+      return mc_validator_1.MCCommandValidator;
+    } });
+  }
+});
+
+// src/extension.ts
+var extension_exports = {};
+__export(extension_exports, {
+  activate: () => activate,
+  deactivate: () => deactivate
+});
+module.exports = __toCommonJS(extension_exports);
+var vscode = __toESM(require("vscode"));
+var { compile: _compile } = require_dist();
+function getCompile() {
+  return _compile ?? null;
 }
-const DEBOUNCE_MS = 600;
+var DEBOUNCE_MS = 600;
 function activate(context) {
-    const diagnostics = vscode.languages.createDiagnosticCollection('redscript');
-    context.subscriptions.push(diagnostics);
-    // Debounce timer per document URI
-    const timers = new Map();
-    function scheduleValidation(doc) {
-        if (doc.languageId !== 'redscript')
-            return;
-        const key = doc.uri.toString();
-        const existing = timers.get(key);
-        if (existing)
-            clearTimeout(existing);
-        timers.set(key, setTimeout(() => {
-            validateDocument(doc, diagnostics);
-            timers.delete(key);
-        }, DEBOUNCE_MS));
-    }
-    // Validate on open
-    context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(doc => scheduleValidation(doc)));
-    // Validate on change
-    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(e => scheduleValidation(e.document)));
-    // Clear diagnostics on close
-    context.subscriptions.push(vscode.workspace.onDidCloseTextDocument(doc => {
-        diagnostics.delete(doc.uri);
-        const key = doc.uri.toString();
-        const t = timers.get(key);
-        if (t) {
-            clearTimeout(t);
-            timers.delete(key);
-        }
-    }));
-    // Validate all already-open .rs files
-    vscode.workspace.textDocuments
-        .filter(d => d.languageId === 'redscript')
-        .forEach(d => scheduleValidation(d));
-    // Status bar item to show compilation state
-    const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10);
-    statusBar.text = '$(pass) RedScript';
-    statusBar.tooltip = 'RedScript compiler';
-    statusBar.show();
-    context.subscriptions.push(statusBar);
-    // Track the active editor's compile state
-    context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(editor => {
-        if (editor?.document.languageId === 'redscript') {
-            statusBar.show();
-        }
-        else {
-            statusBar.hide();
-        }
-    }));
+  const diagnostics = vscode.languages.createDiagnosticCollection("redscript");
+  context.subscriptions.push(diagnostics);
+  const timers = /* @__PURE__ */ new Map();
+  function scheduleValidation(doc) {
+    if (doc.languageId !== "redscript") return;
+    const key = doc.uri.toString();
+    const existing = timers.get(key);
+    if (existing) clearTimeout(existing);
+    timers.set(key, setTimeout(() => {
+      validateDocument(doc, diagnostics);
+      timers.delete(key);
+    }, DEBOUNCE_MS));
+  }
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument((doc) => scheduleValidation(doc))
+  );
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((e) => scheduleValidation(e.document))
+  );
+  context.subscriptions.push(
+    vscode.workspace.onDidCloseTextDocument((doc) => {
+      diagnostics.delete(doc.uri);
+      const key = doc.uri.toString();
+      const t = timers.get(key);
+      if (t) {
+        clearTimeout(t);
+        timers.delete(key);
+      }
+    })
+  );
+  vscode.workspace.textDocuments.filter((d) => d.languageId === "redscript").forEach((d) => scheduleValidation(d));
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10);
+  statusBar.text = "$(pass) RedScript";
+  statusBar.tooltip = "RedScript compiler";
+  statusBar.show();
+  context.subscriptions.push(statusBar);
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor?.document.languageId === "redscript") {
+        statusBar.show();
+      } else {
+        statusBar.hide();
+      }
+    })
+  );
 }
 function validateDocument(doc, collection) {
-    const compile = getCompile();
-    if (!compile) {
-        // Compiler not available — show a one-time info message
-        collection.set(doc.uri, [{
-                message: 'RedScript compiler not found. Run `npm install -g redscript` to enable diagnostics.',
-                range: new vscode.Range(0, 0, 0, 0),
-                severity: vscode.DiagnosticSeverity.Information,
-                source: 'redscript'
-            }]);
-        return;
+  const compile = getCompile();
+  if (!compile) {
+    collection.set(doc.uri, [{
+      message: "RedScript compiler not found. Run `npm install -g redscript` to enable diagnostics.",
+      range: new vscode.Range(0, 0, 0, 0),
+      severity: vscode.DiagnosticSeverity.Information,
+      source: "redscript"
+    }]);
+    return;
+  }
+  const source = doc.getText();
+  const docDiagnostics = [];
+  try {
+    const result = compile(source, { filePath: doc.uri.fsPath });
+    for (const w of result.warnings ?? []) {
+      const line = Math.max(0, (w.line ?? 1) - 1);
+      const col = Math.max(0, (w.column ?? 1) - 1);
+      const range = new vscode.Range(line, col, line, col + 50);
+      docDiagnostics.push({
+        message: w.message,
+        range,
+        severity: vscode.DiagnosticSeverity.Warning,
+        source: "redscript"
+      });
     }
-    const source = doc.getText();
-    const docDiagnostics = [];
-    try {
-        const result = compile(source, { filePath: doc.uri.fsPath });
-        // Convert warnings to VS Code diagnostics
-        for (const w of result.warnings ?? []) {
-            const line = Math.max(0, (w.line ?? 1) - 1);
-            const col = Math.max(0, (w.column ?? 1) - 1);
-            const range = new vscode.Range(line, col, line, col + 50);
-            docDiagnostics.push({
-                message: w.message,
-                range,
-                severity: vscode.DiagnosticSeverity.Warning,
-                source: 'redscript'
-            });
-        }
-    }
-    catch (err) {
-        // Parse the error message for line/column info
-        const msg = err instanceof Error ? err.message : String(err);
-        const range = extractRange(msg, doc);
-        docDiagnostics.push({
-            message: msg,
-            range,
-            severity: vscode.DiagnosticSeverity.Error,
-            source: 'redscript'
-        });
-    }
-    collection.set(doc.uri, docDiagnostics);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const range = extractRange(msg, doc);
+    docDiagnostics.push({
+      message: msg,
+      range,
+      severity: vscode.DiagnosticSeverity.Error,
+      source: "redscript"
+    });
+  }
+  collection.set(doc.uri, docDiagnostics);
 }
-/**
- * Try to extract line/column from common error formats:
- *   "Error at line 5, column 12: ..."
- *   "5:12: ..."
- *   "[line 5] ..."
- */
 function extractRange(msg, doc) {
-    // "line N, column M"
-    let m = msg.match(/line[: ]+(\d+)[,\s]+col(?:umn)?[: ]+(\d+)/i);
-    if (m) {
-        const l = Math.max(0, parseInt(m[1]) - 1);
-        const c = Math.max(0, parseInt(m[2]) - 1);
-        return new vscode.Range(l, c, l, c + 80);
-    }
-    // "N:M"
-    m = msg.match(/^(\d+):(\d+)/);
-    if (m) {
-        const l = Math.max(0, parseInt(m[1]) - 1);
-        const c = Math.max(0, parseInt(m[2]) - 1);
-        return new vscode.Range(l, c, l, c + 80);
-    }
-    // "[line N]"
-    m = msg.match(/\[line (\d+)\]/i);
-    if (m) {
-        const l = Math.max(0, parseInt(m[1]) - 1);
-        return new vscode.Range(l, 0, l, 200);
-    }
-    // Fallback: highlight first line
-    return new vscode.Range(0, 0, 0, doc.lineAt(0).text.length);
+  let m = msg.match(/line[: ]+(\d+)[,\s]+col(?:umn)?[: ]+(\d+)/i);
+  if (m) {
+    const l = Math.max(0, parseInt(m[1]) - 1);
+    const c = Math.max(0, parseInt(m[2]) - 1);
+    return new vscode.Range(l, c, l, c + 80);
+  }
+  m = msg.match(/^(\d+):(\d+)/);
+  if (m) {
+    const l = Math.max(0, parseInt(m[1]) - 1);
+    const c = Math.max(0, parseInt(m[2]) - 1);
+    return new vscode.Range(l, c, l, c + 80);
+  }
+  m = msg.match(/\[line (\d+)\]/i);
+  if (m) {
+    const l = Math.max(0, parseInt(m[1]) - 1);
+    return new vscode.Range(l, 0, l, 200);
+  }
+  return new vscode.Range(0, 0, 0, doc.lineAt(0).text.length);
 }
 function deactivate() {
-    // nothing
 }
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  activate,
+  deactivate
+});

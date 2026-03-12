@@ -1,33 +1,15 @@
 import * as vscode from 'vscode'
-import * as path from 'path'
-import * as fs from 'fs'
-
-// Lazy-load the compiler so it doesn't slow down VS Code startup.
-// We use require() at runtime since it's CommonJS inside the extension.
-let _compile: ((source: string, opts?: { filePath?: string }) => {
-  files: { path: string; content: string }[]
-  warnings: { message: string; line?: number; column?: number }[]
-}) | null = null
+// The compiler is bundled directly into this extension by esbuild.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { compile: _compile } = require('redscript') as {
+  compile: (source: string, opts?: { filePath?: string }) => {
+    files: { path: string; content: string }[]
+    warnings: { message: string; line?: number; column?: number }[]
+  }
+}
 
 function getCompile() {
-  if (!_compile) {
-    try {
-      // Resolve the redscript package relative to this extension
-      const pkgPath = path.join(__dirname, '..', 'node_modules', 'redscript')
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const mod = require(pkgPath)
-      _compile = mod.compile
-    } catch {
-      // Fallback: try global install
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        _compile = require('redscript').compile
-      } catch {
-        return null
-      }
-    }
-  }
-  return _compile
+  return _compile ?? null
 }
 
 const DEBOUNCE_MS = 600

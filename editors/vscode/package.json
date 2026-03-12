@@ -2,7 +2,7 @@
   "name": "redscript-vscode",
   "displayName": "RedScript for Minecraft",
   "description": "Syntax highlighting, error diagnostics, and language support for RedScript — a compiler targeting Minecraft Java Edition",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "bkmashiro",
   "icon": "icon.png",
   "license": "MIT",
@@ -10,23 +10,45 @@
     "type": "git",
     "url": "https://github.com/bkmashiro/redscript"
   },
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Programming Languages"],
-  "keywords": ["minecraft", "mcfunction", "redscript", "datapack", "compiler"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "minecraft",
+    "mcfunction",
+    "redscript",
+    "datapack",
+    "compiler"
+  ],
   "main": "./out/extension.js",
-  "activationEvents": ["onLanguage:redscript"],
+  "activationEvents": [
+    "onLanguage:redscript"
+  ],
   "contributes": {
     "languages": [
       {
         "id": "redscript",
-        "aliases": ["RedScript", "redscript"],
-        "extensions": [".rs"],
+        "aliases": [
+          "RedScript",
+          "redscript"
+        ],
+        "extensions": [
+          ".rs"
+        ],
         "configuration": "./redscript-language-configuration.json"
       },
       {
         "id": "mcfunction",
-        "aliases": ["mcfunction", "Minecraft Function"],
-        "extensions": [".mcfunction"],
+        "aliases": [
+          "mcfunction",
+          "Minecraft Function"
+        ],
+        "extensions": [
+          ".mcfunction"
+        ],
         "configuration": "./mcfunction-language-configuration.json"
       }
     ],
@@ -53,15 +75,16 @@
     ]
   },
   "scripts": {
-    "compile": "tsc -p tsconfig.json",
-    "watch": "tsc -watch -p tsconfig.json",
+    "compile": "node build.mjs",
+    "watch": "node build.mjs --watch",
     "build": "npm run compile",
-    "package": "vsce package --no-dependencies",
-    "publish": "vsce publish --no-dependencies"
+    "package": "npm run build && vsce package --no-dependencies",
+    "publish": "npm run build && vsce publish --no-dependencies"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.27.3",
     "typescript": "^5.3.0"
   },
   "dependencies": {

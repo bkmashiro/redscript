@@ -3,6 +3,8 @@
 **/.eslintrc.json
 node_modules/**
 src/**
-!out/**
-*.vsix
+build.mjs
 tsconfig.json
+package-lock.json
+*.vsix
+# out/ is included (bundled extension)
