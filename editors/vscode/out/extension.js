@@ -1178,16 +1178,23 @@ var require_parser = __commonJS({
                 "untag": "__entity_untag",
                 "has_tag": "__entity_has_tag",
                 "push": "__array_push",
-                "pop": "__array_pop"
+                "pop": "__array_pop",
+                "add": "set_add",
+                "contains": "set_contains",
+                "remove": "set_remove",
+                "clear": "set_clear"
               };
               const internalFn = methodMap[expr.field];
               if (internalFn) {
-                const args2 = this.parseArgs();
+                const args3 = this.parseArgs();
                 this.expect(")");
-                expr = this.withLoc({ kind: "call", fn: internalFn, args: [expr.obj, ...args2] }, this.getLocToken(expr) ?? openParenToken);
+                expr = this.withLoc({ kind: "call", fn: internalFn, args: [expr.obj, ...args3] }, this.getLocToken(expr) ?? openParenToken);
                 continue;
               }
-              this.error(`Unknown method '${expr.field}'`);
+              const args2 = this.parseArgs();
+              this.expect(")");
+              expr = this.withLoc({ kind: "call", fn: expr.field, args: [expr.obj, ...args2] }, this.getLocToken(expr) ?? openParenToken);
+              continue;
             }
             const args = this.parseArgs();
             this.expect(")");
@@ -2397,7 +2404,7 @@ var require_lowering = __commonJS({
       subtitle: ([sel, msg]) => `title ${sel} subtitle {"text":"${msg}"}`,
       title_times: ([sel, fadeIn, stay, fadeOut]) => `title ${sel} times ${fadeIn} ${stay} ${fadeOut}`,
       announce: ([msg]) => `tellraw @a {"text":"${msg}"}`,
-      give: ([sel, item, count]) => `give ${sel} ${item} ${count ?? "1"}`,
+      give: ([sel, item, count, nbt]) => nbt ? `give ${sel} ${item}${nbt} ${count ?? "1"}` : `give ${sel} ${item} ${count ?? "1"}`,
       kill: ([sel]) => `kill ${sel ?? "@s"}`,
       effect: ([sel, eff, dur, amp]) => `effect give ${sel} ${eff} ${dur ?? "30"} ${amp ?? "0"}`,
       summon: ([type, x, y, z, nbt]) => {
@@ -2475,8 +2482,18 @@ var require_lowering = __commonJS({
       // Special handling
       team_option: () => null,
       // Special handling
-      data_get: () => null
+      data_get: () => null,
       // Special handling (returns value from NBT)
+      set_new: () => null,
+      // Special handling (returns set ID)
+      set_add: () => null,
+      // Special handling
+      set_contains: () => null,
+      // Special handling (returns 1/0)
+      set_remove: () => null,
+      // Special handling
+      set_clear: () => null
+      // Special handling
     };
     function getSpan(node) {
       return node?.span;
@@ -2772,6 +2789,12 @@ var require_lowering = __commonJS({
               this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${elemValue.name} rs`);
             }
           }
+          return;
+        }
+        if (stmt.init.kind === "call" && stmt.init.fn === "set_new") {
+          const setId = `__set_${this.foreachCounter++}`;
+          this.builder.emitRaw(`data modify storage rs:sets ${setId} set value []`);
+          this.stringValues.set(stmt.name, setId);
           return;
         }
         if (stmt.init.kind === "call" && stmt.init.fn === "spawn_object") {
@@ -3735,6 +3758,35 @@ var require_lowering = __commonJS({
           this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`);
           return { kind: "var", name: dst };
         }
+        if (name === "set_new") {
+          const setId = `__set_${this.foreachCounter++}`;
+          this.builder.emitRaw(`data modify storage rs:sets ${setId} set value []`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "set_add") {
+          const setId = this.exprToString(args[0]);
+          const value = this.exprToString(args[1]);
+          this.builder.emitRaw(`execute unless data storage rs:sets ${setId}[{value:${value}}] run data modify storage rs:sets ${setId} append value {value:${value}}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "set_contains") {
+          const dst = this.builder.freshTemp();
+          const setId = this.exprToString(args[0]);
+          const value = this.exprToString(args[1]);
+          this.builder.emitRaw(`execute store result score ${dst} rs if data storage rs:sets ${setId}[{value:${value}}]`);
+          return { kind: "var", name: dst };
+        }
+        if (name === "set_remove") {
+          const setId = this.exprToString(args[0]);
+          const value = this.exprToString(args[1]);
+          this.builder.emitRaw(`data remove storage rs:sets ${setId}[{value:${value}}]`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "set_clear") {
+          const setId = this.exprToString(args[0]);
+          this.builder.emitRaw(`data modify storage rs:sets ${setId} set value []`);
+          return { kind: "const", value: 0 };
+        }
         const coordCommand = this.lowerCoordinateBuiltin(name, args);
         if (coordCommand) {
           this.builder.emitRaw(coordCommand);
@@ -3759,7 +3811,7 @@ var require_lowering = __commonJS({
           }
           return { kind: "const", value: 0 };
         }
-        const strArgs = args.map((arg) => this.exprToString(arg));
+        const strArgs = args.map((arg) => arg.kind === "struct_lit" || arg.kind === "array_lit" ? this.exprToSnbt(arg) : this.exprToString(arg));
         const cmd = BUILTINS2[name](strArgs);
         if (cmd) {
           this.builder.emitRaw(cmd);
@@ -3911,6 +3963,36 @@ var require_lowering = __commonJS({
           default:
             const op = this.lowerExpr(expr);
             return this.operandToVar(op);
+        }
+      }
+      exprToSnbt(expr) {
+        switch (expr.kind) {
+          case "struct_lit": {
+            const entries = expr.fields.map((f) => `${f.name}:${this.exprToSnbt(f.value)}`);
+            return `{${entries.join(",")}}`;
+          }
+          case "array_lit": {
+            const items = expr.elements.map((e) => this.exprToSnbt(e));
+            return `[${items.join(",")}]`;
+          }
+          case "str_lit":
+            return `"${expr.value}"`;
+          case "int_lit":
+            return String(expr.value);
+          case "float_lit":
+            return String(expr.value);
+          case "byte_lit":
+            return `${expr.value}b`;
+          case "short_lit":
+            return `${expr.value}s`;
+          case "long_lit":
+            return `${expr.value}L`;
+          case "double_lit":
+            return `${expr.value}d`;
+          case "bool_lit":
+            return expr.value ? "1b" : "0b";
+          default:
+            return this.exprToString(expr);
         }
       }
       exprToTargetString(expr) {

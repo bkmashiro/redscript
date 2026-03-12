@@ -2,7 +2,7 @@
 
 @tick
 fn counter_tick() {
-    let ticks: int = scoreboard_get("counter", #ticks);
+    let ticks = scoreboard_get("counter", #ticks);
     ticks = ticks + 1;
     scoreboard_set("counter", #ticks, ticks);
 

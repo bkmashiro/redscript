@@ -1,9 +1,9 @@
-import "../stdlib/math.rs"
-import "../stdlib/combat.rs"
+import "../stdlib/math.mcrs"
+import "../stdlib/combat.mcrs"
 
 fn attack(enemy: string, base: int, bonus: int) {
-    let raw_damage: int = weapon_damage(base, bonus);
-    let damage: int = clamp(raw_damage, 1, 20);
+    let raw_damage = weapon_damage(base, bonus);
+    let damage = clamp(raw_damage, 1, 20);
     apply_damage(enemy, damage);
 }
 

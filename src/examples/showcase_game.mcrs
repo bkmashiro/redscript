@@ -1,6 +1,6 @@
-import "../stdlib/math.rs"
-import "../stdlib/player.rs"
-import "../stdlib/cooldown.rs"
+import "../stdlib/math.mcrs"
+import "../stdlib/player.mcrs"
+import "../stdlib/cooldown.mcrs"
 
 const WIN_SCORE: int = 15
 const CRYSTAL_VALUE: int = 3

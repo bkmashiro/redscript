@@ -1,6 +1,6 @@
 // Cooldown helpers.
 //
-// Like timer.rs, the `name` parameter is reserved for a future compiler/runtime
+// Like timer.mcrs, the `name` parameter is reserved for a future compiler/runtime
 // that can route string literals through user-defined calls. Today this file
 // manages one cooldown slot on the `rs` objective.
 
