@@ -81,6 +81,75 @@ describe('Lexer', () => {
       ])
     })
 
+    it('tokenizes byte literals (b suffix)', () => {
+      const tokens = tokenize('20b 0B 127b')
+      expect(tokens.map(t => [t.kind, t.value])).toEqual([
+        ['byte_lit', '20b'],
+        ['byte_lit', '0B'],
+        ['byte_lit', '127b'],
+        ['eof', ''],
+      ])
+    })
+
+    it('tokenizes short literals (s suffix)', () => {
+      const tokens = tokenize('100s 0S 32767s')
+      expect(tokens.map(t => [t.kind, t.value])).toEqual([
+        ['short_lit', '100s'],
+        ['short_lit', '0S'],
+        ['short_lit', '32767s'],
+        ['eof', ''],
+      ])
+    })
+
+    it('tokenizes long literals (L suffix)', () => {
+      const tokens = tokenize('1000L 0l 999999L')
+      expect(tokens.map(t => [t.kind, t.value])).toEqual([
+        ['long_lit', '1000L'],
+        ['long_lit', '0l'],
+        ['long_lit', '999999L'],
+        ['eof', ''],
+      ])
+    })
+
+    it('tokenizes float literals with f suffix', () => {
+      const tokens = tokenize('3.14f 0.5F 10.0f')
+      expect(tokens.map(t => [t.kind, t.value])).toEqual([
+        ['float_lit', '3.14f'],
+        ['float_lit', '0.5F'],
+        ['float_lit', '10.0f'],
+        ['eof', ''],
+      ])
+    })
+
+    it('tokenizes double literals (d suffix)', () => {
+      const tokens = tokenize('3.14d 0.5D 10.0d')
+      expect(tokens.map(t => [t.kind, t.value])).toEqual([
+        ['double_lit', '3.14d'],
+        ['double_lit', '0.5D'],
+        ['double_lit', '10.0d'],
+        ['eof', ''],
+      ])
+    })
+
+    it('tokenizes integer with f/d suffix as float/double', () => {
+      const tokens = tokenize('5f 10d')
+      expect(tokens.map(t => [t.kind, t.value])).toEqual([
+        ['float_lit', '5f'],
+        ['double_lit', '10d'],
+        ['eof', ''],
+      ])
+    })
+
+    it('does not treat suffix-like letters in identifiers as NBT suffixes', () => {
+      // 1b2 should not be byte_lit — the 'b' is followed by a digit
+      const tokens = tokenize('1b2')
+      expect(tokens.map(t => [t.kind, t.value])).toEqual([
+        ['int_lit', '1'],
+        ['ident', 'b2'],
+        ['eof', ''],
+      ])
+    })
+
     it('tokenizes range literals', () => {
       const tokens = tokenize('..5 1.. 1..10')
       expect(tokens.map(t => [t.kind, t.value])).toEqual([
