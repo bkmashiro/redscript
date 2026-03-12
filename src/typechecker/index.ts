@@ -32,10 +32,10 @@ export class TypeChecker {
   }
 
   private getNodeLocation(node: unknown): { line: number; col: number } {
-    const loc = (node as { loc?: { line: number; col: number } } | undefined)?.loc
+    const span = (node as { span?: { line: number; col: number } } | undefined)?.span
     return {
-      line: loc?.line ?? 1,
-      col: loc?.col ?? 1,
+      line: span?.line ?? 1,
+      col: span?.col ?? 1,
     }
   }
 
