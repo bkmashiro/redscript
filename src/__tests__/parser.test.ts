@@ -148,6 +148,24 @@ describe('Parser', () => {
       expect((stmt as any).body).toHaveLength(1)
     })
 
+    it('parses for statement', () => {
+      const stmt = parseStmt('for (let i: int = 0; i < 10; i = i + 1) { say("loop"); }')
+      expect(stmt.kind).toBe('for')
+      expect((stmt as any).init.kind).toBe('let')
+      expect((stmt as any).init.name).toBe('i')
+      expect((stmt as any).cond.kind).toBe('binary')
+      expect((stmt as any).cond.op).toBe('<')
+      expect((stmt as any).step.kind).toBe('assign')
+      expect((stmt as any).body).toHaveLength(1)
+    })
+
+    it('parses for statement without init', () => {
+      const stmt = parseStmt('for (; i < 10; i = i + 1) { say("loop"); }')
+      expect(stmt.kind).toBe('for')
+      expect((stmt as any).init).toBeUndefined()
+      expect((stmt as any).cond.kind).toBe('binary')
+    })
+
     it('parses foreach statement', () => {
       const stmt = parseStmt('foreach (z in @e[type=zombie]) { kill(z); }')
       expect(stmt.kind).toBe('foreach')

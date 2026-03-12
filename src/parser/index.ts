@@ -304,6 +304,11 @@ export class Parser {
       return this.parseWhileStmt()
     }
 
+    // For statement
+    if (this.check('for')) {
+      return this.parseForStmt()
+    }
+
     // Foreach statement
     if (this.check('foreach')) {
       return this.parseForeachStmt()
@@ -386,6 +391,39 @@ export class Parser {
     const body = this.parseBlock()
 
     return { kind: 'while', cond, body }
+  }
+
+  private parseForStmt(): Stmt {
+    this.expect('for')
+    this.expect('(')
+
+    // Init: either let statement (without semicolon) or empty
+    let init: Stmt | undefined
+    if (this.check('let')) {
+      // Parse let without consuming semicolon here (we handle it)
+      this.expect('let')
+      const name = this.expect('ident').value
+      let type: TypeNode | undefined
+      if (this.match(':')) {
+        type = this.parseType()
+      }
+      this.expect('=')
+      const initExpr = this.parseExpr()
+      init = { kind: 'let', name, type, init: initExpr }
+    }
+    this.expect(';')
+
+    // Condition
+    const cond = this.parseExpr()
+    this.expect(';')
+
+    // Step expression
+    const step = this.parseExpr()
+    this.expect(')')
+
+    const body = this.parseBlock()
+
+    return { kind: 'for', init, cond, step, body }
   }
 
   private parseForeachStmt(): Stmt {

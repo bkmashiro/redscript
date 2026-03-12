@@ -88,6 +88,7 @@ export type Stmt =
   | { kind: 'return';     value?: Expr }
   | { kind: 'if';         cond: Expr; then: Block; else_?: Block }
   | { kind: 'while';      cond: Expr; body: Block }
+  | { kind: 'for';        init?: Stmt; cond: Expr; step: Expr; body: Block }
   | { kind: 'foreach';    binding: string; selector: EntitySelector; body: Block }
   | { kind: 'as_block';   selector: EntitySelector; body: Block }
   | { kind: 'at_block';   selector: EntitySelector; body: Block }

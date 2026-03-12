@@ -308,6 +308,101 @@ fn count_down() {
     })
   })
 
+  describe('For loop', () => {
+    it('compiles basic for loop', () => {
+      const source = `
+fn count() {
+    for (let i: int = 0; i < 10; i = i + 1) {
+        say("loop");
+    }
+}
+`
+      const files = compile(source)
+      const allContent = files
+        .filter(f => f.path.includes('count'))
+        .map(f => f.content)
+        .join('\n')
+      
+      // Should have initialization (set to 0)
+      expect(allContent).toContain('0')
+      // Should have say command
+      expect(allContent).toContain('say loop')
+      // Should have comparison
+      expect(allContent).toContain('$const_10')
+      // Should have loop structure
+      expect(allContent).toContain('for_check')
+    })
+
+    it('compiles for loop without init', () => {
+      const source = `
+fn count() {
+    let i: int = 5;
+    for (; i > 0; i = i - 1) {
+        say("counting");
+    }
+}
+`
+      const files = compile(source)
+      const allContent = files
+        .filter(f => f.path.includes('count'))
+        .map(f => f.content)
+        .join('\n')
+      
+      expect(allContent).toContain('say counting')
+      expect(allContent).toContain('for_check')
+    })
+
+    it('compiles for loop with compound step', () => {
+      const source = `
+fn double() {
+    for (let x: int = 1; x < 100; x = x * 2) {
+        say("doubling");
+    }
+}
+`
+      const files = compile(source)
+      const fn = getFunction(files, 'double')
+      expect(fn).toBeDefined()
+    })
+
+    it('generates correct control flow blocks', () => {
+      const source = `
+fn loop_test() {
+    for (let i: int = 0; i < 5; i = i + 1) {
+        say("iteration");
+    }
+}
+`
+      const files = compile(source)
+      
+      // Should have for_check block
+      const checkBlock = files.find(f => f.path.includes('for_check'))
+      expect(checkBlock).toBeDefined()
+      
+      // Should have for_body block
+      const bodyBlock = files.find(f => f.path.includes('for_body'))
+      expect(bodyBlock).toBeDefined()
+    })
+
+    it('compiles nested for loops', () => {
+      const source = `
+fn nested() {
+    for (let i: int = 0; i < 3; i = i + 1) {
+        for (let j: int = 0; j < 3; j = j + 1) {
+            say("nested");
+        }
+    }
+}
+`
+      const files = compile(source)
+      const allContent = files
+        .filter(f => f.path.includes('nested'))
+        .map(f => f.content)
+        .join('\n')
+      expect(allContent).toContain('say nested')
+    })
+  })
+
   describe('Control flow', () => {
     it('handles nested if statements', () => {
       const source = `

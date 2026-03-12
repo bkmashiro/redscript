@@ -224,6 +224,9 @@ export class Lowering {
       case 'while':
         this.lowerWhileStmt(stmt)
         break
+      case 'for':
+        this.lowerForStmt(stmt)
+        break
       case 'foreach':
         this.lowerForeachStmt(stmt)
         break
@@ -358,6 +361,39 @@ export class Lowering {
     // Body block
     this.builder.startBlock(bodyLabel)
     this.lowerBlock(stmt.body)
+    if (!this.builder.isBlockSealed()) {
+      this.builder.emitJump(checkLabel)
+    }
+
+    // Exit block
+    this.builder.startBlock(exitLabel)
+  }
+
+  private lowerForStmt(stmt: Extract<Stmt, { kind: 'for' }>): void {
+    // For loop is lowered to: init; while(cond) { body; step; }
+    
+    // Init statement (if present)
+    if (stmt.init) {
+      this.lowerStmt(stmt.init)
+    }
+
+    const checkLabel = this.builder.freshLabel('for_check')
+    const bodyLabel = this.builder.freshLabel('for_body')
+    const exitLabel = this.builder.freshLabel('for_exit')
+
+    this.builder.emitJump(checkLabel)
+
+    // Check block
+    this.builder.startBlock(checkLabel)
+    const condVar = this.lowerExpr(stmt.cond)
+    const condName = this.operandToVar(condVar)
+    this.builder.emitJumpIf(condName, bodyLabel, exitLabel)
+
+    // Body block
+    this.builder.startBlock(bodyLabel)
+    this.lowerBlock(stmt.body)
+    // Step expression
+    this.lowerExpr(stmt.step)
     if (!this.builder.isBlockSealed()) {
       this.builder.emitJump(checkLabel)
     }
