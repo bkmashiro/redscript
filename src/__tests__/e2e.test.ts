@@ -1685,3 +1685,37 @@ describe('for-range loop', () => {
     expect(subFn?.content).toContain('execute if score $x rs matches ..7 run function forloop2:test/__for_0')
   })
 })
+
+// ---------------------------------------------------------------------------
+// NBT Structured Parameters
+// ---------------------------------------------------------------------------
+
+describe('NBT parameters', () => {
+  it('compiles give with NBT struct', () => {
+    const src = `fn test() { give(@s, "minecraft:diamond_sword", 1, { display: { Name: "Excalibur" } }); }`
+    const files = compile(src, 'nbtparam')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('give @s minecraft:diamond_sword{display:{Name:"Excalibur"}} 1')
+  })
+
+  it('compiles give with nested NBT and arrays', () => {
+    const src = `fn test() { give(@s, "minecraft:stick", 1, { display: { Name: "Magic Wand" }, Enchantments: [{ id: "sharpness", lvl: 5 }] }); }`
+    const files = compile(src, 'nbtparam2')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('{display:{Name:"Magic Wand"},Enchantments:[{id:"sharpness",lvl:5}]}')
+  })
+
+  it('compiles summon with NBT', () => {
+    const src = `fn test() { summon("minecraft:zombie", 0, 64, 0, { CustomName: "Boss", NoAI: true }); }`
+    const files = compile(src, 'nbtsummon')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('summon minecraft:zombie 0 64 0 {CustomName:"Boss",NoAI:1b}')
+  })
+
+  it('compiles give with bool values in NBT', () => {
+    const src = `fn test() { give(@s, "minecraft:shield", 1, { Unbreakable: true }); }`
+    const files = compile(src, 'nbtbool')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('{Unbreakable:1b}')
+  })
+})
