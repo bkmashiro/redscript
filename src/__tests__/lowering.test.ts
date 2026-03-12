@@ -635,7 +635,7 @@ fn test() {
       expect(rawCmds).toContain('bossbar set ns:health visible true')
       expect(rawCmds).toContain('bossbar set ns:health players @a')
       expect(rawCmds).toContain('bossbar remove ns:health')
-      expect(rawCmds.some(cmd => /^execute store result score \$t\d+ rs run bossbar get ns:health value$/.test(cmd))).toBe(true)
+      expect(rawCmds.some(cmd => /^execute store result score \$_\d+ rs run bossbar get ns:health value$/.test(cmd))).toBe(true)
     })
 
     it('lowers team management builtins', () => {
@@ -665,14 +665,14 @@ fn test() {
       const ir = compile('fn test() { let x: int = random(1, 100); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds).toContain('scoreboard players random $t0 rs 1 100')
+      expect(rawCmds).toContain('scoreboard players random $_0 rs 1 100')
     })
 
     it('lowers random_native()', () => {
       const ir = compile('fn test() { let x: int = random_native(1, 6); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds).toContain('execute store result score $t0 rs run random value 1 6')
+      expect(rawCmds).toContain('execute store result score $_0 rs run random value 1 6')
     })
 
     it('lowers random_sequence()', () => {

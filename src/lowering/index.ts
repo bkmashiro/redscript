@@ -185,6 +185,7 @@ export class Lowering {
 
   constructor(namespace: string) {
     this.namespace = namespace
+    LoweringBuilder.resetTempCounter()
   }
 
   lower(program: Program): IRModule {
@@ -2095,6 +2096,14 @@ export class Lowering {
       return null
     }
 
+    if (name === 'summon') {
+      if (args.length >= 2 && pos1) {
+        const nbt = args[2] ? ` ${this.exprToString(args[2])}` : ''
+        return `summon ${this.exprToString(args[0])} ${emitBlockPos(pos1)}${nbt}`
+      }
+      return null
+    }
+
     return null
   }
 
@@ -2363,14 +2372,19 @@ export class Lowering {
 // ---------------------------------------------------------------------------
 
 class LoweringBuilder {
-  private tempCount = 0
+  private static globalTempId = 0
   private labelCount = 0
   private blocks: any[] = []
   private currentBlock: any = null
   private locals = new Set<string>()
 
+  /** Reset the global temp counter (call between compilations). */
+  static resetTempCounter(): void {
+    LoweringBuilder.globalTempId = 0
+  }
+
   freshTemp(): string {
-    const name = `$t${this.tempCount++}`
+    const name = `$_${LoweringBuilder.globalTempId++}`
     this.locals.add(name)
     return name
   }
