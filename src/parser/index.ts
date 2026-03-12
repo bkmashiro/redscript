@@ -837,6 +837,24 @@ export class Parser {
       return this.withLoc({ kind: 'float_lit', value: parseFloat(token.value) }, token)
     }
 
+    // NBT suffix literals
+    if (token.kind === 'byte_lit') {
+      this.advance()
+      return this.withLoc({ kind: 'byte_lit', value: parseInt(token.value.slice(0, -1), 10) }, token)
+    }
+    if (token.kind === 'short_lit') {
+      this.advance()
+      return this.withLoc({ kind: 'short_lit', value: parseInt(token.value.slice(0, -1), 10) }, token)
+    }
+    if (token.kind === 'long_lit') {
+      this.advance()
+      return this.withLoc({ kind: 'long_lit', value: parseInt(token.value.slice(0, -1), 10) }, token)
+    }
+    if (token.kind === 'double_lit') {
+      this.advance()
+      return this.withLoc({ kind: 'double_lit', value: parseFloat(token.value.slice(0, -1)) }, token)
+    }
+
     // String literal
     if (token.kind === 'string_lit') {
       this.advance()
