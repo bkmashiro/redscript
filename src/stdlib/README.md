@@ -43,6 +43,19 @@ if (is_op() == 1) {
 } else {
     damage(2);
 }
+
+### `mobs.rs`
+
+Vanilla Java Edition entity type constants for selectors, summon helpers, and
+command wrappers. The file groups hostile, passive, neutral, boss, and misc
+entity IDs so you can copy stable names instead of repeating raw strings.
+
+Example:
+
+```rs
+summon(ALLAY, "~", "~", "~");
+summon(ZOMBIE, "~", "~", "~");
+```
 ```
 
 ### `timer.rs`
