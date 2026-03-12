@@ -24,12 +24,26 @@ export interface Span {
 
 export type PrimitiveType = 'int' | 'bool' | 'float' | 'string' | 'void' | 'BlockPos' | 'byte' | 'short' | 'long' | 'double'
 
+// Entity type hierarchy
+export type EntityTypeName = 
+  | 'entity'      // Base type
+  | 'Player'      // @a, @p, @r
+  | 'Mob'         // Base mob type
+  | 'HostileMob'  // Hostile mobs
+  | 'PassiveMob'  // Passive mobs
+  // Specific mob types (common ones)
+  | 'Zombie' | 'Skeleton' | 'Creeper' | 'Spider' | 'Enderman'
+  | 'Pig' | 'Cow' | 'Sheep' | 'Chicken' | 'Villager'
+  | 'ArmorStand' | 'Item' | 'Arrow'
+
 export type TypeNode =
   | { kind: 'named'; name: PrimitiveType }
   | { kind: 'array'; elem: TypeNode }
   | { kind: 'struct'; name: string }
   | { kind: 'enum'; name: string }
   | { kind: 'function_type'; params: TypeNode[]; return: TypeNode }
+  | { kind: 'entity'; entityType: EntityTypeName }  // Entity types
+  | { kind: 'selector' }  // Selector type (multiple entities)
 
 export interface LambdaParam {
   name: string

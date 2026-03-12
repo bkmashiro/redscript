@@ -5,12 +5,64 @@
  * Collects errors but doesn't block compilation (warn mode).
  */
 
-import type { Program, FnDecl, Stmt, Expr, TypeNode, Block } from '../ast/types'
+import type { Program, FnDecl, Stmt, Expr, TypeNode, Block, EntityTypeName, EntitySelector } from '../ast/types'
 import { DiagnosticError, DiagnosticCollector } from '../diagnostics'
 
 interface ScopeSymbol {
   type: TypeNode
   mutable: boolean
+}
+
+// Entity type hierarchy for subtype checking
+const ENTITY_HIERARCHY: Record<EntityTypeName, EntityTypeName | null> = {
+  'entity': null,
+  'Player': 'entity',
+  'Mob': 'entity',
+  'HostileMob': 'Mob',
+  'PassiveMob': 'Mob',
+  'Zombie': 'HostileMob',
+  'Skeleton': 'HostileMob',
+  'Creeper': 'HostileMob',
+  'Spider': 'HostileMob',
+  'Enderman': 'HostileMob',
+  'Pig': 'PassiveMob',
+  'Cow': 'PassiveMob',
+  'Sheep': 'PassiveMob',
+  'Chicken': 'PassiveMob',
+  'Villager': 'PassiveMob',
+  'ArmorStand': 'entity',
+  'Item': 'entity',
+  'Arrow': 'entity',
+}
+
+// Map Minecraft type names to entity types
+const MC_TYPE_TO_ENTITY: Record<string, EntityTypeName> = {
+  'zombie': 'Zombie',
+  'minecraft:zombie': 'Zombie',
+  'skeleton': 'Skeleton',
+  'minecraft:skeleton': 'Skeleton',
+  'creeper': 'Creeper',
+  'minecraft:creeper': 'Creeper',
+  'spider': 'Spider',
+  'minecraft:spider': 'Spider',
+  'enderman': 'Enderman',
+  'minecraft:enderman': 'Enderman',
+  'pig': 'Pig',
+  'minecraft:pig': 'Pig',
+  'cow': 'Cow',
+  'minecraft:cow': 'Cow',
+  'sheep': 'Sheep',
+  'minecraft:sheep': 'Sheep',
+  'chicken': 'Chicken',
+  'minecraft:chicken': 'Chicken',
+  'villager': 'Villager',
+  'minecraft:villager': 'Villager',
+  'armor_stand': 'ArmorStand',
+  'minecraft:armor_stand': 'ArmorStand',
+  'item': 'Item',
+  'minecraft:item': 'Item',
+  'arrow': 'Arrow',
+  'minecraft:arrow': 'Arrow',
 }
 
 // ---------------------------------------------------------------------------
@@ -26,6 +78,8 @@ export class TypeChecker {
   private currentFn: FnDecl | null = null
   private currentReturnType: TypeNode | null = null
   private scope: Map<string, ScopeSymbol> = new Map()
+  // Stack for tracking @s type in different contexts
+  private selfTypeStack: EntityTypeName[] = ['entity']
 
   constructor(source?: string, filePath?: string) {
     this.collector = new DiagnosticCollector(source, filePath)
@@ -157,7 +211,16 @@ export class TypeChecker {
       case 'foreach':
         this.checkExpr(stmt.iterable)
         if (stmt.iterable.kind === 'selector') {
-          this.scope.set(stmt.binding, { type: { kind: 'named', name: 'void' }, mutable: true }) // Entity marker
+          // Infer entity type from selector (access .sel for the EntitySelector)
+          const entityType = this.inferEntityTypeFromSelector(stmt.iterable.sel)
+          this.scope.set(stmt.binding, { 
+            type: { kind: 'entity', entityType }, 
+            mutable: false  // Entity bindings are not reassignable
+          })
+          // Push self type context for @s inside the loop
+          this.pushSelfType(entityType)
+          this.checkBlock(stmt.body)
+          this.popSelfType()
         } else {
           const iterableType = this.inferType(stmt.iterable)
           if (iterableType.kind === 'array') {
@@ -165,8 +228,8 @@ export class TypeChecker {
           } else {
             this.scope.set(stmt.binding, { type: { kind: 'named', name: 'void' }, mutable: true })
           }
+          this.checkBlock(stmt.body)
         }
-        this.checkBlock(stmt.body)
         break
       case 'match':
         this.checkExpr(stmt.expr)
@@ -180,15 +243,41 @@ export class TypeChecker {
           this.checkBlock(arm.body)
         }
         break
-      case 'as_block':
+      case 'as_block': {
+        // as block changes @s to the selector's entity type
+        const entityType = this.inferEntityTypeFromSelector(stmt.selector)
+        this.pushSelfType(entityType)
+        this.checkBlock(stmt.body)
+        this.popSelfType()
+        break
+      }
       case 'at_block':
+        // at block doesn't change @s type, only position
         this.checkBlock(stmt.body)
         break
-      case 'as_at':
+      case 'as_at': {
+        // as @x at @y - @s becomes the as selector's type
+        const entityType = this.inferEntityTypeFromSelector(stmt.as_sel)
+        this.pushSelfType(entityType)
         this.checkBlock(stmt.body)
+        this.popSelfType()
         break
+      }
       case 'execute':
+        // execute with subcommands - check for 'as' subcommands
+        for (const sub of stmt.subcommands) {
+          if (sub.kind === 'as' && sub.selector) {
+            const entityType = this.inferEntityTypeFromSelector(sub.selector)
+            this.pushSelfType(entityType)
+          }
+        }
         this.checkBlock(stmt.body)
+        // Pop for each 'as' subcommand
+        for (const sub of stmt.subcommands) {
+          if (sub.kind === 'as') {
+            this.popSelfType()
+          }
+        }
         break
       case 'expr':
         this.checkExpr(stmt.expr)
@@ -673,6 +762,61 @@ export class TypeChecker {
     return { kind: 'function_type', params, return: returnType }
   }
 
+  // ---------------------------------------------------------------------------
+  // Entity Type Helpers
+  // ---------------------------------------------------------------------------
+
+  /** Infer entity type from a selector */
+  private inferEntityTypeFromSelector(selector: EntitySelector): EntityTypeName {
+    // @a, @p, @r always return Player
+    if (selector.kind === '@a' || selector.kind === '@p' || selector.kind === '@r') {
+      return 'Player'
+    }
+    
+    // @e or @s with type= filter
+    if (selector.filters?.type) {
+      const mcType = selector.filters.type.toLowerCase()
+      return MC_TYPE_TO_ENTITY[mcType] ?? 'entity'
+    }
+    
+    // @s uses current context
+    if (selector.kind === '@s') {
+      return this.selfTypeStack[this.selfTypeStack.length - 1]
+    }
+    
+    // Default to entity
+    return 'entity'
+  }
+
+  /** Check if childType is a subtype of parentType */
+  private isEntitySubtype(childType: EntityTypeName, parentType: EntityTypeName): boolean {
+    if (childType === parentType) return true
+    
+    let current: EntityTypeName | null = childType
+    while (current !== null) {
+      if (current === parentType) return true
+      current = ENTITY_HIERARCHY[current]
+    }
+    return false
+  }
+
+  /** Push a new self type context */
+  private pushSelfType(entityType: EntityTypeName): void {
+    this.selfTypeStack.push(entityType)
+  }
+
+  /** Pop self type context */
+  private popSelfType(): void {
+    if (this.selfTypeStack.length > 1) {
+      this.selfTypeStack.pop()
+    }
+  }
+
+  /** Get current @s type */
+  private getCurrentSelfType(): EntityTypeName {
+    return this.selfTypeStack[this.selfTypeStack.length - 1]
+  }
+
   private typesMatch(expected: TypeNode, actual: TypeNode): boolean {
     if (expected.kind !== actual.kind) return false
 
@@ -700,6 +844,16 @@ export class TypeChecker {
         this.typesMatch(expected.return, actual.return)
     }
 
+    // Entity type matching with subtype support
+    if (expected.kind === 'entity' && actual.kind === 'entity') {
+      return this.isEntitySubtype(actual.entityType, expected.entityType)
+    }
+
+    // Selector matches any entity type
+    if (expected.kind === 'selector' && actual.kind === 'entity') {
+      return true
+    }
+
     return false
   }
 
@@ -715,6 +869,12 @@ export class TypeChecker {
         return type.name
       case 'function_type':
         return `(${type.params.map(param => this.typeToString(param)).join(', ')}) -> ${this.typeToString(type.return)}`
+      case 'entity':
+        return type.entityType
+      case 'selector':
+        return 'selector'
+      default:
+        return 'unknown'
     }
   }
 
