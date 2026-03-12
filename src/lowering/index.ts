@@ -959,10 +959,22 @@ export class Lowering {
           parts.push(`at ${this.selectorToString(sub.selector)}`)
           break
         case 'if_entity':
-          parts.push(`if entity ${this.selectorToString(sub.selector)}`)
+          if (sub.selector) {
+            parts.push(`if entity ${this.selectorToString(sub.selector)}`)
+          } else if (sub.varName) {
+            // Variable with filters - substitute with @s and apply filters
+            const sel: EntitySelector = { kind: '@s', filters: sub.filters }
+            parts.push(`if entity ${this.selectorToString(sel)}`)
+          }
           break
         case 'unless_entity':
-          parts.push(`unless entity ${this.selectorToString(sub.selector)}`)
+          if (sub.selector) {
+            parts.push(`unless entity ${this.selectorToString(sub.selector)}`)
+          } else if (sub.varName) {
+            // Variable with filters - substitute with @s and apply filters
+            const sel: EntitySelector = { kind: '@s', filters: sub.filters }
+            parts.push(`unless entity ${this.selectorToString(sel)}`)
+          }
           break
         case 'in':
           parts.push(`in ${sub.dimension}`)

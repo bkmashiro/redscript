@@ -153,8 +153,8 @@ export type LiteralExpr =
 export type ExecuteSubcommand =
   | { kind: 'as'; selector: EntitySelector }
   | { kind: 'at'; selector: EntitySelector }
-  | { kind: 'if_entity'; selector: EntitySelector }
-  | { kind: 'unless_entity'; selector: EntitySelector }
+  | { kind: 'if_entity'; selector?: EntitySelector; varName?: string; filters?: SelectorFilter }
+  | { kind: 'unless_entity'; selector?: EntitySelector; varName?: string; filters?: SelectorFilter }
   | { kind: 'in'; dimension: string }
 
 export type Stmt =
