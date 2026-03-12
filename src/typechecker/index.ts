@@ -287,6 +287,9 @@ export class TypeChecker {
         }
         break
 
+      case 'blockpos':
+        break
+
       case 'static_call':
         for (const arg of expr.args) {
           this.checkExpr(arg)
@@ -397,6 +400,8 @@ export class TypeChecker {
           }
         }
         return { kind: 'named', name: 'string' }
+      case 'blockpos':
+        return { kind: 'named', name: 'BlockPos' }
       case 'ident':
         return this.scope.get(expr.name) ?? { kind: 'named', name: 'void' }
       case 'call': {

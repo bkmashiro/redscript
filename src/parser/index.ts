@@ -9,7 +9,8 @@ import { Lexer, type Token, type TokenKind } from '../lexer'
 import type {
   Block, Decorator, EntitySelector, Expr, FnDecl, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Stmt, TypeNode, AssignOp,
-  StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant
+  StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr,
+  CoordComponent
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
@@ -302,7 +303,8 @@ export class Parser {
     let type: TypeNode
 
     if (token.kind === 'int' || token.kind === 'bool' ||
-        token.kind === 'float' || token.kind === 'string' || token.kind === 'void') {
+        token.kind === 'float' || token.kind === 'string' || token.kind === 'void' ||
+        token.kind === 'BlockPos') {
       this.advance()
       type = { kind: 'named', name: token.kind }
     } else if (token.kind === 'ident') {
@@ -805,6 +807,9 @@ export class Parser {
 
     // Grouped expression
     if (token.kind === '(') {
+      if (this.isBlockPosLiteral()) {
+        return this.parseBlockPos()
+      }
       this.advance()
       const expr = this.parseExpr()
       this.expect(')')
@@ -930,6 +935,94 @@ export class Parser {
 
     this.expect(']')
     return this.withLoc({ kind: 'array_lit', elements }, bracketToken)
+  }
+
+  private isBlockPosLiteral(): boolean {
+    if (!this.check('(')) return false
+
+    let offset = 1
+    for (let i = 0; i < 3; i++) {
+      const consumed = this.coordComponentTokenLength(offset)
+      if (consumed === 0) return false
+      offset += consumed
+
+      if (i < 2) {
+        if (this.peek(offset).kind !== ',') return false
+        offset += 1
+      }
+    }
+
+    return this.peek(offset).kind === ')'
+  }
+
+  private coordComponentTokenLength(offset: number): number {
+    const token = this.peek(offset)
+
+    if (token.kind === 'int_lit') {
+      return 1
+    }
+
+    if (token.kind === '-') {
+      return this.peek(offset + 1).kind === 'int_lit' ? 2 : 0
+    }
+
+    if (token.kind !== '~' && token.kind !== '^') {
+      return 0
+    }
+
+    const next = this.peek(offset + 1)
+    if (next.kind === ',' || next.kind === ')') {
+      return 1
+    }
+    if (next.kind === 'int_lit') {
+      return 2
+    }
+    if (next.kind === '-' && this.peek(offset + 2).kind === 'int_lit') {
+      return 3
+    }
+    return 0
+  }
+
+  private parseBlockPos(): BlockPosExpr {
+    const openParenToken = this.expect('(')
+    const x = this.parseCoordComponent()
+    this.expect(',')
+    const y = this.parseCoordComponent()
+    this.expect(',')
+    const z = this.parseCoordComponent()
+    this.expect(')')
+    return this.withLoc({ kind: 'blockpos', x, y, z }, openParenToken)
+  }
+
+  private parseCoordComponent(): CoordComponent {
+    const token = this.peek()
+
+    if (token.kind === '~' || token.kind === '^') {
+      this.advance()
+      const offset = this.parseSignedCoordOffset()
+      return token.kind === '~'
+        ? { kind: 'relative', offset }
+        : { kind: 'local', offset }
+    }
+
+    return { kind: 'absolute', value: this.parseSignedCoordOffset(true) }
+  }
+
+  private parseSignedCoordOffset(requireValue = false): number {
+    let sign = 1
+    if (this.match('-')) {
+      sign = -1
+    }
+
+    if (this.check('int_lit')) {
+      return sign * parseInt(this.advance().value, 10)
+    }
+
+    if (requireValue) {
+      this.error('Expected integer coordinate component')
+    }
+
+    return 0
   }
 
   // -------------------------------------------------------------------------

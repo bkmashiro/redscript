@@ -19,6 +19,7 @@ export type TokenKind =
   | 'execute' | 'run' | 'unless'
   // Types
   | 'int' | 'bool' | 'float' | 'string' | 'void'
+  | 'BlockPos'
   // Boolean literals
   | 'true' | 'false'
   // Entity selector
@@ -32,6 +33,7 @@ export type TokenKind =
   | 'range_lit'     // ..5  1..  1..10
   // Operators
   | '+' | '-' | '*' | '/' | '%'
+  | '~' | '^'
   | '==' | '!=' | '<' | '<=' | '>' | '>='
   | '&&' | '||' | '!'
   | '=' | '+=' | '-=' | '*=' | '/=' | '%='
@@ -79,6 +81,7 @@ const KEYWORDS: Record<string, TokenKind> = {
   float: 'float',
   string: 'string',
   void: 'void',
+  BlockPos: 'BlockPos',
   true: 'true',
   false: 'false',
 }
@@ -251,7 +254,7 @@ export class Lexer {
     }
 
     // Single-character operators and delimiters
-    const singleChar: TokenKind[] = ['+', '-', '*', '/', '%', '<', '>', '!', '=',
+    const singleChar: TokenKind[] = ['+', '-', '*', '/', '%', '~', '^', '<', '>', '!', '=',
       '{', '}', '(', ')', '[', ']', ',', ';', ':', '.']
     if (singleChar.includes(char as TokenKind)) {
       this.addToken(char as TokenKind, char, startLine, startCol)
