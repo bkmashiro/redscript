@@ -177,6 +177,26 @@ fn pulse() {
     expect(runtime.getScore('pulse', 'count')).toBe(2)
   })
 
+  it('executes only the matching match arm', () => {
+    const runtime = loadCompiledProgram(`
+fn choose() {
+    let choice: int = 2;
+    match (choice) {
+        1 => { say("one"); }
+        2 => { say("two"); }
+        _ => { say("other"); }
+    }
+}
+`)
+
+    runtime.load()
+    runtime.execFunction('choose')
+
+    expect(runtime.getChatLog()).toEqual([
+      '[Server] two',
+    ])
+  })
+
   it('updates position, effects, and xp for executor-targeted builtins', () => {
     const runtime = loadCompiledProgram(`
 fn buff_player() {

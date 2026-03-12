@@ -191,6 +191,18 @@ describe('Lowering', () => {
     })
   })
 
+  describe('match statements', () => {
+    it('lowers match into guarded execute function calls', () => {
+      const ir = compile('fn choose() { let choice: int = 2; match (choice) { 1 => { say("one"); } 2 => { say("two"); } _ => { say("other"); } } }')
+      const fn = getFunction(ir, 'choose')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd => cmd.includes('execute if score') && cmd.includes('matches 1 run function'))).toBe(true)
+      expect(rawCmds.some(cmd => cmd.includes('execute if score') && cmd.includes('matches 2 run function'))).toBe(true)
+      expect(rawCmds.some(cmd => cmd.includes('matches ..0 run function'))).toBe(true)
+      expect(ir.functions.filter(f => f.name.includes('match_')).length).toBe(3)
+    })
+  })
+
   describe('arrays', () => {
     it('lowers array literal initialization', () => {
       const ir = compile('fn test() { let arr: int[] = [1, 2, 3]; }')

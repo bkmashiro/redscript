@@ -329,6 +329,10 @@ export class Parser {
       return this.parseForeachStmt()
     }
 
+    if (this.check('match')) {
+      return this.parseMatchStmt()
+    }
+
     // As block
     if (this.check('as')) {
       return this.parseAsStmt()
@@ -458,6 +462,33 @@ export class Parser {
     const body = this.parseBlock()
 
     return this.withLoc({ kind: 'foreach', binding, iterable, body }, foreachToken)
+  }
+
+  private parseMatchStmt(): Stmt {
+    const matchToken = this.expect('match')
+    this.expect('(')
+    const expr = this.parseExpr()
+    this.expect(')')
+    this.expect('{')
+
+    const arms: Array<{ pattern: number | null; body: Block }> = []
+    while (!this.check('}') && !this.check('eof')) {
+      let pattern: number | null
+      if (this.check('ident') && this.peek().value === '_') {
+        this.advance()
+        pattern = null
+      } else {
+        const value = this.expect('int_lit')
+        pattern = parseInt(value.value, 10)
+      }
+
+      this.expect('=>')
+      const body = this.parseBlock()
+      arms.push({ pattern, body })
+    }
+
+    this.expect('}')
+    return this.withLoc({ kind: 'match', expr, arms }, matchToken)
   }
 
   private parseAsStmt(): Stmt {

@@ -256,6 +256,9 @@ export class Lowering {
       case 'foreach':
         this.lowerForeachStmt(stmt)
         break
+      case 'match':
+        this.lowerMatchStmt(stmt)
+        break
       case 'as_block':
         this.lowerAsBlockStmt(stmt)
         break
@@ -467,6 +470,56 @@ export class Lowering {
     this.functions.push(subFn)
 
     // Restore
+    this.builder = savedBuilder
+    this.varMap = savedVarMap
+    this.currentContext = savedContext
+  }
+
+  private lowerMatchStmt(stmt: Extract<Stmt, { kind: 'match' }>): void {
+    const subject = this.operandToVar(this.lowerExpr(stmt.expr))
+    const matchedVar = this.builder.freshTemp()
+    this.builder.emitAssign(matchedVar, { kind: 'const', value: 0 })
+
+    let defaultArm: { pattern: number | null; body: Block } | null = null
+
+    for (const arm of stmt.arms) {
+      if (arm.pattern === null) {
+        defaultArm = arm
+        continue
+      }
+
+      const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`
+      this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${arm.pattern} run function ${this.namespace}:${subFnName}`)
+      this.emitMatchArmSubFunction(subFnName, matchedVar, arm.body, true)
+    }
+
+    if (defaultArm) {
+      const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`
+      this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 run function ${this.namespace}:${subFnName}`)
+      this.emitMatchArmSubFunction(subFnName, matchedVar, defaultArm.body, false)
+    }
+  }
+
+  private emitMatchArmSubFunction(name: string, matchedVar: string, body: Block, setMatched: boolean): void {
+    const savedBuilder = this.builder
+    const savedVarMap = new Map(this.varMap)
+    const savedContext = this.currentContext
+
+    this.builder = new LoweringBuilder()
+    this.varMap = new Map(savedVarMap)
+    this.currentContext = savedContext
+
+    this.builder.startBlock('entry')
+    if (setMatched) {
+      this.builder.emitRaw(`scoreboard players set ${matchedVar} rs 1`)
+    }
+    this.lowerBlock(body)
+    if (!this.builder.isBlockSealed()) {
+      this.builder.emitReturn()
+    }
+
+    this.functions.push(this.builder.build(name, [], false))
+
     this.builder = savedBuilder
     this.varMap = savedVarMap
     this.currentContext = savedContext

@@ -119,6 +119,12 @@ export class TypeChecker {
         }
         this.checkBlock(stmt.body)
         break
+      case 'match':
+        this.checkExpr(stmt.expr)
+        for (const arm of stmt.arms) {
+          this.checkBlock(arm.body)
+        }
+        break
       case 'as_block':
       case 'at_block':
         this.checkBlock(stmt.body)

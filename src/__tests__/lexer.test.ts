@@ -11,9 +11,9 @@ function kinds(tokens: Token[]): TokenKind[] {
 describe('Lexer', () => {
   describe('keywords', () => {
     it('recognizes all keywords', () => {
-      const tokens = tokenize('fn let if else while for foreach return as at in struct trigger namespace')
+      const tokens = tokenize('fn let if else while for foreach match return as at in struct trigger namespace')
       expect(kinds(tokens)).toEqual([
-        'fn', 'let', 'if', 'else', 'while', 'for', 'foreach',
+        'fn', 'let', 'if', 'else', 'while', 'for', 'foreach', 'match',
         'return', 'as', 'at', 'in', 'struct', 'trigger', 'namespace', 'eof'
       ])
     })
@@ -116,6 +116,11 @@ describe('Lexer', () => {
     it('tokenizes arrow operator', () => {
       const tokens = tokenize('->')
       expect(kinds(tokens)).toEqual(['->', 'eof'])
+    })
+
+    it('tokenizes fat arrow operator', () => {
+      const tokens = tokenize('=>')
+      expect(kinds(tokens)).toEqual(['=>', 'eof'])
     })
   })
 

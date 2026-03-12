@@ -14,7 +14,7 @@ import { DiagnosticError } from '../diagnostics'
 
 export type TokenKind =
   // Keywords
-  | 'fn' | 'let' | 'if' | 'else' | 'while' | 'for' | 'foreach'
+  | 'fn' | 'let' | 'if' | 'else' | 'while' | 'for' | 'foreach' | 'match'
   | 'return' | 'as' | 'at' | 'in' | 'struct' | 'trigger' | 'namespace'
   | 'execute' | 'run' | 'unless'
   // Types
@@ -37,7 +37,7 @@ export type TokenKind =
   | '=' | '+=' | '-=' | '*=' | '/=' | '%='
   // Delimiters
   | '{' | '}' | '(' | ')' | '[' | ']'
-  | ',' | ';' | ':' | '::' | '->' | '.'
+  | ',' | ';' | ':' | '::' | '->' | '=>' | '.'
   // Special
   | 'ident'         // Variable/function names
   | 'raw_cmd'       // raw("...") content
@@ -62,6 +62,7 @@ const KEYWORDS: Record<string, TokenKind> = {
   while: 'while',
   for: 'for',
   foreach: 'foreach',
+  match: 'match',
   return: 'return',
   as: 'as',
   at: 'at',
@@ -167,6 +168,11 @@ export class Lexer {
     if (char === '-' && this.peek() === '>') {
       this.advance()
       this.addToken('->', '->', startLine, startCol)
+      return
+    }
+    if (char === '=' && this.peek() === '>') {
+      this.advance()
+      this.addToken('=>', '=>', startLine, startCol)
       return
     }
     if (char === '=' && this.peek() === '=') {

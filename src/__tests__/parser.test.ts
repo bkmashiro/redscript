@@ -174,6 +174,17 @@ describe('Parser', () => {
       expect((stmt as any).iterable.sel.kind).toBe('@e')
     })
 
+    it('parses match statement', () => {
+      const stmt = parseStmt('match (choice) { 1 => { say("one"); } 2 => { say("two"); } _ => { say("other"); } }')
+      expect(stmt.kind).toBe('match')
+      expect((stmt as any).expr).toEqual({ kind: 'ident', name: 'choice' })
+      expect((stmt as any).arms).toEqual([
+        { pattern: 1, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'one' }] } }] },
+        { pattern: 2, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'two' }] } }] },
+        { pattern: null, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'other' }] } }] },
+      ])
+    })
+
     it('parses as block', () => {
       const stmt = parseStmt('as @a { say("hello"); }')
       expect(stmt.kind).toBe('as_block')
