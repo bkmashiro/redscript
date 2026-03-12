@@ -65,12 +65,12 @@ beforeAll(async () => {
   }
 
   // ── Write fixtures + use safe reloadData (no /reload confirm) ───────
-  // counter.rs
-  if (fs.existsSync(path.join(__dirname, '../examples/counter.rs'))) {
-    writeFixture(fs.readFileSync(path.join(__dirname, '../examples/counter.rs'), 'utf-8'), 'counter')
+  // counter.mcrs
+  if (fs.existsSync(path.join(__dirname, '../examples/counter.mcrs'))) {
+    writeFixture(fs.readFileSync(path.join(__dirname, '../examples/counter.mcrs'), 'utf-8'), 'counter')
   }
-  if (fs.existsSync(path.join(__dirname, '../examples/world_manager.rs'))) {
-    writeFixture(fs.readFileSync(path.join(__dirname, '../examples/world_manager.rs'), 'utf-8'), 'world_manager')
+  if (fs.existsSync(path.join(__dirname, '../examples/world_manager.mcrs'))) {
+    writeFixture(fs.readFileSync(path.join(__dirname, '../examples/world_manager.mcrs'), 'utf-8'), 'world_manager')
   }
   writeFixture(`
     @tick
@@ -192,7 +192,7 @@ describe('MC Integration Tests', () => {
   })
 
   // ─── Test 2: Counter tick ─────────────────────────────────────────────
-  test('counter.rs: tick function increments scoreboard over time', async () => {
+  test('counter.mcrs: tick function increments scoreboard over time', async () => {
     if (!serverOnline) return
     
     await mc.ticks(40) // Wait 2s (counter was already init'd in beforeAll)
@@ -202,7 +202,7 @@ describe('MC Integration Tests', () => {
   })
 
   // ─── Test 3: setblock ────────────────────────────────────────────────
-  test('world_manager.rs: setblock places correct block', async () => {
+  test('world_manager.mcrs: setblock places correct block', async () => {
     if (!serverOnline) return
     
     // Clear just the lobby area, keep other state
@@ -217,7 +217,7 @@ describe('MC Integration Tests', () => {
   })
 
   // ─── Test 4: fill ────────────────────────────────────────────────────
-  test('world_manager.rs: fill creates smooth_stone floor', async () => {
+  test('world_manager.mcrs: fill creates smooth_stone floor', async () => {
     if (!serverOnline) return
     // Runs after test 3, floor should still be there
     const block = await mc.block(4, 64, 4)

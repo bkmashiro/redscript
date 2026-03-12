@@ -1,0 +1,20 @@
+// Runtime Set implementation using NBT storage.
+// Sets are stored as NBT arrays with uniqueness enforced on add.
+//
+// Note: This is reference documentation for the builtins.
+// Actual implementation is in the compiler.
+//
+// fn set_new() -> string
+//   Creates a new empty set. Returns a unique set ID.
+//
+// fn set_add(set: string, value: string)
+//   Adds a value to the set if it is not already present.
+//
+// fn set_contains(set: string, value: string) -> int
+//   Returns 1 if the value exists in the set, 0 otherwise.
+//
+// fn set_remove(set: string, value: string)
+//   Removes a value from the set.
+//
+// fn set_clear(set: string)
+//   Removes all values from the set.

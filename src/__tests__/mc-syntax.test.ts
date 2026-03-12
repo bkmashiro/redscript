@@ -33,14 +33,14 @@ describe('MC Command Syntax Validation', () => {
   const validator = new MCCommandValidator(FIXTURE_PATH)
 
   test('counter example generates valid MC commands', () => {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'examples', 'counter.rs'), 'utf-8')
+    const src = fs.readFileSync(path.join(__dirname, '..', 'examples', 'counter.mcrs'), 'utf-8')
     const errors = validateSource(validator, src, 'counter')
     expect(errors).toHaveLength(0)
   })
 
   EXAMPLES.forEach(name => {
-    test(`${name}.rs generates valid MC commands`, () => {
-      const src = fs.readFileSync(path.join(__dirname, '..', 'examples', `${name}.rs`), 'utf-8')
+    test(`${name}.mcrs generates valid MC commands`, () => {
+      const src = fs.readFileSync(path.join(__dirname, '..', 'examples', `${name}.mcrs`), 'utf-8')
       const errors = validateSource(validator, src, name)
 
       if (errors.length > 0) {

@@ -7,7 +7,7 @@
 Compile a source file into a raw structure NBT:
 
 ```bash
-redscript compile --target structure src/examples/arena.rs -o arena.nbt
+redscript compile --target structure src/examples/arena.mcrs -o arena.nbt
 ```
 
 Then copy the generated file into your datapack's `structures/` folder, for example:

@@ -1188,7 +1188,7 @@ fn handle_claim() {
     })
   })
 
-  describe('Real program: zombie_game.rs', () => {
+  describe('Real program: zombie_game.mcrs', () => {
     const source = `
 // A zombie survival game logic
 // Kills nearby zombies and tracks score
