@@ -7,8 +7,11 @@
 写干净的游戏逻辑，把记分板的面条代码交给 RedScript 处理。
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-510%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
+[![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![VSCode](https://img.shields.io/badge/VSCode-插件-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
+[![在线 IDE](https://img.shields.io/badge/试用-在线IDE-orange)](https://redscript-ide.pages.dev)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
 [English](./README.md) · [快速开始](#快速开始) · [文档](https://redscript-docs.pages.dev) · [贡献指南](./CONTRIBUTING.md)
