@@ -6366,13 +6366,46 @@ function escapeRe(s) {
 }
 function findVarDecls(document) {
   const text = document.getText();
-  const re = /\b(let|const)\s+(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g;
   const decls = [];
+  const letRe = /\b(let|const)\s+(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g;
   let m;
-  while ((m = re.exec(text)) !== null) {
+  while ((m = letRe.exec(text)) !== null) {
     decls.push({ kind: m[1], name: m[2], type: m[3] });
   }
   return decls;
+}
+function findFnParams(document) {
+  const text = document.getText();
+  const params = [];
+  const fnRe = /\bfn\s+(\w+)\s*\(([^)]*)\)\s*(?:->\s*\w+)?\s*\{/g;
+  let fnMatch;
+  while ((fnMatch = fnRe.exec(text)) !== null) {
+    const fnName = fnMatch[1];
+    const paramsStr = fnMatch[2];
+    const fnStartOffset = fnMatch.index;
+    const fnStartLine = document.positionAt(fnStartOffset).line;
+    const bodyStart = fnMatch.index + fnMatch[0].length - 1;
+    let braceCount = 1;
+    let pos = bodyStart + 1;
+    while (pos < text.length && braceCount > 0) {
+      if (text[pos] === "{") braceCount++;
+      else if (text[pos] === "}") braceCount--;
+      pos++;
+    }
+    const fnEndLine = document.positionAt(pos).line;
+    const paramRe = /(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g;
+    let paramMatch;
+    while ((paramMatch = paramRe.exec(paramsStr)) !== null) {
+      params.push({
+        name: paramMatch[1],
+        type: paramMatch[2],
+        fnName,
+        fnStartLine,
+        fnEndLine
+      });
+    }
+  }
+  return params;
 }
 function findStructDecls(document) {
   const text = document.getText();
@@ -6485,6 +6518,16 @@ function registerHoverProvider(context) {
         const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/);
         if (!range) return void 0;
         const word = document.getText(range);
+        const fnParams = findFnParams(document);
+        const currentLine = position.line;
+        const param = fnParams.find(
+          (p) => p.name === word && currentLine >= p.fnStartLine && currentLine <= p.fnEndLine
+        );
+        if (param) {
+          const md = new vscode.MarkdownString("", true);
+          md.appendCodeblock(`(parameter) ${param.name}: ${param.type}`, "redscript");
+          return new vscode.Hover(md, range);
+        }
         const varDecls = findVarDecls(document);
         const varDecl = varDecls.find((v) => v.name === word);
         if (varDecl) {

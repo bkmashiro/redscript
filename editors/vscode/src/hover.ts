@@ -768,17 +768,66 @@ function escapeRe(s: string): string {
 // Variable / let / const hover
 // ---------------------------------------------------------------------------
 
-interface VarDecl { name: string; type: string; kind: 'let' | 'const' }
+interface VarDecl { name: string; type: string; kind: 'let' | 'const' | 'param' }
 
 function findVarDecls(document: vscode.TextDocument): VarDecl[] {
   const text = document.getText()
-  const re = /\b(let|const)\s+(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g
   const decls: VarDecl[] = []
+
+  // Find let/const declarations
+  const letRe = /\b(let|const)\s+(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g
   let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
+  while ((m = letRe.exec(text)) !== null) {
     decls.push({ kind: m[1] as 'let' | 'const', name: m[2], type: m[3] })
   }
+
   return decls
+}
+
+interface FnParam { name: string; type: string; fnName: string; fnStartLine: number; fnEndLine: number }
+
+/** Find all function parameters with their scope (function body range). */
+function findFnParams(document: vscode.TextDocument): FnParam[] {
+  const text = document.getText()
+  const params: FnParam[] = []
+
+  // Match: fn name(param1: Type1, param2: Type2) { ... }
+  // Need to find the function body range to scope parameters correctly
+  const fnRe = /\bfn\s+(\w+)\s*\(([^)]*)\)\s*(?:->\s*\w+)?\s*\{/g
+  let fnMatch: RegExpExecArray | null
+
+  while ((fnMatch = fnRe.exec(text)) !== null) {
+    const fnName = fnMatch[1]
+    const paramsStr = fnMatch[2]
+    const fnStartOffset = fnMatch.index
+    const fnStartLine = document.positionAt(fnStartOffset).line
+
+    // Find matching closing brace for function body
+    const bodyStart = fnMatch.index + fnMatch[0].length - 1 // position of '{'
+    let braceCount = 1
+    let pos = bodyStart + 1
+    while (pos < text.length && braceCount > 0) {
+      if (text[pos] === '{') braceCount++
+      else if (text[pos] === '}') braceCount--
+      pos++
+    }
+    const fnEndLine = document.positionAt(pos).line
+
+    // Parse parameters: name: Type, name: Type = default
+    const paramRe = /(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g
+    let paramMatch: RegExpExecArray | null
+    while ((paramMatch = paramRe.exec(paramsStr)) !== null) {
+      params.push({
+        name: paramMatch[1],
+        type: paramMatch[2],
+        fnName,
+        fnStartLine,
+        fnEndLine
+      })
+    }
+  }
+
+  return params
 }
 
 // ---------------------------------------------------------------------------
@@ -937,6 +986,21 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
         if (!range) return undefined
 
         const word = document.getText(range)
+
+        // ── Function parameter hover ────────────────────────────
+        // Check if this word is a function parameter (must be inside that function's scope)
+        const fnParams = findFnParams(document)
+        const currentLine = position.line
+        const param = fnParams.find(p =>
+          p.name === word &&
+          currentLine >= p.fnStartLine &&
+          currentLine <= p.fnEndLine
+        )
+        if (param) {
+          const md = new vscode.MarkdownString('', true)
+          md.appendCodeblock(`(parameter) ${param.name}: ${param.type}`, 'redscript')
+          return new vscode.Hover(md, range)
+        }
 
         // ── Variable / let / const hover ────────────────────────
         // Check if this word has a let/const declaration in the document
