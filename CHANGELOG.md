@@ -2,6 +2,42 @@
 
 All notable changes to RedScript will be documented in this file.
 
+## [1.1.0] - 2026-03-12
+
+### Language Features
+- **Variable selector syntax**: `execute if entity p[x_rotation=-90..-45]` now works in foreach loops
+- **New selector filters**: `x_rotation`, `y_rotation`, `x`, `y`, `z` for rotation and position checks
+- **Duplicate binding detection**: Error when redeclaring foreach variables
+
+### Builtins
+- `effect_clear(target, [effect])` — Clear all or specific effects
+- `data_merge(target, nbt)` — Merge NBT data into entities
+
+### Standard Library
+- `effects.mcrs` — Effect shortcuts (speed, strength, regen, buff_all...)
+- `world.mcrs` — World/gamerule helpers (set_day, weather_clear, enable_keep_inventory...)
+- `inventory.mcrs` — Inventory management (give_kit_warrior, clear_inventory...)
+- `particles.mcrs` — Particle effects (hearts_at, flames, sparkles_at...)
+- `spawn.mcrs` — Teleport utilities (teleport_to, gather_all, goto_lobby...)
+- `teams.mcrs` — Team management (create_red_team, setup_two_teams...)
+- `bossbar.mcrs` — Bossbar helpers (create_progress_bar, update_bar...)
+- `interactions.mcrs` — Input detection (check_look_up, on_right_click, on_sneak_click...)
+
+### Bug Fixes
+- Negative coordinates in summon/tp/particle now work correctly
+- Stdlib particles use coordinates instead of selectors
+
+### Documentation
+- Added tutorials: Zombie Survival, Capture the Flag, Parkour Race
+- Added local debugging guide
+- Added stdlib reference page
+- Added Paper server testing guide
+
+### Community
+- CONTRIBUTING.md with development guide
+- GitHub issue/PR templates
+- CHANGELOG.md
+
 ## [1.0.0] - 2026-03-12
 
 ### 🎉 Initial Release
