@@ -516,6 +516,12 @@ export class Parser {
 
   private parseForStmt(): Stmt {
     const forToken = this.expect('for')
+
+    // Check for for-range syntax: for <ident> in <range_lit> { ... }
+    if (this.check('ident') && this.peek(1).kind === 'in') {
+      return this.parseForRangeStmt(forToken)
+    }
+
     this.expect('(')
 
     // Init: either let statement (without semicolon) or empty
@@ -546,6 +552,25 @@ export class Parser {
     const body = this.parseBlock()
 
     return this.withLoc({ kind: 'for', init, cond, step, body }, forToken)
+  }
+
+  private parseForRangeStmt(forToken: Token): Stmt {
+    const varName = this.expect('ident').value
+    this.expect('in')
+    const rangeToken = this.expect('range_lit')
+    const range = this.parseRangeValue(rangeToken.value)
+
+    const start: Expr = this.withLoc(
+      { kind: 'int_lit', value: range.min ?? 0 },
+      rangeToken
+    )
+    const end: Expr = this.withLoc(
+      { kind: 'int_lit', value: range.max ?? 0 },
+      rangeToken
+    )
+
+    const body = this.parseBlock()
+    return this.withLoc({ kind: 'for_range', varName, start, end, body }, forToken)
   }
 
   private parseForeachStmt(): Stmt {
