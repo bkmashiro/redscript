@@ -62,9 +62,20 @@ function writeFixtureFile(fileName: string, namespace: string): void {
   )
 }
 
+async function waitForServer(client: MCTestClient, timeoutMs = 30000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await client.isOnline()) {
+      return true
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+  return false
+}
+
 beforeAll(async () => {
   mc = new MCTestClient(MC_HOST, MC_PORT)
-  serverOnline = await mc.isOnline()
+  serverOnline = await waitForServer(mc)
   if (!serverOnline) {
     console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping integration tests`)
     console.warn(`  Run: MC_SERVER_DIR=~/mc-test-server npx ts-node src/mc-test/setup.ts`)
@@ -83,16 +94,16 @@ beforeAll(async () => {
   writeFixture(`
     @tick
     fn on_tick() {
-      scoreboard_set("#tick_counter", "ticks", scoreboard_get("#tick_counter", "ticks") + 1);
+      scoreboard_set("#tick_counter", #ticks, scoreboard_get("#tick_counter", #ticks) + 1);
     }
   `, 'tick_test')
   writeFixture(`
     fn check_score() {
-      let x: int = scoreboard_get("#check_x", "test_score");
+      let x: int = scoreboard_get("#check_x", #test_score);
       if (x > 5) {
-        scoreboard_set("#check_x", "result", 1);
+        scoreboard_set("#check_x", #result, 1);
       } else {
-        scoreboard_set("#check_x", "result", 0);
+        scoreboard_set("#check_x", #result, 0);
       }
     }
   `, 'inline_test')
@@ -103,31 +114,31 @@ beforeAll(async () => {
   writeFixture(`
     @tick
     fn game_tick() {
-      let time: int = scoreboard_get("#game", "timer");
+      let time: int = scoreboard_get("#game", #timer);
       if (time > 0) {
-        scoreboard_set("#game", "timer", time - 1);
+        scoreboard_set("#game", #timer, time - 1);
       }
       if (time == 1) {
-        scoreboard_set("#game", "ended", 1);
+        scoreboard_set("#game", #ended, 1);
       }
     }
     fn start_game() {
-      scoreboard_set("#game", "timer", 5);
-      scoreboard_set("#game", "ended", 0);
+      scoreboard_set("#game", #timer, 5);
+      scoreboard_set("#game", #ended, 0);
     }
   `, 'game_loop')
 
   // Scenario B: two functions, same temp var namespace — verify no collision
   writeFixture(`
     fn calc_sum() {
-      let a: int = scoreboard_get("#math", "val_a");
-      let b: int = scoreboard_get("#math", "val_b");
-      scoreboard_set("#math", "sum", a + b);
+      let a: int = scoreboard_get("#math", #val_a);
+      let b: int = scoreboard_get("#math", #val_b);
+      scoreboard_set("#math", #sum, a + b);
     }
     fn calc_product() {
-      let x: int = scoreboard_get("#math", "val_x");
-      let y: int = scoreboard_get("#math", "val_y");
-      scoreboard_set("#math", "product", x * y);
+      let x: int = scoreboard_get("#math", #val_x);
+      let y: int = scoreboard_get("#math", #val_y);
+      scoreboard_set("#math", #product, x * y);
     }
     fn run_both() {
       calc_sum();
@@ -138,16 +149,16 @@ beforeAll(async () => {
   // Scenario C: 3-deep call chain, each step modifies shared state
   writeFixture(`
     fn step3() {
-      let v: int = scoreboard_get("#chain", "val");
-      scoreboard_set("#chain", "val", v * 2);
+      let v: int = scoreboard_get("#chain", #val);
+      scoreboard_set("#chain", #val, v * 2);
     }
     fn step2() {
-      let v: int = scoreboard_get("#chain", "val");
-      scoreboard_set("#chain", "val", v + 5);
+      let v: int = scoreboard_get("#chain", #val);
+      scoreboard_set("#chain", #val, v + 5);
       step3();
     }
     fn step1() {
-      scoreboard_set("#chain", "val", 10);
+      scoreboard_set("#chain", #val, 10);
       step2();
     }
   `, 'call_chain')
@@ -165,10 +176,10 @@ beforeAll(async () => {
   // Scenario E: for-range loop — loop counter increments exactly N times
   writeFixture(`
     fn count_to_five() {
-      scoreboard_set("#range", "counter", 0);
+      scoreboard_set("#range", #counter, 0);
       for i in 0..5 {
-        let c: int = scoreboard_get("#range", "counter");
-        scoreboard_set("#range", "counter", c + 1);
+        let c: int = scoreboard_get("#range", #counter);
+        scoreboard_set("#range", #counter, c + 1);
       }
     }
   `, 'range_test')
@@ -180,7 +191,7 @@ beforeAll(async () => {
     }
     fn run_nested() {
       let a: int = triple(4);
-      scoreboard_set("#nested", "result", a);
+      scoreboard_set("#nested", #result, a);
     }
   `, 'nested_test')
 
@@ -188,10 +199,10 @@ beforeAll(async () => {
   writeFixture(`
     fn classify(x: int) {
       match (x) {
-        1 => { scoreboard_set("#match", "out", 10); }
-        2 => { scoreboard_set("#match", "out", 20); }
-        3 => { scoreboard_set("#match", "out", 30); }
-        _ => { scoreboard_set("#match", "out", -1); }
+        1 => { scoreboard_set("#match", #out, 10); }
+        2 => { scoreboard_set("#match", #out, 20); }
+        3 => { scoreboard_set("#match", #out, 30); }
+        _ => { scoreboard_set("#match", #out, -1); }
       }
     }
   `, 'match_test')
@@ -199,14 +210,14 @@ beforeAll(async () => {
   // Scenario H: while loop counts down
   writeFixture(`
     fn countdown() {
-      scoreboard_set("#wloop", "i", 10);
-      scoreboard_set("#wloop", "steps", 0);
-      let i: int = scoreboard_get("#wloop", "i");
+      scoreboard_set("#wloop", #i, 10);
+      scoreboard_set("#wloop", #steps, 0);
+      let i: int = scoreboard_get("#wloop", #i);
       while (i > 0) {
-        let s: int = scoreboard_get("#wloop", "steps");
-        scoreboard_set("#wloop", "steps", s + 1);
+        let s: int = scoreboard_get("#wloop", #steps);
+        scoreboard_set("#wloop", #steps, s + 1);
         i = i - 1;
-        scoreboard_set("#wloop", "i", i);
+        scoreboard_set("#wloop", #i, i);
       }
     }
   `, 'while_test')
@@ -214,17 +225,17 @@ beforeAll(async () => {
   // Scenario I: multiple if/else branches (boundary test)
   writeFixture(`
     fn classify_score() {
-      let x: int = scoreboard_get("#boundary", "input");
+      let x: int = scoreboard_get("#boundary", #input);
       if (x > 100) {
-        scoreboard_set("#boundary", "tier", 3);
+        scoreboard_set("#boundary", #tier, 3);
       } else {
         if (x > 50) {
-          scoreboard_set("#boundary", "tier", 2);
+          scoreboard_set("#boundary", #tier, 2);
         } else {
           if (x > 0) {
-            scoreboard_set("#boundary", "tier", 1);
+            scoreboard_set("#boundary", #tier, 1);
           } else {
-            scoreboard_set("#boundary", "tier", 0);
+            scoreboard_set("#boundary", #tier, 0);
           }
         }
       }
@@ -246,24 +257,24 @@ beforeAll(async () => {
       let a: int = 2;
       let b: int = 3;
       let c: int = 4;
-      scoreboard_set("#order", "r1", a + b * c);
-      scoreboard_set("#order", "r2", (a + b) * c);
+      scoreboard_set("#order", #r1, a + b * c);
+      scoreboard_set("#order", #r2, (a + b) * c);
       let d: int = 100;
       let e: int = d / 3;
-      scoreboard_set("#order", "r3", e);
+      scoreboard_set("#order", #r3, e);
     }
   `, 'order_test')
 
   // Scenario L: scoreboard read-modify-write chain
   writeFixture(`
     fn chain_rmw() {
-      scoreboard_set("#rmw", "v", 1);
-      let v: int = scoreboard_get("#rmw", "v");
-      scoreboard_set("#rmw", "v", v * 2);
-      v = scoreboard_get("#rmw", "v");
-      scoreboard_set("#rmw", "v", v * 2);
-      v = scoreboard_get("#rmw", "v");
-      scoreboard_set("#rmw", "v", v * 2);
+      scoreboard_set("#rmw", #v, 1);
+      let v: int = scoreboard_get("#rmw", #v);
+      scoreboard_set("#rmw", #v, v * 2);
+      v = scoreboard_get("#rmw", #v);
+      scoreboard_set("#rmw", #v, v * 2);
+      v = scoreboard_get("#rmw", #v);
+      scoreboard_set("#rmw", #v, v * 2);
     }
   `, 'rmw_test')
 
@@ -749,10 +760,12 @@ describe('MC Integration - New Features', () => {
     await mc.command('/scoreboard players set #is_check players 0')
     await mc.command('/scoreboard players set #is_check zombies 0')
     await mc.command('/function is_check_test:__load').catch(() => {})
-    await mc.command('/summon minecraft:zombie 0 65 0 {Tags:["is_check_target"]}')
-    await mc.command('/summon minecraft:armor_stand 2 65 0 {Tags:["is_check_target"]}')
+    await mc.command('/summon minecraft:zombie 0 65 0')
+    await mc.command('/tag @e[type=minecraft:zombie,sort=nearest,limit=1] add is_check_target')
+    await mc.command('/summon minecraft:armor_stand 2 65 0')
+    await mc.command('/tag @e[type=minecraft:armor_stand,sort=nearest,limit=1] add is_check_target')
 
-    await mc.command('/function is_check_test:run')
+    await mc.command('/function is_check_test:check_types')
     await mc.ticks(5)
 
     const zombies = await mc.scoreboard('#is_check', 'zombies')

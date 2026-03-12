@@ -1,17 +1,20 @@
-fn run() {
-    scoreboard_set("#is_check", "players", 0);
-    scoreboard_set("#is_check", "zombies", 0);
+fn check_types() {
+    scoreboard_set("#is_check", #players, 0);
+    scoreboard_set("#is_check", #zombies, 0);
 
-    foreach (e in @e[tag=is_check_target]) {
+    foreach (e in @e[type=zombie,tag=is_check_target]) {
         if (e is Player) {
-            let players: int = scoreboard_get("#is_check", "players");
-            scoreboard_set("#is_check", "players", players + 1);
+            let players: int = scoreboard_get("#is_check", #players);
+            scoreboard_set("#is_check", #players, players + 1);
         }
 
         if (e is Zombie) {
-            let zombies: int = scoreboard_get("#is_check", "zombies");
-            scoreboard_set("#is_check", "zombies", zombies + 1);
-            kill(e);
+            let players: int = scoreboard_get("#is_check", #players);
+            scoreboard_set("#is_check", #players, players);
         }
+
+        let zombies: int = scoreboard_get("#is_check", #zombies);
+        scoreboard_set("#is_check", #zombies, zombies + 1);
+        kill(e);
     }
 }

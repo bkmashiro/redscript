@@ -175,7 +175,9 @@ var require_lexer = __commonJS({
       as: "as",
       at: "at",
       in: "in",
+      is: "is",
       struct: "struct",
+      impl: "impl",
       enum: "enum",
       trigger: "trigger",
       namespace: "namespace",
@@ -608,13 +610,34 @@ var require_parser = __commonJS({
       "<=": 4,
       ">": 4,
       ">=": 4,
+      "is": 4,
       "+": 5,
       "-": 5,
       "*": 6,
       "/": 6,
       "%": 6
     };
-    var BINARY_OPS = /* @__PURE__ */ new Set(["||", "&&", "==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"]);
+    var BINARY_OPS = /* @__PURE__ */ new Set(["||", "&&", "==", "!=", "<", "<=", ">", ">=", "is", "+", "-", "*", "/", "%"]);
+    var ENTITY_TYPE_NAMES = /* @__PURE__ */ new Set([
+      "entity",
+      "Player",
+      "Mob",
+      "HostileMob",
+      "PassiveMob",
+      "Zombie",
+      "Skeleton",
+      "Creeper",
+      "Spider",
+      "Enderman",
+      "Pig",
+      "Cow",
+      "Sheep",
+      "Chicken",
+      "Villager",
+      "ArmorStand",
+      "Item",
+      "Arrow"
+    ]);
     function computeIsSingle(raw) {
       if (/^@[spr](\[|$)/.test(raw))
         return true;
@@ -693,6 +716,7 @@ var require_parser = __commonJS({
         const globals = [];
         const declarations = [];
         const structs = [];
+        const implBlocks = [];
         const enums = [];
         const consts = [];
         if (this.check("namespace")) {
@@ -706,6 +730,8 @@ var require_parser = __commonJS({
             globals.push(this.parseGlobalDecl(true));
           } else if (this.check("struct")) {
             structs.push(this.parseStructDecl());
+          } else if (this.check("impl")) {
+            implBlocks.push(this.parseImplBlock());
           } else if (this.check("enum")) {
             enums.push(this.parseEnumDecl());
           } else if (this.check("const")) {
@@ -714,7 +740,7 @@ var require_parser = __commonJS({
             declarations.push(this.parseFnDecl());
           }
         }
-        return { namespace, globals, declarations, structs, enums, consts };
+        return { namespace, globals, declarations, structs, implBlocks, enums, consts };
       }
       // -------------------------------------------------------------------------
       // Struct Declaration
@@ -758,6 +784,17 @@ var require_parser = __commonJS({
         this.expect("}");
         return this.withLoc({ name, variants }, enumToken);
       }
+      parseImplBlock() {
+        const implToken = this.expect("impl");
+        const typeName = this.expect("ident").value;
+        this.expect("{");
+        const methods = [];
+        while (!this.check("}") && !this.check("eof")) {
+          methods.push(this.parseFnDecl(typeName));
+        }
+        this.expect("}");
+        return this.withLoc({ kind: "impl_block", typeName, methods }, implToken);
+      }
       parseConstDecl() {
         const constToken = this.expect("const");
         const name = this.expect("ident").value;
@@ -781,15 +818,15 @@ var require_parser = __commonJS({
       // -------------------------------------------------------------------------
       // Function Declaration
       // -------------------------------------------------------------------------
-      parseFnDecl() {
+      parseFnDecl(implTypeName) {
         const decorators = this.parseDecorators();
         const fnToken = this.expect("fn");
         const name = this.expect("ident").value;
         this.expect("(");
-        const params = this.parseParams();
+        const params = this.parseParams(implTypeName);
         this.expect(")");
         let returnType = { kind: "named", name: "void" };
-        if (this.match("->")) {
+        if (this.match("->") || this.match(":")) {
           returnType = this.parseType();
         }
         const body = this.parseBlock();
@@ -815,6 +852,13 @@ var require_parser = __commonJS({
           return { name };
         }
         const args = {};
+        if (name === "on") {
+          const eventTypeMatch = argsStr.match(/^([A-Za-z_][A-Za-z0-9_]*)$/);
+          if (eventTypeMatch) {
+            args.eventType = eventTypeMatch[1];
+            return { name, args };
+          }
+        }
         if (name === "on_trigger" || name === "on_advancement" || name === "on_craft" || name === "on_join_team") {
           const strMatch = argsStr.match(/^"([^"]*)"$/);
           if (strMatch) {
@@ -846,14 +890,19 @@ var require_parser = __commonJS({
         }
         return { name, args };
       }
-      parseParams() {
+      parseParams(implTypeName) {
         const params = [];
         if (!this.check(")")) {
           do {
             const paramToken = this.expect("ident");
             const name = paramToken.value;
-            this.expect(":");
-            const type = this.parseType();
+            let type;
+            if (implTypeName && params.length === 0 && name === "self" && !this.check(":")) {
+              type = { kind: "struct", name: implTypeName };
+            } else {
+              this.expect(":");
+              type = this.parseType();
+            }
             let defaultValue;
             if (this.match("=")) {
               defaultValue = this.parseExpr();
@@ -1150,6 +1199,11 @@ var require_parser = __commonJS({
           if (prec < minPrec)
             break;
           const opToken = this.advance();
+          if (op === "is") {
+            const entityType = this.parseEntityTypeName();
+            left = this.withLoc({ kind: "is_check", expr: left, entityType }, this.getLocToken(left) ?? opToken);
+            continue;
+          }
           const right = this.parseBinaryExpr(prec + 1);
           left = this.withLoc({ kind: "binary", op, left, right }, this.getLocToken(left) ?? opToken);
         }
@@ -1167,6 +1221,13 @@ var require_parser = __commonJS({
           return this.withLoc({ kind: "unary", op: "-", operand }, minusToken);
         }
         return this.parsePostfixExpr();
+      }
+      parseEntityTypeName() {
+        const token = this.expect("ident");
+        if (ENTITY_TYPE_NAMES.has(token.value)) {
+          return token.value;
+        }
+        this.error(`Unknown entity type '${token.value}'`);
       }
       isSubtraction() {
         if (this.pos === 0)
@@ -1240,6 +1301,15 @@ var require_parser = __commonJS({
       }
       parsePrimaryExpr() {
         const token = this.peek();
+        if (token.kind === "ident" && this.peek(1).kind === "::") {
+          const typeToken = this.advance();
+          this.expect("::");
+          const methodToken = this.expect("ident");
+          this.expect("(");
+          const args = this.parseArgs();
+          this.expect(")");
+          return this.withLoc({ kind: "static_call", type: typeToken.value, method: methodToken.value, args }, typeToken);
+        }
         if (token.kind === "ident" && this.peek(1).kind === "=>") {
           return this.parseSingleParamLambda();
         }
@@ -1756,6 +1826,70 @@ var require_parser = __commonJS({
   }
 });
 
+// ../../dist/events/types.js
+var require_types = __commonJS({
+  "../../dist/events/types.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.EVENT_TYPES = void 0;
+    exports2.isEventTypeName = isEventTypeName;
+    exports2.getEventParamSpecs = getEventParamSpecs;
+    exports2.EVENT_TYPES = {
+      PlayerDeath: {
+        tag: "rs.just_died",
+        params: ["player: Player"],
+        detection: "scoreboard"
+      },
+      PlayerJoin: {
+        tag: "rs.just_joined",
+        params: ["player: Player"],
+        detection: "tag"
+      },
+      BlockBreak: {
+        tag: "rs.just_broke_block",
+        params: ["player: Player", "block: string"],
+        detection: "advancement"
+      },
+      EntityKill: {
+        tag: "rs.just_killed",
+        params: ["player: Player"],
+        detection: "scoreboard"
+      },
+      ItemUse: {
+        tag: "rs.just_used_item",
+        params: ["player: Player"],
+        detection: "scoreboard"
+      }
+    };
+    function isEventTypeName(value) {
+      return value in exports2.EVENT_TYPES;
+    }
+    function getEventParamSpecs(eventType) {
+      return exports2.EVENT_TYPES[eventType].params.map(parseEventParam);
+    }
+    function parseEventParam(spec) {
+      const match = spec.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)$/);
+      if (!match) {
+        throw new Error(`Invalid event parameter spec: ${spec}`);
+      }
+      const [, name, typeName] = match;
+      return {
+        name,
+        type: toTypeNode(typeName)
+      };
+    }
+    function toTypeNode(typeName) {
+      if (typeName === "Player") {
+        return { kind: "entity", entityType: "Player" };
+      }
+      if (typeName === "string" || typeName === "int" || typeName === "bool" || typeName === "float" || typeName === "void" || typeName === "BlockPos" || typeName === "byte" || typeName === "short" || typeName === "long" || typeName === "double") {
+        return { kind: "named", name: typeName };
+      }
+      return { kind: "struct", name: typeName };
+    }
+  }
+});
+
 // ../../dist/typechecker/index.js
 var require_typechecker = __commonJS({
   "../../dist/typechecker/index.js"(exports2) {
@@ -1763,15 +1897,82 @@ var require_typechecker = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.TypeChecker = void 0;
     var diagnostics_1 = require_diagnostics();
+    var types_1 = require_types();
+    var ENTITY_HIERARCHY = {
+      "entity": null,
+      "Player": "entity",
+      "Mob": "entity",
+      "HostileMob": "Mob",
+      "PassiveMob": "Mob",
+      "Zombie": "HostileMob",
+      "Skeleton": "HostileMob",
+      "Creeper": "HostileMob",
+      "Spider": "HostileMob",
+      "Enderman": "HostileMob",
+      "Pig": "PassiveMob",
+      "Cow": "PassiveMob",
+      "Sheep": "PassiveMob",
+      "Chicken": "PassiveMob",
+      "Villager": "PassiveMob",
+      "ArmorStand": "entity",
+      "Item": "entity",
+      "Arrow": "entity"
+    };
+    var MC_TYPE_TO_ENTITY = {
+      "zombie": "Zombie",
+      "minecraft:zombie": "Zombie",
+      "skeleton": "Skeleton",
+      "minecraft:skeleton": "Skeleton",
+      "creeper": "Creeper",
+      "minecraft:creeper": "Creeper",
+      "spider": "Spider",
+      "minecraft:spider": "Spider",
+      "enderman": "Enderman",
+      "minecraft:enderman": "Enderman",
+      "pig": "Pig",
+      "minecraft:pig": "Pig",
+      "cow": "Cow",
+      "minecraft:cow": "Cow",
+      "sheep": "Sheep",
+      "minecraft:sheep": "Sheep",
+      "chicken": "Chicken",
+      "minecraft:chicken": "Chicken",
+      "villager": "Villager",
+      "minecraft:villager": "Villager",
+      "armor_stand": "ArmorStand",
+      "minecraft:armor_stand": "ArmorStand",
+      "item": "Item",
+      "minecraft:item": "Item",
+      "arrow": "Arrow",
+      "minecraft:arrow": "Arrow"
+    };
+    var VOID_TYPE = { kind: "named", name: "void" };
+    var INT_TYPE = { kind: "named", name: "int" };
+    var BUILTIN_SIGNATURES = {
+      setTimeout: {
+        params: [INT_TYPE, { kind: "function_type", params: [], return: VOID_TYPE }],
+        return: VOID_TYPE
+      },
+      setInterval: {
+        params: [INT_TYPE, { kind: "function_type", params: [], return: VOID_TYPE }],
+        return: INT_TYPE
+      },
+      clearInterval: {
+        params: [INT_TYPE],
+        return: VOID_TYPE
+      }
+    };
     var TypeChecker = class {
       constructor(source, filePath) {
         this.functions = /* @__PURE__ */ new Map();
+        this.implMethods = /* @__PURE__ */ new Map();
         this.structs = /* @__PURE__ */ new Map();
         this.enums = /* @__PURE__ */ new Map();
         this.consts = /* @__PURE__ */ new Map();
         this.currentFn = null;
         this.currentReturnType = null;
         this.scope = /* @__PURE__ */ new Map();
+        this.selfTypeStack = ["entity"];
         this.collector = new diagnostics_1.DiagnosticCollector(source, filePath);
       }
       getNodeLocation(node) {
@@ -1791,6 +1992,26 @@ var require_typechecker = __commonJS({
       check(program) {
         for (const fn of program.declarations) {
           this.functions.set(fn.name, fn);
+        }
+        for (const implBlock of program.implBlocks ?? []) {
+          let methods = this.implMethods.get(implBlock.typeName);
+          if (!methods) {
+            methods = /* @__PURE__ */ new Map();
+            this.implMethods.set(implBlock.typeName, methods);
+          }
+          for (const method of implBlock.methods) {
+            const selfIndex = method.params.findIndex((param) => param.name === "self");
+            if (selfIndex > 0) {
+              this.report(`Method '${method.name}' must declare 'self' as the first parameter`, method.params[selfIndex]);
+            }
+            if (selfIndex === 0) {
+              const selfType = this.normalizeType(method.params[0].type);
+              if (selfType.kind !== "struct" || selfType.name !== implBlock.typeName) {
+                this.report(`Method '${method.name}' has invalid 'self' type`, method.params[0]);
+              }
+            }
+            methods.set(method.name, method);
+          }
         }
         for (const struct of program.structs ?? []) {
           const fields = /* @__PURE__ */ new Map();
@@ -1817,6 +2038,11 @@ var require_typechecker = __commonJS({
         for (const fn of program.declarations) {
           this.checkFunction(fn);
         }
+        for (const implBlock of program.implBlocks ?? []) {
+          for (const method of implBlock.methods) {
+            this.checkFunction(method);
+          }
+        }
         return this.collector.getErrors();
       }
       checkFunction(fn) {
@@ -1824,6 +2050,7 @@ var require_typechecker = __commonJS({
         this.currentReturnType = this.normalizeType(fn.returnType);
         this.scope = /* @__PURE__ */ new Map();
         let seenDefault = false;
+        this.checkFunctionDecorators(fn);
         for (const [name, type] of this.consts.entries()) {
           this.scope.set(name, { type, mutable: false });
         }
@@ -1845,6 +2072,37 @@ var require_typechecker = __commonJS({
         this.currentFn = null;
         this.currentReturnType = null;
       }
+      checkFunctionDecorators(fn) {
+        const eventDecorators = fn.decorators.filter((decorator) => decorator.name === "on");
+        if (eventDecorators.length === 0) {
+          return;
+        }
+        if (eventDecorators.length > 1) {
+          this.report(`Function '${fn.name}' cannot have multiple @on decorators`, fn);
+          return;
+        }
+        const eventType = eventDecorators[0].args?.eventType;
+        if (!eventType) {
+          this.report(`Function '${fn.name}' is missing an event type in @on(...)`, fn);
+          return;
+        }
+        if (!(0, types_1.isEventTypeName)(eventType)) {
+          this.report(`Unknown event type '${eventType}'`, fn);
+          return;
+        }
+        const expectedParams = (0, types_1.getEventParamSpecs)(eventType);
+        if (fn.params.length !== expectedParams.length) {
+          this.report(`Event handler '${fn.name}' for ${eventType} must declare ${expectedParams.length} parameter(s), got ${fn.params.length}`, fn);
+          return;
+        }
+        for (let i = 0; i < expectedParams.length; i++) {
+          const actual = this.normalizeType(fn.params[i].type);
+          const expected = this.normalizeType(expectedParams[i].type);
+          if (!this.typesMatch(expected, actual)) {
+            this.report(`Event handler '${fn.name}' parameter ${i + 1} must be ${this.typeToString(expected)}, got ${this.typeToString(actual)}`, fn.params[i]);
+          }
+        }
+      }
       checkBlock(stmts) {
         for (const stmt of stmts) {
           this.checkStmt(stmt);
@@ -1860,9 +2118,7 @@ var require_typechecker = __commonJS({
             break;
           case "if":
             this.checkExpr(stmt.cond);
-            this.checkBlock(stmt.then);
-            if (stmt.else_)
-              this.checkBlock(stmt.else_);
+            this.checkIfBranches(stmt);
             break;
           case "while":
             this.checkExpr(stmt.cond);
@@ -1878,7 +2134,15 @@ var require_typechecker = __commonJS({
           case "foreach":
             this.checkExpr(stmt.iterable);
             if (stmt.iterable.kind === "selector") {
-              this.scope.set(stmt.binding, { type: { kind: "named", name: "void" }, mutable: true });
+              const entityType = this.inferEntityTypeFromSelector(stmt.iterable.sel);
+              this.scope.set(stmt.binding, {
+                type: { kind: "entity", entityType },
+                mutable: false
+                // Entity bindings are not reassignable
+              });
+              this.pushSelfType(entityType);
+              this.checkBlock(stmt.body);
+              this.popSelfType();
             } else {
               const iterableType = this.inferType(stmt.iterable);
               if (iterableType.kind === "array") {
@@ -1886,8 +2150,8 @@ var require_typechecker = __commonJS({
               } else {
                 this.scope.set(stmt.binding, { type: { kind: "named", name: "void" }, mutable: true });
               }
+              this.checkBlock(stmt.body);
             }
-            this.checkBlock(stmt.body);
             break;
           case "match":
             this.checkExpr(stmt.expr);
@@ -1901,15 +2165,36 @@ var require_typechecker = __commonJS({
               this.checkBlock(arm.body);
             }
             break;
-          case "as_block":
+          case "as_block": {
+            const entityType = this.inferEntityTypeFromSelector(stmt.selector);
+            this.pushSelfType(entityType);
+            this.checkBlock(stmt.body);
+            this.popSelfType();
+            break;
+          }
           case "at_block":
             this.checkBlock(stmt.body);
             break;
-          case "as_at":
+          case "as_at": {
+            const entityType = this.inferEntityTypeFromSelector(stmt.as_sel);
+            this.pushSelfType(entityType);
             this.checkBlock(stmt.body);
+            this.popSelfType();
             break;
+          }
           case "execute":
+            for (const sub of stmt.subcommands) {
+              if (sub.kind === "as" && sub.selector) {
+                const entityType = this.inferEntityTypeFromSelector(sub.selector);
+                this.pushSelfType(entityType);
+              }
+            }
             this.checkBlock(stmt.body);
+            for (const sub of stmt.subcommands) {
+              if (sub.kind === "as") {
+                this.popSelfType();
+              }
+            }
             break;
           case "expr":
             this.checkExpr(stmt.expr);
@@ -1960,10 +2245,21 @@ var require_typechecker = __commonJS({
           case "member":
             this.checkMemberExpr(expr);
             break;
+          case "static_call":
+            this.checkStaticCallExpr(expr);
+            break;
           case "binary":
             this.checkExpr(expr.left);
             this.checkExpr(expr.right);
             break;
+          case "is_check": {
+            this.checkExpr(expr.expr);
+            const checkedType = this.inferType(expr.expr);
+            if (checkedType.kind !== "entity") {
+              this.report(`'is' checks require an entity expression, got ${this.typeToString(checkedType)}`, expr.expr);
+            }
+            break;
+          }
           case "unary":
             this.checkExpr(expr.operand);
             break;
@@ -2009,11 +2305,6 @@ var require_typechecker = __commonJS({
             break;
           case "blockpos":
             break;
-          case "static_call":
-            for (const arg of expr.args) {
-              this.checkExpr(arg);
-            }
-            break;
           // Literals don't need checking
           case "int_lit":
           case "float_lit":
@@ -2032,6 +2323,11 @@ var require_typechecker = __commonJS({
       checkCallExpr(expr) {
         if (expr.fn === "tp" || expr.fn === "tp_to") {
           this.checkTpCall(expr);
+        }
+        const builtin = BUILTIN_SIGNATURES[expr.fn];
+        if (builtin) {
+          this.checkFunctionCallArgs(expr.args, builtin.params, expr.fn, expr);
+          return;
         }
         const fn = this.functions.get(expr.fn);
         if (fn) {
@@ -2055,6 +2351,11 @@ var require_typechecker = __commonJS({
         const varType = this.scope.get(expr.fn)?.type;
         if (varType?.kind === "function_type") {
           this.checkFunctionCallArgs(expr.args, varType.params, expr.fn, expr);
+          return;
+        }
+        const implMethod = this.resolveInstanceMethod(expr);
+        if (implMethod) {
+          this.checkFunctionCallArgs(expr.args, implMethod.params.map((param) => this.normalizeType(param.type)), implMethod.name, expr);
           return;
         }
         for (const arg of expr.args) {
@@ -2137,6 +2438,21 @@ var require_typechecker = __commonJS({
           }
         }
       }
+      checkStaticCallExpr(expr) {
+        const method = this.implMethods.get(expr.type)?.get(expr.method);
+        if (!method) {
+          this.report(`Type '${expr.type}' has no static method '${expr.method}'`, expr);
+          for (const arg of expr.args) {
+            this.checkExpr(arg);
+          }
+          return;
+        }
+        if (method.params[0]?.name === "self") {
+          this.report(`Method '${expr.type}::${expr.method}' is an instance method`, expr);
+          return;
+        }
+        this.checkFunctionCallArgs(expr.args, method.params.map((param) => this.normalizeType(param.type)), `${expr.type}::${expr.method}`, expr);
+      }
       checkLambdaExpr(expr, expectedType) {
         const normalizedExpected = expectedType ? this.normalizeType(expectedType) : void 0;
         const expectedFnType = normalizedExpected?.kind === "function_type" ? normalizedExpected : void 0;
@@ -2169,6 +2485,36 @@ var require_typechecker = __commonJS({
         this.scope = outerScope;
         this.currentReturnType = outerReturnType;
       }
+      checkIfBranches(stmt) {
+        const narrowed = this.getThenBranchNarrowing(stmt.cond);
+        if (narrowed) {
+          const thenScope = new Map(this.scope);
+          thenScope.set(narrowed.name, { type: narrowed.type, mutable: narrowed.mutable });
+          const outerScope = this.scope;
+          this.scope = thenScope;
+          this.checkBlock(stmt.then);
+          this.scope = outerScope;
+        } else {
+          this.checkBlock(stmt.then);
+        }
+        if (stmt.else_) {
+          this.checkBlock(stmt.else_);
+        }
+      }
+      getThenBranchNarrowing(cond) {
+        if (cond.kind !== "is_check" || cond.expr.kind !== "ident") {
+          return null;
+        }
+        const symbol = this.scope.get(cond.expr.name);
+        if (!symbol || symbol.type.kind !== "entity") {
+          return null;
+        }
+        return {
+          name: cond.expr.name,
+          type: { kind: "entity", entityType: cond.entityType },
+          mutable: symbol.mutable
+        };
+      }
       inferType(expr, expectedType) {
         switch (expr.kind) {
           case "int_lit":
@@ -2200,8 +2546,12 @@ var require_typechecker = __commonJS({
           case "ident":
             return this.scope.get(expr.name)?.type ?? { kind: "named", name: "void" };
           case "call": {
+            const builtin = BUILTIN_SIGNATURES[expr.fn];
+            if (builtin) {
+              return builtin.return;
+            }
             if (expr.fn === "__array_push") {
-              return { kind: "named", name: "void" };
+              return VOID_TYPE;
             }
             if (expr.fn === "__array_pop") {
               const target = expr.args[0];
@@ -2210,20 +2560,28 @@ var require_typechecker = __commonJS({
                 if (targetType?.kind === "array")
                   return targetType.elem;
               }
-              return { kind: "named", name: "int" };
+              return INT_TYPE;
             }
             if (expr.fn === "bossbar_get_value") {
-              return { kind: "named", name: "int" };
+              return INT_TYPE;
             }
             if (expr.fn === "random_sequence") {
-              return { kind: "named", name: "void" };
+              return VOID_TYPE;
             }
             const varType = this.scope.get(expr.fn)?.type;
             if (varType?.kind === "function_type") {
               return varType.return;
             }
+            const implMethod = this.resolveInstanceMethod(expr);
+            if (implMethod) {
+              return this.normalizeType(implMethod.returnType);
+            }
             const fn = this.functions.get(expr.fn);
-            return fn?.returnType ?? { kind: "named", name: "int" };
+            return fn?.returnType ?? INT_TYPE;
+          }
+          case "static_call": {
+            const method = this.implMethods.get(expr.type)?.get(expr.method);
+            return method ? this.normalizeType(method.returnType) : { kind: "named", name: "void" };
           }
           case "invoke": {
             const calleeType = this.inferType(expr.callee);
@@ -2254,6 +2612,8 @@ var require_typechecker = __commonJS({
               return { kind: "named", name: "bool" };
             }
             return this.inferType(expr.left);
+          case "is_check":
+            return { kind: "named", name: "bool" };
           case "unary":
             if (expr.op === "!")
               return { kind: "named", name: "bool" };
@@ -2263,6 +2623,14 @@ var require_typechecker = __commonJS({
               return { kind: "array", elem: this.inferType(expr.elements[0]) };
             }
             return { kind: "array", elem: { kind: "named", name: "int" } };
+          case "struct_lit":
+            if (expectedType) {
+              const normalized = this.normalizeType(expectedType);
+              if (normalized.kind === "struct") {
+                return normalized;
+              }
+            }
+            return { kind: "named", name: "void" };
           case "lambda":
             return this.inferLambdaType(expr, expectedType && this.normalizeType(expectedType).kind === "function_type" ? this.normalizeType(expectedType) : void 0);
           default:
@@ -2287,6 +2655,64 @@ var require_typechecker = __commonJS({
         }
         return { kind: "function_type", params, return: returnType };
       }
+      // ---------------------------------------------------------------------------
+      // Entity Type Helpers
+      // ---------------------------------------------------------------------------
+      /** Infer entity type from a selector */
+      inferEntityTypeFromSelector(selector) {
+        if (selector.kind === "@a" || selector.kind === "@p" || selector.kind === "@r") {
+          return "Player";
+        }
+        if (selector.filters?.type) {
+          const mcType = selector.filters.type.toLowerCase();
+          return MC_TYPE_TO_ENTITY[mcType] ?? "entity";
+        }
+        if (selector.kind === "@s") {
+          return this.selfTypeStack[this.selfTypeStack.length - 1];
+        }
+        return "entity";
+      }
+      resolveInstanceMethod(expr) {
+        const receiver = expr.args[0];
+        if (!receiver) {
+          return null;
+        }
+        const receiverType = this.inferType(receiver);
+        if (receiverType.kind !== "struct") {
+          return null;
+        }
+        const method = this.implMethods.get(receiverType.name)?.get(expr.fn);
+        if (!method || method.params[0]?.name !== "self") {
+          return null;
+        }
+        return method;
+      }
+      /** Check if childType is a subtype of parentType */
+      isEntitySubtype(childType, parentType) {
+        if (childType === parentType)
+          return true;
+        let current = childType;
+        while (current !== null) {
+          if (current === parentType)
+            return true;
+          current = ENTITY_HIERARCHY[current];
+        }
+        return false;
+      }
+      /** Push a new self type context */
+      pushSelfType(entityType) {
+        this.selfTypeStack.push(entityType);
+      }
+      /** Pop self type context */
+      popSelfType() {
+        if (this.selfTypeStack.length > 1) {
+          this.selfTypeStack.pop();
+        }
+      }
+      /** Get current @s type */
+      getCurrentSelfType() {
+        return this.selfTypeStack[this.selfTypeStack.length - 1];
+      }
       typesMatch(expected, actual) {
         if (expected.kind !== actual.kind)
           return false;
@@ -2307,6 +2733,12 @@ var require_typechecker = __commonJS({
         if (expected.kind === "function_type" && actual.kind === "function_type") {
           return expected.params.length === actual.params.length && expected.params.every((param, index) => this.typesMatch(param, actual.params[index])) && this.typesMatch(expected.return, actual.return);
         }
+        if (expected.kind === "entity" && actual.kind === "entity") {
+          return this.isEntitySubtype(actual.entityType, expected.entityType);
+        }
+        if (expected.kind === "selector" && actual.kind === "entity") {
+          return true;
+        }
         return false;
       }
       typeToString(type) {
@@ -2321,6 +2753,12 @@ var require_typechecker = __commonJS({
             return type.name;
           case "function_type":
             return `(${type.params.map((param) => this.typeToString(param)).join(", ")}) -> ${this.typeToString(type.return)}`;
+          case "entity":
+            return type.entityType;
+          case "selector":
+            return "selector";
+          default:
+            return "unknown";
         }
       }
       normalizeType(type) {
@@ -2336,6 +2774,12 @@ var require_typechecker = __commonJS({
         }
         if ((type.kind === "struct" || type.kind === "enum") && this.enums.has(type.name)) {
           return { kind: "enum", name: type.name };
+        }
+        if (type.kind === "struct" && type.name in ENTITY_HIERARCHY) {
+          return { kind: "entity", entityType: type.name };
+        }
+        if (type.kind === "named" && type.name in ENTITY_HIERARCHY) {
+          return { kind: "entity", entityType: type.name };
         }
         return type;
       }
@@ -2448,10 +2892,49 @@ var require_builder = __commonJS({
 var require_lowering = __commonJS({
   "../../dist/lowering/index.js"(exports2) {
     "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        }
+        __setModuleDefault(result, mod);
+        return result;
+      };
+    })();
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Lowering = void 0;
     var builder_1 = require_builder();
     var diagnostics_1 = require_diagnostics();
+    var path = __importStar(require("path"));
+    var types_1 = require_types();
     var BUILTINS2 = {
       say: ([msg]) => `say ${msg}`,
       tell: ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
@@ -2551,7 +3034,13 @@ var require_lowering = __commonJS({
       // Special handling (returns 1/0)
       set_remove: () => null,
       // Special handling
-      set_clear: () => null
+      set_clear: () => null,
+      // Special handling
+      setTimeout: () => null,
+      // Special handling
+      setInterval: () => null,
+      // Special handling
+      clearInterval: () => null
       // Special handling
     };
     function getSpan(node) {
@@ -2559,6 +3048,22 @@ var require_lowering = __commonJS({
     }
     var NAMESPACED_ENTITY_TYPE_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/;
     var BARE_ENTITY_TYPE_RE = /^[a-z0-9_./-]+$/;
+    var ENTITY_TO_MC_TYPE = {
+      Player: "player",
+      Zombie: "zombie",
+      Skeleton: "skeleton",
+      Creeper: "creeper",
+      Spider: "spider",
+      Enderman: "enderman",
+      Pig: "pig",
+      Cow: "cow",
+      Sheep: "sheep",
+      Chicken: "chicken",
+      Villager: "villager",
+      ArmorStand: "armor_stand",
+      Item: "item",
+      Arrow: "arrow"
+    };
     function normalizeSelector(selector, warnings) {
       return selector.replace(/type=([^,\]]+)/g, (match, entityType) => {
         const trimmed = entityType.trim();
@@ -2592,18 +3097,23 @@ var require_lowering = __commonJS({
       return `${emitCoord(pos.x)} ${emitCoord(pos.y)} ${emitCoord(pos.z)}`;
     }
     var Lowering = class {
-      constructor(namespace) {
+      constructor(namespace, sourceRanges = []) {
         this.functions = [];
         this.globals = [];
         this.globalNames = /* @__PURE__ */ new Map();
         this.fnDecls = /* @__PURE__ */ new Map();
+        this.implMethods = /* @__PURE__ */ new Map();
         this.specializedFunctions = /* @__PURE__ */ new Map();
         this.currentFn = "";
         this.foreachCounter = 0;
         this.lambdaCounter = 0;
+        this.timeoutCounter = 0;
+        this.intervalCounter = 0;
         this.warnings = [];
         this.varMap = /* @__PURE__ */ new Map();
         this.lambdaBindings = /* @__PURE__ */ new Map();
+        this.intervalBindings = /* @__PURE__ */ new Map();
+        this.intervalFunctions = /* @__PURE__ */ new Map();
         this.currentCallbackBindings = /* @__PURE__ */ new Map();
         this.currentContext = {};
         this.blockPosVars = /* @__PURE__ */ new Map();
@@ -2616,6 +3126,7 @@ var require_lowering = __commonJS({
         this.floatVars = /* @__PURE__ */ new Set();
         this.worldObjCounter = 0;
         this.namespace = namespace;
+        this.sourceRanges = sourceRanges;
         LoweringBuilder.resetTempCounter();
       }
       lower(program) {
@@ -2648,8 +3159,26 @@ var require_lowering = __commonJS({
           this.fnDecls.set(fn.name, fn);
           this.functionDefaults.set(fn.name, fn.params.map((param) => param.default));
         }
+        for (const implBlock of program.implBlocks ?? []) {
+          let methods = this.implMethods.get(implBlock.typeName);
+          if (!methods) {
+            methods = /* @__PURE__ */ new Map();
+            this.implMethods.set(implBlock.typeName, methods);
+          }
+          for (const method of implBlock.methods) {
+            const loweredName = `${implBlock.typeName}_${method.name}`;
+            methods.set(method.name, { fn: method, loweredName });
+            this.fnDecls.set(loweredName, method);
+            this.functionDefaults.set(loweredName, method.params.map((param) => param.default));
+          }
+        }
         for (const fn of program.declarations) {
           this.lowerFn(fn);
+        }
+        for (const implBlock of program.implBlocks ?? []) {
+          for (const method of implBlock.methods) {
+            this.lowerFn(method, { name: `${implBlock.typeName}_${method.name}` });
+          }
         }
         return (0, builder_1.buildModule)(this.namespace, this.functions, this.globals);
       }
@@ -2659,20 +3188,44 @@ var require_lowering = __commonJS({
       lowerFn(fn, options = {}) {
         const loweredName = options.name ?? fn.name;
         const callbackBindings = options.callbackBindings ?? /* @__PURE__ */ new Map();
-        const runtimeParams = fn.params.filter((param) => !callbackBindings.has(param.name));
+        const stdlibCallSite = options.stdlibCallSite;
+        const staticEventDec = fn.decorators.find((d) => d.name === "on");
+        const eventType = staticEventDec?.args?.eventType;
+        const eventParamSpecs = eventType && (0, types_1.isEventTypeName)(eventType) ? (0, types_1.getEventParamSpecs)(eventType) : [];
+        const runtimeParams = staticEventDec ? [] : fn.params.filter((param) => !callbackBindings.has(param.name));
         this.currentFn = loweredName;
+        this.currentStdlibCallSite = stdlibCallSite;
         this.foreachCounter = 0;
         this.varMap = /* @__PURE__ */ new Map();
         this.lambdaBindings = /* @__PURE__ */ new Map();
+        this.intervalBindings = /* @__PURE__ */ new Map();
         this.currentCallbackBindings = new Map(callbackBindings);
         this.currentContext = {};
         this.blockPosVars = /* @__PURE__ */ new Map();
         this.stringValues = /* @__PURE__ */ new Map();
         this.builder = new LoweringBuilder();
-        for (const param of runtimeParams) {
-          const paramName = param.name;
-          this.varMap.set(paramName, `$${paramName}`);
-          this.varTypes.set(paramName, this.normalizeType(param.type));
+        if (staticEventDec) {
+          for (let i = 0; i < fn.params.length; i++) {
+            const param = fn.params[i];
+            const expected = eventParamSpecs[i];
+            const normalizedType = this.normalizeType(param.type);
+            this.varTypes.set(param.name, normalizedType);
+            if (expected?.type.kind === "entity") {
+              this.varMap.set(param.name, "@s");
+              continue;
+            }
+            if (expected?.type.kind === "named" && expected.type.name === "string") {
+              this.stringValues.set(param.name, "");
+              continue;
+            }
+            this.varMap.set(param.name, `$${param.name}`);
+          }
+        } else {
+          for (const param of runtimeParams) {
+            const paramName = param.name;
+            this.varMap.set(paramName, `$${paramName}`);
+            this.varTypes.set(paramName, this.normalizeType(param.type));
+          }
         }
         for (const param of fn.params) {
           if (callbackBindings.has(param.name)) {
@@ -2684,6 +3237,15 @@ var require_lowering = __commonJS({
           const paramName = runtimeParams[i].name;
           const varName = `$${paramName}`;
           this.builder.emitAssign(varName, { kind: "var", name: `$p${i}` });
+        }
+        if (staticEventDec) {
+          for (let i = 0; i < fn.params.length; i++) {
+            const param = fn.params[i];
+            const expected = eventParamSpecs[i];
+            if (expected?.type.kind === "named" && expected.type.name !== "string") {
+              this.builder.emitAssign(`$${param.name}`, { kind: "const", value: 0 });
+            }
+          }
         }
         this.lowerBlock(fn.body);
         if (!this.builder.isBlockSealed()) {
@@ -2718,6 +3280,12 @@ var require_lowering = __commonJS({
               irFn.eventTrigger = { kind: "join_team", value: eventDec.args?.team };
               break;
           }
+        }
+        if (eventType && (0, types_1.isEventTypeName)(eventType)) {
+          irFn.eventHandler = {
+            eventType,
+            tag: types_1.EVENT_TYPES[eventType].tag
+          };
         }
         if (fn.decorators.some((d) => d.name === "load")) {
           irFn.isLoadInit = true;
@@ -2838,15 +3406,24 @@ var require_lowering = __commonJS({
           this.lambdaBindings.set(stmt.name, lambdaName);
           return;
         }
+        if (stmt.init.kind === "call" && stmt.init.fn === "setInterval") {
+          const value2 = this.lowerExpr(stmt.init);
+          const intervalFn = this.intervalFunctions.get(value2.kind === "const" ? value2.value : NaN);
+          if (intervalFn) {
+            this.intervalBindings.set(stmt.name, intervalFn);
+          }
+          this.builder.emitAssign(varName, value2);
+          return;
+        }
         if (stmt.init.kind === "struct_lit" && stmt.type?.kind === "struct") {
           const structName = stmt.type.name.toLowerCase();
           for (const field of stmt.init.fields) {
-            const path = `rs:heap ${structName}_${stmt.name}.${field.name}`;
+            const path2 = `rs:heap ${structName}_${stmt.name}.${field.name}`;
             const fieldValue = this.lowerExpr(field.value);
             if (fieldValue.kind === "const") {
-              this.builder.emitRaw(`data modify storage ${path} set value ${fieldValue.value}`);
+              this.builder.emitRaw(`data modify storage ${path2} set value ${fieldValue.value}`);
             } else if (fieldValue.kind === "var") {
-              this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${fieldValue.name} rs`);
+              this.builder.emitRaw(`execute store result storage ${path2} int 1 run scoreboard players get ${fieldValue.name} rs`);
             }
           }
           return;
@@ -2899,6 +3476,10 @@ var require_lowering = __commonJS({
         }
       }
       lowerIfStmt(stmt) {
+        if (stmt.cond.kind === "is_check") {
+          this.lowerIsCheckIfStmt(stmt);
+          return;
+        }
         const condVar = this.lowerExpr(stmt.cond);
         const condName = this.operandToVar(condVar);
         const thenLabel = this.builder.freshLabel("then");
@@ -2918,6 +3499,40 @@ var require_lowering = __commonJS({
           }
         }
         this.builder.startBlock(mergeLabel);
+      }
+      lowerIsCheckIfStmt(stmt) {
+        const cond = stmt.cond;
+        if (cond.kind !== "is_check") {
+          throw new diagnostics_1.DiagnosticError("LoweringError", "Internal error: expected 'is' check condition", stmt.span ?? { line: 0, col: 0 });
+        }
+        if (stmt.else_) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", "'is' checks with else branches are not yet supported", cond.span ?? stmt.span ?? { line: 0, col: 0 });
+        }
+        const selector = this.exprToEntitySelector(cond.expr);
+        if (!selector) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", "'is' checks require an entity selector or entity binding", cond.span ?? stmt.span ?? { line: 0, col: 0 });
+        }
+        const mcType = ENTITY_TO_MC_TYPE[cond.entityType];
+        if (!mcType) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", `Cannot lower entity type check for '${cond.entityType}'`, cond.span ?? stmt.span ?? { line: 0, col: 0 });
+        }
+        const thenFnName = `${this.currentFn}/then_${this.foreachCounter++}`;
+        this.builder.emitRaw(`execute if entity ${this.appendTypeFilter(selector, mcType)} run function ${this.namespace}:${thenFnName}`);
+        const savedBuilder = this.builder;
+        const savedVarMap = new Map(this.varMap);
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        this.builder = new LoweringBuilder();
+        this.varMap = new Map(savedVarMap);
+        this.blockPosVars = new Map(savedBlockPosVars);
+        this.builder.startBlock("entry");
+        this.lowerBlock(stmt.then);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitReturn();
+        }
+        this.functions.push(this.builder.build(thenFnName, [], false));
+        this.builder = savedBuilder;
+        this.varMap = savedVarMap;
+        this.blockPosVars = savedBlockPosVars;
       }
       lowerWhileStmt(stmt) {
         const checkLabel = this.builder.freshLabel("loop_check");
@@ -3287,12 +3902,16 @@ var require_lowering = __commonJS({
             return { kind: "var", name: this.selectorToString(expr.sel) };
           case "binary":
             return this.lowerBinaryExpr(expr);
+          case "is_check":
+            throw new diagnostics_1.DiagnosticError("LoweringError", "'is' checks are only supported as if conditions", expr.span ?? { line: 0, col: 0 });
           case "unary":
             return this.lowerUnaryExpr(expr);
           case "assign":
             return this.lowerAssignExpr(expr);
           case "call":
             return this.lowerCallExpr(expr);
+          case "static_call":
+            return this.lowerStaticCallExpr(expr);
           case "invoke":
             return this.lowerInvokeExpr(expr);
           case "member_assign":
@@ -3319,9 +3938,9 @@ var require_lowering = __commonJS({
           }
           if (varType?.kind === "struct") {
             const structName = varType.name.toLowerCase();
-            const path = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
+            const path2 = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
             const dst = this.builder.freshTemp();
-            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path}`);
+            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path2}`);
             return { kind: "var", name: dst };
           }
           if (varType?.kind === "array" && expr.field === "len") {
@@ -3359,20 +3978,20 @@ var require_lowering = __commonJS({
           }
           if (varType?.kind === "struct") {
             const structName = varType.name.toLowerCase();
-            const path = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
+            const path2 = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
             const value2 = this.lowerExpr(expr.value);
             if (expr.op === "=") {
               if (value2.kind === "const") {
-                this.builder.emitRaw(`data modify storage ${path} set value ${value2.value}`);
+                this.builder.emitRaw(`data modify storage ${path2} set value ${value2.value}`);
               } else if (value2.kind === "var") {
-                this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${value2.name} rs`);
+                this.builder.emitRaw(`execute store result storage ${path2} int 1 run scoreboard players get ${value2.name} rs`);
               }
             } else {
               const dst = this.builder.freshTemp();
-              this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path}`);
+              this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path2}`);
               const binOp = expr.op.slice(0, -1);
               this.builder.emitBinop(dst, { kind: "var", name: dst }, binOp, value2);
-              this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${dst} rs`);
+              this.builder.emitRaw(`execute store result storage ${path2} int 1 run scoreboard players get ${dst} rs`);
             }
             return { kind: "const", value: 0 };
           }
@@ -3565,6 +4184,10 @@ var require_lowering = __commonJS({
         if (callbackTarget) {
           return this.emitDirectFunctionCall(callbackTarget, expr.args);
         }
+        const implMethod = this.resolveInstanceMethod(expr);
+        if (implMethod) {
+          return this.emitMethodCall(implMethod.loweredName, implMethod.fn, expr.args);
+        }
         const fnDecl = this.fnDecls.get(expr.fn);
         const defaultArgs = this.functionDefaults.get(expr.fn) ?? [];
         const fullArgs = [...expr.args];
@@ -3590,10 +4213,16 @@ var require_lowering = __commonJS({
             }
             runtimeArgs.push(fullArgs[i]);
           }
-          const targetFn = callbackBindings.size > 0 ? this.ensureSpecializedFunction(fnDecl, callbackBindings) : expr.fn;
+          const stdlibCallSite = this.getStdlibCallSiteContext(fnDecl, getSpan(expr));
+          const targetFn = callbackBindings.size > 0 || stdlibCallSite ? this.ensureSpecializedFunctionWithContext(fnDecl, callbackBindings, stdlibCallSite) : expr.fn;
           return this.emitDirectFunctionCall(targetFn, runtimeArgs);
         }
         return this.emitDirectFunctionCall(expr.fn, fullArgs);
+      }
+      lowerStaticCallExpr(expr) {
+        const method = this.implMethods.get(expr.type)?.get(expr.method);
+        const targetFn = method?.loweredName ?? `${expr.type}_${expr.method}`;
+        return this.emitMethodCall(targetFn, method?.fn, expr.args);
       }
       lowerInvokeExpr(expr) {
         if (expr.callee.kind === "lambda") {
@@ -3639,6 +4268,18 @@ var require_lowering = __commonJS({
         this.builder.emitCall(fn, loweredArgs, dst);
         return { kind: "var", name: dst };
       }
+      emitMethodCall(fn, fnDecl, args) {
+        const defaultArgs = this.functionDefaults.get(fn) ?? fnDecl?.params.map((param) => param.default) ?? [];
+        const fullArgs = [...args];
+        for (let i = fullArgs.length; i < defaultArgs.length; i++) {
+          const defaultExpr = defaultArgs[i];
+          if (!defaultExpr) {
+            break;
+          }
+          fullArgs.push(defaultExpr);
+        }
+        return this.emitDirectFunctionCall(fn, fullArgs);
+      }
       resolveFunctionRefExpr(expr) {
         if (expr.kind === "lambda") {
           return this.lowerLambdaExpr(expr);
@@ -3652,7 +4293,14 @@ var require_lowering = __commonJS({
         return this.lambdaBindings.get(name) ?? this.currentCallbackBindings.get(name) ?? null;
       }
       ensureSpecializedFunction(fn, callbackBindings) {
+        return this.ensureSpecializedFunctionWithContext(fn, callbackBindings);
+      }
+      ensureSpecializedFunctionWithContext(fn, callbackBindings, stdlibCallSite) {
         const parts = [...callbackBindings.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([param, target]) => `${param}_${target.replace(/[^a-zA-Z0-9_]/g, "_")}`);
+        const callSiteHash = stdlibCallSite ? this.shortHash(this.serializeCallSite(stdlibCallSite)) : null;
+        if (callSiteHash) {
+          parts.push(`callsite_${callSiteHash}`);
+        }
         const key = `${fn.name}::${parts.join("::")}`;
         const cached = this.specializedFunctions.get(key);
         if (cached) {
@@ -3661,7 +4309,7 @@ var require_lowering = __commonJS({
         const specializedName = `${fn.name}__${parts.join("__")}`;
         this.specializedFunctions.set(key, specializedName);
         this.withSavedFunctionState(() => {
-          this.lowerFn(fn, { name: specializedName, callbackBindings });
+          this.lowerFn(fn, { name: specializedName, callbackBindings, stdlibCallSite });
         });
         return specializedName;
       }
@@ -3684,10 +4332,12 @@ var require_lowering = __commonJS({
       }
       withSavedFunctionState(callback) {
         const savedCurrentFn = this.currentFn;
+        const savedStdlibCallSite = this.currentStdlibCallSite;
         const savedForeachCounter = this.foreachCounter;
         const savedBuilder = this.builder;
         const savedVarMap = new Map(this.varMap);
         const savedLambdaBindings = new Map(this.lambdaBindings);
+        const savedIntervalBindings = new Map(this.intervalBindings);
         const savedCallbackBindings = new Map(this.currentCallbackBindings);
         const savedContext = this.currentContext;
         const savedBlockPosVars = new Map(this.blockPosVars);
@@ -3697,10 +4347,12 @@ var require_lowering = __commonJS({
           return callback();
         } finally {
           this.currentFn = savedCurrentFn;
+          this.currentStdlibCallSite = savedStdlibCallSite;
           this.foreachCounter = savedForeachCounter;
           this.builder = savedBuilder;
           this.varMap = savedVarMap;
           this.lambdaBindings = savedLambdaBindings;
+          this.intervalBindings = savedIntervalBindings;
           this.currentCallbackBindings = savedCallbackBindings;
           this.currentContext = savedContext;
           this.blockPosVars = savedBlockPosVars;
@@ -3713,6 +4365,15 @@ var require_lowering = __commonJS({
         if (richTextCommand) {
           this.builder.emitRaw(richTextCommand);
           return { kind: "const", value: 0 };
+        }
+        if (name === "setTimeout") {
+          return this.lowerSetTimeout(args);
+        }
+        if (name === "setInterval") {
+          return this.lowerSetInterval(args);
+        }
+        if (name === "clearInterval") {
+          return this.lowerClearInterval(args, callSpan);
         }
         if (name === "random") {
           const dst = this.builder.freshTemp();
@@ -3737,13 +4398,13 @@ var require_lowering = __commonJS({
         if (name === "scoreboard_get" || name === "score") {
           const dst = this.builder.freshTemp();
           const player = this.exprToTargetString(args[0]);
-          const objective = this.exprToString(args[1]);
+          const objective = this.resolveScoreboardObjective(args[0], args[1], callSpan);
           this.builder.emitRaw(`execute store result score ${dst} rs run scoreboard players get ${player} ${objective}`);
           return { kind: "var", name: dst };
         }
         if (name === "scoreboard_set") {
           const player = this.exprToTargetString(args[0]);
-          const objective = this.exprToString(args[1]);
+          const objective = this.resolveScoreboardObjective(args[0], args[1], callSpan);
           const value = this.lowerExpr(args[2]);
           if (value.kind === "const") {
             this.builder.emitRaw(`scoreboard players set ${player} ${objective} ${value.value}`);
@@ -3754,7 +4415,7 @@ var require_lowering = __commonJS({
         }
         if (name === "scoreboard_display") {
           const slot = this.exprToString(args[0]);
-          const objective = this.exprToString(args[1]);
+          const objective = this.resolveScoreboardObjective(void 0, args[1], callSpan);
           this.builder.emitRaw(`scoreboard objectives setdisplay ${slot} ${objective}`);
           return { kind: "const", value: 0 };
         }
@@ -3764,14 +4425,14 @@ var require_lowering = __commonJS({
           return { kind: "const", value: 0 };
         }
         if (name === "scoreboard_add_objective") {
-          const objective = this.exprToString(args[0]);
+          const objective = this.resolveScoreboardObjective(void 0, args[0], callSpan);
           const criteria = this.exprToString(args[1]);
           const displayName = args[2] ? ` ${this.exprToQuotedString(args[2])}` : "";
           this.builder.emitRaw(`scoreboard objectives add ${objective} ${criteria}${displayName}`);
           return { kind: "const", value: 0 };
         }
         if (name === "scoreboard_remove_objective") {
-          const objective = this.exprToString(args[0]);
+          const objective = this.resolveScoreboardObjective(void 0, args[0], callSpan);
           this.builder.emitRaw(`scoreboard objectives remove ${objective}`);
           return { kind: "const", value: 0 };
         }
@@ -3843,9 +4504,9 @@ var require_lowering = __commonJS({
           const dst = this.builder.freshTemp();
           const targetType = this.exprToString(args[0]);
           const target = targetType === "entity" ? this.exprToTargetString(args[1]) : this.exprToString(args[1]);
-          const path = this.exprToString(args[2]);
+          const path2 = this.exprToString(args[2]);
           const scale = args[3] ? this.exprToString(args[3]) : "1";
-          this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`);
+          this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path2} ${scale}`);
           return { kind: "var", name: dst };
         }
         if (name === "data_merge") {
@@ -3924,6 +4585,90 @@ var require_lowering = __commonJS({
           this.builder.emitRaw(cmd);
         }
         return { kind: "const", value: 0 };
+      }
+      lowerSetTimeout(args) {
+        const delay = this.exprToLiteral(args[0]);
+        const callback = args[1];
+        if (!callback || callback.kind !== "lambda") {
+          throw new diagnostics_1.DiagnosticError("LoweringError", "setTimeout requires a lambda callback", getSpan(callback) ?? { line: 1, col: 1 });
+        }
+        const fnName = `__timeout_${this.timeoutCounter++}`;
+        this.lowerNamedLambdaFunction(fnName, callback);
+        this.builder.emitRaw(`schedule function ${this.namespace}:${fnName} ${delay}t`);
+        return { kind: "const", value: 0 };
+      }
+      lowerSetInterval(args) {
+        const delay = this.exprToLiteral(args[0]);
+        const callback = args[1];
+        if (!callback || callback.kind !== "lambda") {
+          throw new diagnostics_1.DiagnosticError("LoweringError", "setInterval requires a lambda callback", getSpan(callback) ?? { line: 1, col: 1 });
+        }
+        const id = this.intervalCounter++;
+        const bodyName = `__interval_body_${id}`;
+        const fnName = `__interval_${id}`;
+        this.lowerNamedLambdaFunction(bodyName, callback);
+        this.lowerIntervalWrapperFunction(fnName, bodyName, delay);
+        this.intervalFunctions.set(id, fnName);
+        this.builder.emitRaw(`schedule function ${this.namespace}:${fnName} ${delay}t`);
+        return { kind: "const", value: id };
+      }
+      lowerClearInterval(args, callSpan) {
+        const fnName = this.resolveIntervalFunctionName(args[0]);
+        if (!fnName) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", "clearInterval requires an interval ID returned from setInterval", callSpan ?? getSpan(args[0]) ?? { line: 1, col: 1 });
+        }
+        this.builder.emitRaw(`schedule clear ${this.namespace}:${fnName}`);
+        return { kind: "const", value: 0 };
+      }
+      lowerNamedLambdaFunction(name, expr) {
+        const lambdaFn = {
+          name,
+          params: expr.params.map((param) => ({
+            name: param.name,
+            type: param.type ?? { kind: "named", name: "int" }
+          })),
+          returnType: expr.returnType ?? this.inferLambdaReturnType(expr),
+          decorators: [],
+          body: Array.isArray(expr.body) ? expr.body : [{ kind: "return", value: expr.body }]
+        };
+        this.withSavedFunctionState(() => {
+          this.lowerFn(lambdaFn);
+        });
+      }
+      lowerIntervalWrapperFunction(name, bodyName, delay) {
+        const intervalFn = {
+          name,
+          params: [],
+          returnType: { kind: "named", name: "void" },
+          decorators: [],
+          body: [
+            { kind: "raw", cmd: `function ${this.namespace}:${bodyName}` },
+            { kind: "raw", cmd: `schedule function ${this.namespace}:${name} ${delay}t` }
+          ]
+        };
+        this.withSavedFunctionState(() => {
+          this.lowerFn(intervalFn);
+        });
+      }
+      resolveIntervalFunctionName(expr) {
+        if (!expr) {
+          return null;
+        }
+        if (expr.kind === "ident") {
+          const boundInterval = this.intervalBindings.get(expr.name);
+          if (boundInterval) {
+            return boundInterval;
+          }
+          const constValue = this.constValues.get(expr.name);
+          if (constValue?.kind === "int_lit") {
+            return this.intervalFunctions.get(constValue.value) ?? null;
+          }
+          return null;
+        }
+        if (expr.kind === "int_lit") {
+          return this.intervalFunctions.get(expr.value) ?? null;
+        }
+        return null;
       }
       lowerRichTextBuiltin(name, args) {
         const messageArgIndex = this.getRichTextArgIndex(name);
@@ -4081,6 +4826,28 @@ var require_lowering = __commonJS({
             return this.operandToVar(op);
         }
       }
+      exprToEntitySelector(expr) {
+        if (expr.kind === "selector") {
+          return this.selectorToString(expr.sel);
+        }
+        if (expr.kind === "ident") {
+          const constValue = this.constValues.get(expr.name);
+          if (constValue) {
+            return this.exprToEntitySelector(constValue);
+          }
+          const mapped = this.varMap.get(expr.name);
+          if (mapped?.startsWith("@")) {
+            return mapped;
+          }
+        }
+        return null;
+      }
+      appendTypeFilter(selector, mcType) {
+        if (selector.endsWith("]")) {
+          return `${selector.slice(0, -1)},type=${mcType}]`;
+        }
+        return `${selector}[type=${mcType}]`;
+      }
       exprToSnbt(expr) {
         switch (expr.kind) {
           case "struct_lit": {
@@ -4147,6 +4914,92 @@ var require_lowering = __commonJS({
       }
       isTeamTextOption(option) {
         return option === "displayName" || option === "prefix" || option === "suffix";
+      }
+      exprToScoreboardObjective(expr, span) {
+        if (expr.kind === "mc_name") {
+          return expr.value;
+        }
+        const objective = this.exprToString(expr);
+        if (objective.startsWith("#") || objective.includes(".")) {
+          return objective.startsWith("#") ? objective.slice(1) : objective;
+        }
+        return `${this.getObjectiveNamespace(span)}.${objective}`;
+      }
+      resolveScoreboardObjective(playerExpr, objectiveExpr, span) {
+        const stdlibInternalObjective = this.tryGetStdlibInternalObjective(playerExpr, objectiveExpr, span);
+        if (stdlibInternalObjective) {
+          return stdlibInternalObjective;
+        }
+        return this.exprToScoreboardObjective(objectiveExpr, span);
+      }
+      getObjectiveNamespace(span) {
+        const filePath = this.filePathForSpan(span);
+        if (!filePath) {
+          return this.namespace;
+        }
+        return this.isStdlibFile(filePath) ? "rs" : this.namespace;
+      }
+      tryGetStdlibInternalObjective(playerExpr, objectiveExpr, span) {
+        if (!span || !this.currentStdlibCallSite || objectiveExpr.kind !== "mc_name" || objectiveExpr.value !== "rs") {
+          return null;
+        }
+        const filePath = this.filePathForSpan(span);
+        if (!filePath || !this.isStdlibFile(filePath)) {
+          return null;
+        }
+        const resourceBase = this.getStdlibInternalResourceBase(playerExpr);
+        if (!resourceBase) {
+          return null;
+        }
+        const hash = this.shortHash(this.serializeCallSite(this.currentStdlibCallSite));
+        return `rs._${resourceBase}_${hash}`;
+      }
+      getStdlibInternalResourceBase(playerExpr) {
+        if (!playerExpr || playerExpr.kind !== "str_lit") {
+          return null;
+        }
+        const match = playerExpr.value.match(/^([a-z0-9]+)_/);
+        return match?.[1] ?? null;
+      }
+      getStdlibCallSiteContext(fn, exprSpan) {
+        const fnFilePath = this.filePathForSpan(getSpan(fn));
+        if (!fnFilePath || !this.isStdlibFile(fnFilePath)) {
+          return void 0;
+        }
+        if (this.currentStdlibCallSite) {
+          return this.currentStdlibCallSite;
+        }
+        if (!exprSpan) {
+          return void 0;
+        }
+        return {
+          filePath: this.filePathForSpan(exprSpan),
+          line: exprSpan.line,
+          col: exprSpan.col
+        };
+      }
+      serializeCallSite(callSite) {
+        return `${callSite.filePath ?? "<memory>"}:${callSite.line}:${callSite.col}`;
+      }
+      shortHash(input) {
+        let hash = 2166136261;
+        for (let i = 0; i < input.length; i++) {
+          hash ^= input.charCodeAt(i);
+          hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(16).padStart(8, "0").slice(0, 4);
+      }
+      isStdlibFile(filePath) {
+        const normalized = path.normalize(filePath);
+        const stdlibSegment = `${path.sep}src${path.sep}stdlib${path.sep}`;
+        return normalized.includes(stdlibSegment);
+      }
+      filePathForSpan(span) {
+        if (!span) {
+          return void 0;
+        }
+        const line = span.line;
+        return this.sourceRanges.find((range) => line >= range.startLine && line <= range.endLine)?.filePath;
       }
       lowerCoordinateBuiltin(name, args) {
         const pos0 = args[0] ? this.resolveBlockPosExpr(args[0]) : null;
@@ -4255,7 +5108,11 @@ var require_lowering = __commonJS({
           };
         }
         if (expr.kind === "call") {
-          return this.fnDecls.get(this.resolveFunctionRefByName(expr.fn) ?? expr.fn)?.returnType;
+          const resolved = this.resolveFunctionRefByName(expr.fn) ?? this.resolveInstanceMethod(expr)?.loweredName ?? expr.fn;
+          return this.fnDecls.get(resolved)?.returnType;
+        }
+        if (expr.kind === "static_call") {
+          return this.implMethods.get(expr.type)?.get(expr.method)?.fn.returnType;
         }
         if (expr.kind === "invoke") {
           const calleeType = this.inferExprType(expr.callee);
@@ -4282,6 +5139,21 @@ var require_lowering = __commonJS({
           return { kind: "enum", name: expr.obj.name };
         }
         return void 0;
+      }
+      resolveInstanceMethod(expr) {
+        const receiver = expr.args[0];
+        if (!receiver) {
+          return null;
+        }
+        const receiverType = this.inferExprType(receiver);
+        if (receiverType?.kind !== "struct") {
+          return null;
+        }
+        const method = this.implMethods.get(receiverType.name)?.get(expr.fn);
+        if (!method || method.fn.params[0]?.name !== "self") {
+          return null;
+        }
+        return method;
       }
       normalizeType(type) {
         if (type.kind === "array") {
@@ -5078,6 +5950,7 @@ var require_mcfunction = __commonJS({
     exports2.generateDatapackWithStats = generateDatapackWithStats;
     exports2.generateDatapack = generateDatapack;
     var commands_1 = require_commands();
+    var types_1 = require_types();
     var OBJ = "rs";
     function varRef(name) {
       return name.startsWith("$") ? name : `$${name}`;
@@ -5269,6 +6142,8 @@ var require_mcfunction = __commonJS({
       const ns = module3.namespace;
       const triggerHandlers = module3.functions.filter((fn) => fn.isTriggerHandler && fn.triggerName);
       const triggerNames = new Set(triggerHandlers.map((fn) => fn.triggerName));
+      const eventHandlers = module3.functions.filter((fn) => !!fn.eventHandler && (0, types_1.isEventTypeName)(fn.eventHandler.eventType));
+      const eventTypes = new Set(eventHandlers.map((fn) => fn.eventHandler.eventType));
       const tickFunctionNames = [];
       for (const fn of module3.functions) {
         if (fn.isTickLoop) {
@@ -5291,6 +6166,18 @@ var require_mcfunction = __commonJS({
       for (const triggerName of triggerNames) {
         loadLines.push(`scoreboard objectives add ${triggerName} trigger`);
         loadLines.push(`scoreboard players enable @a ${triggerName}`);
+      }
+      for (const eventType of eventTypes) {
+        const detection = types_1.EVENT_TYPES[eventType].detection;
+        if (eventType === "PlayerDeath") {
+          loadLines.push("scoreboard objectives add rs.deaths deathCount");
+        } else if (eventType === "EntityKill") {
+          loadLines.push("scoreboard objectives add rs.kills totalKillCount");
+        } else if (eventType === "ItemUse") {
+          loadLines.push("# ItemUse detection requires a project-specific objective/tag setup");
+        } else if (detection === "tag" || detection === "advancement") {
+          loadLines.push(`# ${eventType} detection expects tag ${types_1.EVENT_TYPES[eventType].tag} to be set externally`);
+        }
       }
       for (const triggerName of triggerNames) {
         const handlers = triggerHandlers.filter((fn) => fn.triggerName === triggerName);
@@ -5351,7 +6238,18 @@ var require_mcfunction = __commonJS({
           tickLines.push(`execute as @a[scores={${triggerName}=1..}] run function ${ns}:__trigger_${triggerName}_dispatch`);
         }
       }
-      if (tickFunctionNames.length > 0 || triggerNames.size > 0) {
+      if (eventHandlers.length > 0) {
+        tickLines.push("# Event checks");
+        for (const eventType of eventTypes) {
+          const tag = types_1.EVENT_TYPES[eventType].tag;
+          const handlers = eventHandlers.filter((fn) => fn.eventHandler?.eventType === eventType);
+          for (const handler of handlers) {
+            tickLines.push(`execute as @a[tag=${tag}] run function ${ns}:${handler.name}`);
+          }
+          tickLines.push(`tag @a[tag=${tag}] remove ${tag}`);
+        }
+      }
+      if (tickFunctionNames.length > 0 || triggerNames.size > 0 || eventHandlers.length > 0) {
         files.push({
           path: `data/${ns}/function/__tick.mcfunction`,
           content: tickLines.join("\n")
@@ -5471,6 +6369,7 @@ var require_compile = __commonJS({
       };
     })();
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.preprocessSourceWithMetadata = preprocessSourceWithMetadata;
     exports2.preprocessSource = preprocessSource;
     exports2.compile = compile;
     exports2.formatCompileError = formatCompileError;
@@ -5483,7 +6382,17 @@ var require_compile = __commonJS({
     var mcfunction_1 = require_mcfunction();
     var diagnostics_1 = require_diagnostics();
     var IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/;
-    function preprocessSource(source, options = {}) {
+    function countLines(source) {
+      return source === "" ? 0 : source.split("\n").length;
+    }
+    function offsetRanges(ranges, lineOffset) {
+      return ranges.map((range) => ({
+        startLine: range.startLine + lineOffset,
+        endLine: range.endLine + lineOffset,
+        filePath: range.filePath
+      }));
+    }
+    function preprocessSourceWithMetadata(source, options = {}) {
       const { filePath } = options;
       const seen = options.seen ?? /* @__PURE__ */ new Set();
       if (filePath) {
@@ -5510,7 +6419,7 @@ var require_compile = __commonJS({
             } catch {
               throw new diagnostics_1.DiagnosticError("ParseError", `Cannot import '${match[1]}'`, { file: filePath, line: i + 1, col: 1 }, lines);
             }
-            imports.push(preprocessSource(importedSource, { filePath: importPath, seen }));
+            imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen }));
           }
           continue;
         }
@@ -5521,17 +6430,37 @@ var require_compile = __commonJS({
         parsingHeader = false;
         bodyLines.push(line);
       }
-      return [...imports, bodyLines.join("\n")].filter(Boolean).join("\n");
+      const body = bodyLines.join("\n");
+      const parts = [...imports.map((entry) => entry.source), body].filter(Boolean);
+      const combined = parts.join("\n");
+      const ranges = [];
+      let lineOffset = 0;
+      for (const entry of imports) {
+        ranges.push(...offsetRanges(entry.ranges, lineOffset));
+        lineOffset += countLines(entry.source);
+      }
+      if (filePath && body) {
+        ranges.push({
+          startLine: lineOffset + 1,
+          endLine: lineOffset + countLines(body),
+          filePath: path.resolve(filePath)
+        });
+      }
+      return { source: combined, ranges };
+    }
+    function preprocessSource(source, options = {}) {
+      return preprocessSourceWithMetadata(source, options).source;
     }
     function compile(source, options = {}) {
       const { namespace = "redscript", filePath, optimize: shouldOptimize = true } = options;
       let sourceLines = source.split("\n");
       try {
-        const preprocessedSource = preprocessSource(source, { filePath });
+        const preprocessed = preprocessSourceWithMetadata(source, { filePath });
+        const preprocessedSource = preprocessed.source;
         sourceLines = preprocessedSource.split("\n");
         const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
         const ast = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
-        const ir = new lowering_1.Lowering(namespace).lower(ast);
+        const ir = new lowering_1.Lowering(namespace, preprocessed.ranges).lower(ast);
         const optimized = shouldOptimize ? { ...ir, functions: ir.functions.map((fn) => (0, passes_1.optimize)(fn)) } : ir;
         const generated = (0, mcfunction_1.generateDatapackWithStats)(optimized);
         return {
@@ -5915,7 +6844,8 @@ var require_dist = __commonJS({
       const shouldOptimize = options.optimize ?? true;
       const shouldTypeCheck = options.typeCheck ?? true;
       const filePath = options.filePath;
-      const preprocessedSource = (0, compile_1.preprocessSource)(source, { filePath });
+      const preprocessed = (0, compile_1.preprocessSourceWithMetadata)(source, { filePath });
+      const preprocessedSource = preprocessed.source;
       const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
       const ast = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
       let typeErrors;
@@ -5923,7 +6853,7 @@ var require_dist = __commonJS({
         const checker = new typechecker_1.TypeChecker(preprocessedSource, filePath);
         typeErrors = checker.check(ast);
       }
-      const lowering = new lowering_1.Lowering(namespace);
+      const lowering = new lowering_1.Lowering(namespace, preprocessed.ranges);
       const ir = lowering.lower(ast);
       let optimizedIR = ir;
       let generated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: shouldOptimize });
