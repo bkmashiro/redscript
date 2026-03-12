@@ -8,7 +8,7 @@
  *   - Integer vars  → scoreboard fake player  ($name on objective "rs_vars")
  *   - Complex data  → NBT storage             (redscript:stack / redscript:heap)
  *   - Return value  → fake player $ret
- *   - Temporaries   → $t0, $t1, ...
+ *   - Temporaries   → $_0, $_1, ...
  */
 
 // ---------------------------------------------------------------------------

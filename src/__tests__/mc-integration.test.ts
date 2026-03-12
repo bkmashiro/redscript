@@ -450,7 +450,7 @@ describe('E2E Scenario Tests', () => {
   })
 
   // Scenario B: No temp var collision between two functions called in sequence
-  // Verifies: each function's $t0/$t1 temp vars are isolated per-call, not globally shared
+  // Verifies: each function's temp vars are isolated per-call via globally unique names
   // If there's a bug, calc_product would see sum's leftover $t vars and produce wrong result
   test('B: calc_sum + calc_product called in sequence — no temp var collision', async () => {
     if (!serverOnline) return

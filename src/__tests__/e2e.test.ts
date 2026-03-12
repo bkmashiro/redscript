@@ -340,7 +340,7 @@ fn test() {
       expect(fn).toContain('bossbar set ns:health visible true')
       expect(fn).toContain('bossbar set ns:health players @a')
       expect(fn).toContain('bossbar remove ns:health')
-      expect(fn).toMatch(/execute store result score \$t\d+ rs run bossbar get ns:health value/)
+      expect(fn).toMatch(/execute store result score \$_\d+ rs run bossbar get ns:health value/)
     })
 
     it('compiles team builtins', () => {
@@ -651,21 +651,21 @@ fn double_score() -> int {
       const source = 'fn test() { let x: int = random(1, 10); }'
       const files = compile(source)
       const fn = getFunction(files, 'test')
-      expect(fn).toContain('scoreboard players random $t0 rs 1 10')
+      expect(fn).toContain('scoreboard players random $_0 rs 1 10')
     })
 
     it('compiles random_native()', () => {
       const source = 'fn test() { let x: int = random_native(1, 6); }'
       const files = compile(source)
       const fn = getFunction(files, 'test')
-      expect(fn).toContain('execute store result score $t0 rs run random value 1 6')
+      expect(fn).toContain('execute store result score $_0 rs run random value 1 6')
     })
 
     it('compiles random_native() with zero min', () => {
       const source = 'fn test() { let x: int = random_native(0, 100); }'
       const files = compile(source)
       const fn = getFunction(files, 'test')
-      expect(fn).toContain('execute store result score $t0 rs run random value 0 100')
+      expect(fn).toContain('execute store result score $_0 rs run random value 0 100')
     })
 
     it('compiles random_sequence()', () => {
