@@ -690,6 +690,7 @@ var require_parser = __commonJS({
       // -------------------------------------------------------------------------
       parse(defaultNamespace = "redscript") {
         let namespace = defaultNamespace;
+        const globals = [];
         const declarations = [];
         const structs = [];
         const enums = [];
@@ -701,7 +702,9 @@ var require_parser = __commonJS({
           this.expect(";");
         }
         while (!this.check("eof")) {
-          if (this.check("struct")) {
+          if (this.check("let")) {
+            globals.push(this.parseGlobalDecl(true));
+          } else if (this.check("struct")) {
             structs.push(this.parseStructDecl());
           } else if (this.check("enum")) {
             enums.push(this.parseEnumDecl());
@@ -711,7 +714,7 @@ var require_parser = __commonJS({
             declarations.push(this.parseFnDecl());
           }
         }
-        return { namespace, declarations, structs, enums, consts };
+        return { namespace, globals, declarations, structs, enums, consts };
       }
       // -------------------------------------------------------------------------
       // Struct Declaration
@@ -764,6 +767,16 @@ var require_parser = __commonJS({
         const value = this.parseLiteralExpr();
         this.match(";");
         return this.withLoc({ name, type, value }, constToken);
+      }
+      parseGlobalDecl(mutable) {
+        const token = this.advance();
+        const name = this.expect("ident").value;
+        this.expect(":");
+        const type = this.parseType();
+        this.expect("=");
+        const init = this.parseExpr();
+        this.expect(";");
+        return this.withLoc({ kind: "global", name, type, init, mutable }, token);
       }
       // -------------------------------------------------------------------------
       // Function Declaration
@@ -1080,14 +1093,14 @@ var require_parser = __commonJS({
             if (this.peek().kind === "ident" && this.peek().value === "entity") {
               this.advance();
             }
-            const selector = this.parseSelector();
-            subcommands.push({ kind: "if_entity", selector });
+            const selectorOrVar = this.parseSelectorOrVarSelector();
+            subcommands.push({ kind: "if_entity", ...selectorOrVar });
           } else if (this.match("unless")) {
             if (this.peek().kind === "ident" && this.peek().value === "entity") {
               this.advance();
             }
-            const selector = this.parseSelector();
-            subcommands.push({ kind: "unless_entity", selector });
+            const selectorOrVar = this.parseSelectorOrVarSelector();
+            subcommands.push({ kind: "unless_entity", ...selectorOrVar });
           } else if (this.match("in")) {
             const dim = this.expect("ident").value;
             subcommands.push({ kind: "in", dimension: dim });
@@ -1592,6 +1605,34 @@ var require_parser = __commonJS({
         const token = this.expect("selector");
         return this.parseSelectorValue(token.value);
       }
+      // Parse either a selector (@a[...]) or a variable with filters (p[...])
+      // Returns { selector } for selectors or { varName, filters } for variables
+      parseSelectorOrVarSelector() {
+        if (this.check("selector")) {
+          return { selector: this.parseSelector() };
+        }
+        const varToken = this.expect("ident");
+        const varName = varToken.value;
+        if (this.check("[")) {
+          this.advance();
+          let filterStr = "";
+          let depth = 1;
+          while (depth > 0 && !this.check("eof")) {
+            if (this.check("["))
+              depth++;
+            else if (this.check("]"))
+              depth--;
+            if (depth > 0) {
+              filterStr += this.peek().value ?? this.peek().kind;
+              this.advance();
+            }
+          }
+          this.expect("]");
+          const filters = this.parseSelectorFilters(filterStr);
+          return { varName, filters };
+        }
+        return { varName };
+      }
       parseSelectorValue(value) {
         const bracketIndex = value.indexOf("[");
         if (bracketIndex === -1) {
@@ -1641,6 +1682,21 @@ var require_parser = __commonJS({
               break;
             case "scores":
               filters.scores = this.parseScoresFilter(val);
+              break;
+            case "x":
+              filters.x = this.parseRangeValue(val);
+              break;
+            case "y":
+              filters.y = this.parseRangeValue(val);
+              break;
+            case "z":
+              filters.z = this.parseRangeValue(val);
+              break;
+            case "x_rotation":
+              filters.x_rotation = this.parseRangeValue(val);
+              break;
+            case "y_rotation":
+              filters.y_rotation = this.parseRangeValue(val);
               break;
           }
         }
@@ -2407,6 +2463,7 @@ var require_lowering = __commonJS({
       give: ([sel, item, count, nbt]) => nbt ? `give ${sel} ${item}${nbt} ${count ?? "1"}` : `give ${sel} ${item} ${count ?? "1"}`,
       kill: ([sel]) => `kill ${sel ?? "@s"}`,
       effect: ([sel, eff, dur, amp]) => `effect give ${sel} ${eff} ${dur ?? "30"} ${amp ?? "0"}`,
+      effect_clear: ([sel, eff]) => eff ? `effect clear ${sel} ${eff}` : `effect clear ${sel}`,
       summon: ([type, x, y, z, nbt]) => {
         const pos = [x ?? "~", y ?? "~", z ?? "~"].join(" ");
         return nbt ? `summon ${type} ${pos} ${nbt}` : `summon ${type} ${pos}`;
@@ -2484,6 +2541,8 @@ var require_lowering = __commonJS({
       // Special handling
       data_get: () => null,
       // Special handling (returns value from NBT)
+      data_merge: () => null,
+      // Special handling (merge NBT)
       set_new: () => null,
       // Special handling (returns set ID)
       set_add: () => null,
@@ -2536,6 +2595,7 @@ var require_lowering = __commonJS({
       constructor(namespace) {
         this.functions = [];
         this.globals = [];
+        this.globalNames = /* @__PURE__ */ new Map();
         this.fnDecls = /* @__PURE__ */ new Map();
         this.specializedFunctions = /* @__PURE__ */ new Map();
         this.currentFn = "";
@@ -2556,6 +2616,7 @@ var require_lowering = __commonJS({
         this.floatVars = /* @__PURE__ */ new Set();
         this.worldObjCounter = 0;
         this.namespace = namespace;
+        LoweringBuilder.resetTempCounter();
       }
       lower(program) {
         this.namespace = program.namespace;
@@ -2576,6 +2637,12 @@ var require_lowering = __commonJS({
         for (const constDecl of program.consts ?? []) {
           this.constValues.set(constDecl.name, constDecl.value);
           this.varTypes.set(constDecl.name, this.normalizeType(constDecl.type));
+        }
+        for (const g of program.globals ?? []) {
+          this.globalNames.set(g.name, { mutable: g.mutable });
+          this.varTypes.set(g.name, this.normalizeType(g.type));
+          const initValue = g.init.kind === "int_lit" ? g.init.value : 0;
+          this.globals.push({ name: `$${g.name}`, init: initValue });
         }
         for (const fn of program.declarations) {
           this.fnDecls.set(fn.name, fn);
@@ -2652,6 +2719,9 @@ var require_lowering = __commonJS({
               break;
           }
         }
+        if (fn.decorators.some((d) => d.name === "load")) {
+          irFn.isLoadInit = true;
+        }
         if (tickRate && tickRate > 1) {
           this.wrapWithTickRate(irFn, tickRate);
         }
@@ -2663,7 +2733,7 @@ var require_lowering = __commonJS({
       }
       wrapWithTickRate(fn, rate) {
         const counterVar = `$__tick_${fn.name}`;
-        this.globals.push(counterVar);
+        this.globals.push({ name: counterVar, init: 0 });
         const entry = fn.blocks[0];
         const originalInstrs = [...entry.instrs];
         const originalTerm = entry.term;
@@ -2751,6 +2821,9 @@ var require_lowering = __commonJS({
         }
       }
       lowerLetStmt(stmt) {
+        if (this.currentContext.binding === stmt.name) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", `Cannot redeclare foreach binding '${stmt.name}'`, stmt.span ?? { line: 0, col: 0 });
+        }
         const varName = `$${stmt.name}`;
         this.varMap.set(stmt.name, varName);
         const declaredType = stmt.type ? this.normalizeType(stmt.type) : this.inferExprType(stmt.init);
@@ -3116,10 +3189,20 @@ var require_lowering = __commonJS({
               parts.push(`at ${this.selectorToString(sub.selector)}`);
               break;
             case "if_entity":
-              parts.push(`if entity ${this.selectorToString(sub.selector)}`);
+              if (sub.selector) {
+                parts.push(`if entity ${this.selectorToString(sub.selector)}`);
+              } else if (sub.varName) {
+                const sel = { kind: "@s", filters: sub.filters };
+                parts.push(`if entity ${this.selectorToString(sel)}`);
+              }
               break;
             case "unless_entity":
-              parts.push(`unless entity ${this.selectorToString(sub.selector)}`);
+              if (sub.selector) {
+                parts.push(`unless entity ${this.selectorToString(sub.selector)}`);
+              } else if (sub.varName) {
+                const sel = { kind: "@s", filters: sub.filters };
+                parts.push(`unless entity ${this.selectorToString(sel)}`);
+              }
               break;
             case "in":
               parts.push(`in ${sub.dimension}`);
@@ -3368,6 +3451,13 @@ var require_lowering = __commonJS({
         return { kind: "var", name: dst };
       }
       lowerAssignExpr(expr) {
+        if (this.constValues.has(expr.target)) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", `Cannot assign to constant '${expr.target}'`, getSpan(expr) ?? { line: 1, col: 1 });
+        }
+        const globalInfo = this.globalNames.get(expr.target);
+        if (globalInfo && !globalInfo.mutable) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", `Cannot assign to constant '${expr.target}'`, getSpan(expr) ?? { line: 1, col: 1 });
+        }
         const blockPosValue = this.resolveBlockPosExpr(expr.value);
         if (blockPosValue) {
           this.blockPosVars.set(expr.target, blockPosValue);
@@ -3758,6 +3848,23 @@ var require_lowering = __commonJS({
           this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`);
           return { kind: "var", name: dst };
         }
+        if (name === "data_merge") {
+          const target = args[0];
+          const nbt = args[1];
+          const nbtStr = this.exprToSnbt ? this.exprToSnbt(nbt) : this.exprToString(nbt);
+          if (target.kind === "selector") {
+            const sel = this.exprToTargetString(target);
+            this.builder.emitRaw(`data merge entity ${sel} ${nbtStr}`);
+          } else {
+            const targetStr = this.exprToString(target);
+            if (targetStr.match(/^~|^\d|^\^/)) {
+              this.builder.emitRaw(`data merge block ${targetStr} ${nbtStr}`);
+            } else {
+              this.builder.emitRaw(`data merge storage ${targetStr} ${nbtStr}`);
+            }
+          }
+          return { kind: "const", value: 0 };
+        }
         if (name === "set_new") {
           const setId = `__set_${this.foreachCounter++}`;
           this.builder.emitRaw(`data modify storage rs:sets ${setId} set value []`);
@@ -3960,6 +4067,15 @@ var require_lowering = __commonJS({
           }
           case "selector":
             return this.selectorToString(expr.sel);
+          case "unary":
+            if (expr.op === "-" && expr.operand.kind === "int_lit") {
+              return (-expr.operand.value).toString();
+            }
+            if (expr.op === "-" && expr.operand.kind === "float_lit") {
+              return Math.trunc(-expr.operand.value).toString();
+            }
+            const unaryOp = this.lowerExpr(expr);
+            return this.operandToVar(unaryOp);
           default:
             const op = this.lowerExpr(expr);
             return this.operandToVar(op);
@@ -4051,6 +4167,13 @@ var require_lowering = __commonJS({
         if (name === "clone") {
           if (args.length === 3 && pos0 && pos1 && pos2) {
             return `clone ${emitBlockPos(pos0)} ${emitBlockPos(pos1)} ${emitBlockPos(pos2)}`;
+          }
+          return null;
+        }
+        if (name === "summon") {
+          if (args.length >= 2 && pos1) {
+            const nbt = args[2] ? ` ${this.exprToString(args[2])}` : "";
+            return `summon ${this.exprToString(args[0])} ${emitBlockPos(pos1)}${nbt}`;
           }
           return null;
         }
@@ -4281,6 +4404,16 @@ var require_lowering = __commonJS({
           parts.push(`nbt=${filters.nbt}`);
         if (filters.gamemode)
           parts.push(`gamemode=${filters.gamemode}`);
+        if (filters.x)
+          parts.push(`x=${this.rangeToString(filters.x)}`);
+        if (filters.y)
+          parts.push(`y=${this.rangeToString(filters.y)}`);
+        if (filters.z)
+          parts.push(`z=${this.rangeToString(filters.z)}`);
+        if (filters.x_rotation)
+          parts.push(`x_rotation=${this.rangeToString(filters.x_rotation)}`);
+        if (filters.y_rotation)
+          parts.push(`y_rotation=${this.rangeToString(filters.y_rotation)}`);
         return this.finalizeSelector(parts.length ? `${kind}[${parts.join(",")}]` : kind);
       }
       finalizeSelector(selector) {
@@ -4300,16 +4433,19 @@ var require_lowering = __commonJS({
       }
     };
     exports2.Lowering = Lowering;
-    var LoweringBuilder = class {
+    var LoweringBuilder = class _LoweringBuilder {
       constructor() {
-        this.tempCount = 0;
         this.labelCount = 0;
         this.blocks = [];
         this.currentBlock = null;
         this.locals = /* @__PURE__ */ new Set();
       }
+      /** Reset the global temp counter (call between compilations). */
+      static resetTempCounter() {
+        _LoweringBuilder.globalTempId = 0;
+      }
       freshTemp() {
-        const name = `$t${this.tempCount++}`;
+        const name = `$_${_LoweringBuilder.globalTempId++}`;
         this.locals.add(name);
         return name;
       }
@@ -4374,6 +4510,7 @@ var require_lowering = __commonJS({
         };
       }
     };
+    LoweringBuilder.globalTempId = 0;
   }
 });
 
@@ -5149,7 +5286,7 @@ var require_mcfunction = __commonJS({
         `scoreboard objectives add ${OBJ} dummy`
       ];
       for (const g of module3.globals) {
-        loadLines.push(`scoreboard players set ${varRef(g)} ${OBJ} 0`);
+        loadLines.push(`scoreboard players set ${varRef(g.name)} ${OBJ} ${g.init}`);
       }
       for (const triggerName of triggerNames) {
         loadLines.push(`scoreboard objectives add ${triggerName} trigger`);
@@ -5189,6 +5326,11 @@ var require_mcfunction = __commonJS({
           lines.push(...emitTerm(block.term, ns, fn.name));
           const filePath = i === 0 ? `data/${ns}/function/${fn.name}.mcfunction` : `data/${ns}/function/${fn.name}/${block.label}.mcfunction`;
           files.push({ path: filePath, content: lines.join("\n") });
+        }
+      }
+      for (const fn of module3.functions) {
+        if (fn.isLoadInit) {
+          loadLines.push(`function ${ns}:${fn.name}`);
         }
       }
       files.push({
