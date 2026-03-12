@@ -413,6 +413,9 @@ export class Lowering {
       case 'foreach':
         this.lowerForeachStmt(stmt)
         break
+      case 'for_range':
+        this.lowerForRangeStmt(stmt)
+        break
       case 'match':
         this.lowerMatchStmt(stmt)
         break
@@ -608,6 +611,60 @@ export class Lowering {
 
     // Exit block
     this.builder.startBlock(exitLabel)
+  }
+
+  private lowerForRangeStmt(stmt: Extract<Stmt, { kind: 'for_range' }>): void {
+    const loopVar = `$${stmt.varName}`
+    const subFnName = `${this.currentFn}/__for_${this.foreachCounter++}`
+
+    // Initialize loop variable
+    this.varMap.set(stmt.varName, loopVar)
+    const startVal = this.lowerExpr(stmt.start)
+    if (startVal.kind === 'const') {
+      this.builder.emitRaw(`scoreboard players set ${loopVar} rs ${startVal.value}`)
+    } else if (startVal.kind === 'var') {
+      this.builder.emitRaw(`scoreboard players operation ${loopVar} rs = ${startVal.name} rs`)
+    }
+
+    // Call loop function
+    this.builder.emitRaw(`function ${this.namespace}:${subFnName}`)
+
+    // Generate loop sub-function
+    const savedBuilder = this.builder
+    const savedVarMap = new Map(this.varMap)
+    const savedContext = this.currentContext
+    const savedBlockPosVars = new Map(this.blockPosVars)
+
+    this.builder = new LoweringBuilder()
+    this.varMap = new Map(savedVarMap)
+    this.currentContext = savedContext
+    this.blockPosVars = new Map(savedBlockPosVars)
+
+    this.builder.startBlock('entry')
+
+    // Body
+    this.lowerBlock(stmt.body)
+
+    // Increment
+    this.builder.emitRaw(`scoreboard players add ${loopVar} rs 1`)
+
+    // Loop condition: execute if score matches ..<end-1> run function
+    const endVal = this.lowerExpr(stmt.end)
+    const endNum = endVal.kind === 'const' ? endVal.value - 1 : '?'
+    this.builder.emitRaw(`execute if score ${loopVar} rs matches ..${endNum} run function ${this.namespace}:${subFnName}`)
+
+    if (!this.builder.isBlockSealed()) {
+      this.builder.emitReturn()
+    }
+
+    const subFn = this.builder.build(subFnName, [], false)
+    this.functions.push(subFn)
+
+    // Restore
+    this.builder = savedBuilder
+    this.varMap = savedVarMap
+    this.currentContext = savedContext
+    this.blockPosVars = savedBlockPosVars
   }
 
   private lowerForeachStmt(stmt: Extract<Stmt, { kind: 'foreach' }>): void {
