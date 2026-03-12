@@ -29,6 +29,7 @@ Usage:
   redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>] [--target <target>]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
+  redscript fmt <file.rs> [file2.rs ...]
   redscript repl
   redscript version
 
@@ -36,6 +37,7 @@ Commands:
   compile   Compile a RedScript file to a Minecraft datapack
   watch     Watch a directory for .rs file changes, recompile, and hot reload
   check     Check a RedScript file for errors without generating output
+  fmt       Auto-format RedScript source files
   repl      Start an interactive RedScript REPL
   version   Print the RedScript version
 
@@ -407,6 +409,23 @@ async function main(): Promise<void> {
       }
       checkCommand(parsed.file)
       break
+
+    case 'fmt':
+    case 'format': {
+      const files = args.filter(a => a.endsWith('.rs'))
+      if (files.length === 0) {
+        console.error('Usage: redscript fmt <file.rs> [file2.rs ...]')
+        process.exit(1)
+      }
+      const { format } = require('./formatter')
+      for (const file of files) {
+        const content = fs.readFileSync(file, 'utf8')
+        const formatted = format(content)
+        fs.writeFileSync(file, formatted)
+        console.log(`Formatted: ${file}`)
+      }
+      break
+    }
 
     case 'repl':
       await startRepl(parsed.namespace ?? 'repl')
