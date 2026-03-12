@@ -176,9 +176,51 @@
     "selectors": {
       "patterns": [
         {
-          "comment": "Selector with or without filter args: @s @a @e[type=zombie,limit=1]",
-          "name": "variable.language.selector.redscript",
-          "match": "@[aesprnAESPRN](\\[[^\\]]*\\])?"
+          "comment": "Selector WITH arguments: @e[type=minecraft:zombie,distance=..8]",
+          "begin": "(@[aesprnAESPRN])(\\[)",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.selector.redscript" },
+            "2": { "name": "punctuation.section.selector.begin.redscript" }
+          },
+          "end": "\\]",
+          "endCaptures": {
+            "0": { "name": "punctuation.section.selector.end.redscript" }
+          },
+          "patterns": [
+            {
+              "comment": "Selector argument keys",
+              "name": "support.type.property-name.redscript",
+              "match": "\\b(type|name|tag|team|scores|nbt|predicate|gamemode|distance|level|x_rotation|y_rotation|x|y|z|dx|dy|dz|limit|sort|advancements|selector)\\b"
+            },
+            {
+              "comment": "Range operator: ..8, 1.., 1..10",
+              "name": "keyword.operator.range.selector.redscript",
+              "match": "\\.\\."
+            },
+            {
+              "comment": "Namespaced value e.g. minecraft:zombie",
+              "match": "\\b([a-z0-9_]+):([a-z0-9_./]+)",
+              "captures": {
+                "1": { "name": "entity.name.namespace.redscript" },
+                "2": { "name": "entity.name.type.entity.redscript" }
+              }
+            },
+            { "include": "#strings" },
+            { "include": "#numbers" },
+            {
+              "name": "keyword.operator.assignment.redscript",
+              "match": "="
+            },
+            {
+              "name": "keyword.operator.logical.redscript",
+              "match": "!"
+            }
+          ]
+        },
+        {
+          "comment": "Bare selector: @s @a @e @p @r @n (no arguments)",
+          "name": "keyword.other.selector.redscript",
+          "match": "@[aesprnAESPRN]\\b"
         }
       ]
     },
