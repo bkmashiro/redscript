@@ -921,6 +921,18 @@ export class Lowering {
         // Float stored as fixed-point × 1000
         return { kind: 'const', value: Math.round(expr.value * 1000) }
 
+      case 'byte_lit':
+        return { kind: 'const', value: expr.value }
+
+      case 'short_lit':
+        return { kind: 'const', value: expr.value }
+
+      case 'long_lit':
+        return { kind: 'const', value: expr.value }
+
+      case 'double_lit':
+        return { kind: 'const', value: Math.round(expr.value * 1000) }
+
       case 'bool_lit':
         return { kind: 'const', value: expr.value ? 1 : 0 }
 
@@ -1833,6 +1845,14 @@ export class Lowering {
         return expr.value.toString()
       case 'float_lit':
         return Math.trunc(expr.value).toString()
+      case 'byte_lit':
+        return `${expr.value}b`
+      case 'short_lit':
+        return `${expr.value}s`
+      case 'long_lit':
+        return `${expr.value}L`
+      case 'double_lit':
+        return `${expr.value}d`
       case 'bool_lit':
         return expr.value ? '1' : '0'
       case 'str_lit':
