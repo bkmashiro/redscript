@@ -125,9 +125,20 @@ function validateDocument(
       })
     }
   } catch (err: unknown) {
-    // Parse the error message for line/column info
     const msg = err instanceof Error ? err.message : String(err)
-    const range = extractRange(msg, doc)
+
+    // Try to get location from DiagnosticError.location first
+    let range: vscode.Range
+    const loc = (err as { location?: { line?: number; col?: number } }).location
+    if (loc?.line && loc?.col) {
+      const l = Math.max(0, loc.line - 1)
+      const c = Math.max(0, loc.col - 1)
+      range = new vscode.Range(l, c, l, c + 20)
+    } else {
+      // Fallback: parse the error message for line/column info
+      range = extractRange(msg, doc)
+    }
+
     docDiagnostics.push({
       message: msg,
       range,
