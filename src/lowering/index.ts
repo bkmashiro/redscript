@@ -644,6 +644,8 @@ export class Lowering {
         // Array literals should be handled in let statement
         return { kind: 'const', value: 0 }
     }
+
+    throw new Error(`Unhandled expression kind: ${(expr as { kind: string }).kind}`)
   }
 
   private lowerMemberExpr(expr: Extract<Expr, { kind: 'member' }>): Operand {
