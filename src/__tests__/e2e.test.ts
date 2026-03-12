@@ -292,6 +292,32 @@ fn test() {
       expect(fn).toContain('scoreboard objectives add kills playerKillCount "Kill Count"')
       expect(fn).toContain('scoreboard objectives remove kills')
     })
+
+    it('compiles bossbar builtins', () => {
+      const source = `
+fn test() {
+    bossbar_add("ns:health", "Boss Health");
+    bossbar_set_value("ns:health", 50);
+    bossbar_set_max("ns:health", 100);
+    bossbar_set_color("ns:health", "red");
+    bossbar_set_style("ns:health", "notched_10");
+    bossbar_set_visible("ns:health", true);
+    bossbar_set_players("ns:health", @a);
+    bossbar_remove("ns:health");
+    let current: int = bossbar_get_value("ns:health");
+}
+`
+      const fn = getFunction(compile(source), 'test')!
+      expect(fn).toContain('bossbar add ns:health {"text":"Boss Health"}')
+      expect(fn).toContain('bossbar set ns:health value 50')
+      expect(fn).toContain('bossbar set ns:health max 100')
+      expect(fn).toContain('bossbar set ns:health color red')
+      expect(fn).toContain('bossbar set ns:health style notched_10')
+      expect(fn).toContain('bossbar set ns:health visible true')
+      expect(fn).toContain('bossbar set ns:health players @a')
+      expect(fn).toContain('bossbar remove ns:health')
+      expect(fn).toMatch(/execute store result score \$t\d+ rs run bossbar get ns:health value/)
+    })
   })
 
   describe('Test 4: foreach', () => {

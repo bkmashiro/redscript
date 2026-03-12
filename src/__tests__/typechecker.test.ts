@@ -169,6 +169,15 @@ fn test() {
 `)
       expect(posErrors).toHaveLength(0)
     })
+
+    it('treats bossbar_get_value() as int', () => {
+      const errors = typeCheck(`
+fn test() {
+    let current: int = bossbar_get_value("ns:health");
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
   })
 
   describe('return type checking', () => {
