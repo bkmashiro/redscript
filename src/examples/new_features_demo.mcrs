@@ -1,0 +1,193 @@
+/**
+ * RedScript New Features Demo
+ * 展示 2026-03-12 新增的语言特性
+ */
+
+// ============================================
+// 1. 类型推断 (Type Inference)
+// ============================================
+fn type_inference_demo() {
+    // 不需要写 `: int`，编译器自动推断
+    let health = 100;
+    let name = "Steve";
+    let alive = true;
+    let speed = 1.5;
+    
+    // NBT 后缀也能推断
+    let damage = 20b;      // byte
+    let distance = 1000s;  // short
+    let bignum = 999999L;  // long
+    let precise = 3.14d;   // double
+    
+    say("Health: ${health}, Name: ${name}");
+}
+
+// ============================================
+// 2. for-range 循环 (For-Range Loops)
+// ============================================
+fn for_range_demo() {
+    // 从 0 到 9 循环
+    for i in 0..10 {
+        say("Count: ${i}");
+    }
+    
+    // 可以用于倒计时
+    for sec in 0..5 {
+        title(@a, "Starting in ${sec}...");
+    }
+}
+
+// ============================================
+// 3. NBT 结构化参数 (NBT Structured Params)
+// ============================================
+fn nbt_params_demo() {
+    // 给予带 NBT 的物品
+    give(@s, "minecraft:diamond_sword", 1, {
+        display: { Name: "Excalibur" },
+        Enchantments: [
+            { id: "minecraft:sharpness", lvl: 5 },
+            { id: "minecraft:unbreaking", lvl: 3 }
+        ]
+    });
+    
+    // 召唤带属性的实体
+    summon("minecraft:zombie", @s, {
+        CustomName: "Boss Zombie",
+        Health: 100.0,
+        Attributes: [
+            { Name: "generic.max_health", Base: 100.0 }
+        ]
+    });
+}
+
+// ============================================
+// 4. Set 数据结构 (Runtime Set)
+// ============================================
+fn set_demo() {
+    // 创建集合
+    let visited = set_new();
+    
+    // 使用方法语法添加元素
+    visited.add("spawn");
+    visited.add("castle");
+    visited.add("dungeon");
+    
+    // 检查是否存在
+    if (visited.contains("castle")) {
+        say("You've been to the castle!");
+    }
+    
+    // 删除元素
+    visited.remove("spawn");
+    
+    // 清空集合
+    visited.clear();
+}
+
+// ============================================
+// 5. 方法语法糖 (Method Syntax Sugar)
+// ============================================
+fn method_syntax_demo() {
+    let items: string[] = [];
+    
+    // obj.method(args) → method(obj, args)
+    items.push("sword");
+    items.push("shield");
+    items.push("potion");
+    
+    let count = items.len();
+    say("You have ${count} items");
+    
+    // Set 也可以用方法语法
+    let tags = set_new();
+    tags.add("vip");
+    tags.add("admin");
+    
+    if (tags.contains("admin")) {
+        say("Welcome, admin!");
+    }
+}
+
+// ============================================
+// 6. #mc_name 语法 (MC Identifier Syntax)
+// ============================================
+fn mc_name_demo() {
+    // #name 编译为裸 MC 名称（不带引号）
+    scoreboard_set(@s, #kills, 0);
+    scoreboard_add(@s, #deaths, 1);
+    
+    let score = scoreboard_get(@s, #points);
+    
+    // 用于 tag
+    tag_add(@s, #vip);
+    
+    // 用于 team
+    team_join(@s, #red);
+    
+    // 对比：字符串仍需引号
+    give(@s, "minecraft:diamond", 1);
+}
+
+// ============================================
+// 7. 块注释 (Block Comments)
+// ============================================
+
+/* 
+ * 这是块注释
+ * 可以跨越多行
+ */
+
+/**
+ * 这是文档注释
+ * @param player 目标玩家
+ */
+fn documented_function() {
+    say("Hello!");
+}
+
+// ============================================
+// 综合示例：简单游戏
+// ============================================
+
+struct Player {
+    score: int,
+    level: int,
+    visited: string  // set ID
+}
+
+fn init_player() {
+    let visited_set = set_new();
+    let p: Player = {
+        score: 0,
+        level: 1,
+        visited: visited_set
+    };
+    
+    // 记录出生点（使用 set_add，因为 visited 是 string ID）
+    set_add(p.visited, "spawn");
+    
+    scoreboard_set(@s, #score, p.score);
+    scoreboard_set(@s, #level, p.level);
+}
+
+@tick(rate=20)
+fn game_tick() {
+    // 每秒检查一次
+    for i in 0..1 {
+        let score = scoreboard_get(@s, #score);
+        if (score >= 100) {
+            title(@s, "Level Up!");
+            scoreboard_set(@s, #level, 2);
+        }
+    }
+}
+
+fn reward_player(amount: int) {
+    // 类型推断 + NBT 参数
+    let bonus = amount * 2;
+    scoreboard_add(@s, #score, bonus);
+    
+    give(@s, "minecraft:gold_ingot", amount, {
+        display: { Name: "Reward Gold" }
+    });
+}
