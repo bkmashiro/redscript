@@ -11,7 +11,7 @@ import { Lexer } from './lexer'
 import { Parser } from './parser'
 import { Lowering } from './lowering'
 import { optimize } from './optimizer/passes'
-import { generateDatapack, DatapackFile } from './codegen/mcfunction'
+import { generateDatapackWithStats, DatapackFile } from './codegen/mcfunction'
 import { DiagnosticError, formatError, parseErrorMessage } from './diagnostics'
 import type { IRModule } from './ir/types'
 import type { Program } from './ast/types'
@@ -33,6 +33,7 @@ export interface CompileOptions {
 export interface CompileResult {
   success: boolean
   files?: DatapackFile[]
+  advancements?: DatapackFile[]
   ast?: Program
   ir?: IRModule
   error?: DiagnosticError
@@ -133,9 +134,15 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       : ir
 
     // Code generation
-    const files = generateDatapack(optimized)
+    const generated = generateDatapackWithStats(optimized)
 
-    return { success: true, files, ast, ir: optimized }
+    return {
+      success: true,
+      files: [...generated.files, ...generated.advancements],
+      advancements: generated.advancements,
+      ast,
+      ir: optimized,
+    }
   } catch (err) {
     // Already a DiagnosticError
     if (err instanceof DiagnosticError) {

@@ -1,4 +1,4 @@
-import { generateDatapack } from '../codegen/mcfunction'
+import { generateDatapack, generateDatapackWithStats } from '../codegen/mcfunction'
 import type { IRModule } from '../ir/types'
 
 describe('generateDatapack', () => {
@@ -103,5 +103,26 @@ describe('generateDatapack', () => {
     const entry = files.find(f => f.path.endsWith('check.mcfunction'))
     expect(entry?.content).toContain('execute if score $cond rs matches 1..')
     expect(entry?.content).toContain('execute if score $cond rs matches ..0')
+  })
+
+  it('generates advancement json for event decorators', () => {
+    const mod: IRModule = {
+      namespace: 'mypack',
+      globals: [],
+      functions: [{
+        name: 'on_mine_diamond',
+        params: [],
+        locals: [],
+        blocks: [{ label: 'entry', instrs: [], term: { op: 'return' } }],
+        eventTrigger: { kind: 'advancement', value: 'story/mine_diamond' },
+      }],
+    }
+
+    const result = generateDatapackWithStats(mod)
+    const advancement = result.advancements.find(f => f.path === 'data/mypack/advancements/on_advancement_on_mine_diamond.json')
+    expect(advancement).toBeDefined()
+    const json = JSON.parse(advancement!.content)
+    expect(json.criteria.trigger.trigger).toBe('minecraft:story/mine_diamond')
+    expect(json.rewards.function).toBe('mypack:on_mine_diamond')
   })
 })

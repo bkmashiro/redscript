@@ -9,7 +9,7 @@ import { Parser } from '../parser'
 import { Lowering } from '../lowering'
 import { TypeChecker } from '../typechecker'
 import { optimize } from '../optimizer/passes'
-import { generateDatapack, DatapackFile } from '../codegen/mcfunction'
+import { generateDatapack, generateDatapackWithStats, DatapackFile } from '../codegen/mcfunction'
 import type { IRModule } from '../ir/types'
 
 // ---------------------------------------------------------------------------
@@ -143,6 +143,30 @@ fn main() {
       expect(mainFn).toContain('data modify storage rs:strings name set value "Player"')
       expect(mainFn).toContain('run data get storage rs:strings name')
       expect(mainFn).toContain('"objective":"rs"')
+    })
+  })
+
+  describe('advancement event decorators', () => {
+    it('generates advancement json with reward function path', () => {
+      const source = `
+@on_advancement("story/mine_diamond")
+fn on_mine_diamond() {
+    title(@s, "Diamond");
+}
+`
+      const tokens = new Lexer(source).tokenize()
+      const ast = new Parser(tokens).parse('test')
+      const ir = new Lowering('test').lower(ast)
+      const optimized: IRModule = {
+        ...ir,
+        functions: ir.functions.map(fn => optimize(fn)),
+      }
+      const generated = generateDatapackWithStats(optimized)
+      const advancement = generated.advancements.find(f => f.path === 'data/test/advancements/on_advancement_on_mine_diamond.json')
+      expect(advancement).toBeDefined()
+      const content = JSON.parse(advancement!.content)
+      expect(content.criteria.trigger.trigger).toBe('minecraft:story/mine_diamond')
+      expect(content.rewards.function).toBe('test:on_mine_diamond')
     })
   })
 

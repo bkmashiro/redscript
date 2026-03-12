@@ -102,6 +102,10 @@ export interface IRFunction {
   isTickLoop?: boolean     // true → Repeat command block (runs every tick)
   isTriggerHandler?: boolean  // true → handles a trigger event
   triggerName?: string        // the trigger objective name
+  eventTrigger?: {
+    kind: 'advancement' | 'craft' | 'death' | 'login' | 'join_team'
+    value?: string
+  }
 }
 
 // ---------------------------------------------------------------------------

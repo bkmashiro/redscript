@@ -94,6 +94,14 @@ describe('Parser', () => {
       const fn = program.declarations[0]
       expect(fn.decorators).toHaveLength(2)
     })
+
+    it('parses advancement and death decorators', () => {
+      const program = parse('@on_advancement("story/mine_diamond")\n@on_death\nfn handler() {}')
+      expect(program.declarations[0].decorators).toEqual([
+        { name: 'on_advancement', args: { advancement: 'story/mine_diamond' } },
+        { name: 'on_death' },
+      ])
+    })
   })
 
   describe('types', () => {

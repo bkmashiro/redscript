@@ -740,6 +740,12 @@ fn test() {
       expect(fn.isTriggerHandler).toBe(true)
       expect(fn.triggerName).toBe('my_trigger')
     })
+
+    it('marks @on_advancement function for advancement json generation', () => {
+      const ir = compile('@on_advancement("story/mine_diamond") fn handle_advancement() {}')
+      const fn = getFunction(ir, 'handle_advancement')!
+      expect(fn.eventTrigger).toEqual({ kind: 'advancement', value: 'story/mine_diamond' })
+    })
   })
 
   describe('selectors', () => {

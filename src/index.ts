@@ -26,6 +26,7 @@ export interface CompileOptions {
 
 export interface CompileResult {
   files: DatapackFile[]
+  advancements: DatapackFile[]
   ast: Program
   ir: IRModule
   typeErrors?: DiagnosticError[]
@@ -79,7 +80,15 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const generated = generateDatapackWithStats(optimizedIR)
   mergeOptimizationStats(optimizationStats, generated.stats)
 
-  return { files: generated.files, ast, ir: optimizedIR, typeErrors, warnings: lowering.warnings, stats: optimizationStats }
+  return {
+    files: [...generated.files, ...generated.advancements],
+    advancements: generated.advancements,
+    ast,
+    ir: optimizedIR,
+    typeErrors,
+    warnings: lowering.warnings,
+    stats: optimizationStats,
+  }
 }
 
 /**

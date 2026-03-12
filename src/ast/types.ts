@@ -141,8 +141,14 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'on_trigger'
-  args?: { rate?: number; trigger?: string }
+  name: 'tick' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team'
+  args?: {
+    rate?: number
+    trigger?: string
+    advancement?: string
+    item?: string
+    team?: string
+  }
 }
 
 // ---------------------------------------------------------------------------

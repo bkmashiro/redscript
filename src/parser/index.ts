@@ -261,13 +261,13 @@ export class Parser {
   }
 
   private parseDecoratorValue(value: string): Decorator {
-    // Parse @tick or @tick(rate=20) or @on_trigger("name")
+    // Parse @tick or @on_trigger("name") or @on_advancement("story/mine_diamond")
     const match = value.match(/^@(\w+)(?:\(([^)]*)\))?$/)
     if (!match) {
       this.error(`Invalid decorator: ${value}`)
     }
 
-    const name = match[1] as 'tick' | 'on_trigger'
+    const name = match[1] as Decorator['name']
     const argsStr = match[2]
 
     if (!argsStr) {
@@ -276,11 +276,19 @@ export class Parser {
 
     const args: Decorator['args'] = {}
 
-    // Handle @on_trigger("name") format - just a string literal
-    if (name === 'on_trigger') {
+    // Handle @on_trigger("name"), @on_advancement("id"), @on_craft("item"), @on_join_team("team")
+    if (name === 'on_trigger' || name === 'on_advancement' || name === 'on_craft' || name === 'on_join_team') {
       const strMatch = argsStr.match(/^"([^"]*)"$/)
       if (strMatch) {
-        args.trigger = strMatch[1]
+        if (name === 'on_trigger') {
+          args.trigger = strMatch[1]
+        } else if (name === 'on_advancement') {
+          args.advancement = strMatch[1]
+        } else if (name === 'on_craft') {
+          args.item = strMatch[1]
+        } else if (name === 'on_join_team') {
+          args.team = strMatch[1]
+        }
         return { name, args }
       }
     }
@@ -292,6 +300,12 @@ export class Parser {
         args.rate = parseInt(val, 10)
       } else if (key === 'trigger') {
         args.trigger = val
+      } else if (key === 'advancement') {
+        args.advancement = val
+      } else if (key === 'item') {
+        args.item = val
+      } else if (key === 'team') {
+        args.team = val
       }
     }
 

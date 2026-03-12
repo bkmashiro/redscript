@@ -236,11 +236,13 @@ function applyFunctionOptimization(
 
 export interface DatapackGenerationResult {
   files: DatapackFile[]
+  advancements: DatapackFile[]
   stats: OptimizationStats
 }
 
 export function generateDatapackWithStats(module: IRModule): DatapackGenerationResult {
   const files: DatapackFile[] = []
+  const advancements: DatapackFile[] = []
   const ns = module.namespace
 
   // Collect all trigger handlers
@@ -374,12 +376,70 @@ export function generateDatapackWithStats(module: IRModule): DatapackGenerationR
     })
   }
 
+  for (const fn of module.functions) {
+    const eventTrigger = fn.eventTrigger
+    if (!eventTrigger) {
+      continue
+    }
+
+    let path = ''
+    let criteria: Record<string, unknown> = {}
+
+    switch (eventTrigger.kind) {
+      case 'advancement':
+        path = `data/${ns}/advancements/on_advancement_${fn.name}.json`
+        criteria = {
+          trigger: {
+            trigger: `minecraft:${eventTrigger.value}`,
+          },
+        }
+        break
+      case 'craft':
+        path = `data/${ns}/advancements/on_craft_${fn.name}.json`
+        criteria = {
+          crafted: {
+            trigger: 'minecraft:inventory_changed',
+            conditions: {
+              items: [
+                {
+                  items: [eventTrigger.value],
+                },
+              ],
+            },
+          },
+        }
+        break
+      case 'death':
+        path = `data/${ns}/advancements/on_death_${fn.name}.json`
+        criteria = {
+          death: {
+            trigger: 'minecraft:entity_killed_player',
+          },
+        }
+        break
+      case 'login':
+      case 'join_team':
+        continue
+    }
+
+    advancements.push({
+      path,
+      content: JSON.stringify({
+        criteria,
+        rewards: {
+          function: `${ns}:${fn.name}`,
+        },
+      }, null, 2),
+    })
+  }
+
   const optimized = applyFunctionOptimization(files)
   const stats = createEmptyOptimizationStats()
   mergeOptimizationStats(stats, optimized.stats)
-  return { files: optimized.files, stats }
+  return { files: optimized.files, advancements, stats }
 }
 
 export function generateDatapack(module: IRModule): DatapackFile[] {
-  return generateDatapackWithStats(module).files
+  const generated = generateDatapackWithStats(module)
+  return [...generated.files, ...generated.advancements]
 }

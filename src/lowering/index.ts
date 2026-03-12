@@ -260,6 +260,33 @@ export class Lowering {
       irFn.triggerName = triggerName
     }
 
+    const eventDec = fn.decorators.find(d =>
+      d.name === 'on_advancement' ||
+      d.name === 'on_craft' ||
+      d.name === 'on_death' ||
+      d.name === 'on_login' ||
+      d.name === 'on_join_team'
+    )
+    if (eventDec) {
+      switch (eventDec.name) {
+        case 'on_advancement':
+          irFn.eventTrigger = { kind: 'advancement', value: eventDec.args?.advancement }
+          break
+        case 'on_craft':
+          irFn.eventTrigger = { kind: 'craft', value: eventDec.args?.item }
+          break
+        case 'on_death':
+          irFn.eventTrigger = { kind: 'death' }
+          break
+        case 'on_login':
+          irFn.eventTrigger = { kind: 'login' }
+          break
+        case 'on_join_team':
+          irFn.eventTrigger = { kind: 'join_team', value: eventDec.args?.team }
+          break
+      }
+    }
+
     // Handle tick rate counter if needed
     if (tickRate && tickRate > 1) {
       this.wrapWithTickRate(irFn, tickRate)
