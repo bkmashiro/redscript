@@ -715,11 +715,79 @@ function findJsDocAbove(document: vscode.TextDocument, declLine: number): string
  * Find the line where `fn <name>` is declared in the document.
  */
 function findFnDeclLine(document: vscode.TextDocument, name: string): number | null {
-  const re = new RegExp(`^\\s*(?:@[^\\n]*\\n\\s*)*fn\\s+${name}\\s*\\(`, 'm')
+  const re = new RegExp(`\\bfn\\s+${escapeRe(name)}\\s*\\(`, 'm')
   const text = document.getText()
   const match = re.exec(text)
   if (!match) return null
   return document.positionAt(match.index).line
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// ---------------------------------------------------------------------------
+// Variable / let / const hover
+// ---------------------------------------------------------------------------
+
+interface VarDecl { name: string; type: string; kind: 'let' | 'const' }
+
+function findVarDecls(document: vscode.TextDocument): VarDecl[] {
+  const text = document.getText()
+  const re = /\b(let|const)\s+(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g
+  const decls: VarDecl[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    decls.push({ kind: m[1] as 'let' | 'const', name: m[2], type: m[3] })
+  }
+  return decls
+}
+
+// ---------------------------------------------------------------------------
+// Struct hover
+// ---------------------------------------------------------------------------
+
+interface StructField { name: string; type: string }
+interface StructDecl  { name: string; fields: StructField[] }
+
+function findStructDecls(document: vscode.TextDocument): StructDecl[] {
+  const text = document.getText()
+  // Match: struct Name { field: Type, ... }
+  const structRe = /\bstruct\s+(\w+)\s*\{([^}]*)\}/gs
+  const decls: StructDecl[] = []
+  let m: RegExpExecArray | null
+  while ((m = structRe.exec(text)) !== null) {
+    const name = m[1]
+    const body = m[2]
+    const fieldRe = /\b(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g
+    const fields: StructField[] = []
+    let fm: RegExpExecArray | null
+    while ((fm = fieldRe.exec(body)) !== null) {
+      fields.push({ name: fm[1], type: fm[2] })
+    }
+    decls.push({ name, fields })
+  }
+  return decls
+}
+
+function formatStructHover(decl: StructDecl): vscode.MarkdownString {
+  const md = new vscode.MarkdownString('', true)
+  const lines = [`struct ${decl.name} {`]
+  for (const f of decl.fields) lines.push(`    ${f.name}: ${f.type},`)
+  lines.push('}')
+  md.appendCodeblock(lines.join('\n'), 'redscript')
+  return md
+}
+
+// ---------------------------------------------------------------------------
+// #mc_name hover
+// ---------------------------------------------------------------------------
+
+function formatMcNameHover(name: string): vscode.MarkdownString {
+  const md = new vscode.MarkdownString('', true)
+  md.appendCodeblock(`#${name}`, 'redscript')
+  md.appendMarkdown(`MC identifier \`${name}\`\n\nUsed as an objective, tag, team, or gamerule name. Compiles to the bare name \`${name}\` without quotes.`)
+  return md
 }
 
 // ---------------------------------------------------------------------------
@@ -730,34 +798,90 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.languages.registerHoverProvider('redscript', {
       provideHover(document, position) {
-        // Check if the cursor is on a selector (@s, @a, @e[...])
+        const line = document.lineAt(position.line).text
+
+        // ── #mc_name hover ──────────────────────────────────────
+        const mcRange = document.getWordRangeAtPosition(position, /#[a-zA-Z_][a-zA-Z0-9_]*/)
+        if (mcRange) {
+          const raw = document.getText(mcRange)
+          return new vscode.Hover(formatMcNameHover(raw.slice(1)), mcRange)
+        }
+
+        // ── Selector hover ──────────────────────────────────────
         const selectorRange = document.getWordRangeAtPosition(
-          position,
-          /@[aesprnAESPRN](?:\[[^\]]*\])?/
+          position, /@[aesprnAESPRN](?:\[[^\]]*\])?/
         )
         if (selectorRange) {
-          const raw = document.getText(selectorRange)
-          return new vscode.Hover(formatSelectorHover(raw), selectorRange)
+          return new vscode.Hover(formatSelectorHover(document.getText(selectorRange)), selectorRange)
         }
 
         const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/)
-        if (!range) return
+        if (!range) return undefined
 
         const word = document.getText(range)
 
-        // Builtin function
-        const builtin = BUILTINS[word]
-        if (builtin) return new vscode.Hover(formatDoc(builtin), range)
+        // ── Variable / let / const hover ────────────────────────
+        // Check if this word has a let/const declaration in the document
+        const varDecls = findVarDecls(document)
+        const varDecl = varDecls.find(v => v.name === word)
+        if (varDecl) {
+          const md = new vscode.MarkdownString('', true)
+          md.appendCodeblock(`${varDecl.kind} ${varDecl.name}: ${varDecl.type}`, 'redscript')
+          return new vscode.Hover(md, range)
+        }
 
-        // User-defined function — look for JSDoc comment above declaration
-        const declLine = findFnDeclLine(document, word)
-        if (declLine !== null) {
-          const jsdoc = findJsDocAbove(document, declLine)
-          if (jsdoc) {
+        // ── Builtin function (only when used as a call, not variable name) ──
+        // Only show builtin docs if the word is followed by '(' on the same line
+        const afterWord = line.slice(range.end.character).trimStart()
+        const isCall = afterWord.startsWith('(')
+        if (isCall) {
+          const builtin = BUILTINS[word]
+          if (builtin) return new vscode.Hover(formatDoc(builtin), range)
+        }
+
+        // ── Struct type hover ───────────────────────────────────
+        const structDecls = findStructDecls(document)
+        const structDecl = structDecls.find(s => s.name === word)
+        if (structDecl) {
+          return new vscode.Hover(formatStructHover(structDecl), range)
+        }
+
+        // ── Member access: turret.tag ───────────────────────────
+        // Check if word is preceded by '.' (member access)
+        const charBefore = range.start.character > 0
+          ? line.slice(range.start.character - 1, range.start.character)
+          : ''
+        if (charBefore === '.') {
+          // Find the object name before the dot
+          const beforeDot = line.slice(0, range.start.character - 1)
+          const objMatch = beforeDot.match(/([A-Za-z_]\w*)$/)
+          if (objMatch) {
+            const objName = objMatch[1]
+            // Find the type of the object from variable declarations
+            const objVar = varDecls.find(v => v.name === objName)
+            if (objVar) {
+              const objStruct = structDecls.find(s => s.name === objVar.type)
+              if (objStruct) {
+                const field = objStruct.fields.find(f => f.name === word)
+                if (field) {
+                  const md = new vscode.MarkdownString('', true)
+                  md.appendCodeblock(`(field) ${objStruct.name}.${field.name}: ${field.type}`, 'redscript')
+                  return new vscode.Hover(md, range)
+                }
+              }
+            }
+          }
+        }
+
+        // ── User-defined function + JSDoc ───────────────────────
+        // Only if used as a call
+        if (isCall) {
+          const declLine = findFnDeclLine(document, word)
+          if (declLine !== null) {
             const md = new vscode.MarkdownString('', true)
+            const jsdoc = findJsDocAbove(document, declLine)
             md.appendCodeblock(`fn ${word}(...)`, 'redscript')
-            md.appendText('\n')
-            md.appendMarkdown(jsdoc)
+            if (jsdoc) { md.appendText('\n'); md.appendMarkdown(jsdoc) }
             return new vscode.Hover(md, range)
           }
         }
@@ -767,3 +891,4 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
     })
   )
 }
+

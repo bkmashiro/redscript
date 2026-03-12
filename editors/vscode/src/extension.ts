@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import { registerHoverProvider } from './hover'
+import { registerCodeActions } from './codeactions'
 import { registerSymbolProviders } from './symbols'
 // The compiler is bundled directly into this extension by esbuild.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -61,6 +62,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Register hover documentation
   registerHoverProvider(context)
+
+  // Register code actions (quick fixes)
+  registerCodeActions(context)
 
   // Register Go-to-Definition and Find-References
   registerSymbolProviders(context)
