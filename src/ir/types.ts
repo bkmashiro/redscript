@@ -83,6 +83,12 @@ export interface IRBlock {
   term: Terminator
 }
 
+export interface IRCommand {
+  cmd: string
+  conditional?: boolean
+  label?: string
+}
+
 // ---------------------------------------------------------------------------
 // Function
 // ---------------------------------------------------------------------------
@@ -92,6 +98,7 @@ export interface IRFunction {
   params: string[]         // parameter names (passed via fake players)
   locals: string[]         // all local variable names
   blocks: IRBlock[]        // blocks[0] = entry block
+  commands?: IRCommand[]   // structure target command stream
   isTickLoop?: boolean     // true → Repeat command block (runs every tick)
   isTriggerHandler?: boolean  // true → handles a trigger event
   triggerName?: string        // the trigger objective name
