@@ -113,6 +113,9 @@ export class TypeChecker {
       case 'as_at':
         this.checkBlock(stmt.body)
         break
+      case 'execute':
+        this.checkBlock(stmt.body)
+        break
       case 'expr':
         this.checkExpr(stmt.expr)
         break
@@ -226,6 +229,12 @@ export class TypeChecker {
       case 'array_lit':
         for (const elem of expr.elements) {
           this.checkExpr(elem)
+        }
+        break
+
+      case 'static_call':
+        for (const arg of expr.args) {
+          this.checkExpr(arg)
         }
         break
 
