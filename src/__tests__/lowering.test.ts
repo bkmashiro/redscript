@@ -272,6 +272,25 @@ fn test() -> int {
       const fn = getFunction(ir, 'foo')!
       expect(fn.blocks.length).toBeGreaterThanOrEqual(3) // entry, then, else, merge
     })
+
+    it('lowers entity is-checks to execute if entity type filters', () => {
+      const ir = compile(`
+fn scan() {
+  foreach (e in @e) {
+    if (e is Player) {
+      kill(e);
+    }
+  }
+}
+`)
+      const foreachFn = ir.functions.find(fn => fn.name.includes('scan/foreach'))!
+      const rawCmds = getRawCommands(foreachFn)
+      const isCheckCmd = rawCmds.find(cmd => cmd.startsWith('execute if entity @s[type=player] run function test:scan/then_'))
+      expect(isCheckCmd).toBeDefined()
+
+      const thenFn = ir.functions.find(fn => fn.name.startsWith('scan/then_'))!
+      expect(getRawCommands(thenFn)).toContain('kill @s')
+    })
   })
 
   describe('while statements', () => {
@@ -890,6 +909,40 @@ fn test() {
         message: 'Quoted selector "@s" is deprecated; pass @s without quotes',
       }))
     })
+
+    it('keeps already-qualified scoreboard objectives unchanged', () => {
+      const ir = compile('fn test() { scoreboard_set(@s, "custom.timer", 5); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('scoreboard players set @s custom.timer 5')
+    })
+  })
+
+  describe('timer builtins', () => {
+    it('lowers timer builtins into schedule commands and wrapper functions', () => {
+      const ir = compile(`
+fn test() {
+  let intervalId: int = setInterval(20, () => {
+    say("tick");
+  });
+  setTimeout(100, () => {
+    say("later");
+  });
+  clearInterval(intervalId);
+}
+`)
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('schedule function test:__interval_0 20t')
+      expect(rawCmds).toContain('schedule function test:__timeout_0 100t')
+      expect(rawCmds).toContain('schedule clear test:__interval_0')
+
+      const intervalFn = getFunction(ir, '__interval_0')!
+      expect(getRawCommands(intervalFn)).toEqual([
+        'function test:__interval_body_0',
+        'schedule function test:__interval_0 20t',
+      ])
+    })
   })
 
   describe('decorators', () => {
@@ -910,6 +963,14 @@ fn test() {
       const ir = compile('@on_advancement("story/mine_diamond") fn handle_advancement() {}')
       const fn = getFunction(ir, 'handle_advancement')!
       expect(fn.eventTrigger).toEqual({ kind: 'advancement', value: 'story/mine_diamond' })
+    })
+
+    it('marks @on event functions and binds player to @s', () => {
+      const ir = compile('@on(PlayerDeath) fn handle_death(player: Player) { tp(player, @p); }')
+      const fn = getFunction(ir, 'handle_death')!
+      expect(fn.eventHandler).toEqual({ eventType: 'PlayerDeath', tag: 'rs.just_died' })
+      expect(fn.params).toEqual([])
+      expect(getRawCommands(fn)).toContain('tp @s @p')
     })
   })
 

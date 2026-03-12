@@ -103,6 +103,13 @@ describe('Parser', () => {
         { name: 'on_death' },
       ])
     })
+
+    it('parses @on event decorators', () => {
+      const program = parse('@on(PlayerDeath)\nfn handle_death(player: Player) {}')
+      expect(program.declarations[0].decorators).toEqual([
+        { name: 'on', args: { eventType: 'PlayerDeath' } },
+      ])
+    })
   })
 
   describe('types', () => {
@@ -174,6 +181,30 @@ impl Timer {
         default: undefined,
       })
     })
+
+    it('parses impl blocks with static and instance methods', () => {
+      const program = parse(`
+struct Point { x: int, y: int }
+
+impl Point {
+  fn new(x: int, y: int) -> Point {
+    return { x: x, y: y };
+  }
+
+  fn distance(self) -> int {
+    return self.x + self.y;
+  }
+}
+`)
+      expect(program.implBlocks).toHaveLength(1)
+      expect(program.implBlocks[0].typeName).toBe('Point')
+      expect(program.implBlocks[0].methods[0].params.map(param => param.name)).toEqual(['x', 'y'])
+      expect(program.implBlocks[0].methods[1].params[0]).toEqual({
+        name: 'self',
+        type: { kind: 'struct', name: 'Point' },
+        default: undefined,
+      })
+    })
   })
 
   describe('statements', () => {
@@ -227,6 +258,18 @@ impl Timer {
         kind: 'is_check',
         expr: { kind: 'ident', name: 'e' },
         entityType: 'Player',
+      })
+    })
+
+    it('parses entity is-checks inside foreach bodies', () => {
+      const stmt = parseStmt('foreach (e in @e) { if (e is Zombie) { kill(e); } }')
+      expect(stmt.kind).toBe('foreach')
+      const innerIf = (stmt as any).body[0]
+      expect(innerIf.kind).toBe('if')
+      expect(innerIf.cond).toEqual({
+        kind: 'is_check',
+        expr: { kind: 'ident', name: 'e' },
+        entityType: 'Zombie',
       })
     })
 

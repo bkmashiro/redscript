@@ -227,6 +227,16 @@ fn test() {
       expect(errors).toHaveLength(0)
     })
 
+    it('rejects timer callbacks with the wrong return type', () => {
+      const errors = typeCheck(`
+fn test() {
+    setTimeout(100, () => 1);
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('Return type mismatch: expected void, got int')
+    })
+
     it('allows impl instance methods with inferred self type', () => {
       const errors = typeCheck(`
 struct Timer { duration: int }
@@ -245,6 +255,30 @@ fn test() {
       expect(errors).toHaveLength(0)
     })
 
+    it('records then-branch entity narrowing for is-checks', () => {
+      const source = `
+fn test() {
+    foreach (e in @e) {
+        if (e is Player) {
+            kill(e);
+        }
+    }
+}
+`
+      const tokens = new Lexer(source).tokenize()
+      const ast = new Parser(tokens).parse('test')
+      const checker = new TypeChecker(source) as any
+      checker.check(ast)
+
+      const foreachStmt = ast.declarations[0].body[0] as any
+      const ifStmt = foreachStmt.body[0]
+      expect(checker.getThenBranchNarrowing(ifStmt.cond)).toEqual({
+        name: 'e',
+        type: { kind: 'entity', entityType: 'Player' },
+        mutable: false,
+      })
+    })
+
     it('allows static impl method calls', () => {
       const errors = typeCheck(`
 struct Timer { duration: int }
@@ -260,6 +294,37 @@ fn test() {
 }
 `)
       expect(errors).toHaveLength(0)
+    })
+
+    it('rejects using is-checks on non-entity values', () => {
+      const errors = typeCheck(`
+fn test() {
+    let x: int = 1;
+    if (x is Player) {
+        say("nope");
+    }
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain("'is' checks require an entity expression, got int")
+    })
+
+    it('rejects calling instance impl methods as static methods', () => {
+      const errors = typeCheck(`
+struct Point { x: int, y: int }
+
+impl Point {
+  fn distance(self) -> int {
+    return self.x + self.y;
+  }
+}
+
+fn test() {
+  let total: int = Point::distance();
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain("Method 'Point::distance' is an instance method")
     })
   })
 
@@ -466,6 +531,36 @@ fn broken() -> int {
       // Should have multiple errors: 2 undefined vars, return type mismatch
       // (missing_func is not checked since it's not defined as a user function)
       expect(errors.length).toBeGreaterThanOrEqual(3)
+    })
+  })
+
+  describe('event handlers', () => {
+    it('accepts matching @on event signatures', () => {
+      const errors = typeCheck(`
+@on(PlayerDeath)
+fn handle_death(player: Player) {
+    tp(player, @p);
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('rejects unknown event types', () => {
+      const errors = typeCheck(`
+@on(NotARealEvent)
+fn handle(player: Player) {}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain("Unknown event type 'NotARealEvent'")
+    })
+
+    it('rejects mismatched event signatures', () => {
+      const errors = typeCheck(`
+@on(BlockBreak)
+fn handle_break(player: Player) {}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('must declare 2 parameter(s)')
     })
   })
 })

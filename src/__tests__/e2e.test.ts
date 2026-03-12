@@ -174,6 +174,167 @@ fn main() {
     })
   })
 
+  describe('is type narrowing', () => {
+    it('type checks and compiles entity narrowing inside foreach blocks', () => {
+      const source = `
+fn main() {
+    foreach (e in @e) {
+        if (e is Player) {
+            kill(e);
+        }
+        if (e is Zombie) {
+            kill(e);
+        }
+    }
+}
+`
+      expect(typeCheck(source)).toEqual([])
+
+      const files = compile(source)
+      const mainFn = getFunction(files, 'main')
+      const foreachFn = getSubFunction(files, 'main', 'foreach_0')
+      const thenFiles = files.filter(file => file.path.includes('/main/then_') && file.content.includes('kill @s'))
+
+      expect(mainFn).toContain('execute as @e run function test:main/foreach_0')
+      expect(foreachFn).toContain('execute if entity @s[type=player] run function test:main/then_')
+      expect(foreachFn).toContain('execute if entity @s[type=zombie] run function test:main/then_')
+      expect(thenFiles).toHaveLength(2)
+    })
+  })
+
+  describe('impl blocks', () => {
+    it('compiles static and instance impl methods end to end', () => {
+      const source = `
+struct Point { x: int, y: int }
+
+impl Point {
+    fn new(x: int, y: int) -> Point {
+        return { x: x, y: y };
+    }
+
+    fn distance(self) -> int {
+        return self.x + self.y;
+    }
+}
+
+fn main() {
+    let p: Point = Point::new(1, 2);
+    let d: int = p.distance();
+    say("\${d}");
+}
+`
+      expect(typeCheck(source)).toEqual([])
+
+      const files = compile(source)
+      const mainFn = getFunction(files, 'main')
+      const staticFn = getFunction(files, 'Point_new')
+      const instanceFn = getFunction(files, 'Point_distance')
+
+      expect(mainFn).toContain('function test:Point_new')
+      expect(mainFn).toContain('function test:Point_distance')
+      expect(staticFn).toBeDefined()
+      expect(instanceFn).toBeDefined()
+    })
+  })
+
+  describe('namespace prefixing', () => {
+    it('prefixes user objectives but preserves mc_name and qualified objectives', () => {
+      const files = compile(`
+fn main() {
+    scoreboard_set("timer", #rs, 100);
+    scoreboard_set(@s, "timer", 100);
+    scoreboard_set(@s, #health, 20);
+    scoreboard_set(@s, "custom.timer", 1);
+}
+`, 'pack')
+      const mainFn = getFunction(files, 'main')
+      expect(mainFn).toContain('scoreboard players set timer rs 100')
+      expect(mainFn).toContain('scoreboard players set @s pack.timer 100')
+      expect(mainFn).toContain('scoreboard players set @s health 20')
+      expect(mainFn).toContain('scoreboard players set @s custom.timer 1')
+    })
+  })
+
+  describe('Timer OOP API', () => {
+    it('compiles the Timer impl API end to end', () => {
+      const source = `
+struct Timer {
+    _id: int,
+    _duration: int
+}
+
+impl Timer {
+    fn new(duration: int) -> Timer {
+        scoreboard_set("timer_ticks", #rs, 0);
+        scoreboard_set("timer_active", #rs, 0);
+        return { _id: 0, _duration: duration };
+    }
+
+    fn start(self) {
+        scoreboard_set("timer_active", #rs, 1);
+    }
+
+    fn pause(self) {
+        scoreboard_set("timer_active", #rs, 0);
+    }
+
+    fn reset(self) {
+        scoreboard_set("timer_ticks", #rs, 0);
+    }
+
+    fn done(self) -> bool {
+        let ticks: int = scoreboard_get("timer_ticks", #rs);
+        return ticks >= self._duration;
+    }
+
+    fn tick(self) {
+        let active: int = scoreboard_get("timer_active", #rs);
+        let ticks: int = scoreboard_get("timer_ticks", #rs);
+
+        if (active == 1) {
+            if (ticks < self._duration) {
+                scoreboard_set("timer_ticks", #rs, ticks + 1);
+            }
+        }
+    }
+}
+
+fn main() {
+    let t: Timer = Timer::new(100);
+    t.start();
+    t.tick();
+    let finished: bool = t.done();
+    if (finished) {
+        say("done");
+    }
+    t.pause();
+    t.reset();
+}
+`
+      expect(typeCheck(source)).toEqual([])
+
+      const files = compile(source, 'timerapi')
+      const mainFn = getFunction(files, 'main')
+      const newFn = getFunction(files, 'Timer_new')
+      const startFn = getFunction(files, 'Timer_start')
+      const tickFn = getFunction(files, 'Timer_tick')
+      const doneFn = getFunction(files, 'Timer_done')
+      const pauseFn = getFunction(files, 'Timer_pause')
+      const resetFn = getFunction(files, 'Timer_reset')
+
+      expect(mainFn).toContain('function timerapi:Timer_new')
+      expect(mainFn).toContain('function timerapi:Timer_start')
+      expect(mainFn).toContain('function timerapi:Timer_tick')
+      expect(mainFn).toContain('function timerapi:Timer_done')
+      expect(newFn).toContain('scoreboard players set timer_ticks rs 0')
+      expect(startFn).toContain('scoreboard players set timer_active rs 1')
+      expect(tickFn).toContain('scoreboard players get timer_active rs')
+      expect(doneFn).toContain('scoreboard players get timer_ticks rs')
+      expect(pauseFn).toContain('scoreboard players set timer_active rs 0')
+      expect(resetFn).toContain('scoreboard players set timer_ticks rs 0')
+    })
+  })
+
   describe('advancement event decorators', () => {
     it('generates advancement json with reward function path', () => {
       const source = `

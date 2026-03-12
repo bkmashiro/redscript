@@ -18,6 +18,13 @@ describe('Lexer', () => {
       ])
     })
 
+    it('tokenizes is-check and impl syntax with their dedicated keywords', () => {
+      const tokens = tokenize('if (e is Player) { } impl Point { }')
+      expect(kinds(tokens)).toEqual([
+        'if', '(', 'ident', 'is', 'ident', ')', '{', '}', 'impl', 'ident', '{', '}', 'eof',
+      ])
+    })
+
     it('recognizes type keywords', () => {
       const tokens = tokenize('int bool float string void BlockPos')
       expect(kinds(tokens)).toEqual(['int', 'bool', 'float', 'string', 'void', 'BlockPos', 'eof'])
@@ -190,6 +197,11 @@ describe('Lexer', () => {
     it('tokenizes fat arrow operator', () => {
       const tokens = tokenize('=>')
       expect(kinds(tokens)).toEqual(['=>', 'eof'])
+    })
+
+    it('tokenizes static method separators for impl methods', () => {
+      const tokens = tokenize('Point::new()')
+      expect(kinds(tokens)).toEqual(['ident', '::', 'ident', '(', ')', 'eof'])
     })
   })
 
