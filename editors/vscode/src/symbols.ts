@@ -157,6 +157,39 @@ export function registerSymbolProviders(context: vscode.ExtensionContext): void 
       }
     })
   )
+
+  context.subscriptions.push(
+    vscode.languages.registerRenameProvider(selector, {
+      provideRenameEdits(doc, position, newName) {
+        const wordRange = doc.getWordRangeAtPosition(position)
+        if (!wordRange) return null
+        const oldName = doc.getText(wordRange)
+
+        if (isMcName(doc, position)) return null
+
+        const edits = new vscode.WorkspaceEdit()
+        const text = doc.getText()
+        const re = new RegExp(`\\b${escapeRegex(oldName)}\\b`, 'g')
+        let match: RegExpExecArray | null
+        while ((match = re.exec(text)) !== null) {
+          if (match.index > 0 && text[match.index - 1] === '#') continue
+          const start = doc.positionAt(match.index)
+          const end = doc.positionAt(match.index + oldName.length)
+          edits.replace(doc.uri, new vscode.Range(start, end), newName)
+        }
+        return edits
+      },
+
+      prepareRename(doc, position) {
+        const wordRange = doc.getWordRangeAtPosition(position)
+        if (!wordRange) throw new Error('Cannot rename this element')
+        if (isMcName(doc, position)) {
+          throw new Error('Cannot rename MC identifiers (#name)')
+        }
+        return wordRange
+      }
+    })
+  )
 }
 
 /** Returns true if the cursor is on the identifier part of a #mc_name token. */
