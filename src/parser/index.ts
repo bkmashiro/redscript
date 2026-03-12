@@ -119,10 +119,13 @@ export class Parser {
 
     // Parse struct and function declarations
     while (!this.check('eof')) {
+      // Parse decorators first
+      const decorators = this.parseDecorators()
+      
       if (this.check('struct')) {
-        structs.push(this.parseStructDecl())
+        structs.push(this.parseStructDecl(decorators))
       } else {
-        declarations.push(this.parseFnDecl())
+        declarations.push(this.parseFnDeclWithDecorators(decorators))
       }
     }
 
@@ -133,7 +136,7 @@ export class Parser {
   // Struct Declaration
   // -------------------------------------------------------------------------
 
-  private parseStructDecl(): StructDecl {
+  private parseStructDecl(decorators: Decorator[] = []): StructDecl {
     this.expect('struct')
     const name = this.expect('ident').value
     this.expect('{')
@@ -150,6 +153,18 @@ export class Parser {
     }
 
     this.expect('}')
+    
+    // Check for @entity_backed decorator
+    const entityBackedDec = decorators.find(d => d.name === 'entity_backed')
+    if (entityBackedDec) {
+      return { 
+        name, 
+        fields, 
+        entityBacked: true,
+        typeTag: `__rs_${name.toLowerCase()}`
+      }
+    }
+    
     return { name, fields }
   }
 
@@ -159,7 +174,10 @@ export class Parser {
 
   private parseFnDecl(): FnDecl {
     const decorators = this.parseDecorators()
+    return this.parseFnDeclWithDecorators(decorators)
+  }
 
+  private parseFnDeclWithDecorators(decorators: Decorator[]): FnDecl {
     this.expect('fn')
     const name = this.expect('ident').value
     this.expect('(')
@@ -189,13 +207,13 @@ export class Parser {
   }
 
   private parseDecoratorValue(value: string): Decorator {
-    // Parse @tick or @tick(rate=20) or @on_trigger("name")
+    // Parse @tick or @tick(rate=20) or @on_trigger("name") or @entity_backed
     const match = value.match(/^@(\w+)(?:\(([^)]*)\))?$/)
     if (!match) {
       this.error(`Invalid decorator: ${value}`)
     }
 
-    const name = match[1] as 'tick' | 'on_trigger'
+    const name = match[1] as 'tick' | 'on_trigger' | 'entity_backed'
     const argsStr = match[2]
 
     if (!argsStr) {
@@ -436,11 +454,20 @@ export class Parser {
     this.expect('(')
     const binding = this.expect('ident').value
     this.expect('in')
-    const selector = this.parseSelector()
-    this.expect(')')
-    const body = this.parseBlock()
-
-    return { kind: 'foreach', binding, selector, body }
+    
+    // Check if it's a selector or an expression (like Type::all())
+    if (this.check('selector')) {
+      const selector = this.parseSelector()
+      this.expect(')')
+      const body = this.parseBlock()
+      return { kind: 'foreach', binding, selector, body }
+    } else {
+      // Parse as expression (e.g., Turret::all())
+      const iterable = this.parseExpr()
+      this.expect(')')
+      const body = this.parseBlock()
+      return { kind: 'foreach', binding, iterable, body }
+    }
   }
 
   private parseAsStmt(): Stmt {
@@ -588,6 +615,20 @@ export class Parser {
     let expr = this.parsePrimaryExpr()
 
     while (true) {
+      // Static method call: Type::method(args)
+      if (this.match('::')) {
+        if (expr.kind !== 'ident') {
+          this.error('Expected type name before ::')
+        }
+        const typeName = expr.name
+        const method = this.expect('ident').value
+        this.expect('(')
+        const args = this.parseArgs()
+        this.expect(')')
+        expr = { kind: 'static_call', type: typeName, method, args }
+        continue
+      }
+
       // Function call
       if (this.match('(')) {
         if (expr.kind === 'ident') {

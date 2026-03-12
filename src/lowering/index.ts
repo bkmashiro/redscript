@@ -10,8 +10,9 @@ import { buildModule } from '../ir/builder'
 import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
 import type {
   Block, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Stmt,
-  StructDecl, TypeNode, ExecuteSubcommand
+  StructDecl, TypeNode, ExecuteSubcommand, NBTValue
 } from '../ast/types'
+import { serializeNBT } from '../nbt/serialize'
 
 // ---------------------------------------------------------------------------
 // Builtin Functions
@@ -19,15 +20,12 @@ import type {
 
 const BUILTINS: Record<string, (args: string[]) => string | null> = {
   say:    ([msg]) => `say ${msg}`,
-  tell:   ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
-  title:  ([sel, msg]) => `title ${sel} title {"text":"${msg}"}`,
-  give:   ([sel, item, count]) => `give ${sel} ${item} ${count ?? '1'}`,
+  tell:   () => null, // Special handling for interpolation
+  title:  () => null, // Special handling for interpolation
+  give:   () => null, // Special handling for NBT support
   kill:   ([sel]) => `kill ${sel ?? '@s'}`,
   effect: ([sel, eff, dur, amp]) => `effect give ${sel} ${eff} ${dur ?? '30'} ${amp ?? '0'}`,
-  summon: ([type, x, y, z, nbt]) => {
-    const pos = [x ?? '~', y ?? '~', z ?? '~'].join(' ')
-    return nbt ? `summon ${type} ${pos} ${nbt}` : `summon ${type} ${pos}`
-  },
+  summon: () => null, // Special handling for NBT support
   particle: ([name, x, y, z]) => {
     const pos = [x ?? '~', y ?? '~', z ?? '~'].join(' ')
     return `particle ${name} ${pos}`
@@ -38,6 +36,7 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   scoreboard_get: () => null, // Special handling (returns value)
   scoreboard_set: () => null, // Special handling
   score: () => null, // Special handling (same as scoreboard_get)
+  data_get: () => null, // Special handling (returns value from NBT)
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +57,10 @@ export class Lowering {
 
   // Struct definitions: name → { fieldName: TypeNode }
   private structDefs: Map<string, Map<string, TypeNode>> = new Map()
+  // Entity-backed struct info
+  private entityBackedStructs: Map<string, { typeTag: string; fields: string[] }> = new Map()
+  private entityBackedCounters: Map<string, number> = new Map()
+  private entityBackedVars: Map<string, { instanceTag: string; typeTag: string; structName: string }> = new Map()
   // Variable types: varName → TypeNode
   private varTypes: Map<string, TypeNode> = new Map()
   // Float variables (stored as fixed-point × 1000)
@@ -75,17 +78,28 @@ export class Lowering {
     // Load struct definitions
     for (const struct of program.structs ?? []) {
       const fields = new Map<string, TypeNode>()
+      const fieldNames: string[] = []
       for (const field of struct.fields) {
         fields.set(field.name, field.type)
+        fieldNames.push(field.name)
       }
       this.structDefs.set(struct.name, fields)
+      
+      // Track entity-backed structs
+      if (struct.entityBacked && struct.typeTag) {
+        this.entityBackedStructs.set(struct.name, {
+          typeTag: struct.typeTag,
+          fields: fieldNames
+        })
+        this.entityBackedCounters.set(struct.name, 0)
+      }
     }
 
     for (const fn of program.declarations) {
       this.lowerFn(fn)
     }
 
-    return buildModule(this.namespace, this.functions, this.globals)
+    return buildModule(this.namespace, this.functions, this.globals, this.entityBackedStructs)
   }
 
   // -------------------------------------------------------------------------
@@ -314,6 +328,27 @@ export class Lowering {
       return
     }
 
+    // Handle entity-backed struct spawn: let t: Turret = Turret::spawn(x, y, z)
+    if (stmt.init.kind === 'static_call' && stmt.init.method === 'spawn') {
+      const structInfo = this.entityBackedStructs.get(stmt.init.type)
+      if (structInfo) {
+        const value = this.lowerExpr(stmt.init)
+        if (value.kind === 'var') {
+          this.varMap.set(stmt.name, value.name)
+          const match = value.name.match(/@e\[tag=([^,\]]+)/)
+          if (match) {
+            this.entityBackedVars.set(stmt.name, {
+              instanceTag: match[1],
+              typeTag: structInfo.typeTag,
+              structName: stmt.init.type
+            })
+          }
+          this.varTypes.set(stmt.name, { kind: 'struct', name: stmt.init.type })
+        }
+        return
+      }
+    }
+
     const value = this.lowerExpr(stmt.init)
     this.builder.emitAssign(varName, value)
   }
@@ -417,7 +452,7 @@ export class Lowering {
   private lowerForeachStmt(stmt: Extract<Stmt, { kind: 'foreach' }>): void {
     // Extract body into a separate function
     const subFnName = `${this.currentFn}/foreach_${this.foreachCounter++}`
-    const selector = this.selectorToString(stmt.selector)
+    const selector = stmt.selector ? this.selectorToString(stmt.selector) : '@e'
 
     // Emit execute as ... run function ...
     this.builder.emitRaw(`execute as ${selector} run function ${this.namespace}:${subFnName}`)
@@ -642,6 +677,10 @@ export class Lowering {
       case 'array_lit':
         // Array literals should be handled in let statement
         return { kind: 'const', value: 0 }
+
+      default:
+        // Exhaustive check - should never reach here
+        return { kind: 'const', value: 0 }
     }
   }
 
@@ -649,6 +688,16 @@ export class Lowering {
     // Check if this is a struct field access
     if (expr.obj.kind === 'ident') {
       const varType = this.varTypes.get(expr.obj.name)
+
+      // Check for entity-backed struct variable
+      const ebInfo = this.entityBackedVars.get(expr.obj.name)
+      if (ebInfo) {
+        const dst = this.builder.freshTemp()
+        const objective = `rs_${expr.field}`
+        const selector = ebInfo.instanceTag === '__self__' ? '@s' : `@e[tag=${ebInfo.instanceTag},limit=1]`
+        this.builder.emitRaw(`execute store result score ${dst} rs run scoreboard players get ${selector} ${objective}`)
+        return { kind: 'var', name: dst }
+      }
 
       // Check for world object handle (entity selector)
       const mapped = this.varMap.get(expr.obj.name)
@@ -683,6 +732,33 @@ export class Lowering {
   private lowerMemberAssign(expr: Extract<Expr, { kind: 'member_assign' }>): Operand {
     if (expr.obj.kind === 'ident') {
       const varType = this.varTypes.get(expr.obj.name)
+
+      // Check for entity-backed struct variable
+      const ebInfo = this.entityBackedVars.get(expr.obj.name)
+      if (ebInfo) {
+        const value = this.lowerExpr(expr.value)
+        const objective = `rs_${expr.field}`
+        const selector = ebInfo.instanceTag === '__self__' ? '@s' : `@e[tag=${ebInfo.instanceTag},limit=1]`
+        
+        if (expr.op === '=') {
+          if (value.kind === 'const') {
+            this.builder.emitRaw(`scoreboard players set ${selector} ${objective} ${value.value}`)
+          } else if (value.kind === 'var') {
+            this.builder.emitRaw(`scoreboard players operation ${selector} ${objective} = ${value.name} rs`)
+          }
+        } else {
+          const binOp = expr.op.slice(0, -1)
+          const opMap: Record<string, string> = { '+': '+=', '-': '-=', '*': '*=', '/': '/=', '%': '%=' }
+          if (value.kind === 'const') {
+            const constTemp = this.builder.freshTemp()
+            this.builder.emitAssign(constTemp, value)
+            this.builder.emitRaw(`scoreboard players operation ${selector} ${objective} ${opMap[binOp]} ${constTemp} rs`)
+          } else if (value.kind === 'var') {
+            this.builder.emitRaw(`scoreboard players operation ${selector} ${objective} ${opMap[binOp]} ${value.name} rs`)
+          }
+        }
+        return { kind: 'const', value: 0 }
+      }
 
       // Check for world object handle
       const mapped = this.varMap.get(expr.obj.name)
@@ -967,6 +1043,69 @@ export class Lowering {
       return { kind: 'const', value: 0 }
     }
 
+    // Special case: data_get — read NBT data into a variable
+    if (name === 'data_get') {
+      const dst = this.builder.freshTemp()
+      const targetType = this.exprToString(args[0])
+      const target = this.exprToString(args[1])
+      const path = this.exprToString(args[2])
+      const scale = args[3] ? this.exprToString(args[3]) : '1'
+      this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`)
+      return { kind: 'var', name: dst }
+    }
+
+    // Special case: tell — with string interpolation support
+    if (name === 'tell') {
+      const selector = this.exprToString(args[0])
+      const msgExpr = args[1]
+      const json = this.buildTellrawJson(msgExpr)
+      this.builder.emitRaw(`tellraw ${selector} ${json}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    // Special case: title — with string interpolation support
+    if (name === 'title') {
+      const selector = this.exprToString(args[0])
+      const msgExpr = args[1]
+      const json = this.buildTellrawJson(msgExpr)
+      this.builder.emitRaw(`title ${selector} title ${json}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    // Special case: give — with NBT support
+    if (name === 'give') {
+      const selector = this.exprToString(args[0])
+      const item = this.exprToString(args[1])
+      const count = args[2] ? this.exprToString(args[2]) : '1'
+      
+      // Check for NBT literal as 4th argument
+      if (args.length >= 4 && args[3].kind === 'nbt_literal') {
+        const nbtStr = serializeNBT(args[3].value)
+        this.builder.emitRaw(`give ${selector} ${item}${nbtStr} ${count}`)
+      } else {
+        this.builder.emitRaw(`give ${selector} ${item} ${count}`)
+      }
+      return { kind: 'const', value: 0 }
+    }
+
+    // Special case: summon — with NBT support
+    if (name === 'summon') {
+      const type = this.exprToString(args[0])
+      const x = args[1] ? this.exprToString(args[1]) : '~'
+      const y = args[2] ? this.exprToString(args[2]) : '~'
+      const z = args[3] ? this.exprToString(args[3]) : '~'
+      const pos = `${x} ${y} ${z}`
+      
+      // Check for NBT literal as 5th argument
+      if (args.length >= 5 && args[4].kind === 'nbt_literal') {
+        const nbtStr = serializeNBT(args[4].value)
+        this.builder.emitRaw(`summon ${type} ${pos} ${nbtStr}`)
+      } else {
+        this.builder.emitRaw(`summon ${type} ${pos}`)
+      }
+      return { kind: 'const', value: 0 }
+    }
+
     // Convert args to strings for builtin
     const strArgs = args.map(arg => this.exprToString(arg))
     const cmd = BUILTINS[name](strArgs)
@@ -1004,6 +1143,51 @@ export class Lowering {
     if (expr.kind === 'int_lit') return expr.value.toString()
     if (expr.kind === 'float_lit') return Math.trunc(expr.value).toString()
     return '0'
+  }
+
+  /**
+   * Build tellraw JSON for string interpolation.
+   * Supports {variable} syntax in strings.
+   */
+  private buildTellrawJson(expr: Expr): string {
+    if (expr.kind !== 'str_lit') {
+      const str = this.exprToString(expr)
+      return `{"text":"${str}"}`
+    }
+
+    const text = expr.value
+    const regex = /\{([a-zA-Z_][a-zA-Z_0-9]*)\}/g
+    const parts: string[] = []
+    let lastIndex = 0
+    let match: RegExpExecArray | null
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        const before = text.slice(lastIndex, match.index)
+        parts.push(`{"text":"${before}"}`)
+      }
+      
+      const varName = match[1]
+      const mappedVar = this.varMap.get(varName) ?? `$${varName}`
+      parts.push(`{"score":{"name":"${mappedVar}","objective":"rs"}}`)
+      
+      lastIndex = match.index + match[0].length
+    }
+
+    if (lastIndex < text.length) {
+      const after = text.slice(lastIndex)
+      parts.push(`{"text":"${after}"}`)
+    }
+
+    if (parts.length === 0) {
+      return `{"text":"${text}"}`
+    }
+
+    if (parts.length === 1) {
+      return parts[0]
+    }
+
+    return `[${parts.join(',')}]`
   }
 
   // -------------------------------------------------------------------------

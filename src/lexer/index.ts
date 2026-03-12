@@ -37,7 +37,7 @@ export type TokenKind =
   | '=' | '+=' | '-=' | '*=' | '/=' | '%='
   // Delimiters
   | '{' | '}' | '(' | ')' | '[' | ']'
-  | ',' | ';' | ':' | '->' | '.'
+  | ',' | ';' | ':' | '::' | '->' | '.'
   // Special
   | 'ident'         // Variable/function names
   | 'raw_cmd'       // raw("...") content
@@ -222,6 +222,13 @@ export class Lexer {
     if (char === '%' && this.peek() === '=') {
       this.advance()
       this.addToken('%=', '%=', startLine, startCol)
+      return
+    }
+
+    // Double colon ::
+    if (char === ':' && this.peek() === ':') {
+      this.advance()
+      this.addToken('::', '::', startLine, startCol)
       return
     }
 

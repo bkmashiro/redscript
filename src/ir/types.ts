@@ -98,6 +98,15 @@ export interface IRFunction {
 }
 
 // ---------------------------------------------------------------------------
+// Entity-backed struct metadata
+// ---------------------------------------------------------------------------
+
+export interface EntityBackedInfo {
+  typeTag: string
+  fields: string[]
+}
+
+// ---------------------------------------------------------------------------
 // Module — top-level compilation unit
 // ---------------------------------------------------------------------------
 
@@ -105,4 +114,5 @@ export interface IRModule {
   namespace: string        // datapack namespace (e.g. "mypack")
   functions: IRFunction[]
   globals: string[]        // global variable names
+  entityBackedStructs?: Map<string, EntityBackedInfo>
 }

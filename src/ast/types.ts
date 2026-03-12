@@ -57,6 +57,22 @@ export interface EntitySelector {
 export type AssignOp = '=' | '+=' | '-=' | '*=' | '/=' | '%='
 
 // ---------------------------------------------------------------------------
+// NBT Value Types
+// ---------------------------------------------------------------------------
+
+export type NBTValue =
+  | { kind: 'byte';     value: number }     // 1b, 0b, true→1b, false→0b
+  | { kind: 'short';    value: number }     // 1s
+  | { kind: 'int';      value: number }     // 1
+  | { kind: 'long';     value: bigint }     // 1L
+  | { kind: 'float';    value: number }     // 1.0f
+  | { kind: 'double';   value: number }     // 1.0d or 1.0
+  | { kind: 'string';   value: string }     // "hello"
+  | { kind: 'list';     items: NBTValue[] }
+  | { kind: 'compound'; entries: [string, NBTValue][] }
+  | { kind: 'call';     fn: string; args: NBTValue[] }  // text(), enchant(), etc.
+
+// ---------------------------------------------------------------------------
 // Expressions
 // ---------------------------------------------------------------------------
 
@@ -77,6 +93,8 @@ export type Expr =
   | { kind: 'member_assign'; obj: Expr; field: string; op: AssignOp; value: Expr }
   | { kind: 'index';      obj: Expr; index: Expr }
   | { kind: 'array_lit';  elements: Expr[] }
+  | { kind: 'static_call'; type: string; method: string; args: Expr[] }
+  | { kind: 'nbt_literal'; value: NBTValue }  // nbt { ... }
 
 // ---------------------------------------------------------------------------
 // Statements
@@ -100,7 +118,7 @@ export type Stmt =
   | { kind: 'if';         cond: Expr; then: Block; else_?: Block }
   | { kind: 'while';      cond: Expr; body: Block }
   | { kind: 'for';        init?: Stmt; cond: Expr; step: Expr; body: Block }
-  | { kind: 'foreach';    binding: string; selector: EntitySelector; body: Block }
+  | { kind: 'foreach';    binding: string; selector?: EntitySelector; iterable?: Expr; body: Block }
   | { kind: 'as_block';   selector: EntitySelector; body: Block }
   | { kind: 'at_block';   selector: EntitySelector; body: Block }
   | { kind: 'as_at';      as_sel: EntitySelector; at_sel: EntitySelector; body: Block }
@@ -114,7 +132,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'on_trigger'
+  name: 'tick' | 'on_trigger' | 'entity_backed'
   args?: { rate?: number; trigger?: string }
 }
 
@@ -147,6 +165,8 @@ export interface StructField {
 export interface StructDecl {
   name: string
   fields: StructField[]
+  entityBacked?: boolean
+  typeTag?: string
 }
 
 // ---------------------------------------------------------------------------

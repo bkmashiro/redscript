@@ -309,6 +309,121 @@ describe('Lowering', () => {
         cmd.includes('execute store result score') && cmd.includes('random value 1..100')
       )).toBe(true)
     })
+
+    it('lowers data_get from entity', () => {
+      const ir = compile('fn test() { let item_count: int = data_get("entity", "@s", "SelectedItem.Count"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute store result score') && 
+        cmd.includes('run data get entity @s SelectedItem.Count 1')
+      )).toBe(true)
+    })
+
+    it('lowers data_get from block', () => {
+      const ir = compile('fn test() { let furnace_fuel: int = data_get("block", "~ ~ ~", "BurnTime"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run data get block ~ ~ ~ BurnTime 1')
+      )).toBe(true)
+    })
+
+    it('lowers data_get from storage', () => {
+      const ir = compile('fn test() { let val: int = data_get("storage", "mypack:globals", "player_count"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run data get storage mypack:globals player_count 1')
+      )).toBe(true)
+    })
+
+    it('lowers data_get with scale factor', () => {
+      const ir = compile('fn test() { let scaled: int = data_get("entity", "@s", "Pos[0]", "1000"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run data get entity @s Pos[0] 1000')
+      )).toBe(true)
+    })
+
+    it('lowers tell() without interpolation', () => {
+      const ir = compile('fn test() { tell(@a, "Hello world"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('tellraw @a {"text":"Hello world"}')
+      )).toBe(true)
+    })
+
+    it('lowers tell() with single variable interpolation', () => {
+      const ir = compile(`
+        fn test() {
+          let score_val: int = 42;
+          tell(@a, "Your score: {score_val}");
+        }
+      `)
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('tellraw @a') && 
+        cmd.includes('"Your score: "') &&
+        cmd.includes('"score"') &&
+        cmd.includes('"$score_val"')
+      )).toBe(true)
+    })
+
+    it('lowers tell() with multiple interpolations', () => {
+      const ir = compile(`
+        fn test() {
+          let kills: int = 10;
+          let deaths: int = 5;
+          tell(@a, "K: {kills} D: {deaths}");
+        }
+      `)
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('tellraw @a') && 
+        cmd.includes('"K: "') &&
+        cmd.includes('"$kills"') &&
+        cmd.includes('" D: "') &&
+        cmd.includes('"$deaths"')
+      )).toBe(true)
+    })
+
+    it('lowers title() with interpolation', () => {
+      const ir = compile(`
+        fn test() {
+          let score: int = 100;
+          title(@s, "Score: {score}");
+        }
+      `)
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('title @s title') &&
+        cmd.includes('"Score: "') &&
+        cmd.includes('"score"') &&
+        cmd.includes('"$score"')
+      )).toBe(true)
+    })
+
+    it('lowers tell() with variable at start of string', () => {
+      const ir = compile(`
+        fn test() {
+          let x: int = 5;
+          tell(@a, "{x} points!");
+        }
+      `)
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('tellraw @a') &&
+        cmd.includes('"$x"') &&
+        cmd.includes('" points!"')
+      )).toBe(true)
+    })
   })
 
   describe('decorators', () => {

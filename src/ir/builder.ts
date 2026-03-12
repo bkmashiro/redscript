@@ -3,7 +3,7 @@
  * AST → IR lowering uses this.
  */
 
-import type { IRBlock, IRFunction, IRInstr, IRModule, Operand, Terminator } from './types'
+import type { IRBlock, IRFunction, IRInstr, IRModule, Operand, Terminator, EntityBackedInfo } from './types'
 
 export class IRBuilder {
   private tempCount = 0
@@ -109,6 +109,11 @@ export class IRBuilder {
   }
 }
 
-export function buildModule(namespace: string, fns: IRFunction[], globals: string[] = []): IRModule {
-  return { namespace, functions: fns, globals }
+export function buildModule(
+  namespace: string,
+  fns: IRFunction[],
+  globals: string[] = [],
+  entityBackedStructs?: Map<string, EntityBackedInfo>
+): IRModule {
+  return { namespace, functions: fns, globals, entityBackedStructs }
 }
