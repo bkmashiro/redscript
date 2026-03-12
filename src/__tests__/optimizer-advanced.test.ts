@@ -1,4 +1,5 @@
 import { compile } from '../index'
+import { compileToStructure } from '../codegen/structure'
 
 function getFileContent(files: ReturnType<typeof compile>['files'], suffix: string): string {
   const file = files.find(candidate => candidate.path.endsWith(suffix))
@@ -55,6 +56,26 @@ fn read_twice() {
     expect(readMatches).toHaveLength(1)
     expect(fn).toContain('scoreboard players operation $t1 rs = $t0 rs')
   })
+
+  test('reuses duplicate arithmetic sequences', () => {
+    const source = `
+fn math() {
+  let base: int = 4;
+  let a: int = base + 2;
+  let b: int = base + 2;
+  if (a == b) {
+    say("same");
+  }
+}
+`
+
+    const result = compile(source, { namespace: 'test' })
+    const fn = getFileContent(result.files, 'data/test/function/math.mcfunction')
+    const addMatches = fn.match(/\+= \$const_2 rs/g) ?? []
+
+    expect(addMatches).toHaveLength(1)
+    expect(fn).toContain('scoreboard players operation $t1 rs = $t0 rs')
+  })
 })
 
 describe('setblock batching', () => {
@@ -105,5 +126,19 @@ fn build() {
     expect(fn).toContain('setblock 0 64 0 minecraft:stone')
     expect(fn).toContain('setblock 2 64 0 minecraft:stone')
     expect(fn).not.toContain('fill 0 64 0 2 64 0')
+  })
+
+  test('applies batching to structure target output too', () => {
+    const source = `
+fn build() {
+  setblock((0, 64, 0), "minecraft:stone");
+  setblock((1, 64, 0), "minecraft:stone");
+  setblock((2, 64, 0), "minecraft:stone");
+}
+`
+
+    const result = compileToStructure(source, 'test')
+
+    expect(result.blocks.some(block => block.command === 'fill 0 64 0 2 64 0 minecraft:stone')).toBe(true)
   })
 })
