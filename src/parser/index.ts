@@ -843,6 +843,12 @@ export class Parser {
       return this.parseStringExpr(token)
     }
 
+    // MC name literal: #health → mc_name node (value = "health", without #)
+    if (token.kind === 'mc_name') {
+      this.advance()
+      return this.withLoc({ kind: 'mc_name', value: token.value.slice(1) }, token)
+    }
+
     // Boolean literal
     if (token.kind === 'true') {
       this.advance()

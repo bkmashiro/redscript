@@ -21,6 +21,7 @@
         { "include": "#types" },
         { "include": "#numbers" },
         { "include": "#blockpos" },
+        { "include": "#mc-name" },
         { "include": "#operators" },
         { "include": "#punctuation" }
       ]
@@ -257,6 +258,12 @@
       "comment": "BlockPos coordinates: ~5, ^3, ~-1",
       "name": "constant.numeric.blockpos.redscript",
       "match": "[~^]-?\\d*(?:\\.\\d+)?"
+    },
+
+    "mc-name": {
+      "comment": "#objective, #tag, #team — unquoted MC identifier literal",
+      "name": "variable.other.mc-name.redscript",
+      "match": "#[a-zA-Z_][a-zA-Z0-9_]*"
     },
 
     "operators": {
