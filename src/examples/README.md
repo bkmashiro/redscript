@@ -44,7 +44,7 @@ Demonstrates:
 A small world administration example that resets a lobby platform and locks in predictable world settings from a trigger handler.
 
 Demonstrates:
-- `setblock()` and `fill()`
+- `BlockPos` tuple literals with `setblock()` and `fill()`
 - `weather()` and `time_set()`
 - `gamerule()`
 - `announce()` and `actionbar()`

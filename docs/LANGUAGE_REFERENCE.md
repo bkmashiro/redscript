@@ -306,6 +306,41 @@ Supported filter categories in the current parser:
 - `nbt`
 - `gamemode`
 
+## Coordinates
+
+Block positions are first-class values with the `BlockPos` type.
+
+### Absolute coordinates
+
+```rs
+let spawn: BlockPos = (0, 64, 0);
+setblock((4, 65, 4), "minecraft:gold_block");
+```
+
+### Relative coordinates
+
+```rs
+tp(@s, (~1, ~0, ~-1));
+```
+
+### Local coordinates
+
+```rs
+tp(@s, (^0, ^1, ^0));
+```
+
+### Mixed coordinates
+
+```rs
+setblock((~0, 64, ~0), "minecraft:stone");
+```
+
+Each component can be:
+
+- an absolute integer like `64`
+- a relative coordinate like `~` or `~-2`
+- a local coordinate like `^` or `^3`
+
 ## Builtins
 
 The compiler recognizes these builtins and lowers them directly to Minecraft commands or runtime helpers.
@@ -319,8 +354,10 @@ The compiler recognizes these builtins and lowers them directly to Minecraft com
 | `effect(sel, effect, duration?, amplifier?)` | `void` | Defaults: duration `30`, amplifier `0` |
 | `summon(type, x?, y?, z?, nbt?)` | `void` | Defaults position to `~ ~ ~` |
 | `particle(name, x?, y?, z?)` | `void` | Defaults position to `~ ~ ~` |
-| `tp(sel, x?, y?, z?)` | `void` | Emits `tp` |
-| `setblock(x, y, z, block)` | `void` | Emits `setblock` |
+| `tp(sel, x?, y?, z?)` | `void` | Also accepts `tp(sel, pos)` with `BlockPos` |
+| `setblock(x, y, z, block)` | `void` | Also accepts `setblock(pos, block)` with `BlockPos` |
+| `fill(x1, y1, z1, x2, y2, z2, block)` | `void` | Also accepts `fill(from, to, block)` with `BlockPos` |
+| `clone(x1, y1, z1, x2, y2, z2, dx, dy, dz)` | `void` | Also accepts `clone(from, to, dest)` with `BlockPos` |
 | `kill(sel?)` | `void` | Defaults to `@s` |
 | `scoreboard_get(target, objective)` | `int` | Reads a scoreboard score |
 | `score(target, objective)` | `int` | Alias of `scoreboard_get` |
