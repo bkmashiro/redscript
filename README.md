@@ -11,7 +11,7 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![tests](https://img.shields.io/badge/tests-423%20passing-brightgreen)](./src/__tests__)
 
-[中文版](./README.zh.md) · [Wiki](https://github.com/bkmashiro/redscript/wiki) · [Quick Start](#quick-start)
+[中文版](./README.zh.md) · [Wiki](https://github.com/bkmashiro/redscript/wiki) · [Quick Start](#quick-start) · [🚀 Online IDE](https://redscript-ide.pages.dev)
 
 </div>
 

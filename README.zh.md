@@ -11,7 +11,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![tests](https://img.shields.io/badge/tests-423%20passing-brightgreen)](./src/__tests__)
 
-[English](./README.md) · [Wiki](https://github.com/bkmashiro/redscript/wiki) · [快速开始](#快速开始)
+[English](./README.md) · [Wiki](https://github.com/bkmashiro/redscript/wiki) · [快速开始](#快速开始) · [🚀 在线 IDE](https://redscript-ide.pages.dev)
 
 </div>
 
