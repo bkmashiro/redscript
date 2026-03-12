@@ -142,7 +142,7 @@ function printOptimizationStats(stats: OptimizationStats | undefined): void {
   console.log(`  setblock batching: ${stats.setblockMergedCommands} setblocks -> ${stats.setblockFillCommands} fills (saved ${stats.setblockSavedCommands} commands)`)
   console.log(`  dead code: ${stats.deadCodeRemoved} commands removed`)
   console.log(`  constant folding: ${stats.constantFolds} constants folded`)
-  console.log(`  Total commands: ${stats.totalCommandsBefore} -> ${stats.totalCommandsAfter} (${formatReduction(stats.totalCommandsBefore, stats.totalCommandsAfter)} reduction)`)
+  console.log(`  Total mcfunction commands: ${stats.totalCommandsBefore} -> ${stats.totalCommandsAfter} (${formatReduction(stats.totalCommandsBefore, stats.totalCommandsAfter)} reduction)`)
 }
 
 function compileCommand(file: string, output: string, namespace: string, target: string = 'datapack', showStats = false): void {

@@ -9,13 +9,21 @@ import { Parser } from './parser'
 import { TypeChecker } from './typechecker'
 import { Lowering } from './lowering'
 import type { Warning } from './lowering'
-import { optimizeWithStats } from './optimizer/passes'
-import { generateDatapackWithStats, DatapackFile } from './codegen/mcfunction'
+import {
+  constantFoldingWithStats,
+  copyPropagation,
+  deadCodeEliminationWithStats,
+} from './optimizer/passes'
+import {
+  countMcfunctionCommands,
+  generateDatapackWithStats,
+  DatapackFile,
+} from './codegen/mcfunction'
 import { preprocessSource } from './compile'
 import type { IRModule } from './ir/types'
 import type { Program } from './ast/types'
 import type { DiagnosticError } from './diagnostics'
-import { createEmptyOptimizationStats, mergeOptimizationStats, type OptimizationStats } from './optimizer/commands'
+import { createEmptyOptimizationStats, type OptimizationStats } from './optimizer/commands'
 
 export interface CompileOptions {
   namespace?: string
@@ -65,20 +73,50 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const lowering = new Lowering(namespace)
   const ir = lowering.lower(ast)
 
-  // Optimization
-  const optimizationStats = createEmptyOptimizationStats()
-  const optimizedFunctions = shouldOptimize
-    ? ir.functions.map(fn => {
-      const optimized = optimizeWithStats(fn)
-      mergeOptimizationStats(optimizationStats, optimized.stats)
-      return optimized.fn
-    })
-    : ir.functions
-  const optimizedIR: IRModule = { ...ir, functions: optimizedFunctions }
+  let optimizedIR: IRModule = ir
+  let generated = generateDatapackWithStats(ir, { optimizeCommands: shouldOptimize })
+  let optimizationStats: OptimizationStats | undefined
 
-  // Code generation
-  const generated = generateDatapackWithStats(optimizedIR)
-  mergeOptimizationStats(optimizationStats, generated.stats)
+  if (shouldOptimize) {
+    const stats = createEmptyOptimizationStats()
+    const copyPropagatedFunctions = []
+    const deadCodeEliminatedFunctions = []
+
+    for (const fn of ir.functions) {
+      const folded = constantFoldingWithStats(fn)
+      stats.constantFolds += folded.stats.constantFolds ?? 0
+
+      const propagated = copyPropagation(folded.fn)
+      copyPropagatedFunctions.push(propagated)
+
+      const dce = deadCodeEliminationWithStats(propagated)
+      deadCodeEliminatedFunctions.push(dce.fn)
+    }
+
+    const copyPropagatedIR: IRModule = { ...ir, functions: copyPropagatedFunctions }
+    optimizedIR = { ...ir, functions: deadCodeEliminatedFunctions }
+
+    const baselineGenerated = generateDatapackWithStats(ir, { optimizeCommands: false })
+    const beforeDceGenerated = generateDatapackWithStats(copyPropagatedIR, { optimizeCommands: false })
+    const afterDceGenerated = generateDatapackWithStats(optimizedIR, { optimizeCommands: false })
+    generated = generateDatapackWithStats(optimizedIR, { optimizeCommands: true })
+
+    stats.deadCodeRemoved =
+      countMcfunctionCommands(beforeDceGenerated.files) - countMcfunctionCommands(afterDceGenerated.files)
+    stats.licmHoists = generated.stats.licmHoists
+    stats.licmLoopBodies = generated.stats.licmLoopBodies
+    stats.cseRedundantReads = generated.stats.cseRedundantReads
+    stats.cseArithmetic = generated.stats.cseArithmetic
+    stats.setblockMergedCommands = generated.stats.setblockMergedCommands
+    stats.setblockFillCommands = generated.stats.setblockFillCommands
+    stats.setblockSavedCommands = generated.stats.setblockSavedCommands
+    stats.totalCommandsBefore = countMcfunctionCommands(baselineGenerated.files)
+    stats.totalCommandsAfter = countMcfunctionCommands(generated.files)
+    optimizationStats = stats
+  } else {
+    optimizedIR = ir
+    generated = generateDatapackWithStats(ir, { optimizeCommands: false })
+  }
 
   return {
     files: [...generated.files, ...generated.advancements],

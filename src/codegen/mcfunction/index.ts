@@ -240,7 +240,29 @@ export interface DatapackGenerationResult {
   stats: OptimizationStats
 }
 
-export function generateDatapackWithStats(module: IRModule): DatapackGenerationResult {
+export interface DatapackGenerationOptions {
+  optimizeCommands?: boolean
+}
+
+export function countMcfunctionCommands(files: DatapackFile[]): number {
+  return files.reduce((sum, file) => {
+    if (!toFunctionName(file)) {
+      return sum
+    }
+
+    return sum + file.content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '' && !line.startsWith('#'))
+      .length
+  }, 0)
+}
+
+export function generateDatapackWithStats(
+  module: IRModule,
+  options: DatapackGenerationOptions = {},
+): DatapackGenerationResult {
+  const { optimizeCommands = true } = options
   const files: DatapackFile[] = []
   const advancements: DatapackFile[] = []
   const ns = module.namespace
@@ -433,8 +455,12 @@ export function generateDatapackWithStats(module: IRModule): DatapackGenerationR
     })
   }
 
-  const optimized = applyFunctionOptimization(files)
   const stats = createEmptyOptimizationStats()
+  if (!optimizeCommands) {
+    return { files, advancements, stats }
+  }
+
+  const optimized = applyFunctionOptimization(files)
   mergeOptimizationStats(stats, optimized.stats)
   return { files: optimized.files, advancements, stats }
 }

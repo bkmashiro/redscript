@@ -84,6 +84,7 @@ fn build() {
       const result = compile(source, { namespace: 'stats' })
       expect(result.stats?.licmHoists).toBeGreaterThan(0)
       expect(result.stats?.totalCommandsBefore).toBeGreaterThan(result.stats?.totalCommandsAfter ?? 0)
+      expect(result.stats?.deadCodeRemoved).toBeGreaterThanOrEqual(0)
     })
   })
 
@@ -103,6 +104,7 @@ fn build() {
 
       expect(stdout).toContain('Optimizations applied:')
       expect(stdout).toContain('setblock batching:')
+      expect(stdout).toContain('Total mcfunction commands:')
     })
   })
 
