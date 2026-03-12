@@ -77,6 +77,38 @@ function isStructLiteralField(doc: vscode.TextDocument, position: vscode.Positio
   return null
 }
 
+/**
+ * Check if cursor is on a member access field: expr.field
+ * Returns the struct type name if found, null otherwise
+ */
+function isMemberAccessField(doc: vscode.TextDocument, position: vscode.Position, word: string): string | null {
+  const line = doc.lineAt(position.line).text
+  const wordStart = position.character
+
+  // Check if word is preceded by '.'
+  const beforeWord = line.slice(0, wordStart)
+  if (!beforeWord.endsWith('.')) return null
+
+  // Find the variable before the dot
+  const varMatch = beforeWord.match(/(\w+)\s*\.$/)
+  if (!varMatch) return null
+  const varName = varMatch[1]
+
+  // Find the variable's type declaration
+  const text = doc.getText()
+  // Look for: let varName: TypeName or fn param varName: TypeName
+  const typeRe = new RegExp(`\\b(?:let|const)\\s+${varName}\\s*:\\s*(\\w+)`, 'm')
+  const typeMatch = text.match(typeRe)
+  if (typeMatch) return typeMatch[1]
+
+  // Also check function parameters: fn xxx(varName: TypeName)
+  const paramRe = new RegExp(`\\((?:[^)]*,\\s*)?${varName}\\s*:\\s*(\\w+)`, 'm')
+  const paramMatch = text.match(paramRe)
+  if (paramMatch) return paramMatch[1]
+
+  return null
+}
+
 function findAllOccurrences(doc: vscode.TextDocument, word: string): vscode.Location[] {
   const text = doc.getText()
   const re = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g')
@@ -114,6 +146,16 @@ export function registerSymbolProviders(context: vscode.ExtensionContext): void 
         if (structType) {
           const structFields = findStructFields(doc)
           const field = structFields.find(f => f.structName === structType && f.fieldName === word)
+          if (field) {
+            return new vscode.Location(doc.uri, field.fieldRange)
+          }
+        }
+
+        // Check if this is a member access: expr.field
+        const memberAccess = isMemberAccessField(doc, position, word)
+        if (memberAccess) {
+          const structFields = findStructFields(doc)
+          const field = structFields.find(f => f.structName === memberAccess && f.fieldName === word)
           if (field) {
             return new vscode.Location(doc.uri, field.fieldRange)
           }
