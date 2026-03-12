@@ -24,6 +24,7 @@ export class TypeChecker {
   private enums: Map<string, Map<string, number>> = new Map()
   private consts: Map<string, TypeNode> = new Map()
   private currentFn: FnDecl | null = null
+  private currentReturnType: TypeNode | null = null
   private scope: Map<string, ScopeSymbol> = new Map()
 
   constructor(source?: string, filePath?: string) {
@@ -90,6 +91,7 @@ export class TypeChecker {
 
   private checkFunction(fn: FnDecl): void {
     this.currentFn = fn
+    this.currentReturnType = this.normalizeType(fn.returnType)
     this.scope = new Map()
     let seenDefault = false
 
@@ -120,6 +122,7 @@ export class TypeChecker {
     this.checkBlock(fn.body)
 
     this.currentFn = null
+    this.currentReturnType = null
   }
 
   private checkBlock(stmts: Block): void {
@@ -197,15 +200,15 @@ export class TypeChecker {
   }
 
   private checkLetStmt(stmt: Extract<Stmt, { kind: 'let' }>): void {
+    // Check initializer
+    const expectedType = stmt.type ? this.normalizeType(stmt.type) : undefined
+    this.checkExpr(stmt.init, expectedType)
+
     // Add variable to scope
-    const type = stmt.type ? this.normalizeType(stmt.type) : this.inferType(stmt.init)
+    const type = expectedType ?? this.inferType(stmt.init)
     this.scope.set(stmt.name, { type, mutable: true })
 
-    // Check initializer
-    this.checkExpr(stmt.init)
-
-    const expectedType = stmt.type ? this.normalizeType(stmt.type) : undefined
-    const actualType = this.inferType(stmt.init)
+    const actualType = this.inferType(stmt.init, expectedType)
     if (
       expectedType &&
       stmt.init.kind !== 'struct_lit' &&
@@ -221,13 +224,13 @@ export class TypeChecker {
   }
 
   private checkReturnStmt(stmt: Extract<Stmt, { kind: 'return' }>): void {
-    if (!this.currentFn) return
+    if (!this.currentReturnType) return
 
-    const expectedType = this.currentFn.returnType
+    const expectedType = this.currentReturnType
     
     if (stmt.value) {
-      const actualType = this.inferType(stmt.value)
-      this.checkExpr(stmt.value)
+      const actualType = this.inferType(stmt.value, expectedType)
+      this.checkExpr(stmt.value, expectedType)
       
       if (!this.typesMatch(expectedType, actualType)) {
         this.report(
@@ -243,7 +246,7 @@ export class TypeChecker {
     }
   }
 
-  private checkExpr(expr: Expr): void {
+  private checkExpr(expr: Expr, expectedType?: TypeNode): void {
     switch (expr.kind) {
       case 'ident':
         if (!this.scope.has(expr.name)) {
@@ -253,6 +256,10 @@ export class TypeChecker {
 
       case 'call':
         this.checkCallExpr(expr)
+        break
+
+      case 'invoke':
+        this.checkInvokeExpr(expr)
         break
 
       case 'member':
@@ -274,7 +281,7 @@ export class TypeChecker {
         } else if (!this.scope.get(expr.target)?.mutable) {
           this.report(`Cannot assign to const '${expr.target}'`, expr)
         }
-        this.checkExpr(expr.value)
+        this.checkExpr(expr.value, this.scope.get(expr.target)?.type)
         break
 
       case 'member_assign':
@@ -311,6 +318,10 @@ export class TypeChecker {
         }
         break
 
+      case 'lambda':
+        this.checkLambdaExpr(expr, expectedType)
+        break
+
       case 'blockpos':
         break
 
@@ -336,11 +347,6 @@ export class TypeChecker {
       this.checkTpCall(expr)
     }
 
-    // Check args
-    for (const arg of expr.args) {
-      this.checkExpr(arg)
-    }
-
     // Check if function exists and arg count matches
     const fn = this.functions.get(expr.fn)
     if (fn) {
@@ -356,7 +362,10 @@ export class TypeChecker {
       }
       for (let i = 0; i < expr.args.length; i++) {
         const paramType = fn.params[i] ? this.normalizeType(fn.params[i].type) : undefined
-        const argType = this.inferType(expr.args[i])
+        if (paramType) {
+          this.checkExpr(expr.args[i], paramType)
+        }
+        const argType = this.inferType(expr.args[i], paramType)
         if (paramType && !this.typesMatch(paramType, argType)) {
           this.report(
             `Argument ${i + 1} of '${expr.fn}' expects ${this.typeToString(paramType)}, got ${this.typeToString(argType)}`,
@@ -364,8 +373,60 @@ export class TypeChecker {
           )
         }
       }
+      return
+    }
+
+    const varType = this.scope.get(expr.fn)?.type
+    if (varType?.kind === 'function_type') {
+      this.checkFunctionCallArgs(expr.args, varType.params, expr.fn, expr)
+      return
+    }
+
+    for (const arg of expr.args) {
+      this.checkExpr(arg)
     }
     // Built-in functions are not checked for arg count
+  }
+
+  private checkInvokeExpr(expr: Extract<Expr, { kind: 'invoke' }>): void {
+    this.checkExpr(expr.callee)
+    const calleeType = this.inferType(expr.callee)
+    if (calleeType.kind !== 'function_type') {
+      this.report('Attempted to call a non-function value', expr.callee)
+      for (const arg of expr.args) {
+        this.checkExpr(arg)
+      }
+      return
+    }
+
+    this.checkFunctionCallArgs(expr.args, calleeType.params, 'lambda', expr)
+  }
+
+  private checkFunctionCallArgs(
+    args: Expr[],
+    params: TypeNode[],
+    calleeName: string,
+    node: Expr
+  ): void {
+    if (args.length !== params.length) {
+      this.report(`Function '${calleeName}' expects ${params.length} arguments, got ${args.length}`, node)
+    }
+
+    for (let i = 0; i < args.length; i++) {
+      const paramType = params[i]
+      if (!paramType) {
+        this.checkExpr(args[i])
+        continue
+      }
+      this.checkExpr(args[i], paramType)
+      const argType = this.inferType(args[i], paramType)
+      if (!this.typesMatch(paramType, argType)) {
+        this.report(
+          `Argument ${i + 1} of '${calleeName}' expects ${this.typeToString(paramType)}, got ${this.typeToString(argType)}`,
+          args[i]
+        )
+      }
+    }
   }
 
   private checkTpCall(expr: Extract<Expr, { kind: 'call' }>): void {
@@ -431,7 +492,54 @@ export class TypeChecker {
     }
   }
 
-  private inferType(expr: Expr): TypeNode {
+  private checkLambdaExpr(expr: Extract<Expr, { kind: 'lambda' }>, expectedType?: TypeNode): void {
+    const normalizedExpected = expectedType ? this.normalizeType(expectedType) : undefined
+    const expectedFnType = normalizedExpected?.kind === 'function_type' ? normalizedExpected : undefined
+    const lambdaType = this.inferLambdaType(expr, expectedFnType)
+
+    if (expectedFnType && !this.typesMatch(expectedFnType, lambdaType)) {
+      this.report(
+        `Type mismatch: expected ${this.typeToString(expectedFnType)}, got ${this.typeToString(lambdaType)}`,
+        expr
+      )
+      return
+    }
+
+    const outerScope = this.scope
+    const outerReturnType = this.currentReturnType
+    const lambdaScope = new Map(this.scope)
+    const paramTypes = expectedFnType?.params ?? lambdaType.params
+
+    for (let i = 0; i < expr.params.length; i++) {
+      lambdaScope.set(expr.params[i].name, {
+        type: paramTypes[i] ?? { kind: 'named', name: 'void' },
+        mutable: true,
+      })
+    }
+
+    this.scope = lambdaScope
+    this.currentReturnType = expr.returnType
+      ? this.normalizeType(expr.returnType)
+      : (expectedFnType?.return ?? lambdaType.return)
+
+    if (Array.isArray(expr.body)) {
+      this.checkBlock(expr.body)
+    } else {
+      this.checkExpr(expr.body, this.currentReturnType)
+      const actualType = this.inferType(expr.body, this.currentReturnType)
+      if (!this.typesMatch(this.currentReturnType, actualType)) {
+        this.report(
+          `Return type mismatch: expected ${this.typeToString(this.currentReturnType)}, got ${this.typeToString(actualType)}`,
+          expr.body
+        )
+      }
+    }
+
+    this.scope = outerScope
+    this.currentReturnType = outerReturnType
+  }
+
+  private inferType(expr: Expr, expectedType?: TypeNode): TypeNode {
     switch (expr.kind) {
       case 'int_lit':
         return { kind: 'named', name: 'int' }
@@ -470,8 +578,19 @@ export class TypeChecker {
         if (expr.fn === 'random_sequence') {
           return { kind: 'named', name: 'void' }
         }
+        const varType = this.scope.get(expr.fn)?.type
+        if (varType?.kind === 'function_type') {
+          return varType.return
+        }
         const fn = this.functions.get(expr.fn)
         return fn?.returnType ?? { kind: 'named', name: 'int' }
+      }
+      case 'invoke': {
+        const calleeType = this.inferType(expr.callee)
+        if (calleeType.kind === 'function_type') {
+          return calleeType.return
+        }
+        return { kind: 'named', name: 'void' }
       }
       case 'member':
         if (expr.obj.kind === 'ident' && this.enums.has(expr.obj.name)) {
@@ -502,9 +621,42 @@ export class TypeChecker {
           return { kind: 'array', elem: this.inferType(expr.elements[0]) }
         }
         return { kind: 'array', elem: { kind: 'named', name: 'int' } }
+      case 'lambda':
+        return this.inferLambdaType(
+          expr,
+          expectedType && this.normalizeType(expectedType).kind === 'function_type'
+            ? this.normalizeType(expectedType) as Extract<TypeNode, { kind: 'function_type' }>
+            : undefined
+        )
       default:
         return { kind: 'named', name: 'void' }
     }
+  }
+
+  private inferLambdaType(
+    expr: Extract<Expr, { kind: 'lambda' }>,
+    expectedType?: Extract<TypeNode, { kind: 'function_type' }>
+  ): Extract<TypeNode, { kind: 'function_type' }> {
+    const params: TypeNode[] = expr.params.map((param, index) => {
+      if (param.type) {
+        return this.normalizeType(param.type)
+      }
+      const inferred = expectedType?.params[index]
+      if (inferred) {
+        return inferred
+      }
+      this.report(`Lambda parameter '${param.name}' requires a type annotation`, expr)
+      return { kind: 'named', name: 'void' }
+    })
+
+    let returnType: TypeNode | undefined = expr.returnType
+      ? this.normalizeType(expr.returnType)
+      : expectedType?.return
+    if (!returnType) {
+      returnType = Array.isArray(expr.body) ? { kind: 'named', name: 'void' } : this.inferType(expr.body)
+    }
+
+    return { kind: 'function_type', params, return: returnType }
   }
 
   private typesMatch(expected: TypeNode, actual: TypeNode): boolean {
@@ -528,6 +680,12 @@ export class TypeChecker {
       return expected.name === actual.name
     }
 
+    if (expected.kind === 'function_type' && actual.kind === 'function_type') {
+      return expected.params.length === actual.params.length &&
+        expected.params.every((param, index) => this.typesMatch(param, actual.params[index])) &&
+        this.typesMatch(expected.return, actual.return)
+    }
+
     return false
   }
 
@@ -541,12 +699,21 @@ export class TypeChecker {
         return type.name
       case 'enum':
         return type.name
+      case 'function_type':
+        return `(${type.params.map(param => this.typeToString(param)).join(', ')}) -> ${this.typeToString(type.return)}`
     }
   }
 
   private normalizeType(type: TypeNode): TypeNode {
     if (type.kind === 'array') {
       return { kind: 'array', elem: this.normalizeType(type.elem) }
+    }
+    if (type.kind === 'function_type') {
+      return {
+        kind: 'function_type',
+        params: type.params.map(param => this.normalizeType(param)),
+        return: this.normalizeType(type.return),
+      }
     }
     if ((type.kind === 'struct' || type.kind === 'enum') && this.enums.has(type.name)) {
       return { kind: 'enum', name: type.name }

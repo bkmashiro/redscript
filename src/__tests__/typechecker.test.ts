@@ -178,6 +178,39 @@ fn test() {
 `)
       expect(errors).toHaveLength(0)
     })
+
+    it('allows lambda variables to be called via function types', () => {
+      const errors = typeCheck(`
+fn test() {
+    let double: (int) -> int = (x: int) => x * 2;
+    let result: int = double(5);
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('allows lambdas as callback arguments', () => {
+      const errors = typeCheck(`
+fn apply(val: int, cb: (int) -> int) -> int {
+    return cb(val);
+}
+
+fn test() {
+    let result: int = apply(5, (x: int) => x * 3);
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('infers single-parameter lambdas from the expected function type', () => {
+      const errors = typeCheck(`
+fn test() {
+    let double: (int) -> int = x => x * 2;
+    let result: int = double(5);
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
   })
 
   describe('return type checking', () => {
