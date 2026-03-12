@@ -1719,3 +1719,78 @@ describe('NBT parameters', () => {
     expect(fn).toContain('{Unbreakable:1b}')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Set Operations
+// ---------------------------------------------------------------------------
+
+describe('Set operations', () => {
+  it('creates a new set', () => {
+    const src = `fn test() { let s = set_new(); }`
+    const files = compile(src, 'settest')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('data modify storage rs:sets __set_0 set value []')
+  })
+
+  it('adds to a set with uniqueness check', () => {
+    const src = `fn test() { let s = set_new(); set_add(s, "apple"); }`
+    const files = compile(src, 'setadd')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('execute unless data storage rs:sets __set_0[{value:apple}] run data modify storage rs:sets __set_0 append value {value:apple}')
+  })
+
+  it('checks set membership', () => {
+    const src = `fn test() { let s = set_new(); set_add(s, "x"); let has = set_contains(s, "x"); }`
+    const files = compile(src, 'setcontains')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('if data storage rs:sets __set_0[{value:x}]')
+  })
+
+  it('removes from a set', () => {
+    const src = `fn test() { let s = set_new(); set_add(s, "y"); set_remove(s, "y"); }`
+    const files = compile(src, 'setremove')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('data remove storage rs:sets __set_0[{value:y}]')
+  })
+
+  it('clears a set', () => {
+    const src = `fn test() { let s = set_new(); set_clear(s); }`
+    const files = compile(src, 'setclear')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('data modify storage rs:sets __set_0 set value []')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Method Syntax Sugar
+// ---------------------------------------------------------------------------
+
+describe('Method syntax sugar', () => {
+  it('transforms obj.method() to method(obj)', () => {
+    const src = `fn test() { let s = set_new(); s.clear(); }`
+    const files = compile(src, 'method1')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('data modify storage rs:sets __set_0 set value []')
+  })
+
+  it('transforms obj.method(arg) to method(obj, arg)', () => {
+    const src = `fn test() { let s = set_new(); s.add("apple"); }`
+    const files = compile(src, 'method2')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('data modify storage rs:sets __set_0 append value {value:apple}')
+  })
+
+  it('transforms obj.method(arg) with contains', () => {
+    const src = `fn test() { let s = set_new(); s.add("x"); let r = s.contains("x"); }`
+    const files = compile(src, 'method3')
+    const fn = getFunction(files, 'test')
+    expect(fn).toBeDefined()
+  })
+
+  it('works with multiple args', () => {
+    const src = `fn test() { let s = set_new(); s.add("a"); s.add("b"); s.remove("a"); }`
+    const files = compile(src, 'method4')
+    const fn = getFunction(files, 'test')
+    expect(fn).toContain('data remove storage rs:sets __set_0[{value:a}]')
+  })
+})
