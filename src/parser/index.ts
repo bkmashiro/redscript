@@ -243,28 +243,25 @@ export class Parser {
 
   private parseType(): TypeNode {
     const token = this.peek()
+    let type: TypeNode
 
     if (token.kind === 'int' || token.kind === 'bool' ||
         token.kind === 'float' || token.kind === 'string' || token.kind === 'void') {
       this.advance()
-      let type: TypeNode = { kind: 'named', name: token.kind }
-
-      // Check for array type
-      while (this.match('[')) {
-        this.expect(']')
-        type = { kind: 'array', elem: type }
-      }
-
-      return type
-    }
-
-    // Struct type (identifier)
-    if (token.kind === 'ident') {
+      type = { kind: 'named', name: token.kind }
+    } else if (token.kind === 'ident') {
       this.advance()
-      return { kind: 'struct', name: token.value }
+      type = { kind: 'struct', name: token.value }
+    } else {
+      this.error(`Expected type, got '${token.kind}'`)
     }
 
-    this.error(`Expected type, got '${token.kind}'`)
+    while (this.match('[')) {
+      this.expect(']')
+      type = { kind: 'array', elem: type }
+    }
+
+    return type
   }
 
   // -------------------------------------------------------------------------
@@ -436,11 +433,11 @@ export class Parser {
     this.expect('(')
     const binding = this.expect('ident').value
     this.expect('in')
-    const selector = this.parseSelector()
+    const iterable = this.parseExpr()
     this.expect(')')
     const body = this.parseBlock()
 
-    return { kind: 'foreach', binding, selector, body }
+    return { kind: 'foreach', binding, iterable, body }
   }
 
   private parseAsStmt(): Stmt {
@@ -604,6 +601,7 @@ export class Parser {
             'untag': '__entity_untag',
             'has_tag': '__entity_has_tag',
             'push': '__array_push',
+            'pop': '__array_pop',
           }
           const internalFn = methodMap[expr.field]
           if (internalFn) {

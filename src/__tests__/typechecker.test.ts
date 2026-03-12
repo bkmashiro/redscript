@@ -152,11 +152,11 @@ fn test() {
       expect(errors[0].message).toContain("has no field 'z'")
     })
 
-    it('allows array.length access', () => {
+    it('allows array.len access', () => {
       const errors = typeCheck(`
 fn test() {
     let arr: int[] = [1, 2, 3];
-    let len: int = arr.length;
+    let len: int = arr.len;
 }
 `)
       expect(errors).toHaveLength(0)

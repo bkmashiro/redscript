@@ -93,8 +93,17 @@ export class TypeChecker {
         this.checkBlock(stmt.body)
         break
       case 'foreach':
-        // Binding is implicitly an entity
-        this.scope.set(stmt.binding, { kind: 'named', name: 'void' }) // Entity marker
+        this.checkExpr(stmt.iterable)
+        if (stmt.iterable.kind === 'selector') {
+          this.scope.set(stmt.binding, { kind: 'named', name: 'void' }) // Entity marker
+        } else {
+          const iterableType = this.inferType(stmt.iterable)
+          if (iterableType.kind === 'array') {
+            this.scope.set(stmt.binding, iterableType.elem)
+          } else {
+            this.scope.set(stmt.binding, { kind: 'named', name: 'void' })
+          }
+        }
         this.checkBlock(stmt.body)
         break
       case 'as_block':
@@ -198,6 +207,14 @@ export class TypeChecker {
       case 'index':
         this.checkExpr(expr.obj)
         this.checkExpr(expr.index)
+        const indexType = this.inferType(expr.index)
+        if (indexType.kind !== 'named' || indexType.name !== 'int') {
+          this.collector.error(
+            'TypeError',
+            'Array index must be int',
+            1, 1
+          )
+        }
         break
 
       case 'struct_lit':
@@ -261,8 +278,7 @@ export class TypeChecker {
             )
           }
         } else if (varType.kind === 'array') {
-          // Array.length is valid, other members are not
-          if (expr.field !== 'length' && expr.field !== 'push') {
+          if (expr.field !== 'len' && expr.field !== 'push' && expr.field !== 'pop') {
             this.collector.error(
               'TypeError',
               `Array has no field '${expr.field}'`,
@@ -299,8 +315,32 @@ export class TypeChecker {
       case 'ident':
         return this.scope.get(expr.name) ?? { kind: 'named', name: 'void' }
       case 'call': {
+        if (expr.fn === '__array_push') {
+          return { kind: 'named', name: 'void' }
+        }
+        if (expr.fn === '__array_pop') {
+          const target = expr.args[0]
+          if (target && target.kind === 'ident') {
+            const targetType = this.scope.get(target.name)
+            if (targetType?.kind === 'array') return targetType.elem
+          }
+          return { kind: 'named', name: 'int' }
+        }
         const fn = this.functions.get(expr.fn)
         return fn?.returnType ?? { kind: 'named', name: 'int' }
+      }
+      case 'member':
+        if (expr.obj.kind === 'ident') {
+          const objType = this.scope.get(expr.obj.name)
+          if (objType?.kind === 'array' && expr.field === 'len') {
+            return { kind: 'named', name: 'int' }
+          }
+        }
+        return { kind: 'named', name: 'void' }
+      case 'index': {
+        const objType = this.inferType(expr.obj)
+        if (objType.kind === 'array') return objType.elem
+        return { kind: 'named', name: 'void' }
       }
       case 'binary':
         if (['==', '!=', '<', '<=', '>', '>=', '&&', '||'].includes(expr.op)) {

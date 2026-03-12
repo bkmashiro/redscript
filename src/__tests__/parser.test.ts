@@ -170,7 +170,8 @@ describe('Parser', () => {
       const stmt = parseStmt('foreach (z in @e[type=zombie]) { kill(z); }')
       expect(stmt.kind).toBe('foreach')
       expect((stmt as any).binding).toBe('z')
-      expect((stmt as any).selector.kind).toBe('@e')
+      expect((stmt as any).iterable.kind).toBe('selector')
+      expect((stmt as any).iterable.sel.kind).toBe('@e')
     })
 
     it('parses as block', () => {
@@ -427,6 +428,57 @@ describe('Parser', () => {
           field: 'health',
         })
       })
+
+      it('parses array len property', () => {
+        const expr = parseExpr('arr.len')
+        expect(expr).toEqual({
+          kind: 'member',
+          obj: { kind: 'ident', name: 'arr' },
+          field: 'len',
+        })
+      })
+    })
+
+    describe('arrays', () => {
+      it('parses array literal', () => {
+        expect(parseExpr('[1, 2, 3]')).toEqual({
+          kind: 'array_lit',
+          elements: [
+            { kind: 'int_lit', value: 1 },
+            { kind: 'int_lit', value: 2 },
+            { kind: 'int_lit', value: 3 },
+          ],
+        })
+      })
+
+      it('parses array index access', () => {
+        expect(parseExpr('arr[i]')).toEqual({
+          kind: 'index',
+          obj: { kind: 'ident', name: 'arr' },
+          index: { kind: 'ident', name: 'i' },
+        })
+      })
+
+      it('parses array push call', () => {
+        expect(parseExpr('arr.push(4)')).toEqual({
+          kind: 'call',
+          fn: '__array_push',
+          args: [
+            { kind: 'ident', name: 'arr' },
+            { kind: 'int_lit', value: 4 },
+          ],
+        })
+      })
+
+      it('parses array pop call', () => {
+        expect(parseExpr('arr.pop()')).toEqual({
+          kind: 'call',
+          fn: '__array_pop',
+          args: [
+            { kind: 'ident', name: 'arr' },
+          ],
+        })
+      })
     })
 
     describe('grouping', () => {
@@ -497,8 +549,24 @@ fn kill_zombies() {
       const stmt = fn.body[0]
       expect(stmt.kind).toBe('foreach')
       expect((stmt as any).binding).toBe('z')
-      expect((stmt as any).selector.filters.type).toBe('zombie')
-      expect((stmt as any).selector.filters.distance).toEqual({ max: 10 })
+      expect((stmt as any).iterable.sel.filters.type).toBe('zombie')
+      expect((stmt as any).iterable.sel.filters.distance).toEqual({ max: 10 })
+    })
+
+    it('parses foreach over array', () => {
+      const source = `
+fn walk() {
+    let arr: int[] = [1, 2, 3];
+    foreach (x in arr) {
+        say("tick");
+    }
+}
+`
+      const program = parse(source)
+      const stmt = program.declarations[0].body[1]
+      expect(stmt.kind).toBe('foreach')
+      expect((stmt as any).binding).toBe('x')
+      expect((stmt as any).iterable).toEqual({ kind: 'ident', name: 'arr' })
     })
 
     it('parses while loop', () => {
