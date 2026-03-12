@@ -9,6 +9,7 @@
  */
 
 import { compile, check } from './index'
+import { generateCommandBlocks } from './codegen/cmdblock'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -20,7 +21,7 @@ function printUsage(): void {
 RedScript Compiler
 
 Usage:
-  redscript compile <file> [-o <outdir>] [--namespace <ns>]
+  redscript compile <file> [-o <outdir>] [--namespace <ns>] [--target <target>]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>]
   redscript check <file>
   redscript version
@@ -34,7 +35,12 @@ Commands:
 Options:
   -o, --output <dir>     Output directory (default: ./dist)
   --namespace <ns>       Datapack namespace (default: derived from filename)
+  --target <target>      Output target: datapack (default) or cmdblock
   -h, --help             Show this help message
+
+Targets:
+  datapack  Generate a full Minecraft datapack (default)
+  cmdblock  Generate JSON structure for command block placement
 `)
 }
 
@@ -53,6 +59,7 @@ function parseArgs(args: string[]): {
   file?: string
   output?: string
   namespace?: string
+  target?: string
   help?: boolean
 } {
   const result: ReturnType<typeof parseArgs> = {}
@@ -69,6 +76,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--namespace') {
       result.namespace = args[++i]
+      i++
+    } else if (arg === '--target') {
+      result.target = args[++i]
       i++
     } else if (!result.command) {
       result.command = arg
@@ -90,7 +100,7 @@ function deriveNamespace(filePath: string): string {
   return basename.toLowerCase().replace(/[^a-z0-9]/g, '_')
 }
 
-function compileCommand(file: string, output: string, namespace: string): void {
+function compileCommand(file: string, output: string, namespace: string, target: string = 'datapack'): void {
   // Read source file
   if (!fs.existsSync(file)) {
     console.error(`Error: File not found: ${file}`)
@@ -102,21 +112,38 @@ function compileCommand(file: string, output: string, namespace: string): void {
   try {
     const result = compile(source, { namespace })
 
-    // Create output directory
-    fs.mkdirSync(output, { recursive: true })
+    if (target === 'cmdblock') {
+      // Generate command block JSON
+      const hasTick = result.files.some(f => f.path.includes('__tick.mcfunction'))
+      const hasLoad = result.files.some(f => f.path.includes('__load.mcfunction'))
+      const cmdBlocks = generateCommandBlocks(namespace, hasTick, hasLoad)
 
-    // Write all files
-    for (const dataFile of result.files) {
-      const filePath = path.join(output, dataFile.path)
-      const dir = path.dirname(filePath)
-      fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(filePath, dataFile.content)
+      // Write command block JSON
+      fs.mkdirSync(output, { recursive: true })
+      const outputFile = path.join(output, `${namespace}_cmdblocks.json`)
+      fs.writeFileSync(outputFile, JSON.stringify(cmdBlocks, null, 2))
+
+      console.log(`✓ Generated command blocks for ${file}`)
+      console.log(`  Output: ${outputFile}`)
+      console.log(`  Blocks: ${cmdBlocks.blocks.length}`)
+    } else {
+      // Default: generate datapack
+      // Create output directory
+      fs.mkdirSync(output, { recursive: true })
+
+      // Write all files
+      for (const dataFile of result.files) {
+        const filePath = path.join(output, dataFile.path)
+        const dir = path.dirname(filePath)
+        fs.mkdirSync(dir, { recursive: true })
+        fs.writeFileSync(filePath, dataFile.content)
+      }
+
+      console.log(`✓ Compiled ${file} to ${output}/`)
+      console.log(`  Namespace: ${namespace}`)
+      console.log(`  Functions: ${result.ir.functions.length}`)
+      console.log(`  Files: ${result.files.length}`)
     }
-
-    console.log(`✓ Compiled ${file} to ${output}/`)
-    console.log(`  Namespace: ${namespace}`)
-    console.log(`  Functions: ${result.ir.functions.length}`)
-    console.log(`  Files: ${result.files.length}`)
   } catch (err) {
     console.error(`Error: ${(err as Error).message}`)
     process.exit(1)
@@ -254,7 +281,8 @@ switch (parsed.command) {
     compileCommand(
       parsed.file,
       parsed.output ?? './dist',
-      parsed.namespace ?? deriveNamespace(parsed.file)
+      parsed.namespace ?? deriveNamespace(parsed.file),
+      parsed.target ?? 'datapack'
     )
     break
 
