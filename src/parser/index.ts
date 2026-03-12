@@ -9,7 +9,7 @@ import { Lexer, type Token, type TokenKind } from '../lexer'
 import type {
   Block, Decorator, EntitySelector, Expr, FnDecl, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Stmt, TypeNode, AssignOp,
-  StructDecl, StructField, ExecuteSubcommand
+  StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
@@ -125,6 +125,7 @@ export class Parser {
     let namespace = defaultNamespace
     const declarations: FnDecl[] = []
     const structs: StructDecl[] = []
+    const enums: EnumDecl[] = []
 
     // Check for namespace declaration
     if (this.check('namespace')) {
@@ -138,12 +139,14 @@ export class Parser {
     while (!this.check('eof')) {
       if (this.check('struct')) {
         structs.push(this.parseStructDecl())
+      } else if (this.check('enum')) {
+        enums.push(this.parseEnumDecl())
       } else {
         declarations.push(this.parseFnDecl())
       }
     }
 
-    return { namespace, declarations, structs }
+    return { namespace, declarations, structs, enums }
   }
 
   // -------------------------------------------------------------------------
@@ -168,6 +171,37 @@ export class Parser {
 
     this.expect('}')
     return this.withLoc({ name, fields }, structToken)
+  }
+
+  private parseEnumDecl(): EnumDecl {
+    const enumToken = this.expect('enum')
+    const name = this.expect('ident').value
+    this.expect('{')
+
+    const variants: EnumVariant[] = []
+    let nextValue = 0
+
+    while (!this.check('}') && !this.check('eof')) {
+      const variantToken = this.expect('ident')
+      const variant: EnumVariant = { name: variantToken.value }
+
+      if (this.match('=')) {
+        const valueToken = this.expect('int_lit')
+        variant.value = parseInt(valueToken.value, 10)
+        nextValue = variant.value + 1
+      } else {
+        variant.value = nextValue++
+      }
+
+      variants.push(variant)
+
+      if (!this.match(',')) {
+        break
+      }
+    }
+
+    this.expect('}')
+    return this.withLoc({ name, variants }, enumToken)
   }
 
   // -------------------------------------------------------------------------
@@ -471,15 +505,14 @@ export class Parser {
     this.expect(')')
     this.expect('{')
 
-    const arms: Array<{ pattern: number | null; body: Block }> = []
+    const arms: Array<{ pattern: Expr | null; body: Block }> = []
     while (!this.check('}') && !this.check('eof')) {
-      let pattern: number | null
+      let pattern: Expr | null
       if (this.check('ident') && this.peek().value === '_') {
         this.advance()
         pattern = null
       } else {
-        const value = this.expect('int_lit')
-        pattern = parseInt(value.value, 10)
+        pattern = this.parseExpr()
       }
 
       this.expect('=>')

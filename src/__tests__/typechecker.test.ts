@@ -176,6 +176,24 @@ fn test() {
       expect(errors.length).toBeGreaterThan(0)
       expect(errors[0].message).toContain("Cannot access member")
     })
+
+    it('allows enum variants and enum-typed variables', () => {
+      const errors = typeCheck(`
+enum Direction { North, South, East, West }
+
+fn test() {
+    let dir: Direction = Direction.North;
+    if (dir == Direction.South) {
+        say("south");
+    }
+    match (dir) {
+        Direction.East => { say("east"); }
+        _ => { say("other"); }
+    }
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
   })
 
   describe('control flow', () => {

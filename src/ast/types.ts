@@ -17,6 +17,7 @@ export type TypeNode =
   | { kind: 'named'; name: PrimitiveType }
   | { kind: 'array'; elem: TypeNode }
   | { kind: 'struct'; name: string }
+  | { kind: 'enum'; name: string }
 
 // ---------------------------------------------------------------------------
 // Range Expression
@@ -103,7 +104,7 @@ export type Stmt =
   | { kind: 'while';      cond: Expr; body: Block }
   | { kind: 'for';        init?: Stmt; cond: Expr; step: Expr; body: Block }
   | { kind: 'foreach';    binding: string; iterable: Expr; body: Block }
-  | { kind: 'match';      expr: Expr; arms: { pattern: number | null; body: Block }[] }
+  | { kind: 'match';      expr: Expr; arms: { pattern: Expr | null; body: Block }[] }
   | { kind: 'as_block';   selector: EntitySelector; body: Block }
   | { kind: 'at_block';   selector: EntitySelector; body: Block }
   | { kind: 'as_at';      as_sel: EntitySelector; at_sel: EntitySelector; body: Block }
@@ -152,6 +153,16 @@ export interface StructDecl {
   fields: StructField[]
 }
 
+export interface EnumVariant {
+  name: string
+  value?: number
+}
+
+export interface EnumDecl {
+  name: string
+  variants: EnumVariant[]
+}
+
 // ---------------------------------------------------------------------------
 // Program (Top-Level)
 // ---------------------------------------------------------------------------
@@ -160,4 +171,5 @@ export interface Program {
   namespace: string    // Inferred from filename or `namespace mypack;`
   declarations: FnDecl[]
   structs: StructDecl[]
+  enums: EnumDecl[]
 }

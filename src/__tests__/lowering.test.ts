@@ -201,6 +201,28 @@ describe('Lowering', () => {
       expect(rawCmds.some(cmd => cmd.includes('matches ..0 run function'))).toBe(true)
       expect(ir.functions.filter(f => f.name.includes('match_')).length).toBe(3)
     })
+
+    it('lowers enum variants to integer constants in comparisons and match arms', () => {
+      const ir = compile(`
+enum Direction { North, South, East, West }
+
+fn choose(dir: Direction) {
+  if (dir == Direction.South) {
+    say("south");
+  }
+  match (dir) {
+    Direction.North => { say("north"); }
+    Direction.South => { say("south"); }
+    _ => { say("other"); }
+  }
+}
+`)
+      const fn = getFunction(ir, 'choose')!
+      const rawCmds = getRawCommands(fn)
+      expect(getInstructions(fn).some(i => i.op === 'cmp' && (i as any).rhs.value === 1)).toBe(true)
+      expect(rawCmds.some(cmd => cmd.includes('matches 0 run function'))).toBe(true)
+      expect(rawCmds.some(cmd => cmd.includes('matches 1 run function'))).toBe(true)
+    })
   })
 
   describe('arrays', () => {

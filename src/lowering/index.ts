@@ -79,6 +79,7 @@ export class Lowering {
 
   // Struct definitions: name → { fieldName: TypeNode }
   private structDefs: Map<string, Map<string, TypeNode>> = new Map()
+  private enumDefs: Map<string, Map<string, number>> = new Map()
   // Variable types: varName → TypeNode
   private varTypes: Map<string, TypeNode> = new Map()
   // Float variables (stored as fixed-point × 1000)
@@ -100,6 +101,14 @@ export class Lowering {
         fields.set(field.name, field.type)
       }
       this.structDefs.set(struct.name, fields)
+    }
+
+    for (const enumDecl of program.enums ?? []) {
+      const variants = new Map<string, number>()
+      for (const variant of enumDecl.variants) {
+        variants.set(variant.name, variant.value ?? 0)
+      }
+      this.enumDefs.set(enumDecl.name, variants)
     }
 
     for (const fn of program.declarations) {
@@ -124,6 +133,7 @@ export class Lowering {
     for (let i = 0; i < fn.params.length; i++) {
       const paramName = fn.params[i].name
       this.varMap.set(paramName, `$${paramName}`)
+      this.varTypes.set(paramName, this.normalizeType(fn.params[i].type))
     }
 
     // Start entry block
@@ -283,9 +293,10 @@ export class Lowering {
 
     // Track variable type
     if (stmt.type) {
-      this.varTypes.set(stmt.name, stmt.type)
+      const normalizedType = this.normalizeType(stmt.type)
+      this.varTypes.set(stmt.name, normalizedType)
       // Track float variables for fixed-point arithmetic
-      if (stmt.type.kind === 'named' && stmt.type.name === 'float') {
+      if (normalizedType.kind === 'named' && normalizedType.name === 'float') {
         this.floatVars.add(stmt.name)
       }
     }
@@ -480,7 +491,7 @@ export class Lowering {
     const matchedVar = this.builder.freshTemp()
     this.builder.emitAssign(matchedVar, { kind: 'const', value: 0 })
 
-    let defaultArm: { pattern: number | null; body: Block } | null = null
+    let defaultArm: { pattern: Expr | null; body: Block } | null = null
 
     for (const arm of stmt.arms) {
       if (arm.pattern === null) {
@@ -488,8 +499,13 @@ export class Lowering {
         continue
       }
 
+      const patternValue = this.lowerExpr(arm.pattern)
+      if (patternValue.kind !== 'const') {
+        throw new Error('Match patterns must lower to compile-time constants')
+      }
+
       const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`
-      this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${arm.pattern} run function ${this.namespace}:${subFnName}`)
+      this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${patternValue.value} run function ${this.namespace}:${subFnName}`)
       this.emitMatchArmSubFunction(subFnName, matchedVar, arm.body, true)
     }
 
@@ -750,6 +766,17 @@ export class Lowering {
         return { kind: 'var', name: `$${expr.name}` }
       }
 
+      case 'member':
+        if (expr.obj.kind === 'ident' && this.enumDefs.has(expr.obj.name)) {
+          const variants = this.enumDefs.get(expr.obj.name)!
+          const value = variants.get(expr.field)
+          if (value === undefined) {
+            throw new Error(`Unknown enum variant ${expr.obj.name}.${expr.field}`)
+          }
+          return { kind: 'const', value }
+        }
+        return this.lowerMemberExpr(expr)
+
       case 'selector':
         // Selectors are handled inline in builtins
         return { kind: 'var', name: this.selectorToString(expr.sel) }
@@ -765,9 +792,6 @@ export class Lowering {
 
       case 'call':
         return this.lowerCallExpr(expr)
-
-      case 'member':
-        return this.lowerMemberExpr(expr)
 
       case 'member_assign':
         return this.lowerMemberAssign(expr)
@@ -1286,7 +1310,20 @@ export class Lowering {
     if (expr.kind === 'ident') {
       return this.varTypes.get(expr.name)
     }
+    if (expr.kind === 'member' && expr.obj.kind === 'ident' && this.enumDefs.has(expr.obj.name)) {
+      return { kind: 'enum', name: expr.obj.name }
+    }
     return undefined
+  }
+
+  private normalizeType(type: TypeNode): TypeNode {
+    if (type.kind === 'array') {
+      return { kind: 'array', elem: this.normalizeType(type.elem) }
+    }
+    if ((type.kind === 'struct' || type.kind === 'enum') && this.enumDefs.has(type.name)) {
+      return { kind: 'enum', name: type.name }
+    }
+    return type
   }
 
   private readArrayElement(arrayName: string, index: Operand): Operand {

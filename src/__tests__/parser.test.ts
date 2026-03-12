@@ -25,6 +25,7 @@ describe('Parser', () => {
       const program = parse('')
       expect(program.namespace).toBe('test')
       expect(program.declarations).toEqual([])
+      expect(program.enums).toEqual([])
     })
 
     it('parses namespace declaration', () => {
@@ -94,6 +95,21 @@ describe('Parser', () => {
       const program = parse('fn f(a: int[]) {}')
       const param = program.declarations[0].params[0]
       expect(param.type).toEqual({ kind: 'array', elem: { kind: 'named', name: 'int' } })
+    })
+
+    it('parses enum declarations', () => {
+      const program = parse('enum Direction { North, South = 3, East, West }')
+      expect(program.enums).toEqual([
+        {
+          name: 'Direction',
+          variants: [
+            { name: 'North', value: 0 },
+            { name: 'South', value: 3 },
+            { name: 'East', value: 4 },
+            { name: 'West', value: 5 },
+          ],
+        },
+      ])
     })
   })
 
@@ -179,8 +195,8 @@ describe('Parser', () => {
       expect(stmt.kind).toBe('match')
       expect((stmt as any).expr).toEqual({ kind: 'ident', name: 'choice' })
       expect((stmt as any).arms).toEqual([
-        { pattern: 1, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'one' }] } }] },
-        { pattern: 2, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'two' }] } }] },
+        { pattern: { kind: 'int_lit', value: 1 }, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'one' }] } }] },
+        { pattern: { kind: 'int_lit', value: 2 }, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'two' }] } }] },
         { pattern: null, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'other' }] } }] },
       ])
     })
@@ -322,6 +338,15 @@ describe('Parser', () => {
       it('parses no-arg call', () => {
         const expr = parseExpr('foo()')
         expect(expr).toEqual({ kind: 'call', fn: 'foo', args: [] })
+      })
+
+      it('parses enum variant member access', () => {
+        const expr = parseExpr('Direction.North')
+        expect(expr).toEqual({
+          kind: 'member',
+          obj: { kind: 'ident', name: 'Direction' },
+          field: 'North',
+        })
       })
     })
 

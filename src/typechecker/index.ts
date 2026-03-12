@@ -16,6 +16,7 @@ export class TypeChecker {
   private collector: DiagnosticCollector
   private functions: Map<string, FnDecl> = new Map()
   private structs: Map<string, Map<string, TypeNode>> = new Map()
+  private enums: Map<string, Map<string, number>> = new Map()
   private currentFn: FnDecl | null = null
   private scope: Map<string, TypeNode> = new Map()
 
@@ -53,6 +54,14 @@ export class TypeChecker {
       this.structs.set(struct.name, fields)
     }
 
+    for (const enumDecl of program.enums ?? []) {
+      const variants = new Map<string, number>()
+      for (const variant of enumDecl.variants) {
+        variants.set(variant.name, variant.value ?? 0)
+      }
+      this.enums.set(enumDecl.name, variants)
+    }
+
     // Second pass: type check function bodies
     for (const fn of program.declarations) {
       this.checkFunction(fn)
@@ -67,7 +76,7 @@ export class TypeChecker {
 
     // Add parameters to scope
     for (const param of fn.params) {
-      this.scope.set(param.name, param.type)
+      this.scope.set(param.name, this.normalizeType(param.type))
     }
 
     // Check body
@@ -122,6 +131,12 @@ export class TypeChecker {
       case 'match':
         this.checkExpr(stmt.expr)
         for (const arm of stmt.arms) {
+          if (arm.pattern) {
+            this.checkExpr(arm.pattern)
+            if (!this.typesMatch(this.inferType(stmt.expr), this.inferType(arm.pattern))) {
+              this.report('Match arm pattern type must match subject type', arm.pattern)
+            }
+          }
           this.checkBlock(arm.body)
         }
         break
@@ -146,11 +161,26 @@ export class TypeChecker {
 
   private checkLetStmt(stmt: Extract<Stmt, { kind: 'let' }>): void {
     // Add variable to scope
-    const type = stmt.type ?? this.inferType(stmt.init)
+    const type = stmt.type ? this.normalizeType(stmt.type) : this.inferType(stmt.init)
     this.scope.set(stmt.name, type)
 
     // Check initializer
     this.checkExpr(stmt.init)
+
+    const expectedType = stmt.type ? this.normalizeType(stmt.type) : undefined
+    const actualType = this.inferType(stmt.init)
+    if (
+      expectedType &&
+      stmt.init.kind !== 'struct_lit' &&
+      stmt.init.kind !== 'array_lit' &&
+      !(actualType.kind === 'named' && actualType.name === 'void') &&
+      !this.typesMatch(expectedType, actualType)
+    ) {
+      this.report(
+        `Type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`,
+        stmt
+      )
+    }
   }
 
   private checkReturnStmt(stmt: Extract<Stmt, { kind: 'return' }>): void {
@@ -274,15 +304,35 @@ export class TypeChecker {
           expr
         )
       }
+      for (let i = 0; i < expr.args.length; i++) {
+        const paramType = fn.params[i] ? this.normalizeType(fn.params[i].type) : undefined
+        const argType = this.inferType(expr.args[i])
+        if (paramType && !this.typesMatch(paramType, argType)) {
+          this.report(
+            `Argument ${i + 1} of '${expr.fn}' expects ${this.typeToString(paramType)}, got ${this.typeToString(argType)}`,
+            expr.args[i]
+          )
+        }
+      }
     }
     // Built-in functions are not checked for arg count
   }
 
   private checkMemberExpr(expr: Extract<Expr, { kind: 'member' }>): void {
-    this.checkExpr(expr.obj)
+    if (!(expr.obj.kind === 'ident' && this.enums.has(expr.obj.name))) {
+      this.checkExpr(expr.obj)
+    }
 
     // Check if accessing member on appropriate type
     if (expr.obj.kind === 'ident') {
+      if (this.enums.has(expr.obj.name)) {
+        const enumVariants = this.enums.get(expr.obj.name)!
+        if (!enumVariants.has(expr.field)) {
+          this.report(`Enum '${expr.obj.name}' has no variant '${expr.field}'`, expr)
+        }
+        return
+      }
+
       const varType = this.scope.get(expr.obj.name)
       if (varType) {
         // Allow member access on struct types
@@ -346,6 +396,9 @@ export class TypeChecker {
         return fn?.returnType ?? { kind: 'named', name: 'int' }
       }
       case 'member':
+        if (expr.obj.kind === 'ident' && this.enums.has(expr.obj.name)) {
+          return { kind: 'enum', name: expr.obj.name }
+        }
         if (expr.obj.kind === 'ident') {
           const objType = this.scope.get(expr.obj.name)
           if (objType?.kind === 'array' && expr.field === 'len') {
@@ -393,6 +446,10 @@ export class TypeChecker {
       return expected.name === actual.name
     }
 
+    if (expected.kind === 'enum' && actual.kind === 'enum') {
+      return expected.name === actual.name
+    }
+
     return false
   }
 
@@ -404,6 +461,18 @@ export class TypeChecker {
         return `${this.typeToString(type.elem)}[]`
       case 'struct':
         return type.name
+      case 'enum':
+        return type.name
     }
+  }
+
+  private normalizeType(type: TypeNode): TypeNode {
+    if (type.kind === 'array') {
+      return { kind: 'array', elem: this.normalizeType(type.elem) }
+    }
+    if ((type.kind === 'struct' || type.kind === 'enum') && this.enums.has(type.name)) {
+      return { kind: 'enum', name: type.name }
+    }
+    return type
   }
 }
