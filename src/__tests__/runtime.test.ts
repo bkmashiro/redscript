@@ -221,4 +221,69 @@ fn buff_player() {
     ])
     expect(runtime.xp.get(player.id)).toBe(12)
   })
+
+  it('executes lambda variables through generated sub-functions', () => {
+    const runtime = loadCompiledProgram(`
+fn test() {
+    let double: (int) -> int = (x: int) => x * 2;
+    let result: int = double(5);
+    scoreboard_set("lambda", "direct", result);
+}
+`)
+
+    runtime.load()
+    runtime.execFunction('test')
+
+    expect(runtime.getScore('lambda', 'direct')).toBe(10)
+  })
+
+  it('executes lambdas passed as callback arguments', () => {
+    const runtime = loadCompiledProgram(`
+fn apply(val: int, cb: (int) -> int) -> int {
+    return cb(val);
+}
+
+fn test() {
+    let result: int = apply(5, (x: int) => x * 3);
+    scoreboard_set("lambda", "callback", result);
+}
+`)
+
+    runtime.load()
+    runtime.execFunction('test')
+
+    expect(runtime.getScore('lambda', 'callback')).toBe(15)
+  })
+
+  it('executes block-body lambdas', () => {
+    const runtime = loadCompiledProgram(`
+fn test() {
+    let process: (int) -> int = (x: int) => {
+        let doubled: int = x * 2;
+        return doubled + 1;
+    };
+    let result: int = process(5);
+    scoreboard_set("lambda", "block", result);
+}
+`)
+
+    runtime.load()
+    runtime.execFunction('test')
+
+    expect(runtime.getScore('lambda', 'block')).toBe(11)
+  })
+
+  it('executes immediately-invoked expression-body lambdas', () => {
+    const runtime = loadCompiledProgram(`
+fn test() {
+    let result: int = ((x: int) => x * 2)(5);
+    scoreboard_set("lambda", "iife", result);
+}
+`)
+
+    runtime.load()
+    runtime.execFunction('test')
+
+    expect(runtime.getScore('lambda', 'iife')).toBe(10)
+  })
 })

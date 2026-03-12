@@ -70,6 +70,24 @@ fn test() -> int {
       expect(call.args[0]).toEqual({ kind: 'const', value: 10 })
       expect(call.args[1]).toEqual({ kind: 'const', value: 1 })
     })
+
+    it('specializes callback-accepting functions for lambda arguments', () => {
+      const ir = compile(`
+fn apply(val: int, cb: (int) -> int) -> int {
+  return cb(val);
+}
+
+fn test() -> int {
+  return apply(5, (x: int) => x * 3);
+}
+`)
+      expect(getFunction(ir, '__lambda_0')).toBeDefined()
+      const specialized = ir.functions.find(fn => fn.name.startsWith('apply__cb___lambda_0'))
+      expect(specialized).toBeDefined()
+      expect(specialized?.params).toEqual(['$val'])
+      const call = getInstructions(specialized!).find(i => i.op === 'call') as any
+      expect(call.fn).toBe('__lambda_0')
+    })
   })
 
   describe('let statements', () => {
@@ -131,6 +149,33 @@ fn foo() {
       const term = fn.blocks[0].term
       expect(term.op).toBe('return')
       expect((term as any).value).toBeUndefined()
+    })
+  })
+
+  describe('lambda lowering', () => {
+    it('lowers lambda variables to generated sub-functions', () => {
+      const ir = compile(`
+fn test() {
+  let double: (int) -> int = (x: int) => x * 2;
+  let result: int = double(5);
+}
+`)
+      const lambdaFn = getFunction(ir, '__lambda_0')
+      expect(lambdaFn).toBeDefined()
+      const testFn = getFunction(ir, 'test')!
+      const calls = getInstructions(testFn).filter((instr): instr is IRInstr & { op: 'call' } => instr.op === 'call')
+      expect(calls.some(call => call.fn === '__lambda_0')).toBe(true)
+    })
+
+    it('inlines immediately-invoked expression-body lambdas', () => {
+      const ir = compile(`
+fn test() -> int {
+  return ((x: int) => x * 2)(5);
+}
+`)
+      expect(ir.functions.find(fn => fn.name.startsWith('__lambda_'))).toBeUndefined()
+      const testFn = getFunction(ir, 'test')!
+      expect(getInstructions(testFn).some(instr => instr.op === 'binop')).toBe(true)
     })
   })
 
