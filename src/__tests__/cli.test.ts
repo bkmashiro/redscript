@@ -2,6 +2,8 @@ import { compile, check } from '../index'
 import * as fs from 'fs'
 import * as path from 'path'
 
+// Note: watch command is tested manually as it's an interactive long-running process
+
 describe('CLI API', () => {
   describe('compile()', () => {
     it('compiles simple source', () => {

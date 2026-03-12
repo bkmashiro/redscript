@@ -21,11 +21,13 @@ RedScript Compiler
 
 Usage:
   redscript compile <file> [-o <outdir>] [--namespace <ns>]
+  redscript watch <dir> [-o <outdir>] [--namespace <ns>]
   redscript check <file>
   redscript version
 
 Commands:
   compile   Compile a RedScript file to a Minecraft datapack
+  watch     Watch a directory for .rs file changes and recompile
   check     Check a RedScript file for errors without generating output
   version   Print the RedScript version
 
@@ -139,6 +141,101 @@ function checkCommand(file: string): void {
   console.log(`✓ ${file} is valid`)
 }
 
+function watchCommand(dir: string, output: string, namespace?: string): void {
+  // Check if directory exists
+  if (!fs.existsSync(dir)) {
+    console.error(`Error: Directory not found: ${dir}`)
+    process.exit(1)
+  }
+
+  const stat = fs.statSync(dir)
+  if (!stat.isDirectory()) {
+    console.error(`Error: ${dir} is not a directory`)
+    process.exit(1)
+  }
+
+  console.log(`👁  Watching ${dir} for .rs file changes...`)
+  console.log(`   Output: ${output}`)
+  console.log(`   Press Ctrl+C to stop\n`)
+
+  // Debounce timer
+  let debounceTimer: NodeJS.Timeout | null = null
+
+  // Compile all .rs files in directory
+  function compileAll(): void {
+    const files = findRsFiles(dir)
+    if (files.length === 0) {
+      console.log(`⚠  No .rs files found in ${dir}`)
+      return
+    }
+
+    let hasErrors = false
+    for (const file of files) {
+      try {
+        const source = fs.readFileSync(file, 'utf-8')
+        const ns = namespace ?? deriveNamespace(file)
+        const result = compile(source, { namespace: ns })
+
+        // Create output directory
+        fs.mkdirSync(output, { recursive: true })
+
+        // Write all files
+        for (const dataFile of result.files) {
+          const filePath = path.join(output, dataFile.path)
+          const fileDir = path.dirname(filePath)
+          fs.mkdirSync(fileDir, { recursive: true })
+          fs.writeFileSync(filePath, dataFile.content)
+        }
+
+        const timestamp = new Date().toLocaleTimeString()
+        console.log(`✓ [${timestamp}] Compiled ${file} (${result.files.length} files)`)
+      } catch (err) {
+        hasErrors = true
+        const timestamp = new Date().toLocaleTimeString()
+        console.error(`✗ [${timestamp}] Error in ${file}: ${(err as Error).message}`)
+      }
+    }
+
+    if (!hasErrors) {
+      console.log('')
+    }
+  }
+
+  // Find all .rs files recursively
+  function findRsFiles(directory: string): string[] {
+    const results: string[] = []
+    const entries = fs.readdirSync(directory, { withFileTypes: true })
+
+    for (const entry of entries) {
+      const fullPath = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        results.push(...findRsFiles(fullPath))
+      } else if (entry.isFile() && entry.name.endsWith('.rs')) {
+        results.push(fullPath)
+      }
+    }
+
+    return results
+  }
+
+  // Initial compile
+  compileAll()
+
+  // Watch for changes
+  fs.watch(dir, { recursive: true }, (eventType, filename) => {
+    if (filename && filename.endsWith('.rs')) {
+      // Debounce rapid changes
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+      }
+      debounceTimer = setTimeout(() => {
+        console.log(`📝 Change detected: ${filename}`)
+        compileAll()
+      }, 100)
+    }
+  })
+}
+
 // Main
 const parsed = parseArgs(args)
 
@@ -158,6 +255,19 @@ switch (parsed.command) {
       parsed.file,
       parsed.output ?? './dist',
       parsed.namespace ?? deriveNamespace(parsed.file)
+    )
+    break
+
+  case 'watch':
+    if (!parsed.file) {
+      console.error('Error: No directory specified')
+      printUsage()
+      process.exit(1)
+    }
+    watchCommand(
+      parsed.file,
+      parsed.output ?? './dist',
+      parsed.namespace
     )
     break
 
