@@ -528,10 +528,10 @@ fn choose(dir: Direction) {
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
       expect(rawCmds).toContain('tp @s @p')
-      expect(warnings).toContainEqual({
+      expect(warnings).toContainEqual(expect.objectContaining({
         code: 'W_DEPRECATED',
         message: 'tp_to is deprecated; use tp instead',
-      })
+      }))
     })
 
     it('lowers inventory and player admin commands', () => {
@@ -754,10 +754,10 @@ fn test() {
       expect(rawCmds.some(cmd =>
         cmd.includes('run scoreboard players get @s score')
       )).toBe(true)
-      expect(warnings).toContainEqual({
+      expect(warnings).toContainEqual(expect.objectContaining({
         code: 'W_QUOTED_SELECTOR',
         message: 'Quoted selector "@s" is deprecated; pass @s without quotes',
-      })
+      }))
     })
 
     it('does not warn on fake player names', () => {
@@ -777,10 +777,10 @@ fn test() {
       expect(rawCmds.some(cmd =>
         cmd.includes('run data get entity @s Pos[0] 1')
       )).toBe(true)
-      expect(warnings).toContainEqual({
+      expect(warnings).toContainEqual(expect.objectContaining({
         code: 'W_QUOTED_SELECTOR',
         message: 'Quoted selector "@s" is deprecated; pass @s without quotes',
-      })
+      }))
     })
   })
 

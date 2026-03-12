@@ -5,7 +5,7 @@ import { registerHoverProvider } from './hover'
 const { compile: _compile } = require('redscript') as {
   compile: (source: string, opts?: { filePath?: string }) => {
     files: { path: string; content: string }[]
-    warnings: { message: string; line?: number; column?: number }[]
+    warnings: { message: string; code: string; line?: number; col?: number }[]
   }
 }
 
@@ -104,9 +104,10 @@ function validateDocument(
 
     // Convert warnings to VS Code diagnostics
     for (const w of result.warnings ?? []) {
-      // Compiler doesn't yet emit line/col on warnings — try to find the
-      // relevant token by scanning the source for a keyword in the message.
-      const range = findWarningRange(w.message, w.code, source, doc)
+      // Use real line/col from AST span when available, fall back to text search
+      const range = (w.line && w.col)
+        ? new vscode.Range(w.line - 1, w.col - 1, w.line - 1, w.col - 1 + 20)
+        : findWarningRange(w.message, w.code, source, doc)
       docDiagnostics.push({
         message: w.message,
         range,
