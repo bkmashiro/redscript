@@ -1,34 +1,26 @@
-## What does this PR do?
+## Description
 
-<!-- Brief description -->
+<!-- What does this PR do? -->
 
-## Type of change
+## Type of Change
 
-- [ ] Bug fix
-- [ ] New language feature
-- [ ] New builtin / stdlib
-- [ ] Optimizer improvement
-- [ ] Tooling / CLI
-- [ ] Docs
+- [ ] 🐛 Bug fix
+- [ ] ✨ New feature
+- [ ] 📝 Documentation
+- [ ] ♻️ Refactor
+- [ ] 🧪 Tests
+
+## Related Issues
+
+<!-- Link related issues: Fixes #123 -->
 
 ## Checklist
 
 - [ ] `npm run build` passes
-- [ ] `npm test` passes (all existing tests green)
-- [ ] New tests added for new behavior
-- [ ] If adding a builtin: added to `docs/LANGUAGE_REFERENCE.md` and wiki Builtins page
-- [ ] If changing syntax: updated `docs/LANGUAGE_REFERENCE.md`
+- [ ] `npm test` passes
+- [ ] Tests added for new features
+- [ ] Documentation updated (if applicable)
 
-## Test coverage
+## Screenshots / Examples
 
-<!-- Which test file(s) cover this change? -->
-
-## Example
-
-```rs
-// Show a RedScript snippet demonstrating the new feature
-```
-
-```mcfunction
-# Show the expected compiled output
-```
+<!-- If applicable, show before/after or example output -->

@@ -1,0 +1,64 @@
+// Effect helper functions
+
+/// Give speed boost
+fn speed(target: selector, duration: int, level: int) {
+    effect(target, "minecraft:speed", duration, level);
+}
+
+/// Give jump boost
+fn jump(target: selector, duration: int, level: int) {
+    effect(target, "minecraft:jump_boost", duration, level);
+}
+
+/// Give regeneration
+fn regen(target: selector, duration: int, level: int) {
+    effect(target, "minecraft:regeneration", duration, level);
+}
+
+/// Give resistance
+fn resistance(target: selector, duration: int, level: int) {
+    effect(target, "minecraft:resistance", duration, level);
+}
+
+/// Give strength
+fn strength(target: selector, duration: int, level: int) {
+    effect(target, "minecraft:strength", duration, level);
+}
+
+/// Give invisibility
+fn invisible(target: selector, duration: int) {
+    effect(target, "minecraft:invisibility", duration, 0);
+}
+
+/// Give night vision
+fn night_vision(target: selector, duration: int) {
+    effect(target, "minecraft:night_vision", duration, 0);
+}
+
+/// Give slow falling
+fn slow_fall(target: selector, duration: int) {
+    effect(target, "minecraft:slow_falling", duration, 0);
+}
+
+/// Give glowing effect
+fn glow(target: selector, duration: int) {
+    effect(target, "minecraft:glowing", duration, 0);
+}
+
+/// Clear all effects from target
+fn clear_effects(target: selector) {
+    effect_clear(target);
+}
+
+/// Clear specific effect from target
+fn clear_effect(target: selector, eff: string) {
+    effect_clear(target, eff);
+}
+
+/// Full buff package (speed, strength, regen)
+fn buff_all(target: selector, duration: int) {
+    speed(target, duration, 1);
+    strength(target, duration, 1);
+    regen(target, duration, 1);
+    resistance(target, duration, 0);
+}
