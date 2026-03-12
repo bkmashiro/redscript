@@ -982,6 +982,9 @@ var require_parser = __commonJS({
       }
       parseForStmt() {
         const forToken = this.expect("for");
+        if (this.check("ident") && this.peek(1).kind === "in") {
+          return this.parseForRangeStmt(forToken);
+        }
         this.expect("(");
         let init;
         if (this.check("let")) {
@@ -1003,6 +1006,16 @@ var require_parser = __commonJS({
         this.expect(")");
         const body = this.parseBlock();
         return this.withLoc({ kind: "for", init, cond, step, body }, forToken);
+      }
+      parseForRangeStmt(forToken) {
+        const varName = this.expect("ident").value;
+        this.expect("in");
+        const rangeToken = this.expect("range_lit");
+        const range = this.parseRangeValue(rangeToken.value);
+        const start = this.withLoc({ kind: "int_lit", value: range.min ?? 0 }, rangeToken);
+        const end = this.withLoc({ kind: "int_lit", value: range.max ?? 0 }, rangeToken);
+        const body = this.parseBlock();
+        return this.withLoc({ kind: "for_range", varName, start, end, body }, forToken);
       }
       parseForeachStmt() {
         const foreachToken = this.expect("foreach");
@@ -1217,6 +1230,22 @@ var require_parser = __commonJS({
         if (token.kind === "float_lit") {
           this.advance();
           return this.withLoc({ kind: "float_lit", value: parseFloat(token.value) }, token);
+        }
+        if (token.kind === "byte_lit") {
+          this.advance();
+          return this.withLoc({ kind: "byte_lit", value: parseInt(token.value.slice(0, -1), 10) }, token);
+        }
+        if (token.kind === "short_lit") {
+          this.advance();
+          return this.withLoc({ kind: "short_lit", value: parseInt(token.value.slice(0, -1), 10) }, token);
+        }
+        if (token.kind === "long_lit") {
+          this.advance();
+          return this.withLoc({ kind: "long_lit", value: parseInt(token.value.slice(0, -1), 10) }, token);
+        }
+        if (token.kind === "double_lit") {
+          this.advance();
+          return this.withLoc({ kind: "double_lit", value: parseFloat(token.value.slice(0, -1)) }, token);
         }
         if (token.kind === "string_lit") {
           this.advance();
@@ -1930,6 +1959,10 @@ var require_typechecker = __commonJS({
           case "mc_name":
           case "range_lit":
           case "selector":
+          case "byte_lit":
+          case "short_lit":
+          case "long_lit":
+          case "double_lit":
             break;
         }
       }
@@ -2033,7 +2066,7 @@ var require_typechecker = __commonJS({
               }
             } else if (varType.kind === "named") {
               if (varType.name !== "void") {
-                if (["int", "bool", "float", "string"].includes(varType.name)) {
+                if (["int", "bool", "float", "string", "byte", "short", "long", "double"].includes(varType.name)) {
                   this.report(`Cannot access member '${expr.field}' on ${this.typeToString(varType)}`, expr);
                 }
               }
@@ -2079,6 +2112,14 @@ var require_typechecker = __commonJS({
             return { kind: "named", name: "int" };
           case "float_lit":
             return { kind: "named", name: "float" };
+          case "byte_lit":
+            return { kind: "named", name: "byte" };
+          case "short_lit":
+            return { kind: "named", name: "short" };
+          case "long_lit":
+            return { kind: "named", name: "long" };
+          case "double_lit":
+            return { kind: "named", name: "double" };
           case "bool_lit":
             return { kind: "named", name: "bool" };
           case "str_lit":
@@ -2669,6 +2710,9 @@ var require_lowering = __commonJS({
           case "foreach":
             this.lowerForeachStmt(stmt);
             break;
+          case "for_range":
+            this.lowerForRangeStmt(stmt);
+            break;
           case "match":
             this.lowerMatchStmt(stmt);
             break;
@@ -2814,6 +2858,41 @@ var require_lowering = __commonJS({
           this.builder.emitJump(checkLabel);
         }
         this.builder.startBlock(exitLabel);
+      }
+      lowerForRangeStmt(stmt) {
+        const loopVar = `$${stmt.varName}`;
+        const subFnName = `${this.currentFn}/__for_${this.foreachCounter++}`;
+        this.varMap.set(stmt.varName, loopVar);
+        const startVal = this.lowerExpr(stmt.start);
+        if (startVal.kind === "const") {
+          this.builder.emitRaw(`scoreboard players set ${loopVar} rs ${startVal.value}`);
+        } else if (startVal.kind === "var") {
+          this.builder.emitRaw(`scoreboard players operation ${loopVar} rs = ${startVal.name} rs`);
+        }
+        this.builder.emitRaw(`function ${this.namespace}:${subFnName}`);
+        const savedBuilder = this.builder;
+        const savedVarMap = new Map(this.varMap);
+        const savedContext = this.currentContext;
+        const savedBlockPosVars = new Map(this.blockPosVars);
+        this.builder = new LoweringBuilder();
+        this.varMap = new Map(savedVarMap);
+        this.currentContext = savedContext;
+        this.blockPosVars = new Map(savedBlockPosVars);
+        this.builder.startBlock("entry");
+        this.lowerBlock(stmt.body);
+        this.builder.emitRaw(`scoreboard players add ${loopVar} rs 1`);
+        const endVal = this.lowerExpr(stmt.end);
+        const endNum = endVal.kind === "const" ? endVal.value - 1 : "?";
+        this.builder.emitRaw(`execute if score ${loopVar} rs matches ..${endNum} run function ${this.namespace}:${subFnName}`);
+        if (!this.builder.isBlockSealed()) {
+          this.builder.emitReturn();
+        }
+        const subFn = this.builder.build(subFnName, [], false);
+        this.functions.push(subFn);
+        this.builder = savedBuilder;
+        this.varMap = savedVarMap;
+        this.currentContext = savedContext;
+        this.blockPosVars = savedBlockPosVars;
       }
       lowerForeachStmt(stmt) {
         if (stmt.iterable.kind !== "selector") {
@@ -3051,6 +3130,14 @@ var require_lowering = __commonJS({
           case "int_lit":
             return { kind: "const", value: expr.value };
           case "float_lit":
+            return { kind: "const", value: Math.round(expr.value * 1e3) };
+          case "byte_lit":
+            return { kind: "const", value: expr.value };
+          case "short_lit":
+            return { kind: "const", value: expr.value };
+          case "long_lit":
+            return { kind: "const", value: expr.value };
+          case "double_lit":
             return { kind: "const", value: Math.round(expr.value * 1e3) };
           case "bool_lit":
             return { kind: "const", value: expr.value ? 1 : 0 };
@@ -3788,6 +3875,14 @@ var require_lowering = __commonJS({
             return expr.value.toString();
           case "float_lit":
             return Math.trunc(expr.value).toString();
+          case "byte_lit":
+            return `${expr.value}b`;
+          case "short_lit":
+            return `${expr.value}s`;
+          case "long_lit":
+            return `${expr.value}L`;
+          case "double_lit":
+            return `${expr.value}d`;
           case "bool_lit":
             return expr.value ? "1" : "0";
           case "str_lit":
@@ -6941,6 +7036,35 @@ function registerSymbolProviders(context) {
           )) : "";
           return charBefore !== "#";
         });
+      }
+    })
+  );
+  context.subscriptions.push(
+    vscode4.languages.registerRenameProvider(selector, {
+      provideRenameEdits(doc, position, newName) {
+        const wordRange = doc.getWordRangeAtPosition(position);
+        if (!wordRange) return null;
+        const oldName = doc.getText(wordRange);
+        if (isMcName(doc, position)) return null;
+        const edits = new vscode4.WorkspaceEdit();
+        const text = doc.getText();
+        const re = new RegExp(`\\b${escapeRegex(oldName)}\\b`, "g");
+        let match;
+        while ((match = re.exec(text)) !== null) {
+          if (match.index > 0 && text[match.index - 1] === "#") continue;
+          const start = doc.positionAt(match.index);
+          const end = doc.positionAt(match.index + oldName.length);
+          edits.replace(doc.uri, new vscode4.Range(start, end), newName);
+        }
+        return edits;
+      },
+      prepareRename(doc, position) {
+        const wordRange = doc.getWordRangeAtPosition(position);
+        if (!wordRange) throw new Error("Cannot rename this element");
+        if (isMcName(doc, position)) {
+          throw new Error("Cannot rename MC identifiers (#name)");
+        }
+        return wordRange;
       }
     })
   );
