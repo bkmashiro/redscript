@@ -8,10 +8,12 @@
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
+[![VSCode](https://img.shields.io/badge/VSCode-插件-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-423%20passing-brightgreen)](./src/__tests__)
 
-[English](./README.md) · [Wiki](https://github.com/bkmashiro/redscript/wiki) · [快速开始](#快速开始) · [🚀 在线 IDE](https://redscript-ide.pages.dev)
+[English](./README.md) · [快速开始](#快速开始) · [Wiki](https://github.com/bkmashiro/redscript/wiki)
+
+### 🚀 [在线试用 — 无需安装！](https://redscript-ide.pages.dev)
 
 </div>
 
@@ -67,16 +69,20 @@ fn on_kill() {
 
 ### 快速开始
 
-#### 安装
+#### 方式 1：在线 IDE（无需安装）
+
+**[→ redscript-ide.pages.dev](https://redscript-ide.pages.dev)** — 写代码，实时看输出。
+
+#### 方式 2：VSCode 插件
+
+1. 安装 [RedScript for VSCode](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
+2. 获得语法高亮、自动补全、悬停文档等功能
+
+#### 方式 3：命令行
 
 ```bash
-npm install -g redscript
-```
-
-#### 编译
-
-```bash
-redscript compile pvp_game.mcrs -o ./my-datapack
+npm install -g redscript-mc
+redscript compile game.mcrs -o ./my-datapack
 ```
 
 ```

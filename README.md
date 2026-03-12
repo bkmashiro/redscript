@@ -8,10 +8,12 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
+[![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-423%20passing-brightgreen)](./src/__tests__)
 
-[中文版](./README.zh.md) · [Wiki](https://github.com/bkmashiro/redscript/wiki) · [Quick Start](#quick-start) · [🚀 Online IDE](https://redscript-ide.pages.dev)
+[中文版](./README.zh.md) · [Quick Start](#quick-start) · [Wiki](https://github.com/bkmashiro/redscript/wiki)
+
+### 🚀 [Try it online — no install needed!](https://redscript-ide.pages.dev)
 
 </div>
 
@@ -67,16 +69,20 @@ One file. Compiles to a ready-to-use datapack in seconds.
 
 ### Quick Start
 
-#### Install
+#### Option 1: Online IDE (No Install)
+
+**[→ redscript-ide.pages.dev](https://redscript-ide.pages.dev)** — Write code, see output instantly.
+
+#### Option 2: VSCode Extension
+
+1. Install [RedScript for VSCode](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
+2. Get syntax highlighting, auto-complete, hover docs, and more
+
+#### Option 3: CLI
 
 ```bash
-npm install -g redscript
-```
-
-#### Compile
-
-```bash
-redscript compile pvp_game.mcrs -o ./my-datapack
+npm install -g redscript-mc
+redscript compile game.mcrs -o ./my-datapack
 ```
 
 ```
