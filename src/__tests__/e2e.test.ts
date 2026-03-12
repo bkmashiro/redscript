@@ -182,6 +182,54 @@ fn heartbeat() {
     })
   })
 
+  describe('Builtins: command emission', () => {
+    it('compiles UI and broadcast builtins', () => {
+      const source = `
+fn test() {
+    actionbar(@a, "Fight!");
+    subtitle(@a, "Wave 2");
+    title_times(@a, 10, 60, 10);
+    announce("Arena live");
+}
+`
+      const fn = getFunction(compile(source), 'test')!
+      expect(fn).toContain('title @a actionbar {"text":"Fight!"}')
+      expect(fn).toContain('title @a subtitle {"text":"Wave 2"}')
+      expect(fn).toContain('title @a times 10 60 10')
+      expect(fn).toContain('tellraw @a {"text":"Arena live"}')
+    })
+
+    it('compiles world and utility builtins', () => {
+      const source = `
+fn test() {
+    tp(@s, "~", "~1", "~");
+    tp_to(@s, @p);
+    clear(@s);
+    weather("clear");
+    time_set("noon");
+    gamerule("doWeatherCycle", "false");
+    setblock("0", "64", "0", "stone");
+    fill("0", "64", "0", "2", "66", "2", "glass");
+    clone("0", "64", "0", "2", "66", "2", "10", "64", "10");
+    xp_add(@s, 5);
+    xp_set(@s, 1, "levels");
+}
+`
+      const fn = getFunction(compile(source), 'test')!
+      expect(fn).toContain('tp @s ~ ~1 ~')
+      expect(fn).toContain('tp @s @p')
+      expect(fn).toContain('clear @s')
+      expect(fn).toContain('weather clear')
+      expect(fn).toContain('time set noon')
+      expect(fn).toContain('gamerule doWeatherCycle false')
+      expect(fn).toContain('setblock 0 64 0 stone')
+      expect(fn).toContain('fill 0 64 0 2 66 2 glass')
+      expect(fn).toContain('clone 0 64 0 2 66 2 10 64 10')
+      expect(fn).toContain('xp add @s 5 points')
+      expect(fn).toContain('xp set @s 1 levels')
+    })
+  })
+
   describe('Test 4: foreach', () => {
     const source = `
 fn kill_zombies() {
@@ -238,6 +286,52 @@ fn count_down() {
       expect(allContent).toContain('$const_0')
       // Should have conditional execution
       expect(allContent).toMatch(/execute if score/)
+    })
+  })
+
+  describe('Test 6: arrays', () => {
+    const source = `
+fn arrays() {
+    let arr: int[] = [1, 2, 3];
+    let first: int = arr[0];
+    let i: int = 1;
+    let second: int = arr[i];
+    let len: int = arr.len;
+    arr.push(4);
+    let last: int = arr.pop();
+    foreach (x in arr) {
+        say("loop");
+    }
+}
+`
+
+    it('generates array storage commands', () => {
+      const files = compile(source)
+      const fn = getFunction(files, 'arrays')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('data modify storage rs:heap arr set value []')
+      expect(fn).toContain('data modify storage rs:heap arr append value 1')
+      expect(fn).toContain('data modify storage rs:heap arr append value 4')
+      expect(fn).toContain('data remove storage rs:heap arr[-1]')
+    })
+
+    it('generates array access helpers', () => {
+      const files = compile(source)
+      const fn = getFunction(files, 'arrays')!
+      expect(fn).toContain('run data get storage rs:heap arr[0]')
+      expect(fn).toContain('with storage rs:heap')
+      const helper = files.find(f => f.path.includes('array_get_'))
+      expect(helper?.content).toContain('arr[$(')
+    })
+
+    it('generates array foreach loop', () => {
+      const files = compile(source)
+      const allContent = files
+        .filter(f => f.path.includes('/arrays'))
+        .map(f => f.content)
+        .join('\n')
+      expect(allContent).toContain('foreach_array_check')
+      expect(allContent).toContain('say loop')
     })
   })
 
