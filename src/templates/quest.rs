@@ -70,9 +70,9 @@ fn quest_complete(player: string, questId: int) {
 
 @on_trigger("kill_zombie")
 fn kill_zombie_quest() {
-    let activeQuest: int = scoreboard_get("@s", "quest_id");
+    let activeQuest: int = scoreboard_get(@s, "quest_id");
 
     if (activeQuest == 1) {
-        quest_progress("@s", 1, 1);
+        quest_progress(@s, 1, 1);
     }
 }

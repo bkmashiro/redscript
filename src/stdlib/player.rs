@@ -2,19 +2,19 @@
 // These helpers target the nearest player via @p.
 
 fn heal(amount: int) {
-    let health: int = scoreboard_get("@p", #health);
+    let health: int = scoreboard_get(@p, #health);
     let next: int = health + amount;
-    scoreboard_set("@p", #health, next);
+    scoreboard_set(@p, #health, next);
 }
 
 fn damage(amount: int) {
-    let health: int = scoreboard_get("@p", #health);
+    let health: int = scoreboard_get(@p, #health);
     let next: int = health - amount;
 
     if (next < 0) {
-        scoreboard_set("@p", #health, 0);
+        scoreboard_set(@p, #health, 0);
     } else {
-        scoreboard_set("@p", #health, next);
+        scoreboard_set(@p, #health, next);
     }
 }
 
