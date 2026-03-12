@@ -461,6 +461,15 @@ export class Lowering {
   }
 
   private lowerLetStmt(stmt: Extract<Stmt, { kind: 'let' }>): void {
+    // Check for duplicate declaration of foreach binding
+    if (this.currentContext.binding === stmt.name) {
+      throw new DiagnosticError(
+        'LoweringError',
+        `Cannot redeclare foreach binding '${stmt.name}'`,
+        stmt.span ?? { line: 0, col: 0 }
+      )
+    }
+    
     const varName = `$${stmt.name}`
     this.varMap.set(stmt.name, varName)
 
