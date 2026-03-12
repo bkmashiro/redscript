@@ -5651,7 +5651,7 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode3 = __toESM(require("vscode"));
+var vscode4 = __toESM(require("vscode"));
 
 // src/hover.ts
 var vscode = __toESM(require("vscode"));
@@ -6306,37 +6306,127 @@ function findJsDocAbove(document, declLine) {
   return lines.length ? lines.join("\n") : null;
 }
 function findFnDeclLine(document, name) {
-  const re = new RegExp(`^\\s*(?:@[^\\n]*\\n\\s*)*fn\\s+${name}\\s*\\(`, "m");
+  const re = new RegExp(`\\bfn\\s+${escapeRe(name)}\\s*\\(`, "m");
   const text = document.getText();
   const match = re.exec(text);
   if (!match) return null;
   return document.positionAt(match.index).line;
 }
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function findVarDecls(document) {
+  const text = document.getText();
+  const re = /\b(let|const)\s+(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g;
+  const decls = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    decls.push({ kind: m[1], name: m[2], type: m[3] });
+  }
+  return decls;
+}
+function findStructDecls(document) {
+  const text = document.getText();
+  const structRe = /\bstruct\s+(\w+)\s*\{([^}]*)\}/gs;
+  const decls = [];
+  let m;
+  while ((m = structRe.exec(text)) !== null) {
+    const name = m[1];
+    const body = m[2];
+    const fieldRe = /\b(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g;
+    const fields = [];
+    let fm;
+    while ((fm = fieldRe.exec(body)) !== null) {
+      fields.push({ name: fm[1], type: fm[2] });
+    }
+    decls.push({ name, fields });
+  }
+  return decls;
+}
+function formatStructHover(decl) {
+  const md = new vscode.MarkdownString("", true);
+  const lines = [`struct ${decl.name} {`];
+  for (const f of decl.fields) lines.push(`    ${f.name}: ${f.type},`);
+  lines.push("}");
+  md.appendCodeblock(lines.join("\n"), "redscript");
+  return md;
+}
+function formatMcNameHover(name) {
+  const md = new vscode.MarkdownString("", true);
+  md.appendCodeblock(`#${name}`, "redscript");
+  md.appendMarkdown(`MC identifier \`${name}\`
+
+Used as an objective, tag, team, or gamerule name. Compiles to the bare name \`${name}\` without quotes.`);
+  return md;
+}
 function registerHoverProvider(context) {
   context.subscriptions.push(
     vscode.languages.registerHoverProvider("redscript", {
       provideHover(document, position) {
+        const line = document.lineAt(position.line).text;
+        const mcRange = document.getWordRangeAtPosition(position, /#[a-zA-Z_][a-zA-Z0-9_]*/);
+        if (mcRange) {
+          const raw = document.getText(mcRange);
+          return new vscode.Hover(formatMcNameHover(raw.slice(1)), mcRange);
+        }
         const selectorRange = document.getWordRangeAtPosition(
           position,
           /@[aesprnAESPRN](?:\[[^\]]*\])?/
         );
         if (selectorRange) {
-          const raw = document.getText(selectorRange);
-          return new vscode.Hover(formatSelectorHover(raw), selectorRange);
+          return new vscode.Hover(formatSelectorHover(document.getText(selectorRange)), selectorRange);
         }
         const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/);
-        if (!range) return;
+        if (!range) return void 0;
         const word = document.getText(range);
-        const builtin = BUILTINS[word];
-        if (builtin) return new vscode.Hover(formatDoc(builtin), range);
-        const declLine = findFnDeclLine(document, word);
-        if (declLine !== null) {
-          const jsdoc = findJsDocAbove(document, declLine);
-          if (jsdoc) {
+        const varDecls = findVarDecls(document);
+        const varDecl = varDecls.find((v) => v.name === word);
+        if (varDecl) {
+          const md = new vscode.MarkdownString("", true);
+          md.appendCodeblock(`${varDecl.kind} ${varDecl.name}: ${varDecl.type}`, "redscript");
+          return new vscode.Hover(md, range);
+        }
+        const afterWord = line.slice(range.end.character).trimStart();
+        const isCall = afterWord.startsWith("(");
+        if (isCall) {
+          const builtin = BUILTINS[word];
+          if (builtin) return new vscode.Hover(formatDoc(builtin), range);
+        }
+        const structDecls = findStructDecls(document);
+        const structDecl = structDecls.find((s) => s.name === word);
+        if (structDecl) {
+          return new vscode.Hover(formatStructHover(structDecl), range);
+        }
+        const charBefore = range.start.character > 0 ? line.slice(range.start.character - 1, range.start.character) : "";
+        if (charBefore === ".") {
+          const beforeDot = line.slice(0, range.start.character - 1);
+          const objMatch = beforeDot.match(/([A-Za-z_]\w*)$/);
+          if (objMatch) {
+            const objName = objMatch[1];
+            const objVar = varDecls.find((v) => v.name === objName);
+            if (objVar) {
+              const objStruct = structDecls.find((s) => s.name === objVar.type);
+              if (objStruct) {
+                const field = objStruct.fields.find((f) => f.name === word);
+                if (field) {
+                  const md = new vscode.MarkdownString("", true);
+                  md.appendCodeblock(`(field) ${objStruct.name}.${field.name}: ${field.type}`, "redscript");
+                  return new vscode.Hover(md, range);
+                }
+              }
+            }
+          }
+        }
+        if (isCall) {
+          const declLine = findFnDeclLine(document, word);
+          if (declLine !== null) {
             const md = new vscode.MarkdownString("", true);
+            const jsdoc = findJsDocAbove(document, declLine);
             md.appendCodeblock(`fn ${word}(...)`, "redscript");
-            md.appendText("\n");
-            md.appendMarkdown(jsdoc);
+            if (jsdoc) {
+              md.appendText("\n");
+              md.appendMarkdown(jsdoc);
+            }
             return new vscode.Hover(md, range);
           }
         }
@@ -6346,8 +6436,73 @@ function registerHoverProvider(context) {
   );
 }
 
-// src/symbols.ts
+// src/codeactions.ts
 var vscode2 = __toESM(require("vscode"));
+function registerCodeActions(context) {
+  context.subscriptions.push(
+    vscode2.languages.registerCodeActionsProvider(
+      { language: "redscript", scheme: "file" },
+      new RedScriptCodeActionProvider(),
+      { providedCodeActionKinds: [vscode2.CodeActionKind.QuickFix] }
+    )
+  );
+}
+var RedScriptCodeActionProvider = class {
+  provideCodeActions(document, range, context) {
+    const actions = [];
+    for (const diag of context.diagnostics) {
+      if (diag.source !== "redscript") continue;
+      if (diag.code === "W_UNNAMESPACED_TYPE") {
+        const m = diag.message.match(/Unnamespaced entity type "([^"]+)"/);
+        if (!m) continue;
+        const typeName = m[1];
+        const fix = new vscode2.CodeAction(
+          `Add namespace: type=minecraft:${typeName}`,
+          vscode2.CodeActionKind.QuickFix
+        );
+        fix.diagnostics = [diag];
+        fix.isPreferred = true;
+        const text = document.getText();
+        const re = new RegExp(`\\btype=${escapeRe2(typeName)}(?![a-zA-Z0-9_:.])`, "g");
+        const edit = new vscode2.WorkspaceEdit();
+        let match;
+        while ((match = re.exec(text)) !== null) {
+          const start = document.positionAt(match.index + "type=".length);
+          const end = document.positionAt(match.index + "type=".length + typeName.length);
+          edit.replace(document.uri, new vscode2.Range(start, end), `minecraft:${typeName}`);
+        }
+        fix.edit = edit;
+        actions.push(fix);
+      }
+    }
+    const lineText = document.lineAt(range.start.line).text;
+    const lineTypeRe = /\btype=([a-z][a-z0-9_]*)(?!\s*[:a-z0-9_])/g;
+    let lm;
+    while ((lm = lineTypeRe.exec(lineText)) !== null) {
+      const typeName = lm[1];
+      if (typeName.includes(":")) continue;
+      if (actions.some((a) => a.title.includes(typeName))) continue;
+      const fix = new vscode2.CodeAction(
+        `Add namespace: type=minecraft:${typeName}`,
+        vscode2.CodeActionKind.QuickFix
+      );
+      const col = lm.index + "type=".length;
+      const start = new vscode2.Position(range.start.line, col);
+      const end = new vscode2.Position(range.start.line, col + typeName.length);
+      const edit = new vscode2.WorkspaceEdit();
+      edit.replace(document.uri, new vscode2.Range(start, end), `minecraft:${typeName}`);
+      fix.edit = edit;
+      actions.push(fix);
+    }
+    return actions;
+  }
+};
+function escapeRe2(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// src/symbols.ts
+var vscode3 = __toESM(require("vscode"));
 var DECL_RE = /\b(fn|let|const|struct|enum)\s+(\w+)/g;
 function findDeclarations(doc) {
   const text = doc.getText();
@@ -6357,7 +6512,7 @@ function findDeclarations(doc) {
   while ((match = DECL_RE.exec(text)) !== null) {
     const nameStart = match.index + match[0].length - match[2].length;
     const pos = doc.positionAt(nameStart);
-    const range = new vscode2.Range(pos, doc.positionAt(nameStart + match[2].length));
+    const range = new vscode3.Range(pos, doc.positionAt(nameStart + match[2].length));
     decls.push({ kind: match[1], name: match[2], range });
   }
   return decls;
@@ -6369,8 +6524,8 @@ function findAllOccurrences(doc, word) {
   let match;
   while ((match = re.exec(text)) !== null) {
     const pos = doc.positionAt(match.index);
-    const range = new vscode2.Range(pos, doc.positionAt(match.index + word.length));
-    locations.push(new vscode2.Location(doc.uri, range));
+    const range = new vscode3.Range(pos, doc.positionAt(match.index + word.length));
+    locations.push(new vscode3.Location(doc.uri, range));
   }
   return locations;
 }
@@ -6380,7 +6535,7 @@ function escapeRegex(s) {
 function registerSymbolProviders(context) {
   const selector = { language: "redscript", scheme: "file" };
   context.subscriptions.push(
-    vscode2.languages.registerDefinitionProvider(selector, {
+    vscode3.languages.registerDefinitionProvider(selector, {
       provideDefinition(doc, position) {
         if (isMcName(doc, position)) return null;
         const wordRange = doc.getWordRangeAtPosition(position);
@@ -6389,12 +6544,12 @@ function registerSymbolProviders(context) {
         const decls = findDeclarations(doc);
         const decl = decls.find((d) => d.name === word);
         if (!decl) return null;
-        return new vscode2.Location(doc.uri, decl.range);
+        return new vscode3.Location(doc.uri, decl.range);
       }
     })
   );
   context.subscriptions.push(
-    vscode2.languages.registerReferenceProvider(selector, {
+    vscode3.languages.registerReferenceProvider(selector, {
       provideReferences(doc, position) {
         if (isMcName(doc, position)) {
           const mcRange = doc.getWordRangeAtPosition(position, /#[a-zA-Z_][a-zA-Z0-9_]*/);
@@ -6406,7 +6561,7 @@ function registerSymbolProviders(context) {
         if (!wordRange) return null;
         const word = doc.getText(wordRange);
         return findAllOccurrences(doc, word).filter((loc) => {
-          const charBefore = loc.range.start.character > 0 ? doc.getText(new vscode2.Range(
+          const charBefore = loc.range.start.character > 0 ? doc.getText(new vscode3.Range(
             loc.range.start.translate(0, -1),
             loc.range.start
           )) : "";
@@ -6418,7 +6573,7 @@ function registerSymbolProviders(context) {
 }
 function isMcName(doc, position) {
   if (position.character === 0) return false;
-  const charBefore = doc.getText(new vscode2.Range(
+  const charBefore = doc.getText(new vscode3.Range(
     position.translate(0, -1),
     position
   ));
@@ -6435,7 +6590,7 @@ function getCompile() {
 }
 var DEBOUNCE_MS = 600;
 function activate(context) {
-  const diagnostics = vscode3.languages.createDiagnosticCollection("redscript");
+  const diagnostics = vscode4.languages.createDiagnosticCollection("redscript");
   context.subscriptions.push(diagnostics);
   const timers = /* @__PURE__ */ new Map();
   function scheduleValidation(doc) {
@@ -6449,13 +6604,13 @@ function activate(context) {
     }, DEBOUNCE_MS));
   }
   context.subscriptions.push(
-    vscode3.workspace.onDidOpenTextDocument((doc) => scheduleValidation(doc))
+    vscode4.workspace.onDidOpenTextDocument((doc) => scheduleValidation(doc))
   );
   context.subscriptions.push(
-    vscode3.workspace.onDidChangeTextDocument((e) => scheduleValidation(e.document))
+    vscode4.workspace.onDidChangeTextDocument((e) => scheduleValidation(e.document))
   );
   context.subscriptions.push(
-    vscode3.workspace.onDidCloseTextDocument((doc) => {
+    vscode4.workspace.onDidCloseTextDocument((doc) => {
       diagnostics.delete(doc.uri);
       const key = doc.uri.toString();
       const t = timers.get(key);
@@ -6465,16 +6620,17 @@ function activate(context) {
       }
     })
   );
-  vscode3.workspace.textDocuments.filter((d) => d.languageId === "redscript").forEach((d) => scheduleValidation(d));
+  vscode4.workspace.textDocuments.filter((d) => d.languageId === "redscript").forEach((d) => scheduleValidation(d));
   registerHoverProvider(context);
+  registerCodeActions(context);
   registerSymbolProviders(context);
-  const statusBar = vscode3.window.createStatusBarItem(vscode3.StatusBarAlignment.Left, 10);
+  const statusBar = vscode4.window.createStatusBarItem(vscode4.StatusBarAlignment.Left, 10);
   statusBar.text = "$(pass) RedScript";
   statusBar.tooltip = "RedScript compiler";
   statusBar.show();
   context.subscriptions.push(statusBar);
   context.subscriptions.push(
-    vscode3.window.onDidChangeActiveTextEditor((editor) => {
+    vscode4.window.onDidChangeActiveTextEditor((editor) => {
       if (editor?.document.languageId === "redscript") {
         statusBar.show();
       } else {
@@ -6488,8 +6644,8 @@ function validateDocument(doc, collection) {
   if (!compile) {
     collection.set(doc.uri, [{
       message: "RedScript compiler not found. Run `npm install -g redscript` to enable diagnostics.",
-      range: new vscode3.Range(0, 0, 0, 0),
-      severity: vscode3.DiagnosticSeverity.Information,
+      range: new vscode4.Range(0, 0, 0, 0),
+      severity: vscode4.DiagnosticSeverity.Information,
       source: "redscript"
     }]);
     return;
@@ -6499,11 +6655,11 @@ function validateDocument(doc, collection) {
   try {
     const result = compile(source, { filePath: doc.uri.fsPath });
     for (const w of result.warnings ?? []) {
-      const range = w.line && w.col ? new vscode3.Range(w.line - 1, w.col - 1, w.line - 1, w.col - 1 + 20) : findWarningRange(w.message, w.code, source, doc);
+      const range = w.line && w.col ? new vscode4.Range(w.line - 1, w.col - 1, w.line - 1, w.col - 1 + 20) : findWarningRange(w.message, w.code, source, doc);
       docDiagnostics.push({
         message: w.message,
         range,
-        severity: vscode3.DiagnosticSeverity.Warning,
+        severity: vscode4.DiagnosticSeverity.Warning,
         source: "redscript",
         code: w.code
       });
@@ -6514,7 +6670,7 @@ function validateDocument(doc, collection) {
     docDiagnostics.push({
       message: msg,
       range,
-      severity: vscode3.DiagnosticSeverity.Error,
+      severity: vscode4.DiagnosticSeverity.Error,
       source: "redscript"
     });
   }
@@ -6539,30 +6695,30 @@ function searchToken(source, doc, token) {
   const idx = source.indexOf(token);
   if (idx < 0) return null;
   const pos = doc.positionAt(idx);
-  return new vscode3.Range(pos, doc.positionAt(idx + token.length));
+  return new vscode4.Range(pos, doc.positionAt(idx + token.length));
 }
 function topLine(doc) {
-  return new vscode3.Range(0, 0, 0, doc.lineAt(0).text.length);
+  return new vscode4.Range(0, 0, 0, doc.lineAt(0).text.length);
 }
 function extractRange(msg, doc) {
   let m = msg.match(/line[: ]+(\d+)[,\s]+col(?:umn)?[: ]+(\d+)/i);
   if (m) {
     const l = Math.max(0, parseInt(m[1]) - 1);
     const c = Math.max(0, parseInt(m[2]) - 1);
-    return new vscode3.Range(l, c, l, c + 80);
+    return new vscode4.Range(l, c, l, c + 80);
   }
   m = msg.match(/^(\d+):(\d+)/);
   if (m) {
     const l = Math.max(0, parseInt(m[1]) - 1);
     const c = Math.max(0, parseInt(m[2]) - 1);
-    return new vscode3.Range(l, c, l, c + 80);
+    return new vscode4.Range(l, c, l, c + 80);
   }
   m = msg.match(/\[line (\d+)\]/i);
   if (m) {
     const l = Math.max(0, parseInt(m[1]) - 1);
-    return new vscode3.Range(l, 0, l, 200);
+    return new vscode4.Range(l, 0, l, 200);
   }
-  return new vscode3.Range(0, 0, 0, doc.lineAt(0).text.length);
+  return new vscode4.Range(0, 0, 0, doc.lineAt(0).text.length);
 }
 function deactivate() {
 }

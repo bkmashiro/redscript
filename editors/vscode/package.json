@@ -2,7 +2,7 @@
   "name": "redscript-vscode",
   "displayName": "RedScript for Minecraft",
   "description": "Syntax highlighting, error diagnostics, and language support for RedScript — a compiler targeting Minecraft Java Edition",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "publisher": "bkmashiro",
   "icon": "icon.png",
   "license": "MIT",
@@ -72,7 +72,51 @@
         "language": "redscript",
         "path": "./snippets/redscript.json"
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": "variable.other.mc-name.redscript",
+            "settings": {
+              "foreground": "#F38BA8",
+              "fontStyle": ""
+            }
+          },
+          {
+            "scope": "keyword.other.selector.redscript",
+            "settings": {
+              "foreground": "#89B4FA",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": "support.type.property-name.redscript",
+            "settings": {
+              "foreground": "#F9E2AF"
+            }
+          },
+          {
+            "scope": "entity.name.namespace.redscript",
+            "settings": {
+              "foreground": "#6C7086"
+            }
+          },
+          {
+            "scope": "entity.name.type.entity.redscript",
+            "settings": {
+              "foreground": "#CBA6F7"
+            }
+          },
+          {
+            "scope": "keyword.operator.range.selector.redscript",
+            "settings": {
+              "foreground": "#89DCEB"
+            }
+          }
+        ]
+      }
+    }
   },
   "scripts": {
     "compile": "node build.mjs",
