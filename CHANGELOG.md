@@ -8,17 +8,22 @@ All notable changes to RedScript will be documented in this file.
 - `is` type narrowing for entity checks (`if (e is Player)`)
 - `impl` blocks for struct methods
 - Static method calls (`Type::method()`)
+- Runtime f-strings for output functions
 - Timer OOP API in stdlib
 - `setTimeout(delay, callback)` builtin
 - `setInterval(delay, callback)` builtin
 - `clearInterval(id)` builtin
 - `@on(Event)` static event system
 - PlayerDeath, PlayerJoin, BlockBreak, EntityKill, ItemUse
+- Dead code elimination optimizer pass
 - Automatic namespace prefixing for scoreboard objectives
 - Comprehensive MC tag constants (313 tags)
 
 ### Changed
 - Stdlib timer functions now use OOP API
+
+### Documentation
+- Updated README and docs site for the v1.2 language, stdlib, and builtins changes
 
 ## [1.1.0] - 2026-03-12
 

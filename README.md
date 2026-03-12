@@ -9,7 +9,7 @@
 Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-510%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
+[![Tests](https://img.shields.io/badge/tests-573%2B%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
@@ -72,6 +72,19 @@ One file. Compiles to a ready-to-use datapack in seconds.
 
 ---
 
+### What's New in v1.2
+
+- `impl` blocks and methods for object-style APIs on structs
+- `is` type narrowing for safer entity checks
+- Static events with `@on(Event)`
+- Runtime f-strings for `say`, `title`, `actionbar`, and related output
+- Timer OOP API with `Timer::new(...)` and instance methods
+- `setTimeout(...)` and `setInterval(...)` scheduling helpers
+- Dead code elimination in the optimizer
+- 313 Minecraft tag constants in the standard library
+
+---
+
 ### Quick Start
 
 #### Option 1: Online IDE (No Install)
@@ -85,17 +98,30 @@ One file. Compiles to a ready-to-use datapack in seconds.
 
 #### Option 3: CLI
 
+```mcrs
+struct Timer { _id: int; duration: int; }
+
+impl Timer {
+    fn new(duration: int): Timer {
+        return Timer { _id: 0, duration: duration };
+    }
+    fn done(self): bool { return true; }
+}
+
+@on(PlayerJoin)
+fn welcome(player: Player) {
+    say(f"Welcome {player}!");
+}
+
+@tick fn game_loop() {
+    let timer = Timer::new(100);
+    setTimeout(200, () => { say("Delayed!"); });
+}
+```
+
 ```bash
 npm install -g redscript-mc
 redscript compile game.mcrs -o ./my-datapack
-```
-
-```
-✓ Compiled pvp_game.mcrs
-  Namespace : pvp_game
-  Functions : 7
-  Commands  : 34  →  28  (optimizer: −18%)
-  Output    : ./my-datapack/
 ```
 
 #### Deploy
@@ -260,6 +286,21 @@ import "stdlib/mobs.mcrs"       // ZOMBIE, SKELETON, CREEPER, ... (60+ constants
 | 🧱 [Structure Target](docs/STRUCTURE_TARGET.md) | Compile to NBT command block structures |
 | 🧪 [Integration Testing](https://redscript-docs.pages.dev/Integration-Testing) | Test against a real Paper server |
 | 🏗 [Implementation Guide](docs/IMPLEMENTATION_GUIDE.md) | Compiler internals |
+
+---
+
+### Changelog Highlights
+
+#### v1.2.0
+
+- Added `impl` blocks, methods, and static constructors
+- Added `is` type narrowing for entity-safe control flow
+- Added `@on(Event)` static events and callback scheduling builtins
+- Added runtime f-strings for output functions
+- Expanded stdlib with Timer OOP APIs and 313 MC tag constants
+- Improved optimization with dead code elimination
+
+See [CHANGELOG.md](./CHANGELOG.md) for the full release notes.
 
 ---
 
