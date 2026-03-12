@@ -564,6 +564,58 @@ fn choose(dir: Direction) {
       const instrs = getInstructions(fn)
       expect(instrs.some(i => i.op === 'binop' && (i as any).bop === '*')).toBe(true)
     })
+
+    it('accepts bare selector targets in scoreboard_get', () => {
+      const ir = compile('fn test() { let score: int = scoreboard_get(@s, "score"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run scoreboard players get @s score')
+      )).toBe(true)
+    })
+
+    it('accepts bare selector targets in scoreboard_set', () => {
+      const ir = compile('fn test() { scoreboard_set(@a, "kills", 0); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('scoreboard players set @a kills 0')
+    })
+
+    it('warns on quoted selectors in scoreboard_get', () => {
+      const { ir, warnings } = compileWithWarnings('fn test() { let score: int = scoreboard_get("@s", "score"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run scoreboard players get @s score')
+      )).toBe(true)
+      expect(warnings).toContainEqual({
+        code: 'W_QUOTED_SELECTOR',
+        message: 'Quoted selector "@s" is deprecated; pass @s without quotes',
+      })
+    })
+
+    it('does not warn on fake player names', () => {
+      const { ir, warnings } = compileWithWarnings('fn test() { let total: int = scoreboard_get("#global", "total"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run scoreboard players get #global total')
+      )).toBe(true)
+      expect(warnings).toHaveLength(0)
+    })
+
+    it('warns on quoted selectors in data_get entity targets', () => {
+      const { ir, warnings } = compileWithWarnings('fn test() { let pos: int = data_get("entity", "@s", "Pos[0]"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('run data get entity @s Pos[0] 1')
+      )).toBe(true)
+      expect(warnings).toContainEqual({
+        code: 'W_QUOTED_SELECTOR',
+        message: 'Quoted selector "@s" is deprecated; pass @s without quotes',
+      })
+    })
   })
 
   describe('decorators', () => {

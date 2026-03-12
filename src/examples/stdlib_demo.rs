@@ -24,19 +24,19 @@ fn clamp(x: int, lo: int, hi: int) -> int {
 }
 
 fn heal(amount: int) {
-    let health: int = scoreboard_get("@p", "health");
+    let health: int = scoreboard_get(@p, "health");
     let next: int = health + amount;
-    scoreboard_set("@p", "health", next);
+    scoreboard_set(@p, "health", next);
 }
 
 fn damage(amount: int) {
-    let health: int = scoreboard_get("@p", "health");
+    let health: int = scoreboard_get(@p, "health");
     let next: int = health - amount;
 
     if (next < 0) {
-        scoreboard_set("@p", "health", 0);
+        scoreboard_set(@p, "health", 0);
     } else {
-        scoreboard_set("@p", "health", next);
+        scoreboard_set(@p, "health", next);
     }
 }
 
@@ -134,7 +134,7 @@ fn cooldown_tick(name: string) {
 @on_trigger("arena_start")
 fn arena_start() {
     scoreboard_set("arena_zone_center", "rs", 0);
-    scoreboard_set("@p", "health", 20);
+    scoreboard_set(@p, "health", 20);
     timer_start("wave", 200);
     cooldown_start("dash", 0);
     title(@p, "Arena started");
@@ -150,7 +150,7 @@ fn arena_tick() {
         timer_start("wave", 200);
     }
 
-    let player_x: int = data_get("entity", "@p", "Pos[0]");
+    let player_x: int = data_get("entity", @p, "Pos[0]");
     let delta: int = player_x - scoreboard_get("arena_zone_center", "rs");
     let distance: int = abs(delta);
     let pressure: int = clamp(distance, 0, 8);

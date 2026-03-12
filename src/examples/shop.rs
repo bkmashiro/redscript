@@ -2,7 +2,7 @@
 // Players set shop_choice, then run /trigger shop_buy.
 
 fn complete_purchase() {
-    let choice: int = scoreboard_get("@s", "shop_choice");
+    let choice: int = scoreboard_get(@s, "shop_choice");
 
     if (choice == 1) {
         give(@s, "minecraft:bread", 1);
@@ -21,7 +21,7 @@ fn complete_purchase() {
         }
     }
 
-    scoreboard_set("@s", "shop_choice", 0);
+    scoreboard_set(@s, "shop_choice", 0);
 }
 
 @on_trigger("shop_buy")
