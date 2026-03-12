@@ -2039,6 +2039,17 @@ export class Lowering {
       }
       case 'selector':
         return this.selectorToString(expr.sel)
+      case 'unary':
+        // Handle unary minus on literals directly
+        if (expr.op === '-' && expr.operand.kind === 'int_lit') {
+          return (-expr.operand.value).toString()
+        }
+        if (expr.op === '-' && expr.operand.kind === 'float_lit') {
+          return Math.trunc(-expr.operand.value).toString()
+        }
+        // Fall through to default for complex cases
+        const unaryOp = this.lowerExpr(expr)
+        return this.operandToVar(unaryOp)
       default:
         // Complex expression - lower and return var name
         const op = this.lowerExpr(expr)
