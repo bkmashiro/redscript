@@ -125,4 +125,31 @@ describe('generateDatapack', () => {
     expect(json.criteria.trigger.trigger).toBe('minecraft:story/mine_diamond')
     expect(json.rewards.function).toBe('mypack:on_mine_diamond')
   })
+
+  it('generates static event dispatcher in __tick', () => {
+    const mod: IRModule = {
+      namespace: 'mypack',
+      globals: [],
+      functions: [{
+        name: 'handle_death',
+        params: [],
+        locals: [],
+        blocks: [{ label: 'entry', instrs: [], term: { op: 'return' } }],
+        eventHandler: { eventType: 'PlayerDeath', tag: 'rs.just_died' },
+      }, {
+        name: 'handle_death_2',
+        params: [],
+        locals: [],
+        blocks: [{ label: 'entry', instrs: [], term: { op: 'return' } }],
+        eventHandler: { eventType: 'PlayerDeath', tag: 'rs.just_died' },
+      }],
+    }
+
+    const files = generateDatapack(mod)
+    const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
+    expect(tickFn).toBeDefined()
+    expect(tickFn!.content).toContain('execute as @a[tag=rs.just_died] run function mypack:handle_death')
+    expect(tickFn!.content).toContain('execute as @a[tag=rs.just_died] run function mypack:handle_death_2')
+    expect(tickFn!.content).toContain('tag @a[tag=rs.just_died] remove rs.just_died')
+  })
 })

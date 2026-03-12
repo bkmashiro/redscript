@@ -8,6 +8,7 @@ import { optimizeForStructure, optimizeForStructureWithStats } from '../../optim
 import { preprocessSource } from '../../compile'
 import type { IRCommand, IRFunction, IRModule } from '../../ir/types'
 import type { DatapackFile } from '../mcfunction'
+import { EVENT_TYPES, isEventTypeName, type EventTypeName } from '../../events/types'
 
 const DATA_VERSION = 3953
 const MAX_WIDTH = 16
@@ -87,6 +88,10 @@ function collectCommandEntriesFromModule(module: IRModule): CommandEntry[] {
   const entries: CommandEntry[] = []
   const triggerHandlers = module.functions.filter(fn => fn.isTriggerHandler && fn.triggerName)
   const triggerNames = new Set(triggerHandlers.map(fn => fn.triggerName!))
+  const eventHandlers = module.functions.filter((fn): fn is IRFunction & { eventHandler: { eventType: EventTypeName; tag: string } } =>
+    !!fn.eventHandler && isEventTypeName(fn.eventHandler.eventType)
+  )
+  const eventTypes = new Set<EventTypeName>(eventHandlers.map(fn => fn.eventHandler.eventType))
   const loadCommands = [
     `scoreboard objectives add ${OBJ} dummy`,
     ...module.globals.map(g => `scoreboard players set ${varRef(g.name)} ${OBJ} ${g.init}`),
@@ -98,6 +103,14 @@ function collectCommandEntriesFromModule(module: IRModule): CommandEntry[] {
       new Set(module.functions.flatMap(fn => Array.from(collectConsts(fn))))
     ).map(constSetup),
   ]
+
+  for (const eventType of eventTypes) {
+    if (eventType === 'PlayerDeath') {
+      loadCommands.push('scoreboard objectives add rs.deaths deathCount')
+    } else if (eventType === 'EntityKill') {
+      loadCommands.push('scoreboard objectives add rs.kills totalKillCount')
+    }
+  }
 
   // Call @load functions from __load
   for (const fn of module.functions) {
@@ -143,6 +156,20 @@ function collectCommandEntriesFromModule(module: IRModule): CommandEntry[] {
     for (const triggerName of triggerNames) {
       tickCommands.push({
         cmd: `execute as @a[scores={${triggerName}=1..}] run function ${module.namespace}:__trigger_${triggerName}_dispatch`,
+      })
+    }
+  }
+  if (eventHandlers.length > 0) {
+    for (const eventType of eventTypes) {
+      const tag = EVENT_TYPES[eventType].tag
+      const handlers = eventHandlers.filter(fn => fn.eventHandler?.eventType === eventType)
+      for (const handler of handlers) {
+        tickCommands.push({
+          cmd: `execute as @a[tag=${tag}] run function ${module.namespace}:${handler.name}`,
+        })
+      }
+      tickCommands.push({
+        cmd: `tag @a[tag=${tag}] remove ${tag}`,
       })
     }
   }

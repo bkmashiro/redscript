@@ -315,7 +315,7 @@ export class Parser {
   }
 
   private parseDecoratorValue(value: string): Decorator {
-    // Parse @tick or @on_trigger("name") or @on_advancement("story/mine_diamond")
+    // Parse @tick, @on(PlayerDeath), or @on_trigger("name")
     const match = value.match(/^@(\w+)(?:\(([^)]*)\))?$/)
     if (!match) {
       this.error(`Invalid decorator: ${value}`)
@@ -329,6 +329,14 @@ export class Parser {
     }
 
     const args: Decorator['args'] = {}
+
+    if (name === 'on') {
+      const eventTypeMatch = argsStr.match(/^([A-Za-z_][A-Za-z0-9_]*)$/)
+      if (eventTypeMatch) {
+        args.eventType = eventTypeMatch[1]
+        return { name, args }
+      }
+    }
 
     // Handle @on_trigger("name"), @on_advancement("id"), @on_craft("item"), @on_join_team("team")
     if (name === 'on_trigger' || name === 'on_advancement' || name === 'on_craft' || name === 'on_join_team') {

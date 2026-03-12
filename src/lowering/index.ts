@@ -16,6 +16,7 @@ import type {
 } from '../ast/types'
 import type { GlobalVar } from '../ir/types'
 import * as path from 'path'
+import { EVENT_TYPES, getEventParamSpecs, isEventTypeName } from '../events/types'
 
 // ---------------------------------------------------------------------------
 // Builtin Functions
@@ -309,7 +310,12 @@ export class Lowering {
     const loweredName = options.name ?? fn.name
     const callbackBindings = options.callbackBindings ?? new Map<string, string>()
     const stdlibCallSite = options.stdlibCallSite
-    const runtimeParams = fn.params.filter(param => !callbackBindings.has(param.name))
+    const staticEventDec = fn.decorators.find(d => d.name === 'on')
+    const eventType = staticEventDec?.args?.eventType
+    const eventParamSpecs = eventType && isEventTypeName(eventType) ? getEventParamSpecs(eventType) : []
+    const runtimeParams = staticEventDec
+      ? []
+      : fn.params.filter(param => !callbackBindings.has(param.name))
 
     this.currentFn = loweredName
     this.currentStdlibCallSite = stdlibCallSite
@@ -324,10 +330,31 @@ export class Lowering {
     this.builder = new LoweringBuilder()
 
     // Map parameters
-    for (const param of runtimeParams) {
-      const paramName = param.name
-      this.varMap.set(paramName, `$${paramName}`)
-      this.varTypes.set(paramName, this.normalizeType(param.type))
+    if (staticEventDec) {
+      for (let i = 0; i < fn.params.length; i++) {
+        const param = fn.params[i]
+        const expected = eventParamSpecs[i]
+        const normalizedType = this.normalizeType(param.type)
+        this.varTypes.set(param.name, normalizedType)
+
+        if (expected?.type.kind === 'entity') {
+          this.varMap.set(param.name, '@s')
+          continue
+        }
+
+        if (expected?.type.kind === 'named' && expected.type.name === 'string') {
+          this.stringValues.set(param.name, '')
+          continue
+        }
+
+        this.varMap.set(param.name, `$${param.name}`)
+      }
+    } else {
+      for (const param of runtimeParams) {
+        const paramName = param.name
+        this.varMap.set(paramName, `$${paramName}`)
+        this.varTypes.set(paramName, this.normalizeType(param.type))
+      }
     }
     for (const param of fn.params) {
       if (callbackBindings.has(param.name)) {
@@ -343,6 +370,16 @@ export class Lowering {
       const paramName = runtimeParams[i].name
       const varName = `$${paramName}`
       this.builder.emitAssign(varName, { kind: 'var', name: `$p${i}` })
+    }
+
+    if (staticEventDec) {
+      for (let i = 0; i < fn.params.length; i++) {
+        const param = fn.params[i]
+        const expected = eventParamSpecs[i]
+        if (expected?.type.kind === 'named' && expected.type.name !== 'string') {
+          this.builder.emitAssign(`$${param.name}`, { kind: 'const', value: 0 })
+        }
+      }
     }
 
     // Lower body
@@ -394,6 +431,13 @@ export class Lowering {
         case 'on_join_team':
           irFn.eventTrigger = { kind: 'join_team', value: eventDec.args?.team }
           break
+      }
+    }
+
+    if (eventType && isEventTypeName(eventType)) {
+      irFn.eventHandler = {
+        eventType,
+        tag: EVENT_TYPES[eventType].tag,
       }
     }
 

@@ -7,6 +7,7 @@
 
 import type { Program, FnDecl, Stmt, Expr, TypeNode, Block, EntityTypeName, EntitySelector } from '../ast/types'
 import { DiagnosticError, DiagnosticCollector } from '../diagnostics'
+import { getEventParamSpecs, isEventTypeName } from '../events/types'
 
 interface ScopeSymbol {
   type: TypeNode
@@ -201,6 +202,8 @@ export class TypeChecker {
     this.scope = new Map()
     let seenDefault = false
 
+    this.checkFunctionDecorators(fn)
+
     for (const [name, type] of this.consts.entries()) {
       this.scope.set(name, { type, mutable: false })
     }
@@ -229,6 +232,49 @@ export class TypeChecker {
 
     this.currentFn = null
     this.currentReturnType = null
+  }
+
+  private checkFunctionDecorators(fn: FnDecl): void {
+    const eventDecorators = fn.decorators.filter(decorator => decorator.name === 'on')
+    if (eventDecorators.length === 0) {
+      return
+    }
+
+    if (eventDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @on decorators`, fn)
+      return
+    }
+
+    const eventType = eventDecorators[0].args?.eventType
+    if (!eventType) {
+      this.report(`Function '${fn.name}' is missing an event type in @on(...)`, fn)
+      return
+    }
+
+    if (!isEventTypeName(eventType)) {
+      this.report(`Unknown event type '${eventType}'`, fn)
+      return
+    }
+
+    const expectedParams = getEventParamSpecs(eventType)
+    if (fn.params.length !== expectedParams.length) {
+      this.report(
+        `Event handler '${fn.name}' for ${eventType} must declare ${expectedParams.length} parameter(s), got ${fn.params.length}`,
+        fn
+      )
+      return
+    }
+
+    for (let i = 0; i < expectedParams.length; i++) {
+      const actual = this.normalizeType(fn.params[i].type)
+      const expected = this.normalizeType(expectedParams[i].type)
+      if (!this.typesMatch(expected, actual)) {
+        this.report(
+          `Event handler '${fn.name}' parameter ${i + 1} must be ${this.typeToString(expected)}, got ${this.typeToString(actual)}`,
+          fn.params[i]
+        )
+      }
+    }
   }
 
   private checkBlock(stmts: Block): void {

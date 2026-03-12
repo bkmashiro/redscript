@@ -1,0 +1,46 @@
+struct Timer {
+    _id: int,
+    _duration: int
+}
+
+impl Timer {
+    fn new(duration: int) -> Timer {
+        scoreboard_set("timer_ticks", #rs, 0);
+        scoreboard_set("timer_active", #rs, 0);
+        return { _id: 0, _duration: duration };
+    }
+
+    fn start(self) {
+        scoreboard_set("timer_active", #rs, 1);
+    }
+
+    fn tick(self) {
+        let active: int = scoreboard_get("timer_active", #rs);
+        let ticks: int = scoreboard_get("timer_ticks", #rs);
+
+        if (active == 1) {
+            if (ticks < self._duration) {
+                scoreboard_set("timer_ticks", #rs, ticks + 1);
+            }
+        }
+    }
+
+    fn done(self) -> bool {
+        let ticks: int = scoreboard_get("timer_ticks", #rs);
+        return ticks >= self._duration;
+    }
+}
+
+fn test() {
+    let timer: Timer = Timer::new(3);
+    timer.start();
+    timer.tick();
+    timer.tick();
+    timer.tick();
+
+    if (timer.done()) {
+        scoreboard_set("#impl", "done", 1);
+    } else {
+        scoreboard_set("#impl", "done", 0);
+    }
+}

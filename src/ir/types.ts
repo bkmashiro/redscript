@@ -107,6 +107,10 @@ export interface IRFunction {
     kind: 'advancement' | 'craft' | 'death' | 'login' | 'join_team'
     value?: string
   }
+  eventHandler?: {
+    eventType: string
+    tag: string
+  }
 }
 
 // ---------------------------------------------------------------------------

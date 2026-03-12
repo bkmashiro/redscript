@@ -19,6 +19,7 @@ const MC_HOST = process.env.MC_HOST ?? 'localhost'
 const MC_PORT = parseInt(process.env.MC_PORT ?? '25561')
 const MC_SERVER_DIR = process.env.MC_SERVER_DIR ?? path.join(process.env.HOME!, 'mc-test-server')
 const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-test')
+const FIXTURE_DIR = path.join(__dirname, 'fixtures')
 
 let serverOnline = false
 let mc: MCTestClient
@@ -52,6 +53,13 @@ function writeFixture(source: string, namespace: string): void {
       fs.writeFileSync(filePath, file.content)
     }
   }
+}
+
+function writeFixtureFile(fileName: string, namespace: string): void {
+  writeFixture(
+    fs.readFileSync(path.join(FIXTURE_DIR, fileName), 'utf-8'),
+    namespace
+  )
 }
 
 beforeAll(async () => {
@@ -259,13 +267,19 @@ beforeAll(async () => {
     }
   `, 'rmw_test')
 
+  writeFixtureFile('impl-test.mcrs', 'impl_test')
+  writeFixtureFile('timeout-test.mcrs', 'timeout_test')
+  writeFixtureFile('interval-test.mcrs', 'interval_test')
+  writeFixtureFile('is-check-test.mcrs', 'is_check_test')
+
   // ── Full reset + safe data reload ────────────────────────────────────
   await mc.fullReset()
 
   // Pre-create scoreboards
   for (const obj of ['ticks', 'seconds', 'test_score', 'result', 'calc', 'rs',
                      'timer', 'ended', 'val_a', 'val_b', 'sum', 'val_x', 'val_y', 'product', 'val',
-                     'counter', 'out', 'i', 'steps', 'input', 'tier', 'r1', 'r2', 'r3', 'v']) {
+                     'counter', 'out', 'i', 'steps', 'input', 'tier', 'r1', 'r2', 'r3', 'v',
+                     'done', 'fired', 'players', 'zombies']) {
     await mc.command(`/scoreboard objectives add ${obj} dummy`).catch(() => {})
   }
   await mc.command('/scoreboard players set counter ticks 0')
@@ -681,4 +695,75 @@ describe('E2E Scenario Tests', () => {
     console.log(`  RMW chain: 1→2→4→8, got ${v} (expect 8) ✓`)
   })
 
+})
+
+describe('MC Integration - New Features', () => {
+  test('impl-test.mcrs: Timer::new/start/tick/done works in-game', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/scoreboard players set #impl done 0')
+    await mc.command('/scoreboard players set timer_ticks rs 0')
+    await mc.command('/scoreboard players set timer_active rs 0')
+
+    await mc.command('/function impl_test:__load').catch(() => {})
+    await mc.command('/function impl_test:test')
+    await mc.ticks(5)
+
+    const done = await mc.scoreboard('#impl', 'done')
+    const ticks = await mc.scoreboard('timer_ticks', 'rs')
+    expect(done).toBe(1)
+    expect(ticks).toBe(3)
+  })
+
+  test('timeout-test.mcrs: setTimeout executes after delay', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/scoreboard players set #timeout fired 0')
+    await mc.command('/function timeout_test:__load').catch(() => {})
+    await mc.command('/function timeout_test:start')
+    await mc.ticks(10)
+    expect(await mc.scoreboard('#timeout', 'fired')).toBe(0)
+
+    await mc.ticks(15)
+    expect(await mc.scoreboard('#timeout', 'fired')).toBe(1)
+  })
+
+  test('interval-test.mcrs: setInterval repeats on schedule', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/scoreboard players set #interval ticks 0')
+    await mc.command('/function interval_test:__load').catch(() => {})
+    await mc.command('/function interval_test:start')
+    await mc.ticks(70)
+
+    const count = await mc.scoreboard('#interval', 'ticks')
+    expect(count).toBeGreaterThanOrEqual(3)
+    expect(count).toBeLessThanOrEqual(3)
+  })
+
+  test('is-check-test.mcrs: foreach is-narrowing only matches zombie entities', async () => {
+    if (!serverOnline) return
+
+    await mc.fullReset({ clearArea: false, killEntities: true, resetScoreboards: false })
+    await mc.command('/scoreboard players set #is_check players 0')
+    await mc.command('/scoreboard players set #is_check zombies 0')
+    await mc.command('/function is_check_test:__load').catch(() => {})
+    await mc.command('/summon minecraft:zombie 0 65 0 {Tags:["is_check_target"]}')
+    await mc.command('/summon minecraft:armor_stand 2 65 0 {Tags:["is_check_target"]}')
+
+    await mc.command('/function is_check_test:run')
+    await mc.ticks(5)
+
+    const zombies = await mc.scoreboard('#is_check', 'zombies')
+    const players = await mc.scoreboard('#is_check', 'players')
+    const zombieEntities = await mc.entities('@e[type=minecraft:zombie,tag=is_check_target]')
+    const standEntities = await mc.entities('@e[type=minecraft:armor_stand,tag=is_check_target]')
+
+    expect(zombies).toBe(1)
+    expect(players).toBe(0)
+    expect(zombieEntities).toHaveLength(0)
+    expect(standEntities).toHaveLength(1)
+
+    await mc.command('/kill @e[tag=is_check_target]').catch(() => {})
+  })
 })

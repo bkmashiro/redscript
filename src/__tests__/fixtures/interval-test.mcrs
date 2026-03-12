@@ -1,0 +1,11 @@
+fn start() {
+    scoreboard_set("#interval", "ticks", 0);
+
+    setInterval(20, () => {
+        let count: int = scoreboard_get("#interval", "ticks");
+        if (count < 3) {
+            say("Interval tick");
+            scoreboard_set("#interval", "ticks", count + 1);
+        }
+    });
+}

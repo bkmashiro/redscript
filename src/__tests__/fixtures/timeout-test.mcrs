@@ -1,0 +1,7 @@
+fn start() {
+    scoreboard_set("#timeout", "fired", 0);
+    setTimeout(20, () => {
+        say("Delayed message");
+        scoreboard_set("#timeout", "fired", 1);
+    });
+}

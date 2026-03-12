@@ -1,0 +1,17 @@
+fn run() {
+    scoreboard_set("#is_check", "players", 0);
+    scoreboard_set("#is_check", "zombies", 0);
+
+    foreach (e in @e[tag=is_check_target]) {
+        if (e is Player) {
+            let players: int = scoreboard_get("#is_check", "players");
+            scoreboard_set("#is_check", "players", players + 1);
+        }
+
+        if (e is Zombie) {
+            let zombies: int = scoreboard_get("#is_check", "zombies");
+            scoreboard_set("#is_check", "zombies", zombies + 1);
+            kill(e);
+        }
+    }
+}

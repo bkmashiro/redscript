@@ -18,6 +18,7 @@
 
 import type { IRBlock, IRFunction, IRModule, Operand, Terminator } from '../../ir/types'
 import { optimizeCommandFunctions, type OptimizationStats, createEmptyOptimizationStats, mergeOptimizationStats } from '../../optimizer/commands'
+import { EVENT_TYPES, isEventTypeName, type EventTypeName } from '../../events/types'
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -270,6 +271,10 @@ export function generateDatapackWithStats(
   // Collect all trigger handlers
   const triggerHandlers = module.functions.filter(fn => fn.isTriggerHandler && fn.triggerName)
   const triggerNames = new Set(triggerHandlers.map(fn => fn.triggerName!))
+  const eventHandlers = module.functions.filter((fn): fn is IRFunction & { eventHandler: { eventType: EventTypeName; tag: string } } =>
+    !!fn.eventHandler && isEventTypeName(fn.eventHandler.eventType)
+  )
+  const eventTypes = new Set<EventTypeName>(eventHandlers.map(fn => fn.eventHandler.eventType))
 
   // Collect all tick functions
   const tickFunctionNames: string[] = []
@@ -300,6 +305,19 @@ export function generateDatapackWithStats(
   for (const triggerName of triggerNames) {
     loadLines.push(`scoreboard objectives add ${triggerName} trigger`)
     loadLines.push(`scoreboard players enable @a ${triggerName}`)
+  }
+
+  for (const eventType of eventTypes) {
+    const detection = EVENT_TYPES[eventType].detection
+    if (eventType === 'PlayerDeath') {
+      loadLines.push('scoreboard objectives add rs.deaths deathCount')
+    } else if (eventType === 'EntityKill') {
+      loadLines.push('scoreboard objectives add rs.kills totalKillCount')
+    } else if (eventType === 'ItemUse') {
+      loadLines.push('# ItemUse detection requires a project-specific objective/tag setup')
+    } else if (detection === 'tag' || detection === 'advancement') {
+      loadLines.push(`# ${eventType} detection expects tag ${EVENT_TYPES[eventType].tag} to be set externally`)
+    }
   }
 
   // Generate trigger dispatch functions
@@ -391,8 +409,20 @@ export function generateDatapackWithStats(
     }
   }
 
+  if (eventHandlers.length > 0) {
+    tickLines.push('# Event checks')
+    for (const eventType of eventTypes) {
+      const tag = EVENT_TYPES[eventType].tag
+      const handlers = eventHandlers.filter(fn => fn.eventHandler?.eventType === eventType)
+      for (const handler of handlers) {
+        tickLines.push(`execute as @a[tag=${tag}] run function ${ns}:${handler.name}`)
+      }
+      tickLines.push(`tag @a[tag=${tag}] remove ${tag}`)
+    }
+  }
+
   // Only generate __tick if there's something to run
-  if (tickFunctionNames.length > 0 || triggerNames.size > 0) {
+  if (tickFunctionNames.length > 0 || triggerNames.size > 0 || eventHandlers.length > 0) {
     files.push({
       path: `data/${ns}/function/__tick.mcfunction`,
       content: tickLines.join('\n'),
