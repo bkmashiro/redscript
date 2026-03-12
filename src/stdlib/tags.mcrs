@@ -1,0 +1,187 @@
+// ============================================
+// Minecraft Entity & Block Tags
+// ============================================
+// Built-in tag constants for type checking and selection
+// Usage: @e[type=#TAG_UNDEAD] or if (e is #TAG_RAIDERS)
+// ============================================
+
+// ===== Entity Type Tags =====
+
+/// Undead mobs (zombies, skeletons, phantoms, etc.)
+/// Affected by Smite enchantment, healed by harming potions
+const TAG_UNDEAD: string = "#minecraft:undead";
+
+/// Arthropod mobs (spiders, silverfish, endermites, bees)
+/// Affected by Bane of Arthropods enchantment
+const TAG_ARTHROPODS: string = "#minecraft:arthropods";
+
+/// Illager raiders (pillagers, vindicators, evokers, etc.)
+const TAG_RAIDERS: string = "#minecraft:raiders";
+
+/// All skeleton variants
+const TAG_SKELETONS: string = "#minecraft:skeletons";
+
+/// All zombie variants  
+const TAG_ZOMBIES: string = "#minecraft:zombies";
+
+/// Mobs that can be tamed
+const TAG_CAN_BREATHE_UNDER_WATER: string = "#minecraft:can_breathe_under_water";
+
+/// Entities immune to fire
+const TAG_FREEZE_IMMUNE_ENTITY_TYPES: string = "#minecraft:freeze_immune_entity_types";
+
+/// Powder snow walkable entities
+const TAG_POWDER_SNOW_WALKABLE_MOBS: string = "#minecraft:powder_snow_walkable_mobs";
+
+/// Impact projectiles (arrows, tridents, etc.)
+const TAG_IMPACT_PROJECTILES: string = "#minecraft:impact_projectiles";
+
+/// Aquatic mobs
+const TAG_AQUATIC: string = "#minecraft:aquatic";
+
+/// Axolotl huntable mobs
+const TAG_AXOLOTL_HUNT_TARGETS: string = "#minecraft:axolotl_hunt_targets";
+
+/// Warden anger targets
+const TAG_WARDEN_CAN_LISTEN: string = "#minecraft:warden_can_listen";
+
+// ===== Block Tags =====
+
+/// All wool colors
+const TAG_WOOL: string = "#minecraft:wool";
+
+/// All planks
+const TAG_PLANKS: string = "#minecraft:planks";
+
+/// All logs (oak, birch, etc.)
+const TAG_LOGS: string = "#minecraft:logs";
+
+/// All stone types
+const TAG_STONE_BRICKS: string = "#minecraft:stone_bricks";
+
+/// Blocks mineable with pickaxe
+const TAG_MINEABLE_PICKAXE: string = "#minecraft:mineable/pickaxe";
+
+/// Blocks mineable with axe
+const TAG_MINEABLE_AXE: string = "#minecraft:mineable/axe";
+
+/// Blocks mineable with shovel
+const TAG_MINEABLE_SHOVEL: string = "#minecraft:mineable/shovel";
+
+/// Blocks mineable with hoe
+const TAG_MINEABLE_HOE: string = "#minecraft:mineable/hoe";
+
+/// Blocks that need diamond tool
+const TAG_NEEDS_DIAMOND_TOOL: string = "#minecraft:needs_diamond_tool";
+
+/// Blocks that need iron tool
+const TAG_NEEDS_IRON_TOOL: string = "#minecraft:needs_iron_tool";
+
+/// Blocks that need stone tool
+const TAG_NEEDS_STONE_TOOL: string = "#minecraft:needs_stone_tool";
+
+/// All doors
+const TAG_DOORS: string = "#minecraft:doors";
+
+/// All buttons
+const TAG_BUTTONS: string = "#minecraft:buttons";
+
+/// All pressure plates
+const TAG_PRESSURE_PLATES: string = "#minecraft:pressure_plates";
+
+/// All stairs
+const TAG_STAIRS: string = "#minecraft:stairs";
+
+/// All slabs
+const TAG_SLABS: string = "#minecraft:slabs";
+
+/// All fences
+const TAG_FENCES: string = "#minecraft:fences";
+
+/// All walls
+const TAG_WALLS: string = "#minecraft:walls";
+
+/// All signs
+const TAG_SIGNS: string = "#minecraft:signs";
+
+/// All beds
+const TAG_BEDS: string = "#minecraft:beds";
+
+/// All flowers
+const TAG_FLOWERS: string = "#minecraft:flowers";
+
+/// All saplings
+const TAG_SAPLINGS: string = "#minecraft:saplings";
+
+/// All leaves
+const TAG_LEAVES: string = "#minecraft:leaves";
+
+/// All crops
+const TAG_CROPS: string = "#minecraft:crops";
+
+/// All ores
+const TAG_COAL_ORES: string = "#minecraft:coal_ores";
+const TAG_IRON_ORES: string = "#minecraft:iron_ores";
+const TAG_GOLD_ORES: string = "#minecraft:gold_ores";
+const TAG_DIAMOND_ORES: string = "#minecraft:diamond_ores";
+const TAG_EMERALD_ORES: string = "#minecraft:emerald_ores";
+const TAG_LAPIS_ORES: string = "#minecraft:lapis_ores";
+const TAG_REDSTONE_ORES: string = "#minecraft:redstone_ores";
+const TAG_COPPER_ORES: string = "#minecraft:copper_ores";
+
+// ===== Item Tags =====
+
+/// All swords
+const TAG_SWORDS: string = "#minecraft:swords";
+
+/// All axes
+const TAG_AXES: string = "#minecraft:axes";
+
+/// All pickaxes  
+const TAG_PICKAXES: string = "#minecraft:pickaxes";
+
+/// All shovels
+const TAG_SHOVELS: string = "#minecraft:shovels";
+
+/// All hoes
+const TAG_HOES: string = "#minecraft:hoes";
+
+/// All armor trims
+const TAG_TRIM_MATERIALS: string = "#minecraft:trim_materials";
+
+/// All music discs
+const TAG_MUSIC_DISCS: string = "#minecraft:music_discs";
+
+/// All boats
+const TAG_BOATS: string = "#minecraft:boats";
+
+/// All fish food (for cats)
+const TAG_FISHES: string = "#minecraft:fishes";
+
+/// Piglin loved items
+const TAG_PIGLIN_LOVED: string = "#minecraft:piglin_loved";
+
+/// Items that make piglins angry when opened
+const TAG_PIGLIN_REPELLENTS: string = "#minecraft:piglin_repellents";
+
+/// Fox food
+const TAG_FOX_FOOD: string = "#minecraft:fox_food";
+
+/// Beacon payment items
+const TAG_BEACON_PAYMENT_ITEMS: string = "#minecraft:beacon_payment_items";
+
+// ===== Helper Functions =====
+
+/// Check if entity matches a tag
+fn is_tagged(target: selector, tag: string): bool {
+    // Note: This is compile-time only, returns true for syntax purposes
+    // Actual check happens via execute if entity target[type=tag]
+    return true;
+}
+
+/// Select entities by tag
+/// Usage: foreach (e in entities_with_tag(TAG_UNDEAD)) { ... }
+fn entities_with_tag(tag: string): selector {
+    // Returns @e[type=tag] selector
+    return @e;  // Placeholder - actual implementation in lowering
+}

@@ -162,3 +162,39 @@ Player input detection (right click, sneak, look direction).
 // Position ranges
 @a[x=-5..5, y=62..68, z=-5..5]  // In specific area
 ```
+
+### tags.mcrs
+Minecraft tag constants (1.21+).
+
+#### Entity Type Tags
+- `TAG_UNDEAD` — Zombies, skeletons, phantoms (#minecraft:undead)
+- `TAG_ARTHROPODS` — Spiders, silverfish, bees (#minecraft:arthropods)
+- `TAG_RAIDERS` — Pillagers, vindicators, evokers (#minecraft:raiders)
+- `TAG_SKELETONS` — All skeleton variants (#minecraft:skeletons)
+- `TAG_ZOMBIES` — All zombie variants (#minecraft:zombies)
+- `TAG_AQUATIC` — Fish, dolphins, guardians (#minecraft:aquatic)
+
+#### Block Tags
+- `TAG_LOGS`, `TAG_PLANKS`, `TAG_WOOL` — Block categories
+- `TAG_MINEABLE_PICKAXE/AXE/SHOVEL/HOE` — Tool categories
+- `TAG_NEEDS_DIAMOND_TOOL/IRON_TOOL/STONE_TOOL` — Tool requirements
+- `TAG_DOORS`, `TAG_BUTTONS`, `TAG_STAIRS`, `TAG_SLABS` — Block types
+- `TAG_*_ORES` — Coal, iron, gold, diamond, emerald, lapis, redstone, copper
+
+#### Item Tags
+- `TAG_SWORDS`, `TAG_AXES`, `TAG_PICKAXES`, `TAG_SHOVELS`, `TAG_HOES`
+- `TAG_MUSIC_DISCS`, `TAG_BOATS`, `TAG_FISHES`
+- `TAG_PIGLIN_LOVED`, `TAG_BEACON_PAYMENT_ITEMS`
+
+#### Usage
+```mcrs
+import "stdlib/tags.mcrs"
+
+// Select undead mobs
+foreach (e in @e[type=#minecraft:undead]) {
+    kill(e);
+}
+
+// Or use constant
+kill(@e[type=TAG_UNDEAD]);
+```
