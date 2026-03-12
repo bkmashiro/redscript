@@ -2398,6 +2398,13 @@ export class Lowering {
     }
     if (filters.nbt) parts.push(`nbt=${filters.nbt}`)
     if (filters.gamemode) parts.push(`gamemode=${filters.gamemode}`)
+    // Position filters
+    if (filters.x) parts.push(`x=${this.rangeToString(filters.x)}`)
+    if (filters.y) parts.push(`y=${this.rangeToString(filters.y)}`)
+    if (filters.z) parts.push(`z=${this.rangeToString(filters.z)}`)
+    // Rotation filters
+    if (filters.x_rotation) parts.push(`x_rotation=${this.rangeToString(filters.x_rotation)}`)
+    if (filters.y_rotation) parts.push(`y_rotation=${this.rangeToString(filters.y_rotation)}`)
 
     return this.finalizeSelector(parts.length ? `${kind}[${parts.join(',')}]` : kind)
   }

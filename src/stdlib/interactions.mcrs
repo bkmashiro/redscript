@@ -1,0 +1,195 @@
+// Player interaction detection helpers
+// Usage: import "stdlib/interactions.mcrs"
+//
+// Common patterns for detecting player input:
+// - Right click (carrot on stick)
+// - Sneak/crouch
+// - Look direction
+// - Item in hand
+
+// =============================================
+// SETUP - Call once on @load
+// =============================================
+
+/// Initialize interaction scoreboards
+fn interactions_init() {
+    // Right click detection (carrot on a stick)
+    scoreboard_add_objective("rs.click", "minecraft.used:minecraft.carrot_on_a_stick");
+    
+    // Sneak time tracking
+    scoreboard_add_objective("rs.sneak", "minecraft.custom:minecraft.sneak_time");
+    
+    // Attack detection (left click on entity)
+    scoreboard_add_objective("rs.attack", "minecraft.custom:minecraft.damage_dealt");
+}
+
+// =============================================
+// RIGHT CLICK DETECTION
+// =============================================
+// Uses Carrot on a Stick item
+// Give players: /give @p carrot_on_a_stick{CustomModelData:1234}
+
+/// Check if player right-clicked (carrot on stick)
+/// Call this in @tick, resets after detection
+fn on_right_click(callback_fn: string) {
+    // Players with click score > 0 have clicked
+    foreach (p in @a) {
+        let clicks: int = scoreboard_get(p, "rs.click");
+        if (clicks > 0) {
+            // Reset counter
+            scoreboard_set(p, "rs.click", 0);
+            // Trigger callback by tag
+            tag_add(p, "rs.clicked");
+        }
+    }
+}
+
+/// Example: detect right click and do something
+fn example_right_click() {
+    foreach (p in @a) {
+        let clicks: int = scoreboard_get(p, "rs.click");
+        if (clicks > 0) {
+            scoreboard_set(p, "rs.click", 0);
+            // Do your action here
+            say("Player right clicked!");
+        }
+    }
+}
+
+// =============================================
+// SNEAK DETECTION  
+// =============================================
+
+/// Check if player just started sneaking
+/// Returns 1 if sneaking, 0 otherwise
+fn is_sneaking(target: selector) -> int {
+    let sneak_time: int = scoreboard_get(target, "rs.sneak");
+    if (sneak_time > 0) {
+        return 1;
+    }
+    return 0;
+}
+
+/// Detect sneak start (first tick of sneaking)
+fn on_sneak_start() {
+    foreach (p in @a) {
+        let sneak_time: int = scoreboard_get(p, "rs.sneak");
+        // Sneak time == 1 means just started
+        if (sneak_time == 1) {
+            tag_add(p, "rs.sneak_start");
+        } else {
+            tag_remove(p, "rs.sneak_start");
+        }
+    }
+}
+
+// =============================================
+// LOOK DIRECTION
+// =============================================
+// Uses execute with rotation checks
+
+/// Check if player is looking up (pitch < -45)
+fn check_look_up() {
+    // Tag players looking up
+    foreach (p in @a) {
+        execute if entity p[x_rotation=-90..-45] run {
+            tag_add(p, "rs.look_up");
+        }
+        execute unless entity p[x_rotation=-90..-45] run {
+            tag_remove(p, "rs.look_up");
+        }
+    }
+}
+
+/// Check if player is looking down (pitch > 45)
+fn check_look_down() {
+    foreach (p in @a) {
+        execute if entity p[x_rotation=45..90] run {
+            tag_add(p, "rs.look_down");
+        }
+        execute unless entity p[x_rotation=45..90] run {
+            tag_remove(p, "rs.look_down");
+        }
+    }
+}
+
+/// Check if player is looking straight (pitch -45 to 45)
+fn check_look_straight() {
+    foreach (p in @a) {
+        execute if entity p[x_rotation=-45..45] run {
+            tag_add(p, "rs.look_straight");
+        }
+        execute unless entity p[x_rotation=-45..45] run {
+            tag_remove(p, "rs.look_straight");
+        }
+    }
+}
+
+// =============================================
+// ITEM IN HAND
+// =============================================
+// Use execute if data or predicates
+
+/// Check if holding specific item (by tag)
+/// Usage: check_holding_tag("my_wand") checks for tag rs.holding.my_wand
+fn check_holding_item(item_id: string) {
+    // This requires predicate files in datapack
+    // Example predicate: data/ns/predicates/holding_diamond_sword.json
+    // { "condition": "minecraft:entity_properties", 
+    //   "entity": "this",
+    //   "predicate": { "equipment": { "mainhand": { "items": ["minecraft:diamond_sword"] }}}}
+    
+    // For now, use NBT check via execute
+    say("Use execute if data for item checks");
+}
+
+// =============================================
+// COMBINED: SNEAK + RIGHT CLICK
+// =============================================
+// Common pattern: Sneak + Use for special ability
+
+/// Detect sneak + right click combo
+fn on_sneak_click() {
+    foreach (p in @a) {
+        let clicks: int = scoreboard_get(p, "rs.click");
+        let sneak: int = scoreboard_get(p, "rs.sneak");
+        
+        if (clicks > 0) {
+            if (sneak > 0) {
+                // Sneak + Click!
+                scoreboard_set(p, "rs.click", 0);
+                tag_add(p, "rs.sneak_click");
+            } else {
+                // Normal click
+                scoreboard_set(p, "rs.click", 0);
+                tag_add(p, "rs.clicked");
+            }
+        }
+    }
+}
+
+// =============================================
+// DOUBLE TAP SNEAK
+// =============================================
+// Detect double-tap sneak (toggle fly, etc)
+
+let last_sneak_tick: int = 0;
+const DOUBLE_TAP_WINDOW: int = 10;  // 0.5 second
+
+fn on_double_sneak() {
+    foreach (p in @a) {
+        let sneak: int = scoreboard_get(p, "rs.sneak");
+        let last: int = scoreboard_get(p, "rs.last_sneak");
+        let now: int = scoreboard_get(p, "rs.tick");
+        
+        // Just started sneaking
+        if (sneak == 1) {
+            let diff: int = now - last;
+            if (diff < DOUBLE_TAP_WINDOW) {
+                // Double sneak detected!
+                tag_add(p, "rs.double_sneak");
+            }
+            scoreboard_set(p, "rs.last_sneak", now);
+        }
+    }
+}

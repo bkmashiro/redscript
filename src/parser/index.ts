@@ -1389,6 +1389,21 @@ export class Parser {
         case 'scores':
           filters.scores = this.parseScoresFilter(val)
           break
+        case 'x':
+          filters.x = this.parseRangeValue(val)
+          break
+        case 'y':
+          filters.y = this.parseRangeValue(val)
+          break
+        case 'z':
+          filters.z = this.parseRangeValue(val)
+          break
+        case 'x_rotation':
+          filters.x_rotation = this.parseRangeValue(val)
+          break
+        case 'y_rotation':
+          filters.y_rotation = this.parseRangeValue(val)
+          break
       }
     }
 

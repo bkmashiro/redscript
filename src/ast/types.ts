@@ -68,6 +68,13 @@ export interface SelectorFilter {
   sort?: 'nearest' | 'furthest' | 'random' | 'arbitrary'
   nbt?: string
   gamemode?: string
+  // Position filters
+  x?: RangeExpr
+  y?: RangeExpr
+  z?: RangeExpr
+  // Rotation filters
+  x_rotation?: RangeExpr
+  y_rotation?: RangeExpr
 }
 
 export interface EntitySelector {
