@@ -94,6 +94,16 @@ describe('deadCodeElimination', () => {
     const opt = deadCodeElimination(fn)
     expect(opt.blocks[0].instrs).toHaveLength(1)
   })
+
+  it('keeps assignments referenced by raw commands', () => {
+    const fn = makeFn([
+      { op: 'assign', dst: '$used_by_raw', src: { kind: 'const', value: 7 } },
+      { op: 'raw', cmd: 'execute store result score player obj run scoreboard players get $used_by_raw rs' },
+    ])
+    const opt = deadCodeElimination(fn)
+    expect(opt.blocks[0].instrs).toHaveLength(2)
+    expect((opt.blocks[0].instrs[0] as any).dst).toBe('$used_by_raw')
+  })
 })
 
 describe('optimize pipeline', () => {
