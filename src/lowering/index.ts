@@ -35,6 +35,9 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   tp: ([sel, x, y, z]) => `tp ${sel} ${x ?? '~'} ${y ?? '~'} ${z ?? '~'}`,
   setblock: ([x, y, z, block]) => `setblock ${x} ${y} ${z} ${block}`,
   random: () => null, // Special handling
+  scoreboard_get: () => null, // Special handling (returns value)
+  scoreboard_set: () => null, // Special handling
+  score: () => null, // Special handling (same as scoreboard_get)
 }
 
 // ---------------------------------------------------------------------------
@@ -888,6 +891,31 @@ export class Lowering {
       const max = args[1] ? this.exprToLiteral(args[1]) : '100'
       this.builder.emitRaw(`execute store result score ${dst} rs run random value ${min}..${max}`)
       return { kind: 'var', name: dst }
+    }
+
+    // Special case: scoreboard_get / score — read from vanilla MC scoreboard
+    if (name === 'scoreboard_get' || name === 'score') {
+      const dst = this.builder.freshTemp()
+      const player = this.exprToString(args[0])
+      const objective = this.exprToString(args[1])
+      this.builder.emitRaw(`execute store result score ${dst} rs run scoreboard players get ${player} ${objective}`)
+      return { kind: 'var', name: dst }
+    }
+
+    // Special case: scoreboard_set — write to vanilla MC scoreboard
+    if (name === 'scoreboard_set') {
+      const player = this.exprToString(args[0])
+      const objective = this.exprToString(args[1])
+      const value = this.lowerExpr(args[2])
+      if (value.kind === 'const') {
+        this.builder.emitRaw(`scoreboard players set ${player} ${objective} ${value.value}`)
+      } else if (value.kind === 'var') {
+        // Copy from internal scoreboard to vanilla objective
+        const temp = this.builder.freshTemp()
+        this.builder.emitAssign(temp, value)
+        this.builder.emitRaw(`execute store result score ${player} ${objective} run scoreboard players get ${temp} rs`)
+      }
+      return { kind: 'const', value: 0 }
     }
 
     // Convert args to strings for builtin

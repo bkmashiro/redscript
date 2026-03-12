@@ -238,6 +238,90 @@ fn count_down() {
     })
   })
 
+  describe('Scoreboard interop', () => {
+    it('compiles scoreboard_get to read vanilla scores', () => {
+      const source = `
+fn test() -> int {
+    let kills: int = scoreboard_get("PlayerName", "kill_count");
+    return kills;
+}
+`
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('execute store result score')
+      expect(fn).toContain('scoreboard players get PlayerName kill_count')
+    })
+
+    it('compiles scoreboard_get with @s selector', () => {
+      const source = `
+fn test() -> int {
+    let my_kills: int = scoreboard_get("@s", "kill_count");
+    return my_kills;
+}
+`
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('scoreboard players get @s kill_count')
+    })
+
+    it('compiles scoreboard_set with constant value', () => {
+      const source = `
+fn test() {
+    scoreboard_set("PlayerName", "kill_count", 100);
+}
+`
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('scoreboard players set PlayerName kill_count 100')
+    })
+
+    it('compiles scoreboard_set with variable value', () => {
+      const source = `
+fn test() {
+    let value: int = 42;
+    scoreboard_set("@s", "score", value);
+}
+`
+      const files = compile(source)
+      const allContent = files
+        .filter(f => f.path.includes('test'))
+        .map(f => f.content)
+        .join('\n')
+      expect(allContent).toContain('execute store result score @s score')
+    })
+
+    it('compiles score() as expression', () => {
+      const source = `
+fn test() -> int {
+    let level: int = score("@s", "minecraft.custom:minecraft.play_one_minute");
+    return level;
+}
+`
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('scoreboard players get @s minecraft.custom:minecraft.play_one_minute')
+    })
+
+    it('uses scoreboard values in expressions', () => {
+      const source = `
+fn double_score() -> int {
+    let s: int = scoreboard_get("@s", "points");
+    let doubled: int = s * 2;
+    scoreboard_set("@s", "points", doubled);
+    return doubled;
+}
+`
+      const files = compile(source)
+      const fn = getFunction(files, 'double_score')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('scoreboard players get @s points')
+    })
+  })
+
   describe('Built-in functions', () => {
     it('compiles give()', () => {
       const source = 'fn test() { give(@p, "diamond", 64); }'
