@@ -104,6 +104,16 @@ fn foo() {
       const instrs = getInstructions(fn)
       expect(instrs.some(i => i.op === 'binop')).toBe(true)
     })
+
+    it('stores literal-backed string variables in storage for str_len', () => {
+      const ir = compile('fn foo() { let name: string = "Player"; let n: int = str_len(name); }')
+      const fn = getFunction(ir, 'foo')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('data modify storage rs:strings name set value "Player"')
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute store result score') && cmd.includes('run data get storage rs:strings name')
+      )).toBe(true)
+    })
   })
 
   describe('return statements', () => {
@@ -554,6 +564,33 @@ fn test() {
       expect(rawCmds).toContain('scoreboard objectives setdisplay sidebar')
       expect(rawCmds).toContain('scoreboard objectives add kills playerKillCount "Kill Count"')
       expect(rawCmds).toContain('scoreboard objectives remove kills')
+    })
+
+    it('lowers bossbar management builtins', () => {
+      const ir = compile(`
+fn test() {
+  bossbar_add("ns:health", "Boss Health");
+  bossbar_set_value("ns:health", 50);
+  bossbar_set_max("ns:health", 100);
+  bossbar_set_color("ns:health", "red");
+  bossbar_set_style("ns:health", "notched_10");
+  bossbar_set_visible("ns:health", true);
+  bossbar_set_players("ns:health", @a);
+  bossbar_remove("ns:health");
+  let current: int = bossbar_get_value("ns:health");
+}
+`)
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('bossbar add ns:health {"text":"Boss Health"}')
+      expect(rawCmds).toContain('bossbar set ns:health value 50')
+      expect(rawCmds).toContain('bossbar set ns:health max 100')
+      expect(rawCmds).toContain('bossbar set ns:health color red')
+      expect(rawCmds).toContain('bossbar set ns:health style notched_10')
+      expect(rawCmds).toContain('bossbar set ns:health visible true')
+      expect(rawCmds).toContain('bossbar set ns:health players @a')
+      expect(rawCmds).toContain('bossbar remove ns:health')
+      expect(rawCmds.some(cmd => /^execute store result score \$t\d+ rs run bossbar get ns:health value$/.test(cmd))).toBe(true)
     })
 
     it('lowers random()', () => {

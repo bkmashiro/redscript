@@ -63,6 +63,15 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   scoreboard_hide: () => null, // Special handling
   scoreboard_add_objective: () => null, // Special handling
   scoreboard_remove_objective: () => null, // Special handling
+  bossbar_add: () => null, // Special handling
+  bossbar_set_value: () => null, // Special handling
+  bossbar_set_max: () => null, // Special handling
+  bossbar_set_color: () => null, // Special handling
+  bossbar_set_style: () => null, // Special handling
+  bossbar_set_visible: () => null, // Special handling
+  bossbar_set_players: () => null, // Special handling
+  bossbar_remove: () => null, // Special handling
+  bossbar_get_value: () => null, // Special handling
   data_get: () => null, // Special handling (returns value from NBT)
 }
 
@@ -1136,19 +1145,21 @@ export class Lowering {
 
   private lowerCallExpr(expr: Extract<Expr, { kind: 'call' }>): Operand {
     if (expr.fn === 'str_len') {
+      const storagePath = this.getStringStoragePath(expr.args[0])
+      if (storagePath) {
+        const dst = this.builder.freshTemp()
+        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${storagePath}`)
+        return { kind: 'var', name: dst }
+      }
+
       const staticString = this.resolveStaticString(expr.args[0])
       if (staticString !== null) {
         return { kind: 'const', value: Array.from(staticString).length }
-      }
-
-      const storagePath = this.getStringStoragePath(expr.args[0])
-      const dst = this.builder.freshTemp()
-      if (storagePath) {
-        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${storagePath}`)
       } else {
+        const dst = this.builder.freshTemp()
         this.builder.emitAssign(dst, { kind: 'const', value: 0 })
+        return { kind: 'var', name: dst }
       }
-      return { kind: 'var', name: dst }
     }
 
     // Check for builtin
@@ -1311,6 +1322,54 @@ export class Lowering {
       const objective = this.exprToString(args[0])
       this.builder.emitRaw(`scoreboard objectives remove ${objective}`)
       return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'bossbar_add') {
+      const id = this.exprToString(args[0])
+      const title = this.exprToTextComponent(args[1])
+      this.builder.emitRaw(`bossbar add ${id} ${title}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'bossbar_set_value') {
+      this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} value ${this.exprToString(args[1])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'bossbar_set_max') {
+      this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} max ${this.exprToString(args[1])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'bossbar_set_color') {
+      this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} color ${this.exprToString(args[1])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'bossbar_set_style') {
+      this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} style ${this.exprToString(args[1])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'bossbar_set_visible') {
+      this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} visible ${this.exprToBoolString(args[1])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'bossbar_set_players') {
+      this.builder.emitRaw(`bossbar set ${this.exprToString(args[0])} players ${this.exprToTargetString(args[1])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'bossbar_remove') {
+      this.builder.emitRaw(`bossbar remove ${this.exprToString(args[0])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'bossbar_get_value') {
+      const dst = this.builder.freshTemp()
+      this.builder.emitRaw(`execute store result score ${dst} rs run bossbar get ${this.exprToString(args[0])} value`)
+      return { kind: 'var', name: dst }
     }
 
     // Special case: data_get — read NBT data into a variable
@@ -1543,6 +1602,17 @@ export class Lowering {
 
   private exprToQuotedString(expr: Expr): string {
     return JSON.stringify(this.exprToString(expr))
+  }
+
+  private exprToTextComponent(expr: Expr): string {
+    return JSON.stringify({ text: this.exprToString(expr) })
+  }
+
+  private exprToBoolString(expr: Expr): string {
+    if (expr.kind === 'bool_lit') {
+      return expr.value ? 'true' : 'false'
+    }
+    return this.exprToString(expr)
   }
 
   private lowerCoordinateBuiltin(name: string, args: Expr[]): string | null {

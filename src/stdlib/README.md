@@ -43,6 +43,29 @@ if (is_op() == 1) {
 } else {
     damage(2);
 }
+```
+
+### `strings.rs`
+
+String helpers:
+
+- `str_len(s: string) -> int`
+
+Important limitation:
+
+RedScript still does not support general runtime string manipulation. Today the
+compiler only lowers `str_len(...)` cleanly when the input is a string literal,
+a `const` string, or a string variable initialized from a literal-backed value.
+That path works by storing the string in `storage rs:strings` and reading its
+character count with `data get storage`.
+
+Example:
+
+```rs
+let name: string = "Player";
+let n: int = str_len(name);
+tell(@s, "${n}");
+```
 
 ### `mobs.rs`
 

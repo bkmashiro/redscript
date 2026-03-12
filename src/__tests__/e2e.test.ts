@@ -129,6 +129,23 @@ fn main() {
     })
   })
 
+  describe('string stdlib helpers', () => {
+    it('lowers str_len for literal-backed string variables', () => {
+      const files = compile(`
+fn main() {
+    let name: string = "Player";
+    let n: int = str_len(name);
+    tell(@s, "\${n}");
+}
+`)
+      const mainFn = getFunction(files, 'main')
+      expect(mainFn).toBeDefined()
+      expect(mainFn).toContain('data modify storage rs:strings name set value "Player"')
+      expect(mainFn).toContain('run data get storage rs:strings name')
+      expect(mainFn).toContain('"objective":"rs"')
+    })
+  })
+
   describe('Test 1: Simple function (add)', () => {
     const source = `
 fn add(a: int, b: int) -> int {
