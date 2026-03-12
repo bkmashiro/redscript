@@ -47,13 +47,13 @@ fn set_state(phase: int, timer: int) {
 
 @on_trigger("game_join")
 fn game_join() {
-    let joined: int = scoreboard_get("@s", "game_joined");
+    let joined: int = scoreboard_get(@s, "game_joined");
     let players: int = scoreboard_get("game", "players");
 
     if (joined == 0) {
         players = players + 1;
         scoreboard_set("game", "players", players);
-        scoreboard_set("@s", "game_joined", 1);
+        scoreboard_set(@s, "game_joined", 1);
         title(@s, "Joined Lobby");
         actionbar(@s, "Waiting for the admin to start");
         announce("A player joined the mini-game lobby.");
