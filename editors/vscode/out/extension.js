@@ -607,19 +607,21 @@ var require_parser = __commonJS({
         throw new diagnostics_1.DiagnosticError("ParseError", message, { file: this.filePath, line: token.line, col: token.col }, this.sourceLines);
       }
       withLoc(node, token) {
-        Object.defineProperty(node, "loc", {
-          value: { line: token.line, col: token.col },
+        const span = { line: token.line, col: token.col };
+        Object.defineProperty(node, "span", {
+          value: span,
           enumerable: false,
-          configurable: true
+          configurable: true,
+          writable: true
         });
         return node;
       }
       getLocToken(node) {
-        const loc = node.loc;
-        if (!loc) {
+        const span = node.span;
+        if (!span) {
           return null;
         }
-        return { kind: "eof", value: "", line: loc.line, col: loc.col };
+        return { kind: "eof", value: "", line: span.line, col: span.col };
       }
       // -------------------------------------------------------------------------
       // Program
@@ -1615,10 +1617,10 @@ var require_typechecker = __commonJS({
         this.collector = new diagnostics_1.DiagnosticCollector(source, filePath);
       }
       getNodeLocation(node) {
-        const loc = node?.loc;
+        const span = node?.span;
         return {
-          line: loc?.line ?? 1,
-          col: loc?.col ?? 1
+          line: span?.line ?? 1,
+          col: span?.col ?? 1
         };
       }
       report(message, node) {
@@ -2367,6 +2369,9 @@ var require_lowering = __commonJS({
       data_get: () => null
       // Special handling (returns value from NBT)
     };
+    function getSpan(node) {
+      return node?.span;
+    }
     var NAMESPACED_ENTITY_TYPE_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/;
     var BARE_ENTITY_TYPE_RE = /^[a-z0-9_./-]+$/;
     function normalizeSelector(selector, warnings) {
@@ -3222,7 +3227,7 @@ var require_lowering = __commonJS({
           }
         }
         if (expr.fn in BUILTINS2) {
-          return this.lowerBuiltinCall(expr.fn, expr.args);
+          return this.lowerBuiltinCall(expr.fn, expr.args, getSpan(expr));
         }
         if (expr.fn === "__entity_tag") {
           const entity = this.exprToString(expr.args[0]);
@@ -3432,7 +3437,7 @@ var require_lowering = __commonJS({
           this.varTypes = savedVarTypes;
         }
       }
-      lowerBuiltinCall(name, args) {
+      lowerBuiltinCall(name, args, callSpan) {
         const richTextCommand = this.lowerRichTextBuiltin(name, args);
         if (richTextCommand) {
           this.builder.emitRaw(richTextCommand);
@@ -3580,7 +3585,8 @@ var require_lowering = __commonJS({
         if (name === "tp_to") {
           this.warnings.push({
             message: "tp_to is deprecated; use tp instead",
-            code: "W_DEPRECATED"
+            code: "W_DEPRECATED",
+            ...callSpan ? { line: callSpan.line, col: callSpan.col } : {}
           });
           const tpCommand = this.lowerTpCommand(args);
           if (tpCommand) {
@@ -3743,9 +3749,11 @@ var require_lowering = __commonJS({
           return this.selectorToString(expr.sel);
         }
         if (expr.kind === "str_lit" && expr.value.startsWith("@")) {
+          const span = getSpan(expr);
           this.warnings.push({
             message: `Quoted selector "${expr.value}" is deprecated; pass ${expr.value} without quotes`,
-            code: "W_QUOTED_SELECTOR"
+            code: "W_QUOTED_SELECTOR",
+            ...span ? { line: span.line, col: span.col } : {}
           });
           return expr.value;
         }
@@ -5618,7 +5626,7 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode2 = __toESM(require("vscode"));
+var vscode3 = __toESM(require("vscode"));
 
 // src/hover.ts
 var vscode = __toESM(require("vscode"));
@@ -6245,6 +6253,64 @@ function registerHoverProvider(context) {
   );
 }
 
+// src/symbols.ts
+var vscode2 = __toESM(require("vscode"));
+var DECL_RE = /\b(fn|let|const|struct|enum)\s+(\w+)/g;
+function findDeclarations(doc) {
+  const text = doc.getText();
+  const decls = [];
+  let match;
+  DECL_RE.lastIndex = 0;
+  while ((match = DECL_RE.exec(text)) !== null) {
+    const nameStart = match.index + match[0].length - match[2].length;
+    const pos = doc.positionAt(nameStart);
+    const range = new vscode2.Range(pos, doc.positionAt(nameStart + match[2].length));
+    decls.push({ kind: match[1], name: match[2], range });
+  }
+  return decls;
+}
+function findAllOccurrences(doc, word) {
+  const text = doc.getText();
+  const re = new RegExp(`\\b${escapeRegex(word)}\\b`, "g");
+  const locations = [];
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const pos = doc.positionAt(match.index);
+    const range = new vscode2.Range(pos, doc.positionAt(match.index + word.length));
+    locations.push(new vscode2.Location(doc.uri, range));
+  }
+  return locations;
+}
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function registerSymbolProviders(context) {
+  const selector = { language: "redscript", scheme: "file" };
+  context.subscriptions.push(
+    vscode2.languages.registerDefinitionProvider(selector, {
+      provideDefinition(doc, position) {
+        const wordRange = doc.getWordRangeAtPosition(position);
+        if (!wordRange) return null;
+        const word = doc.getText(wordRange);
+        const decls = findDeclarations(doc);
+        const decl = decls.find((d) => d.name === word);
+        if (!decl) return null;
+        return new vscode2.Location(doc.uri, decl.range);
+      }
+    })
+  );
+  context.subscriptions.push(
+    vscode2.languages.registerReferenceProvider(selector, {
+      provideReferences(doc, position) {
+        const wordRange = doc.getWordRangeAtPosition(position);
+        if (!wordRange) return null;
+        const word = doc.getText(wordRange);
+        return findAllOccurrences(doc, word);
+      }
+    })
+  );
+}
+
 // src/extension.ts
 var { compile: _compile } = require_dist();
 function getCompile() {
@@ -6252,7 +6318,7 @@ function getCompile() {
 }
 var DEBOUNCE_MS = 600;
 function activate(context) {
-  const diagnostics = vscode2.languages.createDiagnosticCollection("redscript");
+  const diagnostics = vscode3.languages.createDiagnosticCollection("redscript");
   context.subscriptions.push(diagnostics);
   const timers = /* @__PURE__ */ new Map();
   function scheduleValidation(doc) {
@@ -6266,13 +6332,13 @@ function activate(context) {
     }, DEBOUNCE_MS));
   }
   context.subscriptions.push(
-    vscode2.workspace.onDidOpenTextDocument((doc) => scheduleValidation(doc))
+    vscode3.workspace.onDidOpenTextDocument((doc) => scheduleValidation(doc))
   );
   context.subscriptions.push(
-    vscode2.workspace.onDidChangeTextDocument((e) => scheduleValidation(e.document))
+    vscode3.workspace.onDidChangeTextDocument((e) => scheduleValidation(e.document))
   );
   context.subscriptions.push(
-    vscode2.workspace.onDidCloseTextDocument((doc) => {
+    vscode3.workspace.onDidCloseTextDocument((doc) => {
       diagnostics.delete(doc.uri);
       const key = doc.uri.toString();
       const t = timers.get(key);
@@ -6282,15 +6348,16 @@ function activate(context) {
       }
     })
   );
-  vscode2.workspace.textDocuments.filter((d) => d.languageId === "redscript").forEach((d) => scheduleValidation(d));
+  vscode3.workspace.textDocuments.filter((d) => d.languageId === "redscript").forEach((d) => scheduleValidation(d));
   registerHoverProvider(context);
-  const statusBar = vscode2.window.createStatusBarItem(vscode2.StatusBarAlignment.Left, 10);
+  registerSymbolProviders(context);
+  const statusBar = vscode3.window.createStatusBarItem(vscode3.StatusBarAlignment.Left, 10);
   statusBar.text = "$(pass) RedScript";
   statusBar.tooltip = "RedScript compiler";
   statusBar.show();
   context.subscriptions.push(statusBar);
   context.subscriptions.push(
-    vscode2.window.onDidChangeActiveTextEditor((editor) => {
+    vscode3.window.onDidChangeActiveTextEditor((editor) => {
       if (editor?.document.languageId === "redscript") {
         statusBar.show();
       } else {
@@ -6304,8 +6371,8 @@ function validateDocument(doc, collection) {
   if (!compile) {
     collection.set(doc.uri, [{
       message: "RedScript compiler not found. Run `npm install -g redscript` to enable diagnostics.",
-      range: new vscode2.Range(0, 0, 0, 0),
-      severity: vscode2.DiagnosticSeverity.Information,
+      range: new vscode3.Range(0, 0, 0, 0),
+      severity: vscode3.DiagnosticSeverity.Information,
       source: "redscript"
     }]);
     return;
@@ -6315,11 +6382,11 @@ function validateDocument(doc, collection) {
   try {
     const result = compile(source, { filePath: doc.uri.fsPath });
     for (const w of result.warnings ?? []) {
-      const range = findWarningRange(w.message, w.code, source, doc);
+      const range = w.line && w.col ? new vscode3.Range(w.line - 1, w.col - 1, w.line - 1, w.col - 1 + 20) : findWarningRange(w.message, w.code, source, doc);
       docDiagnostics.push({
         message: w.message,
         range,
-        severity: vscode2.DiagnosticSeverity.Warning,
+        severity: vscode3.DiagnosticSeverity.Warning,
         source: "redscript",
         code: w.code
       });
@@ -6330,7 +6397,7 @@ function validateDocument(doc, collection) {
     docDiagnostics.push({
       message: msg,
       range,
-      severity: vscode2.DiagnosticSeverity.Error,
+      severity: vscode3.DiagnosticSeverity.Error,
       source: "redscript"
     });
   }
@@ -6355,30 +6422,30 @@ function searchToken(source, doc, token) {
   const idx = source.indexOf(token);
   if (idx < 0) return null;
   const pos = doc.positionAt(idx);
-  return new vscode2.Range(pos, doc.positionAt(idx + token.length));
+  return new vscode3.Range(pos, doc.positionAt(idx + token.length));
 }
 function topLine(doc) {
-  return new vscode2.Range(0, 0, 0, doc.lineAt(0).text.length);
+  return new vscode3.Range(0, 0, 0, doc.lineAt(0).text.length);
 }
 function extractRange(msg, doc) {
   let m = msg.match(/line[: ]+(\d+)[,\s]+col(?:umn)?[: ]+(\d+)/i);
   if (m) {
     const l = Math.max(0, parseInt(m[1]) - 1);
     const c = Math.max(0, parseInt(m[2]) - 1);
-    return new vscode2.Range(l, c, l, c + 80);
+    return new vscode3.Range(l, c, l, c + 80);
   }
   m = msg.match(/^(\d+):(\d+)/);
   if (m) {
     const l = Math.max(0, parseInt(m[1]) - 1);
     const c = Math.max(0, parseInt(m[2]) - 1);
-    return new vscode2.Range(l, c, l, c + 80);
+    return new vscode3.Range(l, c, l, c + 80);
   }
   m = msg.match(/\[line (\d+)\]/i);
   if (m) {
     const l = Math.max(0, parseInt(m[1]) - 1);
-    return new vscode2.Range(l, 0, l, 200);
+    return new vscode3.Range(l, 0, l, 200);
   }
-  return new vscode2.Range(0, 0, 0, doc.lineAt(0).text.length);
+  return new vscode3.Range(0, 0, 0, doc.lineAt(0).text.length);
 }
 function deactivate() {
 }
