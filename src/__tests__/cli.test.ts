@@ -57,6 +57,155 @@ describe('CLI API', () => {
 
       expect(tickTimer?.content).toContain('scoreboard players set #rs rs.timer_ticks 1')
     })
+
+    it('adds a call-site hash for stdlib internal scoreboard objectives', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-stdlib-hash-'))
+      const stdlibDir = path.join(tempDir, 'src', 'stdlib')
+      const stdlibPath = path.join(stdlibDir, 'timer.mcrs')
+      const mainPath = path.join(tempDir, 'main.mcrs')
+
+      fs.mkdirSync(stdlibDir, { recursive: true })
+      fs.writeFileSync(stdlibPath, [
+        'fn timer_start(name: string, duration: int) {',
+        '  scoreboard_set("timer_ticks", #rs, duration);',
+        '  scoreboard_set("timer_active", #rs, 1);',
+        '}',
+        '',
+      ].join('\n'))
+      fs.writeFileSync(mainPath, [
+        'import "./src/stdlib/timer.mcrs"',
+        '',
+        'fn main() {',
+        '  timer_start("x", 100);',
+        '  timer_start("x", 100);',
+        '}',
+        '',
+      ].join('\n'))
+
+      const source = fs.readFileSync(mainPath, 'utf-8')
+      const result = compile(source, { namespace: 'mygame', filePath: mainPath })
+      const timerFns = result.files.filter(file => /timer_start__callsite_[0-9a-f]{4}\.mcfunction$/.test(file.path))
+
+      expect(timerFns).toHaveLength(2)
+
+      const objectives = timerFns
+        .flatMap(file => [...file.content.matchAll(/rs\._timer_([0-9a-f]{4})/g)].map(match => match[0]))
+
+      expect(new Set(objectives).size).toBe(2)
+    })
+
+    it('Timer::new creates timer', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-timer-new-'))
+      const mainPath = path.join(tempDir, 'main.mcrs')
+      const timerPath = path.resolve(process.cwd(), 'src/stdlib/timer.mcrs')
+
+      fs.writeFileSync(mainPath, [
+        `import "${timerPath}"`,
+        '',
+        'fn main() {',
+        '  let timer: Timer = Timer::new(20);',
+        '}',
+        '',
+      ].join('\n'))
+
+      const source = fs.readFileSync(mainPath, 'utf-8')
+      const result = compile(source, { namespace: 'timernew', filePath: mainPath })
+
+      expect(result.typeErrors).toEqual([])
+      const newFn = result.files.find(file => file.path.endsWith('/Timer_new.mcfunction'))
+      expect(newFn?.content).toContain('scoreboard players set timer_ticks rs 0')
+      expect(newFn?.content).toContain('scoreboard players set timer_active rs 0')
+    })
+
+    it('Timer.start/pause/reset', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-timer-state-'))
+      const mainPath = path.join(tempDir, 'main.mcrs')
+      const timerPath = path.resolve(process.cwd(), 'src/stdlib/timer.mcrs')
+
+      fs.writeFileSync(mainPath, [
+        `import "${timerPath}"`,
+        '',
+        'fn main() {',
+        '  let timer: Timer = Timer::new(20);',
+        '  timer.start();',
+        '  timer.pause();',
+        '  timer.reset();',
+        '}',
+        '',
+      ].join('\n'))
+
+      const source = fs.readFileSync(mainPath, 'utf-8')
+      const result = compile(source, { namespace: 'timerstate', filePath: mainPath })
+
+      expect(result.typeErrors).toEqual([])
+      const startFn = result.files.find(file => file.path.endsWith('/Timer_start.mcfunction'))
+      const pauseFn = result.files.find(file => file.path.endsWith('/Timer_pause.mcfunction'))
+      const resetFn = result.files.find(file => file.path.endsWith('/Timer_reset.mcfunction'))
+
+      expect(startFn?.content).toContain('scoreboard players set timer_active rs 1')
+      expect(pauseFn?.content).toContain('scoreboard players set timer_active rs 0')
+      expect(resetFn?.content).toContain('scoreboard players set timer_ticks rs 0')
+    })
+
+    it('Timer.done returns bool', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-timer-done-'))
+      const mainPath = path.join(tempDir, 'main.mcrs')
+      const timerPath = path.resolve(process.cwd(), 'src/stdlib/timer.mcrs')
+
+      fs.writeFileSync(mainPath, [
+        `import "${timerPath}"`,
+        '',
+        'fn main() {',
+        '  let timer: Timer = Timer::new(20);',
+        '  let finished: bool = timer.done();',
+        '  if (finished) {',
+        '    say("done");',
+        '  }',
+        '}',
+        '',
+      ].join('\n'))
+
+      const source = fs.readFileSync(mainPath, 'utf-8')
+      const result = compile(source, { namespace: 'timerdone', filePath: mainPath })
+
+      expect(result.typeErrors).toEqual([])
+      const doneFn = result.files.find(file => file.path.endsWith('/Timer_done.mcfunction'))
+      const mainFn = result.files.find(file => file.path.endsWith('/main.mcfunction'))
+      expect(doneFn?.content).toContain('scoreboard players get timer_ticks rs')
+      expect(doneFn?.content).toContain('return run scoreboard players get')
+      expect(mainFn?.content).toContain('execute if score $finished rs matches 1..')
+    })
+
+    it('Timer.tick increments', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-timer-tick-'))
+      const mainPath = path.join(tempDir, 'main.mcrs')
+      const timerPath = path.resolve(process.cwd(), 'src/stdlib/timer.mcrs')
+
+      fs.writeFileSync(mainPath, [
+        `import "${timerPath}"`,
+        '',
+        'fn main() {',
+        '  let timer: Timer = Timer::new(20);',
+        '  timer.start();',
+        '  timer.tick();',
+        '}',
+        '',
+      ].join('\n'))
+
+      const source = fs.readFileSync(mainPath, 'utf-8')
+      const result = compile(source, { namespace: 'timertick', filePath: mainPath })
+
+      expect(result.typeErrors).toEqual([])
+      const tickOutput = result.files
+        .filter(file => file.path.includes('/Timer_tick'))
+        .map(file => file.content)
+        .join('\n')
+
+      expect(tickOutput).toContain('scoreboard players get timer_active rs')
+      expect(tickOutput).toContain('scoreboard players get timer_ticks rs')
+      expect(tickOutput).toContain(' += $const_1 rs')
+      expect(tickOutput).toContain('execute store result score timer_ticks rs run scoreboard players get $_')
+    })
   })
 
   describe('compile()', () => {

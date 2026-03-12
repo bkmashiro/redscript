@@ -70,10 +70,13 @@ Cooldown system using scoreboards.
 - `is_on_cooldown(target)` → int
 
 ### timer.mcrs
-Timer utilities.
-- `timer_start(name, ticks)`
-- `timer_tick()`
-- `timer_done(name)` → int
+Timer utilities with an OOP API.
+- `Timer::new(ticks)` → `Timer`
+- `timer.start()`, `timer.pause()`, `timer.reset()`
+- `timer.done()` → bool
+- `timer.elapsed()` → int
+- `timer.remaining()` → int
+- `timer.tick()` — manual tick update; current runtime uses one shared timer slot
 
 ### combat.mcrs
 Combat helpers.
