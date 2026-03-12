@@ -26,6 +26,7 @@ describe('Parser', () => {
       expect(program.namespace).toBe('test')
       expect(program.declarations).toEqual([])
       expect(program.enums).toEqual([])
+      expect(program.consts).toEqual([])
     })
 
     it('parses namespace declaration', () => {
@@ -37,6 +38,14 @@ describe('Parser', () => {
       const program = parse('fn foo() {}')
       expect(program.declarations).toHaveLength(1)
       expect(program.declarations[0].name).toBe('foo')
+    })
+
+    it('parses top-level const declarations', () => {
+      const program = parse('const MAX_HP: int = 100\nconst NAME: string = "Arena"')
+      expect(program.consts).toEqual([
+        { name: 'MAX_HP', type: { kind: 'named', name: 'int' }, value: { kind: 'int_lit', value: 100 } },
+        { name: 'NAME', type: { kind: 'named', name: 'string' }, value: { kind: 'str_lit', value: 'Arena' } },
+      ])
     })
   })
 
@@ -483,7 +492,27 @@ describe('Parser', () => {
         const expr = parseExpr('@a')
         expect(expr).toEqual({
           kind: 'selector',
+          raw: '@a',
+          isSingle: false,
           sel: { kind: '@a' },
+        })
+      })
+
+      it('marks single-entity selectors', () => {
+        expect(parseExpr('@p')).toEqual({
+          kind: 'selector',
+          raw: '@p',
+          isSingle: true,
+          sel: { kind: '@p' },
+        })
+        expect(parseExpr('@e[limit=1, tag=target]')).toEqual({
+          kind: 'selector',
+          raw: '@e[limit=1, tag=target]',
+          isSingle: true,
+          sel: {
+            kind: '@e',
+            filters: { limit: 1, tag: ['target'] },
+          },
         })
       })
 
@@ -491,6 +520,8 @@ describe('Parser', () => {
         const expr = parseExpr('@e[type=zombie]')
         expect(expr).toEqual({
           kind: 'selector',
+          raw: '@e[type=zombie]',
+          isSingle: false,
           sel: {
             kind: '@e',
             filters: { type: 'zombie' },

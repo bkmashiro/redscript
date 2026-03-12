@@ -73,6 +73,22 @@ fn test() -> int {
   })
 
   describe('let statements', () => {
+    it('inlines const values without allocating scoreboard variables', () => {
+      const ir = compile(`
+const MAX_HP: int = 100
+
+fn foo() {
+  let x: int = MAX_HP;
+}
+`)
+      const fn = getFunction(ir, 'foo')!
+      const instrs = getInstructions(fn)
+      expect(instrs.some(i =>
+        i.op === 'assign' && i.dst === '$x' && (i.src as any).kind === 'const' && (i.src as any).value === 100
+      )).toBe(true)
+      expect(ir.globals).not.toContain('$MAX_HP')
+    })
+
     it('lowers let with literal', () => {
       const ir = compile('fn foo() { let x: int = 42; }')
       const fn = getFunction(ir, 'foo')!
@@ -442,13 +458,25 @@ fn choose(dir: Direction) {
       expect(rawCmds.some(cmd => cmd.includes('effect give @a speed 30 1'))).toBe(true)
     })
 
-    it('lowers tp() and tp_to()', () => {
-      const ir = compile('fn test() { tp(@s, (~1, ~0, ~-1)); tp(@s, "^0", "^1", "^0"); tp_to(@s, @p); }')
+    it('lowers tp() for both positions and entity destinations', () => {
+      const ir = compile('fn test() { tp(@s, (~1, ~0, ~-1)); tp(@s, "^0", "^1", "^0"); tp(@s, @p); tp(@a, (1, 64, 1)); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
       expect(rawCmds).toContain('tp @s ~1 ~ ~-1')
       expect(rawCmds).toContain('tp @s ^0 ^1 ^0')
       expect(rawCmds).toContain('tp @s @p')
+      expect(rawCmds).toContain('tp @a 1 64 1')
+    })
+
+    it('warns when using tp_to()', () => {
+      const { ir, warnings } = compileWithWarnings('fn test() { tp_to(@s, @p); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('tp @s @p')
+      expect(warnings).toContainEqual({
+        code: 'W_DEPRECATED',
+        message: 'tp_to is deprecated; use tp instead',
+      })
     })
 
     it('lowers inventory and player admin commands', () => {

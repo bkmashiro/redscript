@@ -12,6 +12,17 @@ function typeCheck(source: string): DiagnosticError[] {
 
 describe('TypeChecker', () => {
   describe('variable declaration', () => {
+    it('allows using top-level consts inside functions', () => {
+      const errors = typeCheck(`
+const MAX_HP: int = 100
+
+fn test() {
+    let hp: int = MAX_HP;
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
     it('allows using declared variables', () => {
       const errors = typeCheck(`
 fn test() {
@@ -51,6 +62,18 @@ fn test() {
 }
 `)
       expect(errors).toHaveLength(0)
+    })
+
+    it('rejects assigning to const', () => {
+      const errors = typeCheck(`
+const MAX_HP: int = 100
+
+fn test() {
+    MAX_HP = 50;
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain("Cannot assign to const 'MAX_HP'")
     })
   })
 
@@ -117,6 +140,34 @@ fn bad(a: int = 1, b: int) {}
 `)
       expect(errors.length).toBeGreaterThan(0)
       expect(errors[0].message).toContain("cannot follow a default parameter")
+    })
+
+    it('rejects non-single selector tp destinations', () => {
+      const errors = typeCheck(`
+fn test() {
+    tp(@s, @a);
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('tp destination must be a single-entity selector')
+    })
+
+    it('allows single-selector and BlockPos tp destinations', () => {
+      const singleErrors = typeCheck(`
+fn test() {
+    tp(@s, @p);
+    tp(@s, @e[limit=1, tag=target]);
+}
+`)
+      expect(singleErrors).toHaveLength(0)
+
+      const posErrors = typeCheck(`
+fn test() {
+    tp(@a, (1, 64, 1));
+    tp(@s, (~0, ~10, ~0));
+}
+`)
+      expect(posErrors).toHaveLength(0)
     })
   })
 

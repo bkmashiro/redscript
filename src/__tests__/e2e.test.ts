@@ -7,6 +7,7 @@
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
 import { Lowering } from '../lowering'
+import { TypeChecker } from '../typechecker'
 import { optimize } from '../optimizer/passes'
 import { generateDatapack, DatapackFile } from '../codegen/mcfunction'
 import type { IRModule } from '../ir/types'
@@ -41,6 +42,12 @@ function hasTickTag(files: DatapackFile[], namespace: string, fnName: string): b
   const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
   if (!tickFn) return false
   return tickFn.content.includes(`function ${namespace}:${fnName}`)
+}
+
+function typeCheck(source: string) {
+  const tokens = new Lexer(source).tokenize()
+  const ast = new Parser(tokens, source).parse('test')
+  return new TypeChecker(source).check(ast)
 }
 
 import { generateCommandBlocks } from '../codegen/cmdblock'
@@ -104,6 +111,24 @@ describe('Command Block Target', () => {
 })
 
 describe('E2E: Complete Pipeline', () => {
+  describe('const declarations', () => {
+    it('inlines consts in expressions and string interpolation', () => {
+      const files = compile(`
+const MAX_HP: int = 100
+const GAME_NAME: string = "Arena Battle"
+
+fn main() {
+    let hp: int = MAX_HP + 5;
+    announce("\${GAME_NAME}: \${hp}");
+}
+`)
+      const mainFn = getFunction(files, 'main')
+      expect(mainFn).toBeDefined()
+      expect(mainFn).toContain('scoreboard players set $hp rs 105')
+      expect(mainFn).toContain('Arena Battle')
+    })
+  })
+
   describe('Test 1: Simple function (add)', () => {
     const source = `
 fn add(a: int, b: int) -> int {
@@ -203,7 +228,8 @@ fn test() {
       const source = `
 fn test() {
     tp(@s, (~1, ~0, ~-1));
-    tp_to(@s, @p);
+    tp(@s, @p);
+    tp(@a, (1, 64, 1));
     clear(@s);
     weather("clear");
     time_set("noon");
@@ -218,6 +244,7 @@ fn test() {
       const fn = getFunction(compile(source), 'test')!
       expect(fn).toContain('tp @s ~1 ~ ~-1')
       expect(fn).toContain('tp @s @p')
+      expect(fn).toContain('tp @a 1 64 1')
       expect(fn).toContain('clear @s')
       expect(fn).toContain('weather clear')
       expect(fn).toContain('time set noon')
@@ -499,6 +526,16 @@ fn double_score() -> int {
       const files = compile(source)
       const fn = getFunction(files, 'test')
       expect(fn).toContain('tp @s 0 100 0')
+    })
+
+    it('type checks tp selector destinations', () => {
+      const invalid = typeCheck('fn test() { tp(@s, @a); }')
+      expect(invalid.map(err => err.message)).toContain(
+        'tp destination must be a single-entity selector (@s, @p, @r, or limit=1)'
+      )
+
+      expect(typeCheck('fn test() { tp(@s, @p); }')).toHaveLength(0)
+      expect(typeCheck('fn test() { tp(@s, @e[limit=1, tag=target]); }')).toHaveLength(0)
     })
 
     it('compiles random()', () => {

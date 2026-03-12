@@ -8,6 +8,11 @@
 import type { Program, FnDecl, Stmt, Expr, TypeNode, Block } from '../ast/types'
 import { DiagnosticError, DiagnosticCollector } from '../diagnostics'
 
+interface ScopeSymbol {
+  type: TypeNode
+  mutable: boolean
+}
+
 // ---------------------------------------------------------------------------
 // Type Checker
 // ---------------------------------------------------------------------------
@@ -17,8 +22,9 @@ export class TypeChecker {
   private functions: Map<string, FnDecl> = new Map()
   private structs: Map<string, Map<string, TypeNode>> = new Map()
   private enums: Map<string, Map<string, number>> = new Map()
+  private consts: Map<string, TypeNode> = new Map()
   private currentFn: FnDecl | null = null
-  private scope: Map<string, TypeNode> = new Map()
+  private scope: Map<string, ScopeSymbol> = new Map()
 
   constructor(source?: string, filePath?: string) {
     this.collector = new DiagnosticCollector(source, filePath)
@@ -62,6 +68,18 @@ export class TypeChecker {
       this.enums.set(enumDecl.name, variants)
     }
 
+    for (const constDecl of program.consts ?? []) {
+      const constType = this.normalizeType(constDecl.type)
+      const actualType = this.inferType(constDecl.value)
+      if (!this.typesMatch(constType, actualType)) {
+        this.report(
+          `Type mismatch: expected ${this.typeToString(constType)}, got ${this.typeToString(actualType)}`,
+          constDecl.value
+        )
+      }
+      this.consts.set(constDecl.name, constType)
+    }
+
     // Second pass: type check function bodies
     for (const fn of program.declarations) {
       this.checkFunction(fn)
@@ -75,9 +93,13 @@ export class TypeChecker {
     this.scope = new Map()
     let seenDefault = false
 
+    for (const [name, type] of this.consts.entries()) {
+      this.scope.set(name, { type, mutable: false })
+    }
+
     // Add parameters to scope
     for (const param of fn.params) {
-      this.scope.set(param.name, this.normalizeType(param.type))
+      this.scope.set(param.name, { type: this.normalizeType(param.type), mutable: true })
       if (param.default) {
         seenDefault = true
         this.checkExpr(param.default)
@@ -132,13 +154,13 @@ export class TypeChecker {
       case 'foreach':
         this.checkExpr(stmt.iterable)
         if (stmt.iterable.kind === 'selector') {
-          this.scope.set(stmt.binding, { kind: 'named', name: 'void' }) // Entity marker
+          this.scope.set(stmt.binding, { type: { kind: 'named', name: 'void' }, mutable: true }) // Entity marker
         } else {
           const iterableType = this.inferType(stmt.iterable)
           if (iterableType.kind === 'array') {
-            this.scope.set(stmt.binding, iterableType.elem)
+            this.scope.set(stmt.binding, { type: iterableType.elem, mutable: true })
           } else {
-            this.scope.set(stmt.binding, { kind: 'named', name: 'void' })
+            this.scope.set(stmt.binding, { type: { kind: 'named', name: 'void' }, mutable: true })
           }
         }
         this.checkBlock(stmt.body)
@@ -177,7 +199,7 @@ export class TypeChecker {
   private checkLetStmt(stmt: Extract<Stmt, { kind: 'let' }>): void {
     // Add variable to scope
     const type = stmt.type ? this.normalizeType(stmt.type) : this.inferType(stmt.init)
-    this.scope.set(stmt.name, type)
+    this.scope.set(stmt.name, { type, mutable: true })
 
     // Check initializer
     this.checkExpr(stmt.init)
@@ -249,6 +271,8 @@ export class TypeChecker {
       case 'assign':
         if (!this.scope.has(expr.target)) {
           this.report(`Variable '${expr.target}' used before declaration`, expr)
+        } else if (!this.scope.get(expr.target)?.mutable) {
+          this.report(`Cannot assign to const '${expr.target}'`, expr)
         }
         this.checkExpr(expr.value)
         break
@@ -308,6 +332,10 @@ export class TypeChecker {
   }
 
   private checkCallExpr(expr: Extract<Expr, { kind: 'call' }>): void {
+    if (expr.fn === 'tp' || expr.fn === 'tp_to') {
+      this.checkTpCall(expr)
+    }
+
     // Check args
     for (const arg of expr.args) {
       this.checkExpr(arg)
@@ -340,6 +368,25 @@ export class TypeChecker {
     // Built-in functions are not checked for arg count
   }
 
+  private checkTpCall(expr: Extract<Expr, { kind: 'call' }>): void {
+    const dest = expr.args[1]
+    if (!dest) {
+      return
+    }
+
+    const destType = this.inferType(dest)
+    if (destType.kind === 'named' && destType.name === 'BlockPos') {
+      return
+    }
+
+    if (dest.kind === 'selector' && !dest.isSingle) {
+      this.report(
+        'tp destination must be a single-entity selector (@s, @p, @r, or limit=1)',
+        dest
+      )
+    }
+  }
+
   private checkMemberExpr(expr: Extract<Expr, { kind: 'member' }>): void {
     if (!(expr.obj.kind === 'ident' && this.enums.has(expr.obj.name))) {
       this.checkExpr(expr.obj)
@@ -355,7 +402,8 @@ export class TypeChecker {
         return
       }
 
-      const varType = this.scope.get(expr.obj.name)
+      const varSymbol = this.scope.get(expr.obj.name)
+      const varType = varSymbol?.type
       if (varType) {
         // Allow member access on struct types
         if (varType.kind === 'struct') {
@@ -403,7 +451,7 @@ export class TypeChecker {
       case 'blockpos':
         return { kind: 'named', name: 'BlockPos' }
       case 'ident':
-        return this.scope.get(expr.name) ?? { kind: 'named', name: 'void' }
+        return this.scope.get(expr.name)?.type ?? { kind: 'named', name: 'void' }
       case 'call': {
         if (expr.fn === '__array_push') {
           return { kind: 'named', name: 'void' }
@@ -411,9 +459,12 @@ export class TypeChecker {
         if (expr.fn === '__array_pop') {
           const target = expr.args[0]
           if (target && target.kind === 'ident') {
-            const targetType = this.scope.get(target.name)
+            const targetType = this.scope.get(target.name)?.type
             if (targetType?.kind === 'array') return targetType.elem
           }
+          return { kind: 'named', name: 'int' }
+        }
+        if (expr.fn === 'bossbar_get_value') {
           return { kind: 'named', name: 'int' }
         }
         const fn = this.functions.get(expr.fn)
@@ -424,8 +475,8 @@ export class TypeChecker {
           return { kind: 'enum', name: expr.obj.name }
         }
         if (expr.obj.kind === 'ident') {
-          const objType = this.scope.get(expr.obj.name)
-          if (objType?.kind === 'array' && expr.field === 'len') {
+          const objTypeNode = this.scope.get(expr.obj.name)?.type
+          if (objTypeNode?.kind === 'array' && expr.field === 'len') {
             return { kind: 'named', name: 'int' }
           }
         }

@@ -10,7 +10,7 @@ import { buildModule } from '../ir/builder'
 import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
 import type {
-  Block, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Stmt,
+  Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Stmt,
   StructDecl, TypeNode, ExecuteSubcommand, BlockPosExpr, CoordComponent
 } from '../ast/types'
 
@@ -39,8 +39,8 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   },
   playsound:  ([sound, source, sel, x, y, z, volume, pitch, minVolume]) =>
     ['playsound', sound, source, sel, x, y, z, volume, pitch, minVolume].filter(Boolean).join(' '),
-  tp:         ([sel, x, y, z]) => `tp ${sel} ${x} ${y} ${z}`,
-  tp_to:      ([sel, target]) => `tp ${sel} ${target}`,
+  tp:         () => null, // Special handling
+  tp_to:      () => null, // Special handling (deprecated alias)
   clear:      ([sel, item]) => `clear ${sel} ${item ?? ''}`.trim(),
   weather:    ([type]) => `weather ${type}`,
   time_set:   ([val]) => `time set ${val}`,
@@ -138,6 +138,7 @@ export class Lowering {
   private structDefs: Map<string, Map<string, TypeNode>> = new Map()
   private enumDefs: Map<string, Map<string, number>> = new Map()
   private functionDefaults: Map<string, Array<Expr | undefined>> = new Map()
+  private constValues: Map<string, ConstDecl['value']> = new Map()
   // Variable types: varName → TypeNode
   private varTypes: Map<string, TypeNode> = new Map()
   // Float variables (stored as fixed-point × 1000)
@@ -167,6 +168,11 @@ export class Lowering {
         variants.set(variant.name, variant.value ?? 0)
       }
       this.enumDefs.set(enumDecl.name, variants)
+    }
+
+    for (const constDecl of program.consts ?? []) {
+      this.constValues.set(constDecl.name, constDecl.value)
+      this.varTypes.set(constDecl.name, this.normalizeType(constDecl.type))
     }
 
     for (const fn of program.declarations) {
@@ -845,6 +851,10 @@ export class Lowering {
         return { kind: 'const', value: 0 }
 
       case 'ident': {
+        const constValue = this.constValues.get(expr.name)
+        if (constValue) {
+          return this.lowerConstLiteral(constValue)
+        }
         const mapped = this.varMap.get(expr.name)
         if (mapped) {
           // Check if it's a selector reference (like @s)
@@ -1266,6 +1276,26 @@ export class Lowering {
       return { kind: 'const', value: 0 }
     }
 
+    if (name === 'tp_to') {
+      this.warnings.push({
+        message: 'tp_to is deprecated; use tp instead',
+        code: 'W_DEPRECATED',
+      })
+      const tpCommand = this.lowerTpCommand(args)
+      if (tpCommand) {
+        this.builder.emitRaw(tpCommand)
+      }
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'tp') {
+      const tpCommand = this.lowerTpCommand(args)
+      if (tpCommand) {
+        this.builder.emitRaw(tpCommand)
+      }
+      return { kind: 'const', value: 0 }
+    }
+
     // Convert args to strings for builtin
     const strArgs = args.map(arg => this.exprToString(arg))
     const cmd = BUILTINS[name](strArgs)
@@ -1339,6 +1369,14 @@ export class Lowering {
   }
 
   private appendRichTextExpr(components: Array<string | Record<string, unknown>>, expr: Expr): void {
+    if (expr.kind === 'ident') {
+      const constValue = this.constValues.get(expr.name)
+      if (constValue) {
+        this.appendRichTextExpr(components, constValue)
+        return
+      }
+    }
+
     if (expr.kind === 'str_lit') {
       if (expr.value.length > 0) {
         components.push({ text: expr.value })
@@ -1398,6 +1436,10 @@ export class Lowering {
       case 'blockpos':
         return emitBlockPos(expr)
       case 'ident': {
+        const constValue = this.constValues.get(expr.name)
+        if (constValue) {
+          return this.exprToString(constValue)
+        }
         const mapped = this.varMap.get(expr.name)
         return mapped ?? `$${expr.name}`
       }
@@ -1458,21 +1500,26 @@ export class Lowering {
       return null
     }
 
-    if (name === 'tp') {
-      if (args.length === 2 && pos1) {
-        return `tp ${this.exprToString(args[0])} ${emitBlockPos(pos1)}`
-      }
-      return null
+    return null
+  }
+
+  private lowerTpCommand(args: Expr[]): string | null {
+    const pos0 = args[0] ? this.resolveBlockPosExpr(args[0]) : null
+    const pos1 = args[1] ? this.resolveBlockPosExpr(args[1]) : null
+
+    if (args.length === 1 && pos0) {
+      return `tp ${emitBlockPos(pos0)}`
     }
 
-    if (name === 'tp_to') {
-      if (args.length === 1 && pos0) {
-        return `tp ${emitBlockPos(pos0)}`
-      }
-      if (args.length === 2 && pos1) {
+    if (args.length === 2) {
+      if (pos1) {
         return `tp ${this.exprToString(args[0])} ${emitBlockPos(pos1)}`
       }
-      return null
+      return `tp ${this.exprToString(args[0])} ${this.exprToString(args[1])}`
+    }
+
+    if (args.length === 4) {
+      return `tp ${this.exprToString(args[0])} ${this.exprToString(args[1])} ${this.exprToString(args[2])} ${this.exprToString(args[3])}`
     }
 
     return null
@@ -1497,6 +1544,19 @@ export class Lowering {
 
   private inferExprType(expr: Expr): TypeNode | undefined {
     if (expr.kind === 'ident') {
+      const constValue = this.constValues.get(expr.name)
+      if (constValue) {
+        switch (constValue.kind) {
+          case 'int_lit':
+            return { kind: 'named', name: 'int' }
+          case 'float_lit':
+            return { kind: 'named', name: 'float' }
+          case 'bool_lit':
+            return { kind: 'named', name: 'bool' }
+          case 'str_lit':
+            return { kind: 'named', name: 'string' }
+        }
+      }
       return this.varTypes.get(expr.name)
     }
     if (expr.kind === 'member' && expr.obj.kind === 'ident' && this.enumDefs.has(expr.obj.name)) {
@@ -1548,6 +1608,19 @@ export class Lowering {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  private lowerConstLiteral(expr: ConstDecl['value']): Operand {
+    switch (expr.kind) {
+      case 'int_lit':
+        return { kind: 'const', value: expr.value }
+      case 'float_lit':
+        return { kind: 'const', value: Math.round(expr.value * 1000) }
+      case 'bool_lit':
+        return { kind: 'const', value: expr.value ? 1 : 0 }
+      case 'str_lit':
+        return { kind: 'const', value: 0 }
+    }
+  }
 
   private operandToVar(op: Operand): string {
     if (op.kind === 'var') return op.name

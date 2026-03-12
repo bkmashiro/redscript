@@ -7,7 +7,7 @@
 
 import { Lexer, type Token, type TokenKind } from '../lexer'
 import type {
-  Block, Decorator, EntitySelector, Expr, FnDecl, Param,
+  Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, LiteralExpr, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Stmt, TypeNode, AssignOp,
   StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr,
   CoordComponent
@@ -29,6 +29,12 @@ const PRECEDENCE: Record<string, number> = {
 }
 
 const BINARY_OPS = new Set(['||', '&&', '==', '!=', '<', '<=', '>', '>=', '+', '-', '*', '/', '%'])
+
+function computeIsSingle(raw: string): boolean {
+  if (/^@[spr](\[|$)/.test(raw)) return true
+  if (/[\[,\s]limit=1[,\]\s]/.test(raw)) return true
+  return false
+}
 
 // ---------------------------------------------------------------------------
 // Parser Class
@@ -127,6 +133,7 @@ export class Parser {
     const declarations: FnDecl[] = []
     const structs: StructDecl[] = []
     const enums: EnumDecl[] = []
+    const consts: ConstDecl[] = []
 
     // Check for namespace declaration
     if (this.check('namespace')) {
@@ -142,12 +149,14 @@ export class Parser {
         structs.push(this.parseStructDecl())
       } else if (this.check('enum')) {
         enums.push(this.parseEnumDecl())
+      } else if (this.check('const')) {
+        consts.push(this.parseConstDecl())
       } else {
         declarations.push(this.parseFnDecl())
       }
     }
 
-    return { namespace, declarations, structs, enums }
+    return { namespace, declarations, structs, enums, consts }
   }
 
   // -------------------------------------------------------------------------
@@ -203,6 +212,17 @@ export class Parser {
 
     this.expect('}')
     return this.withLoc({ name, variants }, enumToken)
+  }
+
+  private parseConstDecl(): ConstDecl {
+    const constToken = this.expect('const')
+    const name = this.expect('ident').value
+    this.expect(':')
+    const type = this.parseType()
+    this.expect('=')
+    const value = this.parseLiteralExpr()
+    this.match(';')
+    return this.withLoc({ name, type, value }, constToken)
   }
 
   // -------------------------------------------------------------------------
@@ -796,7 +816,12 @@ export class Parser {
     // Selector
     if (token.kind === 'selector') {
       this.advance()
-      return this.withLoc({ kind: 'selector', sel: this.parseSelectorValue(token.value) }, token)
+      return this.withLoc({
+        kind: 'selector',
+        raw: token.value,
+        isSingle: computeIsSingle(token.value),
+        sel: this.parseSelectorValue(token.value),
+      }, token)
     }
 
     // Identifier
@@ -827,6 +852,19 @@ export class Parser {
     }
 
     this.error(`Unexpected token '${token.kind}'`)
+  }
+
+  private parseLiteralExpr(): LiteralExpr {
+    const expr = this.parsePrimaryExpr()
+    if (
+      expr.kind === 'int_lit' ||
+      expr.kind === 'float_lit' ||
+      expr.kind === 'bool_lit' ||
+      expr.kind === 'str_lit'
+    ) {
+      return expr
+    }
+    this.error('Const value must be a literal')
   }
 
   private parseStringExpr(token: Token): Expr {

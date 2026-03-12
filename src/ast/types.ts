@@ -86,7 +86,7 @@ export type Expr =
   | { kind: 'range_lit';  range: RangeExpr }
   | BlockPosExpr
   | { kind: 'ident';      name: string }
-  | { kind: 'selector';   sel: EntitySelector }
+  | { kind: 'selector';   raw: string; isSingle: boolean; sel: EntitySelector }
   | { kind: 'binary';     op: BinOp | CmpOp | '&&' | '||'; left: Expr; right: Expr }
   | { kind: 'unary';      op: '!' | '-'; operand: Expr }
   | { kind: 'assign';     target: string; op: AssignOp; value: Expr }
@@ -97,6 +97,12 @@ export type Expr =
   | { kind: 'index';      obj: Expr; index: Expr }
   | { kind: 'array_lit';  elements: Expr[] }
   | { kind: 'static_call'; type: string; method: string; args: Expr[] }
+
+export type LiteralExpr =
+  | Extract<Expr, { kind: 'int_lit' }>
+  | Extract<Expr, { kind: 'float_lit' }>
+  | Extract<Expr, { kind: 'bool_lit' }>
+  | Extract<Expr, { kind: 'str_lit' }>
 
 // ---------------------------------------------------------------------------
 // Statements
@@ -181,6 +187,12 @@ export interface EnumDecl {
   variants: EnumVariant[]
 }
 
+export interface ConstDecl {
+  name: string
+  type: TypeNode
+  value: LiteralExpr
+}
+
 // ---------------------------------------------------------------------------
 // Program (Top-Level)
 // ---------------------------------------------------------------------------
@@ -190,4 +202,5 @@ export interface Program {
   declarations: FnDecl[]
   structs: StructDecl[]
   enums: EnumDecl[]
+  consts: ConstDecl[]
 }
