@@ -29,7 +29,8 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   announce:    ([msg]) => `tellraw @a {"text":"${msg}"}`,
   give:        ([sel, item, count, nbt]) => nbt ? `give ${sel} ${item}${nbt} ${count ?? '1'}` : `give ${sel} ${item} ${count ?? '1'}`,
   kill:        ([sel]) => `kill ${sel ?? '@s'}`,
-  effect:      ([sel, eff, dur, amp]) => `effect give ${sel} ${eff} ${dur ?? '30'} ${amp ?? '0'}`,
+  effect:       ([sel, eff, dur, amp]) => `effect give ${sel} ${eff} ${dur ?? '30'} ${amp ?? '0'}`,
+  effect_clear: ([sel, eff]) => eff ? `effect clear ${sel} ${eff}` : `effect clear ${sel}`,
   summon: ([type, x, y, z, nbt]) => {
     const pos = [x ?? '~', y ?? '~', z ?? '~'].join(' ')
     return nbt ? `summon ${type} ${pos} ${nbt}` : `summon ${type} ${pos}`

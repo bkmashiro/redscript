@@ -1,0 +1,92 @@
+// World manipulation helpers
+
+/// Set time to day
+fn set_day() {
+    time_set(1000);
+}
+
+/// Set time to night
+fn set_night() {
+    time_set(13000);
+}
+
+/// Set time to noon
+fn set_noon() {
+    time_set(6000);
+}
+
+/// Set time to midnight
+fn set_midnight() {
+    time_set(18000);
+}
+
+/// Set weather to clear
+fn weather_clear() {
+    weather("clear");
+}
+
+/// Set weather to rain
+fn weather_rain() {
+    weather("rain");
+}
+
+/// Set weather to thunder
+fn weather_thunder() {
+    weather("thunder");
+}
+
+/// Enable keep inventory
+fn enable_keep_inventory() {
+    gamerule("keepInventory", "true");
+}
+
+/// Disable keep inventory
+fn disable_keep_inventory() {
+    gamerule("keepInventory", "false");
+}
+
+/// Disable mob griefing
+fn disable_mob_griefing() {
+    gamerule("mobGriefing", "false");
+}
+
+/// Disable fire spread
+fn disable_fire_spread() {
+    gamerule("doFireTick", "false");
+}
+
+/// Set difficulty to peaceful
+fn set_peaceful() {
+    difficulty("peaceful");
+}
+
+/// Set difficulty to easy
+fn set_easy() {
+    difficulty("easy");
+}
+
+/// Set difficulty to normal
+fn set_normal() {
+    difficulty("normal");
+}
+
+/// Set difficulty to hard
+fn set_hard() {
+    difficulty("hard");
+}
+
+/// Create barrier wall
+fn barrier_wall(x1: int, y1: int, z1: int, x2: int, y2: int, z2: int) {
+    fill(x1, y1, z1, x2, y2, z2, "minecraft:barrier");
+}
+
+/// Create air (clear area)
+fn clear_area(x1: int, y1: int, z1: int, x2: int, y2: int, z2: int) {
+    fill(x1, y1, z1, x2, y2, z2, "minecraft:air");
+}
+
+/// Create glass dome (hollow)
+fn glass_box(x1: int, y1: int, z1: int, x2: int, y2: int, z2: int) {
+    fill(x1, y1, z1, x2, y2, z2, "minecraft:glass");
+    fill(x1 + 1, y1 + 1, z1 + 1, x2 - 1, y2 - 1, z2 - 1, "minecraft:air");
+}
