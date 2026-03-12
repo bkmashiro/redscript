@@ -6826,7 +6826,15 @@ function validateDocument(doc, collection) {
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const range = extractRange(msg, doc);
+    let range;
+    const loc = err.location;
+    if (loc?.line && loc?.col) {
+      const l = Math.max(0, loc.line - 1);
+      const c = Math.max(0, loc.col - 1);
+      range = new vscode4.Range(l, c, l, c + 20);
+    } else {
+      range = extractRange(msg, doc);
+    }
     docDiagnostics.push({
       message: msg,
       range,
