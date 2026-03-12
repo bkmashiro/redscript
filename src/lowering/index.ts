@@ -144,13 +144,18 @@ export class Lowering {
   private namespace: string
   private functions: IRFunction[] = []
   private globals: string[] = []
+  private fnDecls: Map<string, FnDecl> = new Map()
+  private specializedFunctions: Map<string, string> = new Map()
   private currentFn: string = ''
   private foreachCounter: number = 0
+  private lambdaCounter: number = 0
   readonly warnings: Warning[] = []
 
   // Builder state for current function
   private builder!: LoweringBuilder
   private varMap: Map<string, string> = new Map()
+  private lambdaBindings: Map<string, string> = new Map()
+  private currentCallbackBindings: Map<string, string> = new Map()
   private currentContext: { binding?: string } = {}
   private blockPosVars: Map<string, BlockPosExpr> = new Map()
 
@@ -197,6 +202,7 @@ export class Lowering {
     }
 
     for (const fn of program.declarations) {
+      this.fnDecls.set(fn.name, fn)
       this.functionDefaults.set(fn.name, fn.params.map(param => param.default))
     }
 
@@ -211,28 +217,45 @@ export class Lowering {
   // Function Lowering
   // -------------------------------------------------------------------------
 
-  private lowerFn(fn: FnDecl): void {
-    this.currentFn = fn.name
+  private lowerFn(
+    fn: FnDecl,
+    options: {
+      name?: string
+      callbackBindings?: Map<string, string>
+    } = {}
+  ): void {
+    const loweredName = options.name ?? fn.name
+    const callbackBindings = options.callbackBindings ?? new Map<string, string>()
+    const runtimeParams = fn.params.filter(param => !callbackBindings.has(param.name))
+
+    this.currentFn = loweredName
     this.foreachCounter = 0
     this.varMap = new Map()
+    this.lambdaBindings = new Map()
+    this.currentCallbackBindings = new Map(callbackBindings)
     this.currentContext = {}
     this.blockPosVars = new Map()
     this.stringValues = new Map()
     this.builder = new LoweringBuilder()
 
     // Map parameters
-    for (let i = 0; i < fn.params.length; i++) {
-      const paramName = fn.params[i].name
+    for (const param of runtimeParams) {
+      const paramName = param.name
       this.varMap.set(paramName, `$${paramName}`)
-      this.varTypes.set(paramName, this.normalizeType(fn.params[i].type))
+      this.varTypes.set(paramName, this.normalizeType(param.type))
+    }
+    for (const param of fn.params) {
+      if (callbackBindings.has(param.name)) {
+        this.varTypes.set(param.name, this.normalizeType(param.type))
+      }
     }
 
     // Start entry block
     this.builder.startBlock('entry')
 
     // Copy params from $p0, $p1, ... to named variables
-    for (let i = 0; i < fn.params.length; i++) {
-      const paramName = fn.params[i].name
+    for (let i = 0; i < runtimeParams.length; i++) {
+      const paramName = runtimeParams[i].name
       const varName = `$${paramName}`
       this.builder.emitAssign(varName, { kind: 'var', name: `$p${i}` })
     }
@@ -254,7 +277,7 @@ export class Lowering {
     const isTriggerHandler = !!triggerDec
     const triggerName = triggerDec?.args?.trigger
 
-    const irFn = this.builder.build(fn.name, fn.params.map(p => `$${p.name}`), isTickLoop)
+    const irFn = this.builder.build(loweredName, runtimeParams.map(p => `$${p.name}`), isTickLoop)
 
     // Add trigger metadata if applicable
     if (isTriggerHandler && triggerName) {
@@ -410,13 +433,19 @@ export class Lowering {
     this.varMap.set(stmt.name, varName)
 
     // Track variable type
-    if (stmt.type) {
-      const normalizedType = this.normalizeType(stmt.type)
-      this.varTypes.set(stmt.name, normalizedType)
+    const declaredType = stmt.type ? this.normalizeType(stmt.type) : this.inferExprType(stmt.init)
+    if (declaredType) {
+      this.varTypes.set(stmt.name, declaredType)
       // Track float variables for fixed-point arithmetic
-      if (normalizedType.kind === 'named' && normalizedType.name === 'float') {
+      if (declaredType.kind === 'named' && declaredType.name === 'float') {
         this.floatVars.add(stmt.name)
       }
+    }
+
+    if (stmt.init.kind === 'lambda') {
+      const lambdaName = this.lowerLambdaExpr(stmt.init)
+      this.lambdaBindings.set(stmt.name, lambdaName)
+      return
     }
 
     // Handle struct literal initialization
@@ -947,6 +976,9 @@ export class Lowering {
       case 'call':
         return this.lowerCallExpr(expr)
 
+      case 'invoke':
+        return this.lowerInvokeExpr(expr)
+
       case 'member_assign':
         return this.lowerMemberAssign(expr)
 
@@ -960,6 +992,9 @@ export class Lowering {
       case 'array_lit':
         // Array literals should be handled in let statement
         return { kind: 'const', value: 0 }
+
+      case 'lambda':
+        throw new Error('Lambda expressions must be used in a function context')
     }
 
     throw new Error(`Unhandled expression kind: ${(expr as { kind: string }).kind}`)
@@ -1274,7 +1309,13 @@ export class Lowering {
       }
     }
 
+    const callbackTarget = this.resolveFunctionRefByName(expr.fn)
+    if (callbackTarget) {
+      return this.emitDirectFunctionCall(callbackTarget, expr.args)
+    }
+
     // Regular function call
+    const fnDecl = this.fnDecls.get(expr.fn)
     const defaultArgs = this.functionDefaults.get(expr.fn) ?? []
     const fullArgs = [...expr.args]
     for (let i = fullArgs.length; i < defaultArgs.length; i++) {
@@ -1285,10 +1326,159 @@ export class Lowering {
       fullArgs.push(defaultExpr)
     }
 
-    const args: Operand[] = fullArgs.map(arg => this.lowerExpr(arg))
+    if (fnDecl) {
+      const callbackBindings = new Map<string, string>()
+      const runtimeArgs: Expr[] = []
+
+      for (let i = 0; i < fullArgs.length; i++) {
+        const param = fnDecl.params[i]
+        if (param && this.normalizeType(param.type).kind === 'function_type') {
+          const functionRef = this.resolveFunctionRefExpr(fullArgs[i])
+          if (!functionRef) {
+            throw new Error(`Cannot lower callback argument for parameter '${param.name}'`)
+          }
+          callbackBindings.set(param.name, functionRef)
+          continue
+        }
+        runtimeArgs.push(fullArgs[i])
+      }
+
+      const targetFn = callbackBindings.size > 0
+        ? this.ensureSpecializedFunction(fnDecl, callbackBindings)
+        : expr.fn
+      return this.emitDirectFunctionCall(targetFn, runtimeArgs)
+    }
+
+    return this.emitDirectFunctionCall(expr.fn, fullArgs)
+  }
+
+  private lowerInvokeExpr(expr: Extract<Expr, { kind: 'invoke' }>): Operand {
+    if (expr.callee.kind === 'lambda') {
+      if (!Array.isArray(expr.callee.body)) {
+        return this.inlineLambdaInvoke(expr.callee, expr.args)
+      }
+      const lambdaName = this.lowerLambdaExpr(expr.callee)
+      return this.emitDirectFunctionCall(lambdaName, expr.args)
+    }
+
+    const functionRef = this.resolveFunctionRefExpr(expr.callee)
+    if (!functionRef) {
+      throw new Error('Cannot invoke a non-function value')
+    }
+    return this.emitDirectFunctionCall(functionRef, expr.args)
+  }
+
+  private inlineLambdaInvoke(expr: Extract<Expr, { kind: 'lambda' }>, args: Expr[]): Operand {
+    const savedVarMap = new Map(this.varMap)
+    const savedVarTypes = new Map(this.varTypes)
+    const savedLambdaBindings = new Map(this.lambdaBindings)
+    const savedBlockPosVars = new Map(this.blockPosVars)
+
+    for (let i = 0; i < expr.params.length; i++) {
+      const param = expr.params[i]
+      const temp = this.builder.freshTemp()
+      const arg = args[i]
+      this.builder.emitAssign(temp, arg ? this.lowerExpr(arg) : { kind: 'const', value: 0 })
+      this.varMap.set(param.name, temp)
+      if (param.type) {
+        this.varTypes.set(param.name, this.normalizeType(param.type))
+      }
+      this.lambdaBindings.delete(param.name)
+      this.blockPosVars.delete(param.name)
+    }
+
+    const result = this.lowerExpr(expr.body as Expr)
+
+    this.varMap = savedVarMap
+    this.varTypes = savedVarTypes
+    this.lambdaBindings = savedLambdaBindings
+    this.blockPosVars = savedBlockPosVars
+    return result
+  }
+
+  private emitDirectFunctionCall(fn: string, args: Expr[]): Operand {
+    const loweredArgs: Operand[] = args.map(arg => this.lowerExpr(arg))
     const dst = this.builder.freshTemp()
-    this.builder.emitCall(expr.fn, args, dst)
+    this.builder.emitCall(fn, loweredArgs, dst)
     return { kind: 'var', name: dst }
+  }
+
+  private resolveFunctionRefExpr(expr: Expr): string | null {
+    if (expr.kind === 'lambda') {
+      return this.lowerLambdaExpr(expr)
+    }
+    if (expr.kind === 'ident') {
+      return this.resolveFunctionRefByName(expr.name) ?? (this.fnDecls.has(expr.name) ? expr.name : null)
+    }
+    return null
+  }
+
+  private resolveFunctionRefByName(name: string): string | null {
+    return this.lambdaBindings.get(name) ?? this.currentCallbackBindings.get(name) ?? null
+  }
+
+  private ensureSpecializedFunction(fn: FnDecl, callbackBindings: Map<string, string>): string {
+    const parts = [...callbackBindings.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([param, target]) => `${param}_${target.replace(/[^a-zA-Z0-9_]/g, '_')}`)
+    const key = `${fn.name}::${parts.join('::')}`
+    const cached = this.specializedFunctions.get(key)
+    if (cached) {
+      return cached
+    }
+
+    const specializedName = `${fn.name}__${parts.join('__')}`
+    this.specializedFunctions.set(key, specializedName)
+    this.withSavedFunctionState(() => {
+      this.lowerFn(fn, { name: specializedName, callbackBindings })
+    })
+    return specializedName
+  }
+
+  private lowerLambdaExpr(expr: Extract<Expr, { kind: 'lambda' }>): string {
+    const lambdaName = `__lambda_${this.lambdaCounter++}`
+    const lambdaFn: FnDecl = {
+      name: lambdaName,
+      params: expr.params.map(param => ({
+        name: param.name,
+        type: param.type ?? { kind: 'named', name: 'int' },
+      })),
+      returnType: expr.returnType ?? this.inferLambdaReturnType(expr),
+      decorators: [],
+      body: Array.isArray(expr.body) ? expr.body : [{ kind: 'return', value: expr.body }],
+    }
+    this.withSavedFunctionState(() => {
+      this.lowerFn(lambdaFn)
+    })
+    return lambdaName
+  }
+
+  private withSavedFunctionState<T>(callback: () => T): T {
+    const savedCurrentFn = this.currentFn
+    const savedForeachCounter = this.foreachCounter
+    const savedBuilder = this.builder
+    const savedVarMap = new Map(this.varMap)
+    const savedLambdaBindings = new Map(this.lambdaBindings)
+    const savedCallbackBindings = new Map(this.currentCallbackBindings)
+    const savedContext = this.currentContext
+    const savedBlockPosVars = new Map(this.blockPosVars)
+    const savedStringValues = new Map(this.stringValues)
+    const savedVarTypes = new Map(this.varTypes)
+
+    try {
+      return callback()
+    } finally {
+      this.currentFn = savedCurrentFn
+      this.foreachCounter = savedForeachCounter
+      this.builder = savedBuilder
+      this.varMap = savedVarMap
+      this.lambdaBindings = savedLambdaBindings
+      this.currentCallbackBindings = savedCallbackBindings
+      this.currentContext = savedContext
+      this.blockPosVars = savedBlockPosVars
+      this.stringValues = savedStringValues
+      this.varTypes = savedVarTypes
+    }
   }
 
   private lowerBuiltinCall(name: string, args: Expr[]): Operand {
@@ -1770,7 +1960,22 @@ export class Lowering {
     return null
   }
 
+  private inferLambdaReturnType(expr: Extract<Expr, { kind: 'lambda' }>): TypeNode {
+    if (expr.returnType) {
+      return this.normalizeType(expr.returnType)
+    }
+    if (Array.isArray(expr.body)) {
+      return { kind: 'named', name: 'void' }
+    }
+    return this.inferExprType(expr.body) ?? { kind: 'named', name: 'void' }
+  }
+
   private inferExprType(expr: Expr): TypeNode | undefined {
+    if (expr.kind === 'int_lit') return { kind: 'named', name: 'int' }
+    if (expr.kind === 'float_lit') return { kind: 'named', name: 'float' }
+    if (expr.kind === 'bool_lit') return { kind: 'named', name: 'bool' }
+    if (expr.kind === 'str_lit' || expr.kind === 'str_interp') return { kind: 'named', name: 'string' }
+    if (expr.kind === 'blockpos') return { kind: 'named', name: 'BlockPos' }
     if (expr.kind === 'ident') {
       const constValue = this.constValues.get(expr.name)
       if (constValue) {
@@ -1787,6 +1992,37 @@ export class Lowering {
       }
       return this.varTypes.get(expr.name)
     }
+    if (expr.kind === 'lambda') {
+      return {
+        kind: 'function_type',
+        params: expr.params.map(param => this.normalizeType(param.type ?? { kind: 'named', name: 'int' })),
+        return: this.inferLambdaReturnType(expr),
+      }
+    }
+    if (expr.kind === 'call') {
+      return this.fnDecls.get(this.resolveFunctionRefByName(expr.fn) ?? expr.fn)?.returnType
+    }
+    if (expr.kind === 'invoke') {
+      const calleeType = this.inferExprType(expr.callee)
+      if (calleeType?.kind === 'function_type') {
+        return calleeType.return
+      }
+    }
+    if (expr.kind === 'binary') {
+      if (['==', '!=', '<', '<=', '>', '>=', '&&', '||'].includes(expr.op)) {
+        return { kind: 'named', name: 'bool' }
+      }
+      return this.inferExprType(expr.left)
+    }
+    if (expr.kind === 'unary') {
+      return expr.op === '!' ? { kind: 'named', name: 'bool' } : this.inferExprType(expr.operand)
+    }
+    if (expr.kind === 'array_lit') {
+      return {
+        kind: 'array',
+        elem: expr.elements[0] ? (this.inferExprType(expr.elements[0]) ?? { kind: 'named', name: 'int' }) : { kind: 'named', name: 'int' },
+      }
+    }
     if (expr.kind === 'member' && expr.obj.kind === 'ident' && this.enumDefs.has(expr.obj.name)) {
       return { kind: 'enum', name: expr.obj.name }
     }
@@ -1796,6 +2032,13 @@ export class Lowering {
   private normalizeType(type: TypeNode): TypeNode {
     if (type.kind === 'array') {
       return { kind: 'array', elem: this.normalizeType(type.elem) }
+    }
+    if (type.kind === 'function_type') {
+      return {
+        kind: 'function_type',
+        params: type.params.map(param => this.normalizeType(param)),
+        return: this.normalizeType(type.return),
+      }
     }
     if ((type.kind === 'struct' || type.kind === 'enum') && this.enumDefs.has(type.name)) {
       return { kind: 'enum', name: type.name }

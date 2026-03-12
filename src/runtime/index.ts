@@ -722,7 +722,9 @@ export class MCRuntime {
 
   private execFunctionCmd(cmd: string, executor?: Entity): boolean {
     const fnName = cmd.slice(9).trim() // remove 'function '
+    const outerShouldReturn = this.shouldReturn
     this.execFunction(fnName, executor)
+    this.shouldReturn = outerShouldReturn
     return true
   }
 
