@@ -2,10 +2,45 @@
  * Diagnostics Tests
  */
 
-import { DiagnosticError, DiagnosticCollector, parseErrorMessage } from '../diagnostics'
+import { DiagnosticError, DiagnosticCollector, formatError, parseErrorMessage } from '../diagnostics'
 import { compile, formatCompileError } from '../compile'
 
 describe('DiagnosticError', () => {
+  describe('formatError', () => {
+    it('formats source context with a caret pointer', () => {
+      const source = [
+        'fn main() {',
+        '  let x = foo(',
+        '}',
+      ].join('\n')
+      const error = new DiagnosticError(
+        'TypeError',
+        'Unknown function: foo',
+        { line: 2, col: 11 },
+        source.split('\n')
+      )
+
+      expect(formatError(error, source)).toBe([
+        'Error at line 2, col 11:',
+        '    let x = foo(',
+        '            ^',
+        'Unknown function: foo',
+      ].join('\n'))
+    })
+
+    it('includes file path when available', () => {
+      const source = 'let x = foo();'
+      const error = new DiagnosticError(
+        'TypeError',
+        'Unknown function: foo',
+        { file: 'test.rs', line: 1, col: 9 },
+        source.split('\n')
+      )
+
+      expect(formatError(error, source)).toContain('Error in test.rs at line 1, col 9:')
+    })
+  })
+
   describe('format', () => {
     it('formats error with source line and pointer', () => {
       const sourceLines = [
@@ -127,7 +162,7 @@ describe('compile function', () => {
     const result = compile('fn main() {\n  let x = 42\n}')
     expect(result.success).toBe(false)
     const formatted = formatCompileError(result)
-    expect(formatted).toContain('ParseError')
+    expect(formatted).toContain('Error at line')
     expect(formatted).toContain('^')
     // Error points to } on line 3, which is where semicolon was expected
     expect(formatted).toContain('}')

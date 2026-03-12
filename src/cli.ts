@@ -10,6 +10,7 @@
 
 import { compile, check } from './index'
 import { generateCommandBlocks } from './codegen/cmdblock'
+import { formatError } from './diagnostics'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -110,7 +111,7 @@ function compileCommand(file: string, output: string, namespace: string, target:
   const source = fs.readFileSync(file, 'utf-8')
 
   try {
-    const result = compile(source, { namespace })
+    const result = compile(source, { namespace, filePath: file })
 
     if (target === 'cmdblock') {
       // Generate command block JSON
@@ -145,7 +146,7 @@ function compileCommand(file: string, output: string, namespace: string, target:
       console.log(`  Files: ${result.files.length}`)
     }
   } catch (err) {
-    console.error(`Error: ${(err as Error).message}`)
+    console.error(formatError(err as Error, source))
     process.exit(1)
   }
 }
@@ -159,9 +160,9 @@ function checkCommand(file: string): void {
 
   const source = fs.readFileSync(file, 'utf-8')
 
-  const error = check(source)
+  const error = check(source, 'redscript', file)
   if (error) {
-    console.error(`Error: ${error.message}`)
+    console.error(formatError(error, source))
     process.exit(1)
   }
 
@@ -198,10 +199,11 @@ function watchCommand(dir: string, output: string, namespace?: string): void {
 
     let hasErrors = false
     for (const file of files) {
+      let source = ''
       try {
-        const source = fs.readFileSync(file, 'utf-8')
+        source = fs.readFileSync(file, 'utf-8')
         const ns = namespace ?? deriveNamespace(file)
-        const result = compile(source, { namespace: ns })
+        const result = compile(source, { namespace: ns, filePath: file })
 
         // Create output directory
         fs.mkdirSync(output, { recursive: true })
@@ -219,7 +221,7 @@ function watchCommand(dir: string, output: string, namespace?: string): void {
       } catch (err) {
         hasErrors = true
         const timestamp = new Date().toLocaleTimeString()
-        console.error(`✗ [${timestamp}] Error in ${file}: ${(err as Error).message}`)
+        console.error(`✗ [${timestamp}] ${formatError(err as Error, source)}`)
       }
     }
 

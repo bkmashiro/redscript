@@ -10,6 +10,7 @@ import { TypeChecker } from './typechecker'
 import { Lowering } from './lowering'
 import { optimize } from './optimizer/passes'
 import { generateDatapack, DatapackFile } from './codegen/mcfunction'
+import { preprocessSource } from './compile'
 import type { IRModule } from './ir/types'
 import type { Program } from './ast/types'
 import type { DiagnosticError } from './diagnostics'
@@ -18,6 +19,7 @@ export interface CompileOptions {
   namespace?: string
   optimize?: boolean
   typeCheck?: boolean
+  filePath?: string
 }
 
 export interface CompileResult {
@@ -38,17 +40,19 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const namespace = options.namespace ?? 'redscript'
   const shouldOptimize = options.optimize ?? true
   const shouldTypeCheck = options.typeCheck ?? true
+  const filePath = options.filePath
+  const preprocessedSource = preprocessSource(source, { filePath })
 
   // Lexing
-  const tokens = new Lexer(source).tokenize()
+  const tokens = new Lexer(preprocessedSource, filePath).tokenize()
 
   // Parsing
-  const ast = new Parser(tokens).parse(namespace)
+  const ast = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
 
   // Type checking (warn mode - collect errors but don't block)
   let typeErrors: DiagnosticError[] | undefined
   if (shouldTypeCheck) {
-    const checker = new TypeChecker(source)
+    const checker = new TypeChecker(preprocessedSource, filePath)
     typeErrors = checker.check(ast)
   }
 
@@ -73,10 +77,11 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
  * @param namespace - Optional namespace
  * @returns null if no errors, or an error object
  */
-export function check(source: string, namespace = 'redscript'): Error | null {
+export function check(source: string, namespace = 'redscript', filePath?: string): Error | null {
   try {
-    const tokens = new Lexer(source).tokenize()
-    new Parser(tokens).parse(namespace)
+    const preprocessedSource = preprocessSource(source, { filePath })
+    const tokens = new Lexer(preprocessedSource, filePath).tokenize()
+    new Parser(tokens, preprocessedSource, filePath).parse(namespace)
     return null
   } catch (err) {
     return err as Error

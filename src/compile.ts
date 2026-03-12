@@ -4,12 +4,15 @@
  * Main compile function with proper error handling and diagnostics.
  */
 
+import * as fs from 'fs'
+import * as path from 'path'
+
 import { Lexer } from './lexer'
 import { Parser } from './parser'
 import { Lowering } from './lowering'
 import { optimize } from './optimizer/passes'
 import { generateDatapack, DatapackFile } from './codegen/mcfunction'
-import { DiagnosticError, parseErrorMessage } from './diagnostics'
+import { DiagnosticError, formatError, parseErrorMessage } from './diagnostics'
 import type { IRModule } from './ir/types'
 import type { Program } from './ast/types'
 
@@ -35,20 +38,91 @@ export interface CompileResult {
   error?: DiagnosticError
 }
 
+const IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/
+
+interface PreprocessOptions {
+  filePath?: string
+  seen?: Set<string>
+}
+
+export function preprocessSource(source: string, options: PreprocessOptions = {}): string {
+  const { filePath } = options
+  const seen = options.seen ?? new Set<string>()
+
+  if (filePath) {
+    seen.add(path.resolve(filePath))
+  }
+
+  const lines = source.split('\n')
+  const imports: string[] = []
+  const bodyLines: string[] = []
+  let parsingHeader = true
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trim()
+    const match = line.match(IMPORT_RE)
+
+    if (parsingHeader && match) {
+      if (!filePath) {
+        throw new DiagnosticError(
+          'ParseError',
+          'Import statements require a file path',
+          { line: i + 1, col: 1 },
+          lines
+        )
+      }
+
+      const importPath = path.resolve(path.dirname(filePath), match[1])
+      if (!seen.has(importPath)) {
+        seen.add(importPath)
+        let importedSource: string
+
+        try {
+          importedSource = fs.readFileSync(importPath, 'utf-8')
+        } catch {
+          throw new DiagnosticError(
+            'ParseError',
+            `Cannot import '${match[1]}'`,
+            { file: filePath, line: i + 1, col: 1 },
+            lines
+          )
+        }
+
+        imports.push(preprocessSource(importedSource, { filePath: importPath, seen }))
+      }
+      continue
+    }
+
+    if (parsingHeader && (trimmed === '' || trimmed.startsWith('//'))) {
+      bodyLines.push(line)
+      continue
+    }
+
+    parsingHeader = false
+    bodyLines.push(line)
+  }
+
+  return [...imports, bodyLines.join('\n')].filter(Boolean).join('\n')
+}
+
 // ---------------------------------------------------------------------------
 // Main Compile Function
 // ---------------------------------------------------------------------------
 
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
   const { namespace = 'redscript', filePath, optimize: shouldOptimize = true } = options
-  const sourceLines = source.split('\n')
+  let sourceLines = source.split('\n')
 
   try {
+    const preprocessedSource = preprocessSource(source, { filePath })
+    sourceLines = preprocessedSource.split('\n')
+
     // Lexing
-    const tokens = new Lexer(source, filePath).tokenize()
+    const tokens = new Lexer(preprocessedSource, filePath).tokenize()
 
     // Parsing
-    const ast = new Parser(tokens, source, filePath).parse(namespace)
+    const ast = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
 
     // Lowering
     const ir = new Lowering(namespace).lower(ast)
@@ -101,7 +175,7 @@ export function formatCompileError(result: CompileResult): string {
     return 'Compilation successful'
   }
   if (result.error) {
-    return result.error.format()
+    return formatError(result.error, result.error.sourceLines?.join('\n'))
   }
   return 'Unknown error'
 }

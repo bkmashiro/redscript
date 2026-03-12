@@ -30,6 +30,8 @@ fn test() {
 `)
       expect(errors.length).toBeGreaterThan(0)
       expect(errors[0].message).toContain("'y' used before declaration")
+      expect(errors[0].location.line).toBe(3)
+      expect(errors[0].location.col).toBe(18)
     })
 
     it('detects undeclared variable in expression', () => {
@@ -69,6 +71,7 @@ fn test() {
 `)
       expect(errors.length).toBeGreaterThan(0)
       expect(errors[0].message).toContain("expects 2 arguments, got 1")
+      expect(errors[0].location.line).toBe(7)
     })
 
     it('detects too many arguments', () => {
@@ -150,6 +153,7 @@ fn test() {
 `)
       expect(errors.length).toBeGreaterThan(0)
       expect(errors[0].message).toContain("has no field 'z'")
+      expect(errors[0].location.line).toBe(6)
     })
 
     it('allows array.len access', () => {

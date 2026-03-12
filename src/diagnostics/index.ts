@@ -16,6 +16,18 @@ export interface DiagnosticLocation {
   col: number
 }
 
+function formatSourcePointer(sourceLines: string[], line: number, col: number): string[] {
+  const lineIdx = line - 1
+  if (lineIdx < 0 || lineIdx >= sourceLines.length) {
+    return []
+  }
+
+  const sourceLine = sourceLines[lineIdx]
+  const safeCol = Math.max(1, Math.min(col, sourceLine.length + 1))
+  const pointer = `  ${' '.repeat(safeCol - 1)}^`
+  return [`  ${sourceLine}`, pointer]
+}
+
 export class DiagnosticError extends Error {
   readonly kind: DiagnosticKind
   readonly location: DiagnosticLocation
@@ -51,15 +63,15 @@ export class DiagnosticError extends Error {
       return header
     }
 
-    const lineIdx = location.line - 1
-    if (lineIdx < 0 || lineIdx >= sourceLines.length) {
+    const pointerLines = formatSourcePointer(sourceLines, location.line, location.col)
+    if (pointerLines.length === 0) {
       return header
     }
-
-    const sourceLine = sourceLines[lineIdx]
     const lineNum = String(location.line).padStart(3)
     const prefix = `${lineNum} | `
-    const pointer = ' '.repeat(prefix.length + location.col - 1) + '^'
+    const sourceLine = sourceLines[location.line - 1]
+    const safeCol = Math.max(1, Math.min(location.col, sourceLine.length + 1))
+    const pointer = ' '.repeat(prefix.length + safeCol - 1) + '^'
     const hint = message.toLowerCase().includes('expected')
       ? message.split(':').pop()?.trim() || ''
       : ''
@@ -147,4 +159,28 @@ export function parseErrorMessage(
 
   // Fallback: line 1, col 1
   return new DiagnosticError(kind, rawMessage, { file: filePath, line: 1, col: 1 }, sourceLines)
+}
+
+export function formatError(error: Error | DiagnosticError, source?: string): string {
+  if (error instanceof DiagnosticError) {
+    const sourceLines = source?.split('\n') ?? error.sourceLines ?? []
+    const { file, line, col } = error.location
+    const locationPart = file
+      ? ` in ${file} at line ${line}, col ${col}`
+      : ` at line ${line}, col ${col}`
+    const lines = [`Error${locationPart}:`]
+    const pointerLines = formatSourcePointer(sourceLines, line, col)
+    if (pointerLines.length > 0) {
+      lines.push(...pointerLines)
+    }
+    lines.push(error.message)
+    return lines.join('\n')
+  }
+
+  if (!source) {
+    return error.message
+  }
+
+  const parsed = parseErrorMessage('ParseError', error.message, source.split('\n'))
+  return formatError(parsed, source)
 }
