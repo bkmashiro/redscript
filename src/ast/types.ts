@@ -16,6 +16,7 @@ export type PrimitiveType = 'int' | 'bool' | 'float' | 'string' | 'void'
 export type TypeNode =
   | { kind: 'named'; name: PrimitiveType }
   | { kind: 'array'; elem: TypeNode }
+  | { kind: 'struct'; name: string }
 
 // ---------------------------------------------------------------------------
 // Range Expression
@@ -72,6 +73,10 @@ export type Expr =
   | { kind: 'assign';     target: string; op: AssignOp; value: Expr }
   | { kind: 'call';       fn: string; args: Expr[] }
   | { kind: 'member';     obj: Expr; field: string }
+  | { kind: 'struct_lit'; fields: { name: string; value: Expr }[] }
+  | { kind: 'member_assign'; obj: Expr; field: string; op: AssignOp; value: Expr }
+  | { kind: 'index';      obj: Expr; index: Expr }
+  | { kind: 'array_lit';  elements: Expr[] }
 
 // ---------------------------------------------------------------------------
 // Statements
@@ -118,10 +123,25 @@ export interface FnDecl {
 }
 
 // ---------------------------------------------------------------------------
+// Struct Declaration
+// ---------------------------------------------------------------------------
+
+export interface StructField {
+  name: string
+  type: TypeNode
+}
+
+export interface StructDecl {
+  name: string
+  fields: StructField[]
+}
+
+// ---------------------------------------------------------------------------
 // Program (Top-Level)
 // ---------------------------------------------------------------------------
 
 export interface Program {
   namespace: string    // Inferred from filename or `namespace mypack;`
   declarations: FnDecl[]
+  structs: StructDecl[]
 }

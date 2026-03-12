@@ -9,7 +9,8 @@ import type { IRBuilder } from '../ir/builder'
 import { buildModule } from '../ir/builder'
 import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
 import type {
-  Block, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Stmt
+  Block, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Stmt,
+  StructDecl, TypeNode
 } from '../ast/types'
 
 // ---------------------------------------------------------------------------
@@ -52,12 +53,28 @@ export class Lowering {
   private varMap: Map<string, string> = new Map()
   private currentContext: { binding?: string } = {}
 
+  // Struct definitions: name → { fieldName: TypeNode }
+  private structDefs: Map<string, Map<string, TypeNode>> = new Map()
+  // Variable types: varName → TypeNode
+  private varTypes: Map<string, TypeNode> = new Map()
+  // World object counter for unique tags
+  private worldObjCounter: number = 0
+
   constructor(namespace: string) {
     this.namespace = namespace
   }
 
   lower(program: Program): IRModule {
     this.namespace = program.namespace
+
+    // Load struct definitions
+    for (const struct of program.structs ?? []) {
+      const fields = new Map<string, TypeNode>()
+      for (const field of struct.fields) {
+        fields.set(field.name, field.type)
+      }
+      this.structDefs.set(struct.name, fields)
+    }
 
     for (const fn of program.declarations) {
       this.lowerFn(fn)
@@ -228,6 +245,60 @@ export class Lowering {
   private lowerLetStmt(stmt: Extract<Stmt, { kind: 'let' }>): void {
     const varName = `$${stmt.name}`
     this.varMap.set(stmt.name, varName)
+
+    // Track variable type
+    if (stmt.type) {
+      this.varTypes.set(stmt.name, stmt.type)
+    }
+
+    // Handle struct literal initialization
+    if (stmt.init.kind === 'struct_lit' && stmt.type?.kind === 'struct') {
+      const structName = stmt.type.name.toLowerCase()
+      for (const field of stmt.init.fields) {
+        const path = `rs:heap ${structName}_${stmt.name}.${field.name}`
+        const fieldValue = this.lowerExpr(field.value)
+        if (fieldValue.kind === 'const') {
+          this.builder.emitRaw(`data modify storage ${path} set value ${fieldValue.value}`)
+        } else if (fieldValue.kind === 'var') {
+          // Copy from scoreboard to NBT
+          this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${fieldValue.name} rs`)
+        }
+      }
+      return
+    }
+
+    // Handle array literal initialization
+    if (stmt.init.kind === 'array_lit') {
+      // Initialize empty NBT array
+      this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} set value []`)
+      // Add each element
+      for (const elem of stmt.init.elements) {
+        const elemValue = this.lowerExpr(elem)
+        if (elemValue.kind === 'const') {
+          this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value ${elemValue.value}`)
+        } else if (elemValue.kind === 'var') {
+          const temp = this.builder.freshTemp()
+          this.builder.emitAssign(temp, elemValue)
+          this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${temp} rs`)
+          this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value 0`)
+          this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${temp} rs`)
+        }
+      }
+      return
+    }
+
+    // Handle spawn_object returning entity handle
+    if (stmt.init.kind === 'call' && stmt.init.fn === 'spawn_object') {
+      const value = this.lowerExpr(stmt.init)
+      // value is the selector like @e[tag=__rs_obj_0,limit=1]
+      if (value.kind === 'var' && value.name.startsWith('@e[tag=__rs_obj_')) {
+        this.varMap.set(stmt.name, value.name)
+        // Mark as entity type for later member access
+        this.varTypes.set(stmt.name, { kind: 'named', name: 'void' }) // Marker
+      }
+      return
+    }
+
     const value = this.lowerExpr(stmt.init)
     this.builder.emitAssign(varName, value)
   }
@@ -462,9 +533,135 @@ export class Lowering {
         return this.lowerCallExpr(expr)
 
       case 'member':
-        // Member access not fully supported in MC
-        return { kind: 'var', name: `$${(expr.obj as any).name}_${expr.field}` }
+        return this.lowerMemberExpr(expr)
+
+      case 'member_assign':
+        return this.lowerMemberAssign(expr)
+
+      case 'index':
+        return this.lowerIndexExpr(expr)
+
+      case 'struct_lit':
+        // Struct literals should be handled in let statement
+        return { kind: 'const', value: 0 }
+
+      case 'array_lit':
+        // Array literals should be handled in let statement
+        return { kind: 'const', value: 0 }
     }
+  }
+
+  private lowerMemberExpr(expr: Extract<Expr, { kind: 'member' }>): Operand {
+    // Check if this is a struct field access
+    if (expr.obj.kind === 'ident') {
+      const varType = this.varTypes.get(expr.obj.name)
+
+      // Check for world object handle (entity selector)
+      const mapped = this.varMap.get(expr.obj.name)
+      if (mapped && mapped.startsWith('@e[tag=__rs_obj_')) {
+        // World object field access → scoreboard get
+        const dst = this.builder.freshTemp()
+        this.builder.emitRaw(`scoreboard players operation ${dst} rs = ${mapped} rs`)
+        return { kind: 'var', name: dst }
+      }
+
+      if (varType?.kind === 'struct') {
+        const structName = varType.name.toLowerCase()
+        const path = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`
+        const dst = this.builder.freshTemp()
+        // Read from NBT storage into scoreboard
+        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path}`)
+        return { kind: 'var', name: dst }
+      }
+
+      // Array length property
+      if (varType?.kind === 'array' && expr.field === 'length') {
+        const dst = this.builder.freshTemp()
+        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${expr.obj.name}`)
+        return { kind: 'var', name: dst }
+      }
+    }
+
+    // Default behavior: simple member access
+    return { kind: 'var', name: `$${(expr.obj as any).name}_${expr.field}` }
+  }
+
+  private lowerMemberAssign(expr: Extract<Expr, { kind: 'member_assign' }>): Operand {
+    if (expr.obj.kind === 'ident') {
+      const varType = this.varTypes.get(expr.obj.name)
+
+      // Check for world object handle
+      const mapped = this.varMap.get(expr.obj.name)
+      if (mapped && mapped.startsWith('@e[tag=__rs_obj_')) {
+        const value = this.lowerExpr(expr.value)
+        if (expr.op === '=') {
+          if (value.kind === 'const') {
+            this.builder.emitRaw(`scoreboard players set ${mapped} rs ${value.value}`)
+          } else if (value.kind === 'var') {
+            this.builder.emitRaw(`scoreboard players operation ${mapped} rs = ${value.name} rs`)
+          }
+        } else {
+          // Compound assignment
+          const binOp = expr.op.slice(0, -1)
+          const opMap: Record<string, string> = { '+': '+=', '-': '-=', '*': '*=', '/': '/=', '%': '%=' }
+          if (value.kind === 'const') {
+            const constTemp = this.builder.freshTemp()
+            this.builder.emitAssign(constTemp, value)
+            this.builder.emitRaw(`scoreboard players operation ${mapped} rs ${opMap[binOp]} ${constTemp} rs`)
+          } else if (value.kind === 'var') {
+            this.builder.emitRaw(`scoreboard players operation ${mapped} rs ${opMap[binOp]} ${value.name} rs`)
+          }
+        }
+        return { kind: 'const', value: 0 }
+      }
+
+      if (varType?.kind === 'struct') {
+        const structName = varType.name.toLowerCase()
+        const path = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`
+        const value = this.lowerExpr(expr.value)
+
+        if (expr.op === '=') {
+          if (value.kind === 'const') {
+            this.builder.emitRaw(`data modify storage ${path} set value ${value.value}`)
+          } else if (value.kind === 'var') {
+            this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${value.name} rs`)
+          }
+        } else {
+          // Compound assignment: read, modify, write back
+          const dst = this.builder.freshTemp()
+          this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path}`)
+          const binOp = expr.op.slice(0, -1)
+          this.builder.emitBinop(dst, { kind: 'var', name: dst }, binOp as any, value)
+          this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${dst} rs`)
+        }
+        return { kind: 'const', value: 0 }
+      }
+    }
+
+    // Default: simple assignment
+    const varName = `$${(expr.obj as any).name}_${expr.field}`
+    const value = this.lowerExpr(expr.value)
+    this.builder.emitAssign(varName, value)
+    return { kind: 'var', name: varName }
+  }
+
+  private lowerIndexExpr(expr: Extract<Expr, { kind: 'index' }>): Operand {
+    if (expr.obj.kind === 'ident') {
+      const varName = expr.obj.name
+      const dst = this.builder.freshTemp()
+
+      if (expr.index.kind === 'int_lit') {
+        // Static index: arr[0]
+        const idx = expr.index.value
+        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${varName}[${idx}]`)
+      } else {
+        // Dynamic index not fully supported in vanilla MC - emit placeholder
+        this.builder.emitRaw(`# Dynamic array indexing not supported in vanilla MC`)
+        this.builder.emitAssign(dst, { kind: 'const', value: 0 })
+      }
+      return { kind: 'var', name: dst }
+    }
+    return { kind: 'const', value: 0 }
   }
 
   private lowerBinaryExpr(expr: Extract<Expr, { kind: 'binary' }>): Operand {
@@ -558,6 +755,45 @@ export class Lowering {
       const dst = this.builder.freshTemp()
       this.builder.emitRaw(`execute store result score ${dst} rs if entity ${entity}[tag=${tagName}]`)
       return { kind: 'var', name: dst }
+    }
+
+    // Handle array push
+    if (expr.fn === '__array_push') {
+      const arrExpr = expr.args[0]
+      const valueExpr = expr.args[1]
+      if (arrExpr.kind === 'ident') {
+        const arrName = arrExpr.name
+        const value = this.lowerExpr(valueExpr)
+        if (value.kind === 'const') {
+          this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value ${value.value}`)
+        } else if (value.kind === 'var') {
+          // Need to use a temp value and then copy
+          this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value 0`)
+          this.builder.emitRaw(`execute store result storage rs:heap ${arrName}[-1] int 1 run scoreboard players get ${value.name} rs`)
+        }
+      }
+      return { kind: 'const', value: 0 }
+    }
+
+    // Handle spawn_object - creates world object (invisible armor stand)
+    if (expr.fn === 'spawn_object') {
+      const x = this.exprToString(expr.args[0])
+      const y = this.exprToString(expr.args[1])
+      const z = this.exprToString(expr.args[2])
+      const tag = `__rs_obj_${this.worldObjCounter++}`
+      this.builder.emitRaw(`summon minecraft:armor_stand ${x} ${y} ${z} {Invisible:1b,Marker:1b,NoGravity:1b,Tags:["${tag}"]}`)
+      // Return a selector pointing to this entity
+      const selector = `@e[tag=${tag},limit=1]`
+      return { kind: 'var', name: selector }
+    }
+
+    // Handle kill for world objects
+    if (expr.fn === 'kill' && expr.args.length === 1 && expr.args[0].kind === 'ident') {
+      const mapped = this.varMap.get(expr.args[0].name)
+      if (mapped && mapped.startsWith('@e[tag=__rs_obj_')) {
+        this.builder.emitRaw(`kill ${mapped}`)
+        return { kind: 'const', value: 0 }
+      }
     }
 
     // Regular function call

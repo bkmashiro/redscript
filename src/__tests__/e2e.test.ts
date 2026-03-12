@@ -661,4 +661,162 @@ fn handle_claim() {
       expect(fn).toContain('function zombie:reward_player')
     })
   })
+
+  describe('Test 11: Struct types backed by NBT storage', () => {
+    const source = `
+struct Point { x: int, y: int }
+
+fn test_struct() {
+    let p: Point = { x: 10, y: 20 };
+    p.x = 30;
+    let val = p.x;
+}
+`
+    it('generates struct field initialization with NBT storage', () => {
+      const files = compile(source, 'structs')
+      const fn = getFunction(files, 'test_struct')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('data modify storage rs:heap point_p.x set value 10')
+      expect(fn).toContain('data modify storage rs:heap point_p.y set value 20')
+    })
+
+    it('generates struct field assignment', () => {
+      const files = compile(source, 'structs')
+      const fn = getFunction(files, 'test_struct')!
+      expect(fn).toContain('data modify storage rs:heap point_p.x set value 30')
+    })
+
+    it('generates struct field read into scoreboard', () => {
+      const files = compile(source, 'structs')
+      const fn = getFunction(files, 'test_struct')!
+      expect(fn).toContain('execute store result score')
+      expect(fn).toContain('data get storage rs:heap point_p.x')
+    })
+  })
+
+  describe('Test 12: Struct compound assignment', () => {
+    const source = `
+struct Counter { value: int }
+
+fn test_compound() {
+    let c: Counter = { value: 0 };
+    c.value += 10;
+    c.value -= 5;
+}
+`
+    it('generates read-modify-write for compound assignment', () => {
+      const files = compile(source, 'compound')
+      const fn = getFunction(files, 'test_compound')
+      expect(fn).toBeDefined()
+      // Should read, add, write back
+      expect(fn).toContain('data get storage rs:heap counter_c.value')
+      expect(fn).toContain('+=')
+    })
+  })
+
+  describe('Test 13: int[] array type', () => {
+    const source = `
+fn test_array() {
+    let arr: int[] = [];
+    arr.push(42);
+    arr.push(100);
+    let first = arr[0];
+}
+`
+    it('initializes empty array in NBT storage', () => {
+      const files = compile(source, 'arrays')
+      const fn = getFunction(files, 'test_array')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('data modify storage rs:heap arr set value []')
+    })
+
+    it('generates array push', () => {
+      const files = compile(source, 'arrays')
+      const fn = getFunction(files, 'test_array')!
+      expect(fn).toContain('data modify storage rs:heap arr append value 42')
+      expect(fn).toContain('data modify storage rs:heap arr append value 100')
+    })
+
+    it('generates array index access', () => {
+      const files = compile(source, 'arrays')
+      const fn = getFunction(files, 'test_array')!
+      expect(fn).toContain('data get storage rs:heap arr[0]')
+    })
+  })
+
+  describe('Test 14: Array with initial values', () => {
+    const source = `
+fn test_init_array() {
+    let nums: int[] = [1, 2, 3];
+}
+`
+    it('initializes array with values', () => {
+      const files = compile(source, 'initarr')
+      const fn = getFunction(files, 'test_init_array')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('data modify storage rs:heap nums set value []')
+      expect(fn).toContain('data modify storage rs:heap nums append value 1')
+      expect(fn).toContain('data modify storage rs:heap nums append value 2')
+      expect(fn).toContain('data modify storage rs:heap nums append value 3')
+    })
+  })
+
+  describe('Test 15: World objects (armor stands)', () => {
+    const source = `
+fn test_spawn() {
+    let turret = spawn_object(10, 64, 20);
+    turret.health = 100;
+}
+`
+    it('generates summon command for world object', () => {
+      const files = compile(source, 'world')
+      const fn = getFunction(files, 'test_spawn')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('summon minecraft:armor_stand 10 64 20')
+      expect(fn).toContain('Invisible:1b')
+      expect(fn).toContain('Marker:1b')
+      expect(fn).toContain('NoGravity:1b')
+      expect(fn).toContain('Tags:["__rs_obj_')
+    })
+
+    it('generates scoreboard set for world object field', () => {
+      const files = compile(source, 'world')
+      const fn = getFunction(files, 'test_spawn')!
+      expect(fn).toContain('scoreboard players set @e[tag=__rs_obj_')
+      expect(fn).toContain('rs 100')
+    })
+  })
+
+  describe('Test 16: World object compound operations', () => {
+    const source = `
+fn test_damage() {
+    let obj = spawn_object(0, 64, 0);
+    obj.health = 100;
+    obj.health -= 10;
+}
+`
+    it('generates compound assignment on world object', () => {
+      const files = compile(source, 'damage')
+      const fn = getFunction(files, 'test_damage')
+      expect(fn).toBeDefined()
+      // Should have -= operation
+      expect(fn).toContain('scoreboard players operation @e[tag=__rs_obj_')
+      expect(fn).toContain('-=')
+    })
+  })
+
+  describe('Test 17: Kill world object', () => {
+    const source = `
+fn test_kill() {
+    let obj = spawn_object(0, 64, 0);
+    kill(obj);
+}
+`
+    it('generates kill command for world object', () => {
+      const files = compile(source, 'killobj')
+      const fn = getFunction(files, 'test_kill')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('kill @e[tag=__rs_obj_')
+    })
+  })
 })

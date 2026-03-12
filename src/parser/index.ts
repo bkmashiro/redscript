@@ -8,7 +8,8 @@
 import type { Token, TokenKind } from '../lexer'
 import type {
   Block, Decorator, EntitySelector, Expr, FnDecl, Param,
-  Program, RangeExpr, SelectorFilter, SelectorKind, Stmt, TypeNode, AssignOp
+  Program, RangeExpr, SelectorFilter, SelectorKind, Stmt, TypeNode, AssignOp,
+  StructDecl, StructField
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ir/types'
 
@@ -91,6 +92,7 @@ export class Parser {
   parse(defaultNamespace = 'redscript'): Program {
     let namespace = defaultNamespace
     const declarations: FnDecl[] = []
+    const structs: StructDecl[] = []
 
     // Check for namespace declaration
     if (this.check('namespace')) {
@@ -100,12 +102,40 @@ export class Parser {
       this.expect(';')
     }
 
-    // Parse function declarations
+    // Parse struct and function declarations
     while (!this.check('eof')) {
-      declarations.push(this.parseFnDecl())
+      if (this.check('struct')) {
+        structs.push(this.parseStructDecl())
+      } else {
+        declarations.push(this.parseFnDecl())
+      }
     }
 
-    return { namespace, declarations }
+    return { namespace, declarations, structs }
+  }
+
+  // -------------------------------------------------------------------------
+  // Struct Declaration
+  // -------------------------------------------------------------------------
+
+  private parseStructDecl(): StructDecl {
+    this.expect('struct')
+    const name = this.expect('ident').value
+    this.expect('{')
+
+    const fields: StructField[] = []
+    while (!this.check('}') && !this.check('eof')) {
+      const fieldName = this.expect('ident').value
+      this.expect(':')
+      const fieldType = this.parseType()
+      fields.push({ name: fieldName, type: fieldType })
+
+      // Allow optional comma or semicolon between fields
+      this.match(',')
+    }
+
+    this.expect('}')
+    return { name, fields }
   }
 
   // -------------------------------------------------------------------------
@@ -211,6 +241,12 @@ export class Parser {
       }
 
       return type
+    }
+
+    // Struct type (identifier)
+    if (token.kind === 'ident') {
+      this.advance()
+      return { kind: 'struct', name: token.value }
     }
 
     this.error(`Expected type, got '${token.kind}'`)
@@ -389,13 +425,20 @@ export class Parser {
     const left = this.parseBinaryExpr(1)
 
     // Check for assignment
-    if (left.kind === 'ident') {
-      const token = this.peek()
-      if (token.kind === '=' || token.kind === '+=' || token.kind === '-=' ||
-          token.kind === '*=' || token.kind === '/=' || token.kind === '%=') {
-        const op = this.advance().kind as AssignOp
+    const token = this.peek()
+    if (token.kind === '=' || token.kind === '+=' || token.kind === '-=' ||
+        token.kind === '*=' || token.kind === '/=' || token.kind === '%=') {
+      const op = this.advance().kind as AssignOp
+
+      if (left.kind === 'ident') {
         const value = this.parseAssignment()
         return { kind: 'assign', target: left.name, op, value }
+      }
+
+      // Member assignment: p.x = 10, p.x += 5
+      if (left.kind === 'member') {
+        const value = this.parseAssignment()
+        return { kind: 'member_assign', obj: left.obj, field: left.field, op, value }
       }
     }
 
@@ -456,11 +499,13 @@ export class Parser {
           continue
         }
         // Member call: entity.tag("name") → __entity_tag(entity, "name")
+        // Also handle arr.push(val) and arr.length
         if (expr.kind === 'member') {
           const methodMap: Record<string, string> = {
             'tag': '__entity_tag',
             'untag': '__entity_untag',
             'has_tag': '__entity_has_tag',
+            'push': '__array_push',
           }
           const internalFn = methodMap[expr.field]
           if (internalFn) {
@@ -472,6 +517,14 @@ export class Parser {
           this.error(`Unknown method '${expr.field}'`)
         }
         this.error('Expected function name before (')
+      }
+
+      // Array index access: arr[0]
+      if (this.match('[')) {
+        const index = this.parseExpr()
+        this.expect(']')
+        expr = { kind: 'index', obj: expr, index }
+        continue
       }
 
       // Member access
@@ -556,7 +609,48 @@ export class Parser {
       return expr
     }
 
+    // Struct literal or block: { x: 10, y: 20 }
+    if (token.kind === '{') {
+      return this.parseStructLit()
+    }
+
+    // Array literal: [1, 2, 3] or []
+    if (token.kind === '[') {
+      return this.parseArrayLit()
+    }
+
     this.error(`Unexpected token '${token.kind}'`)
+  }
+
+  private parseStructLit(): Expr {
+    this.expect('{')
+    const fields: { name: string; value: Expr }[] = []
+
+    if (!this.check('}')) {
+      do {
+        const name = this.expect('ident').value
+        this.expect(':')
+        const value = this.parseExpr()
+        fields.push({ name, value })
+      } while (this.match(','))
+    }
+
+    this.expect('}')
+    return { kind: 'struct_lit', fields }
+  }
+
+  private parseArrayLit(): Expr {
+    this.expect('[')
+    const elements: Expr[] = []
+
+    if (!this.check(']')) {
+      do {
+        elements.push(this.parseExpr())
+      } while (this.match(','))
+    }
+
+    this.expect(']')
+    return { kind: 'array_lit', elements }
   }
 
   // -------------------------------------------------------------------------
