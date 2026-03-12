@@ -6238,16 +6238,84 @@ function formatDoc(doc) {
   }
   return md;
 }
+var SELECTOR_DOCS = {
+  "@s": { name: "@s \u2014 Self", desc: "The entity that ran the current command (the executing entity).", tip: "Always refers to exactly 1 entity." },
+  "@a": { name: "@a \u2014 All Players", desc: "All online players.", tip: "Use `@a[limit=1]` to restrict to one player." },
+  "@e": { name: "@e \u2014 All Entities", desc: "All loaded entities (players + mobs + items + \u2026).", tip: "Usually combined with filters: `@e[type=minecraft:zombie,limit=5]`" },
+  "@p": { name: "@p \u2014 Nearest Player", desc: "The single nearest player to the command origin.", tip: "Exactly 1 player; errors if none are in range." },
+  "@r": { name: "@r \u2014 Random Player", desc: "A random online player.", tip: "Use `@e[type=minecraft:player,sort=random,limit=1]` for full control." },
+  "@n": { name: "@n \u2014 Nearest Entity", desc: "The single nearest entity (including non-players).", tip: "MC 1.21+ only." }
+};
+function formatSelectorHover(raw) {
+  const key = raw.replace(/\[.*/, "");
+  const info = SELECTOR_DOCS[key];
+  const md = new vscode.MarkdownString("", true);
+  if (info) {
+    md.appendMarkdown(`**${info.name}**
+
+`);
+    md.appendMarkdown(info.desc + "\n");
+    if (info.tip) md.appendMarkdown(`
+> \u{1F4A1} ${info.tip}`);
+  } else {
+    md.appendMarkdown(`**Selector** \`${raw}\`
+
+Entity target selector.`);
+  }
+  return md;
+}
+function findJsDocAbove(document, declLine) {
+  let end = declLine - 1;
+  while (end >= 0 && document.lineAt(end).text.trim() === "") end--;
+  if (end < 0) return null;
+  const endText = document.lineAt(end).text.trim();
+  if (!endText.endsWith("*/")) return null;
+  let start = end;
+  while (start >= 0 && !document.lineAt(start).text.includes("/**")) start--;
+  if (start < 0) return null;
+  const lines = [];
+  for (let i = start; i <= end; i++) {
+    let line = document.lineAt(i).text.replace(/^\s*\/\*\*?\s?/, "").replace(/\s*\*\/\s*$/, "").replace(/^\s*\*\s?/, "").trim();
+    if (line) lines.push(line);
+  }
+  return lines.length ? lines.join("\n") : null;
+}
+function findFnDeclLine(document, name) {
+  const re = new RegExp(`^\\s*(?:@[^\\n]*\\n\\s*)*fn\\s+${name}\\s*\\(`, "m");
+  const text = document.getText();
+  const match = re.exec(text);
+  if (!match) return null;
+  return document.positionAt(match.index).line;
+}
 function registerHoverProvider(context) {
   context.subscriptions.push(
     vscode.languages.registerHoverProvider("redscript", {
       provideHover(document, position) {
+        const selectorRange = document.getWordRangeAtPosition(
+          position,
+          /@[aesprnAESPRN](?:\[[^\]]*\])?/
+        );
+        if (selectorRange) {
+          const raw = document.getText(selectorRange);
+          return new vscode.Hover(formatSelectorHover(raw), selectorRange);
+        }
         const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/);
         if (!range) return;
         const word = document.getText(range);
-        const doc = BUILTINS[word];
-        if (!doc) return;
-        return new vscode.Hover(formatDoc(doc), range);
+        const builtin = BUILTINS[word];
+        if (builtin) return new vscode.Hover(formatDoc(builtin), range);
+        const declLine = findFnDeclLine(document, word);
+        if (declLine !== null) {
+          const jsdoc = findJsDocAbove(document, declLine);
+          if (jsdoc) {
+            const md = new vscode.MarkdownString("", true);
+            md.appendCodeblock(`fn ${word}(...)`, "redscript");
+            md.appendText("\n");
+            md.appendMarkdown(jsdoc);
+            return new vscode.Hover(md, range);
+          }
+        }
+        return void 0;
       }
     })
   );

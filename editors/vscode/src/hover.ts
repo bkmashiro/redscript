@@ -649,18 +649,120 @@ function formatDoc(doc: BuiltinDoc): vscode.MarkdownString {
   return md
 }
 
+// ---------------------------------------------------------------------------
+// Selector documentation
+// ---------------------------------------------------------------------------
+
+const SELECTOR_DOCS: Record<string, { name: string; desc: string; tip?: string }> = {
+  '@s': { name: '@s — Self',          desc: 'The entity that ran the current command (the executing entity).',   tip: 'Always refers to exactly 1 entity.' },
+  '@a': { name: '@a — All Players',   desc: 'All online players.',                                               tip: 'Use `@a[limit=1]` to restrict to one player.' },
+  '@e': { name: '@e — All Entities',  desc: 'All loaded entities (players + mobs + items + …).',                tip: 'Usually combined with filters: `@e[type=minecraft:zombie,limit=5]`' },
+  '@p': { name: '@p — Nearest Player',desc: 'The single nearest player to the command origin.',                  tip: 'Exactly 1 player; errors if none are in range.' },
+  '@r': { name: '@r — Random Player', desc: 'A random online player.',                                           tip: 'Use `@e[type=minecraft:player,sort=random,limit=1]` for full control.' },
+  '@n': { name: '@n — Nearest Entity',desc: 'The single nearest entity (including non-players).',                tip: 'MC 1.21+ only.' },
+}
+
+function formatSelectorHover(raw: string): vscode.MarkdownString {
+  const key = raw.replace(/\[.*/, '') as keyof typeof SELECTOR_DOCS
+  const info = SELECTOR_DOCS[key]
+  const md = new vscode.MarkdownString('', true)
+  if (info) {
+    md.appendMarkdown(`**${info.name}**\n\n`)
+    md.appendMarkdown(info.desc + '\n')
+    if (info.tip) md.appendMarkdown(`\n> 💡 ${info.tip}`)
+  } else {
+    md.appendMarkdown(`**Selector** \`${raw}\`\n\nEntity target selector.`)
+  }
+  return md
+}
+
+// ---------------------------------------------------------------------------
+// JSDoc comment parser
+// ---------------------------------------------------------------------------
+
+/**
+ * Look backwards from `line` in `document` for a /** ... *\/ block.
+ * Returns the cleaned comment text, or null.
+ */
+function findJsDocAbove(document: vscode.TextDocument, declLine: number): string | null {
+  // Walk up from the declaration line, skipping blank lines
+  let end = declLine - 1
+  while (end >= 0 && document.lineAt(end).text.trim() === '') end--
+  if (end < 0) return null
+
+  const endText = document.lineAt(end).text.trim()
+  if (!endText.endsWith('*/')) return null
+
+  // Find the opening /**
+  let start = end
+  while (start >= 0 && !document.lineAt(start).text.includes('/**')) start--
+  if (start < 0) return null
+
+  // Extract and clean comment lines
+  const lines: string[] = []
+  for (let i = start; i <= end; i++) {
+    let line = document.lineAt(i).text
+      .replace(/^\s*\/\*\*?\s?/, '')  // remove leading /**
+      .replace(/\s*\*\/\s*$/, '')     // remove trailing */
+      .replace(/^\s*\*\s?/, '')       // remove leading * on middle lines
+      .trim()
+    if (line) lines.push(line)
+  }
+  return lines.length ? lines.join('\n') : null
+}
+
+/**
+ * Find the line where `fn <name>` is declared in the document.
+ */
+function findFnDeclLine(document: vscode.TextDocument, name: string): number | null {
+  const re = new RegExp(`^\\s*(?:@[^\\n]*\\n\\s*)*fn\\s+${name}\\s*\\(`, 'm')
+  const text = document.getText()
+  const match = re.exec(text)
+  if (!match) return null
+  return document.positionAt(match.index).line
+}
+
+// ---------------------------------------------------------------------------
+// Hover provider
+// ---------------------------------------------------------------------------
+
 export function registerHoverProvider(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.languages.registerHoverProvider('redscript', {
       provideHover(document, position) {
+        // Check if the cursor is on a selector (@s, @a, @e[...])
+        const selectorRange = document.getWordRangeAtPosition(
+          position,
+          /@[aesprnAESPRN](?:\[[^\]]*\])?/
+        )
+        if (selectorRange) {
+          const raw = document.getText(selectorRange)
+          return new vscode.Hover(formatSelectorHover(raw), selectorRange)
+        }
+
         const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/)
         if (!range) return
 
         const word = document.getText(range)
-        const doc = BUILTINS[word]
-        if (!doc) return
 
-        return new vscode.Hover(formatDoc(doc), range)
+        // Builtin function
+        const builtin = BUILTINS[word]
+        if (builtin) return new vscode.Hover(formatDoc(builtin), range)
+
+        // User-defined function — look for JSDoc comment above declaration
+        const declLine = findFnDeclLine(document, word)
+        if (declLine !== null) {
+          const jsdoc = findJsDocAbove(document, declLine)
+          if (jsdoc) {
+            const md = new vscode.MarkdownString('', true)
+            md.appendCodeblock(`fn ${word}(...)`, 'redscript')
+            md.appendText('\n')
+            md.appendMarkdown(jsdoc)
+            return new vscode.Hover(md, range)
+          }
+        }
+
+        return undefined
       }
     })
   )
