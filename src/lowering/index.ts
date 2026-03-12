@@ -11,7 +11,7 @@ import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
 import type {
   Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, GlobalDecl, Program, RangeExpr, Span, Stmt,
-  StructDecl, TypeNode, ExecuteSubcommand, BlockPosExpr, CoordComponent
+  StructDecl, TypeNode, ExecuteSubcommand, BlockPosExpr, CoordComponent, EntityTypeName
 } from '../ast/types'
 import type { GlobalVar } from '../ir/types'
 
@@ -103,6 +103,23 @@ function getSpan(node: unknown): Span | undefined {
 
 const NAMESPACED_ENTITY_TYPE_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/
 const BARE_ENTITY_TYPE_RE = /^[a-z0-9_./-]+$/
+
+const ENTITY_TO_MC_TYPE: Partial<Record<EntityTypeName, string>> = {
+  Player: 'player',
+  Zombie: 'zombie',
+  Skeleton: 'skeleton',
+  Creeper: 'creeper',
+  Spider: 'spider',
+  Enderman: 'enderman',
+  Pig: 'pig',
+  Cow: 'cow',
+  Sheep: 'sheep',
+  Chicken: 'chicken',
+  Villager: 'villager',
+  ArmorStand: 'armor_stand',
+  Item: 'item',
+  Arrow: 'arrow',
+}
 
 function normalizeSelector(selector: string, warnings: Warning[]): string {
   return selector.replace(/type=([^,\]]+)/g, (match, entityType) => {
@@ -567,6 +584,11 @@ export class Lowering {
   }
 
   private lowerIfStmt(stmt: Extract<Stmt, { kind: 'if' }>): void {
+    if (stmt.cond.kind === 'is_check') {
+      this.lowerIsCheckIfStmt(stmt)
+      return
+    }
+
     const condVar = this.lowerExpr(stmt.cond)
     const condName = this.operandToVar(condVar)
 
@@ -594,6 +616,66 @@ export class Lowering {
 
     // Merge block
     this.builder.startBlock(mergeLabel)
+  }
+
+  private lowerIsCheckIfStmt(stmt: Extract<Stmt, { kind: 'if' }>): void {
+    const cond = stmt.cond
+    if (cond.kind !== 'is_check') {
+      throw new DiagnosticError(
+        'LoweringError',
+        "Internal error: expected 'is' check condition",
+        stmt.span ?? { line: 0, col: 0 }
+      )
+    }
+
+    if (stmt.else_) {
+      throw new DiagnosticError(
+        'LoweringError',
+        "'is' checks with else branches are not yet supported",
+        cond.span ?? stmt.span ?? { line: 0, col: 0 }
+      )
+    }
+
+    const selector = this.exprToEntitySelector(cond.expr)
+    if (!selector) {
+      throw new DiagnosticError(
+        'LoweringError',
+        "'is' checks require an entity selector or entity binding",
+        cond.span ?? stmt.span ?? { line: 0, col: 0 }
+      )
+    }
+
+    const mcType = ENTITY_TO_MC_TYPE[cond.entityType]
+    if (!mcType) {
+      throw new DiagnosticError(
+        'LoweringError',
+        `Cannot lower entity type check for '${cond.entityType}'`,
+        cond.span ?? stmt.span ?? { line: 0, col: 0 }
+      )
+    }
+
+    const thenFnName = `${this.currentFn}/then_${this.foreachCounter++}`
+    this.builder.emitRaw(`execute if entity ${this.appendTypeFilter(selector, mcType)} run function ${this.namespace}:${thenFnName}`)
+
+    const savedBuilder = this.builder
+    const savedVarMap = new Map(this.varMap)
+    const savedBlockPosVars = new Map(this.blockPosVars)
+
+    this.builder = new LoweringBuilder()
+    this.varMap = new Map(savedVarMap)
+    this.blockPosVars = new Map(savedBlockPosVars)
+
+    this.builder.startBlock('entry')
+    this.lowerBlock(stmt.then)
+    if (!this.builder.isBlockSealed()) {
+      this.builder.emitReturn()
+    }
+
+    this.functions.push(this.builder.build(thenFnName, [], false))
+
+    this.builder = savedBuilder
+    this.varMap = savedVarMap
+    this.blockPosVars = savedBlockPosVars
   }
 
   private lowerWhileStmt(stmt: Extract<Stmt, { kind: 'while' }>): void {
@@ -1097,6 +1179,13 @@ export class Lowering {
 
       case 'binary':
         return this.lowerBinaryExpr(expr)
+
+      case 'is_check':
+        throw new DiagnosticError(
+          'LoweringError',
+          "'is' checks are only supported as if conditions",
+          expr.span ?? { line: 0, col: 0 }
+        )
 
       case 'unary':
         return this.lowerUnaryExpr(expr)
@@ -2076,6 +2165,32 @@ export class Lowering {
         const op = this.lowerExpr(expr)
         return this.operandToVar(op)
     }
+  }
+
+  private exprToEntitySelector(expr: Expr): string | null {
+    if (expr.kind === 'selector') {
+      return this.selectorToString(expr.sel)
+    }
+
+    if (expr.kind === 'ident') {
+      const constValue = this.constValues.get(expr.name)
+      if (constValue) {
+        return this.exprToEntitySelector(constValue)
+      }
+      const mapped = this.varMap.get(expr.name)
+      if (mapped?.startsWith('@')) {
+        return mapped
+      }
+    }
+
+    return null
+  }
+
+  private appendTypeFilter(selector: string, mcType: string): string {
+    if (selector.endsWith(']')) {
+      return `${selector.slice(0, -1)},type=${mcType}]`
+    }
+    return `${selector}[type=${mcType}]`
   }
 
   private exprToSnbt(expr: Expr): string {

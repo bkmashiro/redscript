@@ -213,6 +213,32 @@ fn test() {
     })
   })
 
+  describe('entity is-check narrowing', () => {
+    it('allows entity type checks on foreach bindings', () => {
+      const errors = typeCheck(`
+fn test() {
+    foreach (e in @e) {
+        if (e is Player) {
+            kill(@s);
+        }
+    }
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('rejects is-checks on non-entity expressions', () => {
+      const errors = typeCheck(`
+fn test() {
+    let x: int = 1;
+    if (x is Player) {}
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain("'is' checks require an entity expression")
+    })
+  })
+
   describe('return type checking', () => {
     it('allows matching return type', () => {
       const errors = typeCheck(`

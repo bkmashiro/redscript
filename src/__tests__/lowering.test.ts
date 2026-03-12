@@ -282,6 +282,33 @@ fn test() -> int {
       const rawCmds = getRawCommands(fn)
       expect(rawCmds.some(cmd => cmd.includes('data get storage rs:heap arr'))).toBe(true)
     })
+
+    it('lowers entity is-checks inside foreach bodies', () => {
+      const ir = compile(`
+fn test() {
+  foreach (e in @e) {
+    if (e is Player) {
+      give(@s, "diamond", 1);
+    }
+    if (e is Zombie) {
+      kill(@s);
+    }
+  }
+}
+`)
+      const mainFn = getFunction(ir, 'test')!
+      const foreachFn = ir.functions.find(f => f.name === 'test/foreach_0')!
+      const thenFns = ir.functions.filter(f => /^test\/then_/.test(f.name)).sort((a, b) => a.name.localeCompare(b.name))
+      const rawCmds = getRawCommands(foreachFn)
+      const [playerThenFn, zombieThenFn] = thenFns
+
+      expect(getRawCommands(mainFn)).toContain('execute as @e run function test:test/foreach_0')
+      expect(thenFns).toHaveLength(2)
+      expect(rawCmds).toContain(`execute if entity @s[type=player] run function test:${playerThenFn.name}`)
+      expect(rawCmds).toContain(`execute if entity @s[type=zombie] run function test:${zombieThenFn.name}`)
+      expect(getRawCommands(playerThenFn).some(cmd => cmd.includes('give @s diamond 1'))).toBe(true)
+      expect(getRawCommands(zombieThenFn)).toContain('kill @s')
+    })
   })
 
   describe('match statements', () => {

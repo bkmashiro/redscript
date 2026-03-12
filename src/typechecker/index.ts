@@ -195,8 +195,7 @@ export class TypeChecker {
         break
       case 'if':
         this.checkExpr(stmt.cond)
-        this.checkBlock(stmt.then)
-        if (stmt.else_) this.checkBlock(stmt.else_)
+        this.checkIfBranches(stmt)
         break
       case 'while':
         this.checkExpr(stmt.cond)
@@ -359,6 +358,15 @@ export class TypeChecker {
         this.checkExpr(expr.left)
         this.checkExpr(expr.right)
         break
+
+      case 'is_check': {
+        this.checkExpr(expr.expr)
+        const checkedType = this.inferType(expr.expr)
+        if (checkedType.kind !== 'entity') {
+          this.report(`'is' checks require an entity expression, got ${this.typeToString(checkedType)}`, expr.expr)
+        }
+        break
+      }
 
       case 'unary':
         this.checkExpr(expr.operand)
@@ -633,6 +641,42 @@ export class TypeChecker {
     this.currentReturnType = outerReturnType
   }
 
+  private checkIfBranches(stmt: Extract<Stmt, { kind: 'if' }>): void {
+    const narrowed = this.getThenBranchNarrowing(stmt.cond)
+
+    if (narrowed) {
+      const thenScope = new Map(this.scope)
+      thenScope.set(narrowed.name, { type: narrowed.type, mutable: narrowed.mutable })
+      const outerScope = this.scope
+      this.scope = thenScope
+      this.checkBlock(stmt.then)
+      this.scope = outerScope
+    } else {
+      this.checkBlock(stmt.then)
+    }
+
+    if (stmt.else_) {
+      this.checkBlock(stmt.else_)
+    }
+  }
+
+  private getThenBranchNarrowing(cond: Expr): { name: string; type: Extract<TypeNode, { kind: 'entity' }>; mutable: boolean } | null {
+    if (cond.kind !== 'is_check' || cond.expr.kind !== 'ident') {
+      return null
+    }
+
+    const symbol = this.scope.get(cond.expr.name)
+    if (!symbol || symbol.type.kind !== 'entity') {
+      return null
+    }
+
+    return {
+      name: cond.expr.name,
+      type: { kind: 'entity', entityType: cond.entityType },
+      mutable: symbol.mutable,
+    }
+  }
+
   private inferType(expr: Expr, expectedType?: TypeNode): TypeNode {
     switch (expr.kind) {
       case 'int_lit':
@@ -716,6 +760,8 @@ export class TypeChecker {
           return { kind: 'named', name: 'bool' }
         }
         return this.inferType(expr.left)
+      case 'is_check':
+        return { kind: 'named', name: 'bool' }
       case 'unary':
         if (expr.op === '!') return { kind: 'named', name: 'bool' }
         return this.inferType(expr.operand)

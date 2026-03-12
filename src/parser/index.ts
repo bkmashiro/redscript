@@ -10,7 +10,7 @@ import type {
   Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, GlobalDecl, LiteralExpr, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Span, Stmt, TypeNode, AssignOp,
   StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr,
-  CoordComponent, LambdaParam
+  CoordComponent, LambdaParam, EntityTypeName
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
@@ -23,12 +23,33 @@ const PRECEDENCE: Record<string, number> = {
   '||': 1,
   '&&': 2,
   '==': 3, '!=': 3,
-  '<': 4, '<=': 4, '>': 4, '>=': 4,
+  '<': 4, '<=': 4, '>': 4, '>=': 4, 'is': 4,
   '+': 5, '-': 5,
   '*': 6, '/': 6, '%': 6,
 }
 
-const BINARY_OPS = new Set(['||', '&&', '==', '!=', '<', '<=', '>', '>=', '+', '-', '*', '/', '%'])
+const BINARY_OPS = new Set(['||', '&&', '==', '!=', '<', '<=', '>', '>=', 'is', '+', '-', '*', '/', '%'])
+
+const ENTITY_TYPE_NAMES = new Set<EntityTypeName>([
+  'entity',
+  'Player',
+  'Mob',
+  'HostileMob',
+  'PassiveMob',
+  'Zombie',
+  'Skeleton',
+  'Creeper',
+  'Spider',
+  'Enderman',
+  'Pig',
+  'Cow',
+  'Sheep',
+  'Chicken',
+  'Villager',
+  'ArmorStand',
+  'Item',
+  'Arrow',
+])
 
 function computeIsSingle(raw: string): boolean {
   if (/^@[spr](\[|$)/.test(raw)) return true
@@ -740,6 +761,15 @@ export class Parser {
       if (prec < minPrec) break
 
       const opToken = this.advance()
+      if (op === 'is') {
+        const entityType = this.parseEntityTypeName()
+        left = this.withLoc(
+          { kind: 'is_check', expr: left, entityType },
+          this.getLocToken(left) ?? opToken
+        )
+        continue
+      }
+
       const right = this.parseBinaryExpr(prec + 1) // left associative
       left = this.withLoc(
         { kind: 'binary', op: op as BinOp | CmpOp | '&&' | '||', left, right },
@@ -764,6 +794,14 @@ export class Parser {
     }
 
     return this.parsePostfixExpr()
+  }
+
+  private parseEntityTypeName(): EntityTypeName {
+    const token = this.expect('ident')
+    if (ENTITY_TYPE_NAMES.has(token.value as EntityTypeName)) {
+      return token.value as EntityTypeName
+    }
+    this.error(`Unknown entity type '${token.value}'`)
   }
 
   private isSubtraction(): boolean {

@@ -197,6 +197,16 @@ describe('Parser', () => {
       expect((stmt as any).else_).toHaveLength(1)
     })
 
+    it('parses entity is-checks in if conditions', () => {
+      const stmt = parseStmt('if (e is Player) { kill(@s); }')
+      expect(stmt.kind).toBe('if')
+      expect((stmt as any).cond).toEqual({
+        kind: 'is_check',
+        expr: { kind: 'ident', name: 'e' },
+        entityType: 'Player',
+      })
+    })
+
     it('parses while statement', () => {
       const stmt = parseStmt('while (i > 0) { i = i - 1; }')
       expect(stmt.kind).toBe('while')

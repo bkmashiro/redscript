@@ -138,6 +138,7 @@ export type Expr =
   | { kind: 'ident';      name: string; span?: Span }
   | { kind: 'selector';   raw: string; isSingle: boolean; sel: EntitySelector; span?: Span }
   | { kind: 'binary';     op: BinOp | CmpOp | '&&' | '||'; left: Expr; right: Expr; span?: Span }
+  | { kind: 'is_check';   expr: Expr; entityType: EntityTypeName; span?: Span }
   | { kind: 'unary';      op: '!' | '-'; operand: Expr; span?: Span }
   | { kind: 'assign';     target: string; op: AssignOp; value: Expr; span?: Span }
   | { kind: 'call';       fn: string; args: Expr[]; span?: Span }
