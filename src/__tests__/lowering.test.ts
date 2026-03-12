@@ -620,9 +620,21 @@ fn test() {
       const ir = compile('fn test() { let x: int = random(1, 100); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds.some(cmd =>
-        cmd.includes('execute store result score') && cmd.includes('random value 1..100')
-      )).toBe(true)
+      expect(rawCmds).toContain('scoreboard players random $t0 rs 1 100')
+    })
+
+    it('lowers random_native()', () => {
+      const ir = compile('fn test() { let x: int = random_native(1, 6); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('execute store result score $t0 rs run random value 1 6')
+    })
+
+    it('lowers random_sequence()', () => {
+      const ir = compile('fn test() { random_sequence("loot", 42); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('random reset loot 42')
     })
 
     it('lowers data_get from entity', () => {

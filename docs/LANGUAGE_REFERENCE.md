@@ -363,7 +363,9 @@ The compiler recognizes these builtins and lowers them directly to Minecraft com
 | `score(target, objective)` | `int` | Alias of `scoreboard_get` |
 | `scoreboard_set(target, objective, value)` | `void` | Writes a scoreboard score |
 | `data_get(kind, target, path, scale?)` | `int` | Reads NBT with `data get` |
-| `random(min, max)` | `int` | Uses `/random value min..max` |
+| `random(min, max)` | `int` | Uses `scoreboard players random` for pre-1.20.3 compatibility |
+| `random_native(min, max)` | `int` | Uses `/random value <min> <max>` (MC 1.20.3+) |
+| `random_sequence(sequence, seed?)` | `void` | Uses `/random reset <sequence> <seed>`; default seed is `0` (MC 1.20.3+) |
 | `spawn_object(x, y, z)` | world object handle | Spawns an invisible armor stand with generated tags |
 | `raw(cmd)` | `void` | Emits a literal Minecraft command |
 

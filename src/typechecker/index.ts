@@ -467,6 +467,9 @@ export class TypeChecker {
         if (expr.fn === 'bossbar_get_value') {
           return { kind: 'named', name: 'int' }
         }
+        if (expr.fn === 'random_sequence') {
+          return { kind: 'named', name: 'void' }
+        }
         const fn = this.functions.get(expr.fn)
         return fn?.returnType ?? { kind: 'named', name: 'int' }
       }

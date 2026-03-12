@@ -56,6 +56,8 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   xp_add:     ([sel, amount, type]) => `xp add ${sel} ${amount} ${type ?? 'points'}`,
   xp_set:     ([sel, amount, type]) => `xp set ${sel} ${amount} ${type ?? 'points'}`,
   random: () => null, // Special handling
+  random_native: () => null, // Special handling
+  random_sequence: () => null, // Special handling
   scoreboard_get: () => null, // Special handling (returns value)
   scoreboard_set: () => null, // Special handling
   score: () => null, // Special handling (same as scoreboard_get)
@@ -1296,13 +1298,30 @@ export class Lowering {
       return { kind: 'const', value: 0 }
     }
 
-    // Special case: random
+    // Special case: random - legacy scoreboard RNG for pre-1.20.3 compatibility
     if (name === 'random') {
       const dst = this.builder.freshTemp()
       const min = args[0] ? this.exprToLiteral(args[0]) : '0'
       const max = args[1] ? this.exprToLiteral(args[1]) : '100'
-      this.builder.emitRaw(`execute store result score ${dst} rs run random value ${min}..${max}`)
+      this.builder.emitRaw(`scoreboard players random ${dst} rs ${min} ${max}`)
       return { kind: 'var', name: dst }
+    }
+
+    // Special case: random_native - /random value (MC 1.20.3+)
+    if (name === 'random_native') {
+      const dst = this.builder.freshTemp()
+      const min = args[0] ? this.exprToLiteral(args[0]) : '0'
+      const max = args[1] ? this.exprToLiteral(args[1]) : '100'
+      this.builder.emitRaw(`execute store result score ${dst} rs run random value ${min} ${max}`)
+      return { kind: 'var', name: dst }
+    }
+
+    // Special case: random_sequence - /random reset (MC 1.20.3+)
+    if (name === 'random_sequence') {
+      const sequence = this.exprToString(args[0])
+      const seed = args[1] ? this.exprToLiteral(args[1]) : '0'
+      this.builder.emitRaw(`random reset ${sequence} ${seed}`)
+      return { kind: 'const', value: 0 }
     }
 
     // Special case: scoreboard_get / score — read from vanilla MC scoreboard

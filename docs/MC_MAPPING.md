@@ -135,7 +135,9 @@ Other builtins need special lowering:
 
 - `scoreboard_get(...)` reads a scoreboard into a compiler-managed temp variable.
 - `data_get(...)` uses `execute store result score ... run data get ...`.
-- `random(...)` uses `/random value`.
+- `random(...)` uses `scoreboard players random` for legacy compatibility.
+- `random_native(...)` uses `/random value <min> <max>` on MC 1.20.3+.
+- `random_sequence(...)` uses `/random reset <sequence> <seed>` on MC 1.20.3+.
 - `spawn_object(...)` spawns an invisible armor stand and returns a selector handle.
 
 ## Structs

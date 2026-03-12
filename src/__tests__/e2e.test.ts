@@ -651,7 +651,29 @@ fn double_score() -> int {
       const source = 'fn test() { let x: int = random(1, 10); }'
       const files = compile(source)
       const fn = getFunction(files, 'test')
-      expect(fn).toContain('random value 1..10')
+      expect(fn).toContain('scoreboard players random $t0 rs 1 10')
+    })
+
+    it('compiles random_native()', () => {
+      const source = 'fn test() { let x: int = random_native(1, 6); }'
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toContain('execute store result score $t0 rs run random value 1 6')
+    })
+
+    it('compiles random_native() with zero min', () => {
+      const source = 'fn test() { let x: int = random_native(0, 100); }'
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toContain('execute store result score $t0 rs run random value 0 100')
+    })
+
+    it('compiles random_sequence()', () => {
+      const source = 'fn test() { random_sequence("loot"); random_sequence("loot", 9); }'
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toContain('random reset loot 0')
+      expect(fn).toContain('random reset loot 9')
     })
   })
 
