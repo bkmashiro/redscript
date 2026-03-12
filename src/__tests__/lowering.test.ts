@@ -746,6 +746,43 @@ fn test() {
       expect(rawCmds).toContain('random reset loot 42')
     })
 
+    it('lowers setTimeout() to a scheduled helper function', () => {
+      const ir = compile('fn test() { setTimeout(100, () => { say("hi"); }); }')
+      const fn = getFunction(ir, 'test')!
+      const timeoutFn = getFunction(ir, '__timeout_0')!
+      const rawCmds = getRawCommands(fn)
+      const timeoutCmds = getRawCommands(timeoutFn)
+      expect(rawCmds).toContain('schedule function test:__timeout_0 100t')
+      expect(timeoutCmds).toContain('say hi')
+    })
+
+    it('lowers setInterval() to a self-rescheduling helper function', () => {
+      const ir = compile('fn test() { setInterval(20, () => { say("tick"); }); }')
+      const fn = getFunction(ir, 'test')!
+      const intervalFn = getFunction(ir, '__interval_0')!
+      const intervalBodyFn = getFunction(ir, '__interval_body_0')!
+      const rawCmds = getRawCommands(fn)
+      const intervalCmds = getRawCommands(intervalFn)
+      const intervalBodyCmds = getRawCommands(intervalBodyFn)
+      expect(rawCmds).toContain('schedule function test:__interval_0 20t')
+      expect(intervalCmds).toContain('function test:__interval_body_0')
+      expect(intervalCmds).toContain('schedule function test:__interval_0 20t')
+      expect(intervalBodyCmds).toContain('say tick')
+    })
+
+    it('lowers clearInterval() to schedule clear for the generated interval function', () => {
+      const ir = compile(`
+fn test() {
+  let intervalId: int = setInterval(20, () => { say("tick"); });
+  clearInterval(intervalId);
+}
+`)
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('schedule function test:__interval_0 20t')
+      expect(rawCmds).toContain('schedule clear test:__interval_0')
+    })
+
     it('lowers data_get from entity', () => {
       const ir = compile('fn test() { let item_count: int = data_get("entity", "@s", "SelectedItem.Count"); }')
       const fn = getFunction(ir, 'test')!

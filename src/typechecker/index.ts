@@ -13,6 +13,11 @@ interface ScopeSymbol {
   mutable: boolean
 }
 
+interface BuiltinSignature {
+  params: TypeNode[]
+  return: TypeNode
+}
+
 // Entity type hierarchy for subtype checking
 const ENTITY_HIERARCHY: Record<EntityTypeName, EntityTypeName | null> = {
   'entity': null,
@@ -63,6 +68,24 @@ const MC_TYPE_TO_ENTITY: Record<string, EntityTypeName> = {
   'minecraft:item': 'Item',
   'arrow': 'Arrow',
   'minecraft:arrow': 'Arrow',
+}
+
+const VOID_TYPE: TypeNode = { kind: 'named', name: 'void' }
+const INT_TYPE: TypeNode = { kind: 'named', name: 'int' }
+
+const BUILTIN_SIGNATURES: Record<string, BuiltinSignature> = {
+  setTimeout: {
+    params: [INT_TYPE, { kind: 'function_type', params: [], return: VOID_TYPE }],
+    return: VOID_TYPE,
+  },
+  setInterval: {
+    params: [INT_TYPE, { kind: 'function_type', params: [], return: VOID_TYPE }],
+    return: INT_TYPE,
+  },
+  clearInterval: {
+    params: [INT_TYPE],
+    return: VOID_TYPE,
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +498,12 @@ export class TypeChecker {
       this.checkTpCall(expr)
     }
 
+    const builtin = BUILTIN_SIGNATURES[expr.fn]
+    if (builtin) {
+      this.checkFunctionCallArgs(expr.args, builtin.params, expr.fn, expr)
+      return
+    }
+
     // Check if function exists and arg count matches
     const fn = this.functions.get(expr.fn)
     if (fn) {
@@ -768,8 +797,12 @@ export class TypeChecker {
       case 'ident':
         return this.scope.get(expr.name)?.type ?? { kind: 'named', name: 'void' }
       case 'call': {
+        const builtin = BUILTIN_SIGNATURES[expr.fn]
+        if (builtin) {
+          return builtin.return
+        }
         if (expr.fn === '__array_push') {
-          return { kind: 'named', name: 'void' }
+          return VOID_TYPE
         }
         if (expr.fn === '__array_pop') {
           const target = expr.args[0]
@@ -777,13 +810,13 @@ export class TypeChecker {
             const targetType = this.scope.get(target.name)?.type
             if (targetType?.kind === 'array') return targetType.elem
           }
-          return { kind: 'named', name: 'int' }
+          return INT_TYPE
         }
         if (expr.fn === 'bossbar_get_value') {
-          return { kind: 'named', name: 'int' }
+          return INT_TYPE
         }
         if (expr.fn === 'random_sequence') {
-          return { kind: 'named', name: 'void' }
+          return VOID_TYPE
         }
         const varType = this.scope.get(expr.fn)?.type
         if (varType?.kind === 'function_type') {
@@ -794,7 +827,7 @@ export class TypeChecker {
           return this.normalizeType(implMethod.returnType)
         }
         const fn = this.functions.get(expr.fn)
-        return fn?.returnType ?? { kind: 'named', name: 'int' }
+        return fn?.returnType ?? INT_TYPE
       }
       case 'static_call': {
         const method = this.implMethods.get(expr.type)?.get(expr.method)

@@ -90,6 +90,9 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   set_contains: () => null, // Special handling (returns 1/0)
   set_remove: () => null, // Special handling
   set_clear: () => null, // Special handling
+  setTimeout: () => null, // Special handling
+  setInterval: () => null, // Special handling
+  clearInterval: () => null, // Special handling
 }
 
 export interface Warning {
@@ -97,6 +100,12 @@ export interface Warning {
   code: string
   line?: number
   col?: number
+}
+
+interface StdlibCallSiteContext {
+  filePath?: string
+  line: number
+  col: number
 }
 
 function getSpan(node: unknown): Span | undefined {
@@ -183,14 +192,19 @@ export class Lowering {
   private implMethods: Map<string, Map<string, { fn: FnDecl; loweredName: string }>> = new Map()
   private specializedFunctions: Map<string, string> = new Map()
   private currentFn: string = ''
+  private currentStdlibCallSite?: StdlibCallSiteContext
   private foreachCounter: number = 0
   private lambdaCounter: number = 0
+  private timeoutCounter: number = 0
+  private intervalCounter: number = 0
   readonly warnings: Warning[] = []
 
   // Builder state for current function
   private builder!: LoweringBuilder
   private varMap: Map<string, string> = new Map()
   private lambdaBindings: Map<string, string> = new Map()
+  private intervalBindings: Map<string, string> = new Map()
+  private intervalFunctions: Map<number, string> = new Map()
   private currentCallbackBindings: Map<string, string> = new Map()
   private currentContext: { binding?: string } = {}
   private blockPosVars: Map<string, BlockPosExpr> = new Map()
@@ -289,16 +303,20 @@ export class Lowering {
     options: {
       name?: string
       callbackBindings?: Map<string, string>
+      stdlibCallSite?: StdlibCallSiteContext
     } = {}
   ): void {
     const loweredName = options.name ?? fn.name
     const callbackBindings = options.callbackBindings ?? new Map<string, string>()
+    const stdlibCallSite = options.stdlibCallSite
     const runtimeParams = fn.params.filter(param => !callbackBindings.has(param.name))
 
     this.currentFn = loweredName
+    this.currentStdlibCallSite = stdlibCallSite
     this.foreachCounter = 0
     this.varMap = new Map()
     this.lambdaBindings = new Map()
+    this.intervalBindings = new Map()
     this.currentCallbackBindings = new Map(callbackBindings)
     this.currentContext = {}
     this.blockPosVars = new Map()
@@ -529,6 +547,16 @@ export class Lowering {
     if (stmt.init.kind === 'lambda') {
       const lambdaName = this.lowerLambdaExpr(stmt.init)
       this.lambdaBindings.set(stmt.name, lambdaName)
+      return
+    }
+
+    if (stmt.init.kind === 'call' && stmt.init.fn === 'setInterval') {
+      const value = this.lowerExpr(stmt.init)
+      const intervalFn = this.intervalFunctions.get(value.kind === 'const' ? value.value : NaN)
+      if (intervalFn) {
+        this.intervalBindings.set(stmt.name, intervalFn)
+      }
+      this.builder.emitAssign(varName, value)
       return
     }
 
@@ -1606,8 +1634,9 @@ export class Lowering {
         runtimeArgs.push(fullArgs[i])
       }
 
-      const targetFn = callbackBindings.size > 0
-        ? this.ensureSpecializedFunction(fnDecl, callbackBindings)
+      const stdlibCallSite = this.getStdlibCallSiteContext(fnDecl, getSpan(expr))
+      const targetFn = callbackBindings.size > 0 || stdlibCallSite
+        ? this.ensureSpecializedFunctionWithContext(fnDecl, callbackBindings, stdlibCallSite)
         : expr.fn
       return this.emitDirectFunctionCall(targetFn, runtimeArgs)
     }
@@ -1700,9 +1729,21 @@ export class Lowering {
   }
 
   private ensureSpecializedFunction(fn: FnDecl, callbackBindings: Map<string, string>): string {
+    return this.ensureSpecializedFunctionWithContext(fn, callbackBindings)
+  }
+
+  private ensureSpecializedFunctionWithContext(
+    fn: FnDecl,
+    callbackBindings: Map<string, string>,
+    stdlibCallSite?: StdlibCallSiteContext
+  ): string {
     const parts = [...callbackBindings.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([param, target]) => `${param}_${target.replace(/[^a-zA-Z0-9_]/g, '_')}`)
+    const callSiteHash = stdlibCallSite ? this.shortHash(this.serializeCallSite(stdlibCallSite)) : null
+    if (callSiteHash) {
+      parts.push(`callsite_${callSiteHash}`)
+    }
     const key = `${fn.name}::${parts.join('::')}`
     const cached = this.specializedFunctions.get(key)
     if (cached) {
@@ -1712,7 +1753,7 @@ export class Lowering {
     const specializedName = `${fn.name}__${parts.join('__')}`
     this.specializedFunctions.set(key, specializedName)
     this.withSavedFunctionState(() => {
-      this.lowerFn(fn, { name: specializedName, callbackBindings })
+      this.lowerFn(fn, { name: specializedName, callbackBindings, stdlibCallSite })
     })
     return specializedName
   }
@@ -1737,10 +1778,12 @@ export class Lowering {
 
   private withSavedFunctionState<T>(callback: () => T): T {
     const savedCurrentFn = this.currentFn
+    const savedStdlibCallSite = this.currentStdlibCallSite
     const savedForeachCounter = this.foreachCounter
     const savedBuilder = this.builder
     const savedVarMap = new Map(this.varMap)
     const savedLambdaBindings = new Map(this.lambdaBindings)
+    const savedIntervalBindings = new Map(this.intervalBindings)
     const savedCallbackBindings = new Map(this.currentCallbackBindings)
     const savedContext = this.currentContext
     const savedBlockPosVars = new Map(this.blockPosVars)
@@ -1751,10 +1794,12 @@ export class Lowering {
       return callback()
     } finally {
       this.currentFn = savedCurrentFn
+      this.currentStdlibCallSite = savedStdlibCallSite
       this.foreachCounter = savedForeachCounter
       this.builder = savedBuilder
       this.varMap = savedVarMap
       this.lambdaBindings = savedLambdaBindings
+      this.intervalBindings = savedIntervalBindings
       this.currentCallbackBindings = savedCallbackBindings
       this.currentContext = savedContext
       this.blockPosVars = savedBlockPosVars
@@ -1768,6 +1813,18 @@ export class Lowering {
     if (richTextCommand) {
       this.builder.emitRaw(richTextCommand)
       return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'setTimeout') {
+      return this.lowerSetTimeout(args)
+    }
+
+    if (name === 'setInterval') {
+      return this.lowerSetInterval(args)
+    }
+
+    if (name === 'clearInterval') {
+      return this.lowerClearInterval(args, callSpan)
     }
 
     // Special case: random - legacy scoreboard RNG for pre-1.20.3 compatibility
@@ -1800,7 +1857,7 @@ export class Lowering {
     if (name === 'scoreboard_get' || name === 'score') {
       const dst = this.builder.freshTemp()
       const player = this.exprToTargetString(args[0])
-      const objective = this.exprToScoreboardObjective(args[1], callSpan)
+      const objective = this.resolveScoreboardObjective(args[0], args[1], callSpan)
       this.builder.emitRaw(`execute store result score ${dst} rs run scoreboard players get ${player} ${objective}`)
       return { kind: 'var', name: dst }
     }
@@ -1808,7 +1865,7 @@ export class Lowering {
     // Special case: scoreboard_set — write to vanilla MC scoreboard
     if (name === 'scoreboard_set') {
       const player = this.exprToTargetString(args[0])
-      const objective = this.exprToScoreboardObjective(args[1], callSpan)
+      const objective = this.resolveScoreboardObjective(args[0], args[1], callSpan)
       const value = this.lowerExpr(args[2])
       if (value.kind === 'const') {
         this.builder.emitRaw(`scoreboard players set ${player} ${objective} ${value.value}`)
@@ -1822,7 +1879,7 @@ export class Lowering {
 
     if (name === 'scoreboard_display') {
       const slot = this.exprToString(args[0])
-      const objective = this.exprToScoreboardObjective(args[1], callSpan)
+      const objective = this.resolveScoreboardObjective(undefined, args[1], callSpan)
       this.builder.emitRaw(`scoreboard objectives setdisplay ${slot} ${objective}`)
       return { kind: 'const', value: 0 }
     }
@@ -1834,7 +1891,7 @@ export class Lowering {
     }
 
     if (name === 'scoreboard_add_objective') {
-      const objective = this.exprToScoreboardObjective(args[0], callSpan)
+      const objective = this.resolveScoreboardObjective(undefined, args[0], callSpan)
       const criteria = this.exprToString(args[1])
       const displayName = args[2] ? ` ${this.exprToQuotedString(args[2])}` : ''
       this.builder.emitRaw(`scoreboard objectives add ${objective} ${criteria}${displayName}`)
@@ -1842,7 +1899,7 @@ export class Lowering {
     }
 
     if (name === 'scoreboard_remove_objective') {
-      const objective = this.exprToScoreboardObjective(args[0], callSpan)
+      const objective = this.resolveScoreboardObjective(undefined, args[0], callSpan)
       this.builder.emitRaw(`scoreboard objectives remove ${objective}`)
       return { kind: 'const', value: 0 }
     }
@@ -2042,6 +2099,119 @@ export class Lowering {
     }
 
     return { kind: 'const', value: 0 }
+  }
+
+  private lowerSetTimeout(args: Expr[]): Operand {
+    const delay = this.exprToLiteral(args[0])
+    const callback = args[1]
+    if (!callback || callback.kind !== 'lambda') {
+      throw new DiagnosticError(
+        'LoweringError',
+        'setTimeout requires a lambda callback',
+        getSpan(callback) ?? { line: 1, col: 1 }
+      )
+    }
+
+    const fnName = `__timeout_${this.timeoutCounter++}`
+    this.lowerNamedLambdaFunction(fnName, callback)
+    this.builder.emitRaw(`schedule function ${this.namespace}:${fnName} ${delay}t`)
+    return { kind: 'const', value: 0 }
+  }
+
+  private lowerSetInterval(args: Expr[]): Operand {
+    const delay = this.exprToLiteral(args[0])
+    const callback = args[1]
+    if (!callback || callback.kind !== 'lambda') {
+      throw new DiagnosticError(
+        'LoweringError',
+        'setInterval requires a lambda callback',
+        getSpan(callback) ?? { line: 1, col: 1 }
+      )
+    }
+
+    const id = this.intervalCounter++
+    const bodyName = `__interval_body_${id}`
+    const fnName = `__interval_${id}`
+
+    this.lowerNamedLambdaFunction(bodyName, callback)
+    this.lowerIntervalWrapperFunction(fnName, bodyName, delay)
+    this.intervalFunctions.set(id, fnName)
+    this.builder.emitRaw(`schedule function ${this.namespace}:${fnName} ${delay}t`)
+
+    return { kind: 'const', value: id }
+  }
+
+  private lowerClearInterval(args: Expr[], callSpan?: Span): Operand {
+    const fnName = this.resolveIntervalFunctionName(args[0])
+    if (!fnName) {
+      throw new DiagnosticError(
+        'LoweringError',
+        'clearInterval requires an interval ID returned from setInterval',
+        callSpan ?? getSpan(args[0]) ?? { line: 1, col: 1 }
+      )
+    }
+
+    this.builder.emitRaw(`schedule clear ${this.namespace}:${fnName}`)
+    return { kind: 'const', value: 0 }
+  }
+
+  private lowerNamedLambdaFunction(name: string, expr: Extract<Expr, { kind: 'lambda' }>): void {
+    const lambdaFn: FnDecl = {
+      name,
+      params: expr.params.map(param => ({
+        name: param.name,
+        type: param.type ?? { kind: 'named', name: 'int' },
+      })),
+      returnType: expr.returnType ?? this.inferLambdaReturnType(expr),
+      decorators: [],
+      body: Array.isArray(expr.body) ? expr.body : [{ kind: 'return', value: expr.body }],
+    }
+
+    this.withSavedFunctionState(() => {
+      this.lowerFn(lambdaFn)
+    })
+  }
+
+  private lowerIntervalWrapperFunction(name: string, bodyName: string, delay: string): void {
+    const intervalFn: FnDecl = {
+      name,
+      params: [],
+      returnType: { kind: 'named', name: 'void' },
+      decorators: [],
+      body: [
+        { kind: 'raw', cmd: `function ${this.namespace}:${bodyName}` },
+        { kind: 'raw', cmd: `schedule function ${this.namespace}:${name} ${delay}t` },
+      ],
+    }
+
+    this.withSavedFunctionState(() => {
+      this.lowerFn(intervalFn)
+    })
+  }
+
+  private resolveIntervalFunctionName(expr: Expr | undefined): string | null {
+    if (!expr) {
+      return null
+    }
+
+    if (expr.kind === 'ident') {
+      const boundInterval = this.intervalBindings.get(expr.name)
+      if (boundInterval) {
+        return boundInterval
+      }
+
+      const constValue = this.constValues.get(expr.name)
+      if (constValue?.kind === 'int_lit') {
+        return this.intervalFunctions.get(constValue.value) ?? null
+      }
+      return null
+    }
+
+    if (expr.kind === 'int_lit') {
+      return this.intervalFunctions.get(expr.value) ?? null
+    }
+
+    return null
   }
 
   private lowerRichTextBuiltin(name: string, args: Expr[]): string | null {
@@ -2333,15 +2503,89 @@ export class Lowering {
     return `${this.getObjectiveNamespace(span)}.${objective}`
   }
 
+  private resolveScoreboardObjective(playerExpr: Expr | undefined, objectiveExpr: Expr, span?: Span): string {
+    const stdlibInternalObjective = this.tryGetStdlibInternalObjective(playerExpr, objectiveExpr, span)
+    if (stdlibInternalObjective) {
+      return stdlibInternalObjective
+    }
+    return this.exprToScoreboardObjective(objectiveExpr, span)
+  }
+
   private getObjectiveNamespace(span?: Span): string {
     const filePath = this.filePathForSpan(span)
     if (!filePath) {
       return this.namespace
     }
 
+    return this.isStdlibFile(filePath) ? 'rs' : this.namespace
+  }
+
+  private tryGetStdlibInternalObjective(playerExpr: Expr | undefined, objectiveExpr: Expr, span?: Span): string | null {
+    if (!span || !this.currentStdlibCallSite || objectiveExpr.kind !== 'mc_name' || objectiveExpr.value !== 'rs') {
+      return null
+    }
+
+    const filePath = this.filePathForSpan(span)
+    if (!filePath || !this.isStdlibFile(filePath)) {
+      return null
+    }
+
+    const resourceBase = this.getStdlibInternalResourceBase(playerExpr)
+    if (!resourceBase) {
+      return null
+    }
+
+    const hash = this.shortHash(this.serializeCallSite(this.currentStdlibCallSite))
+    return `rs._${resourceBase}_${hash}`
+  }
+
+  private getStdlibInternalResourceBase(playerExpr: Expr | undefined): string | null {
+    if (!playerExpr || playerExpr.kind !== 'str_lit') {
+      return null
+    }
+
+    const match = playerExpr.value.match(/^([a-z0-9]+)_/)
+    return match?.[1] ?? null
+  }
+
+  private getStdlibCallSiteContext(fn: FnDecl, exprSpan?: Span): StdlibCallSiteContext | undefined {
+    const fnFilePath = this.filePathForSpan(getSpan(fn))
+    if (!fnFilePath || !this.isStdlibFile(fnFilePath)) {
+      return undefined
+    }
+
+    if (this.currentStdlibCallSite) {
+      return this.currentStdlibCallSite
+    }
+
+    if (!exprSpan) {
+      return undefined
+    }
+
+    return {
+      filePath: this.filePathForSpan(exprSpan),
+      line: exprSpan.line,
+      col: exprSpan.col,
+    }
+  }
+
+  private serializeCallSite(callSite: StdlibCallSiteContext): string {
+    return `${callSite.filePath ?? '<memory>'}:${callSite.line}:${callSite.col}`
+  }
+
+  private shortHash(input: string): string {
+    let hash = 2166136261
+    for (let i = 0; i < input.length; i++) {
+      hash ^= input.charCodeAt(i)
+      hash = Math.imul(hash, 16777619)
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0').slice(0, 4)
+  }
+
+  private isStdlibFile(filePath: string): boolean {
     const normalized = path.normalize(filePath)
     const stdlibSegment = `${path.sep}src${path.sep}stdlib${path.sep}`
-    return normalized.includes(stdlibSegment) ? 'rs' : this.namespace
+    return normalized.includes(stdlibSegment)
   }
 
   private filePathForSpan(span?: Span): string | undefined {

@@ -212,6 +212,21 @@ fn test() {
       expect(errors).toHaveLength(0)
     })
 
+    it('type checks timer builtins with void callbacks and interval IDs', () => {
+      const errors = typeCheck(`
+fn test() {
+    setTimeout(100, () => {
+        say("later");
+    });
+    let intervalId: int = setInterval(20, () => {
+        say("tick");
+    });
+    clearInterval(intervalId);
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
     it('allows impl instance methods with inferred self type', () => {
       const errors = typeCheck(`
 struct Timer { duration: int }

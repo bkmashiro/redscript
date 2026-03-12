@@ -146,6 +146,34 @@ fn main() {
     })
   })
 
+  describe('timer builtins', () => {
+    it('generates scheduled timer helper functions', () => {
+      const files = compile(`
+fn main() {
+    let intervalId: int = setInterval(20, () => {
+        say("tick");
+    });
+    setTimeout(100, () => {
+        say("later");
+    });
+    clearInterval(intervalId);
+}
+`)
+      const mainFn = getFunction(files, 'main')
+      const intervalFn = getFunction(files, '__interval_0')
+      const intervalBodyFn = getFunction(files, '__interval_body_0')
+      const timeoutFn = getFunction(files, '__timeout_0')
+      expect(mainFn).toBeDefined()
+      expect(mainFn).toContain('schedule function test:__interval_0 20t')
+      expect(mainFn).toContain('schedule function test:__timeout_0 100t')
+      expect(mainFn).toContain('schedule clear test:__interval_0')
+      expect(intervalFn).toContain('function test:__interval_body_0')
+      expect(intervalFn).toContain('schedule function test:__interval_0 20t')
+      expect(intervalBodyFn).toContain('say tick')
+      expect(timeoutFn).toContain('say later')
+    })
+  })
+
   describe('advancement event decorators', () => {
     it('generates advancement json with reward function path', () => {
       const source = `
