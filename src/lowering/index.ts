@@ -10,7 +10,7 @@ import { buildModule } from '../ir/builder'
 import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
 import type {
   Block, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Stmt,
-  StructDecl, TypeNode
+  StructDecl, TypeNode, ExecuteSubcommand
 } from '../ast/types'
 
 // ---------------------------------------------------------------------------
@@ -243,6 +243,9 @@ export class Lowering {
         break
       case 'as_at':
         this.lowerAsAtStmt(stmt)
+        break
+      case 'execute':
+        this.lowerExecuteStmt(stmt)
         break
       case 'raw':
         this.builder.emitRaw(stmt.cmd)
@@ -506,6 +509,52 @@ export class Lowering {
     this.builder.emitRaw(`execute as ${asSel} at ${atSel} run function ${this.namespace}:${subFnName}`)
 
     // Create sub-function
+    const savedBuilder = this.builder
+    const savedVarMap = new Map(this.varMap)
+
+    this.builder = new LoweringBuilder()
+    this.varMap = new Map(savedVarMap)
+
+    this.builder.startBlock('entry')
+    this.lowerBlock(stmt.body)
+    if (!this.builder.isBlockSealed()) {
+      this.builder.emitReturn()
+    }
+
+    const subFn = this.builder.build(subFnName, [], false)
+    this.functions.push(subFn)
+
+    this.builder = savedBuilder
+    this.varMap = savedVarMap
+  }
+
+  private lowerExecuteStmt(stmt: Extract<Stmt, { kind: 'execute' }>): void {
+    // Build the execute prefix from subcommands
+    const parts: string[] = ['execute']
+    for (const sub of stmt.subcommands) {
+      switch (sub.kind) {
+        case 'as':
+          parts.push(`as ${this.selectorToString(sub.selector)}`)
+          break
+        case 'at':
+          parts.push(`at ${this.selectorToString(sub.selector)}`)
+          break
+        case 'if_entity':
+          parts.push(`if entity ${this.selectorToString(sub.selector)}`)
+          break
+        case 'unless_entity':
+          parts.push(`unless entity ${this.selectorToString(sub.selector)}`)
+          break
+        case 'in':
+          parts.push(`in ${sub.dimension}`)
+          break
+      }
+    }
+
+    const subFnName = `${this.currentFn}/exec_${this.foreachCounter++}`
+    this.builder.emitRaw(`${parts.join(' ')} run function ${this.namespace}:${subFnName}`)
+
+    // Create sub-function for the body
     const savedBuilder = this.builder
     const savedVarMap = new Map(this.varMap)
 

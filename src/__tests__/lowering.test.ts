@@ -204,6 +204,67 @@ describe('Lowering', () => {
     })
   })
 
+  describe('execute inline blocks', () => {
+    it('extracts execute as run block into sub-function', () => {
+      const ir = compile('fn test() { execute as @a run { say("hello from each"); } }')
+      expect(ir.functions.length).toBe(2)
+      const mainFn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(mainFn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute as @a run function')
+      )).toBe(true)
+    })
+
+    it('extracts execute as at run block into sub-function', () => {
+      const ir = compile('fn test() { execute as @a at @s run { particle("flame"); } }')
+      expect(ir.functions.length).toBe(2)
+      const mainFn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(mainFn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute as @a at @s run function')
+      )).toBe(true)
+    })
+
+    it('handles execute with if entity condition', () => {
+      const ir = compile('fn test() { execute as @a if entity @s[tag=admin] run { give(@s, "diamond", 1); } }')
+      expect(ir.functions.length).toBe(2)
+      const mainFn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(mainFn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute as @a if entity @s[tag=admin] run function')
+      )).toBe(true)
+    })
+
+    it('handles execute with unless entity condition', () => {
+      const ir = compile('fn test() { execute as @a unless entity @s[tag=dead] run { effect(@s, "regeneration", 5); } }')
+      expect(ir.functions.length).toBe(2)
+      const mainFn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(mainFn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute as @a unless entity @s[tag=dead] run function')
+      )).toBe(true)
+    })
+
+    it('handles execute with in dimension', () => {
+      const ir = compile('fn test() { execute in the_nether run { say("in nether"); } }')
+      expect(ir.functions.length).toBe(2)
+      const mainFn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(mainFn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute in the_nether run function')
+      )).toBe(true)
+    })
+
+    it('lowered sub-function contains body commands', () => {
+      const ir = compile('fn test() { execute as @a run { say("inner"); give(@s, "bread", 1); } }')
+      const subFn = ir.functions.find(f => f.name.includes('exec_'))!
+      expect(subFn).toBeDefined()
+      const rawCmds = getRawCommands(subFn)
+      expect(rawCmds).toContain('say inner')
+      expect(rawCmds.some(cmd => cmd.includes('give @s bread 1'))).toBe(true)
+    })
+  })
+
   describe('builtins', () => {
     it('lowers say()', () => {
       const ir = compile('fn test() { say("hello"); }')

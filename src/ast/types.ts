@@ -82,6 +82,17 @@ export type Expr =
 // Statements
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Execute Subcommand Types
+// ---------------------------------------------------------------------------
+
+export type ExecuteSubcommand =
+  | { kind: 'as'; selector: EntitySelector }
+  | { kind: 'at'; selector: EntitySelector }
+  | { kind: 'if_entity'; selector: EntitySelector }
+  | { kind: 'unless_entity'; selector: EntitySelector }
+  | { kind: 'in'; dimension: string }
+
 export type Stmt =
   | { kind: 'let';        name: string; type?: TypeNode; init: Expr }
   | { kind: 'expr';       expr: Expr }
@@ -93,6 +104,7 @@ export type Stmt =
   | { kind: 'as_block';   selector: EntitySelector; body: Block }
   | { kind: 'at_block';   selector: EntitySelector; body: Block }
   | { kind: 'as_at';      as_sel: EntitySelector; at_sel: EntitySelector; body: Block }
+  | { kind: 'execute';    subcommands: ExecuteSubcommand[]; body: Block }
   | { kind: 'raw';        cmd: string }
 
 export type Block = Stmt[]

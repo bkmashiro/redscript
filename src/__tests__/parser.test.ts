@@ -196,6 +196,50 @@ describe('Parser', () => {
       const stmt = parseStmt('raw("say hello");')
       expect(stmt).toEqual({ kind: 'raw', cmd: 'say hello' })
     })
+
+    it('parses execute as run block', () => {
+      const stmt = parseStmt('execute as @a run { say("hello"); }')
+      expect(stmt.kind).toBe('execute')
+      expect((stmt as any).subcommands).toHaveLength(1)
+      expect((stmt as any).subcommands[0]).toEqual({ kind: 'as', selector: { kind: '@a' } })
+      expect((stmt as any).body).toHaveLength(1)
+    })
+
+    it('parses execute as at run block', () => {
+      const stmt = parseStmt('execute as @a at @s run { particle("flame"); }')
+      expect(stmt.kind).toBe('execute')
+      expect((stmt as any).subcommands).toHaveLength(2)
+      expect((stmt as any).subcommands[0]).toEqual({ kind: 'as', selector: { kind: '@a' } })
+      expect((stmt as any).subcommands[1]).toEqual({ kind: 'at', selector: { kind: '@s' } })
+    })
+
+    it('parses execute with if entity condition', () => {
+      const stmt = parseStmt('execute as @a if entity @s[tag=admin] run { give(@s, "diamond", 1); }')
+      expect(stmt.kind).toBe('execute')
+      expect((stmt as any).subcommands).toHaveLength(2)
+      expect((stmt as any).subcommands[1].kind).toBe('if_entity')
+      expect((stmt as any).subcommands[1].selector.filters.tag).toEqual(['admin'])
+    })
+
+    it('parses execute with unless entity condition', () => {
+      const stmt = parseStmt('execute as @a unless entity @s[tag=dead] run { effect(@s, "regeneration", 5); }')
+      expect(stmt.kind).toBe('execute')
+      expect((stmt as any).subcommands).toHaveLength(2)
+      expect((stmt as any).subcommands[1].kind).toBe('unless_entity')
+    })
+
+    it('parses execute with in dimension', () => {
+      const stmt = parseStmt('execute in the_nether run { say("in nether"); }')
+      expect(stmt.kind).toBe('execute')
+      expect((stmt as any).subcommands).toHaveLength(1)
+      expect((stmt as any).subcommands[0]).toEqual({ kind: 'in', dimension: 'the_nether' })
+    })
+
+    it('parses complex execute chain', () => {
+      const stmt = parseStmt('execute as @a at @s if entity @s[tag=vip] in overworld run { particle("heart"); }')
+      expect(stmt.kind).toBe('execute')
+      expect((stmt as any).subcommands).toHaveLength(4)
+    })
   })
 
   describe('expressions', () => {

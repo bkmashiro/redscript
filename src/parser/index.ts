@@ -9,7 +9,7 @@ import type { Token, TokenKind } from '../lexer'
 import type {
   Block, Decorator, EntitySelector, Expr, FnDecl, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Stmt, TypeNode, AssignOp,
-  StructDecl, StructField
+  StructDecl, StructField, ExecuteSubcommand
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
@@ -324,6 +324,11 @@ export class Parser {
       return this.parseAtStmt()
     }
 
+    // Execute statement: execute as/at/if/unless/in ... run { }
+    if (this.check('execute')) {
+      return this.parseExecuteStmt()
+    }
+
     // Raw command
     if (this.check('raw_cmd')) {
       const cmd = this.advance().value
@@ -458,6 +463,46 @@ export class Parser {
     const selector = this.parseSelector()
     const body = this.parseBlock()
     return { kind: 'at_block', selector, body }
+  }
+
+  private parseExecuteStmt(): Stmt {
+    this.expect('execute')
+    const subcommands: ExecuteSubcommand[] = []
+
+    // Parse subcommands until we hit 'run'
+    while (!this.check('run') && !this.check('eof')) {
+      if (this.match('as')) {
+        const selector = this.parseSelector()
+        subcommands.push({ kind: 'as', selector })
+      } else if (this.match('at')) {
+        const selector = this.parseSelector()
+        subcommands.push({ kind: 'at', selector })
+      } else if (this.match('if')) {
+        // Expect 'entity' keyword (as ident) or just parse selector directly
+        if (this.peek().kind === 'ident' && this.peek().value === 'entity') {
+          this.advance() // consume 'entity'
+        }
+        const selector = this.parseSelector()
+        subcommands.push({ kind: 'if_entity', selector })
+      } else if (this.match('unless')) {
+        // Expect 'entity' keyword (as ident) or just parse selector directly  
+        if (this.peek().kind === 'ident' && this.peek().value === 'entity') {
+          this.advance() // consume 'entity'
+        }
+        const selector = this.parseSelector()
+        subcommands.push({ kind: 'unless_entity', selector })
+      } else if (this.match('in')) {
+        const dim = this.expect('ident').value
+        subcommands.push({ kind: 'in', dimension: dim })
+      } else {
+        this.error(`Unexpected token in execute statement: ${this.peek().kind}`)
+      }
+    }
+
+    this.expect('run')
+    const body = this.parseBlock()
+
+    return { kind: 'execute', subcommands, body }
   }
 
   private parseExprStmt(): Stmt {

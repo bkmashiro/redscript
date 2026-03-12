@@ -16,6 +16,7 @@ export type TokenKind =
   // Keywords
   | 'fn' | 'let' | 'if' | 'else' | 'while' | 'for' | 'foreach'
   | 'return' | 'as' | 'at' | 'in' | 'struct' | 'trigger' | 'namespace'
+  | 'execute' | 'run' | 'unless'
   // Types
   | 'int' | 'bool' | 'float' | 'string' | 'void'
   // Boolean literals
@@ -68,6 +69,9 @@ const KEYWORDS: Record<string, TokenKind> = {
   struct: 'struct',
   trigger: 'trigger',
   namespace: 'namespace',
+  execute: 'execute',
+  run: 'run',
+  unless: 'unless',
   int: 'int',
   bool: 'bool',
   float: 'float',
