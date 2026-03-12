@@ -43,6 +43,15 @@ fn test() {
       expect(errors.length).toBeGreaterThan(0)
       expect(errors[0].message).toContain("'undeclared' used before declaration")
     })
+
+    it('accepts BlockPos literals for BlockPos variables', () => {
+      const errors = typeCheck(`
+fn test() {
+    let spawn: BlockPos = (~0, 64, ~0);
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
   })
 
   describe('function calls', () => {

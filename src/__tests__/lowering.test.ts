@@ -438,10 +438,11 @@ fn choose(dir: Direction) {
     })
 
     it('lowers tp() and tp_to()', () => {
-      const ir = compile('fn test() { tp(@s, "~", "~1", "~"); tp_to(@s, @p); }')
+      const ir = compile('fn test() { tp(@s, (~1, ~0, ~-1)); tp(@s, "^0", "^1", "^0"); tp_to(@s, @p); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds).toContain('tp @s ~ ~1 ~')
+      expect(rawCmds).toContain('tp @s ~1 ~ ~-1')
+      expect(rawCmds).toContain('tp @s ^0 ^1 ^0')
       expect(rawCmds).toContain('tp @s @p')
     })
 
@@ -475,12 +476,20 @@ fn choose(dir: Direction) {
     })
 
     it('lowers setblock(), fill(), and clone()', () => {
-      const ir = compile('fn test() { setblock("~", "~", "~", "stone"); fill("~", "~", "~", "~3", "~3", "~3", "glass"); clone("0", "64", "0", "4", "68", "4", "10", "64", "10"); }')
+      const ir = compile('fn test() { setblock((4, 65, 4), "stone"); fill((0, 64, 0), (8, 64, 8), "minecraft:smooth_stone"); clone((0, 64, 0), (4, 68, 4), (10, 64, 10)); setblock("~", "~", "~", "legacy"); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds).toContain('setblock ~ ~ ~ stone')
-      expect(rawCmds).toContain('fill ~ ~ ~ ~3 ~3 ~3 glass')
+      expect(rawCmds).toContain('setblock 4 65 4 stone')
+      expect(rawCmds).toContain('fill 0 64 0 8 64 8 minecraft:smooth_stone')
       expect(rawCmds).toContain('clone 0 64 0 4 68 4 10 64 10')
+      expect(rawCmds).toContain('setblock ~ ~ ~ legacy')
+    })
+
+    it('lowers BlockPos locals in coordinate builtins', () => {
+      const ir = compile('fn test() { let spawn: BlockPos = (4, 65, 4); setblock(spawn, "minecraft:stone"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('setblock 4 65 4 minecraft:stone')
     })
 
     it('lowers xp_add() and xp_set()', () => {

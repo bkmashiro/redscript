@@ -105,6 +105,12 @@ describe('Parser', () => {
       expect(param.type).toEqual({ kind: 'array', elem: { kind: 'named', name: 'int' } })
     })
 
+    it('parses BlockPos types', () => {
+      const program = parse('fn f(pos: BlockPos) {}')
+      const param = program.declarations[0].params[0]
+      expect(param.type).toEqual({ kind: 'named', name: 'BlockPos' })
+    })
+
     it('parses enum declarations', () => {
       const program = parse('enum Direction { North, South = 3, East, West }')
       expect(program.enums).toEqual([
@@ -322,6 +328,42 @@ describe('Parser', () => {
         expect(parseExpr('..5')).toEqual({ kind: 'range_lit', range: { max: 5 } })
         expect(parseExpr('1..')).toEqual({ kind: 'range_lit', range: { min: 1 } })
         expect(parseExpr('1..10')).toEqual({ kind: 'range_lit', range: { min: 1, max: 10 } })
+      })
+
+      it('parses absolute block positions', () => {
+        expect(parseExpr('(0, 64, 0)')).toEqual({
+          kind: 'blockpos',
+          x: { kind: 'absolute', value: 0 },
+          y: { kind: 'absolute', value: 64 },
+          z: { kind: 'absolute', value: 0 },
+        })
+      })
+
+      it('parses relative block positions', () => {
+        expect(parseExpr('(~1, ~0, ~-1)')).toEqual({
+          kind: 'blockpos',
+          x: { kind: 'relative', offset: 1 },
+          y: { kind: 'relative', offset: 0 },
+          z: { kind: 'relative', offset: -1 },
+        })
+      })
+
+      it('parses local block positions', () => {
+        expect(parseExpr('(^0, ^1, ^0)')).toEqual({
+          kind: 'blockpos',
+          x: { kind: 'local', offset: 0 },
+          y: { kind: 'local', offset: 1 },
+          z: { kind: 'local', offset: 0 },
+        })
+      })
+
+      it('parses mixed block positions', () => {
+        expect(parseExpr('(~0, 64, ~0)')).toEqual({
+          kind: 'blockpos',
+          x: { kind: 'relative', offset: 0 },
+          y: { kind: 'absolute', value: 64 },
+          z: { kind: 'relative', offset: 0 },
+        })
       })
     })
 

@@ -202,21 +202,21 @@ fn test() {
     it('compiles world and utility builtins', () => {
       const source = `
 fn test() {
-    tp(@s, "~", "~1", "~");
+    tp(@s, (~1, ~0, ~-1));
     tp_to(@s, @p);
     clear(@s);
     weather("clear");
     time_set("noon");
     gamerule("doWeatherCycle", "false");
-    setblock("0", "64", "0", "stone");
-    fill("0", "64", "0", "2", "66", "2", "glass");
-    clone("0", "64", "0", "2", "66", "2", "10", "64", "10");
+    setblock((0, 64, 0), "stone");
+    fill((0, 64, 0), (2, 66, 2), "glass");
+    clone((0, 64, 0), (2, 66, 2), (10, 64, 10));
     xp_add(@s, 5);
     xp_set(@s, 1, "levels");
 }
 `
       const fn = getFunction(compile(source), 'test')!
-      expect(fn).toContain('tp @s ~ ~1 ~')
+      expect(fn).toContain('tp @s ~1 ~ ~-1')
       expect(fn).toContain('tp @s @p')
       expect(fn).toContain('clear @s')
       expect(fn).toContain('weather clear')
@@ -495,7 +495,7 @@ fn double_score() -> int {
     })
 
     it('compiles tp()', () => {
-      const source = 'fn test() { tp(@s, "0", "100", "0"); }'
+      const source = 'fn test() { tp(@s, (0, 100, 0)); }'
       const files = compile(source)
       const fn = getFunction(files, 'test')
       expect(fn).toContain('tp @s 0 100 0')

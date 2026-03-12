@@ -143,8 +143,11 @@ fn arrays() {
   it('tracks world state, weather, and time from compiled world commands', () => {
     const runtime = loadCompiledProgram(`
 fn reset_world() {
-    fill("0", "64", "0", "1", "64", "1", "minecraft:stone");
-    setblock("1", "64", "1", "minecraft:gold_block");
+    let floor_start: BlockPos = (0, 64, 0);
+    let floor_end: BlockPos = (1, 64, 1);
+    let centerpiece: BlockPos = (1, 64, 1);
+    fill(floor_start, floor_end, "minecraft:stone");
+    setblock(centerpiece, "minecraft:gold_block");
     weather("rain");
     time_set("noon");
 }
@@ -200,7 +203,7 @@ fn choose() {
   it('updates position, effects, and xp for executor-targeted builtins', () => {
     const runtime = loadCompiledProgram(`
 fn buff_player() {
-    tp(@s, "5", "70", "-2");
+    tp(@s, (5, 70, -2));
     effect(@s, "speed", 15, 2);
     xp_add(@s, 5);
     xp_set(@s, 12, "levels");

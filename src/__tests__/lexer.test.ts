@@ -19,8 +19,8 @@ describe('Lexer', () => {
     })
 
     it('recognizes type keywords', () => {
-      const tokens = tokenize('int bool float string void')
-      expect(kinds(tokens)).toEqual(['int', 'bool', 'float', 'string', 'void', 'eof'])
+      const tokens = tokenize('int bool float string void BlockPos')
+      expect(kinds(tokens)).toEqual(['int', 'bool', 'float', 'string', 'void', 'BlockPos', 'eof'])
     })
 
     it('recognizes boolean literals', () => {
@@ -94,8 +94,8 @@ describe('Lexer', () => {
 
   describe('operators', () => {
     it('tokenizes arithmetic operators', () => {
-      const tokens = tokenize('+ - * / %')
-      expect(kinds(tokens)).toEqual(['+', '-', '*', '/', '%', 'eof'])
+      const tokens = tokenize('+ - * / % ~ ^')
+      expect(kinds(tokens)).toEqual(['+', '-', '*', '/', '%', '~', '^', 'eof'])
     })
 
     it('tokenizes comparison operators', () => {
