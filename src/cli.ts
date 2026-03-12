@@ -5,12 +5,14 @@
  * Usage:
  *   redscript compile <file> [-o <outdir>] [--namespace <ns>]
  *   redscript check <file>
+ *   redscript repl
  *   redscript version
  */
 
 import { compile, check } from './index'
 import { generateCommandBlocks } from './codegen/cmdblock'
 import { formatError } from './diagnostics'
+import { startRepl } from './repl'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -25,12 +27,14 @@ Usage:
   redscript compile <file> [-o <outdir>] [--namespace <ns>] [--target <target>]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>]
   redscript check <file>
+  redscript repl
   redscript version
 
 Commands:
   compile   Compile a RedScript file to a Minecraft datapack
   watch     Watch a directory for .rs file changes and recompile
   check     Check a RedScript file for errors without generating output
+  repl      Start an interactive RedScript REPL
   version   Print the RedScript version
 
 Options:
@@ -268,54 +272,62 @@ function watchCommand(dir: string, output: string, namespace?: string): void {
 // Main
 const parsed = parseArgs(args)
 
-if (parsed.help || !parsed.command) {
-  printUsage()
-  process.exit(parsed.help ? 0 : 1)
-}
-
-switch (parsed.command) {
-  case 'compile':
-    if (!parsed.file) {
-      console.error('Error: No input file specified')
-      printUsage()
-      process.exit(1)
-    }
-    compileCommand(
-      parsed.file,
-      parsed.output ?? './dist',
-      parsed.namespace ?? deriveNamespace(parsed.file),
-      parsed.target ?? 'datapack'
-    )
-    break
-
-  case 'watch':
-    if (!parsed.file) {
-      console.error('Error: No directory specified')
-      printUsage()
-      process.exit(1)
-    }
-    watchCommand(
-      parsed.file,
-      parsed.output ?? './dist',
-      parsed.namespace
-    )
-    break
-
-  case 'check':
-    if (!parsed.file) {
-      console.error('Error: No input file specified')
-      printUsage()
-      process.exit(1)
-    }
-    checkCommand(parsed.file)
-    break
-
-  case 'version':
-    printVersion()
-    break
-
-  default:
-    console.error(`Error: Unknown command '${parsed.command}'`)
+async function main(): Promise<void> {
+  if (parsed.help || !parsed.command) {
     printUsage()
-    process.exit(1)
+    process.exit(parsed.help ? 0 : 1)
+  }
+
+  switch (parsed.command) {
+    case 'compile':
+      if (!parsed.file) {
+        console.error('Error: No input file specified')
+        printUsage()
+        process.exit(1)
+      }
+      compileCommand(
+        parsed.file,
+        parsed.output ?? './dist',
+        parsed.namespace ?? deriveNamespace(parsed.file),
+        parsed.target ?? 'datapack'
+      )
+      break
+
+    case 'watch':
+      if (!parsed.file) {
+        console.error('Error: No directory specified')
+        printUsage()
+        process.exit(1)
+      }
+      watchCommand(
+        parsed.file,
+        parsed.output ?? './dist',
+        parsed.namespace
+      )
+      break
+
+    case 'check':
+      if (!parsed.file) {
+        console.error('Error: No input file specified')
+        printUsage()
+        process.exit(1)
+      }
+      checkCommand(parsed.file)
+      break
+
+    case 'repl':
+      await startRepl(parsed.namespace ?? 'repl')
+      break
+
+    case 'version':
+      printVersion()
+      break
+
+    default:
+      console.error(`Error: Unknown command '${parsed.command}'`)
+      printUsage()
+      process.exit(1)
+  }
 }
+
+void main()
