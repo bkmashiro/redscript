@@ -11,7 +11,7 @@
 [![VSCode](https://img.shields.io/badge/VSCode-插件-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-[English](./README.md) · [快速开始](#快速开始) · [Docs](https://redscript-docs.pages.dev)
+[English](./README.md) · [快速开始](#快速开始) · [文档](https://redscript-docs.pages.dev) · [贡献指南](./CONTRIBUTING.md)
 
 ### 🚀 [在线试用 — 无需安装！](https://redscript-ide.pages.dev)
 

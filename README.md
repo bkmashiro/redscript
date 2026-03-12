@@ -11,7 +11,7 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-[中文版](./README.zh.md) · [Quick Start](#quick-start) · [Docs](https://redscript-docs.pages.dev)
+[中文版](./README.zh.md) · [Quick Start](#quick-start) · [Docs](https://redscript-docs.pages.dev) · [Contributing](./CONTRIBUTING.md)
 
 ### 🚀 [Try it online — no install needed!](https://redscript-ide.pages.dev)
 
