@@ -782,6 +782,10 @@ export class Parser {
             'has_tag': '__entity_has_tag',
             'push': '__array_push',
             'pop': '__array_pop',
+            'add': 'set_add',
+            'contains': 'set_contains',
+            'remove': 'set_remove',
+            'clear': 'set_clear',
           }
           const internalFn = methodMap[expr.field]
           if (internalFn) {
@@ -793,7 +797,14 @@ export class Parser {
             )
             continue
           }
-          this.error(`Unknown method '${expr.field}'`)
+          // Generic method sugar: obj.method(args) → method(obj, args)
+          const args = this.parseArgs()
+          this.expect(')')
+          expr = this.withLoc(
+            { kind: 'call', fn: expr.field, args: [expr.obj, ...args] },
+            this.getLocToken(expr) ?? openParenToken
+          )
+          continue
         }
         const args = this.parseArgs()
         this.expect(')')
