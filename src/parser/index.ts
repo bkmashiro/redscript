@@ -10,7 +10,7 @@ import type {
   Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, LiteralExpr, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Stmt, TypeNode, AssignOp,
   StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr,
-  CoordComponent
+  CoordComponent, LambdaParam
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
@@ -336,6 +336,10 @@ export class Parser {
     const token = this.peek()
     let type: TypeNode
 
+    if (token.kind === '(') {
+      return this.parseFunctionType()
+    }
+
     if (token.kind === 'int' || token.kind === 'bool' ||
         token.kind === 'float' || token.kind === 'string' || token.kind === 'void' ||
         token.kind === 'BlockPos') {
@@ -354,6 +358,22 @@ export class Parser {
     }
 
     return type
+  }
+
+  private parseFunctionType(): TypeNode {
+    this.expect('(')
+    const params: TypeNode[] = []
+
+    if (!this.check(')')) {
+      do {
+        params.push(this.parseType())
+      } while (this.match(','))
+    }
+
+    this.expect(')')
+    this.expect('->')
+    const returnType = this.parseType()
+    return { kind: 'function_type', params, return: returnType }
   }
 
   // -------------------------------------------------------------------------
@@ -748,7 +768,13 @@ export class Parser {
           }
           this.error(`Unknown method '${expr.field}'`)
         }
-        this.error('Expected function name before (')
+        const args = this.parseArgs()
+        this.expect(')')
+        expr = this.withLoc(
+          { kind: 'invoke', callee: expr, args },
+          this.getLocToken(expr) ?? openParenToken
+        )
+        continue
       }
 
       // Array index access: arr[0]
@@ -792,6 +818,10 @@ export class Parser {
 
   private parsePrimaryExpr(): Expr {
     const token = this.peek()
+
+    if (token.kind === 'ident' && this.peek(1).kind === '=>') {
+      return this.parseSingleParamLambda()
+    }
 
     // Integer literal
     if (token.kind === 'int_lit') {
@@ -849,6 +879,9 @@ export class Parser {
       if (this.isBlockPosLiteral()) {
         return this.parseBlockPos()
       }
+      if (this.isLambdaStart()) {
+        return this.parseLambdaExpr()
+      }
       this.advance()
       const expr = this.parseExpr()
       this.expect(')')
@@ -879,6 +912,42 @@ export class Parser {
       return expr
     }
     this.error('Const value must be a literal')
+  }
+
+  private parseSingleParamLambda(): Expr {
+    const paramToken = this.expect('ident')
+    const params: LambdaParam[] = [{ name: paramToken.value }]
+    this.expect('=>')
+    return this.finishLambdaExpr(params, paramToken)
+  }
+
+  private parseLambdaExpr(): Expr {
+    const openParenToken = this.expect('(')
+    const params: LambdaParam[] = []
+
+    if (!this.check(')')) {
+      do {
+        const name = this.expect('ident').value
+        let type: TypeNode | undefined
+        if (this.match(':')) {
+          type = this.parseType()
+        }
+        params.push({ name, type })
+      } while (this.match(','))
+    }
+
+    this.expect(')')
+    let returnType: TypeNode | undefined
+    if (this.match('->')) {
+      returnType = this.parseType()
+    }
+    this.expect('=>')
+    return this.finishLambdaExpr(params, openParenToken, returnType)
+  }
+
+  private finishLambdaExpr(params: LambdaParam[], token: Token, returnType?: TypeNode): Expr {
+    const body = this.check('{') ? this.parseBlock() : this.parseExpr()
+    return this.withLoc({ kind: 'lambda', params, returnType, body }, token)
   }
 
   private parseStringExpr(token: Token): Expr {
@@ -987,6 +1056,108 @@ export class Parser {
 
     this.expect(']')
     return this.withLoc({ kind: 'array_lit', elements }, bracketToken)
+  }
+
+  private isLambdaStart(): boolean {
+    if (!this.check('(')) return false
+
+    let offset = 1
+    if (this.peek(offset).kind !== ')') {
+      while (true) {
+        if (this.peek(offset).kind !== 'ident') {
+          return false
+        }
+        offset += 1
+
+        if (this.peek(offset).kind === ':') {
+          offset += 1
+          const consumed = this.typeTokenLength(offset)
+          if (consumed === 0) {
+            return false
+          }
+          offset += consumed
+        }
+
+        if (this.peek(offset).kind === ',') {
+          offset += 1
+          continue
+        }
+        break
+      }
+    }
+
+    if (this.peek(offset).kind !== ')') {
+      return false
+    }
+    offset += 1
+
+    if (this.peek(offset).kind === '=>') {
+      return true
+    }
+
+    if (this.peek(offset).kind === '->') {
+      offset += 1
+      const consumed = this.typeTokenLength(offset)
+      if (consumed === 0) {
+        return false
+      }
+      offset += consumed
+      return this.peek(offset).kind === '=>'
+    }
+
+    return false
+  }
+
+  private typeTokenLength(offset: number): number {
+    const token = this.peek(offset)
+
+    if (token.kind === '(') {
+      let inner = offset + 1
+      if (this.peek(inner).kind !== ')') {
+        while (true) {
+          const consumed = this.typeTokenLength(inner)
+          if (consumed === 0) {
+            return 0
+          }
+          inner += consumed
+          if (this.peek(inner).kind === ',') {
+            inner += 1
+            continue
+          }
+          break
+        }
+      }
+
+      if (this.peek(inner).kind !== ')') {
+        return 0
+      }
+      inner += 1
+
+      if (this.peek(inner).kind !== '->') {
+        return 0
+      }
+      inner += 1
+      const returnLen = this.typeTokenLength(inner)
+      return returnLen === 0 ? 0 : inner + returnLen - offset
+    }
+
+    const isNamedType =
+      token.kind === 'int' ||
+      token.kind === 'bool' ||
+      token.kind === 'float' ||
+      token.kind === 'string' ||
+      token.kind === 'void' ||
+      token.kind === 'BlockPos' ||
+      token.kind === 'ident'
+    if (!isNamedType) {
+      return 0
+    }
+
+    let length = 1
+    while (this.peek(offset + length).kind === '[' && this.peek(offset + length + 1).kind === ']') {
+      length += 2
+    }
+    return length
   }
 
   private isBlockPosLiteral(): boolean {

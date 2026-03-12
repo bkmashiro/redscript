@@ -128,6 +128,15 @@ describe('Parser', () => {
       expect(param.type).toEqual({ kind: 'named', name: 'BlockPos' })
     })
 
+    it('parses function types', () => {
+      const program = parse('fn apply(val: int, cb: (int) -> int) -> int { return cb(val); }')
+      expect(program.declarations[0].params[1].type).toEqual({
+        kind: 'function_type',
+        params: [{ kind: 'named', name: 'int' }],
+        return: { kind: 'named', name: 'int' },
+      })
+    })
+
     it('parses enum declarations', () => {
       const program = parse('enum Direction { North, South = 3, East, West }')
       expect(program.enums).toEqual([
@@ -298,6 +307,66 @@ describe('Parser', () => {
       const stmt = parseStmt('execute as @a at @s if entity @s[tag=vip] in overworld run { particle("heart"); }')
       expect(stmt.kind).toBe('execute')
       expect((stmt as any).subcommands).toHaveLength(4)
+    })
+  })
+
+  describe('lambda expressions', () => {
+    it('parses expression-body lambdas', () => {
+      const stmt = parseStmt('let double = (x: int) => x * 2;')
+      expect(stmt.kind).toBe('let')
+      expect((stmt as any).init).toEqual({
+        kind: 'lambda',
+        params: [{ name: 'x', type: { kind: 'named', name: 'int' } }],
+        returnType: undefined,
+        body: {
+          kind: 'binary',
+          op: '*',
+          left: { kind: 'ident', name: 'x' },
+          right: { kind: 'int_lit', value: 2 },
+        },
+      })
+    })
+
+    it('parses block-body lambdas', () => {
+      const stmt = parseStmt('let process: (int) -> int = (x: int) => { let doubled: int = x * 2; return doubled + 1; };')
+      expect(stmt.kind).toBe('let')
+      expect((stmt as any).init.kind).toBe('lambda')
+      expect(Array.isArray((stmt as any).init.body)).toBe(true)
+    })
+
+    it('parses single-parameter lambdas without parens', () => {
+      const stmt = parseStmt('let double: (int) -> int = x => x * 2;')
+      expect(stmt.kind).toBe('let')
+      expect((stmt as any).init).toEqual({
+        kind: 'lambda',
+        params: [{ name: 'x' }],
+        returnType: undefined,
+        body: {
+          kind: 'binary',
+          op: '*',
+          left: { kind: 'ident', name: 'x' },
+          right: { kind: 'int_lit', value: 2 },
+        },
+      })
+    })
+
+    it('parses immediately-invoked lambdas', () => {
+      const expr = parseExpr('((x: int) => x * 2)(5)')
+      expect(expr).toEqual({
+        kind: 'invoke',
+        callee: {
+          kind: 'lambda',
+          params: [{ name: 'x', type: { kind: 'named', name: 'int' } }],
+          returnType: undefined,
+          body: {
+            kind: 'binary',
+            op: '*',
+            left: { kind: 'ident', name: 'x' },
+            right: { kind: 'int_lit', value: 2 },
+          },
+        },
+        args: [{ kind: 'int_lit', value: 5 }],
+      })
     })
   })
 
