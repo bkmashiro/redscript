@@ -11,7 +11,7 @@
 [![VSCode](https://img.shields.io/badge/VSCode-插件-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-[English](./README.md) · [快速开始](#快速开始) · [Wiki](https://github.com/bkmashiro/redscript/wiki)
+[English](./README.md) · [快速开始](#快速开始) · [Docs](https://redscript-docs.pages.dev)
 
 ### 🚀 [在线试用 — 无需安装！](https://redscript-ide.pages.dev)
 
@@ -250,10 +250,10 @@ import "stdlib/mobs.mcrs"       // ZOMBIE, SKELETON, CREEPER ... (60+ 实体常�
 | | |
 |---|---|
 | 📖 [语言参考](docs/LANGUAGE_REFERENCE.md) | 完整语法与类型系统 |
-| 🔧 [内置函数](https://github.com/bkmashiro/redscript/wiki/Builtins) | 所有 34+ MC 内置函数 |
-| ⚡ [优化器](https://github.com/bkmashiro/redscript/wiki/Optimizer) | 各优化 Pass 说明 |
+| 🔧 [内置函数](https://redscript-docs.pages.dev/Builtins) | 所有 34+ MC 内置函数 |
+| ⚡ [优化器](https://redscript-docs.pages.dev/Optimizer) | 各优化 Pass 说明 |
 | 🧱 [结构体目标](docs/STRUCTURE_TARGET.md) | 编译到 NBT 命令方块结构体 |
-| 🧪 [集成测试](https://github.com/bkmashiro/redscript/wiki/Integration-Testing) | 在真实 Paper 服务器上测试 |
+| 🧪 [集成测试](https://redscript-docs.pages.dev/Integration-Testing) | 在真实 Paper 服务器上测试 |
 | 🏗 [实现指南](docs/IMPLEMENTATION_GUIDE.md) | 编译器内部原理 |
 
 ---
