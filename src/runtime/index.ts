@@ -1029,6 +1029,15 @@ export class MCRuntime {
   }
 
   private execTp(cmd: string, executor?: Entity): boolean {
+    const selfCoordsMatch = cmd.match(/^tp (\S+) (\S+) (\S+)$/)
+    if (selfCoordsMatch && executor) {
+      const [, x, y, z] = selfCoordsMatch
+      const next = this.resolvePosition(executor.position ?? { x: 0, y: 0, z: 0 }, x, y, z)
+      if (!next) return false
+      executor.position = next
+      return true
+    }
+
     const coordsMatch = cmd.match(/^tp (\S+) (\S+) (\S+) (\S+)$/)
     if (coordsMatch) {
       const [, selStr, x, y, z] = coordsMatch
@@ -1294,7 +1303,7 @@ export class MCRuntime {
 
   private parseAbsolutePosition(x: string, y: string, z: string): { x: number; y: number; z: number } | null {
     const coords = [x, y, z].map(coord => {
-      if (coord.startsWith('~')) {
+      if (coord.startsWith('~') || coord.startsWith('^')) {
         const offset = coord.slice(1)
         return offset === '' ? 0 : parseInt(offset, 10)
       }
@@ -1306,7 +1315,7 @@ export class MCRuntime {
 
   private resolvePosition(base: { x: number; y: number; z: number }, x: string, y: string, z: string): { x: number; y: number; z: number } | null {
     const values = [x, y, z].map((coord, index) => {
-      if (coord.startsWith('~')) {
+      if (coord.startsWith('~') || coord.startsWith('^')) {
         const offset = coord.slice(1)
         const delta = offset === '' ? 0 : parseInt(offset, 10)
         return [base.x, base.y, base.z][index] + delta

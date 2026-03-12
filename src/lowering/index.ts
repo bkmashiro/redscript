@@ -10,7 +10,7 @@ import { buildModule } from '../ir/builder'
 import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
 import type {
   Block, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Stmt,
-  StructDecl, TypeNode, ExecuteSubcommand
+  StructDecl, TypeNode, ExecuteSubcommand, BlockPosExpr, CoordComponent
 } from '../ast/types'
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,21 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   data_get: () => null, // Special handling (returns value from NBT)
 }
 
+function emitCoord(component: CoordComponent): string {
+  switch (component.kind) {
+    case 'absolute':
+      return String(component.value)
+    case 'relative':
+      return component.offset === 0 ? '~' : `~${component.offset}`
+    case 'local':
+      return component.offset === 0 ? '^' : `^${component.offset}`
+  }
+}
+
+function emitBlockPos(pos: BlockPosExpr): string {
+  return `${emitCoord(pos.x)} ${emitCoord(pos.y)} ${emitCoord(pos.z)}`
+}
+
 // ---------------------------------------------------------------------------
 // Lowering Class
 // ---------------------------------------------------------------------------
@@ -76,6 +91,7 @@ export class Lowering {
   private builder!: LoweringBuilder
   private varMap: Map<string, string> = new Map()
   private currentContext: { binding?: string } = {}
+  private blockPosVars: Map<string, BlockPosExpr> = new Map()
 
   // Struct definitions: name → { fieldName: TypeNode }
   private structDefs: Map<string, Map<string, TypeNode>> = new Map()
@@ -132,6 +148,7 @@ export class Lowering {
     this.foreachCounter = 0
     this.varMap = new Map()
     this.currentContext = {}
+    this.blockPosVars = new Map()
     this.builder = new LoweringBuilder()
 
     // Map parameters
@@ -351,6 +368,12 @@ export class Lowering {
       return
     }
 
+    const blockPosValue = this.resolveBlockPosExpr(stmt.init)
+    if (blockPosValue) {
+      this.blockPosVars.set(stmt.name, blockPosValue)
+      return
+    }
+
     const value = this.lowerExpr(stmt.init)
     this.builder.emitAssign(varName, value)
   }
@@ -468,10 +491,12 @@ export class Lowering {
     const savedBuilder = this.builder
     const savedVarMap = new Map(this.varMap)
     const savedContext = this.currentContext
+    const savedBlockPosVars = new Map(this.blockPosVars)
 
     this.builder = new LoweringBuilder()
     this.varMap = new Map(savedVarMap)
     this.currentContext = { binding: stmt.binding }
+    this.blockPosVars = new Map(savedBlockPosVars)
 
     // In foreach body, the binding maps to @s
     this.varMap.set(stmt.binding, '@s')
@@ -489,6 +514,7 @@ export class Lowering {
     this.builder = savedBuilder
     this.varMap = savedVarMap
     this.currentContext = savedContext
+    this.blockPosVars = savedBlockPosVars
   }
 
   private lowerMatchStmt(stmt: Extract<Stmt, { kind: 'match' }>): void {
@@ -525,10 +551,12 @@ export class Lowering {
     const savedBuilder = this.builder
     const savedVarMap = new Map(this.varMap)
     const savedContext = this.currentContext
+    const savedBlockPosVars = new Map(this.blockPosVars)
 
     this.builder = new LoweringBuilder()
     this.varMap = new Map(savedVarMap)
     this.currentContext = savedContext
+    this.blockPosVars = new Map(savedBlockPosVars)
 
     this.builder.startBlock('entry')
     if (setMatched) {
@@ -544,6 +572,7 @@ export class Lowering {
     this.builder = savedBuilder
     this.varMap = savedVarMap
     this.currentContext = savedContext
+    this.blockPosVars = savedBlockPosVars
   }
 
   private lowerArrayForeachStmt(stmt: Extract<Stmt, { kind: 'foreach' }>): void {
@@ -615,9 +644,11 @@ export class Lowering {
     // Create sub-function
     const savedBuilder = this.builder
     const savedVarMap = new Map(this.varMap)
+    const savedBlockPosVars = new Map(this.blockPosVars)
 
     this.builder = new LoweringBuilder()
     this.varMap = new Map(savedVarMap)
+    this.blockPosVars = new Map(savedBlockPosVars)
 
     this.builder.startBlock('entry')
     this.lowerBlock(stmt.body)
@@ -630,6 +661,7 @@ export class Lowering {
 
     this.builder = savedBuilder
     this.varMap = savedVarMap
+    this.blockPosVars = savedBlockPosVars
   }
 
   private lowerAtBlockStmt(stmt: Extract<Stmt, { kind: 'at_block' }>): void {
@@ -641,9 +673,11 @@ export class Lowering {
     // Create sub-function
     const savedBuilder = this.builder
     const savedVarMap = new Map(this.varMap)
+    const savedBlockPosVars = new Map(this.blockPosVars)
 
     this.builder = new LoweringBuilder()
     this.varMap = new Map(savedVarMap)
+    this.blockPosVars = new Map(savedBlockPosVars)
 
     this.builder.startBlock('entry')
     this.lowerBlock(stmt.body)
@@ -656,6 +690,7 @@ export class Lowering {
 
     this.builder = savedBuilder
     this.varMap = savedVarMap
+    this.blockPosVars = savedBlockPosVars
   }
 
   private lowerAsAtStmt(stmt: Extract<Stmt, { kind: 'as_at' }>): void {
@@ -668,9 +703,11 @@ export class Lowering {
     // Create sub-function
     const savedBuilder = this.builder
     const savedVarMap = new Map(this.varMap)
+    const savedBlockPosVars = new Map(this.blockPosVars)
 
     this.builder = new LoweringBuilder()
     this.varMap = new Map(savedVarMap)
+    this.blockPosVars = new Map(savedBlockPosVars)
 
     this.builder.startBlock('entry')
     this.lowerBlock(stmt.body)
@@ -683,6 +720,7 @@ export class Lowering {
 
     this.builder = savedBuilder
     this.varMap = savedVarMap
+    this.blockPosVars = savedBlockPosVars
   }
 
   private lowerExecuteStmt(stmt: Extract<Stmt, { kind: 'execute' }>): void {
@@ -714,9 +752,11 @@ export class Lowering {
     // Create sub-function for the body
     const savedBuilder = this.builder
     const savedVarMap = new Map(this.varMap)
+    const savedBlockPosVars = new Map(this.blockPosVars)
 
     this.builder = new LoweringBuilder()
     this.varMap = new Map(savedVarMap)
+    this.blockPosVars = new Map(savedBlockPosVars)
 
     this.builder.startBlock('entry')
     this.lowerBlock(stmt.body)
@@ -729,6 +769,7 @@ export class Lowering {
 
     this.builder = savedBuilder
     this.varMap = savedVarMap
+    this.blockPosVars = savedBlockPosVars
   }
 
   // -------------------------------------------------------------------------
@@ -757,6 +798,9 @@ export class Lowering {
 
       case 'range_lit':
         // Ranges are handled in context (selectors, etc.)
+        return { kind: 'const', value: 0 }
+
+      case 'blockpos':
         return { kind: 'const', value: 0 }
 
       case 'ident': {
@@ -1001,6 +1045,13 @@ export class Lowering {
   }
 
   private lowerAssignExpr(expr: Extract<Expr, { kind: 'assign' }>): Operand {
+    const blockPosValue = this.resolveBlockPosExpr(expr.value)
+    if (blockPosValue) {
+      this.blockPosVars.set(expr.target, blockPosValue)
+      return { kind: 'const', value: 0 }
+    }
+
+    this.blockPosVars.delete(expr.target)
     const varName = this.varMap.get(expr.target) ?? `$${expr.target}`
     const value = this.lowerExpr(expr.value)
 
@@ -1166,6 +1217,12 @@ export class Lowering {
       return { kind: 'var', name: dst }
     }
 
+    const coordCommand = this.lowerCoordinateBuiltin(name, args)
+    if (coordCommand) {
+      this.builder.emitRaw(coordCommand)
+      return { kind: 'const', value: 0 }
+    }
+
     // Convert args to strings for builtin
     const strArgs = args.map(arg => this.exprToString(arg))
     const cmd = BUILTINS[name](strArgs)
@@ -1295,6 +1352,8 @@ export class Lowering {
         return expr.value
       case 'str_interp':
         return this.buildRichTextJson(expr)
+      case 'blockpos':
+        return emitBlockPos(expr)
       case 'ident': {
         const mapped = this.varMap.get(expr.name)
         return mapped ?? `$${expr.name}`
@@ -1312,6 +1371,62 @@ export class Lowering {
     if (expr.kind === 'int_lit') return expr.value.toString()
     if (expr.kind === 'float_lit') return Math.trunc(expr.value).toString()
     return '0'
+  }
+
+  private lowerCoordinateBuiltin(name: string, args: Expr[]): string | null {
+    const pos0 = args[0] ? this.resolveBlockPosExpr(args[0]) : null
+    const pos1 = args[1] ? this.resolveBlockPosExpr(args[1]) : null
+    const pos2 = args[2] ? this.resolveBlockPosExpr(args[2]) : null
+
+    if (name === 'setblock') {
+      if (args.length === 2 && pos0) {
+        return `setblock ${emitBlockPos(pos0)} ${this.exprToString(args[1])}`
+      }
+      return null
+    }
+
+    if (name === 'fill') {
+      if (args.length === 3 && pos0 && pos1) {
+        return `fill ${emitBlockPos(pos0)} ${emitBlockPos(pos1)} ${this.exprToString(args[2])}`
+      }
+      return null
+    }
+
+    if (name === 'clone') {
+      if (args.length === 3 && pos0 && pos1 && pos2) {
+        return `clone ${emitBlockPos(pos0)} ${emitBlockPos(pos1)} ${emitBlockPos(pos2)}`
+      }
+      return null
+    }
+
+    if (name === 'tp') {
+      if (args.length === 2 && pos1) {
+        return `tp ${this.exprToString(args[0])} ${emitBlockPos(pos1)}`
+      }
+      return null
+    }
+
+    if (name === 'tp_to') {
+      if (args.length === 1 && pos0) {
+        return `tp ${emitBlockPos(pos0)}`
+      }
+      if (args.length === 2 && pos1) {
+        return `tp ${this.exprToString(args[0])} ${emitBlockPos(pos1)}`
+      }
+      return null
+    }
+
+    return null
+  }
+
+  private resolveBlockPosExpr(expr: Expr): BlockPosExpr | null {
+    if (expr.kind === 'blockpos') {
+      return expr
+    }
+    if (expr.kind === 'ident') {
+      return this.blockPosVars.get(expr.name) ?? null
+    }
+    return null
   }
 
   private getArrayStorageName(expr: Expr): string | null {
