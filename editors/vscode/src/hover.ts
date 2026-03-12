@@ -766,15 +766,68 @@ function findFnDeclLine(document: vscode.TextDocument, name: string): number | n
 function findFnSignature(document: vscode.TextDocument, name: string): string | null {
   const text = document.getText()
   // Match: fn name(params) or fn name(params) -> Type
-  const re = new RegExp(`\\bfn\\s+${escapeRe(name)}\\s*\\(([^)]*)\\)(?:\\s*->\\s*([A-Za-z_][A-Za-z0-9_\\[\\]]*))?`, 'm')
+  const re = new RegExp(`\\bfn\\s+${escapeRe(name)}\\s*\\(([^)]*)\\)(?:\\s*->\\s*([A-Za-z_][A-Za-z0-9_\\[\\]]*))?\\s*\\{`, 'm')
   const match = re.exec(text)
   if (!match) return null
   const params = match[1].trim()
-  const returnType = match[2]
+  let returnType = match[2]
+  
+  // If no explicit return type, try to infer from return statements
+  if (!returnType) {
+    returnType = inferReturnType(text, match.index + match[0].length)
+  }
+  
   if (returnType) {
     return `fn ${name}(${params}) -> ${returnType}`
   }
   return `fn ${name}(${params})`
+}
+
+/**
+ * Infer return type by looking at return statements in function body
+ */
+function inferReturnType(text: string, bodyStart: number): string | null {
+  // Find the matching closing brace
+  let braceCount = 1
+  let pos = bodyStart
+  while (pos < text.length && braceCount > 0) {
+    if (text[pos] === '{') braceCount++
+    else if (text[pos] === '}') braceCount--
+    pos++
+  }
+  const body = text.slice(bodyStart, pos - 1)
+  
+  // Look for return statements
+  const returnMatch = body.match(/\breturn\s+(.+?);/)
+  if (!returnMatch) return null
+  
+  const returnExpr = returnMatch[1].trim()
+  
+  // Infer type from expression
+  if (/^\d+$/.test(returnExpr)) return 'int'
+  if (/^\d+\.\d+$/.test(returnExpr)) return 'float'
+  if (/^\d+[bB]$/.test(returnExpr)) return 'byte'
+  if (/^\d+[sS]$/.test(returnExpr)) return 'short'
+  if (/^\d+[lL]$/.test(returnExpr)) return 'long'
+  if (/^\d+(\.\d+)?[dD]$/.test(returnExpr)) return 'double'
+  if (/^".*"$/.test(returnExpr)) return 'string'
+  if (/^(true|false)$/.test(returnExpr)) return 'bool'
+  if (/^@[aeprs]/.test(returnExpr)) return 'selector'
+  if (/^\{/.test(returnExpr)) return 'struct'
+  if (/^\[/.test(returnExpr)) return 'array'
+  
+  // Check for known builtin return types
+  const callMatch = returnExpr.match(/^(\w+)\s*\(/)
+  if (callMatch) {
+    const fnName = callMatch[1]
+    // Common builtins that return int
+    if (['scoreboard_get', 'score', 'random', 'random_native', 'str_len', 'len', 'data_get', 'bossbar_get_value', 'set_contains'].includes(fnName)) {
+      return 'int'
+    }
+    if (fnName === 'set_new') return 'string'
+  }
+  
+  return null
 }
 
 function escapeRe(s: string): string {
