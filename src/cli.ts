@@ -3,7 +3,7 @@
  * RedScript CLI
  * 
  * Usage:
- *   redscript compile <file> [-o <outdir>] [--namespace <ns>]
+ *   redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>]
  *   redscript check <file>
  *   redscript repl
  *   redscript version
@@ -11,6 +11,7 @@
 
 import { compile, check } from './index'
 import { generateCommandBlocks } from './codegen/cmdblock'
+import { generateStructure } from './codegen/structure'
 import { formatError } from './diagnostics'
 import { startRepl } from './repl'
 import * as fs from 'fs'
@@ -24,7 +25,7 @@ function printUsage(): void {
 RedScript Compiler
 
 Usage:
-  redscript compile <file> [-o <outdir>] [--namespace <ns>] [--target <target>]
+  redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>] [--target <target>]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>]
   redscript check <file>
   redscript repl
@@ -38,14 +39,16 @@ Commands:
   version   Print the RedScript version
 
 Options:
-  -o, --output <dir>     Output directory (default: ./dist)
+  -o, --output <path>    Output directory or file path, depending on target
+  --output-nbt <file>    Output .nbt file path for structure target
   --namespace <ns>       Datapack namespace (default: derived from filename)
-  --target <target>      Output target: datapack (default) or cmdblock
+  --target <target>      Output target: datapack (default), cmdblock, or structure
   -h, --help             Show this help message
 
 Targets:
   datapack  Generate a full Minecraft datapack (default)
   cmdblock  Generate JSON structure for command block placement
+  structure Generate a Minecraft structure .nbt file with command blocks
 `)
 }
 
@@ -63,6 +66,7 @@ function parseArgs(args: string[]): {
   command?: string
   file?: string
   output?: string
+  outputNbt?: string
   namespace?: string
   target?: string
   help?: boolean
@@ -78,6 +82,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '-o' || arg === '--output') {
       result.output = args[++i]
+      i++
+    } else if (arg === '--output-nbt') {
+      result.outputNbt = args[++i]
       i++
     } else if (arg === '--namespace') {
       result.namespace = args[++i]
@@ -131,6 +138,14 @@ function compileCommand(file: string, output: string, namespace: string, target:
       console.log(`✓ Generated command blocks for ${file}`)
       console.log(`  Output: ${outputFile}`)
       console.log(`  Blocks: ${cmdBlocks.blocks.length}`)
+    } else if (target === 'structure') {
+      const structure = generateStructure(result.files)
+      fs.mkdirSync(path.dirname(output), { recursive: true })
+      fs.writeFileSync(output, structure.buffer)
+
+      console.log(`✓ Generated structure for ${file}`)
+      console.log(`  Output: ${output}`)
+      console.log(`  Blocks: ${structure.blockCount}`)
     } else {
       // Default: generate datapack
       // Create output directory
@@ -285,12 +300,20 @@ async function main(): Promise<void> {
         printUsage()
         process.exit(1)
       }
+      {
+        const namespace = parsed.namespace ?? deriveNamespace(parsed.file)
+        const target = parsed.target ?? 'datapack'
+        const output = target === 'structure'
+          ? (parsed.outputNbt ?? parsed.output ?? `./${namespace}.nbt`)
+          : (parsed.output ?? './dist')
+
       compileCommand(
         parsed.file,
-        parsed.output ?? './dist',
-        parsed.namespace ?? deriveNamespace(parsed.file),
-        parsed.target ?? 'datapack'
+        output,
+        namespace,
+        target
       )
+      }
       break
 
     case 'watch':
