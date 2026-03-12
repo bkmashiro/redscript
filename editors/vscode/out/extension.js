@@ -6577,15 +6577,51 @@ function findFnDeclLine(document, name) {
 }
 function findFnSignature(document, name) {
   const text = document.getText();
-  const re = new RegExp(`\\bfn\\s+${escapeRe(name)}\\s*\\(([^)]*)\\)(?:\\s*->\\s*([A-Za-z_][A-Za-z0-9_\\[\\]]*))?`, "m");
+  const re = new RegExp(`\\bfn\\s+${escapeRe(name)}\\s*\\(([^)]*)\\)(?:\\s*->\\s*([A-Za-z_][A-Za-z0-9_\\[\\]]*))?\\s*\\{`, "m");
   const match = re.exec(text);
   if (!match) return null;
   const params = match[1].trim();
-  const returnType = match[2];
+  let returnType = match[2];
+  if (!returnType) {
+    returnType = inferReturnType(text, match.index + match[0].length);
+  }
   if (returnType) {
     return `fn ${name}(${params}) -> ${returnType}`;
   }
   return `fn ${name}(${params})`;
+}
+function inferReturnType(text, bodyStart) {
+  let braceCount = 1;
+  let pos = bodyStart;
+  while (pos < text.length && braceCount > 0) {
+    if (text[pos] === "{") braceCount++;
+    else if (text[pos] === "}") braceCount--;
+    pos++;
+  }
+  const body = text.slice(bodyStart, pos - 1);
+  const returnMatch = body.match(/\breturn\s+(.+?);/);
+  if (!returnMatch) return null;
+  const returnExpr = returnMatch[1].trim();
+  if (/^\d+$/.test(returnExpr)) return "int";
+  if (/^\d+\.\d+$/.test(returnExpr)) return "float";
+  if (/^\d+[bB]$/.test(returnExpr)) return "byte";
+  if (/^\d+[sS]$/.test(returnExpr)) return "short";
+  if (/^\d+[lL]$/.test(returnExpr)) return "long";
+  if (/^\d+(\.\d+)?[dD]$/.test(returnExpr)) return "double";
+  if (/^".*"$/.test(returnExpr)) return "string";
+  if (/^(true|false)$/.test(returnExpr)) return "bool";
+  if (/^@[aeprs]/.test(returnExpr)) return "selector";
+  if (/^\{/.test(returnExpr)) return "struct";
+  if (/^\[/.test(returnExpr)) return "array";
+  const callMatch = returnExpr.match(/^(\w+)\s*\(/);
+  if (callMatch) {
+    const fnName = callMatch[1];
+    if (["scoreboard_get", "score", "random", "random_native", "str_len", "len", "data_get", "bossbar_get_value", "set_contains"].includes(fnName)) {
+      return "int";
+    }
+    if (fnName === "set_new") return "string";
+  }
+  return null;
 }
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
