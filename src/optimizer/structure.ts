@@ -1,5 +1,5 @@
 import type { IRBlock, IRCommand, IRFunction, IRInstr, Operand, Terminator } from '../ir/types'
-import { applyCSE, applyLICM } from './commands'
+import { applyCSE, applyLICM, batchSetblocks } from './commands'
 
 const OBJ = 'rs'
 const INLINE_THRESHOLD = 8
@@ -423,9 +423,10 @@ export function optimizeForStructure(functions: IRFunction[], namespace = 'redsc
   )
 
   const cse = applyCSE(licm.functions)
+  const batched = batchSetblocks(cse.functions)
 
   return Array.from(staged.values()).map(fn => ({
     ...fn,
-    commands: cse.functions.find(candidate => candidate.name === fn.name)?.commands ?? fn.commands,
+    commands: batched.functions.find(candidate => candidate.name === fn.name)?.commands ?? fn.commands,
   }))
 }

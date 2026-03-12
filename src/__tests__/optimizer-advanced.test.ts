@@ -56,3 +56,54 @@ fn read_twice() {
     expect(fn).toContain('scoreboard players operation $t1 rs = $t0 rs')
   })
 })
+
+describe('setblock batching', () => {
+  test('merges 4 consecutive setblocks into fill', () => {
+    const source = `
+fn build() {
+  setblock((0, 64, 0), "minecraft:stone");
+  setblock((1, 64, 0), "minecraft:stone");
+  setblock((2, 64, 0), "minecraft:stone");
+  setblock((3, 64, 0), "minecraft:stone");
+}
+`
+
+    const result = compile(source, { namespace: 'test' })
+    const fn = getFileContent(result.files, 'data/test/function/build.mcfunction')
+
+    expect(fn).toContain('fill 0 64 0 3 64 0 minecraft:stone')
+    expect(fn).not.toContain('setblock 1 64 0 minecraft:stone')
+  })
+
+  test('does not merge setblocks with different blocks', () => {
+    const source = `
+fn build() {
+  setblock((0, 64, 0), "minecraft:stone");
+  setblock((1, 64, 0), "minecraft:dirt");
+}
+`
+
+    const result = compile(source, { namespace: 'test' })
+    const fn = getFileContent(result.files, 'data/test/function/build.mcfunction')
+
+    expect(fn).toContain('setblock 0 64 0 minecraft:stone')
+    expect(fn).toContain('setblock 1 64 0 minecraft:dirt')
+    expect(fn).not.toContain('fill 0 64 0 1 64 0')
+  })
+
+  test('does not merge non-adjacent setblocks', () => {
+    const source = `
+fn build() {
+  setblock((0, 64, 0), "minecraft:stone");
+  setblock((2, 64, 0), "minecraft:stone");
+}
+`
+
+    const result = compile(source, { namespace: 'test' })
+    const fn = getFileContent(result.files, 'data/test/function/build.mcfunction')
+
+    expect(fn).toContain('setblock 0 64 0 minecraft:stone')
+    expect(fn).toContain('setblock 2 64 0 minecraft:stone')
+    expect(fn).not.toContain('fill 0 64 0 2 64 0')
+  })
+})

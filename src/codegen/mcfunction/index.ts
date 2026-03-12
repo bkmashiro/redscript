@@ -17,7 +17,7 @@
  */
 
 import type { IRBlock, IRFunction, IRModule, Operand, Terminator } from '../../ir/types'
-import { applyCSE, applyLICM } from '../../optimizer/commands'
+import { applyCSE, applyLICM, batchSetblocks } from '../../optimizer/commands'
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -369,5 +369,5 @@ export function generateDatapack(module: IRModule): DatapackFile[] {
     })
   }
 
-  return applyFunctionOptimization(files, [applyLICM, applyCSE])
+  return applyFunctionOptimization(files, [applyLICM, applyCSE, batchSetblocks])
 }
