@@ -495,6 +495,14 @@ export class Lowering {
       return
     }
 
+    // Handle set_new returning a set ID string
+    if (stmt.init.kind === 'call' && stmt.init.fn === 'set_new') {
+      const setId = `__set_${this.foreachCounter++}`
+      this.builder.emitRaw(`data modify storage rs:sets ${setId} set value []`)
+      this.stringValues.set(stmt.name, setId)
+      return
+    }
+
     // Handle spawn_object returning entity handle
     if (stmt.init.kind === 'call' && stmt.init.fn === 'spawn_object') {
       const value = this.lowerExpr(stmt.init)
@@ -1742,6 +1750,43 @@ export class Lowering {
       const scale = args[3] ? this.exprToString(args[3]) : '1'
       this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`)
       return { kind: 'var', name: dst }
+    }
+
+    // Set data structure operations — unique collections via NBT storage
+    // set_new is primarily handled in lowerLetStmt for proper string tracking.
+    // This fallback handles standalone set_new() calls without assignment.
+    if (name === 'set_new') {
+      const setId = `__set_${this.foreachCounter++}`
+      this.builder.emitRaw(`data modify storage rs:sets ${setId} set value []`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'set_add') {
+      const setId = this.exprToString(args[0])
+      const value = this.exprToString(args[1])
+      this.builder.emitRaw(`execute unless data storage rs:sets ${setId}[{value:${value}}] run data modify storage rs:sets ${setId} append value {value:${value}}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'set_contains') {
+      const dst = this.builder.freshTemp()
+      const setId = this.exprToString(args[0])
+      const value = this.exprToString(args[1])
+      this.builder.emitRaw(`execute store result score ${dst} rs if data storage rs:sets ${setId}[{value:${value}}]`)
+      return { kind: 'var', name: dst }
+    }
+
+    if (name === 'set_remove') {
+      const setId = this.exprToString(args[0])
+      const value = this.exprToString(args[1])
+      this.builder.emitRaw(`data remove storage rs:sets ${setId}[{value:${value}}]`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'set_clear') {
+      const setId = this.exprToString(args[0])
+      this.builder.emitRaw(`data modify storage rs:sets ${setId} set value []`)
+      return { kind: 'const', value: 0 }
     }
 
     const coordCommand = this.lowerCoordinateBuiltin(name, args)
