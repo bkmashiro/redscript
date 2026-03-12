@@ -260,3 +260,28 @@ describe('Lexer', () => {
     })
   })
 })
+
+describe('Block comments', () => {
+  it('skips single-line block comment', () => {
+    const src = `/* comment */ fn test() {}`
+    const tokens = tokenize(src)
+    expect(tokens.map(t => t.kind)).not.toContain('/')
+    expect(tokens.find(t => t.kind === 'fn')).toBeDefined()
+  })
+
+  it('skips multi-line block comment', () => {
+    const src = `/**
+ * JSDoc comment
+ */
+fn test() {}`
+    const tokens = tokenize(src)
+    expect(tokens.map(t => t.kind)).not.toContain('/')
+    expect(tokens.find(t => t.kind === 'fn')).toBeDefined()
+  })
+
+  it('handles block comment with asterisks', () => {
+    const src = `/*** stars ***/fn x(){}`
+    const tokens = tokenize(src)
+    expect(tokens.find(t => t.kind === 'fn')).toBeDefined()
+  })
+})

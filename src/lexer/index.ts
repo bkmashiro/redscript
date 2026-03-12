@@ -170,6 +170,20 @@ export class Lexer {
       return
     }
 
+    // Block comments: /* ... */ and /** ... */
+    if (char === '/' && this.peek() === '*') {
+      this.advance() // consume '*'
+      while (!this.isAtEnd()) {
+        if (this.peek() === '*' && this.peek(1) === '/') {
+          this.advance() // consume '*'
+          this.advance() // consume '/'
+          break
+        }
+        this.advance()
+      }
+      return
+    }
+
     // Two-character operators
     if (char === '-' && this.peek() === '>') {
       this.advance()
