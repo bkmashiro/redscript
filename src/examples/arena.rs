@@ -24,16 +24,21 @@ fn announce_leaders() {
     }
 
     if (top_kills > 0) {
-        say("Arena update: current leader check complete.");
+        announce("Arena update: leader check complete.");
+        title_times(@a, 10, 40, 10);
+        actionbar(@a, "Top kills updated");
 
         foreach (player in @a) {
             let kills: int = scoreboard_get(player, "kills");
             if (kills == top_kills) {
                 tell(player, "You are leading the arena right now.");
                 title(player, "Arena Leader");
+                subtitle(player, "Hold the top score");
+                actionbar(player, "Stay alive to keep the lead");
             }
         }
     } else {
-        say("Arena update: no PvP kills yet.");
+        announce("Arena update: no PvP kills yet.");
+        actionbar(@a, "No arena leader yet");
     }
 }

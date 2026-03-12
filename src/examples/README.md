@@ -36,7 +36,19 @@ Demonstrates:
 - `foreach (player in @a)`
 - per-player scoreboard reads
 - aggregation with local variables
+- `announce()`, `actionbar()`, `subtitle()`, and `title_times()`
 - `tell()` and `title()`
+
+## `world_manager.rs`
+
+A small world administration example that resets a lobby platform and locks in predictable world settings from a trigger handler.
+
+Demonstrates:
+- `setblock()` and `fill()`
+- `weather()` and `time_set()`
+- `gamerule()`
+- `announce()` and `actionbar()`
+- `@on_trigger`
 
 ## `turret.rs`
 
