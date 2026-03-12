@@ -97,3 +97,46 @@ Runtime set operations (NBT-based).
 String formatting helpers.
 - `broadcast(msg)` — Announce to all players
 - `whisper(target, msg)` — Private message
+
+### particles.mcrs
+Particle effect shortcuts.
+- `hearts(target)` — Heart particles above target
+- `flames(x, y, z)` — Fire particles
+- `smoke(x, y, z)` — Smoke effect
+- `explosion_effect(x, y, z)` — Explosion particles
+- `sparkles(target)` — Enchantment sparkles
+- `angry(target)` — Angry villager particles
+- `happy(target)` — Happy villager particles
+- `portal_effect(x, y, z)` — Portal particles
+- `totem_effect(target)` — Totem of undying particles
+- `end_sparkles(target)` — End rod particles
+
+### spawn.mcrs
+Teleport and spawn utilities.
+- `teleport_to(target, x, y, z)` — TP to coordinates
+- `teleport_to_entity(target, dest)` — TP to entity
+- `gather_all(x, y, z)` — TP all players
+- `launch_up(target, height)` — Launch player upward
+- `goto_lobby(target)` — TP to lobby
+- `goto_arena(target)` — TP to arena
+
+### teams.mcrs
+Team management.
+- `create_team(name, color)` — Create colored team
+- `create_red_team()`, `create_blue_team()` — Quick team setup
+- `create_green_team()`, `create_yellow_team()`
+- `add_to_team(target, team)` — Add player to team
+- `remove_from_teams(target)` — Remove from all teams
+- `setup_two_teams()` — Quick 2-team setup
+- `setup_four_teams()` — Quick 4-team setup
+- `cleanup_teams()` — Remove all teams
+
+### bossbar.mcrs
+Bossbar for timers and progress.
+- `create_timer_bar(id, name, seconds)` — Timer bossbar
+- `create_health_bar(id, name, max)` — Red health bar
+- `create_progress_bar(id, name, max)` — Blue progress bar
+- `update_bar(id, value)` — Update value
+- `hide_bar(id)`, `show_bar(id)` — Visibility
+- `remove_bar(id)` — Delete bossbar
+- `update_bar_color(id, percent)` — Color by percentage

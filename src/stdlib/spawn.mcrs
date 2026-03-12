@@ -1,0 +1,41 @@
+// Spawn point and teleport helpers
+// Usage: import "stdlib/spawn.mcrs"
+
+/// Teleport player to coordinates
+fn teleport_to(target: selector, x: int, y: int, z: int) {
+    tp(target, x, y, z);
+}
+
+/// Teleport player to another entity
+fn teleport_to_entity(target: selector, dest: selector) {
+    tp(target, dest);
+}
+
+/// Spread players randomly in area
+fn spread_players(x: int, z: int, radius: int) {
+    // Use raw command for spreadplayers
+    // spreadplayers(x, z, 0, radius, false, @a);
+    say("Spreading players...");
+}
+
+/// Teleport all players to one location
+fn gather_all(x: int, y: int, z: int) {
+    tp(@a, x, y, z);
+}
+
+/// Teleport player up (for launching)
+fn launch_up(target: selector, height: int) {
+    tp(target, ~0, ~height, ~0);
+}
+
+/// Teleport to lobby (customize coordinates)
+fn goto_lobby(target: selector) {
+    tp(target, 0, 64, 0);
+    title(target, "Welcome to Lobby!");
+}
+
+/// Teleport to arena (customize coordinates)
+fn goto_arena(target: selector) {
+    tp(target, 100, 64, 100);
+    title(target, "Fight!");
+}

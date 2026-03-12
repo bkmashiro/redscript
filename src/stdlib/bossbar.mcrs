@@ -1,0 +1,68 @@
+// Bossbar helpers for progress bars and timers
+// Usage: import "stdlib/bossbar.mcrs"
+
+/// Create and show a timer bossbar
+fn create_timer_bar(id: string, name: string, max_seconds: int) {
+    bossbar_add(id, name);
+    bossbar_set_max(id, max_seconds * 20);
+    bossbar_set_value(id, max_seconds * 20);
+    bossbar_set_color(id, "green");
+    bossbar_set_style(id, "progress");
+    bossbar_set_players(id, @a);
+    bossbar_set_visible(id, 1);
+}
+
+/// Create a health-style bossbar (red)
+fn create_health_bar(id: string, name: string, max_val: int) {
+    bossbar_add(id, name);
+    bossbar_set_max(id, max_val);
+    bossbar_set_value(id, max_val);
+    bossbar_set_color(id, "red");
+    bossbar_set_style(id, "progress");
+    bossbar_set_players(id, @a);
+    bossbar_set_visible(id, 1);
+}
+
+/// Create a progress bossbar (blue)
+fn create_progress_bar(id: string, name: string, max_val: int) {
+    bossbar_add(id, name);
+    bossbar_set_max(id, max_val);
+    bossbar_set_value(id, 0);
+    bossbar_set_color(id, "blue");
+    bossbar_set_style(id, "progress");
+    bossbar_set_players(id, @a);
+    bossbar_set_visible(id, 1);
+}
+
+/// Update bossbar value
+fn update_bar(id: string, value: int) {
+    bossbar_set_value(id, value);
+}
+
+/// Hide bossbar
+fn hide_bar(id: string) {
+    bossbar_set_visible(id, 0);
+}
+
+/// Show bossbar
+fn show_bar(id: string) {
+    bossbar_set_visible(id, 1);
+}
+
+/// Remove bossbar
+fn remove_bar(id: string) {
+    bossbar_remove(id);
+}
+
+/// Set bossbar color based on percentage
+fn update_bar_color(id: string, percent: int) {
+    if (percent > 66) {
+        bossbar_set_color(id, "green");
+    } else {
+        if (percent > 33) {
+            bossbar_set_color(id, "yellow");
+        } else {
+            bossbar_set_color(id, "red");
+        }
+    }
+}

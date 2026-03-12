@@ -1,0 +1,52 @@
+// Particle effect helpers
+// Usage: import "stdlib/particles.mcrs"
+
+/// Spawn heart particles above target
+fn hearts(target: selector) {
+    particle("heart", target, ~0, ~2, ~0);
+}
+
+/// Spawn flame particles at position
+fn flames(x: int, y: int, z: int) {
+    particle("flame", x, y, z);
+}
+
+/// Spawn smoke effect
+fn smoke(x: int, y: int, z: int) {
+    particle("large_smoke", x, y, z);
+}
+
+/// Spawn explosion effect
+fn explosion_effect(x: int, y: int, z: int) {
+    particle("explosion", x, y, z);
+}
+
+/// Spawn magic sparkles
+fn sparkles(target: selector) {
+    particle("enchant", target, ~0, ~1, ~0);
+}
+
+/// Spawn angry villager particles (for damage/hit)
+fn angry(target: selector) {
+    particle("angry_villager", target, ~0, ~2, ~0);
+}
+
+/// Spawn happy villager particles (for heal/reward)
+fn happy(target: selector) {
+    particle("happy_villager", target, ~0, ~2, ~0);
+}
+
+/// Spawn portal effect
+fn portal_effect(x: int, y: int, z: int) {
+    particle("portal", x, y, z);
+}
+
+/// Spawn totem of undying effect on player
+fn totem_effect(target: selector) {
+    particle("totem_of_undying", target, ~0, ~1, ~0);
+}
+
+/// Spawn end rod sparkles
+fn end_sparkles(target: selector) {
+    particle("end_rod", target, ~0, ~1, ~0);
+}
