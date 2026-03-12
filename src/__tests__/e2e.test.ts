@@ -477,6 +477,102 @@ fn spawn_at_players() {
     })
   })
 
+  describe('Float type (fixed-point)', () => {
+    it('stores float as fixed-point × 1000', () => {
+      const source = `
+fn test() -> int {
+    let pi: float = 3.14;
+    return pi;
+}
+`
+      const files = compile(source)
+      const allContent = files.map(f => f.content).join('\n')
+      // 3.14 * 1000 = 3140
+      expect(allContent).toContain('3140')
+    })
+
+    it('handles float addition correctly', () => {
+      const source = `
+fn test() -> int {
+    let a: float = 1.5;
+    let b: float = 2.5;
+    let c: float = a + b;
+    return c;
+}
+`
+      const files = compile(source)
+      const allContent = files.map(f => f.content).join('\n')
+      // 1.5 * 1000 = 1500, 2.5 * 1000 = 2500
+      expect(allContent).toContain('1500')
+      expect(allContent).toContain('2500')
+      // Addition should use +=
+      expect(allContent).toContain('+=')
+    })
+
+    it('handles float multiplication with scaling', () => {
+      const source = `
+fn test() {
+    let a: float = 2.0;
+    let b: float = 3.0;
+    let c: float = a * b;
+}
+`
+      const files = compile(source)
+      const allContent = files.map(f => f.content).join('\n')
+      // Should have 2000 and 3000 (the fixed-point values)
+      expect(allContent).toContain('2000')
+      expect(allContent).toContain('3000')
+      // Should divide after multiplication (for fixed-point correction)
+      expect(allContent).toContain('/=')
+    })
+
+    it('handles float division with scaling', () => {
+      const source = `
+fn test() {
+    let a: float = 10.0;
+    let b: float = 2.0;
+    let c: float = a / b;
+}
+`
+      const files = compile(source)
+      const allContent = files.map(f => f.content).join('\n')
+      // Should multiply by 1000 before division
+      expect(allContent).toContain('*=')
+      // Should then divide
+      expect(allContent).toContain('/=')
+    })
+
+    it('handles small float literals', () => {
+      const source = `
+fn test() -> int {
+    let x: float = 0.001;
+    let y: float = 0.5;
+    let z: float = x + y;
+    return 0;
+}
+`
+      const files = compile(source)
+      const allContent = files.map(f => f.content).join('\n')
+      // 0.001 * 1000 = 1, 0.5 * 1000 = 500
+      // Check that fixed-point values are present
+      expect(allContent).toContain('$const_1')
+      expect(allContent).toContain('500')
+    })
+
+    it('handles float in expressions', () => {
+      const source = `
+fn calc() {
+    let speed: float = 1.5;
+    let time: float = 2.0;
+    let distance: float = speed * time;
+}
+`
+      const files = compile(source)
+      const fn = getFunction(files, 'calc')
+      expect(fn).toBeDefined()
+    })
+  })
+
   describe('Optimization', () => {
     it('folds constants', () => {
       const source = 'fn test() -> int { return 2 + 3; }'

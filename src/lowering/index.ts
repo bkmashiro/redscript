@@ -57,6 +57,8 @@ export class Lowering {
   private structDefs: Map<string, Map<string, TypeNode>> = new Map()
   // Variable types: varName → TypeNode
   private varTypes: Map<string, TypeNode> = new Map()
+  // Float variables (stored as fixed-point × 1000)
+  private floatVars: Set<string> = new Set()
   // World object counter for unique tags
   private worldObjCounter: number = 0
 
@@ -252,6 +254,10 @@ export class Lowering {
     // Track variable type
     if (stmt.type) {
       this.varTypes.set(stmt.name, stmt.type)
+      // Track float variables for fixed-point arithmetic
+      if (stmt.type.kind === 'named' && stmt.type.name === 'float') {
+        this.floatVars.add(stmt.name)
+      }
     }
 
     // Handle struct literal initialization
@@ -526,8 +532,8 @@ export class Lowering {
         return { kind: 'const', value: expr.value }
 
       case 'float_lit':
-        // MC doesn't support floats, truncate to int
-        return { kind: 'const', value: Math.trunc(expr.value) }
+        // Float stored as fixed-point × 1000
+        return { kind: 'const', value: Math.round(expr.value * 1000) }
 
       case 'bool_lit':
         return { kind: 'const', value: expr.value ? 1 : 0 }
@@ -726,10 +732,45 @@ export class Lowering {
     if (['==', '!=', '<', '<=', '>', '>='].includes(expr.op)) {
       this.builder.emitCmp(dst, left, expr.op as CmpOp, right)
     } else {
+      // Check if this is float arithmetic
+      const isFloatOp = this.isFloatExpr(expr.left) || this.isFloatExpr(expr.right)
+      
+      if (isFloatOp && (expr.op === '*' || expr.op === '/')) {
+        // Float multiplication: a * b / 1000
+        // Float division: a * 1000 / b
+        if (expr.op === '*') {
+          this.builder.emitBinop(dst, left, '*', right)
+          // Divide by 1000 to correct for double scaling
+          const constDiv = this.builder.freshTemp()
+          this.builder.emitAssign(constDiv, { kind: 'const', value: 1000 })
+          this.builder.emitRaw(`scoreboard players operation ${dst} rs /= ${constDiv} rs`)
+        } else {
+          // Division: a * 1000 / b
+          const constMul = this.builder.freshTemp()
+          this.builder.emitAssign(constMul, { kind: 'const', value: 1000 })
+          this.builder.emitAssign(dst, left)
+          this.builder.emitRaw(`scoreboard players operation ${dst} rs *= ${constMul} rs`)
+          const rightVar = this.operandToVar(right)
+          this.builder.emitRaw(`scoreboard players operation ${dst} rs /= ${rightVar} rs`)
+        }
+        return { kind: 'var', name: dst }
+      }
+      
       this.builder.emitBinop(dst, left, expr.op as BinOp, right)
     }
 
     return { kind: 'var', name: dst }
+  }
+
+  private isFloatExpr(expr: Expr): boolean {
+    if (expr.kind === 'float_lit') return true
+    if (expr.kind === 'ident') {
+      return this.floatVars.has(expr.name)
+    }
+    if (expr.kind === 'binary') {
+      return this.isFloatExpr(expr.left) || this.isFloatExpr(expr.right)
+    }
+    return false
   }
 
   private lowerUnaryExpr(expr: Extract<Expr, { kind: 'unary' }>): Operand {
