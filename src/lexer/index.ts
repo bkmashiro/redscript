@@ -338,13 +338,42 @@ export class Lexer {
 
   private scanString(startLine: number, startCol: number): void {
     let value = ''
-    while (!this.isAtEnd() && this.peek() !== '"') {
+    let interpolationDepth = 0
+    let interpolationString = false
+
+    while (!this.isAtEnd()) {
+      if (interpolationDepth === 0 && this.peek() === '"') {
+        break
+      }
+
       if (this.peek() === '\\' && this.peek(1) === '"') {
         this.advance() // skip backslash
         value += this.advance() // add escaped quote
-      } else {
-        value += this.advance()
+        continue
       }
+
+      if (interpolationDepth === 0 && this.peek() === '$' && this.peek(1) === '{') {
+        value += this.advance()
+        value += this.advance()
+        interpolationDepth = 1
+        interpolationString = false
+        continue
+      }
+
+      const char = this.advance()
+      value += char
+
+      if (interpolationDepth === 0) continue
+
+      if (char === '"') {
+        interpolationString = !interpolationString
+        continue
+      }
+
+      if (interpolationString) continue
+
+      if (char === '{') interpolationDepth++
+      if (char === '}') interpolationDepth--
     }
 
     if (this.isAtEnd()) {

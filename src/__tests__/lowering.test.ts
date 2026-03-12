@@ -365,6 +365,13 @@ describe('Lowering', () => {
       expect(rawCmds).toContain('tellraw @a {"text":"Server event starting"}')
     })
 
+    it('lowers interpolated say() to tellraw score components', () => {
+      const ir = compile('fn test() { let score: int = 7; say("You have ${score} points"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('tellraw @a ["",{"text":"You have "},{"score":{"name":"$score","objective":"rs"}},{"text":" points"}]')
+    })
+
     it('lowers summon()', () => {
       const ir = compile('fn test() { summon("zombie"); }')
       const fn = getFunction(ir, 'test')!

@@ -73,6 +73,14 @@ describe('Lexer', () => {
       ])
     })
 
+    it('tokenizes interpolated strings as a single string token', () => {
+      const tokens = tokenize('"hello ${name + 1}"')
+      expect(tokens.map(t => [t.kind, t.value])).toEqual([
+        ['string_lit', 'hello ${name + 1}'],
+        ['eof', ''],
+      ])
+    })
+
     it('tokenizes range literals', () => {
       const tokens = tokenize('..5 1.. 1..10')
       expect(tokens.map(t => [t.kind, t.value])).toEqual([

@@ -255,10 +255,28 @@ describe('Parser', () => {
         expect(expr).toEqual({ kind: 'float_lit', value: 3.14 })
       })
 
-      it('parses string literal', () => {
-        const expr = parseExpr('"hello"')
-        expect(expr).toEqual({ kind: 'str_lit', value: 'hello' })
+    it('parses string literal', () => {
+      const expr = parseExpr('"hello"')
+      expect(expr).toEqual({ kind: 'str_lit', value: 'hello' })
+    })
+
+    it('parses interpolated string literal', () => {
+      const expr = parseExpr('"Hello ${name}, score is ${score + 1}"')
+      expect(expr).toEqual({
+        kind: 'str_interp',
+        parts: [
+          'Hello ',
+          { kind: 'ident', name: 'name' },
+          ', score is ',
+          {
+            kind: 'binary',
+            op: '+',
+            left: { kind: 'ident', name: 'score' },
+            right: { kind: 'int_lit', value: 1 },
+          },
+        ],
       })
+    })
 
       it('parses boolean literals', () => {
         expect(parseExpr('true')).toEqual({ kind: 'bool_lit', value: true })

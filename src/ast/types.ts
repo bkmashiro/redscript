@@ -65,6 +65,7 @@ export type Expr =
   | { kind: 'float_lit';  value: number }
   | { kind: 'bool_lit';   value: boolean }
   | { kind: 'str_lit';    value: string }
+  | { kind: 'str_interp'; parts: Array<string | Expr> }
   | { kind: 'range_lit';  range: RangeExpr }
   | { kind: 'ident';      name: string }
   | { kind: 'selector';   sel: EntitySelector }

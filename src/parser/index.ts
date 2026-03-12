@@ -5,7 +5,7 @@
  * Uses precedence climbing for expression parsing.
  */
 
-import type { Token, TokenKind } from '../lexer'
+import { Lexer, type Token, type TokenKind } from '../lexer'
 import type {
   Block, Decorator, EntitySelector, Expr, FnDecl, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Stmt, TypeNode, AssignOp,
@@ -100,6 +100,23 @@ export class Parser {
     )
   }
 
+  private withLoc<T extends object>(node: T, token: Token): T {
+    Object.defineProperty(node, 'loc', {
+      value: { line: token.line, col: token.col },
+      enumerable: false,
+      configurable: true,
+    })
+    return node
+  }
+
+  private getLocToken(node: object): Token | null {
+    const loc = (node as { loc?: { line: number; col: number } }).loc
+    if (!loc) {
+      return null
+    }
+    return { kind: 'eof', value: '', line: loc.line, col: loc.col }
+  }
+
   // -------------------------------------------------------------------------
   // Program
   // -------------------------------------------------------------------------
@@ -134,7 +151,7 @@ export class Parser {
   // -------------------------------------------------------------------------
 
   private parseStructDecl(): StructDecl {
-    this.expect('struct')
+    const structToken = this.expect('struct')
     const name = this.expect('ident').value
     this.expect('{')
 
@@ -150,7 +167,7 @@ export class Parser {
     }
 
     this.expect('}')
-    return { name, fields }
+    return this.withLoc({ name, fields }, structToken)
   }
 
   // -------------------------------------------------------------------------
@@ -160,7 +177,7 @@ export class Parser {
   private parseFnDecl(): FnDecl {
     const decorators = this.parseDecorators()
 
-    this.expect('fn')
+    const fnToken = this.expect('fn')
     const name = this.expect('ident').value
     this.expect('(')
     const params = this.parseParams()
@@ -173,7 +190,7 @@ export class Parser {
 
     const body = this.parseBlock()
 
-    return { name, params, returnType, decorators, body }
+    return this.withLoc({ name, params, returnType, decorators, body }, fnToken)
   }
 
   private parseDecorators(): Decorator[] {
@@ -231,10 +248,11 @@ export class Parser {
 
     if (!this.check(')')) {
       do {
-        const name = this.expect('ident').value
+        const paramToken = this.expect('ident')
+        const name = paramToken.value
         this.expect(':')
         const type = this.parseType()
-        params.push({ name, type })
+        params.push(this.withLoc({ name, type }, paramToken))
       } while (this.match(','))
     }
 
@@ -328,9 +346,10 @@ export class Parser {
 
     // Raw command
     if (this.check('raw_cmd')) {
-      const cmd = this.advance().value
+      const token = this.advance()
+      const cmd = token.value
       this.match(';') // optional semicolon (raw consumes it)
-      return { kind: 'raw', cmd }
+      return this.withLoc({ kind: 'raw', cmd }, token)
     }
 
     // Expression statement
@@ -338,7 +357,7 @@ export class Parser {
   }
 
   private parseLetStmt(): Stmt {
-    this.expect('let')
+    const letToken = this.expect('let')
     const name = this.expect('ident').value
 
     let type: TypeNode | undefined
@@ -350,11 +369,11 @@ export class Parser {
     const init = this.parseExpr()
     this.expect(';')
 
-    return { kind: 'let', name, type, init }
+    return this.withLoc({ kind: 'let', name, type, init }, letToken)
   }
 
   private parseReturnStmt(): Stmt {
-    this.expect('return')
+    const returnToken = this.expect('return')
 
     let value: Expr | undefined
     if (!this.check(';')) {
@@ -362,11 +381,11 @@ export class Parser {
     }
 
     this.expect(';')
-    return { kind: 'return', value }
+    return this.withLoc({ kind: 'return', value }, returnToken)
   }
 
   private parseIfStmt(): Stmt {
-    this.expect('if')
+    const ifToken = this.expect('if')
     this.expect('(')
     const cond = this.parseExpr()
     this.expect(')')
@@ -382,28 +401,28 @@ export class Parser {
       }
     }
 
-    return { kind: 'if', cond, then, else_ }
+    return this.withLoc({ kind: 'if', cond, then, else_ }, ifToken)
   }
 
   private parseWhileStmt(): Stmt {
-    this.expect('while')
+    const whileToken = this.expect('while')
     this.expect('(')
     const cond = this.parseExpr()
     this.expect(')')
     const body = this.parseBlock()
 
-    return { kind: 'while', cond, body }
+    return this.withLoc({ kind: 'while', cond, body }, whileToken)
   }
 
   private parseForStmt(): Stmt {
-    this.expect('for')
+    const forToken = this.expect('for')
     this.expect('(')
 
     // Init: either let statement (without semicolon) or empty
     let init: Stmt | undefined
     if (this.check('let')) {
       // Parse let without consuming semicolon here (we handle it)
-      this.expect('let')
+      const letToken = this.expect('let')
       const name = this.expect('ident').value
       let type: TypeNode | undefined
       if (this.match(':')) {
@@ -411,7 +430,8 @@ export class Parser {
       }
       this.expect('=')
       const initExpr = this.parseExpr()
-      init = { kind: 'let', name, type, init: initExpr }
+      const initStmt: Stmt = { kind: 'let', name, type, init: initExpr }
+      init = this.withLoc(initStmt, letToken)
     }
     this.expect(';')
 
@@ -425,11 +445,11 @@ export class Parser {
 
     const body = this.parseBlock()
 
-    return { kind: 'for', init, cond, step, body }
+    return this.withLoc({ kind: 'for', init, cond, step, body }, forToken)
   }
 
   private parseForeachStmt(): Stmt {
-    this.expect('foreach')
+    const foreachToken = this.expect('foreach')
     this.expect('(')
     const binding = this.expect('ident').value
     this.expect('in')
@@ -437,33 +457,33 @@ export class Parser {
     this.expect(')')
     const body = this.parseBlock()
 
-    return { kind: 'foreach', binding, iterable, body }
+    return this.withLoc({ kind: 'foreach', binding, iterable, body }, foreachToken)
   }
 
   private parseAsStmt(): Stmt {
-    this.expect('as')
+    const asToken = this.expect('as')
     const as_sel = this.parseSelector()
 
     // Check for combined as/at
     if (this.match('at')) {
       const at_sel = this.parseSelector()
       const body = this.parseBlock()
-      return { kind: 'as_at', as_sel, at_sel, body }
+      return this.withLoc({ kind: 'as_at', as_sel, at_sel, body }, asToken)
     }
 
     const body = this.parseBlock()
-    return { kind: 'as_block', selector: as_sel, body }
+    return this.withLoc({ kind: 'as_block', selector: as_sel, body }, asToken)
   }
 
   private parseAtStmt(): Stmt {
-    this.expect('at')
+    const atToken = this.expect('at')
     const selector = this.parseSelector()
     const body = this.parseBlock()
-    return { kind: 'at_block', selector, body }
+    return this.withLoc({ kind: 'at_block', selector, body }, atToken)
   }
 
   private parseExecuteStmt(): Stmt {
-    this.expect('execute')
+    const executeToken = this.expect('execute')
     const subcommands: ExecuteSubcommand[] = []
 
     // Parse subcommands until we hit 'run'
@@ -499,13 +519,14 @@ export class Parser {
     this.expect('run')
     const body = this.parseBlock()
 
-    return { kind: 'execute', subcommands, body }
+    return this.withLoc({ kind: 'execute', subcommands, body }, executeToken)
   }
 
   private parseExprStmt(): Stmt {
     const expr = this.parseExpr()
     this.expect(';')
-    return { kind: 'expr', expr }
+    const exprToken = this.getLocToken(expr) ?? this.peek()
+    return this.withLoc({ kind: 'expr', expr }, exprToken)
   }
 
   // -------------------------------------------------------------------------
@@ -527,13 +548,16 @@ export class Parser {
 
       if (left.kind === 'ident') {
         const value = this.parseAssignment()
-        return { kind: 'assign', target: left.name, op, value }
+        return this.withLoc({ kind: 'assign', target: left.name, op, value }, this.getLocToken(left) ?? token)
       }
 
       // Member assignment: p.x = 10, p.x += 5
       if (left.kind === 'member') {
         const value = this.parseAssignment()
-        return { kind: 'member_assign', obj: left.obj, field: left.field, op, value }
+        return this.withLoc(
+          { kind: 'member_assign', obj: left.obj, field: left.field, op, value },
+          this.getLocToken(left) ?? token
+        )
       }
     }
 
@@ -550,9 +574,12 @@ export class Parser {
       const prec = PRECEDENCE[op]
       if (prec < minPrec) break
 
-      this.advance()
+      const opToken = this.advance()
       const right = this.parseBinaryExpr(prec + 1) // left associative
-      left = { kind: 'binary', op: op as BinOp | CmpOp | '&&' | '||', left, right }
+      left = this.withLoc(
+        { kind: 'binary', op: op as BinOp | CmpOp | '&&' | '||', left, right },
+        this.getLocToken(left) ?? opToken
+      )
     }
 
     return left
@@ -560,14 +587,15 @@ export class Parser {
 
   private parseUnaryExpr(): Expr {
     if (this.match('!')) {
+      const bangToken = this.tokens[this.pos - 1]
       const operand = this.parseUnaryExpr()
-      return { kind: 'unary', op: '!', operand }
+      return this.withLoc({ kind: 'unary', op: '!', operand }, bangToken)
     }
 
     if (this.check('-') && !this.isSubtraction()) {
-      this.advance()
+      const minusToken = this.advance()
       const operand = this.parseUnaryExpr()
-      return { kind: 'unary', op: '-', operand }
+      return this.withLoc({ kind: 'unary', op: '-', operand }, minusToken)
     }
 
     return this.parsePostfixExpr()
@@ -587,10 +615,11 @@ export class Parser {
     while (true) {
       // Function call
       if (this.match('(')) {
+        const openParenToken = this.tokens[this.pos - 1]
         if (expr.kind === 'ident') {
           const args = this.parseArgs()
           this.expect(')')
-          expr = { kind: 'call', fn: expr.name, args }
+          expr = this.withLoc({ kind: 'call', fn: expr.name, args }, this.getLocToken(expr) ?? openParenToken)
           continue
         }
         // Member call: entity.tag("name") → __entity_tag(entity, "name")
@@ -607,7 +636,10 @@ export class Parser {
           if (internalFn) {
             const args = this.parseArgs()
             this.expect(')')
-            expr = { kind: 'call', fn: internalFn, args: [expr.obj, ...args] }
+            expr = this.withLoc(
+              { kind: 'call', fn: internalFn, args: [expr.obj, ...args] },
+              this.getLocToken(expr) ?? openParenToken
+            )
             continue
           }
           this.error(`Unknown method '${expr.field}'`)
@@ -619,14 +651,20 @@ export class Parser {
       if (this.match('[')) {
         const index = this.parseExpr()
         this.expect(']')
-        expr = { kind: 'index', obj: expr, index }
+        expr = this.withLoc(
+          { kind: 'index', obj: expr, index },
+          this.getLocToken(expr) ?? this.tokens[this.pos - 1]
+        )
         continue
       }
 
       // Member access
       if (this.match('.')) {
         const field = this.expect('ident').value
-        expr = { kind: 'member', obj: expr, field }
+        expr = this.withLoc(
+          { kind: 'member', obj: expr, field },
+          this.getLocToken(expr) ?? this.tokens[this.pos - 1]
+        )
         continue
       }
 
@@ -654,47 +692,47 @@ export class Parser {
     // Integer literal
     if (token.kind === 'int_lit') {
       this.advance()
-      return { kind: 'int_lit', value: parseInt(token.value, 10) }
+      return this.withLoc({ kind: 'int_lit', value: parseInt(token.value, 10) }, token)
     }
 
     // Float literal
     if (token.kind === 'float_lit') {
       this.advance()
-      return { kind: 'float_lit', value: parseFloat(token.value) }
+      return this.withLoc({ kind: 'float_lit', value: parseFloat(token.value) }, token)
     }
 
     // String literal
     if (token.kind === 'string_lit') {
       this.advance()
-      return { kind: 'str_lit', value: token.value }
+      return this.parseStringExpr(token)
     }
 
     // Boolean literal
     if (token.kind === 'true') {
       this.advance()
-      return { kind: 'bool_lit', value: true }
+      return this.withLoc({ kind: 'bool_lit', value: true }, token)
     }
     if (token.kind === 'false') {
       this.advance()
-      return { kind: 'bool_lit', value: false }
+      return this.withLoc({ kind: 'bool_lit', value: false }, token)
     }
 
     // Range literal
     if (token.kind === 'range_lit') {
       this.advance()
-      return { kind: 'range_lit', range: this.parseRangeValue(token.value) }
+      return this.withLoc({ kind: 'range_lit', range: this.parseRangeValue(token.value) }, token)
     }
 
     // Selector
     if (token.kind === 'selector') {
       this.advance()
-      return { kind: 'selector', sel: this.parseSelectorValue(token.value) }
+      return this.withLoc({ kind: 'selector', sel: this.parseSelectorValue(token.value) }, token)
     }
 
     // Identifier
     if (token.kind === 'ident') {
       this.advance()
-      return { kind: 'ident', name: token.value }
+      return this.withLoc({ kind: 'ident', name: token.value }, token)
     }
 
     // Grouped expression
@@ -718,8 +756,85 @@ export class Parser {
     this.error(`Unexpected token '${token.kind}'`)
   }
 
+  private parseStringExpr(token: Token): Expr {
+    if (!token.value.includes('${')) {
+      return this.withLoc({ kind: 'str_lit', value: token.value }, token)
+    }
+
+    const parts: Array<string | Expr> = []
+    let current = ''
+    let index = 0
+
+    while (index < token.value.length) {
+      if (token.value[index] === '$' && token.value[index + 1] === '{') {
+        if (current) {
+          parts.push(current)
+          current = ''
+        }
+
+        index += 2
+        let depth = 1
+        let exprSource = ''
+        let inString = false
+
+        while (index < token.value.length && depth > 0) {
+          const char = token.value[index]
+
+          if (char === '"' && token.value[index - 1] !== '\\') {
+            inString = !inString
+          }
+
+          if (!inString) {
+            if (char === '{') {
+              depth++
+            } else if (char === '}') {
+              depth--
+              if (depth === 0) {
+                index++
+                break
+              }
+            }
+          }
+
+          if (depth > 0) {
+            exprSource += char
+          }
+          index++
+        }
+
+        if (depth !== 0) {
+          this.error('Unterminated string interpolation')
+        }
+
+        parts.push(this.parseEmbeddedExpr(exprSource))
+        continue
+      }
+
+      current += token.value[index]
+      index++
+    }
+
+    if (current) {
+      parts.push(current)
+    }
+
+    return this.withLoc({ kind: 'str_interp', parts }, token)
+  }
+
+  private parseEmbeddedExpr(source: string): Expr {
+    const tokens = new Lexer(source, this.filePath).tokenize()
+    const parser = new Parser(tokens, source, this.filePath)
+    const expr = parser.parseExpr()
+
+    if (!parser.check('eof')) {
+      parser.error(`Unexpected token '${parser.peek().kind}' in string interpolation`)
+    }
+
+    return expr
+  }
+
   private parseStructLit(): Expr {
-    this.expect('{')
+    const braceToken = this.expect('{')
     const fields: { name: string; value: Expr }[] = []
 
     if (!this.check('}')) {
@@ -732,11 +847,11 @@ export class Parser {
     }
 
     this.expect('}')
-    return { kind: 'struct_lit', fields }
+    return this.withLoc({ kind: 'struct_lit', fields }, braceToken)
   }
 
   private parseArrayLit(): Expr {
-    this.expect('[')
+    const bracketToken = this.expect('[')
     const elements: Expr[] = []
 
     if (!this.check(']')) {
@@ -746,7 +861,7 @@ export class Parser {
     }
 
     this.expect(']')
-    return { kind: 'array_lit', elements }
+    return this.withLoc({ kind: 'array_lit', elements }, bracketToken)
   }
 
   // -------------------------------------------------------------------------

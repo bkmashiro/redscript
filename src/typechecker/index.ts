@@ -23,6 +23,19 @@ export class TypeChecker {
     this.collector = new DiagnosticCollector(source, filePath)
   }
 
+  private getNodeLocation(node: unknown): { line: number; col: number } {
+    const loc = (node as { loc?: { line: number; col: number } } | undefined)?.loc
+    return {
+      line: loc?.line ?? 1,
+      col: loc?.col ?? 1,
+    }
+  }
+
+  private report(message: string, node?: unknown): void {
+    const { line, col } = this.getNodeLocation(node)
+    this.collector.error('TypeError', message, line, col)
+  }
+
   /**
    * Type check a program. Returns collected errors.
    */
@@ -144,20 +157,15 @@ export class TypeChecker {
       this.checkExpr(stmt.value)
       
       if (!this.typesMatch(expectedType, actualType)) {
-        this.collector.error(
-          'TypeError',
+        this.report(
           `Return type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`,
-          1, 1  // Line/col not tracked in AST
+          stmt
         )
       }
     } else {
       // No return value
       if (expectedType.kind !== 'named' || expectedType.name !== 'void') {
-        this.collector.error(
-          'TypeError',
-          `Missing return value: expected ${this.typeToString(expectedType)}`,
-          1, 1
-        )
+        this.report(`Missing return value: expected ${this.typeToString(expectedType)}`, stmt)
       }
     }
   }
@@ -166,11 +174,7 @@ export class TypeChecker {
     switch (expr.kind) {
       case 'ident':
         if (!this.scope.has(expr.name)) {
-          this.collector.error(
-            'TypeError',
-            `Variable '${expr.name}' used before declaration`,
-            1, 1
-          )
+          this.report(`Variable '${expr.name}' used before declaration`, expr)
         }
         break
 
@@ -193,11 +197,7 @@ export class TypeChecker {
 
       case 'assign':
         if (!this.scope.has(expr.target)) {
-          this.collector.error(
-            'TypeError',
-            `Variable '${expr.target}' used before declaration`,
-            1, 1
-          )
+          this.report(`Variable '${expr.target}' used before declaration`, expr)
         }
         this.checkExpr(expr.value)
         break
@@ -212,17 +212,21 @@ export class TypeChecker {
         this.checkExpr(expr.index)
         const indexType = this.inferType(expr.index)
         if (indexType.kind !== 'named' || indexType.name !== 'int') {
-          this.collector.error(
-            'TypeError',
-            'Array index must be int',
-            1, 1
-          )
+          this.report('Array index must be int', expr.index)
         }
         break
 
       case 'struct_lit':
         for (const field of expr.fields) {
           this.checkExpr(field.value)
+        }
+        break
+
+      case 'str_interp':
+        for (const part of expr.parts) {
+          if (typeof part !== 'string') {
+            this.checkExpr(part)
+          }
         }
         break
 
@@ -259,10 +263,9 @@ export class TypeChecker {
     const fn = this.functions.get(expr.fn)
     if (fn) {
       if (expr.args.length !== fn.params.length) {
-        this.collector.error(
-          'TypeError',
+        this.report(
           `Function '${expr.fn}' expects ${fn.params.length} arguments, got ${expr.args.length}`,
-          1, 1
+          expr
         )
       }
     }
@@ -280,29 +283,20 @@ export class TypeChecker {
         if (varType.kind === 'struct') {
           const structFields = this.structs.get(varType.name)
           if (structFields && !structFields.has(expr.field)) {
-            this.collector.error(
-              'TypeError',
-              `Struct '${varType.name}' has no field '${expr.field}'`,
-              1, 1
-            )
+            this.report(`Struct '${varType.name}' has no field '${expr.field}'`, expr)
           }
         } else if (varType.kind === 'array') {
           if (expr.field !== 'len' && expr.field !== 'push' && expr.field !== 'pop') {
-            this.collector.error(
-              'TypeError',
-              `Array has no field '${expr.field}'`,
-              1, 1
-            )
+            this.report(`Array has no field '${expr.field}'`, expr)
           }
         } else if (varType.kind === 'named') {
           // Entity marker (void) - allow all members
           if (varType.name !== 'void') {
             // Only warn for primitive types
             if (['int', 'bool', 'float', 'string'].includes(varType.name)) {
-              this.collector.error(
-                'TypeError',
+              this.report(
                 `Cannot access member '${expr.field}' on ${this.typeToString(varType)}`,
-                1, 1
+                expr
               )
             }
           }
@@ -320,6 +314,13 @@ export class TypeChecker {
       case 'bool_lit':
         return { kind: 'named', name: 'bool' }
       case 'str_lit':
+        return { kind: 'named', name: 'string' }
+      case 'str_interp':
+        for (const part of expr.parts) {
+          if (typeof part !== 'string') {
+            this.checkExpr(part)
+          }
+        }
         return { kind: 'named', name: 'string' }
       case 'ident':
         return this.scope.get(expr.name) ?? { kind: 'named', name: 'void' }

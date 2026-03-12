@@ -677,6 +677,10 @@ export class Lowering {
         // Strings are handled inline in builtins
         return { kind: 'const', value: 0 } // Placeholder
 
+      case 'str_interp':
+        // Interpolated strings are handled inline in message builtins.
+        return { kind: 'const', value: 0 }
+
       case 'range_lit':
         // Ranges are handled in context (selectors, etc.)
         return { kind: 'const', value: 0 }
@@ -1018,6 +1022,12 @@ export class Lowering {
   }
 
   private lowerBuiltinCall(name: string, args: Expr[]): Operand {
+    const richTextCommand = this.lowerRichTextBuiltin(name, args)
+    if (richTextCommand) {
+      this.builder.emitRaw(richTextCommand)
+      return { kind: 'const', value: 0 }
+    }
+
     // Special case: random
     if (name === 'random') {
       const dst = this.builder.freshTemp()
@@ -1074,6 +1084,113 @@ export class Lowering {
     return { kind: 'const', value: 0 }
   }
 
+  private lowerRichTextBuiltin(name: string, args: Expr[]): string | null {
+    const messageArgIndex = this.getRichTextArgIndex(name)
+    if (messageArgIndex === null) {
+      return null
+    }
+
+    const messageExpr = args[messageArgIndex]
+    if (!messageExpr || messageExpr.kind !== 'str_interp') {
+      return null
+    }
+
+    const json = this.buildRichTextJson(messageExpr)
+
+    switch (name) {
+      case 'say':
+      case 'announce':
+        return `tellraw @a ${json}`
+      case 'tell':
+        return `tellraw ${this.exprToString(args[0])} ${json}`
+      case 'title':
+        return `title ${this.exprToString(args[0])} title ${json}`
+      case 'actionbar':
+        return `title ${this.exprToString(args[0])} actionbar ${json}`
+      case 'subtitle':
+        return `title ${this.exprToString(args[0])} subtitle ${json}`
+      default:
+        return null
+    }
+  }
+
+  private getRichTextArgIndex(name: string): number | null {
+    switch (name) {
+      case 'say':
+      case 'announce':
+        return 0
+      case 'tell':
+      case 'title':
+      case 'actionbar':
+      case 'subtitle':
+        return 1
+      default:
+        return null
+    }
+  }
+
+  private buildRichTextJson(expr: Extract<Expr, { kind: 'str_interp' }>): string {
+    const components: Array<string | Record<string, unknown>> = ['']
+
+    for (const part of expr.parts) {
+      if (typeof part === 'string') {
+        if (part.length > 0) {
+          components.push({ text: part })
+        }
+        continue
+      }
+
+      this.appendRichTextExpr(components, part)
+    }
+
+    return JSON.stringify(components)
+  }
+
+  private appendRichTextExpr(components: Array<string | Record<string, unknown>>, expr: Expr): void {
+    if (expr.kind === 'str_lit') {
+      if (expr.value.length > 0) {
+        components.push({ text: expr.value })
+      }
+      return
+    }
+
+    if (expr.kind === 'str_interp') {
+      for (const part of expr.parts) {
+        if (typeof part === 'string') {
+          if (part.length > 0) {
+            components.push({ text: part })
+          }
+        } else {
+          this.appendRichTextExpr(components, part)
+        }
+      }
+      return
+    }
+
+    if (expr.kind === 'bool_lit') {
+      components.push({ text: expr.value ? 'true' : 'false' })
+      return
+    }
+
+    if (expr.kind === 'int_lit') {
+      components.push({ text: expr.value.toString() })
+      return
+    }
+
+    if (expr.kind === 'float_lit') {
+      components.push({ text: expr.value.toString() })
+      return
+    }
+
+    const operand = this.lowerExpr(expr)
+    if (operand.kind === 'const') {
+      components.push({ text: operand.value.toString() })
+      return
+    }
+
+    components.push({ score: { name: this.operandToVar(operand), objective: 'rs' } })
+  }
+
   private exprToString(expr: Expr): string {
     switch (expr.kind) {
       case 'int_lit':
@@ -1084,6 +1201,8 @@ export class Lowering {
         return expr.value ? '1' : '0'
       case 'str_lit':
         return expr.value
+      case 'str_interp':
+        return this.buildRichTextJson(expr)
       case 'ident': {
         const mapped = this.varMap.get(expr.name)
         return mapped ?? `$${expr.name}`
