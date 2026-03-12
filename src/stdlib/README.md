@@ -164,37 +164,28 @@ Player input detection (right click, sneak, look direction).
 ```
 
 ### tags.mcrs
-Minecraft tag constants (1.21+).
+Minecraft Java Edition tag constants generated from the Minecraft Fandom tag list.
 
-#### Entity Type Tags
-- `TAG_UNDEAD` — Zombies, skeletons, phantoms (#minecraft:undead)
-- `TAG_ARTHROPODS` — Spiders, silverfish, bees (#minecraft:arthropods)
-- `TAG_RAIDERS` — Pillagers, vindicators, evokers (#minecraft:raiders)
-- `TAG_SKELETONS` — All skeleton variants (#minecraft:skeletons)
-- `TAG_ZOMBIES` — All zombie variants (#minecraft:zombies)
-- `TAG_AQUATIC` — Fish, dolphins, guardians (#minecraft:aquatic)
+#### Coverage
+- 171 `BLOCK_*` constants for Java block tags
+- 14 `ENTITY_*` constants for Java entity type tags
+- 99 `ITEM_*` constants for Java item tags
+- 2 `FLUID_*` constants for Java fluid tags
+- 27 `DAMAGE_*` constants for Java damage type tags
 
-#### Block Tags
-- `TAG_LOGS`, `TAG_PLANKS`, `TAG_WOOL` — Block categories
-- `TAG_MINEABLE_PICKAXE/AXE/SHOVEL/HOE` — Tool categories
-- `TAG_NEEDS_DIAMOND_TOOL/IRON_TOOL/STONE_TOOL` — Tool requirements
-- `TAG_DOORS`, `TAG_BUTTONS`, `TAG_STAIRS`, `TAG_SLABS` — Block types
-- `TAG_*_ORES` — Coal, iron, gold, diamond, emerald, lapis, redstone, copper
-
-#### Item Tags
-- `TAG_SWORDS`, `TAG_AXES`, `TAG_PICKAXES`, `TAG_SHOVELS`, `TAG_HOES`
-- `TAG_MUSIC_DISCS`, `TAG_BOATS`, `TAG_FISHES`
-- `TAG_PIGLIN_LOVED`, `TAG_BEACON_PAYMENT_ITEMS`
+#### Naming
+- Constants use `SCREAMING_SNAKE_CASE`
+- Each constant is prefixed by category: `BLOCK_`, `ENTITY_`, `ITEM_`, `FLUID_`, `DAMAGE_`
+- Each value is the full tag selector string, for example `#minecraft:mineable/axe`
 
 #### Usage
 ```mcrs
 import "stdlib/tags.mcrs"
 
-// Select undead mobs
-foreach (e in @e[type=#minecraft:undead]) {
-    kill(e);
-}
+// Select skeleton variants
+kill(@e[type=ENTITY_SKELETONS]);
 
-// Or use constant
-kill(@e[type=TAG_UNDEAD]);
+// Use block and item tags in your own helpers
+const LOGS: string = BLOCK_LOGS;
+const SWORDS: string = ITEM_SWORDS;
 ```

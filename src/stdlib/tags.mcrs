@@ -1,187 +1,951 @@
-// ============================================
-// Minecraft Entity & Block Tags
-// ============================================
-// Built-in tag constants for type checking and selection
-// Usage: @e[type=#TAG_UNDEAD] or if (e is #TAG_RAIDERS)
-// ============================================
+// Minecraft Java Edition tag constants generated from the Minecraft Fandom Tag page.
+// Covers Java Edition block, entity type, item, fluid, and damage type tags listed on the page.
 
-// ===== Entity Type Tags =====
+// ===== BLOCK TAGS =====
 
-/// Undead mobs (zombies, skeletons, phantoms, etc.)
-/// Affected by Smite enchantment, healed by harming potions
-const TAG_UNDEAD: string = "#minecraft:undead";
+/// Blocks in `#minecraft:mineable/axe`.
+const BLOCK_MINEABLE_AXE: string = "#minecraft:mineable/axe";
 
-/// Arthropod mobs (spiders, silverfish, endermites, bees)
-/// Affected by Bane of Arthropods enchantment
-const TAG_ARTHROPODS: string = "#minecraft:arthropods";
+/// Blocks in `#minecraft:mineable/hoe`.
+const BLOCK_MINEABLE_HOE: string = "#minecraft:mineable/hoe";
 
-/// Illager raiders (pillagers, vindicators, evokers, etc.)
-const TAG_RAIDERS: string = "#minecraft:raiders";
+/// Blocks in `#minecraft:mineable/pickaxe`.
+const BLOCK_MINEABLE_PICKAXE: string = "#minecraft:mineable/pickaxe";
 
-/// All skeleton variants
-const TAG_SKELETONS: string = "#minecraft:skeletons";
+/// Blocks in `#minecraft:mineable/shovel`.
+const BLOCK_MINEABLE_SHOVEL: string = "#minecraft:mineable/shovel";
 
-/// All zombie variants  
-const TAG_ZOMBIES: string = "#minecraft:zombies";
+/// Blocks in `#minecraft:all_hanging_signs`.
+const BLOCK_ALL_HANGING_SIGNS: string = "#minecraft:all_hanging_signs";
 
-/// Mobs that can be tamed
-const TAG_CAN_BREATHE_UNDER_WATER: string = "#minecraft:can_breathe_under_water";
+/// Blocks in `#minecraft:all_signs`.
+const BLOCK_ALL_SIGNS: string = "#minecraft:all_signs";
 
-/// Entities immune to fire
-const TAG_FREEZE_IMMUNE_ENTITY_TYPES: string = "#minecraft:freeze_immune_entity_types";
+/// Blocks in `#minecraft:ancient_city_replaceable`.
+const BLOCK_ANCIENT_CITY_REPLACEABLE: string = "#minecraft:ancient_city_replaceable";
 
-/// Powder snow walkable entities
-const TAG_POWDER_SNOW_WALKABLE_MOBS: string = "#minecraft:powder_snow_walkable_mobs";
+/// Blocks in `#minecraft:animals_spawnable_on`.
+const BLOCK_ANIMALS_SPAWNABLE_ON: string = "#minecraft:animals_spawnable_on";
 
-/// Impact projectiles (arrows, tridents, etc.)
-const TAG_IMPACT_PROJECTILES: string = "#minecraft:impact_projectiles";
+/// Blocks in `#minecraft:anvil`.
+const BLOCK_ANVIL: string = "#minecraft:anvil";
 
-/// Aquatic mobs
-const TAG_AQUATIC: string = "#minecraft:aquatic";
+/// Blocks in `#minecraft:axolotls_spawnable_on`.
+const BLOCK_AXOLOTLS_SPAWNABLE_ON: string = "#minecraft:axolotls_spawnable_on";
 
-/// Axolotl huntable mobs
-const TAG_AXOLOTL_HUNT_TARGETS: string = "#minecraft:axolotl_hunt_targets";
+/// Blocks in `#minecraft:azalea_grows_on`.
+const BLOCK_AZALEA_GROWS_ON: string = "#minecraft:azalea_grows_on";
 
-/// Warden anger targets
-const TAG_WARDEN_CAN_LISTEN: string = "#minecraft:warden_can_listen";
+/// Blocks in `#minecraft:azalea_root_replaceable`.
+const BLOCK_AZALEA_ROOT_REPLACEABLE: string = "#minecraft:azalea_root_replaceable";
 
-// ===== Block Tags =====
+/// Blocks in `#minecraft:acacia_logs`.
+const BLOCK_ACACIA_LOGS: string = "#minecraft:acacia_logs";
 
-/// All wool colors
-const TAG_WOOL: string = "#minecraft:wool";
+/// Blocks in `#minecraft:bamboo_blocks`.
+const BLOCK_BAMBOO_BLOCKS: string = "#minecraft:bamboo_blocks";
 
-/// All planks
-const TAG_PLANKS: string = "#minecraft:planks";
+/// Blocks in `#minecraft:bamboo_plantable_on`.
+const BLOCK_BAMBOO_PLANTABLE_ON: string = "#minecraft:bamboo_plantable_on";
 
-/// All logs (oak, birch, etc.)
-const TAG_LOGS: string = "#minecraft:logs";
+/// Blocks in `#minecraft:banners`.
+const BLOCK_BANNERS: string = "#minecraft:banners";
 
-/// All stone types
-const TAG_STONE_BRICKS: string = "#minecraft:stone_bricks";
+/// Blocks in `#minecraft:base_stone_nether`.
+const BLOCK_BASE_STONE_NETHER: string = "#minecraft:base_stone_nether";
 
-/// Blocks mineable with pickaxe
-const TAG_MINEABLE_PICKAXE: string = "#minecraft:mineable/pickaxe";
+/// Blocks in `#minecraft:base_stone_overworld`.
+const BLOCK_BASE_STONE_OVERWORLD: string = "#minecraft:base_stone_overworld";
 
-/// Blocks mineable with axe
-const TAG_MINEABLE_AXE: string = "#minecraft:mineable/axe";
+/// Blocks in `#minecraft:beacon_base_blocks`.
+const BLOCK_BEACON_BASE_BLOCKS: string = "#minecraft:beacon_base_blocks";
 
-/// Blocks mineable with shovel
-const TAG_MINEABLE_SHOVEL: string = "#minecraft:mineable/shovel";
+/// Blocks in `#minecraft:beds`.
+const BLOCK_BEDS: string = "#minecraft:beds";
 
-/// Blocks mineable with hoe
-const TAG_MINEABLE_HOE: string = "#minecraft:mineable/hoe";
+/// Blocks in `#minecraft:beehives`.
+const BLOCK_BEEHIVES: string = "#minecraft:beehives";
 
-/// Blocks that need diamond tool
-const TAG_NEEDS_DIAMOND_TOOL: string = "#minecraft:needs_diamond_tool";
+/// Blocks in `#minecraft:bee_growables`.
+const BLOCK_BEE_GROWABLES: string = "#minecraft:bee_growables";
 
-/// Blocks that need iron tool
-const TAG_NEEDS_IRON_TOOL: string = "#minecraft:needs_iron_tool";
+/// Blocks in `#minecraft:big_dripleaf_placeable`.
+const BLOCK_BIG_DRIPLEAF_PLACEABLE: string = "#minecraft:big_dripleaf_placeable";
 
-/// Blocks that need stone tool
-const TAG_NEEDS_STONE_TOOL: string = "#minecraft:needs_stone_tool";
+/// Blocks in `#minecraft:birch_logs`.
+const BLOCK_BIRCH_LOGS: string = "#minecraft:birch_logs";
 
-/// All doors
-const TAG_DOORS: string = "#minecraft:doors";
+/// Blocks in `#minecraft:buttons`.
+const BLOCK_BUTTONS: string = "#minecraft:buttons";
 
-/// All buttons
-const TAG_BUTTONS: string = "#minecraft:buttons";
+/// Blocks in `#minecraft:camel_sand_step_sound_blocks`.
+const BLOCK_CAMEL_SAND_STEP_SOUND_BLOCKS: string = "#minecraft:camel_sand_step_sound_blocks";
 
-/// All pressure plates
-const TAG_PRESSURE_PLATES: string = "#minecraft:pressure_plates";
+/// Blocks in `#minecraft:campfires`.
+const BLOCK_CAMPFIRES: string = "#minecraft:campfires";
 
-/// All stairs
-const TAG_STAIRS: string = "#minecraft:stairs";
+/// Blocks in `#minecraft:candle_cakes`.
+const BLOCK_CANDLE_CAKES: string = "#minecraft:candle_cakes";
 
-/// All slabs
-const TAG_SLABS: string = "#minecraft:slabs";
+/// Blocks in `#minecraft:candles`.
+const BLOCK_CANDLES: string = "#minecraft:candles";
 
-/// All fences
-const TAG_FENCES: string = "#minecraft:fences";
+/// Blocks in `#minecraft:cauldrons`.
+const BLOCK_CAULDRONS: string = "#minecraft:cauldrons";
 
-/// All walls
-const TAG_WALLS: string = "#minecraft:walls";
+/// Blocks in `#minecraft:cave_vines`.
+const BLOCK_CAVE_VINES: string = "#minecraft:cave_vines";
 
-/// All signs
-const TAG_SIGNS: string = "#minecraft:signs";
+/// Blocks in `#minecraft:ceiling_hanging_signs`.
+const BLOCK_CEILING_HANGING_SIGNS: string = "#minecraft:ceiling_hanging_signs";
 
-/// All beds
-const TAG_BEDS: string = "#minecraft:beds";
+/// Blocks in `#minecraft:cherry_logs`.
+const BLOCK_CHERRY_LOGS: string = "#minecraft:cherry_logs";
 
-/// All flowers
-const TAG_FLOWERS: string = "#minecraft:flowers";
+/// Blocks in `#minecraft:climbable`.
+const BLOCK_CLIMBABLE: string = "#minecraft:climbable";
 
-/// All saplings
-const TAG_SAPLINGS: string = "#minecraft:saplings";
+/// Blocks in `#minecraft:coal_ores`.
+const BLOCK_COAL_ORES: string = "#minecraft:coal_ores";
 
-/// All leaves
-const TAG_LEAVES: string = "#minecraft:leaves";
+/// Blocks in `#minecraft:combination_step_sound_blocks`.
+const BLOCK_COMBINATION_STEP_SOUND_BLOCKS: string = "#minecraft:combination_step_sound_blocks";
 
-/// All crops
-const TAG_CROPS: string = "#minecraft:crops";
+/// Blocks in `#minecraft:completes_find_tree_tutorial`.
+const BLOCK_COMPLETES_FIND_TREE_TUTORIAL: string = "#minecraft:completes_find_tree_tutorial";
 
-/// All ores
-const TAG_COAL_ORES: string = "#minecraft:coal_ores";
-const TAG_IRON_ORES: string = "#minecraft:iron_ores";
-const TAG_GOLD_ORES: string = "#minecraft:gold_ores";
-const TAG_DIAMOND_ORES: string = "#minecraft:diamond_ores";
-const TAG_EMERALD_ORES: string = "#minecraft:emerald_ores";
-const TAG_LAPIS_ORES: string = "#minecraft:lapis_ores";
-const TAG_REDSTONE_ORES: string = "#minecraft:redstone_ores";
-const TAG_COPPER_ORES: string = "#minecraft:copper_ores";
+/// Blocks in `#minecraft:concrete_powder`.
+const BLOCK_CONCRETE_POWDER: string = "#minecraft:concrete_powder";
 
-// ===== Item Tags =====
+/// Blocks in `#minecraft:convertable_to_mud`.
+const BLOCK_CONVERTABLE_TO_MUD: string = "#minecraft:convertable_to_mud";
 
-/// All swords
-const TAG_SWORDS: string = "#minecraft:swords";
+/// Blocks in `#minecraft:copper_ores`.
+const BLOCK_COPPER_ORES: string = "#minecraft:copper_ores";
 
-/// All axes
-const TAG_AXES: string = "#minecraft:axes";
+/// Blocks in `#minecraft:corals`.
+const BLOCK_CORALS: string = "#minecraft:corals";
 
-/// All pickaxes  
-const TAG_PICKAXES: string = "#minecraft:pickaxes";
+/// Blocks in `#minecraft:coral_blocks`.
+const BLOCK_CORAL_BLOCKS: string = "#minecraft:coral_blocks";
 
-/// All shovels
-const TAG_SHOVELS: string = "#minecraft:shovels";
+/// Blocks in `#minecraft:coral_plants`.
+const BLOCK_CORAL_PLANTS: string = "#minecraft:coral_plants";
 
-/// All hoes
-const TAG_HOES: string = "#minecraft:hoes";
+/// Blocks in `#minecraft:crimson_stems`.
+const BLOCK_CRIMSON_STEMS: string = "#minecraft:crimson_stems";
 
-/// All armor trims
-const TAG_TRIM_MATERIALS: string = "#minecraft:trim_materials";
+/// Blocks in `#minecraft:crops`.
+const BLOCK_CROPS: string = "#minecraft:crops";
 
-/// All music discs
-const TAG_MUSIC_DISCS: string = "#minecraft:music_discs";
+/// Blocks in `#minecraft:crystal_sound_blocks`.
+const BLOCK_CRYSTAL_SOUND_BLOCKS: string = "#minecraft:crystal_sound_blocks";
 
-/// All boats
-const TAG_BOATS: string = "#minecraft:boats";
+/// Blocks in `#minecraft:dampens_vibrations`.
+const BLOCK_DAMPENS_VIBRATIONS: string = "#minecraft:dampens_vibrations";
 
-/// All fish food (for cats)
-const TAG_FISHES: string = "#minecraft:fishes";
+/// Blocks in `#minecraft:dark_oak_logs`.
+const BLOCK_DARK_OAK_LOGS: string = "#minecraft:dark_oak_logs";
 
-/// Piglin loved items
-const TAG_PIGLIN_LOVED: string = "#minecraft:piglin_loved";
+/// Blocks in `#minecraft:dead_bush_may_place_on`.
+const BLOCK_DEAD_BUSH_MAY_PLACE_ON: string = "#minecraft:dead_bush_may_place_on";
 
-/// Items that make piglins angry when opened
-const TAG_PIGLIN_REPELLENTS: string = "#minecraft:piglin_repellents";
+/// Blocks in `#minecraft:deepslate_ore_replaceables`.
+const BLOCK_DEEPSLATE_ORE_REPLACEABLES: string = "#minecraft:deepslate_ore_replaceables";
 
-/// Fox food
-const TAG_FOX_FOOD: string = "#minecraft:fox_food";
+/// Blocks in `#minecraft:diamond_ores`.
+const BLOCK_DIAMOND_ORES: string = "#minecraft:diamond_ores";
 
-/// Beacon payment items
-const TAG_BEACON_PAYMENT_ITEMS: string = "#minecraft:beacon_payment_items";
+/// Blocks in `#minecraft:dirt`.
+const BLOCK_DIRT: string = "#minecraft:dirt";
 
-// ===== Helper Functions =====
+/// Blocks in `#minecraft:doors`.
+const BLOCK_DOORS: string = "#minecraft:doors";
 
-/// Check if entity matches a tag
-fn is_tagged(target: selector, tag: string): bool {
-    // Note: This is compile-time only, returns true for syntax purposes
-    // Actual check happens via execute if entity target[type=tag]
-    return true;
-}
+/// Blocks in `#minecraft:dragon_immune`.
+const BLOCK_DRAGON_IMMUNE: string = "#minecraft:dragon_immune";
 
-/// Select entities by tag
-/// Usage: foreach (e in entities_with_tag(TAG_UNDEAD)) { ... }
-fn entities_with_tag(tag: string): selector {
-    // Returns @e[type=tag] selector
-    return @e;  // Placeholder - actual implementation in lowering
-}
+/// Blocks in `#minecraft:dragon_transparent`.
+const BLOCK_DRAGON_TRANSPARENT: string = "#minecraft:dragon_transparent";
+
+/// Blocks in `#minecraft:dripstone_replaceable_blocks`.
+const BLOCK_DRIPSTONE_REPLACEABLE_BLOCKS: string = "#minecraft:dripstone_replaceable_blocks";
+
+/// Blocks in `#minecraft:emerald_ores`.
+const BLOCK_EMERALD_ORES: string = "#minecraft:emerald_ores";
+
+/// Blocks in `#minecraft:enchantment_power_provider`.
+const BLOCK_ENCHANTMENT_POWER_PROVIDER: string = "#minecraft:enchantment_power_provider";
+
+/// Blocks in `#minecraft:enchantment_power_transmitter`.
+const BLOCK_ENCHANTMENT_POWER_TRANSMITTER: string = "#minecraft:enchantment_power_transmitter";
+
+/// Blocks in `#minecraft:enderman_holdable`.
+const BLOCK_ENDERMAN_HOLDABLE: string = "#minecraft:enderman_holdable";
+
+/// Blocks in `#minecraft:fall_damage_resetting`.
+const BLOCK_FALL_DAMAGE_RESETTING: string = "#minecraft:fall_damage_resetting";
+
+/// Blocks in `#minecraft:features_cannot_replace`.
+const BLOCK_FEATURES_CANNOT_REPLACE: string = "#minecraft:features_cannot_replace";
+
+/// Blocks in `#minecraft:fence_gates`.
+const BLOCK_FENCE_GATES: string = "#minecraft:fence_gates";
+
+/// Blocks in `#minecraft:fences`.
+const BLOCK_FENCES: string = "#minecraft:fences";
+
+/// Blocks in `#minecraft:fire`.
+const BLOCK_FIRE: string = "#minecraft:fire";
+
+/// Blocks in `#minecraft:flower_pots`.
+const BLOCK_FLOWER_POTS: string = "#minecraft:flower_pots";
+
+/// Blocks in `#minecraft:flowers`.
+const BLOCK_FLOWERS: string = "#minecraft:flowers";
+
+/// Blocks in `#minecraft:foxes_spawnable_on`.
+const BLOCK_FOXES_SPAWNABLE_ON: string = "#minecraft:foxes_spawnable_on";
+
+/// Blocks in `#minecraft:frog_prefer_jump_to`.
+const BLOCK_FROG_PREFER_JUMP_TO: string = "#minecraft:frog_prefer_jump_to";
+
+/// Blocks in `#minecraft:frogs_spawnable_on`.
+const BLOCK_FROGS_SPAWNABLE_ON: string = "#minecraft:frogs_spawnable_on";
+
+/// Blocks in `#minecraft:geode_invalid_blocks`.
+const BLOCK_GEODE_INVALID_BLOCKS: string = "#minecraft:geode_invalid_blocks";
+
+/// Blocks in `#minecraft:goats_spawnable_on`.
+const BLOCK_GOATS_SPAWNABLE_ON: string = "#minecraft:goats_spawnable_on";
+
+/// Blocks in `#minecraft:gold_ores`.
+const BLOCK_GOLD_ORES: string = "#minecraft:gold_ores";
+
+/// Blocks in `#minecraft:guarded_by_piglins`.
+const BLOCK_GUARDED_BY_PIGLINS: string = "#minecraft:guarded_by_piglins";
+
+/// Blocks in `#minecraft:hoglin_repellents`.
+const BLOCK_HOGLIN_REPELLENTS: string = "#minecraft:hoglin_repellents";
+
+/// Blocks in `#minecraft:ice`.
+const BLOCK_ICE: string = "#minecraft:ice";
+
+/// Blocks in `#minecraft:impermeable`.
+const BLOCK_IMPERMEABLE: string = "#minecraft:impermeable";
+
+/// Blocks in `#minecraft:infiniburn_end`.
+const BLOCK_INFINIBURN_END: string = "#minecraft:infiniburn_end";
+
+/// Blocks in `#minecraft:infiniburn_nether`.
+const BLOCK_INFINIBURN_NETHER: string = "#minecraft:infiniburn_nether";
+
+/// Blocks in `#minecraft:infiniburn_overworld`.
+const BLOCK_INFINIBURN_OVERWORLD: string = "#minecraft:infiniburn_overworld";
+
+/// Blocks in `#minecraft:inside_step_sound_blocks`.
+const BLOCK_INSIDE_STEP_SOUND_BLOCKS: string = "#minecraft:inside_step_sound_blocks";
+
+/// Blocks in `#minecraft:invalid_spawn_inside`.
+const BLOCK_INVALID_SPAWN_INSIDE: string = "#minecraft:invalid_spawn_inside";
+
+/// Blocks in `#minecraft:iron_ores`.
+const BLOCK_IRON_ORES: string = "#minecraft:iron_ores";
+
+/// Blocks in `#minecraft:jungle_logs`.
+const BLOCK_JUNGLE_LOGS: string = "#minecraft:jungle_logs";
+
+/// Blocks in `#minecraft:lapis_ores`.
+const BLOCK_LAPIS_ORES: string = "#minecraft:lapis_ores";
+
+/// Blocks in `#minecraft:lava_pool_stone_cannot_replace`.
+const BLOCK_LAVA_POOL_STONE_CANNOT_REPLACE: string = "#minecraft:lava_pool_stone_cannot_replace";
+
+/// Blocks in `#minecraft:leaves`.
+const BLOCK_LEAVES: string = "#minecraft:leaves";
+
+/// Blocks in `#minecraft:logs`.
+const BLOCK_LOGS: string = "#minecraft:logs";
+
+/// Blocks in `#minecraft:logs_that_burn`.
+const BLOCK_LOGS_THAT_BURN: string = "#minecraft:logs_that_burn";
+
+/// Blocks in `#minecraft:lush_ground_replaceable`.
+const BLOCK_LUSH_GROUND_REPLACEABLE: string = "#minecraft:lush_ground_replaceable";
+
+/// Blocks in `#minecraft:maintains_farmland`.
+const BLOCK_MAINTAINS_FARMLAND: string = "#minecraft:maintains_farmland";
+
+/// Blocks in `#minecraft:mangrove_logs`.
+const BLOCK_MANGROVE_LOGS: string = "#minecraft:mangrove_logs";
+
+/// Blocks in `#minecraft:mangrove_logs_can_grow_through`.
+const BLOCK_MANGROVE_LOGS_CAN_GROW_THROUGH: string = "#minecraft:mangrove_logs_can_grow_through";
+
+/// Blocks in `#minecraft:mangrove_roots_can_grow_through`.
+const BLOCK_MANGROVE_ROOTS_CAN_GROW_THROUGH: string = "#minecraft:mangrove_roots_can_grow_through";
+
+/// Blocks in `#minecraft:mooshrooms_spawnable_on`.
+const BLOCK_MOOSHROOMS_SPAWNABLE_ON: string = "#minecraft:mooshrooms_spawnable_on";
+
+/// Blocks in `#minecraft:moss_replaceable`.
+const BLOCK_MOSS_REPLACEABLE: string = "#minecraft:moss_replaceable";
+
+/// Blocks in `#minecraft:mushroom_grow_block`.
+const BLOCK_MUSHROOM_GROW_BLOCK: string = "#minecraft:mushroom_grow_block";
+
+/// Blocks in `#minecraft:needs_diamond_tool`.
+const BLOCK_NEEDS_DIAMOND_TOOL: string = "#minecraft:needs_diamond_tool";
+
+/// Blocks in `#minecraft:needs_iron_tool`.
+const BLOCK_NEEDS_IRON_TOOL: string = "#minecraft:needs_iron_tool";
+
+/// Blocks in `#minecraft:needs_stone_tool`.
+const BLOCK_NEEDS_STONE_TOOL: string = "#minecraft:needs_stone_tool";
+
+/// Blocks in `#minecraft:nether_carver_replaceables`.
+const BLOCK_NETHER_CARVER_REPLACEABLES: string = "#minecraft:nether_carver_replaceables";
+
+/// Blocks in `#minecraft:nylium`.
+const BLOCK_NYLIUM: string = "#minecraft:nylium";
+
+/// Blocks in `#minecraft:oak_logs`.
+const BLOCK_OAK_LOGS: string = "#minecraft:oak_logs";
+
+/// Blocks in `#minecraft:occludes_vibration_signals`.
+const BLOCK_OCCLUDES_VIBRATION_SIGNALS: string = "#minecraft:occludes_vibration_signals";
+
+/// Blocks in `#minecraft:overworld_carver_replaceables`.
+const BLOCK_OVERWORLD_CARVER_REPLACEABLES: string = "#minecraft:overworld_carver_replaceables";
+
+/// Blocks in `#minecraft:overworld_natural_logs`.
+const BLOCK_OVERWORLD_NATURAL_LOGS: string = "#minecraft:overworld_natural_logs";
+
+/// Blocks in `#minecraft:parrots_spawnable_on`.
+const BLOCK_PARROTS_SPAWNABLE_ON: string = "#minecraft:parrots_spawnable_on";
+
+/// Blocks in `#minecraft:piglin_repellents`.
+const BLOCK_PIGLIN_REPELLENTS: string = "#minecraft:piglin_repellents";
+
+/// Blocks in `#minecraft:planks`.
+const BLOCK_PLANKS: string = "#minecraft:planks";
+
+/// Blocks in `#minecraft:polar_bears_spawnable_on_alternate`.
+const BLOCK_POLAR_BEARS_SPAWNABLE_ON_ALTERNATE: string = "#minecraft:polar_bears_spawnable_on_alternate";
+
+/// Blocks in `#minecraft:portals`.
+const BLOCK_PORTALS: string = "#minecraft:portals";
+
+/// Blocks in `#minecraft:pressure_plates`.
+const BLOCK_PRESSURE_PLATES: string = "#minecraft:pressure_plates";
+
+/// Blocks in `#minecraft:prevent_mob_spawning_inside`.
+const BLOCK_PREVENT_MOB_SPAWNING_INSIDE: string = "#minecraft:prevent_mob_spawning_inside";
+
+/// Blocks in `#minecraft:rabbits_spawnable_on`.
+const BLOCK_RABBITS_SPAWNABLE_ON: string = "#minecraft:rabbits_spawnable_on";
+
+/// Blocks in `#minecraft:rails`.
+const BLOCK_RAILS: string = "#minecraft:rails";
+
+/// Blocks in `#minecraft:redstone_ores`.
+const BLOCK_REDSTONE_ORES: string = "#minecraft:redstone_ores";
+
+/// Blocks in `#minecraft:replaceable`.
+const BLOCK_REPLACEABLE: string = "#minecraft:replaceable";
+
+/// Blocks in `#minecraft:replaceable_by_trees`.
+const BLOCK_REPLACEABLE_BY_TREES: string = "#minecraft:replaceable_by_trees";
+
+/// Blocks in `#minecraft:sand`.
+const BLOCK_SAND: string = "#minecraft:sand";
+
+/// Blocks in `#minecraft:saplings`.
+const BLOCK_SAPLINGS: string = "#minecraft:saplings";
+
+/// Blocks in `#minecraft:sculk_replaceable`.
+const BLOCK_SCULK_REPLACEABLE: string = "#minecraft:sculk_replaceable";
+
+/// Blocks in `#minecraft:sculk_replaceable_worldgen`.
+const BLOCK_SCULK_REPLACEABLE_WORLDGEN: string = "#minecraft:sculk_replaceable_worldgen";
+
+/// Blocks in `#minecraft:shulker_boxes`.
+const BLOCK_SHULKER_BOXES: string = "#minecraft:shulker_boxes";
+
+/// Blocks in `#minecraft:signs`.
+const BLOCK_SIGNS: string = "#minecraft:signs";
+
+/// Blocks in `#minecraft:slabs`.
+const BLOCK_SLABS: string = "#minecraft:slabs";
+
+/// Blocks in `#minecraft:small_dripleaf_placeable`.
+const BLOCK_SMALL_DRIPLEAF_PLACEABLE: string = "#minecraft:small_dripleaf_placeable";
+
+/// Blocks in `#minecraft:small_flowers`.
+const BLOCK_SMALL_FLOWERS: string = "#minecraft:small_flowers";
+
+/// Blocks in `#minecraft:smelts_to_glass`.
+const BLOCK_SMELTS_TO_GLASS: string = "#minecraft:smelts_to_glass";
+
+/// Blocks in `#minecraft:snaps_goat_horn`.
+const BLOCK_SNAPS_GOAT_HORN: string = "#minecraft:snaps_goat_horn";
+
+/// Blocks in `#minecraft:sniffer_diggable_block`.
+const BLOCK_SNIFFER_DIGGABLE_BLOCK: string = "#minecraft:sniffer_diggable_block";
+
+/// Blocks in `#minecraft:sniffer_egg_hatch_boost`.
+const BLOCK_SNIFFER_EGG_HATCH_BOOST: string = "#minecraft:sniffer_egg_hatch_boost";
+
+/// Blocks in `#minecraft:snow`.
+const BLOCK_SNOW: string = "#minecraft:snow";
+
+/// Blocks in `#minecraft:snow_layer_can_survive_on`.
+const BLOCK_SNOW_LAYER_CAN_SURVIVE_ON: string = "#minecraft:snow_layer_can_survive_on";
+
+/// Blocks in `#minecraft:snow_layer_cannot_survive_on`.
+const BLOCK_SNOW_LAYER_CANNOT_SURVIVE_ON: string = "#minecraft:snow_layer_cannot_survive_on";
+
+/// Blocks in `#minecraft:soul_fire_base_blocks`.
+const BLOCK_SOUL_FIRE_BASE_BLOCKS: string = "#minecraft:soul_fire_base_blocks";
+
+/// Blocks in `#minecraft:soul_speed_blocks`.
+const BLOCK_SOUL_SPEED_BLOCKS: string = "#minecraft:soul_speed_blocks";
+
+/// Blocks in `#minecraft:spruce_logs`.
+const BLOCK_SPRUCE_LOGS: string = "#minecraft:spruce_logs";
+
+/// Blocks in `#minecraft:stairs`.
+const BLOCK_STAIRS: string = "#minecraft:stairs";
+
+/// Blocks in `#minecraft:standing_signs`.
+const BLOCK_STANDING_SIGNS: string = "#minecraft:standing_signs";
+
+/// Blocks in `#minecraft:stone_bricks`.
+const BLOCK_STONE_BRICKS: string = "#minecraft:stone_bricks";
+
+/// Blocks in `#minecraft:stone_buttons`.
+const BLOCK_STONE_BUTTONS: string = "#minecraft:stone_buttons";
+
+/// Blocks in `#minecraft:stone_ore_replaceables`.
+const BLOCK_STONE_ORE_REPLACEABLES: string = "#minecraft:stone_ore_replaceables";
+
+/// Blocks in `#minecraft:stone_pressure_plates`.
+const BLOCK_STONE_PRESSURE_PLATES: string = "#minecraft:stone_pressure_plates";
+
+/// Blocks in `#minecraft:strider_warm_blocks`.
+const BLOCK_STRIDER_WARM_BLOCKS: string = "#minecraft:strider_warm_blocks";
+
+/// Blocks in `#minecraft:sword_efficient`.
+const BLOCK_SWORD_EFFICIENT: string = "#minecraft:sword_efficient";
+
+/// Blocks in `#minecraft:tall_flowers`.
+const BLOCK_TALL_FLOWERS: string = "#minecraft:tall_flowers";
+
+/// Blocks in `#minecraft:terracotta`.
+const BLOCK_TERRACOTTA: string = "#minecraft:terracotta";
+
+/// Blocks in `#minecraft:trail_ruins_replaceable`.
+const BLOCK_TRAIL_RUINS_REPLACEABLE: string = "#minecraft:trail_ruins_replaceable";
+
+/// Blocks in `#minecraft:trapdoors`.
+const BLOCK_TRAPDOORS: string = "#minecraft:trapdoors";
+
+/// Blocks in `#minecraft:underwater_bonemeals`.
+const BLOCK_UNDERWATER_BONEMEALS: string = "#minecraft:underwater_bonemeals";
+
+/// Blocks in `#minecraft:unstable_bottom_center`.
+const BLOCK_UNSTABLE_BOTTOM_CENTER: string = "#minecraft:unstable_bottom_center";
+
+/// Blocks in `#minecraft:valid_spawn`.
+const BLOCK_VALID_SPAWN: string = "#minecraft:valid_spawn";
+
+/// Blocks in `#minecraft:walls`.
+const BLOCK_WALLS: string = "#minecraft:walls";
+
+/// Blocks in `#minecraft:wall_corals`.
+const BLOCK_WALL_CORALS: string = "#minecraft:wall_corals";
+
+/// Blocks in `#minecraft:wall_hanging_signs`.
+const BLOCK_WALL_HANGING_SIGNS: string = "#minecraft:wall_hanging_signs";
+
+/// Blocks in `#minecraft:wall_post_override`.
+const BLOCK_WALL_POST_OVERRIDE: string = "#minecraft:wall_post_override";
+
+/// Blocks in `#minecraft:wall_signs`.
+const BLOCK_WALL_SIGNS: string = "#minecraft:wall_signs";
+
+/// Blocks in `#minecraft:warped_stems`.
+const BLOCK_WARPED_STEMS: string = "#minecraft:warped_stems";
+
+/// Blocks in `#minecraft:wart_blocks`.
+const BLOCK_WART_BLOCKS: string = "#minecraft:wart_blocks";
+
+/// Blocks in `#minecraft:wither_immune`.
+const BLOCK_WITHER_IMMUNE: string = "#minecraft:wither_immune";
+
+/// Blocks in `#minecraft:wither_summon_base_blocks`.
+const BLOCK_WITHER_SUMMON_BASE_BLOCKS: string = "#minecraft:wither_summon_base_blocks";
+
+/// Blocks in `#minecraft:wolves_spawnable_on`.
+const BLOCK_WOLVES_SPAWNABLE_ON: string = "#minecraft:wolves_spawnable_on";
+
+/// Blocks in `#minecraft:wooden_buttons`.
+const BLOCK_WOODEN_BUTTONS: string = "#minecraft:wooden_buttons";
+
+/// Blocks in `#minecraft:wooden_doors`.
+const BLOCK_WOODEN_DOORS: string = "#minecraft:wooden_doors";
+
+/// Blocks in `#minecraft:wooden_fences`.
+const BLOCK_WOODEN_FENCES: string = "#minecraft:wooden_fences";
+
+/// Blocks in `#minecraft:wooden_pressure_plates`.
+const BLOCK_WOODEN_PRESSURE_PLATES: string = "#minecraft:wooden_pressure_plates";
+
+/// Blocks in `#minecraft:wooden_slabs`.
+const BLOCK_WOODEN_SLABS: string = "#minecraft:wooden_slabs";
+
+/// Blocks in `#minecraft:wooden_stairs`.
+const BLOCK_WOODEN_STAIRS: string = "#minecraft:wooden_stairs";
+
+/// Blocks in `#minecraft:wooden_trapdoors`.
+const BLOCK_WOODEN_TRAPDOORS: string = "#minecraft:wooden_trapdoors";
+
+/// Blocks in `#minecraft:wool`.
+const BLOCK_WOOL: string = "#minecraft:wool";
+
+/// Blocks in `#minecraft:wool_carpets`.
+const BLOCK_WOOL_CARPETS: string = "#minecraft:wool_carpets";
+
+// ===== ENTITY TYPE TAGS =====
+
+/// Entity types in `#minecraft:arrows`.
+const ENTITY_ARROWS: string = "#minecraft:arrows";
+
+/// Entity types in `#minecraft:axolotl_always_hostiles`.
+const ENTITY_AXOLOTL_ALWAYS_HOSTILES: string = "#minecraft:axolotl_always_hostiles";
+
+/// Entity types in `#minecraft:axolotl_hunt_targets`.
+const ENTITY_AXOLOTL_HUNT_TARGETS: string = "#minecraft:axolotl_hunt_targets";
+
+/// Entity types in `#minecraft:beehive_inhabitors`.
+const ENTITY_BEEHIVE_INHABITORS: string = "#minecraft:beehive_inhabitors";
+
+/// Entity types in `#minecraft:dismounts_underwater`.
+const ENTITY_DISMOUNTS_UNDERWATER: string = "#minecraft:dismounts_underwater";
+
+/// Entity types in `#minecraft:fall_damage_immune`.
+const ENTITY_FALL_DAMAGE_IMMUNE: string = "#minecraft:fall_damage_immune";
+
+/// Entity types in `#minecraft:freeze_hurts_extra_types`.
+const ENTITY_FREEZE_HURTS_EXTRA_TYPES: string = "#minecraft:freeze_hurts_extra_types";
+
+/// Entity types in `#minecraft:freeze_immune_entity_types`.
+const ENTITY_FREEZE_IMMUNE_ENTITY_TYPES: string = "#minecraft:freeze_immune_entity_types";
+
+/// Entity types in `#minecraft:frog_food`.
+const ENTITY_FROG_FOOD: string = "#minecraft:frog_food";
+
+/// Entity types in `#minecraft:impact_projectiles`.
+const ENTITY_IMPACT_PROJECTILES: string = "#minecraft:impact_projectiles";
+
+/// Entity types in `#minecraft:non_controlling_rider`.
+const ENTITY_NON_CONTROLLING_RIDER: string = "#minecraft:non_controlling_rider";
+
+/// Entity types in `#minecraft:powder_snow_walkable_mobs`.
+const ENTITY_POWDER_SNOW_WALKABLE_MOBS: string = "#minecraft:powder_snow_walkable_mobs";
+
+/// Entity types in `#minecraft:raiders`.
+const ENTITY_RAIDERS: string = "#minecraft:raiders";
+
+/// Entity types in `#minecraft:skeletons`.
+const ENTITY_SKELETONS: string = "#minecraft:skeletons";
+
+// ===== ITEM TAGS =====
+
+/// Items in `#minecraft:acacia_logs`.
+const ITEM_ACACIA_LOGS: string = "#minecraft:acacia_logs";
+
+/// Items in `#minecraft:anvil`.
+const ITEM_ANVIL: string = "#minecraft:anvil";
+
+/// Items in `#minecraft:arrows`.
+const ITEM_ARROWS: string = "#minecraft:arrows";
+
+/// Items in `#minecraft:axes`.
+const ITEM_AXES: string = "#minecraft:axes";
+
+/// Items in `#minecraft:axolotl_tempt_items`.
+const ITEM_AXOLOTL_TEMPT_ITEMS: string = "#minecraft:axolotl_tempt_items";
+
+/// Items in `#minecraft:bamboo_blocks`.
+const ITEM_BAMBOO_BLOCKS: string = "#minecraft:bamboo_blocks";
+
+/// Items in `#minecraft:banners`.
+const ITEM_BANNERS: string = "#minecraft:banners";
+
+/// Items in `#minecraft:beacon_payment_items`.
+const ITEM_BEACON_PAYMENT_ITEMS: string = "#minecraft:beacon_payment_items";
+
+/// Items in `#minecraft:beds`.
+const ITEM_BEDS: string = "#minecraft:beds";
+
+/// Items in `#minecraft:birch_logs`.
+const ITEM_BIRCH_LOGS: string = "#minecraft:birch_logs";
+
+/// Items in `#minecraft:boats`.
+const ITEM_BOATS: string = "#minecraft:boats";
+
+/// Items in `#minecraft:bookshelf_books`.
+const ITEM_BOOKSHELF_BOOKS: string = "#minecraft:bookshelf_books";
+
+/// Items in `#minecraft:breaks_decorated_pots`.
+const ITEM_BREAKS_DECORATED_POTS: string = "#minecraft:breaks_decorated_pots";
+
+/// Items in `#minecraft:buttons`.
+const ITEM_BUTTONS: string = "#minecraft:buttons";
+
+/// Items in `#minecraft:candles`.
+const ITEM_CANDLES: string = "#minecraft:candles";
+
+/// Items in `#minecraft:cherry_logs`.
+const ITEM_CHERRY_LOGS: string = "#minecraft:cherry_logs";
+
+/// Items in `#minecraft:chest_boats`.
+const ITEM_CHEST_BOATS: string = "#minecraft:chest_boats";
+
+/// Items in `#minecraft:cluster_max_harvestables`.
+const ITEM_CLUSTER_MAX_HARVESTABLES: string = "#minecraft:cluster_max_harvestables";
+
+/// Items in `#minecraft:coal_ores`.
+const ITEM_COAL_ORES: string = "#minecraft:coal_ores";
+
+/// Items in `#minecraft:coals`.
+const ITEM_COALS: string = "#minecraft:coals";
+
+/// Items in `#minecraft:compasses`.
+const ITEM_COMPASSES: string = "#minecraft:compasses";
+
+/// Items in `#minecraft:completes_find_tree_tutorial`.
+const ITEM_COMPLETES_FIND_TREE_TUTORIAL: string = "#minecraft:completes_find_tree_tutorial";
+
+/// Items in `#minecraft:copper_ores`.
+const ITEM_COPPER_ORES: string = "#minecraft:copper_ores";
+
+/// Items in `#minecraft:creeper_drop_music_discs`.
+const ITEM_CREEPER_DROP_MUSIC_DISCS: string = "#minecraft:creeper_drop_music_discs";
+
+/// Items in `#minecraft:creeper_igniters`.
+const ITEM_CREEPER_IGNITERS: string = "#minecraft:creeper_igniters";
+
+/// Items in `#minecraft:crimson_stems`.
+const ITEM_CRIMSON_STEMS: string = "#minecraft:crimson_stems";
+
+/// Items in `#minecraft:dampens_vibrations`.
+const ITEM_DAMPENS_VIBRATIONS: string = "#minecraft:dampens_vibrations";
+
+/// Items in `#minecraft:dark_oak_logs`.
+const ITEM_DARK_OAK_LOGS: string = "#minecraft:dark_oak_logs";
+
+/// Items in `#minecraft:decorated_pot_ingredients`.
+const ITEM_DECORATED_POT_INGREDIENTS: string = "#minecraft:decorated_pot_ingredients";
+
+/// Items in `#minecraft:decorated_pot_sherds`.
+const ITEM_DECORATED_POT_SHERDS: string = "#minecraft:decorated_pot_sherds";
+
+/// Items in `#minecraft:diamond_ores`.
+const ITEM_DIAMOND_ORES: string = "#minecraft:diamond_ores";
+
+/// Items in `#minecraft:dirt`.
+const ITEM_DIRT: string = "#minecraft:dirt";
+
+/// Items in `#minecraft:doors`.
+const ITEM_DOORS: string = "#minecraft:doors";
+
+/// Items in `#minecraft:emerald_ores`.
+const ITEM_EMERALD_ORES: string = "#minecraft:emerald_ores";
+
+/// Items in `#minecraft:fence_gates`.
+const ITEM_FENCE_GATES: string = "#minecraft:fence_gates";
+
+/// Items in `#minecraft:fences`.
+const ITEM_FENCES: string = "#minecraft:fences";
+
+/// Items in `#minecraft:fishes`.
+const ITEM_FISHES: string = "#minecraft:fishes";
+
+/// Items in `#minecraft:flowers`.
+const ITEM_FLOWERS: string = "#minecraft:flowers";
+
+/// Items in `#minecraft:fox_food`.
+const ITEM_FOX_FOOD: string = "#minecraft:fox_food";
+
+/// Items in `#minecraft:freeze_immune_wearables`.
+const ITEM_FREEZE_IMMUNE_WEARABLES: string = "#minecraft:freeze_immune_wearables";
+
+/// Items in `#minecraft:gold_ores`.
+const ITEM_GOLD_ORES: string = "#minecraft:gold_ores";
+
+/// Items in `#minecraft:hanging_signs`.
+const ITEM_HANGING_SIGNS: string = "#minecraft:hanging_signs";
+
+/// Items in `#minecraft:hoes`.
+const ITEM_HOES: string = "#minecraft:hoes";
+
+/// Items in `#minecraft:ignored_by_piglin_babies`.
+const ITEM_IGNORED_BY_PIGLIN_BABIES: string = "#minecraft:ignored_by_piglin_babies";
+
+/// Items in `#minecraft:iron_ores`.
+const ITEM_IRON_ORES: string = "#minecraft:iron_ores";
+
+/// Items in `#minecraft:jungle_logs`.
+const ITEM_JUNGLE_LOGS: string = "#minecraft:jungle_logs";
+
+/// Items in `#minecraft:lapis_ores`.
+const ITEM_LAPIS_ORES: string = "#minecraft:lapis_ores";
+
+/// Items in `#minecraft:leaves`.
+const ITEM_LEAVES: string = "#minecraft:leaves";
+
+/// Items in `#minecraft:lectern_books`.
+const ITEM_LECTERN_BOOKS: string = "#minecraft:lectern_books";
+
+/// Items in `#minecraft:logs`.
+const ITEM_LOGS: string = "#minecraft:logs";
+
+/// Items in `#minecraft:logs_that_burn`.
+const ITEM_LOGS_THAT_BURN: string = "#minecraft:logs_that_burn";
+
+/// Items in `#minecraft:mangrove_logs`.
+const ITEM_MANGROVE_LOGS: string = "#minecraft:mangrove_logs";
+
+/// Items in `#minecraft:music_discs`.
+const ITEM_MUSIC_DISCS: string = "#minecraft:music_discs";
+
+/// Items in `#minecraft:non_flammable_wood`.
+const ITEM_NON_FLAMMABLE_WOOD: string = "#minecraft:non_flammable_wood";
+
+/// Items in `#minecraft:noteblock_top_instruments`.
+const ITEM_NOTEBLOCK_TOP_INSTRUMENTS: string = "#minecraft:noteblock_top_instruments";
+
+/// Items in `#minecraft:oak_logs`.
+const ITEM_OAK_LOGS: string = "#minecraft:oak_logs";
+
+/// Items in `#minecraft:pickaxes`.
+const ITEM_PICKAXES: string = "#minecraft:pickaxes";
+
+/// Items in `#minecraft:piglin_food`.
+const ITEM_PIGLIN_FOOD: string = "#minecraft:piglin_food";
+
+/// Items in `#minecraft:piglin_loved`.
+const ITEM_PIGLIN_LOVED: string = "#minecraft:piglin_loved";
+
+/// Items in `#minecraft:piglin_repellents`.
+const ITEM_PIGLIN_REPELLENTS: string = "#minecraft:piglin_repellents";
+
+/// Items in `#minecraft:planks`.
+const ITEM_PLANKS: string = "#minecraft:planks";
+
+/// Items in `#minecraft:rails`.
+const ITEM_RAILS: string = "#minecraft:rails";
+
+/// Items in `#minecraft:redstone_ores`.
+const ITEM_REDSTONE_ORES: string = "#minecraft:redstone_ores";
+
+/// Items in `#minecraft:sand`.
+const ITEM_SAND: string = "#minecraft:sand";
+
+/// Items in `#minecraft:saplings`.
+const ITEM_SAPLINGS: string = "#minecraft:saplings";
+
+/// Items in `#minecraft:shovels`.
+const ITEM_SHOVELS: string = "#minecraft:shovels";
+
+/// Items in `#minecraft:signs`.
+const ITEM_SIGNS: string = "#minecraft:signs";
+
+/// Items in `#minecraft:slabs`.
+const ITEM_SLABS: string = "#minecraft:slabs";
+
+/// Items in `#minecraft:small_flowers`.
+const ITEM_SMALL_FLOWERS: string = "#minecraft:small_flowers";
+
+/// Items in `#minecraft:smelts_to_glass`.
+const ITEM_SMELTS_TO_GLASS: string = "#minecraft:smelts_to_glass";
+
+/// Items in `#minecraft:sniffer_food`.
+const ITEM_SNIFFER_FOOD: string = "#minecraft:sniffer_food";
+
+/// Items in `#minecraft:soul_fire_base_blocks`.
+const ITEM_SOUL_FIRE_BASE_BLOCKS: string = "#minecraft:soul_fire_base_blocks";
+
+/// Items in `#minecraft:spruce_logs`.
+const ITEM_SPRUCE_LOGS: string = "#minecraft:spruce_logs";
+
+/// Items in `#minecraft:stairs`.
+const ITEM_STAIRS: string = "#minecraft:stairs";
+
+/// Items in `#minecraft:stone_bricks`.
+const ITEM_STONE_BRICKS: string = "#minecraft:stone_bricks";
+
+/// Items in `#minecraft:stone_buttons`.
+const ITEM_STONE_BUTTONS: string = "#minecraft:stone_buttons";
+
+/// Items in `#minecraft:stone_crafting_materials`.
+const ITEM_STONE_CRAFTING_MATERIALS: string = "#minecraft:stone_crafting_materials";
+
+/// Items in `#minecraft:stone_tool_materials`.
+const ITEM_STONE_TOOL_MATERIALS: string = "#minecraft:stone_tool_materials";
+
+/// Items in `#minecraft:swords`.
+const ITEM_SWORDS: string = "#minecraft:swords";
+
+/// Items in `#minecraft:tall_flowers`.
+const ITEM_TALL_FLOWERS: string = "#minecraft:tall_flowers";
+
+/// Items in `#minecraft:terracotta`.
+const ITEM_TERRACOTTA: string = "#minecraft:terracotta";
+
+/// Items in `#minecraft:tools`.
+const ITEM_TOOLS: string = "#minecraft:tools";
+
+/// Items in `#minecraft:trapdoors`.
+const ITEM_TRAPDOORS: string = "#minecraft:trapdoors";
+
+/// Items in `#minecraft:trim_materials`.
+const ITEM_TRIM_MATERIALS: string = "#minecraft:trim_materials";
+
+/// Items in `#minecraft:trim_templates`.
+const ITEM_TRIM_TEMPLATES: string = "#minecraft:trim_templates";
+
+/// Items in `#minecraft:trimmable_armor`.
+const ITEM_TRIMMABLE_ARMOR: string = "#minecraft:trimmable_armor";
+
+/// Items in `#minecraft:villager_plantable_seeds`.
+const ITEM_VILLAGER_PLANTABLE_SEEDS: string = "#minecraft:villager_plantable_seeds";
+
+/// Items in `#minecraft:walls`.
+const ITEM_WALLS: string = "#minecraft:walls";
+
+/// Items in `#minecraft:warped_stems`.
+const ITEM_WARPED_STEMS: string = "#minecraft:warped_stems";
+
+/// Items in `#minecraft:wart_blocks`.
+const ITEM_WART_BLOCKS: string = "#minecraft:wart_blocks";
+
+/// Items in `#minecraft:wooden_buttons`.
+const ITEM_WOODEN_BUTTONS: string = "#minecraft:wooden_buttons";
+
+/// Items in `#minecraft:wooden_doors`.
+const ITEM_WOODEN_DOORS: string = "#minecraft:wooden_doors";
+
+/// Items in `#minecraft:wooden_fences`.
+const ITEM_WOODEN_FENCES: string = "#minecraft:wooden_fences";
+
+/// Items in `#minecraft:wooden_pressure_plates`.
+const ITEM_WOODEN_PRESSURE_PLATES: string = "#minecraft:wooden_pressure_plates";
+
+/// Items in `#minecraft:wooden_slabs`.
+const ITEM_WOODEN_SLABS: string = "#minecraft:wooden_slabs";
+
+/// Items in `#minecraft:wooden_stairs`.
+const ITEM_WOODEN_STAIRS: string = "#minecraft:wooden_stairs";
+
+/// Items in `#minecraft:wooden_trapdoors`.
+const ITEM_WOODEN_TRAPDOORS: string = "#minecraft:wooden_trapdoors";
+
+/// Items in `#minecraft:wool`.
+const ITEM_WOOL: string = "#minecraft:wool";
+
+/// Items in `#minecraft:wool_carpets`.
+const ITEM_WOOL_CARPETS: string = "#minecraft:wool_carpets";
+
+// ===== FLUID TAGS =====
+
+/// Fluids in `#minecraft:lava`.
+const FLUID_LAVA: string = "#minecraft:lava";
+
+/// Fluids in `#minecraft:water`.
+const FLUID_WATER: string = "#minecraft:water";
+
+// ===== DAMAGE TYPE TAGS =====
+
+/// Damage types in `#minecraft:always_hurts_ender_dragons`.
+const DAMAGE_ALWAYS_HURTS_ENDER_DRAGONS: string = "#minecraft:always_hurts_ender_dragons";
+
+/// Damage types in `#minecraft:always_kills_armor_stands`.
+const DAMAGE_ALWAYS_KILLS_ARMOR_STANDS: string = "#minecraft:always_kills_armor_stands";
+
+/// Damage types in `#minecraft:always_most_significant_fall`.
+const DAMAGE_ALWAYS_MOST_SIGNIFICANT_FALL: string = "#minecraft:always_most_significant_fall";
+
+/// Damage types in `#minecraft:always_triggers_silverfish`.
+const DAMAGE_ALWAYS_TRIGGERS_SILVERFISH: string = "#minecraft:always_triggers_silverfish";
+
+/// Damage types in `#minecraft:avoids_guardian_thorns`.
+const DAMAGE_AVOIDS_GUARDIAN_THORNS: string = "#minecraft:avoids_guardian_thorns";
+
+/// Damage types in `#minecraft:burns_armor_stands`.
+const DAMAGE_BURNS_ARMOR_STANDS: string = "#minecraft:burns_armor_stands";
+
+/// Damage types in `#minecraft:bypasses_armor`.
+const DAMAGE_BYPASSES_ARMOR: string = "#minecraft:bypasses_armor";
+
+/// Damage types in `#minecraft:bypasses_cooldown`.
+const DAMAGE_BYPASSES_COOLDOWN: string = "#minecraft:bypasses_cooldown";
+
+/// Damage types in `#minecraft:bypasses_effects`.
+const DAMAGE_BYPASSES_EFFECTS: string = "#minecraft:bypasses_effects";
+
+/// Damage types in `#minecraft:bypasses_enchantments`.
+const DAMAGE_BYPASSES_ENCHANTMENTS: string = "#minecraft:bypasses_enchantments";
+
+/// Damage types in `#minecraft:bypasses_invulnerability`.
+const DAMAGE_BYPASSES_INVULNERABILITY: string = "#minecraft:bypasses_invulnerability";
+
+/// Damage types in `#minecraft:bypasses_resistance`.
+const DAMAGE_BYPASSES_RESISTANCE: string = "#minecraft:bypasses_resistance";
+
+/// Damage types in `#minecraft:bypasses_shield`.
+const DAMAGE_BYPASSES_SHIELD: string = "#minecraft:bypasses_shield";
+
+/// Damage types in `#minecraft:damages_helmet`.
+const DAMAGE_DAMAGES_HELMET: string = "#minecraft:damages_helmet";
+
+/// Damage types in `#minecraft:ignites_armor_stands`.
+const DAMAGE_IGNITES_ARMOR_STANDS: string = "#minecraft:ignites_armor_stands";
+
+/// Damage types in `#minecraft:is_drowning`.
+const DAMAGE_IS_DROWNING: string = "#minecraft:is_drowning";
+
+/// Damage types in `#minecraft:is_explosion`.
+const DAMAGE_IS_EXPLOSION: string = "#minecraft:is_explosion";
+
+/// Damage types in `#minecraft:is_fall`.
+const DAMAGE_IS_FALL: string = "#minecraft:is_fall";
+
+/// Damage types in `#minecraft:is_fire`.
+const DAMAGE_IS_FIRE: string = "#minecraft:is_fire";
+
+/// Damage types in `#minecraft:is_freezing`.
+const DAMAGE_IS_FREEZING: string = "#minecraft:is_freezing";
+
+/// Damage types in `#minecraft:is_lightning`.
+const DAMAGE_IS_LIGHTNING: string = "#minecraft:is_lightning";
+
+/// Damage types in `#minecraft:is_projectile`.
+const DAMAGE_IS_PROJECTILE: string = "#minecraft:is_projectile";
+
+/// Damage types in `#minecraft:no_anger`.
+const DAMAGE_NO_ANGER: string = "#minecraft:no_anger";
+
+/// Damage types in `#minecraft:no_impact`.
+const DAMAGE_NO_IMPACT: string = "#minecraft:no_impact";
+
+/// Damage types in `#minecraft:no_knockback`.
+const DAMAGE_NO_KNOCKBACK: string = "#minecraft:no_knockback";
+
+/// Damage types in `#minecraft:witch_resistant_to`.
+const DAMAGE_WITCH_RESISTANT_TO: string = "#minecraft:witch_resistant_to";
+
+/// Damage types in `#minecraft:wither_immune_to`.
+const DAMAGE_WITHER_IMMUNE_TO: string = "#minecraft:wither_immune_to";
