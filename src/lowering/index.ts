@@ -81,6 +81,7 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   team_leave: () => null, // Special handling
   team_option: () => null, // Special handling
   data_get: () => null, // Special handling (returns value from NBT)
+  data_merge: () => null, // Special handling (merge NBT)
   set_new: () => null, // Special handling (returns set ID)
   set_add: () => null, // Special handling
   set_contains: () => null, // Special handling (returns 1/0)
@@ -1775,6 +1776,30 @@ export class Lowering {
       const scale = args[3] ? this.exprToString(args[3]) : '1'
       this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`)
       return { kind: 'var', name: dst }
+    }
+
+    // data_merge(target, nbt) — merge NBT into entity/block/storage
+    // data_merge(@s, { Invisible: 1b, Silent: 1b })
+    if (name === 'data_merge') {
+      const target = args[0]
+      const nbt = args[1]
+      const nbtStr = this.exprToSnbt ? this.exprToSnbt(nbt) : this.exprToString(nbt)
+      
+      // Check if target is a selector (entity) or string (block/storage)
+      if (target.kind === 'selector') {
+        const sel = this.exprToTargetString(target)
+        this.builder.emitRaw(`data merge entity ${sel} ${nbtStr}`)
+      } else {
+        // Assume block position or storage
+        const targetStr = this.exprToString(target)
+        // If it looks like coordinates, use block; otherwise storage
+        if (targetStr.match(/^~|^\d|^\^/)) {
+          this.builder.emitRaw(`data merge block ${targetStr} ${nbtStr}`)
+        } else {
+          this.builder.emitRaw(`data merge storage ${targetStr} ${nbtStr}`)
+        }
+      }
+      return { kind: 'const', value: 0 }
     }
 
     // Set data structure operations — unique collections via NBT storage
