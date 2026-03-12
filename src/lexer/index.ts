@@ -6,6 +6,8 @@
  * range literals, and raw commands.
  */
 
+import { DiagnosticError } from '../diagnostics'
+
 // ---------------------------------------------------------------------------
 // Token Types
 // ---------------------------------------------------------------------------
@@ -84,13 +86,26 @@ const SELECTOR_CHARS = new Set(['a', 'e', 's', 'p', 'r', 'n'])
 
 export class Lexer {
   private source: string
+  private sourceLines: string[]
   private pos: number = 0
   private line: number = 1
   private col: number = 1
   private tokens: Token[] = []
+  private filePath?: string
 
-  constructor(source: string) {
+  constructor(source: string, filePath?: string) {
     this.source = source
+    this.sourceLines = source.split('\n')
+    this.filePath = filePath
+  }
+
+  private error(message: string, line?: number, col?: number): never {
+    throw new DiagnosticError(
+      'LexError',
+      message,
+      { file: this.filePath, line: line ?? this.line, col: col ?? this.col },
+      this.sourceLines
+    )
   }
 
   tokenize(): Token[] {
@@ -249,7 +264,7 @@ export class Lexer {
       return
     }
 
-    throw new Error(`Unexpected character '${char}' at line ${startLine}, col ${startCol}`)
+    this.error(`Unexpected character '${char}'`, startLine, startCol)
   }
 
   private scanAtToken(startLine: number, startCol: number): void {
@@ -322,7 +337,7 @@ export class Lexer {
     }
 
     if (this.isAtEnd()) {
-      throw new Error(`Unterminated string at line ${startLine}, col ${startCol}`)
+      this.error(`Unterminated string`, startLine, startCol)
     }
 
     this.advance() // closing quote

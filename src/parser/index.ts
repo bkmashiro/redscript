@@ -12,6 +12,7 @@ import type {
   StructDecl, StructField
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ir/types'
+import { DiagnosticError } from '../diagnostics'
 
 // ---------------------------------------------------------------------------
 // Operator Precedence (higher = binds tighter)
@@ -35,9 +36,13 @@ const BINARY_OPS = new Set(['||', '&&', '==', '!=', '<', '<=', '>', '>=', '+', '
 export class Parser {
   private tokens: Token[]
   private pos: number = 0
+  private sourceLines: string[]
+  private filePath?: string
 
-  constructor(tokens: Token[]) {
+  constructor(tokens: Token[], source?: string, filePath?: string) {
     this.tokens = tokens
+    this.sourceLines = source?.split('\n') ?? []
+    this.filePath = filePath
   }
 
   // -------------------------------------------------------------------------
@@ -75,14 +80,24 @@ export class Parser {
   private expect(kind: TokenKind): Token {
     const token = this.peek()
     if (token.kind !== kind) {
-      throw new Error(`Expected '${kind}' but got '${token.kind}' at line ${token.line}, col ${token.col}`)
+      throw new DiagnosticError(
+        'ParseError',
+        `Expected '${kind}' but got '${token.kind}'`,
+        { file: this.filePath, line: token.line, col: token.col },
+        this.sourceLines
+      )
     }
     return this.advance()
   }
 
   private error(message: string): never {
     const token = this.peek()
-    throw new Error(`${message} at line ${token.line}, col ${token.col}`)
+    throw new DiagnosticError(
+      'ParseError',
+      message,
+      { file: this.filePath, line: token.line, col: token.col },
+      this.sourceLines
+    )
   }
 
   // -------------------------------------------------------------------------
@@ -177,7 +192,7 @@ export class Parser {
     // Parse @tick or @tick(rate=20) or @on_trigger("name")
     const match = value.match(/^@(\w+)(?:\(([^)]*)\))?$/)
     if (!match) {
-      throw new Error(`Invalid decorator: ${value}`)
+      this.error(`Invalid decorator: ${value}`)
     }
 
     const name = match[1] as 'tick' | 'on_trigger'
