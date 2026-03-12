@@ -6345,22 +6345,60 @@ function findStructDecls(document) {
   while ((m = structRe.exec(text)) !== null) {
     const name = m[1];
     const body = m[2];
+    const structLine = document.positionAt(m.index).line;
+    const bodyStartOffset = m.index + m[0].indexOf("{") + 1;
+    const structDoc = findJsDocAbove(document, structLine);
     const fieldRe = /\b(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g;
     const fields = [];
     let fm;
     while ((fm = fieldRe.exec(body)) !== null) {
-      fields.push({ name: fm[1], type: fm[2] });
+      const fieldOffset = bodyStartOffset + fm.index;
+      const fieldLine = document.positionAt(fieldOffset).line;
+      const lineText = document.lineAt(fieldLine).text;
+      const inlineMatch = lineText.match(/\/\/\s*(.+)$/);
+      const docAbove = findFieldDocAbove(document, fieldLine);
+      const fieldDoc = inlineMatch?.[1] || docAbove || void 0;
+      fields.push({ name: fm[1], type: fm[2], line: fieldLine, doc: fieldDoc });
     }
-    decls.push({ name, fields });
+    decls.push({ name, fields, line: structLine, doc: structDoc ?? void 0 });
   }
   return decls;
+}
+function findFieldDocAbove(document, fieldLine) {
+  if (fieldLine === 0) return null;
+  const prevLine = document.lineAt(fieldLine - 1).text.trim();
+  if (prevLine.startsWith("//")) {
+    return prevLine.replace(/^\/\/\s*/, "");
+  }
+  const blockMatch = prevLine.match(/\/\*\*?\s*(.*?)\s*\*\//);
+  if (blockMatch) return blockMatch[1];
+  if (prevLine.endsWith("*/")) {
+    return findJsDocAbove(document, fieldLine);
+  }
+  return null;
 }
 function formatStructHover(decl) {
   const md = new vscode.MarkdownString("", true);
   const lines = [`struct ${decl.name} {`];
-  for (const f of decl.fields) lines.push(`    ${f.name}: ${f.type},`);
+  for (const f of decl.fields) {
+    const comment = f.doc ? `  // ${f.doc}` : "";
+    lines.push(`    ${f.name}: ${f.type},${comment}`);
+  }
   lines.push("}");
   md.appendCodeblock(lines.join("\n"), "redscript");
+  if (decl.doc) {
+    md.appendText("\n");
+    md.appendMarkdown(decl.doc);
+  }
+  return md;
+}
+function formatFieldHover(structName, field) {
+  const md = new vscode.MarkdownString("", true);
+  md.appendCodeblock(`(field) ${structName}.${field.name}: ${field.type}`, "redscript");
+  if (field.doc) {
+    md.appendText("\n");
+    md.appendMarkdown(field.doc);
+  }
   return md;
 }
 function formatMcNameHover(name) {
@@ -6421,10 +6459,24 @@ function registerHoverProvider(context) {
               if (objStruct) {
                 const field = objStruct.fields.find((f) => f.name === word);
                 if (field) {
-                  const md = new vscode.MarkdownString("", true);
-                  md.appendCodeblock(`(field) ${objStruct.name}.${field.name}: ${field.type}`, "redscript");
-                  return new vscode.Hover(md, range);
+                  return new vscode.Hover(formatFieldHover(objStruct.name, field), range);
                 }
+              }
+            }
+          }
+        }
+        const afterWordTrimmed = afterWord;
+        if (afterWordTrimmed.startsWith(":")) {
+          const textBefore = document.getText(new vscode.Range(new vscode.Position(0, 0), position));
+          const letMatch = textBefore.match(/let\s+\w+\s*:\s*(\w+)\s*=\s*\{[^}]*$/);
+          const fnMatch = textBefore.match(/->\s*(\w+)\s*\{[^}]*return\s*\{[^}]*$/);
+          const structType = letMatch?.[1] || fnMatch?.[1];
+          if (structType) {
+            const targetStruct = structDecls.find((s) => s.name === structType);
+            if (targetStruct) {
+              const field = targetStruct.fields.find((f) => f.name === word);
+              if (field) {
+                return new vscode.Hover(formatFieldHover(targetStruct.name, field), range);
               }
             }
           }
@@ -6529,6 +6581,38 @@ function findDeclarations(doc) {
   }
   return decls;
 }
+function findStructFields(doc) {
+  const text = doc.getText();
+  const structRe = /\bstruct\s+(\w+)\s*\{([^}]*)\}/gs;
+  const fields = [];
+  let sm;
+  while ((sm = structRe.exec(text)) !== null) {
+    const structName = sm[1];
+    const bodyStart = sm.index + sm[0].indexOf("{") + 1;
+    const body = sm[2];
+    const fieldRe = /\b(\w+)\s*:/g;
+    let fm;
+    while ((fm = fieldRe.exec(body)) !== null) {
+      const fieldStart = bodyStart + fm.index;
+      const pos = doc.positionAt(fieldStart);
+      const range = new vscode3.Range(pos, doc.positionAt(fieldStart + fm[1].length));
+      fields.push({ structName, fieldName: fm[1], fieldRange: range });
+    }
+  }
+  return fields;
+}
+function isStructLiteralField(doc, position, word) {
+  const line = doc.lineAt(position.line).text;
+  const wordEnd = position.character + word.length;
+  const afterWord = line.slice(wordEnd).trimStart();
+  if (!afterWord.startsWith(":")) return null;
+  const textBefore = doc.getText(new vscode3.Range(new vscode3.Position(0, 0), position));
+  const letMatch = textBefore.match(/let\s+\w+\s*:\s*(\w+)\s*=\s*\{[^}]*$/);
+  if (letMatch) return letMatch[1];
+  const fnMatch = textBefore.match(/->\s*(\w+)\s*\{[^}]*return\s*\{[^}]*$/);
+  if (fnMatch) return fnMatch[1];
+  return null;
+}
 function findAllOccurrences(doc, word) {
   const text = doc.getText();
   const re = new RegExp(`\\b${escapeRegex(word)}\\b`, "g");
@@ -6553,6 +6637,14 @@ function registerSymbolProviders(context) {
         const wordRange = doc.getWordRangeAtPosition(position);
         if (!wordRange) return null;
         const word = doc.getText(wordRange);
+        const structType = isStructLiteralField(doc, position, word);
+        if (structType) {
+          const structFields = findStructFields(doc);
+          const field = structFields.find((f) => f.structName === structType && f.fieldName === word);
+          if (field) {
+            return new vscode3.Location(doc.uri, field.fieldRange);
+          }
+        }
         const decls = findDeclarations(doc);
         const decl = decls.find((d) => d.name === word);
         if (!decl) return null;
