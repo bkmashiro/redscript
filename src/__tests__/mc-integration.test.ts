@@ -89,11 +89,77 @@ beforeAll(async () => {
     }
   `, 'inline_test')
 
+  // ── E2E scenario fixtures ────────────────────────────────────────────
+
+  // Scenario A: mini game loop (timer countdown + ended flag)
+  writeFixture(`
+    @tick
+    fn game_tick() {
+      let time: int = scoreboard_get("#game", "timer");
+      if (time > 0) {
+        scoreboard_set("#game", "timer", time - 1);
+      }
+      if (time == 1) {
+        scoreboard_set("#game", "ended", 1);
+      }
+    }
+    fn start_game() {
+      scoreboard_set("#game", "timer", 5);
+      scoreboard_set("#game", "ended", 0);
+    }
+  `, 'game_loop')
+
+  // Scenario B: two functions, same temp var namespace — verify no collision
+  writeFixture(`
+    fn calc_sum() {
+      let a: int = scoreboard_get("#math", "val_a");
+      let b: int = scoreboard_get("#math", "val_b");
+      scoreboard_set("#math", "sum", a + b);
+    }
+    fn calc_product() {
+      let x: int = scoreboard_get("#math", "val_x");
+      let y: int = scoreboard_get("#math", "val_y");
+      scoreboard_set("#math", "product", x * y);
+    }
+    fn run_both() {
+      calc_sum();
+      calc_product();
+    }
+  `, 'math_test')
+
+  // Scenario C: 3-deep call chain, each step modifies shared state
+  writeFixture(`
+    fn step3() {
+      let v: int = scoreboard_get("#chain", "val");
+      scoreboard_set("#chain", "val", v * 2);
+    }
+    fn step2() {
+      let v: int = scoreboard_get("#chain", "val");
+      scoreboard_set("#chain", "val", v + 5);
+      step3();
+    }
+    fn step1() {
+      scoreboard_set("#chain", "val", 10);
+      step2();
+    }
+  `, 'call_chain')
+
+  // Scenario D: setblock batching optimizer — 4 adjacent setblocks → fill
+  writeFixture(`
+    fn build_row() {
+      setblock((0, 70, 0), "minecraft:stone");
+      setblock((1, 70, 0), "minecraft:stone");
+      setblock((2, 70, 0), "minecraft:stone");
+      setblock((3, 70, 0), "minecraft:stone");
+    }
+  `, 'fill_test')
+
   // ── Full reset + safe data reload ────────────────────────────────────
   await mc.fullReset()
 
   // Pre-create scoreboards
-  for (const obj of ['ticks', 'seconds', 'test_score', 'result', 'calc', 'rs']) {
+  for (const obj of ['ticks', 'seconds', 'test_score', 'result', 'calc', 'rs',
+                     'timer', 'ended', 'val_a', 'val_b', 'sum', 'val_x', 'val_y', 'product', 'val']) {
     await mc.command(`/scoreboard objectives add ${obj} dummy`).catch(() => {})
   }
   await mc.command('/scoreboard players set counter ticks 0')
@@ -244,6 +310,100 @@ describe('MC Integration Tests', () => {
     block = await mc.block(5, 65, 5)
     expect(block.type).toBe('minecraft:air')
     console.log(`  Block after reset: ${block.type} ✓`)
+  })
+
+})
+
+// ─── E2E Scenario Tests ───────────────────────────────────────────────────────
+describe('E2E Scenario Tests', () => {
+
+  // Scenario A: Mini game loop
+  // Verifies: @tick auto-runs, scoreboard read-modify-write, two if conditions
+  // in the same function, timer countdown converges to ended=1
+  test('A: game_loop timer countdown sets ended=1 after N ticks', async () => {
+    if (!serverOnline) return
+
+    // game_tick is @tick - it runs every server tick automatically.
+    // start_game sets timer=5, but game_tick may already decrement it by the
+    // time we query. Use a large timer and just verify it reaches 0 eventually.
+    await mc.command('/scoreboard players set #game timer 0')
+    await mc.command('/scoreboard players set #game ended 0')
+    await mc.ticks(2)
+
+    await mc.command('/function game_loop:__load')
+    await mc.command('/function game_loop:start_game') // timer=5, ended=0
+
+    // Wait 25 ticks — enough for 5 decrements + margin
+    await mc.ticks(25)
+
+    const ended = await mc.scoreboard('#game', 'ended')
+    expect(ended).toBe(1)
+    const finalTimer = await mc.scoreboard('#game', 'timer')
+    expect(finalTimer).toBe(0)
+    console.log(`  timer hit 0 (final=${finalTimer}), ended=${ended} ✓`)
+  })
+
+  // Scenario B: No temp var collision between two functions called in sequence
+  // Verifies: each function's $t0/$t1 temp vars are isolated per-call, not globally shared
+  // If there's a bug, calc_product would see sum's leftover $t vars and produce wrong result
+  test('B: calc_sum + calc_product called in sequence — no temp var collision', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/function math_test:__load')
+    await mc.command('/scoreboard players set #math val_a 7')
+    await mc.command('/scoreboard players set #math val_b 3')
+    await mc.command('/scoreboard players set #math val_x 4')
+    await mc.command('/scoreboard players set #math val_y 5')
+
+    await mc.command('/function math_test:run_both') // calc_sum() then calc_product()
+    await mc.ticks(5)
+
+    const sum = await mc.scoreboard('#math', 'sum')
+    const product = await mc.scoreboard('#math', 'product')
+    expect(sum).toBe(10)       // 7 + 3
+    expect(product).toBe(20)   // 4 × 5
+    console.log(`  sum=${sum} (expect 10), product=${product} (expect 20) ✓`)
+  })
+
+  // Scenario C: 3-deep call chain, shared state threaded through
+  // Verifies: function calls preserve scoreboard state across stack frames
+  // step1: val=10 → step2: val=10+5=15 → step3: val=15×2=30
+  test('C: 3-deep call chain preserves intermediate state (10→15→30)', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/function call_chain:__load')
+    await mc.command('/scoreboard players set #chain val 0')
+
+    await mc.command('/function call_chain:step1')
+    await mc.ticks(5)
+
+    const val = await mc.scoreboard('#chain', 'val')
+    expect(val).toBe(30)  // (10 + 5) * 2 = 30
+    console.log(`  call chain result: ${val} (expect 30) ✓`)
+  })
+
+  // Scenario D: Setblock batching optimizer — 4 adjacent setblocks compiled to fill
+  // Verifies: optimizer's fill-batching pass produces correct MC behavior
+  // (not just that the output says "fill", but that ALL 4 blocks are actually stone)
+  test('D: fill optimizer — 4 adjacent setblocks all placed correctly', async () => {
+    if (!serverOnline) return
+
+    await mc.fullReset({ x1: -5, y1: 65, z1: -5, x2: 10, y2: 75, z2: 10, resetScoreboards: false })
+    await mc.command('/function fill_test:__load')
+    await mc.command('/function fill_test:build_row')
+    await mc.ticks(5)
+
+    // All 4 blocks should be stone (optimizer batched into fill 0 70 0 3 70 0 stone)
+    for (let x = 0; x <= 3; x++) {
+      const block = await mc.block(x, 70, 0)
+      expect(block.type).toBe('minecraft:stone')
+    }
+    // Neighbors should still be air (fill didn't overshoot)
+    const before = await mc.block(-1, 70, 0)
+    const after  = await mc.block(4, 70, 0)
+    expect(before.type).toBe('minecraft:air')
+    expect(after.type).toBe('minecraft:air')
+    console.log(`  fill_test: blocks [0-3,70,0]=stone, [-1]/[4]=air ✓`)
   })
 
 })
