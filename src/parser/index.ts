@@ -8,7 +8,7 @@
 import { Lexer, type Token, type TokenKind } from '../lexer'
 import type {
   Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, LiteralExpr, Param,
-  Program, RangeExpr, SelectorFilter, SelectorKind, Stmt, TypeNode, AssignOp,
+  Program, RangeExpr, SelectorFilter, SelectorKind, Span, Stmt, TypeNode, AssignOp,
   StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr,
   CoordComponent, LambdaParam
 } from '../ast/types'
@@ -108,20 +108,22 @@ export class Parser {
   }
 
   private withLoc<T extends object>(node: T, token: Token): T {
-    Object.defineProperty(node, 'loc', {
-      value: { line: token.line, col: token.col },
+    const span: Span = { line: token.line, col: token.col }
+    Object.defineProperty(node, 'span', {
+      value: span,
       enumerable: false,
       configurable: true,
+      writable: true,
     })
     return node
   }
 
   private getLocToken(node: object): Token | null {
-    const loc = (node as { loc?: { line: number; col: number } }).loc
-    if (!loc) {
+    const span = (node as { span?: Span }).span
+    if (!span) {
       return null
     }
-    return { kind: 'eof', value: '', line: loc.line, col: loc.col }
+    return { kind: 'eof', value: '', line: span.line, col: span.col }
   }
 
   // -------------------------------------------------------------------------

@@ -8,6 +8,17 @@
 import type { BinOp, CmpOp } from '../ir/types'
 
 // ---------------------------------------------------------------------------
+// Source Span
+// ---------------------------------------------------------------------------
+
+export interface Span {
+  line: number      // 1-indexed
+  col: number       // 1-indexed
+  endLine?: number
+  endCol?: number
+}
+
+// ---------------------------------------------------------------------------
 // Type Nodes
 // ---------------------------------------------------------------------------
 
@@ -91,27 +102,27 @@ export type AssignOp = '=' | '+=' | '-=' | '*=' | '/=' | '%='
 // ---------------------------------------------------------------------------
 
 export type Expr =
-  | { kind: 'int_lit';    value: number }
-  | { kind: 'float_lit';  value: number }
-  | { kind: 'bool_lit';   value: boolean }
-  | { kind: 'str_lit';    value: string }
-  | { kind: 'str_interp'; parts: Array<string | Expr> }
-  | { kind: 'range_lit';  range: RangeExpr }
-  | BlockPosExpr
-  | { kind: 'ident';      name: string }
-  | { kind: 'selector';   raw: string; isSingle: boolean; sel: EntitySelector }
-  | { kind: 'binary';     op: BinOp | CmpOp | '&&' | '||'; left: Expr; right: Expr }
-  | { kind: 'unary';      op: '!' | '-'; operand: Expr }
-  | { kind: 'assign';     target: string; op: AssignOp; value: Expr }
-  | { kind: 'call';       fn: string; args: Expr[] }
-  | { kind: 'invoke';     callee: Expr; args: Expr[] }
-  | { kind: 'member';     obj: Expr; field: string }
-  | { kind: 'struct_lit'; fields: { name: string; value: Expr }[] }
-  | { kind: 'member_assign'; obj: Expr; field: string; op: AssignOp; value: Expr }
-  | { kind: 'index';      obj: Expr; index: Expr }
-  | { kind: 'array_lit';  elements: Expr[] }
-  | { kind: 'static_call'; type: string; method: string; args: Expr[] }
-  | LambdaExpr
+  | { kind: 'int_lit';    value: number; span?: Span }
+  | { kind: 'float_lit';  value: number; span?: Span }
+  | { kind: 'bool_lit';   value: boolean; span?: Span }
+  | { kind: 'str_lit';    value: string; span?: Span }
+  | { kind: 'str_interp'; parts: Array<string | Expr>; span?: Span }
+  | { kind: 'range_lit';  range: RangeExpr; span?: Span }
+  | (BlockPosExpr & { span?: Span })
+  | { kind: 'ident';      name: string; span?: Span }
+  | { kind: 'selector';   raw: string; isSingle: boolean; sel: EntitySelector; span?: Span }
+  | { kind: 'binary';     op: BinOp | CmpOp | '&&' | '||'; left: Expr; right: Expr; span?: Span }
+  | { kind: 'unary';      op: '!' | '-'; operand: Expr; span?: Span }
+  | { kind: 'assign';     target: string; op: AssignOp; value: Expr; span?: Span }
+  | { kind: 'call';       fn: string; args: Expr[]; span?: Span }
+  | { kind: 'invoke';     callee: Expr; args: Expr[]; span?: Span }
+  | { kind: 'member';     obj: Expr; field: string; span?: Span }
+  | { kind: 'struct_lit'; fields: { name: string; value: Expr }[]; span?: Span }
+  | { kind: 'member_assign'; obj: Expr; field: string; op: AssignOp; value: Expr; span?: Span }
+  | { kind: 'index';      obj: Expr; index: Expr; span?: Span }
+  | { kind: 'array_lit';  elements: Expr[]; span?: Span }
+  | { kind: 'static_call'; type: string; method: string; args: Expr[]; span?: Span }
+  | (LambdaExpr & { span?: Span })
 
 export type LiteralExpr =
   | Extract<Expr, { kind: 'int_lit' }>
@@ -135,19 +146,19 @@ export type ExecuteSubcommand =
   | { kind: 'in'; dimension: string }
 
 export type Stmt =
-  | { kind: 'let';        name: string; type?: TypeNode; init: Expr }
-  | { kind: 'expr';       expr: Expr }
-  | { kind: 'return';     value?: Expr }
-  | { kind: 'if';         cond: Expr; then: Block; else_?: Block }
-  | { kind: 'while';      cond: Expr; body: Block }
-  | { kind: 'for';        init?: Stmt; cond: Expr; step: Expr; body: Block }
-  | { kind: 'foreach';    binding: string; iterable: Expr; body: Block }
-  | { kind: 'match';      expr: Expr; arms: { pattern: Expr | null; body: Block }[] }
-  | { kind: 'as_block';   selector: EntitySelector; body: Block }
-  | { kind: 'at_block';   selector: EntitySelector; body: Block }
-  | { kind: 'as_at';      as_sel: EntitySelector; at_sel: EntitySelector; body: Block }
-  | { kind: 'execute';    subcommands: ExecuteSubcommand[]; body: Block }
-  | { kind: 'raw';        cmd: string }
+  | { kind: 'let';        name: string; type?: TypeNode; init: Expr; span?: Span }
+  | { kind: 'expr';       expr: Expr; span?: Span }
+  | { kind: 'return';     value?: Expr; span?: Span }
+  | { kind: 'if';         cond: Expr; then: Block; else_?: Block; span?: Span }
+  | { kind: 'while';      cond: Expr; body: Block; span?: Span }
+  | { kind: 'for';        init?: Stmt; cond: Expr; step: Expr; body: Block; span?: Span }
+  | { kind: 'foreach';    binding: string; iterable: Expr; body: Block; span?: Span }
+  | { kind: 'match';      expr: Expr; arms: { pattern: Expr | null; body: Block }[]; span?: Span }
+  | { kind: 'as_block';   selector: EntitySelector; body: Block; span?: Span }
+  | { kind: 'at_block';   selector: EntitySelector; body: Block; span?: Span }
+  | { kind: 'as_at';      as_sel: EntitySelector; at_sel: EntitySelector; body: Block; span?: Span }
+  | { kind: 'execute';    subcommands: ExecuteSubcommand[]; body: Block; span?: Span }
+  | { kind: 'raw';        cmd: string; span?: Span }
 
 export type Block = Stmt[]
 
@@ -182,6 +193,7 @@ export interface FnDecl {
   returnType: TypeNode
   decorators: Decorator[]
   body: Block
+  span?: Span
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +208,7 @@ export interface StructField {
 export interface StructDecl {
   name: string
   fields: StructField[]
+  span?: Span
 }
 
 export interface EnumVariant {
@@ -206,12 +219,14 @@ export interface EnumVariant {
 export interface EnumDecl {
   name: string
   variants: EnumVariant[]
+  span?: Span
 }
 
 export interface ConstDecl {
   name: string
   type: TypeNode
   value: LiteralExpr
+  span?: Span
 }
 
 // ---------------------------------------------------------------------------
