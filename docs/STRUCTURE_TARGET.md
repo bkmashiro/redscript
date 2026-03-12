@@ -42,6 +42,37 @@ Palette usage:
 - Chain command block: subsequent commands in the same function
 - Repeating command block: first command in `__tick`, with `auto: 1b`
 
+## Optimizations
+
+The structure target runs an extra optimization pass after normal IR optimization. It rewrites simple control flow into native command block chaining so the placed structure can branch without extra helper functions.
+
+Conditional chain blocks:
+
+- A plain chain command block always runs after the previous block.
+- A conditional chain command block runs only if the previous block succeeded.
+- RedScript uses this to flatten small `if` / `else` bodies directly into the chain.
+
+Before:
+
+```mcfunction
+execute if score $cond rs matches 1.. run function demo:test/then_0
+```
+
+After:
+
+```mcfunction
+execute if score $cond rs matches 1..
+say big
+give @s diamond
+```
+
+The first command block is unconditional. The following inlined blocks are emitted as conditional chain command blocks, so they run only when the guard succeeds.
+
+Inlining threshold:
+
+- RedScript inlines small branch targets up to 8 commands.
+- Larger branches still fall back to helper function calls.
+
 ## Limitations
 
 - Minecraft structures are practical only up to roughly 32k placed blocks before they become awkward to manage.
