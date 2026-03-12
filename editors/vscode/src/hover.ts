@@ -760,6 +760,23 @@ function findFnDeclLine(document: vscode.TextDocument, name: string): number | n
   return document.positionAt(match.index).line
 }
 
+/**
+ * Extract the full function signature: fn name(params) -> ReturnType
+ */
+function findFnSignature(document: vscode.TextDocument, name: string): string | null {
+  const text = document.getText()
+  // Match: fn name(params) or fn name(params) -> Type
+  const re = new RegExp(`\\bfn\\s+${escapeRe(name)}\\s*\\(([^)]*)\\)(?:\\s*->\\s*([A-Za-z_][A-Za-z0-9_\\[\\]]*))?`, 'm')
+  const match = re.exec(text)
+  if (!match) return null
+  const params = match[1].trim()
+  const returnType = match[2]
+  if (returnType) {
+    return `fn ${name}(${params}) -> ${returnType}`
+  }
+  return `fn ${name}(${params})`
+}
+
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -987,6 +1004,14 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
 
         const word = document.getText(range)
 
+        // ── Discard/wildcard pattern _ ──────────────────────────
+        if (word === '_') {
+          const md = new vscode.MarkdownString('', true)
+          md.appendCodeblock('_', 'redscript')
+          md.appendMarkdown('**Wildcard pattern** (discard)\n\nMatches any value. Used in `match` expressions as a catch-all case, or to ignore unused values.')
+          return new vscode.Hover(md, range)
+        }
+
         // ── Function parameter hover ────────────────────────────
         // Check if this word is a function parameter (must be inside that function's scope)
         const fnParams = findFnParams(document)
@@ -1080,7 +1105,8 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
           if (declLine !== null) {
             const md = new vscode.MarkdownString('', true)
             const jsdoc = findJsDocAbove(document, declLine)
-            md.appendCodeblock(`fn ${word}(...)`, 'redscript')
+            const sig = findFnSignature(document, word) || `fn ${word}(...)`
+            md.appendCodeblock(sig, 'redscript')
             if (jsdoc) { md.appendText('\n'); md.appendMarkdown(jsdoc) }
             return new vscode.Hover(md, range)
           }
