@@ -1,8 +1,8 @@
 {
   "name": "redscript-vscode",
   "displayName": "RedScript for Minecraft",
-  "description": "Syntax highlighting and language support for RedScript — a compiler targeting Minecraft Java Edition",
-  "version": "0.1.0",
+  "description": "Syntax highlighting, error diagnostics, and language support for RedScript — a compiler targeting Minecraft Java Edition",
+  "version": "0.2.0",
   "publisher": "bkmashiro",
   "icon": "icon.png",
   "license": "MIT",
@@ -13,6 +13,8 @@
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Programming Languages"],
   "keywords": ["minecraft", "mcfunction", "redscript", "datapack", "compiler"],
+  "main": "./out/extension.js",
+  "activationEvents": ["onLanguage:redscript"],
   "contributes": {
     "languages": [
       {
@@ -49,5 +51,20 @@
         "path": "./snippets/redscript.json"
       }
     ]
+  },
+  "scripts": {
+    "compile": "tsc -p tsconfig.json",
+    "watch": "tsc -watch -p tsconfig.json",
+    "build": "npm run compile",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "redscript": "file:../../"
   }
 }
