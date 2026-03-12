@@ -356,6 +356,13 @@ export function generateDatapackWithStats(
     }
   }
 
+  // Call @load functions from __load
+  for (const fn of module.functions) {
+    if (fn.isLoadInit) {
+      loadLines.push(`function ${ns}:${fn.name}`)
+    }
+  }
+
   // Write __load.mcfunction
   files.push({
     path: `data/${ns}/function/__load.mcfunction`,

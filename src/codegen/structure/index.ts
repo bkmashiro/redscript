@@ -99,6 +99,13 @@ function collectCommandEntriesFromModule(module: IRModule): CommandEntry[] {
     ).map(constSetup),
   ]
 
+  // Call @load functions from __load
+  for (const fn of module.functions) {
+    if (fn.isLoadInit) {
+      loadCommands.push(`function ${module.namespace}:${fn.name}`)
+    }
+  }
+
   const sections: Array<{ name: string; commands: IRCommand[]; repeat?: boolean }> = []
 
   if (loadCommands.length > 0) {

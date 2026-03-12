@@ -100,6 +100,7 @@ export interface IRFunction {
   blocks: IRBlock[]        // blocks[0] = entry block
   commands?: IRCommand[]   // structure target command stream
   isTickLoop?: boolean     // true → Repeat command block (runs every tick)
+  isLoadInit?: boolean     // true → called from __load.mcfunction
   isTriggerHandler?: boolean  // true → handles a trigger event
   triggerName?: string        // the trigger objective name
   eventTrigger?: {
