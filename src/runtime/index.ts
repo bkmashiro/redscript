@@ -56,6 +56,10 @@ function matchesRange(value: number, range: Range): boolean {
   return value >= range.min && value <= range.max
 }
 
+function canonicalEntityType(entityType: string): string {
+  return entityType.includes(':') ? entityType : `minecraft:${entityType}`
+}
+
 function parseFilters(content: string): SelectorFilters {
   const filters: SelectorFilters = {
     tag: [],
@@ -119,14 +123,15 @@ function matchesFilters(entity: Entity, filters: SelectorFilters, objective: str
 
   // Check types
   if ((filters.type?.length ?? 0) > 0) {
-    const entityType = entity.type ?? 'minecraft:armor_stand'
-    if (!filters.type!.includes(entityType) && !filters.type!.includes(entityType.replace(/^minecraft:/, ''))) {
+    const entityType = canonicalEntityType(entity.type ?? 'minecraft:armor_stand')
+    const allowedTypes = filters.type!.map(canonicalEntityType)
+    if (!allowedTypes.includes(entityType)) {
       return false
     }
   }
   for (const notType of filters.notType || []) {
-    const entityType = entity.type ?? 'minecraft:armor_stand'
-    if (notType === entityType || notType === entityType.replace(/^minecraft:/, '')) {
+    const entityType = canonicalEntityType(entity.type ?? 'minecraft:armor_stand')
+    if (canonicalEntityType(notType) === entityType) {
       return false
     }
   }

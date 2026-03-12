@@ -8,6 +8,7 @@
 import type { IRBuilder } from '../ir/builder'
 import { buildModule } from '../ir/builder'
 import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
+import { DiagnosticError } from '../diagnostics'
 import type {
   Block, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Stmt,
   StructDecl, TypeNode, ExecuteSubcommand, BlockPosExpr, CoordComponent
@@ -61,6 +62,45 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   data_get: () => null, // Special handling (returns value from NBT)
 }
 
+export interface Warning {
+  message: string
+  code: string
+}
+
+const NAMESPACED_ENTITY_TYPE_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/
+const BARE_ENTITY_TYPE_RE = /^[a-z0-9_./-]+$/
+
+function normalizeSelector(selector: string, warnings: Warning[]): string {
+  return selector.replace(/type=([^,\]]+)/g, (match, entityType) => {
+    const trimmed = entityType.trim()
+
+    if (trimmed.includes(':')) {
+      if (!NAMESPACED_ENTITY_TYPE_RE.test(trimmed)) {
+        throw new DiagnosticError(
+          'LoweringError',
+          `Invalid entity type format: "${trimmed}" (must be namespace:name)`,
+          { line: 1, col: 1 }
+        )
+      }
+      return match
+    }
+
+    if (!BARE_ENTITY_TYPE_RE.test(trimmed)) {
+      throw new DiagnosticError(
+        'LoweringError',
+        `Invalid entity type format: "${trimmed}" (must be namespace:name or bare_name)`,
+        { line: 1, col: 1 }
+      )
+    }
+
+    warnings.push({
+      message: `Unnamespaced entity type "${trimmed}", auto-qualifying to "minecraft:${trimmed}"`,
+      code: 'W_UNNAMESPACED_TYPE',
+    })
+    return `type=minecraft:${trimmed}`
+  })
+}
+
 function emitCoord(component: CoordComponent): string {
   switch (component.kind) {
     case 'absolute':
@@ -86,6 +126,7 @@ export class Lowering {
   private globals: string[] = []
   private currentFn: string = ''
   private foreachCounter: number = 0
+  readonly warnings: Warning[] = []
 
   // Builder state for current function
   private builder!: LoweringBuilder
@@ -1183,7 +1224,7 @@ export class Lowering {
     // Special case: scoreboard_get / score — read from vanilla MC scoreboard
     if (name === 'scoreboard_get' || name === 'score') {
       const dst = this.builder.freshTemp()
-      const player = this.exprToString(args[0])
+      const player = this.exprToTargetString(args[0])
       const objective = this.exprToString(args[1])
       this.builder.emitRaw(`execute store result score ${dst} rs run scoreboard players get ${player} ${objective}`)
       return { kind: 'var', name: dst }
@@ -1191,7 +1232,7 @@ export class Lowering {
 
     // Special case: scoreboard_set — write to vanilla MC scoreboard
     if (name === 'scoreboard_set') {
-      const player = this.exprToString(args[0])
+      const player = this.exprToTargetString(args[0])
       const objective = this.exprToString(args[1])
       const value = this.lowerExpr(args[2])
       if (value.kind === 'const') {
@@ -1210,7 +1251,9 @@ export class Lowering {
     if (name === 'data_get') {
       const dst = this.builder.freshTemp()
       const targetType = this.exprToString(args[0])
-      const target = this.exprToString(args[1])
+      const target = targetType === 'entity'
+        ? this.exprToTargetString(args[1])
+        : this.exprToString(args[1])
       const path = this.exprToString(args[2])
       const scale = args[3] ? this.exprToString(args[3]) : '1'
       this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`)
@@ -1367,6 +1410,22 @@ export class Lowering {
     }
   }
 
+  private exprToTargetString(expr: Expr): string {
+    if (expr.kind === 'selector') {
+      return this.selectorToString(expr.sel)
+    }
+
+    if (expr.kind === 'str_lit' && expr.value.startsWith('@')) {
+      this.warnings.push({
+        message: `Quoted selector "${expr.value}" is deprecated; pass ${expr.value} without quotes`,
+        code: 'W_QUOTED_SELECTOR',
+      })
+      return expr.value
+    }
+
+    return this.exprToString(expr)
+  }
+
   private exprToLiteral(expr: Expr): string {
     if (expr.kind === 'int_lit') return expr.value.toString()
     if (expr.kind === 'float_lit') return Math.trunc(expr.value).toString()
@@ -1500,7 +1559,7 @@ export class Lowering {
 
   private selectorToString(sel: EntitySelector): string {
     const { kind, filters } = sel
-    if (!filters) return kind
+    if (!filters) return this.finalizeSelector(kind)
 
     const parts: string[] = []
     if (filters.type) parts.push(`type=${filters.type}`)
@@ -1517,7 +1576,11 @@ export class Lowering {
     if (filters.nbt) parts.push(`nbt=${filters.nbt}`)
     if (filters.gamemode) parts.push(`gamemode=${filters.gamemode}`)
 
-    return parts.length ? `${kind}[${parts.join(',')}]` : kind
+    return this.finalizeSelector(parts.length ? `${kind}[${parts.join(',')}]` : kind)
+  }
+
+  private finalizeSelector(selector: string): string {
+    return normalizeSelector(selector, this.warnings)
   }
 
   private rangeToString(r: RangeExpr): string {

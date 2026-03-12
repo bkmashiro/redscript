@@ -242,7 +242,7 @@ fn kill_zombies() {
       const files = compile(source)
       const fn = getFunction(files, 'kill_zombies')
       expect(fn).toBeDefined()
-      expect(fn).toContain('execute as @e[type=zombie,distance=..10]')
+      expect(fn).toContain('execute as @e[type=minecraft:zombie,distance=..10]')
       expect(fn).toContain('run function test:kill_zombies/foreach_0')
     })
 
@@ -521,14 +521,14 @@ fn double_score() -> int {
       const source = 'fn test() { kill(@e[type=creeper]); }'
       const files = compile(source)
       const fn = getFunction(files, 'test')
-      expect(fn).toContain('kill @e[type=creeper]')
+      expect(fn).toContain('kill @e[type=minecraft:creeper]')
     })
 
     it('handles selectors with multiple filters', () => {
       const source = 'fn test() { kill(@e[type=zombie, distance=..5, limit=1]); }'
       const files = compile(source)
       const fn = getFunction(files, 'test')
-      expect(fn).toContain('type=zombie')
+      expect(fn).toContain('type=minecraft:zombie')
       expect(fn).toContain('distance=..5')
       expect(fn).toContain('limit=1')
     })
@@ -1060,7 +1060,7 @@ fn handle_claim() {
         .filter(f => f.path.includes('check_zombies'))
         .map(f => f.content)
         .join('\n')
-      expect(allContent).toContain('execute as @e[type=zombie,distance=..10]')
+      expect(allContent).toContain('execute as @e[type=minecraft:zombie,distance=..10]')
     })
 
     it('generates foreach sub-function with kill @s', () => {

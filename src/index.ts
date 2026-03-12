@@ -8,6 +8,7 @@ import { Lexer } from './lexer'
 import { Parser } from './parser'
 import { TypeChecker } from './typechecker'
 import { Lowering } from './lowering'
+import type { Warning } from './lowering'
 import { optimize } from './optimizer/passes'
 import { generateDatapack, DatapackFile } from './codegen/mcfunction'
 import { preprocessSource } from './compile'
@@ -27,6 +28,7 @@ export interface CompileResult {
   ast: Program
   ir: IRModule
   typeErrors?: DiagnosticError[]
+  warnings?: Warning[]
 }
 
 /**
@@ -57,7 +59,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   }
 
   // Lowering to IR
-  const ir = new Lowering(namespace).lower(ast)
+  const lowering = new Lowering(namespace)
+  const ir = lowering.lower(ast)
 
   // Optimization
   const optimizedIR: IRModule = shouldOptimize
@@ -67,7 +70,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   // Code generation
   const files = generateDatapack(optimizedIR)
 
-  return { files, ast, ir: optimizedIR, typeErrors }
+  return { files, ast, ir: optimizedIR, typeErrors, warnings: lowering.warnings }
 }
 
 /**

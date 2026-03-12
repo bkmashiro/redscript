@@ -112,6 +112,16 @@ function deriveNamespace(filePath: string): string {
   return basename.toLowerCase().replace(/[^a-z0-9]/g, '_')
 }
 
+function printWarnings(warnings: Array<{ code: string; message: string }> | undefined): void {
+  if (!warnings || warnings.length === 0) {
+    return
+  }
+
+  for (const warning of warnings) {
+    console.error(`Warning [${warning.code}]: ${warning.message}`)
+  }
+}
+
 function compileCommand(file: string, output: string, namespace: string, target: string = 'datapack'): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -123,6 +133,7 @@ function compileCommand(file: string, output: string, namespace: string, target:
 
   try {
     const result = compile(source, { namespace, filePath: file })
+    printWarnings(result.warnings)
 
     if (target === 'cmdblock') {
       // Generate command block JSON
@@ -223,6 +234,7 @@ function watchCommand(dir: string, output: string, namespace?: string): void {
         source = fs.readFileSync(file, 'utf-8')
         const ns = namespace ?? deriveNamespace(file)
         const result = compile(source, { namespace: ns, filePath: file })
+        printWarnings(result.warnings)
 
         // Create output directory
         fs.mkdirSync(output, { recursive: true })

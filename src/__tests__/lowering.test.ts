@@ -4,9 +4,14 @@ import { Lowering } from '../lowering'
 import type { IRModule, IRFunction, IRInstr } from '../ir/types'
 
 function compile(source: string, namespace = 'test'): IRModule {
+  return compileWithWarnings(source, namespace).ir
+}
+
+function compileWithWarnings(source: string, namespace = 'test'): { ir: IRModule; warnings: Lowering['warnings'] } {
   const tokens = new Lexer(source).tokenize()
   const ast = new Parser(tokens).parse(namespace)
-  return new Lowering(namespace).lower(ast)
+  const lowering = new Lowering(namespace)
+  return { ir: lowering.lower(ast), warnings: lowering.warnings }
 }
 
 function getFunction(module: IRModule, name: string): IRFunction | undefined {
@@ -187,7 +192,7 @@ fn test() -> int {
       const mainFn = getFunction(ir, 'kill_all')!
       const rawCmds = getRawCommands(mainFn)
       expect(rawCmds.some(cmd =>
-        cmd.includes('execute as @e[type=zombie]') && cmd.includes('run function')
+        cmd.includes('execute as @e[type=minecraft:zombie]') && cmd.includes('run function')
       )).toBe(true)
     })
 
@@ -390,7 +395,7 @@ fn choose(dir: Direction) {
       const ir = compile('fn test() { kill(@e[type=zombie]); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds).toContain('kill @e[type=zombie]')
+      expect(rawCmds).toContain('kill @e[type=minecraft:zombie]')
     })
 
     it('lowers give()', () => {
@@ -582,9 +587,41 @@ fn choose(dir: Direction) {
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
       const killCmd = rawCmds.find(cmd => cmd.startsWith('kill'))
-      expect(killCmd).toContain('type=zombie')
+      expect(killCmd).toContain('type=minecraft:zombie')
       expect(killCmd).toContain('distance=..10')
       expect(killCmd).toContain('tag=boss')
+    })
+
+    it('warns and auto-qualifies unnamespaced entity types', () => {
+      const { ir, warnings } = compileWithWarnings('fn test() { kill(@e[type=zombie]); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('kill @e[type=minecraft:zombie]')
+      expect(warnings).toContainEqual({
+        code: 'W_UNNAMESPACED_TYPE',
+        message: 'Unnamespaced entity type "zombie", auto-qualifying to "minecraft:zombie"',
+      })
+    })
+
+    it('passes through minecraft entity types without warnings', () => {
+      const { ir, warnings } = compileWithWarnings('fn test() { kill(@e[type=minecraft:zombie]); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('kill @e[type=minecraft:zombie]')
+      expect(warnings).toHaveLength(0)
+    })
+
+    it('passes through custom namespaced entity types without warnings', () => {
+      const { ir, warnings } = compileWithWarnings('fn test() { kill(@e[type=my_mod:custom_mob]); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('kill @e[type=my_mod:custom_mob]')
+      expect(warnings).toHaveLength(0)
+    })
+
+    it('throws on invalid entity type format', () => {
+      expect(() => compileWithWarnings('fn test() { kill(@e[type=invalid!!!]); }'))
+        .toThrow('Invalid entity type format: "invalid!!!"')
     })
   })
 
@@ -636,7 +673,7 @@ fn choose(dir: Direction) {
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
       expect(rawCmds.some(cmd =>
-        cmd.includes('tag @e[type=zombie] add marked')
+        cmd.includes('tag @e[type=minecraft:zombie] add marked')
       )).toBe(true)
     })
   })
