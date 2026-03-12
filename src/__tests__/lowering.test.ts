@@ -535,6 +535,27 @@ fn choose(dir: Direction) {
       expect(rawCmds).toContain('xp set @s 3 levels')
     })
 
+    it('lowers scoreboard display and objective management builtins', () => {
+      const ir = compile(`
+fn test() {
+  scoreboard_display("sidebar", "kills");
+  scoreboard_display("list", "coins");
+  scoreboard_display("belowName", "hp");
+  scoreboard_hide("sidebar");
+  scoreboard_add_objective("kills", "playerKillCount", "Kill Count");
+  scoreboard_remove_objective("kills");
+}
+`)
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('scoreboard objectives setdisplay sidebar kills')
+      expect(rawCmds).toContain('scoreboard objectives setdisplay list coins')
+      expect(rawCmds).toContain('scoreboard objectives setdisplay belowName hp')
+      expect(rawCmds).toContain('scoreboard objectives setdisplay sidebar')
+      expect(rawCmds).toContain('scoreboard objectives add kills playerKillCount "Kill Count"')
+      expect(rawCmds).toContain('scoreboard objectives remove kills')
+    })
+
     it('lowers random()', () => {
       const ir = compile('fn test() { let x: int = random(1, 100); }')
       const fn = getFunction(ir, 'test')!

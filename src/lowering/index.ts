@@ -59,6 +59,10 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   scoreboard_get: () => null, // Special handling (returns value)
   scoreboard_set: () => null, // Special handling
   score: () => null, // Special handling (same as scoreboard_get)
+  scoreboard_display: () => null, // Special handling
+  scoreboard_hide: () => null, // Special handling
+  scoreboard_add_objective: () => null, // Special handling
+  scoreboard_remove_objective: () => null, // Special handling
   data_get: () => null, // Special handling (returns value from NBT)
 }
 
@@ -139,6 +143,7 @@ export class Lowering {
   private enumDefs: Map<string, Map<string, number>> = new Map()
   private functionDefaults: Map<string, Array<Expr | undefined>> = new Map()
   private constValues: Map<string, ConstDecl['value']> = new Map()
+  private stringValues: Map<string, string> = new Map()
   // Variable types: varName → TypeNode
   private varTypes: Map<string, TypeNode> = new Map()
   // Float variables (stored as fixed-point × 1000)
@@ -196,6 +201,7 @@ export class Lowering {
     this.varMap = new Map()
     this.currentContext = {}
     this.blockPosVars = new Map()
+    this.stringValues = new Map()
     this.builder = new LoweringBuilder()
 
     // Map parameters
@@ -418,6 +424,11 @@ export class Lowering {
     const blockPosValue = this.resolveBlockPosExpr(stmt.init)
     if (blockPosValue) {
       this.blockPosVars.set(stmt.name, blockPosValue)
+      return
+    }
+
+    const stmtType = stmt.type ? this.normalizeType(stmt.type) : this.inferExprType(stmt.init)
+    if (stmtType?.kind === 'named' && stmtType.name === 'string' && this.storeStringValue(stmt.name, stmt.init)) {
       return
     }
 
@@ -1103,6 +1114,10 @@ export class Lowering {
     }
 
     this.blockPosVars.delete(expr.target)
+    const targetType = this.varTypes.get(expr.target)
+    if (targetType?.kind === 'named' && targetType.name === 'string' && this.storeStringValue(expr.target, expr.value)) {
+      return { kind: 'const', value: 0 }
+    }
     const varName = this.varMap.get(expr.target) ?? `$${expr.target}`
     const value = this.lowerExpr(expr.value)
 
@@ -1120,6 +1135,22 @@ export class Lowering {
   }
 
   private lowerCallExpr(expr: Extract<Expr, { kind: 'call' }>): Operand {
+    if (expr.fn === 'str_len') {
+      const staticString = this.resolveStaticString(expr.args[0])
+      if (staticString !== null) {
+        return { kind: 'const', value: Array.from(staticString).length }
+      }
+
+      const storagePath = this.getStringStoragePath(expr.args[0])
+      const dst = this.builder.freshTemp()
+      if (storagePath) {
+        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${storagePath}`)
+      } else {
+        this.builder.emitAssign(dst, { kind: 'const', value: 0 })
+      }
+      return { kind: 'var', name: dst }
+    }
+
     // Check for builtin
     if (expr.fn in BUILTINS) {
       return this.lowerBuiltinCall(expr.fn, expr.args)
@@ -1255,6 +1286,33 @@ export class Lowering {
       return { kind: 'const', value: 0 }
     }
 
+    if (name === 'scoreboard_display') {
+      const slot = this.exprToString(args[0])
+      const objective = this.exprToString(args[1])
+      this.builder.emitRaw(`scoreboard objectives setdisplay ${slot} ${objective}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'scoreboard_hide') {
+      const slot = this.exprToString(args[0])
+      this.builder.emitRaw(`scoreboard objectives setdisplay ${slot}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'scoreboard_add_objective') {
+      const objective = this.exprToString(args[0])
+      const criteria = this.exprToString(args[1])
+      const displayName = args[2] ? ` ${this.exprToQuotedString(args[2])}` : ''
+      this.builder.emitRaw(`scoreboard objectives add ${objective} ${criteria}${displayName}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'scoreboard_remove_objective') {
+      const objective = this.exprToString(args[0])
+      this.builder.emitRaw(`scoreboard objectives remove ${objective}`)
+      return { kind: 'const', value: 0 }
+    }
+
     // Special case: data_get — read NBT data into a variable
     // data_get(target_type, target, path, scale?)
     // target_type: "entity", "block", "storage"
@@ -1375,6 +1433,11 @@ export class Lowering {
         this.appendRichTextExpr(components, constValue)
         return
       }
+      const stringValue = this.stringValues.get(expr.name)
+      if (stringValue !== undefined) {
+        components.push({ text: stringValue })
+        return
+      }
     }
 
     if (expr.kind === 'str_lit') {
@@ -1440,6 +1503,10 @@ export class Lowering {
         if (constValue) {
           return this.exprToString(constValue)
         }
+        const stringValue = this.stringValues.get(expr.name)
+        if (stringValue !== undefined) {
+          return stringValue
+        }
         const mapped = this.varMap.get(expr.name)
         return mapped ?? `$${expr.name}`
       }
@@ -1472,6 +1539,10 @@ export class Lowering {
     if (expr.kind === 'int_lit') return expr.value.toString()
     if (expr.kind === 'float_lit') return Math.trunc(expr.value).toString()
     return '0'
+  }
+
+  private exprToQuotedString(expr: Expr): string {
+    return JSON.stringify(this.exprToString(expr))
   }
 
   private lowerCoordinateBuiltin(name: string, args: Expr[]): string | null {
@@ -1608,6 +1679,49 @@ export class Lowering {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  private storeStringValue(name: string, expr: Expr): boolean {
+    const value = this.resolveStaticString(expr)
+    if (value === null) {
+      this.stringValues.delete(name)
+      return false
+    }
+    this.stringValues.set(name, value)
+    this.builder.emitRaw(`data modify storage rs:strings ${name} set value ${JSON.stringify(value)}`)
+    return true
+  }
+
+  private resolveStaticString(expr: Expr | undefined): string | null {
+    if (!expr) {
+      return null
+    }
+
+    if (expr.kind === 'str_lit') {
+      return expr.value
+    }
+
+    if (expr.kind === 'ident') {
+      const constValue = this.constValues.get(expr.name)
+      if (constValue?.kind === 'str_lit') {
+        return constValue.value
+      }
+      return this.stringValues.get(expr.name) ?? null
+    }
+
+    return null
+  }
+
+  private getStringStoragePath(expr: Expr | undefined): string | null {
+    if (!expr || expr.kind !== 'ident') {
+      return null
+    }
+
+    if (this.stringValues.has(expr.name)) {
+      return `rs:strings ${expr.name}`
+    }
+
+    return null
+  }
 
   private lowerConstLiteral(expr: ConstDecl['value']): Operand {
     switch (expr.kind) {

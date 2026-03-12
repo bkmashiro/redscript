@@ -255,6 +255,26 @@ fn test() {
       expect(fn).toContain('xp add @s 5 points')
       expect(fn).toContain('xp set @s 1 levels')
     })
+
+    it('compiles scoreboard display and objective builtins', () => {
+      const source = `
+fn test() {
+    scoreboard_display("sidebar", "kills");
+    scoreboard_display("list", "coins");
+    scoreboard_display("belowName", "hp");
+    scoreboard_hide("sidebar");
+    scoreboard_add_objective("kills", "playerKillCount", "Kill Count");
+    scoreboard_remove_objective("kills");
+}
+`
+      const fn = getFunction(compile(source), 'test')!
+      expect(fn).toContain('scoreboard objectives setdisplay sidebar kills')
+      expect(fn).toContain('scoreboard objectives setdisplay list coins')
+      expect(fn).toContain('scoreboard objectives setdisplay belowName hp')
+      expect(fn).toContain('scoreboard objectives setdisplay sidebar')
+      expect(fn).toContain('scoreboard objectives add kills playerKillCount "Kill Count"')
+      expect(fn).toContain('scoreboard objectives remove kills')
+    })
   })
 
   describe('Test 4: foreach', () => {
