@@ -6361,6 +6361,18 @@ function findFnDeclLine(document, name) {
   if (!match) return null;
   return document.positionAt(match.index).line;
 }
+function findFnSignature(document, name) {
+  const text = document.getText();
+  const re = new RegExp(`\\bfn\\s+${escapeRe(name)}\\s*\\(([^)]*)\\)(?:\\s*->\\s*([A-Za-z_][A-Za-z0-9_\\[\\]]*))?`, "m");
+  const match = re.exec(text);
+  if (!match) return null;
+  const params = match[1].trim();
+  const returnType = match[2];
+  if (returnType) {
+    return `fn ${name}(${params}) -> ${returnType}`;
+  }
+  return `fn ${name}(${params})`;
+}
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -6518,6 +6530,12 @@ function registerHoverProvider(context) {
         const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/);
         if (!range) return void 0;
         const word = document.getText(range);
+        if (word === "_") {
+          const md = new vscode.MarkdownString("", true);
+          md.appendCodeblock("_", "redscript");
+          md.appendMarkdown("**Wildcard pattern** (discard)\n\nMatches any value. Used in `match` expressions as a catch-all case, or to ignore unused values.");
+          return new vscode.Hover(md, range);
+        }
         const fnParams = findFnParams(document);
         const currentLine = position.line;
         const param = fnParams.find(
@@ -6585,7 +6603,8 @@ function registerHoverProvider(context) {
           if (declLine !== null) {
             const md = new vscode.MarkdownString("", true);
             const jsdoc = findJsDocAbove(document, declLine);
-            md.appendCodeblock(`fn ${word}(...)`, "redscript");
+            const sig = findFnSignature(document, word) || `fn ${word}(...)`;
+            md.appendCodeblock(sig, "redscript");
             if (jsdoc) {
               md.appendText("\n");
               md.appendMarkdown(jsdoc);

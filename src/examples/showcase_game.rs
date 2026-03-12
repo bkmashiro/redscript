@@ -231,16 +231,16 @@ fn spawn_enemy_wave() {
     foreach (lane in lanes) {
         match (lane) {
             Lane.North => {
-                summon("minecraft:zombie", "0", "65", "-10");
+                summon("minecraft:zombie", (0, 65, -10));
             }
             Lane.South => {
-                summon("minecraft:zombie", "0", "65", "10");
+                summon("minecraft:zombie", (0, 65, 10));
             }
             Lane.East => {
-                summon("minecraft:zombie", "10", "65", "0");
+                summon("minecraft:zombie", (10, 65, 0));
             }
             _ => {
-                summon("minecraft:zombie", "-10", "65", "0");
+                summon("minecraft:zombie", (-10, 65, 0));
             }
         }
     }
