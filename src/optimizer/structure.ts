@@ -1,5 +1,5 @@
 import type { IRBlock, IRCommand, IRFunction, IRInstr, Operand, Terminator } from '../ir/types'
-import { applyCSE, applyLICM, batchSetblocks } from './commands'
+import { createEmptyOptimizationStats, mergeOptimizationStats, optimizeCommandFunctions, type OptimizationStats } from './commands'
 
 const OBJ = 'rs'
 const INLINE_THRESHOLD = 8
@@ -405,6 +405,13 @@ export function optimizeFunctionForStructure(
 }
 
 export function optimizeForStructure(functions: IRFunction[], namespace = 'redscript'): IRFunction[] {
+  return optimizeForStructureWithStats(functions, namespace).functions
+}
+
+export function optimizeForStructureWithStats(
+  functions: IRFunction[],
+  namespace = 'redscript'
+): { functions: IRFunction[]; stats: OptimizationStats } {
   const staged = new Map(functions.map(fn => [fn.name, { ...fn }]))
 
   for (const fn of staged.values()) {
@@ -415,18 +422,20 @@ export function optimizeForStructure(functions: IRFunction[], namespace = 'redsc
     fn.commands = optimizeFunctionForStructure(fn, staged, namespace)
   }
 
-  const licm = applyLICM(
+  const optimizedCommands = optimizeCommandFunctions(
     Array.from(staged.values()).map(fn => ({
       name: fn.name,
       commands: fn.commands ?? [],
     }))
   )
+  const stats = createEmptyOptimizationStats()
+  mergeOptimizationStats(stats, optimizedCommands.stats)
 
-  const cse = applyCSE(licm.functions)
-  const batched = batchSetblocks(cse.functions)
-
-  return Array.from(staged.values()).map(fn => ({
-    ...fn,
-    commands: batched.functions.find(candidate => candidate.name === fn.name)?.commands ?? fn.commands,
-  }))
+  return {
+    functions: Array.from(staged.values()).map(fn => ({
+      ...fn,
+      commands: optimizedCommands.functions.find(candidate => candidate.name === fn.name)?.commands ?? fn.commands,
+    })),
+    stats,
+  }
 }

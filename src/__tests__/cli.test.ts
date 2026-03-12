@@ -2,6 +2,7 @@ import { compile, check } from '../index'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
+import { execFileSync } from 'child_process'
 
 // Note: watch command is tested manually as it's an interactive long-running process
 
@@ -64,6 +65,44 @@ describe('CLI API', () => {
       expect(paths).toContain('pack.mcmeta')
       expect(paths).toContain('data/game/function/__load.mcfunction')
       expect(paths.some(p => p.includes('test.mcfunction'))).toBe(true)
+    })
+
+    it('collects optimizer stats', () => {
+      const source = `
+fn build() {
+  foreach (turret in @e[tag=turret]) {
+    let range: int = scoreboard_get("config", "turret_range");
+    if (range > 0) {
+      if (range > -1) {
+        say("ready");
+      }
+    }
+  }
+}
+`
+
+      const result = compile(source, { namespace: 'stats' })
+      expect(result.stats?.licmHoists).toBeGreaterThan(0)
+      expect(result.stats?.totalCommandsBefore).toBeGreaterThan(result.stats?.totalCommandsAfter ?? 0)
+    })
+  })
+
+  describe('--stats flag', () => {
+    it('prints optimizer statistics', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-stats-'))
+      const inputPath = path.join(tempDir, 'input.rs')
+      const outputDir = path.join(tempDir, 'out')
+
+      fs.writeFileSync(inputPath, 'fn build() { setblock((0, 64, 0), "minecraft:stone"); setblock((1, 64, 0), "minecraft:stone"); }')
+
+      const stdout = execFileSync(
+        process.execPath,
+        ['-r', 'ts-node/register', path.join(process.cwd(), 'src/cli.ts'), 'compile', inputPath, '-o', outputDir, '--stats'],
+        { cwd: process.cwd(), encoding: 'utf-8' }
+      )
+
+      expect(stdout).toContain('Optimizations applied:')
+      expect(stdout).toContain('setblock batching:')
     })
   })
 

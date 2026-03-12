@@ -9,12 +9,13 @@ import { Parser } from './parser'
 import { TypeChecker } from './typechecker'
 import { Lowering } from './lowering'
 import type { Warning } from './lowering'
-import { optimize } from './optimizer/passes'
-import { generateDatapack, DatapackFile } from './codegen/mcfunction'
+import { optimizeWithStats } from './optimizer/passes'
+import { generateDatapackWithStats, DatapackFile } from './codegen/mcfunction'
 import { preprocessSource } from './compile'
 import type { IRModule } from './ir/types'
 import type { Program } from './ast/types'
 import type { DiagnosticError } from './diagnostics'
+import { createEmptyOptimizationStats, mergeOptimizationStats, type OptimizationStats } from './optimizer/commands'
 
 export interface CompileOptions {
   namespace?: string
@@ -29,6 +30,7 @@ export interface CompileResult {
   ir: IRModule
   typeErrors?: DiagnosticError[]
   warnings?: Warning[]
+  stats?: OptimizationStats
 }
 
 /**
@@ -63,14 +65,21 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const ir = lowering.lower(ast)
 
   // Optimization
-  const optimizedIR: IRModule = shouldOptimize
-    ? { ...ir, functions: ir.functions.map(fn => optimize(fn)) }
-    : ir
+  const optimizationStats = createEmptyOptimizationStats()
+  const optimizedFunctions = shouldOptimize
+    ? ir.functions.map(fn => {
+      const optimized = optimizeWithStats(fn)
+      mergeOptimizationStats(optimizationStats, optimized.stats)
+      return optimized.fn
+    })
+    : ir.functions
+  const optimizedIR: IRModule = { ...ir, functions: optimizedFunctions }
 
   // Code generation
-  const files = generateDatapack(optimizedIR)
+  const generated = generateDatapackWithStats(optimizedIR)
+  mergeOptimizationStats(optimizationStats, generated.stats)
 
-  return { files, ast, ir: optimizedIR, typeErrors, warnings: lowering.warnings }
+  return { files: generated.files, ast, ir: optimizedIR, typeErrors, warnings: lowering.warnings, stats: optimizationStats }
 }
 
 /**

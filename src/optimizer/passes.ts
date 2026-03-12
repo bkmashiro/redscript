@@ -11,6 +11,7 @@
  */
 
 import type { IRBlock, IRFunction, IRInstr, Operand } from '../ir/types'
+import { createEmptyOptimizationStats, mergeOptimizationStats, type OptimizationStats } from './commands'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,18 +50,25 @@ function evalCmp(lhs: number, cop: string, rhs: number): number {
 // ---------------------------------------------------------------------------
 
 export function constantFolding(fn: IRFunction): IRFunction {
+  return constantFoldingWithStats(fn).fn
+}
+
+export function constantFoldingWithStats(fn: IRFunction): { fn: IRFunction; stats: Partial<OptimizationStats> } {
+  let folded = 0
   const newBlocks = fn.blocks.map(block => {
     const newInstrs: IRInstr[] = []
     for (const instr of block.instrs) {
       if (instr.op === 'binop' && isConst(instr.lhs) && isConst(instr.rhs)) {
         const result = evalBinop(instr.lhs.value, instr.bop, instr.rhs.value)
         if (result !== null) {
+          folded++
           newInstrs.push({ op: 'assign', dst: instr.dst, src: { kind: 'const', value: result } })
           continue
         }
       }
       if (instr.op === 'cmp' && isConst(instr.lhs) && isConst(instr.rhs)) {
         const result = evalCmp(instr.lhs.value, instr.cop, instr.rhs.value)
+        folded++
         newInstrs.push({ op: 'assign', dst: instr.dst, src: { kind: 'const', value: result } })
         continue
       }
@@ -68,7 +76,7 @@ export function constantFolding(fn: IRFunction): IRFunction {
     }
     return { ...block, instrs: newInstrs }
   })
-  return { ...fn, blocks: newBlocks }
+  return { fn: { ...fn, blocks: newBlocks }, stats: { constantFolds: folded } }
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +136,10 @@ export function copyPropagation(fn: IRFunction): IRFunction {
 // ---------------------------------------------------------------------------
 
 export function deadCodeElimination(fn: IRFunction): IRFunction {
+  return deadCodeEliminationWithStats(fn).fn
+}
+
+export function deadCodeEliminationWithStats(fn: IRFunction): { fn: IRFunction; stats: Partial<OptimizationStats> } {
   // Collect all reads across all blocks
   const readVars = new Set<string>()
 
@@ -159,19 +171,22 @@ export function deadCodeElimination(fn: IRFunction): IRFunction {
   // Also keep params and globals
   fn.params.forEach(p => readVars.add(p))
 
+  let removed = 0
   const newBlocks = fn.blocks.map(block => ({
     ...block,
     instrs: block.instrs.filter(instr => {
       // Only assignments/binops/cmps with an unused dst are candidates for removal
       if (instr.op === 'assign' || instr.op === 'binop' || instr.op === 'cmp') {
-        return readVars.has(instr.dst)
+        const keep = readVars.has(instr.dst)
+        if (!keep) removed++
+        return keep
       }
       // calls may have side effects — keep them always
       return true
     }),
   }))
 
-  return { ...fn, blocks: newBlocks }
+  return { fn: { ...fn, blocks: newBlocks }, stats: { deadCodeRemoved: removed } }
 }
 
 // ---------------------------------------------------------------------------
@@ -191,5 +206,28 @@ export const defaultPipeline: OptimizationPass[] = [
 ]
 
 export function optimize(fn: IRFunction, passes = defaultPipeline): IRFunction {
-  return passes.reduce((f, p) => p.run(f), fn)
+  return optimizeWithStats(fn, passes).fn
+}
+
+export function optimizeWithStats(fn: IRFunction, passes = defaultPipeline): { fn: IRFunction; stats: OptimizationStats } {
+  let current = fn
+  const stats = createEmptyOptimizationStats()
+
+  for (const pass of passes) {
+    if (pass.name === 'constant-folding') {
+      const result = constantFoldingWithStats(current)
+      current = result.fn
+      mergeOptimizationStats(stats, result.stats)
+      continue
+    }
+    if (pass.name === 'dead-code-elimination') {
+      const result = deadCodeEliminationWithStats(current)
+      current = result.fn
+      mergeOptimizationStats(stats, result.stats)
+      continue
+    }
+    current = pass.run(current)
+  }
+
+  return { fn: current, stats }
 }

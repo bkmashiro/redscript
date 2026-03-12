@@ -2,8 +2,9 @@ import { Lexer } from '../../lexer'
 import { Parser } from '../../parser'
 import { Lowering } from '../../lowering'
 import { nbt, TagType, writeNbt, type CompoundTag, type NbtTag } from '../../nbt'
-import { optimize } from '../../optimizer/passes'
-import { optimizeForStructure } from '../../optimizer/structure'
+import { createEmptyOptimizationStats, mergeOptimizationStats, type OptimizationStats } from '../../optimizer/commands'
+import { optimizeWithStats } from '../../optimizer/passes'
+import { optimizeForStructure, optimizeForStructureWithStats } from '../../optimizer/structure'
 import { preprocessSource } from '../../compile'
 import type { IRCommand, IRFunction, IRModule } from '../../ir/types'
 import type { DatapackFile } from '../mcfunction'
@@ -46,6 +47,7 @@ export interface StructureCompileResult {
   buffer: Buffer
   blockCount: number
   blocks: StructureBlockInfo[]
+  stats?: OptimizationStats
 }
 
 function escapeJsonString(value: string): string {
@@ -284,9 +286,20 @@ export function compileToStructure(source: string, namespace: string, filePath?:
   const tokens = new Lexer(preprocessedSource, filePath).tokenize()
   const ast = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
   const ir = new Lowering(namespace).lower(ast)
+  const stats = createEmptyOptimizationStats()
+  const optimizedIRFunctions = ir.functions.map(fn => {
+    const optimized = optimizeWithStats(fn)
+    mergeOptimizationStats(stats, optimized.stats)
+    return optimized.fn
+  })
+  const structureOptimized = optimizeForStructureWithStats(optimizedIRFunctions, namespace)
+  mergeOptimizationStats(stats, structureOptimized.stats)
   const optimizedModule: IRModule = {
     ...ir,
-    functions: optimizeForStructure(ir.functions.map(fn => optimize(fn)), namespace),
+    functions: structureOptimized.functions,
   }
-  return generateStructure(optimizedModule)
+  return {
+    ...generateStructure(optimizedModule),
+    stats,
+  }
 }

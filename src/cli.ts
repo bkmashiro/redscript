@@ -14,6 +14,7 @@ import { generateCommandBlocks } from './codegen/cmdblock'
 import { compileToStructure } from './codegen/structure'
 import { formatError } from './diagnostics'
 import { startRepl } from './repl'
+import type { OptimizationStats } from './optimizer/commands'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -43,6 +44,7 @@ Options:
   --output-nbt <file>    Output .nbt file path for structure target
   --namespace <ns>       Datapack namespace (default: derived from filename)
   --target <target>      Output target: datapack (default), cmdblock, or structure
+  --stats                Print optimizer statistics
   -h, --help             Show this help message
 
 Targets:
@@ -69,6 +71,7 @@ function parseArgs(args: string[]): {
   outputNbt?: string
   namespace?: string
   target?: string
+  stats?: boolean
   help?: boolean
 } {
   const result: ReturnType<typeof parseArgs> = {}
@@ -91,6 +94,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--target') {
       result.target = args[++i]
+      i++
+    } else if (arg === '--stats') {
+      result.stats = true
       i++
     } else if (!result.command) {
       result.command = arg
@@ -122,7 +128,24 @@ function printWarnings(warnings: Array<{ code: string; message: string }> | unde
   }
 }
 
-function compileCommand(file: string, output: string, namespace: string, target: string = 'datapack'): void {
+function formatReduction(before: number, after: number): string {
+  if (before === 0) return '0%'
+  return `${Math.round(((before - after) / before) * 100)}%`
+}
+
+function printOptimizationStats(stats: OptimizationStats | undefined): void {
+  if (!stats) return
+
+  console.log('Optimizations applied:')
+  console.log(`  LICM: ${stats.licmHoists} reads hoisted from ${stats.licmLoopBodies} loop bodies`)
+  console.log(`  CSE:  ${stats.cseRedundantReads + stats.cseArithmetic} expressions eliminated`)
+  console.log(`  setblock batching: ${stats.setblockMergedCommands} setblocks -> ${stats.setblockFillCommands} fills (saved ${stats.setblockSavedCommands} commands)`)
+  console.log(`  dead code: ${stats.deadCodeRemoved} commands removed`)
+  console.log(`  constant folding: ${stats.constantFolds} constants folded`)
+  console.log(`  Total commands: ${stats.totalCommandsBefore} -> ${stats.totalCommandsAfter} (${formatReduction(stats.totalCommandsBefore, stats.totalCommandsAfter)} reduction)`)
+}
+
+function compileCommand(file: string, output: string, namespace: string, target: string = 'datapack', showStats = false): void {
   // Read source file
   if (!fs.existsSync(file)) {
     console.error(`Error: File not found: ${file}`)
@@ -149,6 +172,9 @@ function compileCommand(file: string, output: string, namespace: string, target:
       console.log(`✓ Generated command blocks for ${file}`)
       console.log(`  Output: ${outputFile}`)
       console.log(`  Blocks: ${cmdBlocks.blocks.length}`)
+      if (showStats) {
+        printOptimizationStats(result.stats)
+      }
     } else if (target === 'structure') {
       const structure = compileToStructure(source, namespace, file)
       fs.mkdirSync(path.dirname(output), { recursive: true })
@@ -157,6 +183,9 @@ function compileCommand(file: string, output: string, namespace: string, target:
       console.log(`✓ Generated structure for ${file}`)
       console.log(`  Output: ${output}`)
       console.log(`  Blocks: ${structure.blockCount}`)
+      if (showStats) {
+        printOptimizationStats(structure.stats)
+      }
     } else {
       const result = compile(source, { namespace, filePath: file })
       printWarnings(result.warnings)
@@ -177,6 +206,9 @@ function compileCommand(file: string, output: string, namespace: string, target:
       console.log(`  Namespace: ${namespace}`)
       console.log(`  Functions: ${result.ir.functions.length}`)
       console.log(`  Files: ${result.files.length}`)
+      if (showStats) {
+        printOptimizationStats(result.stats)
+      }
     }
   } catch (err) {
     console.error(formatError(err as Error, source))
@@ -326,7 +358,8 @@ async function main(): Promise<void> {
         parsed.file,
         output,
         namespace,
-        target
+        target,
+        parsed.stats
       )
       }
       break

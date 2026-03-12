@@ -17,7 +17,7 @@
  */
 
 import type { IRBlock, IRFunction, IRModule, Operand, Terminator } from '../../ir/types'
-import { applyCSE, applyLICM, batchSetblocks } from '../../optimizer/commands'
+import { optimizeCommandFunctions, type OptimizationStats, createEmptyOptimizationStats, mergeOptimizationStats } from '../../optimizer/commands'
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -197,10 +197,7 @@ function toFunctionName(file: DatapackFile): string | null {
 
 function applyFunctionOptimization(
   files: DatapackFile[],
-  optimizers: Array<(functions: Array<{ name: string; commands: Array<{ cmd: string }> }>) => {
-    functions: Array<{ name: string; commands: Array<{ cmd: string }> }>
-  }>
-): DatapackFile[] {
+): { files: DatapackFile[]; stats: OptimizationStats } {
   const functionFiles = files
     .map(file => {
       const functionName = toFunctionName(file)
@@ -214,13 +211,14 @@ function applyFunctionOptimization(
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
 
-  const optimized = optimizers.reduce((current, optimize) => optimize(current).functions, functionFiles.map(entry => ({
+  const optimized = optimizeCommandFunctions(functionFiles.map(entry => ({
     name: entry.functionName,
     commands: entry.commands,
   })))
-  const commandMap = new Map(optimized.map(fn => [fn.name, fn.commands]))
+  const commandMap = new Map(optimized.functions.map(fn => [fn.name, fn.commands]))
 
-  return files.map(file => {
+  return {
+    files: files.map(file => {
     const functionName = toFunctionName(file)
     if (!functionName) return file
     const commands = commandMap.get(functionName)
@@ -231,10 +229,17 @@ function applyFunctionOptimization(
       ...file,
       content: [...header, ...commands.map(command => command.cmd)].join('\n'),
     }
-  })
+    }),
+    stats: optimized.stats,
+  }
 }
 
-export function generateDatapack(module: IRModule): DatapackFile[] {
+export interface DatapackGenerationResult {
+  files: DatapackFile[]
+  stats: OptimizationStats
+}
+
+export function generateDatapackWithStats(module: IRModule): DatapackGenerationResult {
   const files: DatapackFile[] = []
   const ns = module.namespace
 
@@ -369,5 +374,12 @@ export function generateDatapack(module: IRModule): DatapackFile[] {
     })
   }
 
-  return applyFunctionOptimization(files, [applyLICM, applyCSE, batchSetblocks])
+  const optimized = applyFunctionOptimization(files)
+  const stats = createEmptyOptimizationStats()
+  mergeOptimizationStats(stats, optimized.stats)
+  return { files: optimized.files, stats }
+}
+
+export function generateDatapack(module: IRModule): DatapackFile[] {
+  return generateDatapackWithStats(module).files
 }

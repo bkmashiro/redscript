@@ -29,7 +29,7 @@ const FUNCTION_CALL_RE = /^execute as (.+) run function ([^:]+):(.+)$/
 const TEMP_RE = /\$[A-Za-z0-9_]+/g
 const SETBLOCK_RE = /^setblock (-?\d+) (-?\d+) (-?\d+) (\S+)$/
 
-function createEmptyStats(): OptimizationStats {
+export function createEmptyOptimizationStats(): OptimizationStats {
   return {
     licmHoists: 0,
     licmLoopBodies: 0,
@@ -56,7 +56,7 @@ function cloneFunctions(functions: CommandFunction[]): CommandFunction[] {
   }))
 }
 
-function mergeStats(base: OptimizationStats, delta: Partial<OptimizationStats>): void {
+export function mergeOptimizationStats(base: OptimizationStats, delta: Partial<OptimizationStats>): void {
   for (const [key, value] of Object.entries(delta)) {
     base[key as keyof OptimizationStats] += value as number
   }
@@ -359,7 +359,7 @@ function applySetblockBatchingInternal(functions: CommandFunction[]): Partial<Op
   for (const fn of functions) {
     const batched = batchSetblocksInCommands(fn.commands)
     fn.commands = batched.commands
-    mergeStats(stats as OptimizationStats, batched.stats)
+    mergeOptimizationStats(stats as OptimizationStats, batched.stats)
   }
 
   return stats
@@ -367,27 +367,48 @@ function applySetblockBatchingInternal(functions: CommandFunction[]): Partial<Op
 
 export function applyLICM(functions: CommandFunction[]): { functions: CommandFunction[]; stats: OptimizationStats } {
   const optimized = cloneFunctions(functions)
-  const stats = createEmptyStats()
+  const stats = createEmptyOptimizationStats()
   stats.totalCommandsBefore = optimized.reduce((sum, fn) => sum + fn.commands.length, 0)
-  mergeStats(stats, applyLICMInternal(optimized))
+  mergeOptimizationStats(stats, applyLICMInternal(optimized))
   stats.totalCommandsAfter = optimized.reduce((sum, fn) => sum + fn.commands.length, 0)
   return { functions: optimized, stats }
 }
 
 export function applyCSE(functions: CommandFunction[]): { functions: CommandFunction[]; stats: OptimizationStats } {
   const optimized = cloneFunctions(functions)
-  const stats = createEmptyStats()
+  const stats = createEmptyOptimizationStats()
   stats.totalCommandsBefore = optimized.reduce((sum, fn) => sum + fn.commands.length, 0)
-  mergeStats(stats, applyCSEInternal(optimized))
+  mergeOptimizationStats(stats, applyCSEInternal(optimized))
   stats.totalCommandsAfter = optimized.reduce((sum, fn) => sum + fn.commands.length, 0)
   return { functions: optimized, stats }
 }
 
 export function batchSetblocks(functions: CommandFunction[]): { functions: CommandFunction[]; stats: OptimizationStats } {
   const optimized = cloneFunctions(functions)
-  const stats = createEmptyStats()
+  const stats = createEmptyOptimizationStats()
   stats.totalCommandsBefore = optimized.reduce((sum, fn) => sum + fn.commands.length, 0)
-  mergeStats(stats, applySetblockBatchingInternal(optimized))
+  mergeOptimizationStats(stats, applySetblockBatchingInternal(optimized))
   stats.totalCommandsAfter = optimized.reduce((sum, fn) => sum + fn.commands.length, 0)
   return { functions: optimized, stats }
+}
+
+export function optimizeCommandFunctions(functions: CommandFunction[]): { functions: CommandFunction[]; stats: OptimizationStats } {
+  const initial = cloneFunctions(functions)
+  const stats = createEmptyOptimizationStats()
+  stats.totalCommandsBefore = initial.reduce((sum, fn) => sum + fn.commands.length, 0)
+
+  const licm = applyLICM(initial)
+  mergeOptimizationStats(stats, licm.stats)
+
+  const cse = applyCSE(licm.functions)
+  mergeOptimizationStats(stats, cse.stats)
+
+  const batched = batchSetblocks(cse.functions)
+  mergeOptimizationStats(stats, batched.stats)
+  stats.totalCommandsAfter = batched.functions.reduce((sum, fn) => sum + fn.commands.length, 0)
+
+  return {
+    functions: batched.functions,
+    stats,
+  }
 }
