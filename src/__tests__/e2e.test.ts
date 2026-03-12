@@ -37,10 +37,10 @@ function getSubFunction(files: DatapackFile[], parent: string, sub: string): str
 }
 
 function hasTickTag(files: DatapackFile[], namespace: string, fnName: string): boolean {
-  const tickTag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
-  if (!tickTag) return false
-  const content = JSON.parse(tickTag.content)
-  return content.values.includes(`${namespace}:${fnName}`)
+  // Check if the function is called from __tick.mcfunction
+  const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
+  if (!tickFn) return false
+  return tickFn.content.includes(`function ${namespace}:${fnName}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -186,25 +186,55 @@ fn count_down() {
   })
 
   describe('Datapack structure', () => {
-    it('generates pack.mcmeta', () => {
+    it('generates pack.mcmeta with proper format and description', () => {
       const files = compile('fn test() {}')
       const meta = files.find(f => f.path === 'pack.mcmeta')
       expect(meta).toBeDefined()
       const content = JSON.parse(meta!.content)
-      expect(content.pack.pack_format).toBeDefined()
+      expect(content.pack.pack_format).toBe(26)
+      expect(content.pack.description).toBe('test datapack — compiled by redscript')
     })
 
-    it('generates load.mcfunction', () => {
+    it('generates __load.mcfunction with scoreboard setup', () => {
       const files = compile('fn test() {}')
-      const load = files.find(f => f.path.includes('load.mcfunction'))
+      const load = files.find(f => f.path.includes('__load.mcfunction'))
       expect(load).toBeDefined()
+      expect(load!.content).toContain('# RedScript runtime init')
       expect(load!.content).toContain('scoreboard objectives add rs dummy')
     })
 
-    it('generates minecraft:load tag', () => {
+    it('generates minecraft:load tag pointing to __load', () => {
       const files = compile('fn test() {}')
       const tag = files.find(f => f.path === 'data/minecraft/tags/function/load.json')
       expect(tag).toBeDefined()
+      const content = JSON.parse(tag!.content)
+      expect(content.values).toContain('test:__load')
+    })
+
+    it('generates __tick.mcfunction for tick functions', () => {
+      const source = '@tick fn tick_fn() { say("tick"); }'
+      const files = compile(source)
+      const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
+      expect(tickFn).toBeDefined()
+      expect(tickFn!.content).toContain('# RedScript tick dispatcher')
+      expect(tickFn!.content).toContain('function test:tick_fn')
+    })
+
+    it('generates minecraft:tick tag pointing to __tick', () => {
+      const source = '@tick fn tick_fn() { say("tick"); }'
+      const files = compile(source)
+      const tag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
+      expect(tag).toBeDefined()
+      const content = JSON.parse(tag!.content)
+      expect(content.values).toContain('test:__tick')
+    })
+
+    it('does not generate tick infrastructure when no tick functions', () => {
+      const files = compile('fn test() {}')
+      const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
+      const tickTag = files.find(f => f.path.includes('tick.json'))
+      expect(tickFn).toBeUndefined()
+      expect(tickTag).toBeUndefined()
     })
   })
 
@@ -457,7 +487,7 @@ fn test() {
   })
 
   describe('Trigger system', () => {
-    it('generates trigger objective in load.mcfunction', () => {
+    it('generates trigger objective in __load.mcfunction', () => {
       const source = `
 @on_trigger("claim_reward")
 fn handle_claim() {
@@ -465,12 +495,12 @@ fn handle_claim() {
 }
 `
       const files = compile(source)
-      const load = files.find(f => f.path.includes('load.mcfunction'))
+      const load = files.find(f => f.path.includes('__load.mcfunction'))
       expect(load?.content).toContain('scoreboard objectives add claim_reward trigger')
       expect(load?.content).toContain('scoreboard players enable @a claim_reward')
     })
 
-    it('generates trigger check function', () => {
+    it('generates trigger check in __tick function', () => {
       const source = `
 @on_trigger("claim_reward")
 fn handle_claim() {
@@ -478,10 +508,11 @@ fn handle_claim() {
 }
 `
       const files = compile(source)
-      const check = files.find(f => f.path.includes('__trigger_check.mcfunction'))
-      expect(check).toBeDefined()
-      expect(check?.content).toContain('execute as @a[scores={claim_reward=1..}]')
-      expect(check?.content).toContain('run function test:__trigger_claim_reward_dispatch')
+      // Trigger checks are now in __tick.mcfunction
+      const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
+      expect(tickFn).toBeDefined()
+      expect(tickFn?.content).toContain('execute as @a[scores={claim_reward=1..}]')
+      expect(tickFn?.content).toContain('run function test:__trigger_claim_reward_dispatch')
     })
 
     it('generates trigger dispatch function', () => {
@@ -499,7 +530,7 @@ fn handle_claim() {
       expect(dispatch?.content).toContain('scoreboard players enable @s claim_reward')
     })
 
-    it('registers trigger check in tick tag', () => {
+    it('registers __tick in tick tag when triggers exist', () => {
       const source = `
 @on_trigger("claim_reward")
 fn handle_claim() {
@@ -510,10 +541,11 @@ fn handle_claim() {
       const tickTag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
       expect(tickTag).toBeDefined()
       const content = JSON.parse(tickTag!.content)
-      expect(content.values).toContain('test:__trigger_check')
+      // All tick functionality is routed through __tick
+      expect(content.values).toContain('test:__tick')
     })
 
-    it('combines tick functions and trigger check in tick tag', () => {
+    it('combines tick functions and trigger check in __tick', () => {
       const source = `
 @tick
 fn game_loop() {
@@ -526,11 +558,17 @@ fn handle_claim() {
 }
 `
       const files = compile(source)
+      // tick.json points to __tick
       const tickTag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
       expect(tickTag).toBeDefined()
       const content = JSON.parse(tickTag!.content)
-      expect(content.values).toContain('test:__trigger_check')
-      expect(content.values).toContain('test:game_loop')
+      expect(content.values).toContain('test:__tick')
+      
+      // __tick.mcfunction calls both tick functions and trigger checks
+      const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
+      expect(tickFn).toBeDefined()
+      expect(tickFn?.content).toContain('function test:game_loop')
+      expect(tickFn?.content).toContain('execute as @a[scores={claim_reward=1..}]')
     })
   })
 
@@ -626,20 +664,25 @@ fn handle_claim() {
       expect(fn).toContain('Zombie Slayer!')
     })
 
-    it('registers tick functions in tick tag', () => {
+    it('registers __tick in tick tag and calls tick functions', () => {
       const files = compile(source, 'zombie')
       const tickTag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
       expect(tickTag).toBeDefined()
       const content = JSON.parse(tickTag!.content)
-      expect(content.values).toContain('zombie:check_zombies')
-      expect(content.values).toContain('zombie:announce')
+      expect(content.values).toContain('zombie:__tick')
+      
+      // __tick should call both tick functions
+      const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
+      expect(tickFn).toBeDefined()
+      expect(tickFn?.content).toContain('function zombie:check_zombies')
+      expect(tickFn?.content).toContain('function zombie:announce')
     })
 
     it('generates trigger infrastructure for claim_reward', () => {
       const files = compile(source, 'zombie')
       
-      // Check load.mcfunction has trigger objective
-      const load = files.find(f => f.path.includes('load.mcfunction'))
+      // Check __load.mcfunction has trigger objective
+      const load = files.find(f => f.path.includes('__load.mcfunction'))
       expect(load?.content).toContain('scoreboard objectives add claim_reward trigger')
       
       // Check dispatch function exists
@@ -649,10 +692,10 @@ fn handle_claim() {
       expect(dispatch).toBeDefined()
       expect(dispatch?.content).toContain('function zombie:handle_claim')
       
-      // Check trigger_check is registered
-      const tickTag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
-      const content = JSON.parse(tickTag!.content)
-      expect(content.values).toContain('zombie:__trigger_check')
+      // Check trigger_check is in __tick.mcfunction
+      const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
+      expect(tickFn).toBeDefined()
+      expect(tickFn?.content).toContain('execute as @a[scores={claim_reward=1..}]')
     })
 
     it('generates function call from handle_claim to reward_player', () => {

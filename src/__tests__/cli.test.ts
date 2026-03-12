@@ -24,7 +24,7 @@ describe('CLI API', () => {
       
       const paths = result.files.map(f => f.path)
       expect(paths).toContain('pack.mcmeta')
-      expect(paths).toContain('data/game/function/load.mcfunction')
+      expect(paths).toContain('data/game/function/__load.mcfunction')
       expect(paths.some(p => p.includes('test.mcfunction'))).toBe(true)
     })
   })

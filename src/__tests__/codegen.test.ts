@@ -10,10 +10,10 @@ describe('generateDatapack', () => {
     expect(JSON.parse(meta!.content).pack.pack_format).toBe(26)
   })
 
-  it('generates load.mcfunction with objective setup', () => {
+  it('generates __load.mcfunction with objective setup', () => {
     const mod: IRModule = { namespace: 'mypack', functions: [], globals: ['counter'] }
     const files = generateDatapack(mod)
-    const load = files.find(f => f.path.includes('load.mcfunction'))
+    const load = files.find(f => f.path.includes('__load.mcfunction'))
     expect(load?.content).toContain('scoreboard objectives add rs dummy')
     expect(load?.content).toContain('scoreboard players set $counter rs 0')
   })
@@ -58,9 +58,16 @@ describe('generateDatapack', () => {
       }],
     }
     const files = generateDatapack(mod)
+    
+    // tick.json should point to __tick
     const tickTag = files.find(f => f.path.includes('tick.json'))
     expect(tickTag).toBeDefined()
-    expect(JSON.parse(tickTag!.content).values).toContain('mypack:game_loop')
+    expect(JSON.parse(tickTag!.content).values).toContain('mypack:__tick')
+    
+    // __tick.mcfunction should call the game_loop function
+    const tickFn = files.find(f => f.path.includes('__tick.mcfunction'))
+    expect(tickFn).toBeDefined()
+    expect(tickFn!.content).toContain('function mypack:game_loop')
   })
 
   it('generates conditional branches with execute if/unless', () => {
