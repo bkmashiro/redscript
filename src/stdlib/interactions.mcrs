@@ -90,12 +90,12 @@ fn on_sneak_start() {
 
 /// Check if player is looking up (pitch < -45)
 fn check_look_up() {
-    // Tag players looking up (use @s inside foreach)
+    // Now supports p[filters] syntax sugar!
     foreach (p in @a) {
-        execute if entity @s[x_rotation=-90..-45] run {
+        execute if entity p[x_rotation=-90..-45] run {
             tag_add(@s, "rs.look_up");
         }
-        execute unless entity @s[x_rotation=-90..-45] run {
+        execute unless entity p[x_rotation=-90..-45] run {
             tag_remove(@s, "rs.look_up");
         }
     }
@@ -104,10 +104,10 @@ fn check_look_up() {
 /// Check if player is looking down (pitch > 45)
 fn check_look_down() {
     foreach (p in @a) {
-        execute if entity @s[x_rotation=45..90] run {
+        execute if entity p[x_rotation=45..90] run {
             tag_add(@s, "rs.look_down");
         }
-        execute unless entity @s[x_rotation=45..90] run {
+        execute unless entity p[x_rotation=45..90] run {
             tag_remove(@s, "rs.look_down");
         }
     }
@@ -116,10 +116,10 @@ fn check_look_down() {
 /// Check if player is looking straight (pitch -45 to 45)
 fn check_look_straight() {
     foreach (p in @a) {
-        execute if entity @s[x_rotation=-45..45] run {
+        execute if entity p[x_rotation=-45..45] run {
             tag_add(@s, "rs.look_straight");
         }
-        execute unless entity @s[x_rotation=-45..45] run {
+        execute unless entity p[x_rotation=-45..45] run {
             tag_remove(@s, "rs.look_straight");
         }
     }

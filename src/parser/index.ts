@@ -664,15 +664,15 @@ export class Parser {
         if (this.peek().kind === 'ident' && this.peek().value === 'entity') {
           this.advance() // consume 'entity'
         }
-        const selector = this.parseSelector()
-        subcommands.push({ kind: 'if_entity', selector })
+        const selectorOrVar = this.parseSelectorOrVarSelector()
+        subcommands.push({ kind: 'if_entity', ...selectorOrVar })
       } else if (this.match('unless')) {
         // Expect 'entity' keyword (as ident) or just parse selector directly  
         if (this.peek().kind === 'ident' && this.peek().value === 'entity') {
           this.advance() // consume 'entity'
         }
-        const selector = this.parseSelector()
-        subcommands.push({ kind: 'unless_entity', selector })
+        const selectorOrVar = this.parseSelectorOrVarSelector()
+        subcommands.push({ kind: 'unless_entity', ...selectorOrVar })
       } else if (this.match('in')) {
         const dim = this.expect('ident').value
         subcommands.push({ kind: 'in', dimension: dim })
@@ -1331,6 +1331,39 @@ export class Parser {
   private parseSelector(): EntitySelector {
     const token = this.expect('selector')
     return this.parseSelectorValue(token.value)
+  }
+
+  // Parse either a selector (@a[...]) or a variable with filters (p[...])
+  // Returns { selector } for selectors or { varName, filters } for variables
+  private parseSelectorOrVarSelector(): { selector?: EntitySelector, varName?: string, filters?: SelectorFilter } {
+    if (this.check('selector')) {
+      return { selector: this.parseSelector() }
+    }
+    
+    // Must be an identifier (variable) possibly with filters
+    const varToken = this.expect('ident')
+    const varName = varToken.value
+    
+    // Check for optional filters [...]
+    if (this.check('[')) {
+      this.advance() // consume '['
+      // Collect everything until ']'
+      let filterStr = ''
+      let depth = 1
+      while (depth > 0 && !this.check('eof')) {
+        if (this.check('[')) depth++
+        else if (this.check(']')) depth--
+        if (depth > 0) {
+          filterStr += this.peek().value ?? this.peek().kind
+          this.advance()
+        }
+      }
+      this.expect(']')
+      const filters = this.parseSelectorFilters(filterStr)
+      return { varName, filters }
+    }
+    
+    return { varName }
   }
 
   private parseSelectorValue(value: string): EntitySelector {
