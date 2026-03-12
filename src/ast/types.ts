@@ -129,6 +129,7 @@ export interface Decorator {
 export interface Param {
   name: string
   type: TypeNode
+  default?: Expr
 }
 
 export interface FnDecl {

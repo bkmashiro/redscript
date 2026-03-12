@@ -74,6 +74,20 @@ fn test() {
       expect(errors[0].location.line).toBe(7)
     })
 
+    it('allows omitting trailing default arguments', () => {
+      const errors = typeCheck(`
+fn greet(name: string, formal: bool = false) {
+    say(name);
+}
+
+fn test() {
+    greet("Player");
+    greet("Player", true);
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
     it('detects too many arguments', () => {
       const errors = typeCheck(`
 fn greet() {
@@ -86,6 +100,14 @@ fn test() {
 `)
       expect(errors.length).toBeGreaterThan(0)
       expect(errors[0].message).toContain("expects 0 arguments, got 3")
+    })
+
+    it('rejects a required parameter after a default parameter', () => {
+      const errors = typeCheck(`
+fn bad(a: int = 1, b: int) {}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain("cannot follow a default parameter")
     })
   })
 

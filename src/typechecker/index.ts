@@ -73,10 +73,25 @@ export class TypeChecker {
   private checkFunction(fn: FnDecl): void {
     this.currentFn = fn
     this.scope = new Map()
+    let seenDefault = false
 
     // Add parameters to scope
     for (const param of fn.params) {
       this.scope.set(param.name, this.normalizeType(param.type))
+      if (param.default) {
+        seenDefault = true
+        this.checkExpr(param.default)
+        const defaultType = this.inferType(param.default)
+        const paramType = this.normalizeType(param.type)
+        if (!this.typesMatch(paramType, defaultType)) {
+          this.report(
+            `Default value for '${param.name}' must be ${this.typeToString(paramType)}, got ${this.typeToString(defaultType)}`,
+            param.default
+          )
+        }
+      } else if (seenDefault) {
+        this.report(`Parameter '${param.name}' cannot follow a default parameter`, param)
+      }
     }
 
     // Check body
@@ -298,9 +313,13 @@ export class TypeChecker {
     // Check if function exists and arg count matches
     const fn = this.functions.get(expr.fn)
     if (fn) {
-      if (expr.args.length !== fn.params.length) {
+      const requiredParams = fn.params.filter(param => !param.default).length
+      if (expr.args.length < requiredParams || expr.args.length > fn.params.length) {
+        const expectedRange = requiredParams === fn.params.length
+          ? `${fn.params.length}`
+          : `${requiredParams}-${fn.params.length}`
         this.report(
-          `Function '${expr.fn}' expects ${fn.params.length} arguments, got ${expr.args.length}`,
+          `Function '${expr.fn}' expects ${expectedRange} arguments, got ${expr.args.length}`,
           expr
         )
       }

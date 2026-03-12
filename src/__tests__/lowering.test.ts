@@ -48,6 +48,23 @@ describe('Lowering', () => {
         i.op === 'assign' && i.dst === '$x' && (i.src as any).name === '$p0'
       )).toBe(true)
     })
+
+    it('fills in missing default arguments at call sites', () => {
+      const ir = compile(`
+fn damage(amount: int, multiplier: int = 1) -> int {
+  return amount * multiplier;
+}
+
+fn test() -> int {
+  return damage(10);
+}
+`)
+      const fn = getFunction(ir, 'test')!
+      const call = getInstructions(fn).find(i => i.op === 'call') as any
+      expect(call.args).toHaveLength(2)
+      expect(call.args[0]).toEqual({ kind: 'const', value: 10 })
+      expect(call.args[1]).toEqual({ kind: 'const', value: 1 })
+    })
   })
 
   describe('let statements', () => {

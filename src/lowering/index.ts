@@ -80,6 +80,7 @@ export class Lowering {
   // Struct definitions: name → { fieldName: TypeNode }
   private structDefs: Map<string, Map<string, TypeNode>> = new Map()
   private enumDefs: Map<string, Map<string, number>> = new Map()
+  private functionDefaults: Map<string, Array<Expr | undefined>> = new Map()
   // Variable types: varName → TypeNode
   private varTypes: Map<string, TypeNode> = new Map()
   // Float variables (stored as fixed-point × 1000)
@@ -109,6 +110,10 @@ export class Lowering {
         variants.set(variant.name, variant.value ?? 0)
       }
       this.enumDefs.set(enumDecl.name, variants)
+    }
+
+    for (const fn of program.declarations) {
+      this.functionDefaults.set(fn.name, fn.params.map(param => param.default))
     }
 
     for (const fn of program.declarations) {
@@ -1092,7 +1097,17 @@ export class Lowering {
     }
 
     // Regular function call
-    const args: Operand[] = expr.args.map(arg => this.lowerExpr(arg))
+    const defaultArgs = this.functionDefaults.get(expr.fn) ?? []
+    const fullArgs = [...expr.args]
+    for (let i = fullArgs.length; i < defaultArgs.length; i++) {
+      const defaultExpr = defaultArgs[i]
+      if (!defaultExpr) {
+        break
+      }
+      fullArgs.push(defaultExpr)
+    }
+
+    const args: Operand[] = fullArgs.map(arg => this.lowerExpr(arg))
     const dst = this.builder.freshTemp()
     this.builder.emitCall(expr.fn, args, dst)
     return { kind: 'var', name: dst }

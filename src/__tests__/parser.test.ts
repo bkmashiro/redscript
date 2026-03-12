@@ -54,10 +54,18 @@ describe('Parser', () => {
       const fn = program.declarations[0]
       expect(fn.name).toBe('add')
       expect(fn.params).toEqual([
-        { name: 'a', type: { kind: 'named', name: 'int' } },
-        { name: 'b', type: { kind: 'named', name: 'int' } },
+        { name: 'a', type: { kind: 'named', name: 'int' }, default: undefined },
+        { name: 'b', type: { kind: 'named', name: 'int' }, default: undefined },
       ])
       expect(fn.returnType).toEqual({ kind: 'named', name: 'int' })
+    })
+
+    it('parses function params with defaults', () => {
+      const program = parse('fn greet(name: string, formal: bool = false) {}')
+      expect(program.declarations[0].params).toEqual([
+        { name: 'name', type: { kind: 'named', name: 'string' }, default: undefined },
+        { name: 'formal', type: { kind: 'named', name: 'bool' }, default: { kind: 'bool_lit', value: false } },
+      ])
     })
 
     it('parses function with decorators', () => {

@@ -286,7 +286,11 @@ export class Parser {
         const name = paramToken.value
         this.expect(':')
         const type = this.parseType()
-        params.push(this.withLoc({ name, type }, paramToken))
+        let defaultValue: Expr | undefined
+        if (this.match('=')) {
+          defaultValue = this.parseExpr()
+        }
+        params.push(this.withLoc({ name, type, default: defaultValue }, paramToken))
       } while (this.match(','))
     }
 
