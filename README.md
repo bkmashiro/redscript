@@ -11,13 +11,11 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![tests](https://img.shields.io/badge/tests-423%20passing-brightgreen)](./src/__tests__)
 
-[English](#english) · [中文](#中文) · [Wiki](https://github.com/bkmashiro/redscript/wiki) · [快速开始](#quick-start--快速开始)
+[中文版](./README.zh.md) · [Wiki](https://github.com/bkmashiro/redscript/wiki) · [Quick Start](#quick-start)
 
 </div>
 
 ---
-
-## English
 
 ### What is RedScript?
 
@@ -29,7 +27,7 @@ With RedScript, it's this:
 // pvp_game.rs
 import "stdlib/player.rs"
 
-const GAME_TIME: int = 300;  // 15 seconds × 20 ticks
+const GAME_TIME: int = 300;
 
 @tick(rate=20)
 fn every_second() {
@@ -128,8 +126,8 @@ fn heartbeat() { ... }
 fn every_second() { ... }
 
 @on_advancement("story/mine_diamond")
-fn on_diamond(player: selector) {
-    give(player, "minecraft:diamond", 5);
+fn on_diamond() {
+    give(@s, "minecraft:diamond", 5);
 }
 
 @on_death
@@ -166,8 +164,6 @@ struct Player {
     alive: bool,
 }
 
-let phase = Phase::Playing;
-
 match (phase) {
     Phase::Lobby   => { announce("Waiting..."); }
     Phase::Playing => { every_second(); }
@@ -191,7 +187,6 @@ apply(double, 5);  // 10
 ```rs
 let scores: int[] = [];
 push(scores, 42);
-push(scores, 100);
 
 foreach (s in scores) {
     announce("Score: ${s}");
@@ -238,107 +233,6 @@ import "stdlib/mobs.rs"       // ZOMBIE, SKELETON, CREEPER, ... (60+ constants)
 | 🧱 [Structure Target](docs/STRUCTURE_TARGET.md) | Compile to NBT command block structures |
 | 🧪 [Integration Testing](https://github.com/bkmashiro/redscript/wiki/Integration-Testing) | Test against a real Paper server |
 | 🏗 [Implementation Guide](docs/IMPLEMENTATION_GUIDE.md) | Compiler internals |
-
----
-
-## 中文
-
-### RedScript 是什么？
-
-你想做一个 Minecraft 小游戏——倒计时、击杀计数、复活逻辑、记分板显示。用原版 MC 的话，这意味着 40+ 个 `.mcfunction` 文件、几百条 `execute if score` 命令，还要花一个周末调试。
-
-用 RedScript，就是这样：
-
-```rs
-// pvp_game.rs
-import "stdlib/player.rs"
-
-const GAME_TIME: int = 300;
-
-@tick(rate=20)
-fn every_second() {
-    let time: int = scoreboard_get("#game", "timer");
-
-    if (time <= 0) {
-        end_game();
-        return;
-    }
-
-    scoreboard_set("#game", "timer", time - 1);
-    actionbar(@a, "⏱ 剩余 ${time} 秒");
-}
-
-fn start_game() {
-    scoreboard_set("#game", "timer", GAME_TIME);
-    title(@a, "开始战斗！", "游戏已开始");
-    tp(@a, (0, 64, 0));
-}
-
-fn end_game() {
-    title(@a, "游戏结束！");
-    announce("感谢游玩！");
-}
-
-@on_death
-fn on_kill() {
-    scoreboard_add(@s, "kills", 1);
-}
-```
-
-一个文件，几秒钟编译出可以直接用的 datapack。
-
----
-
-### 快速开始 / Quick Start
-
-#### 安装
-
-```bash
-npm install -g redscript
-```
-
-#### 编译
-
-```bash
-redscript compile pvp_game.rs -o ./my-datapack
-```
-
-#### 部署
-
-把输出文件夹丢进存档的 `datapacks/` 目录，游戏内跑 `/reload`。完成。
-
----
-
-### 语言特性
-
-| 特性 | 说明 |
-|------|------|
-| 类型系统 | `int` / `string` / `bool` / `selector` / `BlockPos` / 泛型数组 |
-| 函数 | 默认参数、返回值、调用链 |
-| 控制流 | `if/else` / `for` / `while` / `foreach` / `match` |
-| 装饰器 | `@tick` / `@tick(rate=N)` / `@on_advancement` / `@on_death` / `@on_craft` |
-| Lambda | 高阶函数，单态化编译（无运行时函数指针） |
-| 结构体/枚举 | 组合类型 + 模式匹配 |
-| 数组 | NBT storage 实现，支持 push/pop/len/foreach |
-| 字符串插值 | `"玩家 ${name} 得分 ${score}"` |
-| import | 多文件项目，`import "path/to/file.rs"` |
-| const | 编译期常量内联 |
-| 优化器 | 死代码消除、CSE、LICM、setblock→fill 批合并 |
-| 两种输出 | `datapack`（默认）或 `structure`（NBT 命令方块结构体） |
-| MC 内置函数 | 34+ 个，覆盖聊天、传送、方块、实体、记分板、bossbar、队伍 |
-
----
-
-### 更多文档
-
-| | |
-|---|---|
-| 📖 [语言参考](docs/LANGUAGE_REFERENCE.md) | 完整语法与类型系统 |
-| 🔧 [内置函数](https://github.com/bkmashiro/redscript/wiki/Builtins) | 所有 34+ MC 内置函数 |
-| ⚡ [优化器](https://github.com/bkmashiro/redscript/wiki/Optimizer) | 各优化 Pass 说明 |
-| 🧱 [结构体目标](docs/STRUCTURE_TARGET.md) | 编译到 NBT 命令方块结构体 |
-| 🧪 [集成测试](https://github.com/bkmashiro/redscript/wiki/Integration-Testing) | 在真实 Paper 服务器上测试 |
-| 🏗 [实现指南](docs/IMPLEMENTATION_GUIDE.md) | 编译器内部原理 |
 
 ---
 
