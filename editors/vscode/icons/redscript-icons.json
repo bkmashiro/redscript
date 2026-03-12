@@ -1,0 +1,10 @@
+{
+  "iconDefinitions": {
+    "_mcrs": {
+      "iconPath": "./mcrs.svg"
+    }
+  },
+  "fileExtensions": {
+    "mcrs": "_mcrs"
+  }
+}
