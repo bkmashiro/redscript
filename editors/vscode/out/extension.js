@@ -7096,6 +7096,23 @@ function isStructLiteralField(doc, position, word) {
   if (fnMatch) return fnMatch[1];
   return null;
 }
+function isMemberAccessField(doc, position, word) {
+  const line = doc.lineAt(position.line).text;
+  const wordStart = position.character;
+  const beforeWord = line.slice(0, wordStart);
+  if (!beforeWord.endsWith(".")) return null;
+  const varMatch = beforeWord.match(/(\w+)\s*\.$/);
+  if (!varMatch) return null;
+  const varName = varMatch[1];
+  const text = doc.getText();
+  const typeRe = new RegExp(`\\b(?:let|const)\\s+${varName}\\s*:\\s*(\\w+)`, "m");
+  const typeMatch = text.match(typeRe);
+  if (typeMatch) return typeMatch[1];
+  const paramRe = new RegExp(`\\((?:[^)]*,\\s*)?${varName}\\s*:\\s*(\\w+)`, "m");
+  const paramMatch = text.match(paramRe);
+  if (paramMatch) return paramMatch[1];
+  return null;
+}
 function findAllOccurrences(doc, word) {
   const text = doc.getText();
   const re = new RegExp(`\\b${escapeRegex(word)}\\b`, "g");
@@ -7124,6 +7141,14 @@ function registerSymbolProviders(context) {
         if (structType) {
           const structFields = findStructFields(doc);
           const field = structFields.find((f) => f.structName === structType && f.fieldName === word);
+          if (field) {
+            return new vscode4.Location(doc.uri, field.fieldRange);
+          }
+        }
+        const memberAccess = isMemberAccessField(doc, position, word);
+        if (memberAccess) {
+          const structFields = findStructFields(doc);
+          const field = structFields.find((f) => f.structName === memberAccess && f.fieldName === word);
           if (field) {
             return new vscode4.Location(doc.uri, field.fieldRange);
           }
