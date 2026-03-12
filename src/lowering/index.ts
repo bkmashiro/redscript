@@ -26,7 +26,7 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   subtitle:    ([sel, msg]) => `title ${sel} subtitle {"text":"${msg}"}`,
   title_times: ([sel, fadeIn, stay, fadeOut]) => `title ${sel} times ${fadeIn} ${stay} ${fadeOut}`,
   announce:    ([msg]) => `tellraw @a {"text":"${msg}"}`,
-  give:        ([sel, item, count]) => `give ${sel} ${item} ${count ?? '1'}`,
+  give:        ([sel, item, count, nbt]) => nbt ? `give ${sel} ${item}${nbt} ${count ?? '1'}` : `give ${sel} ${item} ${count ?? '1'}`,
   kill:        ([sel]) => `kill ${sel ?? '@s'}`,
   effect:      ([sel, eff, dur, amp]) => `effect give ${sel} ${eff} ${dur ?? '30'} ${amp ?? '0'}`,
   summon: ([type, x, y, z, nbt]) => {
@@ -80,6 +80,11 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   team_leave: () => null, // Special handling
   team_option: () => null, // Special handling
   data_get: () => null, // Special handling (returns value from NBT)
+  set_new: () => null, // Special handling (returns set ID)
+  set_add: () => null, // Special handling
+  set_contains: () => null, // Special handling (returns 1/0)
+  set_remove: () => null, // Special handling
+  set_clear: () => null, // Special handling
 }
 
 export interface Warning {
@@ -1766,8 +1771,12 @@ export class Lowering {
       return { kind: 'const', value: 0 }
     }
 
-    // Convert args to strings for builtin
-    const strArgs = args.map(arg => this.exprToString(arg))
+    // Convert args to strings for builtin (use SNBT for struct/array literals)
+    const strArgs = args.map(arg =>
+      arg.kind === 'struct_lit' || arg.kind === 'array_lit'
+        ? this.exprToSnbt(arg)
+        : this.exprToString(arg)
+    )
     const cmd = BUILTINS[name](strArgs)
     if (cmd) {
       this.builder.emitRaw(cmd)
@@ -1938,6 +1947,37 @@ export class Lowering {
         // Complex expression - lower and return var name
         const op = this.lowerExpr(expr)
         return this.operandToVar(op)
+    }
+  }
+
+  private exprToSnbt(expr: Expr): string {
+    switch (expr.kind) {
+      case 'struct_lit': {
+        const entries = expr.fields.map(f => `${f.name}:${this.exprToSnbt(f.value)}`)
+        return `{${entries.join(',')}}`
+      }
+      case 'array_lit': {
+        const items = expr.elements.map(e => this.exprToSnbt(e))
+        return `[${items.join(',')}]`
+      }
+      case 'str_lit':
+        return `"${expr.value}"`
+      case 'int_lit':
+        return String(expr.value)
+      case 'float_lit':
+        return String(expr.value)
+      case 'byte_lit':
+        return `${expr.value}b`
+      case 'short_lit':
+        return `${expr.value}s`
+      case 'long_lit':
+        return `${expr.value}L`
+      case 'double_lit':
+        return `${expr.value}d`
+      case 'bool_lit':
+        return expr.value ? '1b' : '0b'
+      default:
+        return this.exprToString(expr)
     }
   }
 
