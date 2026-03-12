@@ -1,0 +1,68 @@
+// Team management helpers
+// Usage: import "stdlib/teams.mcrs"
+
+/// Create a team with color
+fn create_team(name: string, color: string) {
+    team_add(name);
+    team_option(name, "color", color);
+}
+
+/// Create red team
+fn create_red_team() {
+    team_add("red");
+    team_option("red", "color", "red");
+    team_option("red", "friendlyFire", "false");
+}
+
+/// Create blue team
+fn create_blue_team() {
+    team_add("blue");
+    team_option("blue", "color", "blue");
+    team_option("blue", "friendlyFire", "false");
+}
+
+/// Create green team
+fn create_green_team() {
+    team_add("green");
+    team_option("green", "color", "green");
+    team_option("green", "friendlyFire", "false");
+}
+
+/// Create yellow team
+fn create_yellow_team() {
+    team_add("yellow");
+    team_option("yellow", "color", "yellow");
+    team_option("yellow", "friendlyFire", "false");
+}
+
+/// Add player to team
+fn add_to_team(target: selector, team_name: string) {
+    team_join(target, team_name);
+}
+
+/// Remove player from all teams
+fn remove_from_teams(target: selector) {
+    team_leave(target);
+}
+
+/// Setup standard 2-team game
+fn setup_two_teams() {
+    create_red_team();
+    create_blue_team();
+}
+
+/// Setup 4-team game
+fn setup_four_teams() {
+    create_red_team();
+    create_blue_team();
+    create_green_team();
+    create_yellow_team();
+}
+
+/// Cleanup all teams
+fn cleanup_teams() {
+    team_remove("red");
+    team_remove("blue");
+    team_remove("green");
+    team_remove("yellow");
+}

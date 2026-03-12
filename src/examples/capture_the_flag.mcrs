@@ -1,0 +1,208 @@
+// ============================================
+// Capture the Flag Mini-Game
+// ============================================
+// 场景：两队对抗，抢夺对方旗帜带回己方基地得分
+// Scenario: Two teams compete to capture enemy flag
+// ============================================
+
+import "../stdlib/teams.mcrs"
+import "../stdlib/effects.mcrs"
+import "../stdlib/world.mcrs"
+import "../stdlib/inventory.mcrs"
+import "../stdlib/particles.mcrs"
+
+// ===== 配置 =====
+const RED_BASE_X: int = -50;
+const RED_BASE_Z: int = 0;
+const BLUE_BASE_X: int = 50;
+const BLUE_BASE_Z: int = 0;
+const BASE_Y: int = 64;
+const WIN_SCORE: int = 3;
+
+// ===== 游戏状态 =====
+struct GameState {
+    running: int,
+    red_score: int,
+    blue_score: int,
+    red_flag_taken: int,
+    blue_flag_taken: int
+}
+
+let game: GameState = GameState {
+    running: 0,
+    red_score: 0,
+    blue_score: 0,
+    red_flag_taken: 0,
+    blue_flag_taken: 0
+};
+
+// ===== 初始化 =====
+@load
+fn init() {
+    // 创建记分板
+    scoreboard_add_objective("ctf_team", "dummy");
+    scoreboard_add_objective("ctf_flag", "dummy");
+    
+    // 创建队伍
+    setup_two_teams();
+    
+    // 世界设置
+    set_day();
+    weather_clear();
+    enable_keep_inventory();
+    
+    announce("§e[CTF] §f夺旗战已加载！使用 /trigger start 开始游戏");
+}
+
+// ===== 开始游戏 =====
+fn start_game() {
+    game.running = 1;
+    game.red_score = 0;
+    game.blue_score = 0;
+    
+    // 随机分配队伍
+    assign_teams();
+    
+    // 传送到各自基地
+    tp(@a[team=red], RED_BASE_X, BASE_Y, RED_BASE_Z);
+    tp(@a[team=blue], BLUE_BASE_X, BASE_Y, BLUE_BASE_Z);
+    
+    // 给装备
+    foreach (p in @a) {
+        clear_inventory(p);
+        give_kit_warrior(p);
+    }
+    
+    // 放置旗帜（盔甲架）
+    place_flags();
+    
+    announce("§e[CTF] §a游戏开始！抢夺敌方旗帜！");
+    title(@a, "§6夺旗战开始！");
+}
+
+fn place_flags() {
+    // 红方旗帜（红色旗帜方块）
+    setblock(RED_BASE_X, BASE_Y + 1, RED_BASE_Z, "minecraft:red_banner");
+    // 蓝方旗帜
+    setblock(BLUE_BASE_X, BASE_Y + 1, BLUE_BASE_Z, "minecraft:blue_banner");
+    
+    game.red_flag_taken = 0;
+    game.blue_flag_taken = 0;
+}
+
+fn assign_teams() {
+    let count: int = 0;
+    foreach (p in @a) {
+        if (count % 2 == 0) {
+            team_join(p, "red");
+            scoreboard_set(p, "ctf_team", 1);
+        } else {
+            team_join(p, "blue");
+            scoreboard_set(p, "ctf_team", 2);
+        }
+        count = count + 1;
+    }
+}
+
+// ===== 每 tick 检查 =====
+@tick
+fn game_tick() {
+    if (game.running == 1) {
+        check_flag_pickup();
+        check_flag_capture();
+        check_win();
+    }
+}
+
+fn check_flag_pickup() {
+    // 检查蓝队玩家是否靠近红旗
+    foreach (p in @a[team=blue]) {
+        // 如果在红方基地附近且旗帜未被拿走
+        let dist: int = distance_to(p, RED_BASE_X, BASE_Y, RED_BASE_Z);
+        if (dist < 3) {
+            if (game.red_flag_taken == 0) {
+                game.red_flag_taken = 1;
+                tag_add(p, "has_flag");
+                setblock(RED_BASE_X, BASE_Y + 1, RED_BASE_Z, "minecraft:air");
+                announce("§e[CTF] §9蓝队 §f拿到了 §c红方旗帜§f！");
+                glow(p, 9999);
+            }
+        }
+    }
+    
+    // 检查红队玩家是否靠近蓝旗
+    foreach (p in @a[team=red]) {
+        let dist: int = distance_to(p, BLUE_BASE_X, BASE_Y, BLUE_BASE_Z);
+        if (dist < 3) {
+            if (game.blue_flag_taken == 0) {
+                game.blue_flag_taken = 1;
+                tag_add(p, "has_flag");
+                setblock(BLUE_BASE_X, BASE_Y + 1, BLUE_BASE_Z, "minecraft:air");
+                announce("§e[CTF] §c红队 §f拿到了 §9蓝方旗帜§f！");
+                glow(p, 9999);
+            }
+        }
+    }
+}
+
+fn check_flag_capture() {
+    // 蓝队带红旗回蓝方基地
+    foreach (p in @a[team=blue, tag=has_flag]) {
+        let dist: int = distance_to(p, BLUE_BASE_X, BASE_Y, BLUE_BASE_Z);
+        if (dist < 5) {
+            game.blue_score = game.blue_score + 1;
+            announce("§e[CTF] §9蓝队 §a得分！§f (" + game.blue_score + "/" + WIN_SCORE + ")");
+            tag_remove(p, "has_flag");
+            effect_clear(p, "minecraft:glowing");
+            place_flags();
+            happy(p);
+        }
+    }
+    
+    // 红队带蓝旗回红方基地  
+    foreach (p in @a[team=red, tag=has_flag]) {
+        let dist: int = distance_to(p, RED_BASE_X, BASE_Y, RED_BASE_Z);
+        if (dist < 5) {
+            game.red_score = game.red_score + 1;
+            announce("§e[CTF] §c红队 §a得分！§f (" + game.red_score + "/" + WIN_SCORE + ")");
+            tag_remove(p, "has_flag");
+            effect_clear(p, "minecraft:glowing");
+            place_flags();
+            happy(p);
+        }
+    }
+}
+
+fn check_win() {
+    if (game.red_score >= WIN_SCORE) {
+        end_game("red");
+    }
+    if (game.blue_score >= WIN_SCORE) {
+        end_game("blue");
+    }
+}
+
+fn end_game(winner: string) {
+    game.running = 0;
+    
+    if (winner == "red") {
+        title(@a, "§c红队获胜！");
+        announce("§e[CTF] §c红队 §6赢得了比赛！");
+    } else {
+        title(@a, "§9蓝队获胜！");
+        announce("§e[CTF] §9蓝队 §6赢得了比赛！");
+    }
+    
+    // 清理
+    foreach (p in @a[tag=has_flag]) {
+        tag_remove(p, "has_flag");
+        effect_clear(p);
+    }
+}
+
+// ===== 辅助函数 =====
+fn distance_to(target: selector, x: int, y: int, z: int) -> int {
+    // 简化的距离计算（使用记分板）
+    let dist: int = scoreboard_get(target, "ctf_dist");
+    return dist;
+}
