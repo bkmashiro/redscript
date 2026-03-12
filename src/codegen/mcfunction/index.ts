@@ -17,7 +17,7 @@
  */
 
 import type { IRBlock, IRFunction, IRModule, Operand, Terminator } from '../../ir/types'
-import { applyLICM } from '../../optimizer/commands'
+import { applyCSE, applyLICM } from '../../optimizer/commands'
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -197,9 +197,9 @@ function toFunctionName(file: DatapackFile): string | null {
 
 function applyFunctionOptimization(
   files: DatapackFile[],
-  optimize: (functions: Array<{ name: string; commands: Array<{ cmd: string }> }>) => {
+  optimizers: Array<(functions: Array<{ name: string; commands: Array<{ cmd: string }> }>) => {
     functions: Array<{ name: string; commands: Array<{ cmd: string }> }>
-  }
+  }>
 ): DatapackFile[] {
   const functionFiles = files
     .map(file => {
@@ -214,11 +214,11 @@ function applyFunctionOptimization(
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
 
-  const optimized = optimize(functionFiles.map(entry => ({
+  const optimized = optimizers.reduce((current, optimize) => optimize(current).functions, functionFiles.map(entry => ({
     name: entry.functionName,
     commands: entry.commands,
   })))
-  const commandMap = new Map(optimized.functions.map(fn => [fn.name, fn.commands]))
+  const commandMap = new Map(optimized.map(fn => [fn.name, fn.commands]))
 
   return files.map(file => {
     const functionName = toFunctionName(file)
@@ -369,5 +369,5 @@ export function generateDatapack(module: IRModule): DatapackFile[] {
     })
   }
 
-  return applyFunctionOptimization(files, applyLICM)
+  return applyFunctionOptimization(files, [applyLICM, applyCSE])
 }

@@ -35,3 +35,24 @@ fn turret_tick() {
     expect(loopBody).not.toContain('scoreboard players get config turret_range')
   })
 })
+
+describe('CSE', () => {
+  test('eliminates duplicate scoreboard reads', () => {
+    const source = `
+fn read_twice() {
+  let a: int = scoreboard_get(@s, "coins");
+  let b: int = scoreboard_get(@s, "coins");
+  if (a == b) {
+    say("same");
+  }
+}
+`
+
+    const result = compile(source, { namespace: 'test' })
+    const fn = getFileContent(result.files, 'data/test/function/read_twice.mcfunction')
+    const readMatches = fn.match(/scoreboard players get @s coins/g) ?? []
+
+    expect(readMatches).toHaveLength(1)
+    expect(fn).toContain('scoreboard players operation $t1 rs = $t0 rs')
+  })
+})
