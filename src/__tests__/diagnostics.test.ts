@@ -33,11 +33,11 @@ describe('DiagnosticError', () => {
       const error = new DiagnosticError(
         'TypeError',
         'Unknown function: foo',
-        { file: 'test.rs', line: 1, col: 9 },
+        { file: 'test.mcrs', line: 1, col: 9 },
         source.split('\n')
       )
 
-      expect(formatError(error, source)).toContain('Error in test.rs at line 1, col 9:')
+      expect(formatError(error, source)).toContain('Error in test.mcrs at line 1, col 9:')
     })
   })
 
@@ -66,11 +66,11 @@ describe('DiagnosticError', () => {
       const error = new DiagnosticError(
         'LexError',
         'Unexpected character',
-        { file: 'test.rs', line: 1, col: 1 },
+        { file: 'test.mcrs', line: 1, col: 1 },
         ['@@@']
       )
       const formatted = error.format()
-      expect(formatted).toContain('test.rs:')
+      expect(formatted).toContain('test.mcrs:')
       expect(formatted).toContain('[LexError]')
     })
 
@@ -153,7 +153,7 @@ describe('compile function', () => {
   })
 
   it('includes file path in error', () => {
-    const result = compile('fn main() { }', { filePath: 'test.rs' })
+    const result = compile('fn main() { }', { filePath: 'test.mcrs' })
     // This is valid, but test that filePath is passed through
     expect(result.success).toBe(true)
   })

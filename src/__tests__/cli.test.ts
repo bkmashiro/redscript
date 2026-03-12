@@ -10,11 +10,11 @@ describe('CLI API', () => {
   describe('imports', () => {
     it('compiles a file with imported helpers', () => {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-imports-'))
-      const libPath = path.join(tempDir, 'lib.rs')
-      const mainPath = path.join(tempDir, 'main.rs')
+      const libPath = path.join(tempDir, 'lib.mcrs')
+      const mainPath = path.join(tempDir, 'main.mcrs')
 
       fs.writeFileSync(libPath, 'fn double(x: int) -> int { return x + x; }\n')
-      fs.writeFileSync(mainPath, 'import "./lib.rs"\n\nfn main() { let value: int = double(2); }\n')
+      fs.writeFileSync(mainPath, 'import "./lib.mcrs"\n\nfn main() { let value: int = double(2); }\n')
 
       const source = fs.readFileSync(mainPath, 'utf-8')
       const result = compile(source, { namespace: 'imports', filePath: mainPath })
@@ -26,13 +26,13 @@ describe('CLI API', () => {
 
     it('deduplicates circular imports', () => {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-circular-'))
-      const aPath = path.join(tempDir, 'a.rs')
-      const bPath = path.join(tempDir, 'b.rs')
-      const mainPath = path.join(tempDir, 'main.rs')
+      const aPath = path.join(tempDir, 'a.mcrs')
+      const bPath = path.join(tempDir, 'b.mcrs')
+      const mainPath = path.join(tempDir, 'main.mcrs')
 
-      fs.writeFileSync(aPath, 'import "./b.rs"\n\nfn from_a() -> int { return 1; }\n')
-      fs.writeFileSync(bPath, 'import "./a.rs"\n\nfn from_b() -> int { return from_a(); }\n')
-      fs.writeFileSync(mainPath, 'import "./a.rs"\n\nfn main() { let value: int = from_b(); }\n')
+      fs.writeFileSync(aPath, 'import "./b.mcrs"\n\nfn from_a() -> int { return 1; }\n')
+      fs.writeFileSync(bPath, 'import "./a.mcrs"\n\nfn from_b() -> int { return from_a(); }\n')
+      fs.writeFileSync(mainPath, 'import "./a.mcrs"\n\nfn main() { let value: int = from_b(); }\n')
 
       const source = fs.readFileSync(mainPath, 'utf-8')
       const result = compile(source, { namespace: 'circular', filePath: mainPath })
@@ -91,7 +91,7 @@ fn build() {
   describe('--stats flag', () => {
     it('prints optimizer statistics', () => {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-stats-'))
-      const inputPath = path.join(tempDir, 'input.rs')
+      const inputPath = path.join(tempDir, 'input.mcrs')
       const outputDir = path.join(tempDir, 'out')
 
       fs.writeFileSync(inputPath, 'fn build() { setblock((0, 64, 0), "minecraft:stone"); setblock((1, 64, 0), "minecraft:stone"); }')

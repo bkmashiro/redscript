@@ -36,7 +36,7 @@
           "redscript"
         ],
         "extensions": [
-          ".rs"
+          ".mcrs"
         ],
         "configuration": "./redscript-language-configuration.json"
       },

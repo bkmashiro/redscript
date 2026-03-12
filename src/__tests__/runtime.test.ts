@@ -29,7 +29,7 @@ function loadExample(name: string): string {
 
 describe('MCRuntime behavioral integration', () => {
   it('runs the counter example and increments the scoreboard across ticks', () => {
-    const runtime = loadCompiledProgram(loadExample('counter.rs'))
+    const runtime = loadCompiledProgram(loadExample('counter.mcrs'))
 
     runtime.load()
     runtime.ticks(5)

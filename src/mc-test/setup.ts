@@ -36,11 +36,11 @@ function main() {
   // Example files
   const exampleNamespaces = ['counter', 'world_manager']
   for (const ns of exampleNamespaces) {
-    const file = path.join(EXAMPLES_DIR, `${ns}.rs`)
+    const file = path.join(EXAMPLES_DIR, `${ns}.mcrs`)
     if (fs.existsSync(file)) {
       writeFixture(fs.readFileSync(file, 'utf-8'), ns)
     } else {
-      console.log(`  ⚠ ${ns}.rs not found, skipping`)
+      console.log(`  ⚠ ${ns}.mcrs not found, skipping`)
     }
   }
 

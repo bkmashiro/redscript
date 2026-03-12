@@ -397,7 +397,7 @@ function rangeToString(r: RangeExpr): string {
 
 ### 测试 1：简单函数
 ```rs
-// input: src/test_programs/add.rs
+// input: src/test_programs/add.mcrs
 fn add(a: int, b: int) -> int {
     return a + b;
 }

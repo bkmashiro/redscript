@@ -24,8 +24,8 @@ You want to make a Minecraft mini-game. You need a countdown timer, kill counter
 With RedScript, it's this:
 
 ```rs
-// pvp_game.rs
-import "stdlib/player.rs"
+// pvp_game.mcrs
+import "stdlib/player.mcrs"
 
 const GAME_TIME: int = 300;
 
@@ -76,11 +76,11 @@ npm install -g redscript
 #### Compile
 
 ```bash
-redscript compile pvp_game.rs -o ./my-datapack
+redscript compile pvp_game.mcrs -o ./my-datapack
 ```
 
 ```
-✓ Compiled pvp_game.rs
+✓ Compiled pvp_game.mcrs
   Namespace : pvp_game
   Functions : 7
   Commands  : 34  →  28  (optimizer: −18%)
@@ -230,11 +230,11 @@ redscript validate <file>      Validate MC commands
 ### Standard Library
 
 ```rs
-import "stdlib/math.rs"       // abs, min, max, clamp
-import "stdlib/player.rs"     // is_alive, in_range, get_health
-import "stdlib/timer.rs"      // start_timer, tick_timer, has_elapsed
-import "stdlib/cooldown.rs"   // set_cooldown, check_cooldown
-import "stdlib/mobs.rs"       // ZOMBIE, SKELETON, CREEPER, ... (60+ constants)
+import "stdlib/math.mcrs"       // abs, min, max, clamp
+import "stdlib/player.mcrs"     // is_alive, in_range, get_health
+import "stdlib/timer.mcrs"      // start_timer, tick_timer, has_elapsed
+import "stdlib/cooldown.mcrs"   // set_cooldown, check_cooldown
+import "stdlib/mobs.mcrs"       // ZOMBIE, SKELETON, CREEPER, ... (60+ constants)
 ```
 
 ---

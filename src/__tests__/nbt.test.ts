@@ -40,8 +40,8 @@ describe('NBT codec', () => {
 })
 
 describe('Structure generator', () => {
-  test('compiles counter.rs to a non-empty structure', () => {
-    const filePath = 'src/examples/counter.rs'
+  test('compiles counter.mcrs to a non-empty structure', () => {
+    const filePath = 'src/examples/counter.mcrs'
     const src = fs.readFileSync(filePath, 'utf-8')
     const { buffer, blockCount } = compileToStructure(src, 'counter', filePath)
 

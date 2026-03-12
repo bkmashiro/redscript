@@ -1,11 +1,11 @@
 /**
  * RedScript MC Integration Test Runner
  *
- * Compiles a .rs file, installs it to a running Paper server,
+ * Compiles a .mcrs file, installs it to a running Paper server,
  * runs test scenarios, and reports results.
  *
  * Usage:
- *   npx ts-node src/mc-test/runner.ts src/examples/counter.rs
+ *   npx ts-node src/mc-test/runner.ts src/examples/counter.mcrs
  *
  * Requires:
  *   - Paper server running with TestHarnessPlugin
@@ -105,7 +105,7 @@ export async function runMCTests(
 if (require.main === module) {
   const sourceFile = process.argv[2]
   if (!sourceFile) {
-    console.error('Usage: ts-node runner.ts <source.rs>')
+    console.error('Usage: ts-node runner.ts <source.mcrs>')
     process.exit(1)
   }
 

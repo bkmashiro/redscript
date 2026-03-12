@@ -24,8 +24,8 @@
 用 RedScript，就是这样：
 
 ```rs
-// pvp_game.rs
-import "stdlib/player.rs"
+// pvp_game.mcrs
+import "stdlib/player.mcrs"
 
 const GAME_TIME: int = 300;
 
@@ -76,11 +76,11 @@ npm install -g redscript
 #### 编译
 
 ```bash
-redscript compile pvp_game.rs -o ./my-datapack
+redscript compile pvp_game.mcrs -o ./my-datapack
 ```
 
 ```
-✓ 已编译 pvp_game.rs
+✓ 已编译 pvp_game.mcrs
   命名空间 : pvp_game
   函数数量  : 7
   命令数量  : 34  →  28  (优化器节省了 18%)
@@ -230,11 +230,11 @@ redscript validate <file>      验证 MC 命令语法
 ### 标准库
 
 ```rs
-import "stdlib/math.rs"       // abs, min, max, clamp
-import "stdlib/player.rs"     // is_alive, in_range, get_health
-import "stdlib/timer.rs"      // start_timer, tick_timer, has_elapsed
-import "stdlib/cooldown.rs"   // set_cooldown, check_cooldown
-import "stdlib/mobs.rs"       // ZOMBIE, SKELETON, CREEPER ... (60+ 实体常量)
+import "stdlib/math.mcrs"       // abs, min, max, clamp
+import "stdlib/player.mcrs"     // is_alive, in_range, get_health
+import "stdlib/timer.mcrs"      // start_timer, tick_timer, has_elapsed
+import "stdlib/cooldown.mcrs"   // set_cooldown, check_cooldown
+import "stdlib/mobs.mcrs"       // ZOMBIE, SKELETON, CREEPER ... (60+ 实体常量)
 ```
 
 ---
