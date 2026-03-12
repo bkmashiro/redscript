@@ -1,6 +1,6 @@
 {
   "name": "redscript-vscode",
-  "displayName": "RedScript",
+  "displayName": "RedScript for Minecraft",
   "description": "Syntax highlighting and language support for RedScript — a compiler targeting Minecraft Java Edition",
   "version": "0.1.0",
   "publisher": "bkmashiro",

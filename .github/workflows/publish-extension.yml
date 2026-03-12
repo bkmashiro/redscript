@@ -1,0 +1,35 @@
+name: Publish VSCode Extension
+
+on:
+  push:
+    tags:
+      - 'vscode-v*'   # trigger on tags like vscode-v0.2.0
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install vsce & ovsx
+        run: npm install -g @vscode/vsce ovsx
+
+      - name: Package extension
+        working-directory: editors/vscode
+        run: vsce package --no-dependencies
+
+      - name: Publish to VS Marketplace
+        working-directory: editors/vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: vsce publish --no-dependencies -p "$VSCE_PAT"
+
+      - name: Publish to Open VSX
+        working-directory: editors/vscode
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: ovsx publish *.vsix -p "$OVSX_PAT"
