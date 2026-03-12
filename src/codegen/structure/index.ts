@@ -1,13 +1,26 @@
-import { compile } from '../../index'
-import type { DatapackFile } from '../mcfunction'
+import { Lexer } from '../../lexer'
+import { Parser } from '../../parser'
+import { Lowering } from '../../lowering'
 import { nbt, TagType, writeNbt, type CompoundTag, type NbtTag } from '../../nbt'
+import { optimize } from '../../optimizer/passes'
+import { optimizeForStructure } from '../../optimizer/structure'
+import { preprocessSource } from '../../compile'
+import type { IRCommand, IRFunction, IRModule } from '../../ir/types'
+import type { DatapackFile } from '../mcfunction'
 
 const DATA_VERSION = 3953
 const MAX_WIDTH = 16
+const OBJ = 'rs'
+
+const PALETTE_IMPULSE = 0
+const PALETTE_CHAIN_UNCONDITIONAL = 1
+const PALETTE_CHAIN_CONDITIONAL = 2
+const PALETTE_REPEAT = 3
 
 const palette = [
   { Name: 'minecraft:command_block', Properties: { conditional: 'false', facing: 'east' } },
   { Name: 'minecraft:chain_command_block', Properties: { conditional: 'false', facing: 'east' } },
+  { Name: 'minecraft:chain_command_block', Properties: { conditional: 'true', facing: 'east' } },
   { Name: 'minecraft:repeating_command_block', Properties: { conditional: 'false', facing: 'east' } },
   { Name: 'minecraft:air', Properties: {} },
 ]
@@ -17,16 +30,141 @@ interface CommandEntry {
   lineNumber: number
   command: string
   state: number
+  conditional: boolean
   isRepeat: boolean
+}
+
+export interface StructureBlockInfo {
+  command: string
+  conditional: boolean
+  state: number
+  functionName: string
+  lineNumber: number
 }
 
 export interface StructureCompileResult {
   buffer: Buffer
   blockCount: number
+  blocks: StructureBlockInfo[]
 }
 
 function escapeJsonString(value: string): string {
   return JSON.stringify(value).slice(1, -1)
+}
+
+function varRef(name: string): string {
+  return name.startsWith('$') ? name : `$${name}`
+}
+
+function collectConsts(fn: IRFunction): Set<number> {
+  const consts = new Set<number>()
+  for (const block of fn.blocks) {
+    for (const instr of block.instrs) {
+      if (instr.op === 'assign' && instr.src.kind === 'const') consts.add(instr.src.value)
+      if (instr.op === 'binop') {
+        if (instr.lhs.kind === 'const') consts.add(instr.lhs.value)
+        if (instr.rhs.kind === 'const') consts.add(instr.rhs.value)
+      }
+      if (instr.op === 'cmp') {
+        if (instr.lhs.kind === 'const') consts.add(instr.lhs.value)
+        if (instr.rhs.kind === 'const') consts.add(instr.rhs.value)
+      }
+    }
+    if (block.term.op === 'return' && block.term.value?.kind === 'const') {
+      consts.add(block.term.value.value)
+    }
+  }
+  return consts
+}
+
+function constSetup(value: number): string {
+  return `scoreboard players set $const_${value} ${OBJ} ${value}`
+}
+
+function collectCommandEntriesFromModule(module: IRModule): CommandEntry[] {
+  const entries: CommandEntry[] = []
+  const triggerHandlers = module.functions.filter(fn => fn.isTriggerHandler && fn.triggerName)
+  const triggerNames = new Set(triggerHandlers.map(fn => fn.triggerName!))
+  const loadCommands = [
+    `scoreboard objectives add ${OBJ} dummy`,
+    ...module.globals.map(globalName => `scoreboard players set ${varRef(globalName)} ${OBJ} 0`),
+    ...Array.from(triggerNames).flatMap(triggerName => [
+      `scoreboard objectives add ${triggerName} trigger`,
+      `scoreboard players enable @a ${triggerName}`,
+    ]),
+    ...Array.from(
+      new Set(module.functions.flatMap(fn => Array.from(collectConsts(fn))))
+    ).map(constSetup),
+  ]
+
+  const sections: Array<{ name: string; commands: IRCommand[]; repeat?: boolean }> = []
+
+  if (loadCommands.length > 0) {
+    sections.push({
+      name: '__load',
+      commands: loadCommands.map(cmd => ({ cmd })),
+    })
+  }
+
+  for (const triggerName of triggerNames) {
+    const handlers = triggerHandlers.filter(fn => fn.triggerName === triggerName)
+    sections.push({
+      name: `__trigger_${triggerName}_dispatch`,
+      commands: [
+        ...handlers.map(handler => ({ cmd: `function ${module.namespace}:${handler.name}` })),
+        { cmd: `scoreboard players set @s ${triggerName} 0` },
+        { cmd: `scoreboard players enable @s ${triggerName}` },
+      ],
+    })
+  }
+
+  for (const fn of module.functions) {
+    if (!fn.commands || fn.commands.length === 0) continue
+    sections.push({
+      name: fn.name,
+      commands: fn.commands,
+    })
+  }
+
+  const tickCommands: IRCommand[] = []
+  for (const fn of module.functions.filter(candidate => candidate.isTickLoop)) {
+    tickCommands.push({ cmd: `function ${module.namespace}:${fn.name}` })
+  }
+  if (triggerNames.size > 0) {
+    for (const triggerName of triggerNames) {
+      tickCommands.push({
+        cmd: `execute as @a[scores={${triggerName}=1..}] run function ${module.namespace}:__trigger_${triggerName}_dispatch`,
+      })
+    }
+  }
+  if (tickCommands.length > 0) {
+    sections.push({
+      name: '__tick',
+      commands: tickCommands,
+      repeat: true,
+    })
+  }
+
+  for (const section of sections) {
+    for (let i = 0; i < section.commands.length; i++) {
+      const command = section.commands[i]
+      const state =
+        i === 0
+          ? (section.repeat ? PALETTE_REPEAT : PALETTE_IMPULSE)
+          : (command.conditional ? PALETTE_CHAIN_CONDITIONAL : PALETTE_CHAIN_UNCONDITIONAL)
+
+      entries.push({
+        functionName: section.name,
+        lineNumber: i + 1,
+        command: command.cmd,
+        conditional: Boolean(command.conditional),
+        state,
+        isRepeat: Boolean(section.repeat && i === 0),
+      })
+    }
+  }
+
+  return entries
 }
 
 function toFunctionName(file: DatapackFile): string | null {
@@ -34,7 +172,7 @@ function toFunctionName(file: DatapackFile): string | null {
   return match?.[1] ?? null
 }
 
-function collectCommandEntries(files: DatapackFile[]): CommandEntry[] {
+function collectCommandEntriesFromFiles(files: DatapackFile[]): CommandEntry[] {
   const entries: CommandEntry[] = []
 
   for (const file of files) {
@@ -49,24 +187,17 @@ function collectCommandEntries(files: DatapackFile[]): CommandEntry[] {
       const command = lines[i].trim()
       if (command === '' || command.startsWith('#')) continue
 
-      let state = 1
-      let isRepeat = false
-
-      if (isFirstCommand) {
-        if (isTickFunction) {
-          state = 2
-          isRepeat = true
-        } else {
-          state = 0
-        }
-      }
+      const state = isFirstCommand
+        ? (isTickFunction ? PALETTE_REPEAT : PALETTE_IMPULSE)
+        : PALETTE_CHAIN_UNCONDITIONAL
 
       entries.push({
         functionName,
         lineNumber: i + 1,
         command,
+        conditional: false,
         state,
-        isRepeat,
+        isRepeat: isTickFunction && isFirstCommand,
       })
 
       isFirstCommand = false
@@ -117,12 +248,15 @@ function createBlockTag(entry: CommandEntry, index: number): CompoundTag {
   })
 }
 
-export function generateStructure(files: DatapackFile[]): StructureCompileResult {
-  const commands = collectCommandEntries(files)
-  const blockTags = commands.map(createBlockTag)
-  const sizeX = Math.max(1, Math.min(MAX_WIDTH, commands.length || 1))
-  const sizeZ = Math.max(1, Math.min(MAX_WIDTH, Math.ceil(commands.length / MAX_WIDTH) || 1))
-  const sizeY = Math.max(1, Math.ceil(commands.length / (MAX_WIDTH * MAX_WIDTH)) || 1)
+export function generateStructure(input: IRModule | DatapackFile[]): StructureCompileResult {
+  const entries = Array.isArray(input)
+    ? collectCommandEntriesFromFiles(input)
+    : collectCommandEntriesFromModule(input)
+
+  const blockTags = entries.map(createBlockTag)
+  const sizeX = Math.max(1, Math.min(MAX_WIDTH, entries.length || 1))
+  const sizeZ = Math.max(1, Math.min(MAX_WIDTH, Math.ceil(entries.length / MAX_WIDTH) || 1))
+  const sizeY = Math.max(1, Math.ceil(entries.length / (MAX_WIDTH * MAX_WIDTH)) || 1)
 
   const root = nbt.compound({
     DataVersion: nbt.int(DATA_VERSION),
@@ -134,11 +268,25 @@ export function generateStructure(files: DatapackFile[]): StructureCompileResult
 
   return {
     buffer: writeNbt(root, ''),
-    blockCount: commands.length,
+    blockCount: entries.length,
+    blocks: entries.map(entry => ({
+      command: entry.command,
+      conditional: entry.conditional,
+      state: entry.state,
+      functionName: entry.functionName,
+      lineNumber: entry.lineNumber,
+    })),
   }
 }
 
 export function compileToStructure(source: string, namespace: string, filePath?: string): StructureCompileResult {
-  const result = compile(source, { namespace, filePath })
-  return generateStructure(result.files)
+  const preprocessedSource = preprocessSource(source, { filePath })
+  const tokens = new Lexer(preprocessedSource, filePath).tokenize()
+  const ast = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+  const ir = new Lowering(namespace).lower(ast)
+  const optimizedModule: IRModule = {
+    ...ir,
+    functions: optimizeForStructure(ir.functions.map(fn => optimize(fn)), namespace),
+  }
+  return generateStructure(optimizedModule)
 }

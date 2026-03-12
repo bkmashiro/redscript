@@ -11,7 +11,7 @@
 
 import { compile, check } from './index'
 import { generateCommandBlocks } from './codegen/cmdblock'
-import { generateStructure } from './codegen/structure'
+import { compileToStructure } from './codegen/structure'
 import { formatError } from './diagnostics'
 import { startRepl } from './repl'
 import * as fs from 'fs'
@@ -132,10 +132,10 @@ function compileCommand(file: string, output: string, namespace: string, target:
   const source = fs.readFileSync(file, 'utf-8')
 
   try {
-    const result = compile(source, { namespace, filePath: file })
-    printWarnings(result.warnings)
-
     if (target === 'cmdblock') {
+      const result = compile(source, { namespace, filePath: file })
+      printWarnings(result.warnings)
+
       // Generate command block JSON
       const hasTick = result.files.some(f => f.path.includes('__tick.mcfunction'))
       const hasLoad = result.files.some(f => f.path.includes('__load.mcfunction'))
@@ -150,7 +150,7 @@ function compileCommand(file: string, output: string, namespace: string, target:
       console.log(`  Output: ${outputFile}`)
       console.log(`  Blocks: ${cmdBlocks.blocks.length}`)
     } else if (target === 'structure') {
-      const structure = generateStructure(result.files)
+      const structure = compileToStructure(source, namespace, file)
       fs.mkdirSync(path.dirname(output), { recursive: true })
       fs.writeFileSync(output, structure.buffer)
 
@@ -158,6 +158,9 @@ function compileCommand(file: string, output: string, namespace: string, target:
       console.log(`  Output: ${output}`)
       console.log(`  Blocks: ${structure.blockCount}`)
     } else {
+      const result = compile(source, { namespace, filePath: file })
+      printWarnings(result.warnings)
+
       // Default: generate datapack
       // Create output directory
       fs.mkdirSync(output, { recursive: true })
