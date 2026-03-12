@@ -31,11 +31,11 @@ struct PlayerState {
 }
 
 fn snapshot_game() -> GameState {
-    let phase: int = scoreboard_get("crystal", "phase");
-    let countdown: int = scoreboard_get("crystal", "countdown");
-    let timer: int = scoreboard_get("crystal", "timer");
-    let joined: int = scoreboard_get("crystal", "joined");
-    let reset_timer: int = scoreboard_get("crystal", "reset_timer");
+    let phase: int = scoreboard_get(#crystal, #phase);
+    let countdown: int = scoreboard_get(#crystal, #countdown);
+    let timer: int = scoreboard_get(#crystal, #timer);
+    let joined: int = scoreboard_get(#crystal, #joined);
+    let reset_timer: int = scoreboard_get(#crystal, #reset_timer);
     let state: GameState = {
         phase: phase,
         countdown: countdown,
@@ -47,19 +47,19 @@ fn snapshot_game() -> GameState {
 }
 
 fn snapshot_player() -> PlayerState {
-    let score: int = scoreboard_get(@s, "score");
-    let crystals: int = scoreboard_get(@s, "crystals");
-    let streak: int = scoreboard_get(@s, "streak");
-    let alive: int = scoreboard_get(@s, "alive");
+    let score: int = scoreboard_get(@s, #score);
+    let crystals: int = scoreboard_get(@s, #crystals);
+    let streak: int = scoreboard_get(@s, #streak);
+    let alive: int = scoreboard_get(@s, #alive);
     let state: PlayerState = { score: score, crystals: crystals, streak: streak, alive: alive };
     return state;
 }
 
 fn save_player(state: PlayerState) {
-    scoreboard_set(@s, "score", state.score);
-    scoreboard_set(@s, "crystals", state.crystals);
-    scoreboard_set(@s, "streak", state.streak);
-    scoreboard_set(@s, "alive", state.alive);
+    scoreboard_set(@s, #score, state.score);
+    scoreboard_set(@s, #crystals, state.crystals);
+    scoreboard_set(@s, #streak, state.streak);
+    scoreboard_set(@s, #alive, state.alive);
 }
 
 fn crystal_reward(base: int, streak: int = 0) -> int {
@@ -74,27 +74,27 @@ fn count_joined_players() -> int {
         total += 1;
     }
 
-    scoreboard_set("crystal", "joined", total);
+    scoreboard_set(#crystal, #joined, total);
     return total;
 }
 
 fn set_phase(phase: int) {
-    scoreboard_set("crystal", "phase", phase);
+    scoreboard_set(#crystal, #phase, phase);
 }
 
 fn lane_live_score(lane: int) -> int {
     match (lane) {
         Lane.North => {
-            return scoreboard_get("crystal", "north_live");
+            return scoreboard_get(#crystal, #north_live);
         }
         Lane.South => {
-            return scoreboard_get("crystal", "south_live");
+            return scoreboard_get(#crystal, #south_live);
         }
         Lane.East => {
-            return scoreboard_get("crystal", "east_live");
+            return scoreboard_get(#crystal, #east_live);
         }
         _ => {
-            return scoreboard_get("crystal", "west_live");
+            return scoreboard_get(#crystal, #west_live);
         }
     }
 }
@@ -102,16 +102,16 @@ fn lane_live_score(lane: int) -> int {
 fn set_lane_live(lane: int, live: int) {
     match (lane) {
         Lane.North => {
-            scoreboard_set("crystal", "north_live", live);
+            scoreboard_set(#crystal, #north_live, live);
         }
         Lane.South => {
-            scoreboard_set("crystal", "south_live", live);
+            scoreboard_set(#crystal, #south_live, live);
         }
         Lane.East => {
-            scoreboard_set("crystal", "east_live", live);
+            scoreboard_set(#crystal, #east_live, live);
         }
         _ => {
-            scoreboard_set("crystal", "west_live", live);
+            scoreboard_set(#crystal, #west_live, live);
         }
     }
 }
@@ -249,11 +249,11 @@ fn spawn_enemy_wave() {
 }
 
 fn reset_player_scores() {
-    scoreboard_set(@a[tag=cr_joined], "score", 0);
-    scoreboard_set(@a[tag=cr_joined], "crystals", 0);
-    scoreboard_set(@a[tag=cr_joined], "streak", 0);
-    scoreboard_set(@a[tag=cr_joined], "alive", 1);
-    scoreboard_set(@a[tag=cr_joined], "health", 20);
+    scoreboard_set(@a[tag=cr_joined], #score, 0);
+    scoreboard_set(@a[tag=cr_joined], #crystals, 0);
+    scoreboard_set(@a[tag=cr_joined], #streak, 0);
+    scoreboard_set(@a[tag=cr_joined], #alive, 1);
+    scoreboard_set(@a[tag=cr_joined], #health, 20);
 }
 
 fn respawn_all_crystals() {
@@ -268,9 +268,9 @@ fn start_game() {
     build_arena();
     respawn_all_crystals();
     reset_player_scores();
-    scoreboard_set("crystal", "timer", ROUND_SECONDS);
-    scoreboard_set("crystal", "countdown", 0);
-    scoreboard_set("crystal", "reset_timer", 0);
+    scoreboard_set(#crystal, #timer, ROUND_SECONDS);
+    scoreboard_set(#crystal, #countdown, 0);
+    scoreboard_set(#crystal, #reset_timer, 0);
     set_phase(Phase.Playing);
     tp(@a[tag=cr_joined], (0, 65, 0));
     mark_player_spawn_pads();
@@ -308,7 +308,7 @@ fn tick_playing() {
             damage(ENEMY_DAMAGE);
         }
 
-        let health: int = scoreboard_get(@s, "health");
+        let health: int = scoreboard_get(@s, #health);
         if (health <= 0) {
             respawn_player_after_knockout();
         }
@@ -325,7 +325,7 @@ fn tick_ended() {
 }
 
 fn tick_fast() {
-    let phase: int = scoreboard_get("crystal", "phase");
+    let phase: int = scoreboard_get(#crystal, #phase);
 
     match (phase) {
         Phase.Waiting => {
@@ -348,19 +348,19 @@ fn second_waiting() {
 }
 
 fn second_countdown() {
-    let cd: int = scoreboard_get("crystal", "countdown");
+    let cd: int = scoreboard_get(#crystal, #countdown);
 
     if (cd > 1) {
-        scoreboard_set("crystal", "countdown", cd - 1);
+        scoreboard_set(#crystal, #countdown, cd - 1);
     } else {
         start_game();
     }
 }
 
 fn second_playing() {
-    let timer: int = scoreboard_get("crystal", "timer");
+    let timer: int = scoreboard_get(#crystal, #timer);
     let next: int = max(timer - 1, 0);
-    scoreboard_set("crystal", "timer", next);
+    scoreboard_set(#crystal, #timer, next);
 
     if (next % 10 == 0) {
         spawn_enemy_wave();
@@ -374,10 +374,10 @@ fn second_playing() {
 }
 
 fn second_ended() {
-    let reset_timer: int = scoreboard_get("crystal", "reset_timer");
+    let reset_timer: int = scoreboard_get(#crystal, #reset_timer);
 
     if (reset_timer > 1) {
-        scoreboard_set("crystal", "reset_timer", reset_timer - 1);
+        scoreboard_set(#crystal, #reset_timer, reset_timer - 1);
     } else {
         reset_match();
     }
@@ -390,7 +390,7 @@ fn crystal_rush_tick() {
 
 @tick(rate=20)
 fn crystal_rush_second() {
-    let phase: int = scoreboard_get("crystal", "phase");
+    let phase: int = scoreboard_get(#crystal, #phase);
 
     match (phase) {
         Phase.Waiting => {
@@ -432,7 +432,7 @@ fn respawn_player_after_knockout() {
     }
 
     save_player(player);
-    scoreboard_set(@s, "health", 20);
+    scoreboard_set(@s, #health, 20);
     title(@s, "Knocked out");
     subtitle(@s, "You lost 1 crystal and returned to spawn");
     tp(@s, (0, 65, 0));
@@ -440,11 +440,11 @@ fn respawn_player_after_knockout() {
 
 fn end_game() {
     set_phase(Phase.Ended);
-    scoreboard_set("crystal", "reset_timer", RESET_SECONDS);
+    scoreboard_set(#crystal, #reset_timer, RESET_SECONDS);
     effect(@a, "minecraft:slowness", 5, 2);
 
     foreach (player in @a[tag=cr_joined]) {
-        let score: int = scoreboard_get(@s, "score");
+        let score: int = scoreboard_get(@s, #score);
         if (score >= WIN_SCORE) {
             title(@a, "Game Over");
             subtitle(@a, "${@s} wins Crystal Rush");
@@ -455,9 +455,9 @@ fn end_game() {
 
 fn reset_match() {
     set_phase(Phase.Waiting);
-    scoreboard_set("crystal", "countdown", 0);
-    scoreboard_set("crystal", "timer", 0);
-    scoreboard_set("crystal", "reset_timer", 0);
+    scoreboard_set(#crystal, #countdown, 0);
+    scoreboard_set(#crystal, #timer, 0);
+    scoreboard_set(#crystal, #reset_timer, 0);
     clear_lane(Lane.North);
     clear_lane(Lane.South);
     clear_lane(Lane.East);
@@ -473,11 +473,11 @@ fn crystal_join() {
     }
 
     @s.tag("cr_joined");
-    scoreboard_set(@s, "score", 0);
-    scoreboard_set(@s, "crystals", 0);
-    scoreboard_set(@s, "streak", 0);
-    scoreboard_set(@s, "alive", 1);
-    scoreboard_set(@s, "health", 20);
+    scoreboard_set(@s, #score, 0);
+    scoreboard_set(@s, #crystals, 0);
+    scoreboard_set(@s, #streak, 0);
+    scoreboard_set(@s, #alive, 1);
+    scoreboard_set(@s, #health, 20);
     tp(@s, (0, 65, 0));
     title(@s, "Crystal Rush");
     subtitle(@s, "Joined the lobby");
@@ -494,7 +494,7 @@ fn crystal_join() {
 @on_trigger("crystal_start")
 fn crystal_start() {
     let joined: int = count_joined_players();
-    let phase: int = scoreboard_get("crystal", "phase");
+    let phase: int = scoreboard_get(#crystal, #phase);
 
     if (phase != Phase.Waiting) {
         actionbar(@s, "Crystal Rush is already running");
@@ -506,14 +506,14 @@ fn crystal_start() {
         return;
     }
 
-    scoreboard_set("crystal", "countdown", COUNTDOWN_SECONDS);
+    scoreboard_set(#crystal, #countdown, COUNTDOWN_SECONDS);
     set_phase(Phase.Countdown);
     announce("Crystal Rush countdown has started.");
 }
 
 @on_trigger("crystal_claim")
 fn crystal_claim() {
-    let phase: int = scoreboard_get("crystal", "phase");
+    let phase: int = scoreboard_get(#crystal, #phase);
 
     if (phase != Phase.Playing) {
         actionbar(@s, "You can only claim crystals during the round");
@@ -533,7 +533,7 @@ fn crystal_claim() {
 
 @on_trigger("crystal_dash")
 fn crystal_dash() {
-    let phase: int = scoreboard_get("crystal", "phase");
+    let phase: int = scoreboard_get(#crystal, #phase);
 
     if (phase != Phase.Playing) {
         actionbar(@s, "Dash unlocks once the match is live");
@@ -546,7 +546,7 @@ fn crystal_dash() {
         title(@s, "Crystal Dash");
         subtitle(@s, "You lunged ${DASH_DISTANCE} blocks forward");
     } else {
-        let ticks_left: int = scoreboard_get("cooldown_ticks", "rs");
+        let ticks_left: int = scoreboard_get("cooldown_ticks", #rs);
         actionbar(@s, "Dash cooling down: ${ticks_left} ticks");
     }
 }

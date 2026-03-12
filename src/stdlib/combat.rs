@@ -5,7 +5,7 @@ fn weapon_damage(base: int, bonus: int) -> int {
 }
 
 fn enemy_health(name: string) -> int {
-    return scoreboard_get(name, "health");
+    return scoreboard_get(name, #health);
 }
 
 fn apply_damage(name: string, amount: int) {
@@ -13,8 +13,8 @@ fn apply_damage(name: string, amount: int) {
     let next: int = health - amount;
 
     if (next < 0) {
-        scoreboard_set(name, "health", 0);
+        scoreboard_set(name, #health, 0);
     } else {
-        scoreboard_set(name, "health", next);
+        scoreboard_set(name, #health, next);
     }
 }

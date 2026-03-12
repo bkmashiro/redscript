@@ -31,33 +31,33 @@ const GAME_TIME: int = 300;
 
 @tick(rate=20)
 fn every_second() {
-    let time: int = scoreboard_get("#game", "timer");
+    let time: int = scoreboard_get(#game, #timer);
 
     if (time <= 0) {
         end_game();
         return;
     }
 
-    scoreboard_set("#game", "timer", time - 1);
+    scoreboard_set(#game, #timer, time - 1);
     actionbar(@a, "⏱ ${time}s remaining");
 }
 
 fn start_game() {
-    scoreboard_set("#game", "timer", GAME_TIME);
-    scoreboard_set("#game", "running", 1);
+    scoreboard_set(#game, #timer, GAME_TIME);
+    scoreboard_set(#game, #running, 1);
     title(@a, "Fight!", "Game started");
     tp(@a, (0, 64, 0));
 }
 
 fn end_game() {
-    scoreboard_set("#game", "running", 0);
+    scoreboard_set(#game, #running, 0);
     title(@a, "Game Over!");
     announce("Thanks for playing!");
 }
 
 @on_death
 fn on_kill() {
-    scoreboard_add(@s, "kills", 1);
+    scoreboard_add(@s, #kills, 1);
 }
 ```
 
@@ -105,6 +105,22 @@ let nearby: BlockPos = (~5, ~0, ~5);   // relative coords
 const MAX: int = 100;                  // compile-time constant
 ```
 
+#### MC Names (Objectives, Tags, Teams)
+
+Use `#name` for Minecraft identifiers — no quotes needed:
+
+```rs
+// Objectives, fake players, tags, teams — write without quotes
+let hp: int = scoreboard_get(@s, #health);
+scoreboard_set(#game, #timer, 300);     // fake player #game, objective timer
+tag_add(@s, #hasKey);
+team_join(#red, @s);
+gamerule(#keepInventory, true);
+
+// String literals still work (backward compatible)
+scoreboard_get(@s, "health")            // same output as #health
+```
+
 #### Functions & Defaults
 
 ```rs
@@ -132,7 +148,7 @@ fn on_diamond() {
 
 @on_death
 fn on_death() {
-    scoreboard_add(@s, "deaths", 1);
+    scoreboard_add(@s, #deaths, 1);
 }
 ```
 
