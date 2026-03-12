@@ -593,6 +593,29 @@ fn test() {
       expect(rawCmds.some(cmd => /^execute store result score \$t\d+ rs run bossbar get ns:health value$/.test(cmd))).toBe(true)
     })
 
+    it('lowers team management builtins', () => {
+      const ir = compile(`
+fn test() {
+  team_add("red", "Red Team");
+  team_remove("red");
+  team_join("red", @a[tag=red_team]);
+  team_leave(@s);
+  team_option("red", "friendlyFire", "false");
+  team_option("red", "color", "red");
+  team_option("red", "prefix", "[Red] ");
+}
+`)
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('team add red {"text":"Red Team"}')
+      expect(rawCmds).toContain('team remove red')
+      expect(rawCmds).toContain('team join red @a[tag=red_team]')
+      expect(rawCmds).toContain('team leave @s')
+      expect(rawCmds).toContain('team modify red friendlyFire false')
+      expect(rawCmds).toContain('team modify red color red')
+      expect(rawCmds).toContain('team modify red prefix {"text":"[Red] "}')
+    })
+
     it('lowers random()', () => {
       const ir = compile('fn test() { let x: int = random(1, 100); }')
       const fn = getFunction(ir, 'test')!

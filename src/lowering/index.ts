@@ -72,6 +72,11 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   bossbar_set_players: () => null, // Special handling
   bossbar_remove: () => null, // Special handling
   bossbar_get_value: () => null, // Special handling
+  team_add: () => null, // Special handling
+  team_remove: () => null, // Special handling
+  team_join: () => null, // Special handling
+  team_leave: () => null, // Special handling
+  team_option: () => null, // Special handling
   data_get: () => null, // Special handling (returns value from NBT)
 }
 
@@ -1372,6 +1377,38 @@ export class Lowering {
       return { kind: 'var', name: dst }
     }
 
+    if (name === 'team_add') {
+      const team = this.exprToString(args[0])
+      const displayName = args[1] ? ` ${this.exprToTextComponent(args[1])}` : ''
+      this.builder.emitRaw(`team add ${team}${displayName}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'team_remove') {
+      this.builder.emitRaw(`team remove ${this.exprToString(args[0])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'team_join') {
+      this.builder.emitRaw(`team join ${this.exprToString(args[0])} ${this.exprToTargetString(args[1])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'team_leave') {
+      this.builder.emitRaw(`team leave ${this.exprToTargetString(args[0])}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (name === 'team_option') {
+      const team = this.exprToString(args[0])
+      const option = this.exprToString(args[1])
+      const value = this.isTeamTextOption(option)
+        ? this.exprToTextComponent(args[2])
+        : this.exprToString(args[2])
+      this.builder.emitRaw(`team modify ${team} ${option} ${value}`)
+      return { kind: 'const', value: 0 }
+    }
+
     // Special case: data_get — read NBT data into a variable
     // data_get(target_type, target, path, scale?)
     // target_type: "entity", "block", "storage"
@@ -1613,6 +1650,10 @@ export class Lowering {
       return expr.value ? 'true' : 'false'
     }
     return this.exprToString(expr)
+  }
+
+  private isTeamTextOption(option: string): boolean {
+    return option === 'displayName' || option === 'prefix' || option === 'suffix'
   }
 
   private lowerCoordinateBuiltin(name: string, args: Expr[]): string | null {

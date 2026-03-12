@@ -318,6 +318,28 @@ fn test() {
       expect(fn).toContain('bossbar remove ns:health')
       expect(fn).toMatch(/execute store result score \$t\d+ rs run bossbar get ns:health value/)
     })
+
+    it('compiles team builtins', () => {
+      const source = `
+fn test() {
+    team_add("red", "Red Team");
+    team_remove("red");
+    team_join("red", @a[tag=red_team]);
+    team_leave(@s);
+    team_option("red", "friendlyFire", "false");
+    team_option("red", "color", "red");
+    team_option("red", "prefix", "[Red] ");
+}
+`
+      const fn = getFunction(compile(source), 'test')!
+      expect(fn).toContain('team add red {"text":"Red Team"}')
+      expect(fn).toContain('team remove red')
+      expect(fn).toContain('team join red @a[tag=red_team]')
+      expect(fn).toContain('team leave @s')
+      expect(fn).toContain('team modify red friendlyFire false')
+      expect(fn).toContain('team modify red color red')
+      expect(fn).toContain('team modify red prefix {"text":"[Red] "}')
+    })
   })
 
   describe('Test 4: foreach', () => {
