@@ -27,14 +27,14 @@ RedScript Compiler
 
 Usage:
   redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>] [--target <target>]
-  redscript watch <dir> [-o <outdir>] [--namespace <ns>]
+  redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
   redscript repl
   redscript version
 
 Commands:
   compile   Compile a RedScript file to a Minecraft datapack
-  watch     Watch a directory for .rs file changes and recompile
+  watch     Watch a directory for .rs file changes, recompile, and hot reload
   check     Check a RedScript file for errors without generating output
   repl      Start an interactive RedScript REPL
   version   Print the RedScript version
@@ -45,6 +45,8 @@ Options:
   --namespace <ns>       Datapack namespace (default: derived from filename)
   --target <target>      Output target: datapack (default), cmdblock, or structure
   --stats                Print optimizer statistics
+  --hot-reload <url>     After each successful compile, POST to <url>/reload
+                         (use with redscript-testharness; e.g. http://localhost:25561)
   -h, --help             Show this help message
 
 Targets:
@@ -73,6 +75,7 @@ function parseArgs(args: string[]): {
   target?: string
   stats?: boolean
   help?: boolean
+  hotReload?: string
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -97,6 +100,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--stats') {
       result.stats = true
+      i++
+    } else if (arg === '--hot-reload') {
+      result.hotReload = args[++i]
       i++
     } else if (!result.command) {
       result.command = arg
@@ -234,7 +240,20 @@ function checkCommand(file: string): void {
   console.log(`✓ ${file} is valid`)
 }
 
-function watchCommand(dir: string, output: string, namespace?: string): void {
+async function hotReload(url: string): Promise<void> {
+  try {
+    const res = await fetch(`${url}/reload`, { method: 'POST' })
+    if (res.ok) {
+      console.log(`🔄 Hot reload sent → ${url}`)
+    } else {
+      console.warn(`⚠  Hot reload failed: HTTP ${res.status}`)
+    }
+  } catch (e) {
+    console.warn(`⚠  Hot reload failed (is the server running?): ${(e as Error).message}`)
+  }
+}
+
+function watchCommand(dir: string, output: string, namespace?: string, hotReloadUrl?: string): void {
   // Check if directory exists
   if (!fs.existsSync(dir)) {
     console.error(`Error: Directory not found: ${dir}`)
@@ -249,13 +268,14 @@ function watchCommand(dir: string, output: string, namespace?: string): void {
 
   console.log(`👁  Watching ${dir} for .rs file changes...`)
   console.log(`   Output: ${output}`)
+  if (hotReloadUrl) console.log(`   Hot reload: ${hotReloadUrl}`)
   console.log(`   Press Ctrl+C to stop\n`)
 
   // Debounce timer
   let debounceTimer: NodeJS.Timeout | null = null
 
   // Compile all .rs files in directory
-  function compileAll(): void {
+  async function compileAll(): Promise<void> {
     const files = findRsFiles(dir)
     if (files.length === 0) {
       console.log(`⚠  No .rs files found in ${dir}`)
@@ -292,6 +312,7 @@ function watchCommand(dir: string, output: string, namespace?: string): void {
     }
 
     if (!hasErrors) {
+      if (hotReloadUrl) await hotReload(hotReloadUrl)
       console.log('')
     }
   }
@@ -314,7 +335,7 @@ function watchCommand(dir: string, output: string, namespace?: string): void {
   }
 
   // Initial compile
-  compileAll()
+  void compileAll()
 
   // Watch for changes
   fs.watch(dir, { recursive: true }, (eventType, filename) => {
@@ -325,7 +346,7 @@ function watchCommand(dir: string, output: string, namespace?: string): void {
       }
       debounceTimer = setTimeout(() => {
         console.log(`📝 Change detected: ${filename}`)
-        compileAll()
+        void compileAll()
       }, 100)
     }
   })
@@ -373,7 +394,8 @@ async function main(): Promise<void> {
       watchCommand(
         parsed.file,
         parsed.output ?? './dist',
-        parsed.namespace
+        parsed.namespace,
+        parsed.hotReload
       )
       break
 
