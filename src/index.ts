@@ -6,21 +6,25 @@
 
 import { Lexer } from './lexer'
 import { Parser } from './parser'
+import { TypeChecker } from './typechecker'
 import { Lowering } from './lowering'
 import { optimize } from './optimizer/passes'
 import { generateDatapack, DatapackFile } from './codegen/mcfunction'
 import type { IRModule } from './ir/types'
 import type { Program } from './ast/types'
+import type { DiagnosticError } from './diagnostics'
 
 export interface CompileOptions {
   namespace?: string
   optimize?: boolean
+  typeCheck?: boolean
 }
 
 export interface CompileResult {
   files: DatapackFile[]
   ast: Program
   ir: IRModule
+  typeErrors?: DiagnosticError[]
 }
 
 /**
@@ -33,12 +37,20 @@ export interface CompileResult {
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
   const namespace = options.namespace ?? 'redscript'
   const shouldOptimize = options.optimize ?? true
+  const shouldTypeCheck = options.typeCheck ?? true
 
   // Lexing
   const tokens = new Lexer(source).tokenize()
 
   // Parsing
   const ast = new Parser(tokens).parse(namespace)
+
+  // Type checking (warn mode - collect errors but don't block)
+  let typeErrors: DiagnosticError[] | undefined
+  if (shouldTypeCheck) {
+    const checker = new TypeChecker(source)
+    typeErrors = checker.check(ast)
+  }
 
   // Lowering to IR
   const ir = new Lowering(namespace).lower(ast)
@@ -51,7 +63,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   // Code generation
   const files = generateDatapack(optimizedIR)
 
-  return { files, ast, ir: optimizedIR }
+  return { files, ast, ir: optimizedIR, typeErrors }
 }
 
 /**
@@ -74,9 +86,11 @@ export function check(source: string, namespace = 'redscript'): Error | null {
 // Re-export types and classes for advanced usage
 export { Lexer } from './lexer'
 export { Parser } from './parser'
+export { TypeChecker } from './typechecker'
 export { Lowering } from './lowering'
 export { optimize } from './optimizer/passes'
 export { generateDatapack } from './codegen/mcfunction'
 export type { DatapackFile } from './codegen/mcfunction'
 export type { IRModule, IRFunction } from './ir/types'
 export type { Program, FnDecl, Expr, Stmt } from './ast/types'
+export type { DiagnosticError } from './diagnostics'
