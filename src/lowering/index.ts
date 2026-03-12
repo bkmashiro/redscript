@@ -1044,10 +1044,9 @@ export class Lowering {
       if (value.kind === 'const') {
         this.builder.emitRaw(`scoreboard players set ${player} ${objective} ${value.value}`)
       } else if (value.kind === 'var') {
-        // Copy from internal scoreboard to vanilla objective
-        const temp = this.builder.freshTemp()
-        this.builder.emitAssign(temp, value)
-        this.builder.emitRaw(`execute store result score ${player} ${objective} run scoreboard players get ${temp} rs`)
+        // Read directly from the computed scoreboard temp. Routing through a fresh
+        // temp here breaks once optimization removes the apparently-dead assign.
+        this.builder.emitRaw(`execute store result score ${player} ${objective} run scoreboard players get ${value.name} rs`)
       }
       return { kind: 'const', value: 0 }
     }

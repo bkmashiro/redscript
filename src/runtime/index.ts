@@ -18,6 +18,8 @@ export interface Entity {
   tags: Set<string>
   scores: Map<string, number>
   selector: string
+  type?: string
+  position?: { x: number; y: number; z: number }
 }
 
 interface Range {
@@ -28,6 +30,8 @@ interface Range {
 interface SelectorFilters {
   tag?: string[]
   notTag?: string[]
+  type?: string[]
+  notType?: string[]
   limit?: number
   scores?: Map<string, Range>
 }
@@ -56,6 +60,8 @@ function parseFilters(content: string): SelectorFilters {
   const filters: SelectorFilters = {
     tag: [],
     notTag: [],
+    type: [],
+    notType: [],
   }
 
   if (!content) return filters
@@ -86,6 +92,12 @@ function parseFilters(content: string): SelectorFilters {
       } else {
         filters.tag!.push(value)
       }
+    } else if (key === 'type') {
+      if (value.startsWith('!')) {
+        filters.notType!.push(value.slice(1))
+      } else {
+        filters.type!.push(value)
+      }
     } else if (key === 'limit') {
       filters.limit = parseInt(value, 10)
     }
@@ -103,6 +115,20 @@ function matchesFilters(entity: Entity, filters: SelectorFilters, objective: str
   // Check excluded tags
   for (const notTag of filters.notTag || []) {
     if (entity.tags.has(notTag)) return false
+  }
+
+  // Check types
+  if ((filters.type?.length ?? 0) > 0) {
+    const entityType = entity.type ?? 'minecraft:armor_stand'
+    if (!filters.type!.includes(entityType) && !filters.type!.includes(entityType.replace(/^minecraft:/, ''))) {
+      return false
+    }
+  }
+  for (const notType of filters.notType || []) {
+    const entityType = entity.type ?? 'minecraft:armor_stand'
+    if (notType === entityType || notType === entityType.replace(/^minecraft:/, '')) {
+      return false
+    }
   }
 
   // Check scores
@@ -165,28 +191,6 @@ function parseSelector(
 // JSON Component Parsing
 // ---------------------------------------------------------------------------
 
-function extractJsonText(json: any): string {
-  if (typeof json === 'string') {
-    try {
-      json = JSON.parse(json)
-    } catch {
-      return json
-    }
-  }
-
-  if (typeof json === 'string') return json
-  if (Array.isArray(json)) {
-    return json.map(extractJsonText).join('')
-  }
-  if (typeof json === 'object' && json !== null) {
-    if ('text' in json) return String(json.text)
-    if ('extra' in json && Array.isArray(json.extra)) {
-      return json.extra.map(extractJsonText).join('')
-    }
-  }
-  return ''
-}
-
 // ---------------------------------------------------------------------------
 // NBT Parsing
 // ---------------------------------------------------------------------------
@@ -226,6 +230,21 @@ export class MCRuntime {
 
   // Log of say/tellraw/title output
   chatLog: string[] = []
+
+  // Simple world state: "x,y,z" -> block id
+  world: Map<string, string> = new Map()
+
+  // Current weather
+  weather: string = 'clear'
+
+  // Current world time
+  worldTime: number = 0
+
+  // Active potion effects by entity id
+  effects: Map<string, { effect: string; duration: number; amplifier: number }[]> = new Map()
+
+  // XP values by player/entity id
+  xp: Map<string, number> = new Map()
 
   // Tick counter
   tickCount: number = 0
@@ -364,8 +383,29 @@ export class MCRuntime {
     if (cmd.startsWith('title ')) {
       return this.execTitle(cmd)
     }
+    if (cmd.startsWith('setblock ')) {
+      return this.execSetblock(cmd)
+    }
+    if (cmd.startsWith('fill ')) {
+      return this.execFill(cmd)
+    }
+    if (cmd.startsWith('tp ')) {
+      return this.execTp(cmd, executor)
+    }
+    if (cmd.startsWith('weather ')) {
+      return this.execWeather(cmd)
+    }
+    if (cmd.startsWith('time ')) {
+      return this.execTime(cmd)
+    }
     if (cmd.startsWith('kill ')) {
       return this.execKill(cmd, executor)
+    }
+    if (cmd.startsWith('effect ')) {
+      return this.execEffect(cmd, executor)
+    }
+    if (cmd.startsWith('xp ')) {
+      return this.execXp(cmd, executor)
     }
     if (cmd.startsWith('summon ')) {
       return this.execSummon(cmd)
@@ -646,6 +686,13 @@ export class MCRuntime {
       rest = rest.slice(nextSpace + 1)
     }
 
+    if (storeTarget) {
+      const value = storeTarget.type === 'result'
+        ? (this.returnValue ?? (condition ? 1 : 0))
+        : (condition ? 1 : 0)
+      this.setScore(storeTarget.player, storeTarget.objective, value)
+    }
+
     return condition
   }
 
@@ -706,7 +753,13 @@ export class MCRuntime {
     if (getMatch) {
       const [, storagePath, field] = getMatch
       const value = this.getStorageField(storagePath, field)
-      this.returnValue = typeof value === 'number' ? value : (value ? 1 : 0)
+      if (typeof value === 'number') {
+        this.returnValue = value
+      } else if (Array.isArray(value)) {
+        this.returnValue = value.length
+      } else {
+        this.returnValue = value ? 1 : 0
+      }
       return true
     }
 
@@ -717,6 +770,13 @@ export class MCRuntime {
       const value = this.getStorageField(srcPath, srcField)
       this.setStorageField(dstPath, dstField, value)
       return true
+    }
+
+    // data remove storage <ns:path> <field>
+    const removeMatch = cmd.match(/^data remove storage (\S+) (\S+)$/)
+    if (removeMatch) {
+      const [, storagePath, field] = removeMatch
+      return this.removeStorageField(storagePath, field)
     }
 
     return false
@@ -738,11 +798,17 @@ export class MCRuntime {
 
   private getStorageField(storagePath: string, field: string): any {
     const data = this.storage.get(storagePath) ?? {}
-    const parts = field.split('.')
-    let current = data
-    for (const part of parts) {
+    const segments = this.parseStoragePath(field)
+    let current: any = data
+    for (const segment of segments) {
+      if (typeof segment === 'number') {
+        if (!Array.isArray(current)) return undefined
+        const index = segment < 0 ? current.length + segment : segment
+        current = current[index]
+        continue
+      }
       if (current == null || typeof current !== 'object') return undefined
-      current = current[part]
+      current = current[segment]
     }
     return current
   }
@@ -753,16 +819,80 @@ export class MCRuntime {
       data = {}
       this.storage.set(storagePath, data)
     }
-    const parts = field.split('.')
-    let current = data
-    for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i]
-      if (!(part in current)) {
-        current[part] = {}
+    const segments = this.parseStoragePath(field)
+    let current: any = data
+    for (let i = 0; i < segments.length - 1; i++) {
+      const segment = segments[i]
+      const next = segments[i + 1]
+      if (typeof segment === 'number') {
+        if (!Array.isArray(current)) return
+        const index = segment < 0 ? current.length + segment : segment
+        if (current[index] === undefined) {
+          current[index] = typeof next === 'number' ? [] : {}
+        }
+        current = current[index]
+        continue
       }
-      current = current[part]
+      if (!(segment in current)) {
+        current[segment] = typeof next === 'number' ? [] : {}
+      }
+      current = current[segment]
     }
-    current[parts[parts.length - 1]] = value
+
+    const last = segments[segments.length - 1]
+    if (typeof last === 'number') {
+      if (!Array.isArray(current)) return
+      const index = last < 0 ? current.length + last : last
+      current[index] = value
+      return
+    }
+    current[last] = value
+  }
+
+  private removeStorageField(storagePath: string, field: string): boolean {
+    const data = this.storage.get(storagePath)
+    if (!data) return false
+
+    const segments = this.parseStoragePath(field)
+    let current: any = data
+    for (let i = 0; i < segments.length - 1; i++) {
+      const segment = segments[i]
+      if (typeof segment === 'number') {
+        if (!Array.isArray(current)) return false
+        const index = segment < 0 ? current.length + segment : segment
+        current = current[index]
+      } else {
+        current = current?.[segment]
+      }
+      if (current === undefined) return false
+    }
+
+    const last = segments[segments.length - 1]
+    if (typeof last === 'number') {
+      if (!Array.isArray(current)) return false
+      const index = last < 0 ? current.length + last : last
+      if (index < 0 || index >= current.length) return false
+      current.splice(index, 1)
+      return true
+    }
+
+    if (current == null || typeof current !== 'object' || !(last in current)) return false
+    delete current[last]
+    return true
+  }
+
+  private parseStoragePath(field: string): Array<string | number> {
+    return field
+      .split('.')
+      .flatMap(part => {
+        const segments: Array<string | number> = []
+        const regex = /([^\[\]]+)|\[(-?\d+)\]/g
+        for (const match of part.matchAll(regex)) {
+          if (match[1]) segments.push(match[1])
+          if (match[2]) segments.push(parseInt(match[2], 10))
+        }
+        return segments
+      })
   }
 
   // -------------------------------------------------------------------------
@@ -814,7 +944,7 @@ export class MCRuntime {
     const match = cmd.match(/^tellraw \S+ (.+)$/)
     if (match) {
       const jsonStr = match[1]
-      const text = extractJsonText(jsonStr)
+      const text = this.extractJsonText(jsonStr)
       this.chatLog.push(text)
       return true
     }
@@ -822,15 +952,138 @@ export class MCRuntime {
   }
 
   private execTitle(cmd: string): boolean {
-    // title <selector> title <json>
-    const match = cmd.match(/^title \S+ title (.+)$/)
+    // title <selector> <kind> <json>
+    const match = cmd.match(/^title \S+ (actionbar|title|subtitle) (.+)$/)
     if (match) {
-      const jsonStr = match[1]
-      const text = extractJsonText(jsonStr)
-      this.chatLog.push(`[TITLE] ${text}`)
+      const [, kind, jsonStr] = match
+      const text = this.extractJsonText(jsonStr)
+      this.chatLog.push(`[${kind.toUpperCase()}] ${text}`)
       return true
     }
     return false
+  }
+
+  private extractJsonText(json: any): string {
+    if (typeof json === 'string') {
+      try {
+        json = JSON.parse(json)
+      } catch {
+        return json
+      }
+    }
+
+    if (typeof json === 'string') return json
+    if (Array.isArray(json)) {
+      return json.map(part => this.extractJsonText(part)).join('')
+    }
+    if (typeof json === 'object' && json !== null) {
+      if ('text' in json) return String(json.text)
+      if ('score' in json && typeof json.score === 'object' && json.score !== null) {
+        const name = 'name' in json.score ? String(json.score.name) : ''
+        const objective = 'objective' in json.score ? String(json.score.objective) : 'rs'
+        return String(this.getScore(name, objective))
+      }
+      if ('extra' in json && Array.isArray(json.extra)) {
+        return json.extra.map((part: any) => this.extractJsonText(part)).join('')
+      }
+    }
+    return ''
+  }
+
+  // -------------------------------------------------------------------------
+  // World Commands
+  // -------------------------------------------------------------------------
+
+  private execSetblock(cmd: string): boolean {
+    const match = cmd.match(/^setblock (\S+) (\S+) (\S+) (\S+)$/)
+    if (!match) return false
+
+    const [, x, y, z, block] = match
+    const key = this.positionKey(x, y, z)
+    if (!key) return false
+    this.world.set(key, block)
+    return true
+  }
+
+  private execFill(cmd: string): boolean {
+    const match = cmd.match(/^fill (\S+) (\S+) (\S+) (\S+) (\S+) (\S+) (\S+)$/)
+    if (!match) return false
+
+    const [, x1, y1, z1, x2, y2, z2, block] = match
+    const start = this.parseAbsolutePosition(x1, y1, z1)
+    const end = this.parseAbsolutePosition(x2, y2, z2)
+    if (!start || !end) return false
+
+    const [minX, maxX] = [Math.min(start.x, end.x), Math.max(start.x, end.x)]
+    const [minY, maxY] = [Math.min(start.y, end.y), Math.max(start.y, end.y)]
+    const [minZ, maxZ] = [Math.min(start.z, end.z), Math.max(start.z, end.z)]
+
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let z = minZ; z <= maxZ; z++) {
+          this.world.set(`${x},${y},${z}`, block)
+        }
+      }
+    }
+    return true
+  }
+
+  private execTp(cmd: string, executor?: Entity): boolean {
+    const coordsMatch = cmd.match(/^tp (\S+) (\S+) (\S+) (\S+)$/)
+    if (coordsMatch) {
+      const [, selStr, x, y, z] = coordsMatch
+      const entities = selStr === '@s' && executor
+        ? [executor]
+        : parseSelector(selStr, this.entities, executor)
+      for (const entity of entities) {
+        const next = this.resolvePosition(entity.position ?? { x: 0, y: 0, z: 0 }, x, y, z)
+        if (next) {
+          entity.position = next
+        }
+      }
+      return entities.length > 0
+    }
+
+    const entityMatch = cmd.match(/^tp (\S+) (\S+)$/)
+    if (entityMatch) {
+      const [, selStr, targetStr] = entityMatch
+      const entities = selStr === '@s' && executor
+        ? [executor]
+        : parseSelector(selStr, this.entities, executor)
+      const target = targetStr === '@s' && executor
+        ? executor
+        : parseSelector(targetStr, this.entities, executor)[0]
+      if (!target?.position) return false
+      for (const entity of entities) {
+        entity.position = { ...target.position }
+      }
+      return entities.length > 0
+    }
+
+    return false
+  }
+
+  private execWeather(cmd: string): boolean {
+    const match = cmd.match(/^weather (\S+)$/)
+    if (!match) return false
+    this.weather = match[1]
+    return true
+  }
+
+  private execTime(cmd: string): boolean {
+    const match = cmd.match(/^time (set|add) (\S+)$/)
+    if (!match) return false
+
+    const [, action, valueStr] = match
+    const value = this.parseTimeValue(valueStr)
+    if (value === null) return false
+
+    if (action === 'set') {
+      this.worldTime = value
+    } else {
+      this.worldTime += value
+    }
+    return true
   }
 
   // -------------------------------------------------------------------------
@@ -853,22 +1106,67 @@ export class MCRuntime {
   }
 
   // -------------------------------------------------------------------------
+  // Effect / XP Commands
+  // -------------------------------------------------------------------------
+
+  private execEffect(cmd: string, executor?: Entity): boolean {
+    const match = cmd.match(/^effect give (\S+) (\S+)(?: (\S+))?(?: (\S+))?(?: \S+)?$/)
+    if (!match) return false
+
+    const [, selStr, effect, durationStr, amplifierStr] = match
+    const entities = selStr === '@s' && executor
+      ? [executor]
+      : parseSelector(selStr, this.entities, executor)
+
+    const duration = durationStr ? parseInt(durationStr, 10) : 30
+    const amplifier = amplifierStr ? parseInt(amplifierStr, 10) : 0
+    for (const entity of entities) {
+      const current = this.effects.get(entity.id) ?? []
+      current.push({ effect, duration: isNaN(duration) ? 30 : duration, amplifier: isNaN(amplifier) ? 0 : amplifier })
+      this.effects.set(entity.id, current)
+    }
+    return entities.length > 0
+  }
+
+  private execXp(cmd: string, executor?: Entity): boolean {
+    const match = cmd.match(/^xp (add|set) (\S+) (-?\d+)(?: (\S+))?$/)
+    if (!match) return false
+
+    const [, action, target, amountStr] = match
+    const amount = parseInt(amountStr, 10)
+    const keys = this.resolveTargetKeys(target, executor)
+    if (keys.length === 0) return false
+
+    for (const key of keys) {
+      const current = this.xp.get(key) ?? 0
+      this.xp.set(key, action === 'set' ? amount : current + amount)
+    }
+    return true
+  }
+
+  // -------------------------------------------------------------------------
   // Summon Command
   // -------------------------------------------------------------------------
 
   private execSummon(cmd: string): boolean {
     // summon minecraft:armor_stand <x> <y> <z> {Tags:["tag1","tag2"]}
-    const match = cmd.match(/^summon \S+ [^\s]+ [^\s]+ [^\s]+ ({.+})$/)
+    const match = cmd.match(/^summon (\S+) (\S+) (\S+) (\S+) ({.+})$/)
     if (match) {
-      const nbt = parseNBT(match[1])
-      this.spawnEntity(nbt.Tags || [])
+      const [, type, x, y, z, nbtStr] = match
+      const nbt = parseNBT(nbtStr)
+      const position = this.parseAbsolutePosition(x, y, z) ?? { x: 0, y: 0, z: 0 }
+      this.spawnEntity(nbt.Tags || [], type, position)
       return true
     }
 
     // Simple summon without NBT
-    const simpleMatch = cmd.match(/^summon /)
+    const simpleMatch = cmd.match(/^summon (\S+)(?: (\S+) (\S+) (\S+))?$/)
     if (simpleMatch) {
-      this.spawnEntity([])
+      const [, type, x, y, z] = simpleMatch
+      const position = x && y && z
+        ? (this.parseAbsolutePosition(x, y, z) ?? { x: 0, y: 0, z: 0 })
+        : { x: 0, y: 0, z: 0 }
+      this.spawnEntity([], type, position)
       return true
     }
 
@@ -967,13 +1265,15 @@ export class MCRuntime {
   // Entity Helpers
   // -------------------------------------------------------------------------
 
-  spawnEntity(tags: string[]): Entity {
+  spawnEntity(tags: string[], type: string = 'minecraft:armor_stand', position: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }): Entity {
     const id = `entity_${this.entityIdCounter++}`
     const entity: Entity = {
       id,
       tags: new Set(tags),
       scores: new Map(),
       selector: `@e[tag=${tags[0] ?? id},limit=1]`,
+      type,
+      position,
     }
     this.entities.push(entity)
     return entity
@@ -985,6 +1285,61 @@ export class MCRuntime {
 
   getEntities(selector: string): Entity[] {
     return parseSelector(selector, this.entities)
+  }
+
+  private positionKey(x: string, y: string, z: string): string | null {
+    const pos = this.parseAbsolutePosition(x, y, z)
+    return pos ? `${pos.x},${pos.y},${pos.z}` : null
+  }
+
+  private parseAbsolutePosition(x: string, y: string, z: string): { x: number; y: number; z: number } | null {
+    const coords = [x, y, z].map(coord => {
+      if (coord.startsWith('~')) {
+        const offset = coord.slice(1)
+        return offset === '' ? 0 : parseInt(offset, 10)
+      }
+      return parseInt(coord, 10)
+    })
+    if (coords.some(Number.isNaN)) return null
+    return { x: coords[0], y: coords[1], z: coords[2] }
+  }
+
+  private resolvePosition(base: { x: number; y: number; z: number }, x: string, y: string, z: string): { x: number; y: number; z: number } | null {
+    const values = [x, y, z].map((coord, index) => {
+      if (coord.startsWith('~')) {
+        const offset = coord.slice(1)
+        const delta = offset === '' ? 0 : parseInt(offset, 10)
+        return [base.x, base.y, base.z][index] + delta
+      }
+      return parseInt(coord, 10)
+    })
+    if (values.some(Number.isNaN)) return null
+    return { x: values[0], y: values[1], z: values[2] }
+  }
+
+  private parseTimeValue(value: string): number | null {
+    if (/^-?\d+$/.test(value)) {
+      return parseInt(value, 10)
+    }
+
+    const aliases: Record<string, number> = {
+      day: 1000,
+      noon: 6000,
+      night: 13000,
+      midnight: 18000,
+      sunrise: 23000,
+    }
+    return aliases[value] ?? null
+  }
+
+  private resolveTargetKeys(target: string, executor?: Entity): string[] {
+    if (target.startsWith('@')) {
+      const entities = target === '@s' && executor
+        ? [executor]
+        : parseSelector(target, this.entities, executor)
+      return entities.map(entity => entity.id)
+    }
+    return [target]
   }
 
   // -------------------------------------------------------------------------

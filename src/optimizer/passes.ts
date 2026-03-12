@@ -135,12 +135,19 @@ export function deadCodeElimination(fn: IRFunction): IRFunction {
     if (op.kind === 'var') readVars.add(op.name)
   }
 
+  function markRawReads(cmd: string) {
+    for (const match of cmd.matchAll(/\$[A-Za-z0-9_]+/g)) {
+      readVars.add(match[0])
+    }
+  }
+
   for (const block of fn.blocks) {
     for (const instr of block.instrs) {
       if (instr.op === 'binop')   { markRead(instr.lhs); markRead(instr.rhs) }
       if (instr.op === 'cmp')     { markRead(instr.lhs); markRead(instr.rhs) }
       if (instr.op === 'call')    { instr.args.forEach(markRead) }
       if (instr.op === 'assign')  { markRead(instr.src) }
+      if (instr.op === 'raw')     { markRawReads(instr.cmd) }
     }
     // Terminator reads
     const t = block.term
