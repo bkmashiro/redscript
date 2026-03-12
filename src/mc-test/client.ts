@@ -174,12 +174,19 @@ export class MCTestClient {
    * Full test reset: clear logs + fill test area with air + kill entities + reset scoreboards.
    * Call this at the start of each integration test.
    */
-  async fullReset(area?: { x1: number; y1: number; z1: number; x2: number; y2: number; z2: number }): Promise<void> {
+  async fullReset(options?: {
+    x1?: number; y1?: number; z1?: number
+    x2?: number; y2?: number; z2?: number
+    clearArea?: boolean
+    killEntities?: boolean
+    resetScoreboards?: boolean
+  }): Promise<void> {
     await this.post('/reset', {
-      clearArea: true,
-      killEntities: true,
-      resetScoreboards: true,
-      ...(area ?? { x1: -50, y1: 0, z1: -50, x2: 50, y2: 100, z2: 50 })
+      clearArea: options?.clearArea ?? true,
+      killEntities: options?.killEntities ?? true,
+      resetScoreboards: options?.resetScoreboards ?? true,
+      x1: options?.x1 ?? -50, y1: options?.y1 ?? 0, z1: options?.z1 ?? -50,
+      x2: options?.x2 ?? 50,  y2: options?.y2 ?? 100, z2: options?.z2 ?? 50,
     })
   }
 
