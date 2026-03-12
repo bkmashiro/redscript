@@ -11,7 +11,7 @@ import type { BinOp, CmpOp } from '../ir/types'
 // Type Nodes
 // ---------------------------------------------------------------------------
 
-export type PrimitiveType = 'int' | 'bool' | 'float' | 'string' | 'void'
+export type PrimitiveType = 'int' | 'bool' | 'float' | 'string' | 'void' | 'BlockPos'
 
 export type TypeNode =
   | { kind: 'named'; name: PrimitiveType }
@@ -52,6 +52,22 @@ export interface EntitySelector {
 }
 
 // ---------------------------------------------------------------------------
+// Block Positions
+// ---------------------------------------------------------------------------
+
+export type CoordComponent =
+  | { kind: 'absolute'; value: number }
+  | { kind: 'relative'; offset: number }
+  | { kind: 'local'; offset: number }
+
+export interface BlockPosExpr {
+  kind: 'blockpos'
+  x: CoordComponent
+  y: CoordComponent
+  z: CoordComponent
+}
+
+// ---------------------------------------------------------------------------
 // Assignment Operators
 // ---------------------------------------------------------------------------
 
@@ -68,6 +84,7 @@ export type Expr =
   | { kind: 'str_lit';    value: string }
   | { kind: 'str_interp'; parts: Array<string | Expr> }
   | { kind: 'range_lit';  range: RangeExpr }
+  | BlockPosExpr
   | { kind: 'ident';      name: string }
   | { kind: 'selector';   sel: EntitySelector }
   | { kind: 'binary';     op: BinOp | CmpOp | '&&' | '||'; left: Expr; right: Expr }
