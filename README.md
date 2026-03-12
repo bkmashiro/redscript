@@ -1,186 +1,181 @@
-# RedScript
+<div align="center">
+
+<img src="https://img.shields.io/badge/RedScript-1.0-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+
+**A typed scripting language that compiles to Minecraft datapacks.**
+
+Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/redscript)](https://www.npmjs.com/package/redscript)
+[![npm](https://img.shields.io/npm/v/redscript?color=cb3837)](https://www.npmjs.com/package/redscript)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![tests](https://img.shields.io/badge/tests-423%20passing-brightgreen)](./src/__tests__)
 
-A compiled, typed scripting language that targets Minecraft datapacks and structure files. Write clean, readable game logic — RedScript compiles it to optimized `.mcfunction` files and NBT structures ready to drop into any 1.21+ world.
+[English](#english) · [中文](#中文) · [Wiki](https://github.com/bkmashiro/redscript/wiki) · [快速开始](#quick-start--快速开始)
+
+</div>
+
+---
+
+## English
+
+### What is RedScript?
+
+You want to make a Minecraft mini-game. You need a countdown timer, kill counter, respawn logic, and a scoreboard display. In vanilla MC, that's 40+ `.mcfunction` files, hundreds of `execute if score` commands, and a weekend of debugging.
+
+With RedScript, it's this:
 
 ```rs
-// counter.rs
-@tick
-fn counter_tick() {
-    let ticks: int = scoreboard_get("counter", "ticks");
-    ticks = ticks + 1;
-    scoreboard_set("counter", "ticks", ticks);
+// pvp_game.rs
+import "stdlib/player.rs"
 
-    if (ticks % 100 == 0) {
-        say("Counter reached another 100 ticks");
+const GAME_TIME: int = 300;  // 15 seconds × 20 ticks
+
+@tick(rate=20)
+fn every_second() {
+    let time: int = scoreboard_get("#game", "timer");
+
+    if (time <= 0) {
+        end_game();
+        return;
     }
+
+    scoreboard_set("#game", "timer", time - 1);
+    actionbar(@a, "⏱ ${time}s remaining");
+}
+
+fn start_game() {
+    scoreboard_set("#game", "timer", GAME_TIME);
+    scoreboard_set("#game", "running", 1);
+    title(@a, "Fight!", "Game started");
+    tp(@a, (0, 64, 0));
+}
+
+fn end_game() {
+    scoreboard_set("#game", "running", 0);
+    title(@a, "Game Over!");
+    announce("Thanks for playing!");
+}
+
+@on_death
+fn on_kill() {
+    scoreboard_add(@s, "kills", 1);
 }
 ```
 
-```bash
-redscript compile counter.rs -o ./datapack
-# ✓ Compiled counter.rs → datapack/
-#   Namespace: counter  |  Functions: 4  |  Commands: 12
-```
+One file. Compiles to a ready-to-use datapack in seconds.
 
 ---
 
-## Features
+### Quick Start
 
-| | |
-|---|---|
-| **Typed variables** | `let x: int = 42;` with full type inference |
-| **Functions** | First-class, default params, call chains |
-| **Control flow** | `if/else`, `for`, `while`, `match` |
-| **Lambdas** | Higher-order functions via monomorphization |
-| **Structs & Enums** | Composite types with pattern matching |
-| **Arrays** | NBT storage-backed, with push/pop/len/foreach |
-| **String interpolation** | `"Hello ${player}!"` |
-| **Decorators** | `@tick`, `@tick(rate=20)`, `@on_advancement`, `@on_death`, `@on_craft` |
-| **Selectors** | `@s`, `@a`, `@e[type=zombie]` with type safety |
-| **Imports** | Multi-file projects with `import "path/to/file.rs"` |
-| **Constants** | Compile-time inlined `const` |
-| **MC builtins** | 34+ builtins: `say`, `tp`, `setblock`, `fill`, `give`, `scoreboard`, `bossbar`, `team`, `effect`, and more |
-| **Optimizer** | LICM, CSE, dead store elimination, setblock→fill batching |
-| **Two targets** | `--target datapack` (default) or `--target structure` (NBT command block structure) |
-| **Validator** | MC 1.21.4 command syntax validation with warnings |
-| **REPL** | Interactive `redscript repl` for quick testing |
-
----
-
-## Installation
+#### Install
 
 ```bash
 npm install -g redscript
 ```
 
-Or from source:
+#### Compile
 
 ```bash
-git clone https://github.com/bkmashiro/redscript
-cd redscript
-npm install && npm run build
-npm link
+redscript compile pvp_game.rs -o ./my-datapack
 ```
+
+```
+✓ Compiled pvp_game.rs
+  Namespace : pvp_game
+  Functions : 7
+  Commands  : 34  →  28  (optimizer: −18%)
+  Output    : ./my-datapack/
+```
+
+#### Deploy
+
+Drop the output folder into your world's `datapacks/` directory and run `/reload`. Done.
 
 ---
 
-## Quick Start
+### The Language
 
-### 1. Write a script
-
-```rs
-// game.rs
-import "stdlib/player.rs"
-
-const MAX_SCORE: int = 100;
-
-@tick(rate=20)
-fn every_second() {
-    let alive: int = scoreboard_get("#game", "alive");
-    if (alive == 0) {
-        end_game();
-    }
-}
-
-fn end_game() {
-    title(@a, "Game Over");
-    scoreboard_set("#game", "running", 0);
-}
-```
-
-### 2. Compile
-
-```bash
-# Compile to datapack
-redscript compile game.rs -o ./my-datapack
-
-# Compile to NBT structure (command blocks)
-redscript compile game.rs --target structure -o ./structures
-
-# Show optimization stats
-redscript compile game.rs --stats
-```
-
-### 3. Deploy
-
-Copy the output to your world's `datapacks/` folder and run `/reload`.
-
----
-
-## Language Overview
-
-### Variables & Types
+#### Variables & Types
 
 ```rs
 let x: int = 42;
 let name: string = "Steve";
-let pos: BlockPos = (10, 64, -5);
-let rel: BlockPos = (~1, ~0, ~-1);   // relative
-let loc: BlockPos = (^0, ^1, ^0);   // local
+let spawn: BlockPos = (0, 64, 0);
+let nearby: BlockPos = (~5, ~0, ~5);   // relative coords
+const MAX: int = 100;                  // compile-time constant
 ```
 
-### Functions & Default Params
+#### Functions & Defaults
 
 ```rs
-fn greet(player: selector, msg: string = "Hello!") {
+fn greet(player: selector, msg: string = "Welcome!") {
     tell(player, msg);
 }
 
-greet(@s);               // uses default
-greet(@a, "Welcome!");   // override
+greet(@s);              // uses default message
+greet(@a, "Hello!");    // override
 ```
 
-### Decorators
+#### Decorators
 
 ```rs
-@tick                      // runs every tick
+@tick                  // every tick
 fn heartbeat() { ... }
 
-@tick(rate=20)             // runs every 20 ticks (1 second)
+@tick(rate=20)         // every second
 fn every_second() { ... }
 
 @on_advancement("story/mine_diamond")
-fn got_diamond() {
-    give(@s, "minecraft:diamond", 1);
+fn on_diamond(player: selector) {
+    give(player, "minecraft:diamond", 5);
 }
 
 @on_death
-fn on_player_death() {
-    scoreboard_set(@s, "deaths", scoreboard_get(@s, "deaths") + 1);
+fn on_death() {
+    scoreboard_add(@s, "deaths", 1);
 }
 ```
 
-### Structs & Enums
+#### Control Flow
 
 ```rs
-struct Vec2 {
-    x: int,
-    y: int,
+if (hp <= 0) {
+    respawn();
+} else if (hp < 5) {
+    warn_player();
 }
 
-enum GameState {
-    Waiting,
-    Running,
-    Ended,
+for (let i: int = 0; i < 10; i = i + 1) {
+    summon("minecraft:zombie", (i, 64, 0));
+}
+
+foreach (player in @a) {
+    heal(player, 2);
 }
 ```
 
-### Match
+#### Structs & Enums
 
 ```rs
-match (state) {
-    GameState::Waiting => { announce("Waiting for players..."); }
-    GameState::Running => { every_second(); }
-    GameState::Ended   => { show_results(); }
+enum Phase { Lobby, Playing, Ended }
+
+struct Player {
+    score: int,
+    alive: bool,
+}
+
+let phase = Phase::Playing;
+
+match (phase) {
+    Phase::Lobby   => { announce("Waiting..."); }
+    Phase::Playing => { every_second(); }
+    Phase::Ended   => { show_scoreboard(); }
 }
 ```
 
-### Lambdas
+#### Lambdas
 
 ```rs
 fn apply(f: (int) -> int, x: int) -> int {
@@ -188,118 +183,169 @@ fn apply(f: (int) -> int, x: int) -> int {
 }
 
 let double = (x: int) -> int { return x * 2; };
-let result = apply(double, 5);  // 10
+apply(double, 5);  // 10
 ```
 
-### Selectors
+#### Arrays
 
 ```rs
-tp(@s, (0, 64, 0));
-tell(@a[distance=..10], "You're close!");
-scoreboard_set(@e[type=minecraft:zombie], "hp", 20);
+let scores: int[] = [];
+push(scores, 42);
+push(scores, 100);
+
+foreach (s in scores) {
+    announce("Score: ${s}");
+}
 ```
 
 ---
 
-## Standard Library
+### CLI Reference
+
+```
+redscript compile <file>       Compile to datapack (default) or structure
+  -o, --output <dir>           Output directory         [default: ./out]
+  --target datapack|structure  Output format            [default: datapack]
+  --namespace <ns>             Datapack namespace       [default: filename]
+  --no-optimize                Skip optimizer passes
+  --stats                      Print optimizer statistics
+
+redscript repl                 Interactive REPL
+redscript validate <file>      Validate MC commands
+```
+
+---
+
+### Standard Library
 
 ```rs
 import "stdlib/math.rs"       // abs, min, max, clamp
 import "stdlib/player.rs"     // is_alive, in_range, get_health
 import "stdlib/timer.rs"      // start_timer, tick_timer, has_elapsed
 import "stdlib/cooldown.rs"   // set_cooldown, check_cooldown
-import "stdlib/mobs.rs"       // ZOMBIE, SKELETON, CREEPER, ... (60+ entity constants)
-import "stdlib/strings.rs"    // str_len
+import "stdlib/mobs.rs"       // ZOMBIE, SKELETON, CREEPER, ... (60+ constants)
 ```
 
 ---
 
-## Structure Target
+### Further Reading
 
-Compile to an NBT `.nbt` structure file containing command blocks:
+| | |
+|---|---|
+| 📖 [Language Reference](docs/LANGUAGE_REFERENCE.md) | Full syntax & type system |
+| 🔧 [Builtins](https://github.com/bkmashiro/redscript/wiki/Builtins) | All 34+ MC builtin functions |
+| ⚡ [Optimizer](https://github.com/bkmashiro/redscript/wiki/Optimizer) | How the optimizer works |
+| 🧱 [Structure Target](docs/STRUCTURE_TARGET.md) | Compile to NBT command block structures |
+| 🧪 [Integration Testing](https://github.com/bkmashiro/redscript/wiki/Integration-Testing) | Test against a real Paper server |
+| 🏗 [Implementation Guide](docs/IMPLEMENTATION_GUIDE.md) | Compiler internals |
+
+---
+
+## 中文
+
+### RedScript 是什么？
+
+你想做一个 Minecraft 小游戏——倒计时、击杀计数、复活逻辑、记分板显示。用原版 MC 的话，这意味着 40+ 个 `.mcfunction` 文件、几百条 `execute if score` 命令，还要花一个周末调试。
+
+用 RedScript，就是这样：
+
+```rs
+// pvp_game.rs
+import "stdlib/player.rs"
+
+const GAME_TIME: int = 300;
+
+@tick(rate=20)
+fn every_second() {
+    let time: int = scoreboard_get("#game", "timer");
+
+    if (time <= 0) {
+        end_game();
+        return;
+    }
+
+    scoreboard_set("#game", "timer", time - 1);
+    actionbar(@a, "⏱ 剩余 ${time} 秒");
+}
+
+fn start_game() {
+    scoreboard_set("#game", "timer", GAME_TIME);
+    title(@a, "开始战斗！", "游戏已开始");
+    tp(@a, (0, 64, 0));
+}
+
+fn end_game() {
+    title(@a, "游戏结束！");
+    announce("感谢游玩！");
+}
+
+@on_death
+fn on_kill() {
+    scoreboard_add(@s, "kills", 1);
+}
+```
+
+一个文件，几秒钟编译出可以直接用的 datapack。
+
+---
+
+### 快速开始 / Quick Start
+
+#### 安装
 
 ```bash
-redscript compile game.rs --target structure -o ./structures
+npm install -g redscript
 ```
 
-RedScript generates impulse → chain → repeat command block layouts, automatically optimizing with the structure optimizer (conditional chain flattening, CSE, LICM, setblock→fill batching).
-
-See [docs/STRUCTURE_TARGET.md](docs/STRUCTURE_TARGET.md) for details.
-
----
-
-## Optimizer
-
-RedScript includes a multi-pass optimizer:
-
-| Pass | Description |
-|------|-------------|
-| Dead store elimination | Removes unused `$tmp` assignments |
-| Branch variable elimination | Removes `$cond` vars when branch is unconditional |
-| LICM | Hoists loop-invariant commands out of loops |
-| CSE | Eliminates duplicate scoreboard reads |
-| Setblock batching | Merges adjacent same-block `setblock` → `fill` |
-| Conditional chain flattening | (Structure target) Flattens simple branches |
+#### 编译
 
 ```bash
-redscript compile large_script.rs --stats
-# Optimizer stats:
-#   dead stores removed:    12
-#   setblock→fill batches:   3  (saved 8 commands)
-#   LICM hoists:             2
-#   CSE eliminations:        5
+redscript compile pvp_game.rs -o ./my-datapack
 ```
+
+#### 部署
+
+把输出文件夹丢进存档的 `datapacks/` 目录，游戏内跑 `/reload`。完成。
 
 ---
 
-## Integration Testing
+### 语言特性
 
-RedScript ships with a real Minecraft integration test suite that runs compiled datapacks on a live Paper 1.21.4 server.
-
-See [redscript-testharness](https://github.com/bkmashiro/redscript-testharness) for the Paper plugin.
-
-```bash
-# Start Paper server (with redscript-testharness plugin)
-# Then:
-MC_SERVER_DIR=~/mc-test-server npx jest mc-integration --testTimeout=120000
-```
-
-Tests cover: setblock/fill, scoreboard arithmetic, @tick dispatch, entity queries, fill optimizer correctness, call chains, temp var isolation, and game loop logic.
-
----
-
-## CLI Reference
-
-```
-Usage: redscript <command> [options]
-
-Commands:
-  compile <file>    Compile a .rs file to a datapack or structure
-  repl              Start interactive REPL
-  validate <file>   Validate MC commands without compiling
-
-Options:
-  -o, --output <dir>      Output directory (default: ./out)
-  --target <target>       Output target: datapack | structure (default: datapack)
-  --namespace <ns>        Datapack namespace (default: derived from filename)
-  --no-optimize           Disable optimizer passes
-  --stats                 Print optimizer statistics
-  --validate              Run MC command validation after compile
-```
+| 特性 | 说明 |
+|------|------|
+| 类型系统 | `int` / `string` / `bool` / `selector` / `BlockPos` / 泛型数组 |
+| 函数 | 默认参数、返回值、调用链 |
+| 控制流 | `if/else` / `for` / `while` / `foreach` / `match` |
+| 装饰器 | `@tick` / `@tick(rate=N)` / `@on_advancement` / `@on_death` / `@on_craft` |
+| Lambda | 高阶函数，单态化编译（无运行时函数指针） |
+| 结构体/枚举 | 组合类型 + 模式匹配 |
+| 数组 | NBT storage 实现，支持 push/pop/len/foreach |
+| 字符串插值 | `"玩家 ${name} 得分 ${score}"` |
+| import | 多文件项目，`import "path/to/file.rs"` |
+| const | 编译期常量内联 |
+| 优化器 | 死代码消除、CSE、LICM、setblock→fill 批合并 |
+| 两种输出 | `datapack`（默认）或 `structure`（NBT 命令方块结构体） |
+| MC 内置函数 | 34+ 个，覆盖聊天、传送、方块、实体、记分板、bossbar、队伍 |
 
 ---
 
-## Documentation
+### 更多文档
 
-- [Language Reference](docs/LANGUAGE_REFERENCE.md)
-- [MC Command Mapping](docs/MC_MAPPING.md)
-- [Structure Target](docs/STRUCTURE_TARGET.md)
-- [Compilation Stats](docs/COMPILATION_STATS.md)
-- [Implementation Guide](docs/IMPLEMENTATION_GUIDE.md)
-- [GitHub Wiki](https://github.com/bkmashiro/redscript/wiki)
+| | |
+|---|---|
+| 📖 [语言参考](docs/LANGUAGE_REFERENCE.md) | 完整语法与类型系统 |
+| 🔧 [内置函数](https://github.com/bkmashiro/redscript/wiki/Builtins) | 所有 34+ MC 内置函数 |
+| ⚡ [优化器](https://github.com/bkmashiro/redscript/wiki/Optimizer) | 各优化 Pass 说明 |
+| 🧱 [结构体目标](docs/STRUCTURE_TARGET.md) | 编译到 NBT 命令方块结构体 |
+| 🧪 [集成测试](https://github.com/bkmashiro/redscript/wiki/Integration-Testing) | 在真实 Paper 服务器上测试 |
+| 🏗 [实现指南](docs/IMPLEMENTATION_GUIDE.md) | 编译器内部原理 |
 
 ---
 
-## License
+<div align="center">
 
-MIT © [bkmashiro](https://github.com/bkmashiro)
+MIT License · Copyright © 2026 [bkmashiro](https://github.com/bkmashiro)
+
+*Write less. Build more. Ship faster.*
+
+</div>
