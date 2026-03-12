@@ -6283,6 +6283,29 @@ var SELECTOR_DOCS = {
   "@r": { name: "@r \u2014 Random Player", desc: "A random online player.", tip: "Use `@e[type=minecraft:player,sort=random,limit=1]` for full control." },
   "@n": { name: "@n \u2014 Nearest Entity", desc: "The single nearest entity (including non-players).", tip: "MC 1.21+ only." }
 };
+var SELECTOR_ARG_DOCS = {
+  "type": { name: "type", desc: "Filter by entity type.", example: "type=minecraft:zombie" },
+  "tag": { name: "tag", desc: "Filter by scoreboard tag. Use `tag=!name` to exclude.", example: "tag=my_tag, tag=!excluded" },
+  "name": { name: "name", desc: "Filter by entity custom name.", example: 'name="Steve"' },
+  "team": { name: "team", desc: "Filter by team membership. Empty string = no team.", example: "team=red, team=" },
+  "scores": { name: "scores", desc: "Filter by scoreboard scores. Uses `{obj=range}` syntax.", example: "scores={kills=1..}" },
+  "nbt": { name: "nbt", desc: "Filter by NBT data match.", example: "nbt={OnGround:1b}" },
+  "predicate": { name: "predicate", desc: "Filter by datapack predicate.", example: "predicate=my_pack:is_valid" },
+  "gamemode": { name: "gamemode", desc: "Filter players by gamemode.", example: "gamemode=survival, gamemode=!creative" },
+  "distance": { name: "distance", desc: "Filter by distance from command origin. Supports ranges.", example: "distance=..10, distance=5..20" },
+  "level": { name: "level", desc: "Filter players by XP level.", example: "level=10.., level=1..5" },
+  "x_rotation": { name: "x_rotation", desc: "Filter by vertical head rotation (pitch). -90=up, 90=down.", example: "x_rotation=-90..0" },
+  "y_rotation": { name: "y_rotation", desc: "Filter by horizontal head rotation (yaw). South=0.", example: "y_rotation=0..90" },
+  "x": { name: "x", desc: "Override X coordinate for distance/volume calculations.", example: "x=100" },
+  "y": { name: "y", desc: "Override Y coordinate for distance/volume calculations.", example: "y=64" },
+  "z": { name: "z", desc: "Override Z coordinate for distance/volume calculations.", example: "z=-200" },
+  "dx": { name: "dx", desc: "X-size of selection box from x,y,z.", example: "dx=10" },
+  "dy": { name: "dy", desc: "Y-size of selection box from x,y,z.", example: "dy=5" },
+  "dz": { name: "dz", desc: "Z-size of selection box from x,y,z.", example: "dz=10" },
+  "limit": { name: "limit", desc: "Maximum number of entities to select.", example: "limit=1, limit=5" },
+  "sort": { name: "sort", desc: "Sort order: nearest, furthest, random, arbitrary.", example: "sort=random" },
+  "advancements": { name: "advancements", desc: "Filter by advancement completion.", example: "advancements={story/mine_diamond=true}" }
+};
 function formatSelectorHover(raw) {
   const key = raw.replace(/\[.*/, "");
   const info = SELECTOR_DOCS[key];
@@ -6298,6 +6321,20 @@ function formatSelectorHover(raw) {
     md.appendMarkdown(`**Selector** \`${raw}\`
 
 Entity target selector.`);
+  }
+  return md;
+}
+function formatSelectorArgHover(arg) {
+  const info = SELECTOR_ARG_DOCS[arg];
+  if (!info) return null;
+  const md = new vscode.MarkdownString("", true);
+  md.appendMarkdown(`**${info.name}** (selector argument)
+
+`);
+  md.appendMarkdown(info.desc);
+  if (info.example) {
+    md.appendText("\n\n");
+    md.appendCodeblock(info.example, "redscript");
   }
   return md;
 }
@@ -6419,12 +6456,31 @@ function registerHoverProvider(context) {
           const raw = document.getText(mcRange);
           return new vscode.Hover(formatMcNameHover(raw.slice(1)), mcRange);
         }
-        const selectorRange = document.getWordRangeAtPosition(
-          position,
-          /@[aesprnAESPRN](?:\[[^\]]*\])?/
-        );
-        if (selectorRange) {
-          return new vscode.Hover(formatSelectorHover(document.getText(selectorRange)), selectorRange);
+        const baseSelectorRange = document.getWordRangeAtPosition(position, /@[aesprnAESPRN]/);
+        if (baseSelectorRange) {
+          const base = document.getText(baseSelectorRange);
+          return new vscode.Hover(formatSelectorHover(base), baseSelectorRange);
+        }
+        const wordAtCursor = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/);
+        if (wordAtCursor) {
+          const wordText = document.getText(wordAtCursor);
+          if (SELECTOR_ARG_DOCS[wordText]) {
+            const afterWord2 = line.slice(wordAtCursor.end.character).trimStart();
+            if (afterWord2.startsWith("=")) {
+              const beforeWord = line.slice(0, wordAtCursor.start.character);
+              const openBracket = beforeWord.lastIndexOf("[");
+              const closeBracket = beforeWord.lastIndexOf("]");
+              if (openBracket > closeBracket) {
+                const beforeBracket = beforeWord.slice(0, openBracket);
+                if (/@[aesprnAESPRN]\s*$/.test(beforeBracket)) {
+                  const argDoc = formatSelectorArgHover(wordText);
+                  if (argDoc) {
+                    return new vscode.Hover(argDoc, wordAtCursor);
+                  }
+                }
+              }
+            }
+          }
         }
         const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][a-zA-Z0-9_]*/);
         if (!range) return void 0;
