@@ -8,7 +8,7 @@ fn deploy_turret() {
     turret.health = 40;
     turret.tag("turret");
 
-    let state: TurretState = { health: 40 };
+    let state = { health: 40 };
     let hp = state.health;
     scoreboard_set("turret", #health, hp);
 
