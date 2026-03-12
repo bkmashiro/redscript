@@ -72,6 +72,7 @@ const MC_TYPE_TO_ENTITY: Record<string, EntityTypeName> = {
 export class TypeChecker {
   private collector: DiagnosticCollector
   private functions: Map<string, FnDecl> = new Map()
+  private implMethods: Map<string, Map<string, FnDecl>> = new Map()
   private structs: Map<string, Map<string, TypeNode>> = new Map()
   private enums: Map<string, Map<string, number>> = new Map()
   private consts: Map<string, TypeNode> = new Map()
@@ -107,6 +108,28 @@ export class TypeChecker {
       this.functions.set(fn.name, fn)
     }
 
+    for (const implBlock of program.implBlocks ?? []) {
+      let methods = this.implMethods.get(implBlock.typeName)
+      if (!methods) {
+        methods = new Map()
+        this.implMethods.set(implBlock.typeName, methods)
+      }
+
+      for (const method of implBlock.methods) {
+        const selfIndex = method.params.findIndex(param => param.name === 'self')
+        if (selfIndex > 0) {
+          this.report(`Method '${method.name}' must declare 'self' as the first parameter`, method.params[selfIndex])
+        }
+        if (selfIndex === 0) {
+          const selfType = this.normalizeType(method.params[0].type)
+          if (selfType.kind !== 'struct' || selfType.name !== implBlock.typeName) {
+            this.report(`Method '${method.name}' has invalid 'self' type`, method.params[0])
+          }
+        }
+        methods.set(method.name, method)
+      }
+    }
+
     for (const struct of program.structs ?? []) {
       const fields = new Map<string, TypeNode>()
       for (const field of struct.fields) {
@@ -138,6 +161,12 @@ export class TypeChecker {
     // Second pass: type check function bodies
     for (const fn of program.declarations) {
       this.checkFunction(fn)
+    }
+
+    for (const implBlock of program.implBlocks ?? []) {
+      for (const method of implBlock.methods) {
+        this.checkFunction(method)
+      }
     }
 
     return this.collector.getErrors()
@@ -353,6 +382,9 @@ export class TypeChecker {
       case 'member':
         this.checkMemberExpr(expr)
         break
+      case 'static_call':
+        this.checkStaticCallExpr(expr)
+        break
 
       case 'binary':
         this.checkExpr(expr.left)
@@ -422,12 +454,6 @@ export class TypeChecker {
       case 'blockpos':
         break
 
-      case 'static_call':
-        for (const arg of expr.args) {
-          this.checkExpr(arg)
-        }
-        break
-
       // Literals don't need checking
       case 'int_lit':
       case 'float_lit':
@@ -481,6 +507,17 @@ export class TypeChecker {
     const varType = this.scope.get(expr.fn)?.type
     if (varType?.kind === 'function_type') {
       this.checkFunctionCallArgs(expr.args, varType.params, expr.fn, expr)
+      return
+    }
+
+    const implMethod = this.resolveInstanceMethod(expr)
+    if (implMethod) {
+      this.checkFunctionCallArgs(
+        expr.args,
+        implMethod.params.map(param => this.normalizeType(param.type)),
+        implMethod.name,
+        expr
+      )
       return
     }
 
@@ -592,6 +629,29 @@ export class TypeChecker {
         }
       }
     }
+  }
+
+  private checkStaticCallExpr(expr: Extract<Expr, { kind: 'static_call' }>): void {
+    const method = this.implMethods.get(expr.type)?.get(expr.method)
+    if (!method) {
+      this.report(`Type '${expr.type}' has no static method '${expr.method}'`, expr)
+      for (const arg of expr.args) {
+        this.checkExpr(arg)
+      }
+      return
+    }
+
+    if (method.params[0]?.name === 'self') {
+      this.report(`Method '${expr.type}::${expr.method}' is an instance method`, expr)
+      return
+    }
+
+    this.checkFunctionCallArgs(
+      expr.args,
+      method.params.map(param => this.normalizeType(param.type)),
+      `${expr.type}::${expr.method}`,
+      expr
+    )
   }
 
   private checkLambdaExpr(expr: Extract<Expr, { kind: 'lambda' }>, expectedType?: TypeNode): void {
@@ -729,8 +789,16 @@ export class TypeChecker {
         if (varType?.kind === 'function_type') {
           return varType.return
         }
+        const implMethod = this.resolveInstanceMethod(expr)
+        if (implMethod) {
+          return this.normalizeType(implMethod.returnType)
+        }
         const fn = this.functions.get(expr.fn)
         return fn?.returnType ?? { kind: 'named', name: 'int' }
+      }
+      case 'static_call': {
+        const method = this.implMethods.get(expr.type)?.get(expr.method)
+        return method ? this.normalizeType(method.returnType) : { kind: 'named', name: 'void' }
       }
       case 'invoke': {
         const calleeType = this.inferType(expr.callee)
@@ -770,6 +838,14 @@ export class TypeChecker {
           return { kind: 'array', elem: this.inferType(expr.elements[0]) }
         }
         return { kind: 'array', elem: { kind: 'named', name: 'int' } }
+      case 'struct_lit':
+        if (expectedType) {
+          const normalized = this.normalizeType(expectedType)
+          if (normalized.kind === 'struct') {
+            return normalized
+          }
+        }
+        return { kind: 'named', name: 'void' }
       case 'lambda':
         return this.inferLambdaType(
           expr,
@@ -832,6 +908,25 @@ export class TypeChecker {
     
     // Default to entity
     return 'entity'
+  }
+
+  private resolveInstanceMethod(expr: Extract<Expr, { kind: 'call' }>): FnDecl | null {
+    const receiver = expr.args[0]
+    if (!receiver) {
+      return null
+    }
+
+    const receiverType = this.inferType(receiver)
+    if (receiverType.kind !== 'struct') {
+      return null
+    }
+
+    const method = this.implMethods.get(receiverType.name)?.get(expr.fn)
+    if (!method || method.params[0]?.name !== 'self') {
+      return null
+    }
+
+    return method
   }
 
   /** Check if childType is a subtype of parentType */

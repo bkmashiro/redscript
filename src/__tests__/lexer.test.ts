@@ -11,10 +11,10 @@ function kinds(tokens: Token[]): TokenKind[] {
 describe('Lexer', () => {
   describe('keywords', () => {
     it('recognizes all keywords', () => {
-      const tokens = tokenize('fn let const if else while for foreach match return as at in is struct enum trigger namespace')
+      const tokens = tokenize('fn let const if else while for foreach match return as at in is struct impl enum trigger namespace')
       expect(kinds(tokens)).toEqual([
         'fn', 'let', 'const', 'if', 'else', 'while', 'for', 'foreach', 'match',
-        'return', 'as', 'at', 'in', 'is', 'struct', 'enum', 'trigger', 'namespace', 'eof'
+        'return', 'as', 'at', 'in', 'is', 'struct', 'impl', 'enum', 'trigger', 'namespace', 'eof'
       ])
     })
 

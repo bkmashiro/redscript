@@ -239,6 +239,13 @@ export interface StructDecl {
   span?: Span
 }
 
+export interface ImplBlock {
+  kind: 'impl_block'
+  typeName: string
+  methods: FnDecl[]
+  span?: Span
+}
+
 export interface EnumVariant {
   name: string
   value?: number
@@ -275,6 +282,7 @@ export interface Program {
   globals: GlobalDecl[]
   declarations: FnDecl[]
   structs: StructDecl[]
+  implBlocks: ImplBlock[]
   enums: EnumDecl[]
   consts: ConstDecl[]
 }

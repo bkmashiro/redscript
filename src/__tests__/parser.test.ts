@@ -25,6 +25,7 @@ describe('Parser', () => {
       const program = parse('')
       expect(program.namespace).toBe('test')
       expect(program.declarations).toEqual([])
+      expect(program.implBlocks).toEqual([])
       expect(program.enums).toEqual([])
       expect(program.consts).toEqual([])
     })
@@ -150,6 +151,28 @@ describe('Parser', () => {
           ],
         },
       ])
+    })
+
+    it('parses impl blocks', () => {
+      const program = parse(`
+struct Timer { duration: int }
+
+impl Timer {
+  fn new(duration: int): Timer {
+    return { duration: duration };
+  }
+
+  fn start(self) {}
+}
+`)
+      expect(program.implBlocks).toHaveLength(1)
+      expect(program.implBlocks[0].typeName).toBe('Timer')
+      expect(program.implBlocks[0].methods.map(method => method.name)).toEqual(['new', 'start'])
+      expect(program.implBlocks[0].methods[1].params[0]).toEqual({
+        name: 'self',
+        type: { kind: 'struct', name: 'Timer' },
+        default: undefined,
+      })
     })
   })
 
@@ -469,11 +492,11 @@ describe('Parser', () => {
         expect(expr).toEqual({ kind: 'ident', name: 'foo' })
       })
 
-      it('parses function call', () => {
-        const expr = parseExpr('foo(1, 2)')
-        expect(expr).toEqual({
-          kind: 'call',
-          fn: 'foo',
+    it('parses function call', () => {
+      const expr = parseExpr('foo(1, 2)')
+      expect(expr).toEqual({
+        kind: 'call',
+        fn: 'foo',
           args: [
             { kind: 'int_lit', value: 1 },
             { kind: 'int_lit', value: 2 },
@@ -493,6 +516,16 @@ describe('Parser', () => {
           obj: { kind: 'ident', name: 'Direction' },
           field: 'North',
         })
+      })
+    })
+
+    it('parses static method calls', () => {
+      const expr = parseExpr('Timer::new(100)')
+      expect(expr).toEqual({
+        kind: 'static_call',
+        type: 'Timer',
+        method: 'new',
+        args: [{ kind: 'int_lit', value: 100 }],
       })
     })
 

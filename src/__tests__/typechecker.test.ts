@@ -211,6 +211,41 @@ fn test() {
 `)
       expect(errors).toHaveLength(0)
     })
+
+    it('allows impl instance methods with inferred self type', () => {
+      const errors = typeCheck(`
+struct Timer { duration: int }
+
+impl Timer {
+  fn elapsed(self) -> int {
+    return self.duration;
+  }
+}
+
+fn test() {
+  let timer: Timer = { duration: 10 };
+  let value: int = timer.elapsed();
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('allows static impl method calls', () => {
+      const errors = typeCheck(`
+struct Timer { duration: int }
+
+impl Timer {
+  fn new(duration: int) -> Timer {
+    return { duration: duration };
+  }
+}
+
+fn test() {
+  let timer: Timer = Timer::new(10);
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
   })
 
   describe('entity is-check narrowing', () => {

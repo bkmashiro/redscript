@@ -9,7 +9,7 @@ import { Lexer, type Token, type TokenKind } from '../lexer'
 import type {
   Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, GlobalDecl, LiteralExpr, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Span, Stmt, TypeNode, AssignOp,
-  StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr,
+  StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr, ImplBlock,
   CoordComponent, LambdaParam, EntityTypeName
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ir/types'
@@ -156,6 +156,7 @@ export class Parser {
     const globals: GlobalDecl[] = []
     const declarations: FnDecl[] = []
     const structs: StructDecl[] = []
+    const implBlocks: ImplBlock[] = []
     const enums: EnumDecl[] = []
     const consts: ConstDecl[] = []
 
@@ -173,6 +174,8 @@ export class Parser {
         globals.push(this.parseGlobalDecl(true))
       } else if (this.check('struct')) {
         structs.push(this.parseStructDecl())
+      } else if (this.check('impl')) {
+        implBlocks.push(this.parseImplBlock())
       } else if (this.check('enum')) {
         enums.push(this.parseEnumDecl())
       } else if (this.check('const')) {
@@ -182,7 +185,7 @@ export class Parser {
       }
     }
 
-    return { namespace, globals, declarations, structs, enums, consts }
+    return { namespace, globals, declarations, structs, implBlocks, enums, consts }
   }
 
   // -------------------------------------------------------------------------
@@ -240,6 +243,20 @@ export class Parser {
     return this.withLoc({ name, variants }, enumToken)
   }
 
+  private parseImplBlock(): ImplBlock {
+    const implToken = this.expect('impl')
+    const typeName = this.expect('ident').value
+    this.expect('{')
+
+    const methods: FnDecl[] = []
+    while (!this.check('}') && !this.check('eof')) {
+      methods.push(this.parseFnDecl(typeName))
+    }
+
+    this.expect('}')
+    return this.withLoc({ kind: 'impl_block', typeName, methods }, implToken)
+  }
+
   private parseConstDecl(): ConstDecl {
     const constToken = this.expect('const')
     const name = this.expect('ident').value
@@ -266,17 +283,17 @@ export class Parser {
   // Function Declaration
   // -------------------------------------------------------------------------
 
-  private parseFnDecl(): FnDecl {
+  private parseFnDecl(implTypeName?: string): FnDecl {
     const decorators = this.parseDecorators()
 
     const fnToken = this.expect('fn')
     const name = this.expect('ident').value
     this.expect('(')
-    const params = this.parseParams()
+    const params = this.parseParams(implTypeName)
     this.expect(')')
 
     let returnType: TypeNode = { kind: 'named', name: 'void' }
-    if (this.match('->')) {
+    if (this.match('->') || this.match(':')) {
       returnType = this.parseType()
     }
 
@@ -349,15 +366,20 @@ export class Parser {
     return { name, args }
   }
 
-  private parseParams(): Param[] {
+  private parseParams(implTypeName?: string): Param[] {
     const params: Param[] = []
 
     if (!this.check(')')) {
       do {
         const paramToken = this.expect('ident')
         const name = paramToken.value
-        this.expect(':')
-        const type = this.parseType()
+        let type: TypeNode
+        if (implTypeName && params.length === 0 && name === 'self' && !this.check(':')) {
+          type = { kind: 'struct', name: implTypeName }
+        } else {
+          this.expect(':')
+          type = this.parseType()
+        }
         let defaultValue: Expr | undefined
         if (this.match('=')) {
           defaultValue = this.parseExpr()
@@ -908,6 +930,16 @@ export class Parser {
 
   private parsePrimaryExpr(): Expr {
     const token = this.peek()
+
+    if (token.kind === 'ident' && this.peek(1).kind === '::') {
+      const typeToken = this.advance()
+      this.expect('::')
+      const methodToken = this.expect('ident')
+      this.expect('(')
+      const args = this.parseArgs()
+      this.expect(')')
+      return this.withLoc({ kind: 'static_call', type: typeToken.value, method: methodToken.value, args }, typeToken)
+    }
 
     if (token.kind === 'ident' && this.peek(1).kind === '=>') {
       return this.parseSingleParamLambda()
