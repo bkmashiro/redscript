@@ -33,10 +33,25 @@
           "match": "//.*$"
         },
         {
+          "comment": "JSDoc block comment /** ... */",
+          "name": "comment.block.documentation.redscript",
+          "begin": "/\\*\\*",
+          "end": "\\*/",
+          "patterns": [
+            {
+              "name": "storage.type.class.jsdoc",
+              "match": "@(?:param|returns?|type|throws?|example|deprecated|since|see|todo)\\b"
+            },
+            {
+              "name": "variable.other.jsdoc",
+              "match": "\\{[^}]+\\}"
+            }
+          ]
+        },
+        {
           "name": "comment.block.redscript",
           "begin": "/\\*",
-          "end": "\\*/",
-          "name": "comment.block.redscript"
+          "end": "\\*/"
         }
       ]
     },
@@ -160,31 +175,9 @@
     "selectors": {
       "patterns": [
         {
-          "comment": "Selector with filter arguments: @e[type=zombie,limit=1]",
-          "begin": "(@[aesprnAESPRN])(\\[)",
-          "beginCaptures": {
-            "1": { "name": "variable.language.selector.redscript" },
-            "2": { "name": "punctuation.definition.selector.begin.redscript" }
-          },
-          "end": "\\]",
-          "endCaptures": {
-            "0": { "name": "punctuation.definition.selector.end.redscript" }
-          },
-          "patterns": [
-            {
-              "comment": "Key in selector argument",
-              "match": "\\b(type|name|tag|team|scores|nbt|predicate|gamemode|distance|level|x_rotation|y_rotation|x|y|z|dx|dy|dz|limit|sort|advancements|selector)\\b",
-              "name": "support.type.selector-key.redscript"
-            },
-            { "include": "#strings" },
-            { "include": "#numbers" },
-            { "name": "keyword.operator.assignment.redscript", "match": "=" }
-          ]
-        },
-        {
-          "comment": "Bare selector: @s @a @e @p @r",
+          "comment": "Selector with or without filter args: @s @a @e[type=zombie,limit=1]",
           "name": "variable.language.selector.redscript",
-          "match": "@[aesprnAESPRN]\\b"
+          "match": "@[aesprnAESPRN](\\[[^\\]]*\\])?"
         }
       ]
     },
