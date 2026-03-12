@@ -747,8 +747,8 @@ function findVarDecls(document: vscode.TextDocument): VarDecl[] {
 // Struct hover
 // ---------------------------------------------------------------------------
 
-interface StructField { name: string; type: string }
-interface StructDecl  { name: string; fields: StructField[] }
+interface StructField { name: string; type: string; line: number; doc?: string }
+interface StructDecl  { name: string; fields: StructField[]; line: number; doc?: string }
 
 function findStructDecls(document: vscode.TextDocument): StructDecl[] {
   const text = document.getText()
@@ -756,26 +756,78 @@ function findStructDecls(document: vscode.TextDocument): StructDecl[] {
   const structRe = /\bstruct\s+(\w+)\s*\{([^}]*)\}/gs
   const decls: StructDecl[] = []
   let m: RegExpExecArray | null
+
   while ((m = structRe.exec(text)) !== null) {
     const name = m[1]
     const body = m[2]
+    const structLine = document.positionAt(m.index).line
+    const bodyStartOffset = m.index + m[0].indexOf('{') + 1
+
+    // Find JSDoc above struct
+    const structDoc = findJsDocAbove(document, structLine)
+
+    // Parse fields with their line numbers
     const fieldRe = /\b(\w+)\s*:\s*([A-Za-z_][A-Za-z0-9_\[\]]*)/g
     const fields: StructField[] = []
     let fm: RegExpExecArray | null
     while ((fm = fieldRe.exec(body)) !== null) {
-      fields.push({ name: fm[1], type: fm[2] })
+      const fieldOffset = bodyStartOffset + fm.index
+      const fieldLine = document.positionAt(fieldOffset).line
+      // Check for inline comment: field: Type, // comment
+      const lineText = document.lineAt(fieldLine).text
+      const inlineMatch = lineText.match(/\/\/\s*(.+)$/)
+      // Check for JSDoc/comment above field
+      const docAbove = findFieldDocAbove(document, fieldLine)
+      const fieldDoc = inlineMatch?.[1] || docAbove || undefined
+      fields.push({ name: fm[1], type: fm[2], line: fieldLine, doc: fieldDoc })
     }
-    decls.push({ name, fields })
+
+    decls.push({ name, fields, line: structLine, doc: structDoc ?? undefined })
   }
   return decls
+}
+
+/** Find comment above a struct field (single // comment or /** block). */
+function findFieldDocAbove(document: vscode.TextDocument, fieldLine: number): string | null {
+  if (fieldLine === 0) return null
+  const prevLine = document.lineAt(fieldLine - 1).text.trim()
+  // Check for // comment
+  if (prevLine.startsWith('//')) {
+    return prevLine.replace(/^\/\/\s*/, '')
+  }
+  // Check for /** */ on single line
+  const blockMatch = prevLine.match(/\/\*\*?\s*(.*?)\s*\*\//)
+  if (blockMatch) return blockMatch[1]
+  // Multi-line block comment
+  if (prevLine.endsWith('*/')) {
+    return findJsDocAbove(document, fieldLine)
+  }
+  return null
 }
 
 function formatStructHover(decl: StructDecl): vscode.MarkdownString {
   const md = new vscode.MarkdownString('', true)
   const lines = [`struct ${decl.name} {`]
-  for (const f of decl.fields) lines.push(`    ${f.name}: ${f.type},`)
+  for (const f of decl.fields) {
+    const comment = f.doc ? `  // ${f.doc}` : ''
+    lines.push(`    ${f.name}: ${f.type},${comment}`)
+  }
   lines.push('}')
   md.appendCodeblock(lines.join('\n'), 'redscript')
+  if (decl.doc) {
+    md.appendText('\n')
+    md.appendMarkdown(decl.doc)
+  }
+  return md
+}
+
+function formatFieldHover(structName: string, field: StructField): vscode.MarkdownString {
+  const md = new vscode.MarkdownString('', true)
+  md.appendCodeblock(`(field) ${structName}.${field.name}: ${field.type}`, 'redscript')
+  if (field.doc) {
+    md.appendText('\n')
+    md.appendMarkdown(field.doc)
+  }
   return md
 }
 
@@ -864,10 +916,28 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
               if (objStruct) {
                 const field = objStruct.fields.find(f => f.name === word)
                 if (field) {
-                  const md = new vscode.MarkdownString('', true)
-                  md.appendCodeblock(`(field) ${objStruct.name}.${field.name}: ${field.type}`, 'redscript')
-                  return new vscode.Hover(md, range)
+                  return new vscode.Hover(formatFieldHover(objStruct.name, field), range)
                 }
+              }
+            }
+          }
+        }
+
+        // ── Struct literal field key: { phase: value } ──────────
+        // Check if word is followed by ':' (struct literal field)
+        const afterWordTrimmed = afterWord
+        if (afterWordTrimmed.startsWith(':')) {
+          // Find the struct type from context: let x: StructType = { ... }
+          const textBefore = document.getText(new vscode.Range(new vscode.Position(0, 0), position))
+          const letMatch = textBefore.match(/let\s+\w+\s*:\s*(\w+)\s*=\s*\{[^}]*$/)
+          const fnMatch = textBefore.match(/->\s*(\w+)\s*\{[^}]*return\s*\{[^}]*$/)
+          const structType = letMatch?.[1] || fnMatch?.[1]
+          if (structType) {
+            const targetStruct = structDecls.find(s => s.name === structType)
+            if (targetStruct) {
+              const field = targetStruct.fields.find(f => f.name === word)
+              if (field) {
+                return new vscode.Hover(formatFieldHover(targetStruct.name, field), range)
               }
             }
           }

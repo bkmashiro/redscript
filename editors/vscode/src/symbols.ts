@@ -8,6 +8,12 @@ interface DeclInfo {
   range: vscode.Range
 }
 
+interface StructFieldInfo {
+  structName: string
+  fieldName: string
+  fieldRange: vscode.Range
+}
+
 function findDeclarations(doc: vscode.TextDocument): DeclInfo[] {
   const text = doc.getText()
   const decls: DeclInfo[] = []
@@ -22,6 +28,53 @@ function findDeclarations(doc: vscode.TextDocument): DeclInfo[] {
   }
 
   return decls
+}
+
+/** Find all struct definitions and their field positions. */
+function findStructFields(doc: vscode.TextDocument): StructFieldInfo[] {
+  const text = doc.getText()
+  const structRe = /\bstruct\s+(\w+)\s*\{([^}]*)\}/gs
+  const fields: StructFieldInfo[] = []
+  let sm: RegExpExecArray | null
+
+  while ((sm = structRe.exec(text)) !== null) {
+    const structName = sm[1]
+    const bodyStart = sm.index + sm[0].indexOf('{') + 1
+    const body = sm[2]
+    const fieldRe = /\b(\w+)\s*:/g
+    let fm: RegExpExecArray | null
+    while ((fm = fieldRe.exec(body)) !== null) {
+      const fieldStart = bodyStart + fm.index
+      const pos = doc.positionAt(fieldStart)
+      const range = new vscode.Range(pos, doc.positionAt(fieldStart + fm[1].length))
+      fields.push({ structName, fieldName: fm[1], fieldRange: range })
+    }
+  }
+
+  return fields
+}
+
+/** Check if cursor is on a struct literal field key (left side of : in { key: value }). */
+function isStructLiteralField(doc: vscode.TextDocument, position: vscode.Position, word: string): string | null {
+  const line = doc.lineAt(position.line).text
+  const wordEnd = position.character + word.length
+
+  // Check if word is followed by ':' (struct literal field)
+  const afterWord = line.slice(wordEnd).trimStart()
+  if (!afterWord.startsWith(':')) return null
+
+  // Find the struct type from context: let x: StructType = { ... }
+  // Search backwards for "let <name>: <Type> = {"
+  const textBefore = doc.getText(new vscode.Range(new vscode.Position(0, 0), position))
+  // Match: let varname: TypeName = { ... (cursor is somewhere in the braces)
+  const letMatch = textBefore.match(/let\s+\w+\s*:\s*(\w+)\s*=\s*\{[^}]*$/)
+  if (letMatch) return letMatch[1]
+
+  // Also check for: return { ... } after -> TypeName
+  const fnMatch = textBefore.match(/->\s*(\w+)\s*\{[^}]*return\s*\{[^}]*$/)
+  if (fnMatch) return fnMatch[1]
+
+  return null
 }
 
 function findAllOccurrences(doc: vscode.TextDocument, word: string): vscode.Location[] {
@@ -55,6 +108,16 @@ export function registerSymbolProviders(context: vscode.ExtensionContext): void 
         const wordRange = doc.getWordRangeAtPosition(position)
         if (!wordRange) return null
         const word = doc.getText(wordRange)
+
+        // Check if this is a struct literal field key: { fieldName: value }
+        const structType = isStructLiteralField(doc, position, word)
+        if (structType) {
+          const structFields = findStructFields(doc)
+          const field = structFields.find(f => f.structName === structType && f.fieldName === word)
+          if (field) {
+            return new vscode.Location(doc.uri, field.fieldRange)
+          }
+        }
 
         const decls = findDeclarations(doc)
         const decl = decls.find(d => d.name === word)
