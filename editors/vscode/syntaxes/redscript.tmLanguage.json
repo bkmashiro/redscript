@@ -1,0 +1,149 @@
+{
+  "name": "RedScript",
+  "scopeName": "source.redscript",
+  "fileTypes": ["rs"],
+  "patterns": [{ "include": "#root" }],
+  "repository": {
+    "root": {
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#decorators" },
+        { "include": "#keywords" },
+        { "include": "#types" },
+        { "include": "#selectors" },
+        { "include": "#ranges" },
+        { "include": "#strings" },
+        { "include": "#numbers" },
+        { "include": "#builtins" },
+        { "include": "#operators" },
+        { "include": "#punctuation" }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.redscript",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.redscript",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "decorators": {
+      "patterns": [
+        {
+          "name": "entity.name.function.decorator.redscript",
+          "match": "@(tick|on_trigger)(?:\\([^)]*\\))?"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.redscript",
+          "match": "\\b(if|else|while|for|foreach|return|as|at|in)\\b"
+        },
+        {
+          "name": "keyword.declaration.redscript",
+          "match": "\\b(fn|let|struct|trigger|namespace)\\b"
+        },
+        {
+          "name": "constant.language.boolean.redscript",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.redscript",
+          "match": "\\b(int|float|bool|string|void)\\b"
+        }
+      ]
+    },
+    "selectors": {
+      "patterns": [
+        {
+          "name": "variable.language.selector.redscript",
+          "match": "@[aesprnAESPRN](\\[[^\\]]*\\])?"
+        }
+      ]
+    },
+    "ranges": {
+      "patterns": [
+        {
+          "name": "constant.numeric.range.redscript",
+          "match": "(\\d+\\.\\.\\d+|\\d+\\.\\.|\\.\\.\\d+)"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.redscript",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.redscript", "match": "\\\\." }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.redscript",
+          "match": "\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.redscript",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.redscript",
+          "match": "\\b(say|tell|title|give|kill|effect|summon|raw|random|score|scoreboard_get|scoreboard_set|spawn_object)(?=\\s*\\()"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.redscript",
+          "match": "(==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.logical.redscript",
+          "match": "(&&|\\|\\||!)"
+        },
+        {
+          "name": "keyword.operator.assignment.redscript",
+          "match": "(\\+=|-=|\\*=|/=|%=|=)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.redscript",
+          "match": "(\\+|-|\\*|/|%)"
+        },
+        {
+          "name": "keyword.operator.arrow.redscript",
+          "match": "->"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        { "name": "punctuation.terminator.redscript", "match": ";" },
+        { "name": "punctuation.separator.redscript", "match": "," },
+        { "name": "punctuation.accessor.redscript", "match": "\\." },
+        { "name": "punctuation.definition.block.redscript", "match": "[{}]" },
+        { "name": "punctuation.definition.parameters.redscript", "match": "[()]" }
+      ]
+    }
+  }
+}

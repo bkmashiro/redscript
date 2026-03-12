@@ -1,0 +1,77 @@
+{
+  "Function": {
+    "prefix": "fn",
+    "body": ["fn ${1:name}(${2:params}) -> ${3:void} {", "\t${0}", "}"],
+    "description": "Define a function"
+  },
+  "Tick Function": {
+    "prefix": "tickfn",
+    "body": ["@tick", "fn ${1:name}() {", "\t${0}", "}"],
+    "description": "Define a tick function (runs every game tick)"
+  },
+  "Tick Rate Function": {
+    "prefix": "tickratefn",
+    "body": ["@tick(rate=${1:20})", "fn ${1:name}() {", "\t${0}", "}"],
+    "description": "Define a rate-limited tick function"
+  },
+  "Trigger Handler": {
+    "prefix": "trigfn",
+    "body": ["@on_trigger(\"${1:objective}\")", "fn ${2:handler}() {", "\t${0}", "}"],
+    "description": "Define an @on_trigger handler"
+  },
+  "Let Declaration": {
+    "prefix": "let",
+    "body": ["let ${1:name}: ${2:int} = ${0};"],
+    "description": "Declare a variable"
+  },
+  "Foreach": {
+    "prefix": "foreach",
+    "body": ["foreach (${1:entity} in ${2:@e[type=zombie]}) {", "\t${0}", "}"],
+    "description": "Foreach over entity selector"
+  },
+  "Struct": {
+    "prefix": "struct",
+    "body": ["struct ${1:Name} {", "\t${2:field}: ${3:int},", "}"],
+    "description": "Define a struct"
+  },
+  "If": {
+    "prefix": "if",
+    "body": ["if (${1:condition}) {", "\t${0}", "}"],
+    "description": "If statement"
+  },
+  "If Else": {
+    "prefix": "ife",
+    "body": ["if (${1:condition}) {", "\t${0}", "} else {", "\t", "}"],
+    "description": "If-else statement"
+  },
+  "While": {
+    "prefix": "while",
+    "body": ["while (${1:condition}) {", "\t${0}", "}"],
+    "description": "While loop"
+  },
+  "For": {
+    "prefix": "for",
+    "body": ["for (let ${1:i}: int = 0; ${1:i} < ${2:10}; ${1:i} = ${1:i} + 1) {", "\t${0}", "}"],
+    "description": "C-style for loop"
+  },
+  "As Block": {
+    "prefix": "as",
+    "body": ["as (${1:@e[type=player]}) {", "\t${0}", "}"],
+    "description": "Execute as entity selector"
+  },
+  "At Block": {
+    "prefix": "at",
+    "body": ["at (${1:@e[tag=marker]}) {", "\t${0}", "}"],
+    "description": "Execute at entity selector"
+  },
+  "Raw Command": {
+    "prefix": "raw",
+    "body": ["raw(\"${0}\");"],
+    "description": "Raw MC command passthrough"
+  },
+  "Spawn Object": {
+    "prefix": "spawn",
+    "body": ["let ${1:obj} = spawn_object(${2:~}, ${3:~}, ${4:~});"],
+    "description": "Spawn a world object (invisible armor stand)"
+  }
+}

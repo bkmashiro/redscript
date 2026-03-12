@@ -1,0 +1,53 @@
+{
+  "name": "redscript-vscode",
+  "displayName": "RedScript",
+  "description": "Syntax highlighting and language support for RedScript — a compiler targeting Minecraft Java Edition",
+  "version": "0.1.0",
+  "publisher": "bkmashiro",
+  "icon": "icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bkmashiro/redscript"
+  },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages"],
+  "keywords": ["minecraft", "mcfunction", "redscript", "datapack", "compiler"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "redscript",
+        "aliases": ["RedScript", "redscript"],
+        "extensions": [".rs"],
+        "configuration": "./redscript-language-configuration.json"
+      },
+      {
+        "id": "mcfunction",
+        "aliases": ["mcfunction", "Minecraft Function"],
+        "extensions": [".mcfunction"],
+        "configuration": "./mcfunction-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "redscript",
+        "scopeName": "source.redscript",
+        "path": "./syntaxes/redscript.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.mcfunction": "mcfunction"
+        }
+      },
+      {
+        "language": "mcfunction",
+        "scopeName": "source.mcfunction",
+        "path": "./syntaxes/mcfunction.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "redscript",
+        "path": "./snippets/redscript.json"
+      }
+    ]
+  }
+}
