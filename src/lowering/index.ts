@@ -105,7 +105,18 @@ export class Lowering {
     const isTickLoop = fn.decorators.some(d => d.name === 'tick')
     const tickRate = this.getTickRate(fn.decorators)
 
+    // Check for trigger handler
+    const triggerDec = fn.decorators.find(d => d.name === 'on_trigger')
+    const isTriggerHandler = !!triggerDec
+    const triggerName = triggerDec?.args?.trigger
+
     const irFn = this.builder.build(fn.name, fn.params.map(p => `$${p.name}`), isTickLoop)
+
+    // Add trigger metadata if applicable
+    if (isTriggerHandler && triggerName) {
+      irFn.isTriggerHandler = true
+      irFn.triggerName = triggerName
+    }
 
     // Handle tick rate counter if needed
     if (tickRate && tickRate > 1) {

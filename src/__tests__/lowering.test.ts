@@ -256,6 +256,13 @@ describe('Lowering', () => {
       const fn = getFunction(ir, 'game_loop')!
       expect(fn.isTickLoop).toBe(true)
     })
+
+    it('marks @on_trigger function', () => {
+      const ir = compile('@on_trigger("my_trigger") fn handle_trigger() {}')
+      const fn = getFunction(ir, 'handle_trigger')!
+      expect(fn.isTriggerHandler).toBe(true)
+      expect(fn.triggerName).toBe('my_trigger')
+    })
   })
 
   describe('selectors', () => {

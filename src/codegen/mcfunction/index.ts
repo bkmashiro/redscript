@@ -193,6 +193,10 @@ export function generateDatapack(module: IRModule): DatapackFile[] {
   const files: DatapackFile[] = []
   const ns = module.namespace
 
+  // Collect all trigger handlers
+  const triggerHandlers = module.functions.filter(fn => fn.isTriggerHandler && fn.triggerName)
+  const triggerNames = new Set(triggerHandlers.map(fn => fn.triggerName!))
+
   // pack.mcmeta
   files.push({
     path: 'pack.mcmeta',
@@ -209,6 +213,13 @@ export function generateDatapack(module: IRModule): DatapackFile[] {
   for (const g of module.globals) {
     loadLines.push(`scoreboard players set ${varRef(g)} ${OBJ} 0`)
   }
+
+  // Add trigger objectives
+  for (const triggerName of triggerNames) {
+    loadLines.push(`scoreboard objectives add ${triggerName} trigger`)
+    loadLines.push(`scoreboard players enable @a ${triggerName}`)
+  }
+
   files.push({
     path: `data/${ns}/function/load.mcfunction`,
     content: loadLines.join('\n'),
@@ -219,6 +230,44 @@ export function generateDatapack(module: IRModule): DatapackFile[] {
     path: `data/minecraft/tags/function/load.json`,
     content: JSON.stringify({ values: [`${ns}:load`] }, null, 2),
   })
+
+  // Generate trigger dispatch functions
+  for (const triggerName of triggerNames) {
+    const handlers = triggerHandlers.filter(fn => fn.triggerName === triggerName)
+
+    // __trigger_{name}_dispatch.mcfunction
+    const dispatchLines = [
+      `# Trigger dispatch for ${triggerName}`,
+    ]
+    for (const handler of handlers) {
+      dispatchLines.push(`function ${ns}:${handler.name}`)
+    }
+    dispatchLines.push(`scoreboard players set @s ${triggerName} 0`)
+    dispatchLines.push(`scoreboard players enable @s ${triggerName}`)
+
+    files.push({
+      path: `data/${ns}/function/__trigger_${triggerName}_dispatch.mcfunction`,
+      content: dispatchLines.join('\n'),
+    })
+  }
+
+  // __trigger_check.mcfunction - checks all triggers
+  if (triggerNames.size > 0) {
+    const checkLines = ['# Trigger check - runs every tick']
+    for (const triggerName of triggerNames) {
+      checkLines.push(`execute as @a[scores={${triggerName}=1..}] run function ${ns}:__trigger_${triggerName}_dispatch`)
+    }
+    files.push({
+      path: `data/${ns}/function/__trigger_check.mcfunction`,
+      content: checkLines.join('\n'),
+    })
+  }
+
+  // Collect all tick functions
+  const tickFunctions: string[] = []
+  if (triggerNames.size > 0) {
+    tickFunctions.push(`${ns}:__trigger_check`)
+  }
 
   // Generate each function
   for (const fn of module.functions) {
@@ -253,13 +302,18 @@ export function generateDatapack(module: IRModule): DatapackFile[] {
       files.push({ path: filePath, content: lines.join('\n') })
     }
 
-    // Tick loop → register in tick tag
+    // Tick loop → collect for tick tag
     if (fn.isTickLoop) {
-      files.push({
-        path: `data/minecraft/tags/function/tick.json`,
-        content: JSON.stringify({ values: [`${ns}:${fn.name}`] }, null, 2),
-      })
+      tickFunctions.push(`${ns}:${fn.name}`)
     }
+  }
+
+  // Generate tick tag with all tick functions
+  if (tickFunctions.length > 0) {
+    files.push({
+      path: `data/minecraft/tags/function/tick.json`,
+      content: JSON.stringify({ values: tickFunctions }, null, 2),
+    })
   }
 
   return files

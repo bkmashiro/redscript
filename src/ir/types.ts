@@ -93,6 +93,8 @@ export interface IRFunction {
   locals: string[]         // all local variable names
   blocks: IRBlock[]        // blocks[0] = entry block
   isTickLoop?: boolean     // true → Repeat command block (runs every tick)
+  isTriggerHandler?: boolean  // true → handles a trigger event
+  triggerName?: string        // the trigger objective name
 }
 
 // ---------------------------------------------------------------------------

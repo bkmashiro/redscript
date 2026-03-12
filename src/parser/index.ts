@@ -144,7 +144,7 @@ export class Parser {
   }
 
   private parseDecoratorValue(value: string): Decorator {
-    // Parse @tick or @tick(rate=20) or @on_trigger
+    // Parse @tick or @tick(rate=20) or @on_trigger("name")
     const match = value.match(/^@(\w+)(?:\(([^)]*)\))?$/)
     if (!match) {
       throw new Error(`Invalid decorator: ${value}`)
@@ -158,6 +158,17 @@ export class Parser {
     }
 
     const args: Decorator['args'] = {}
+
+    // Handle @on_trigger("name") format - just a string literal
+    if (name === 'on_trigger') {
+      const strMatch = argsStr.match(/^"([^"]*)"$/)
+      if (strMatch) {
+        args.trigger = strMatch[1]
+        return { name, args }
+      }
+    }
+
+    // Handle key=value format (e.g., rate=20)
     for (const part of argsStr.split(',')) {
       const [key, val] = part.split('=').map(s => s.trim())
       if (key === 'rate') {

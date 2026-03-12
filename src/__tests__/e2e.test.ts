@@ -455,4 +455,105 @@ fn test() {
       expect(getFunction(files, 'test')).toBeDefined()
     })
   })
+
+  describe('Trigger system', () => {
+    it('generates trigger objective in load.mcfunction', () => {
+      const source = `
+@on_trigger("claim_reward")
+fn handle_claim() {
+    say("Claimed!");
+}
+`
+      const files = compile(source)
+      const load = files.find(f => f.path.includes('load.mcfunction'))
+      expect(load?.content).toContain('scoreboard objectives add claim_reward trigger')
+      expect(load?.content).toContain('scoreboard players enable @a claim_reward')
+    })
+
+    it('generates trigger check function', () => {
+      const source = `
+@on_trigger("claim_reward")
+fn handle_claim() {
+    say("Claimed!");
+}
+`
+      const files = compile(source)
+      const check = files.find(f => f.path.includes('__trigger_check.mcfunction'))
+      expect(check).toBeDefined()
+      expect(check?.content).toContain('execute as @a[scores={claim_reward=1..}]')
+      expect(check?.content).toContain('run function test:__trigger_claim_reward_dispatch')
+    })
+
+    it('generates trigger dispatch function', () => {
+      const source = `
+@on_trigger("claim_reward")
+fn handle_claim() {
+    say("Claimed!");
+}
+`
+      const files = compile(source)
+      const dispatch = files.find(f => f.path.includes('__trigger_claim_reward_dispatch.mcfunction'))
+      expect(dispatch).toBeDefined()
+      expect(dispatch?.content).toContain('function test:handle_claim')
+      expect(dispatch?.content).toContain('scoreboard players set @s claim_reward 0')
+      expect(dispatch?.content).toContain('scoreboard players enable @s claim_reward')
+    })
+
+    it('registers trigger check in tick tag', () => {
+      const source = `
+@on_trigger("claim_reward")
+fn handle_claim() {
+    say("Claimed!");
+}
+`
+      const files = compile(source)
+      const tickTag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
+      expect(tickTag).toBeDefined()
+      const content = JSON.parse(tickTag!.content)
+      expect(content.values).toContain('test:__trigger_check')
+    })
+
+    it('combines tick functions and trigger check in tick tag', () => {
+      const source = `
+@tick
+fn game_loop() {
+    say("tick");
+}
+
+@on_trigger("claim_reward")
+fn handle_claim() {
+    say("Claimed!");
+}
+`
+      const files = compile(source)
+      const tickTag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
+      expect(tickTag).toBeDefined()
+      const content = JSON.parse(tickTag!.content)
+      expect(content.values).toContain('test:__trigger_check')
+      expect(content.values).toContain('test:game_loop')
+    })
+  })
+
+  describe('Entity tag methods', () => {
+    it('compiles entity.tag()', () => {
+      const source = 'fn test() { @s.tag("boss"); }'
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toContain('tag @s add boss')
+    })
+
+    it('compiles entity.untag()', () => {
+      const source = 'fn test() { @s.untag("boss"); }'
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toContain('tag @s remove boss')
+    })
+
+    it('compiles entity.has_tag()', () => {
+      const source = 'fn test() { let x: bool = @s.has_tag("boss"); }'
+      const files = compile(source)
+      const fn = getFunction(files, 'test')
+      expect(fn).toContain('if entity @s[tag=boss]')
+    })
+  })
 })
