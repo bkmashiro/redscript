@@ -339,6 +339,10 @@ export class TypeChecker {
       case 'mc_name':
       case 'range_lit':
       case 'selector':
+      case 'byte_lit':
+      case 'short_lit':
+      case 'long_lit':
+      case 'double_lit':
         break
     }
   }
@@ -481,7 +485,7 @@ export class TypeChecker {
           // Entity marker (void) - allow all members
           if (varType.name !== 'void') {
             // Only warn for primitive types
-            if (['int', 'bool', 'float', 'string'].includes(varType.name)) {
+            if (['int', 'bool', 'float', 'string', 'byte', 'short', 'long', 'double'].includes(varType.name)) {
               this.report(
                 `Cannot access member '${expr.field}' on ${this.typeToString(varType)}`,
                 expr
@@ -546,6 +550,14 @@ export class TypeChecker {
         return { kind: 'named', name: 'int' }
       case 'float_lit':
         return { kind: 'named', name: 'float' }
+      case 'byte_lit':
+        return { kind: 'named', name: 'byte' }
+      case 'short_lit':
+        return { kind: 'named', name: 'short' }
+      case 'long_lit':
+        return { kind: 'named', name: 'long' }
+      case 'double_lit':
+        return { kind: 'named', name: 'double' }
       case 'bool_lit':
         return { kind: 'named', name: 'bool' }
       case 'str_lit':
