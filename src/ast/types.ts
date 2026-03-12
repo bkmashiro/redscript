@@ -104,6 +104,10 @@ export type AssignOp = '=' | '+=' | '-=' | '*=' | '/=' | '%='
 export type Expr =
   | { kind: 'int_lit';    value: number; span?: Span }
   | { kind: 'float_lit';  value: number; span?: Span }
+  | { kind: 'byte_lit';   value: number; span?: Span }
+  | { kind: 'short_lit';  value: number; span?: Span }
+  | { kind: 'long_lit';   value: number; span?: Span }
+  | { kind: 'double_lit'; value: number; span?: Span }
   | { kind: 'bool_lit';   value: boolean; span?: Span }
   | { kind: 'str_lit';    value: string; span?: Span }
   | { kind: 'mc_name';   value: string; span?: Span }  // #health → "health" (MC identifier)
