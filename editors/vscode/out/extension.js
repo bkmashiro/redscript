@@ -246,6 +246,18 @@ var require_lexer = __commonJS({
           }
           return;
         }
+        if (char === "/" && this.peek() === "*") {
+          this.advance();
+          while (!this.isAtEnd()) {
+            if (this.peek() === "*" && this.peek(1) === "/") {
+              this.advance();
+              this.advance();
+              break;
+            }
+            this.advance();
+          }
+          return;
+        }
         if (char === "-" && this.peek() === ">") {
           this.advance();
           this.addToken("->", "->", startLine, startCol);
