@@ -1523,4 +1523,52 @@ fn tick_game() {
       expect(fn).toContain('gamerule keepInventory')
     })
   })
+
+  describe('NBT literals', () => {
+    it('compiles byte literal', () => {
+      const files = compile('fn test() -> int { let x: byte = 20b; return x; }', 'nbt')
+      const fn = getFunction(files, 'test')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('20')
+    })
+
+    it('compiles short literal', () => {
+      const files = compile('fn test() -> int { let x: short = 100s; return x; }', 'nbt')
+      const fn = getFunction(files, 'test')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('100')
+    })
+
+    it('compiles long literal', () => {
+      const files = compile('fn test() -> int { let x: long = 1000L; return x; }', 'nbt')
+      const fn = getFunction(files, 'test')
+      expect(fn).toBeDefined()
+      expect(fn).toContain('1000')
+    })
+
+    it('compiles double literal', () => {
+      const files = compile('fn test() -> int { let x: double = 3.14d; return x; }', 'nbt')
+      const fn = getFunction(files, 'test')
+      expect(fn).toBeDefined()
+    })
+
+    it('compiles float literal with f suffix', () => {
+      const files = compile('fn test() -> int { let x: float = 2.5f; return x; }', 'nbt')
+      const fn = getFunction(files, 'test')
+      expect(fn).toBeDefined()
+    })
+
+    it('type-checks NBT literals without errors', () => {
+      const errors = typeCheck(`
+        fn test() {
+          let a = 20b;
+          let b = 100s;
+          let c = 1000L;
+          let d = 3.14d;
+          let e = 2.5f;
+        }
+      `)
+      expect(errors).toHaveLength(0)
+    })
+  })
 })
