@@ -556,4 +556,109 @@ fn handle_claim() {
       expect(fn).toContain('if entity @s[tag=boss]')
     })
   })
+
+  describe('Real program: zombie_game.rs', () => {
+    const source = `
+// A zombie survival game logic
+// Kills nearby zombies and tracks score
+
+@tick(rate=20)
+fn check_zombies() {
+    foreach (z in @e[type=zombie, distance=..10]) {
+        kill(z);
+    }
+}
+
+@tick(rate=100)
+fn announce() {
+    say("Zombie check complete");
+}
+
+fn reward_player() {
+    give(@s, "minecraft:diamond", 1);
+    title(@s, "Zombie Slayer!");
+}
+
+@on_trigger("claim_reward")
+fn handle_claim() {
+    reward_player();
+}
+`
+
+    it('compiles without errors', () => {
+      const files = compile(source, 'zombie')
+      expect(files.length).toBeGreaterThan(0)
+    })
+
+    it('generates check_zombies with foreach loop', () => {
+      const files = compile(source, 'zombie')
+      // With tick rate, the foreach is in tick_body block
+      const allContent = files
+        .filter(f => f.path.includes('check_zombies'))
+        .map(f => f.content)
+        .join('\n')
+      expect(allContent).toContain('execute as @e[type=zombie,distance=..10]')
+    })
+
+    it('generates foreach sub-function with kill @s', () => {
+      const files = compile(source, 'zombie')
+      const subFn = files.find(f => 
+        f.path.includes('check_zombies/foreach_0')
+      )
+      expect(subFn).toBeDefined()
+      expect(subFn?.content).toContain('kill @s')
+    })
+
+    it('generates announce function with say command', () => {
+      const files = compile(source, 'zombie')
+      const allContent = files
+        .filter(f => f.path.includes('announce'))
+        .map(f => f.content)
+        .join('\n')
+      expect(allContent).toContain('say Zombie check complete')
+    })
+
+    it('generates reward_player with give and title', () => {
+      const files = compile(source, 'zombie')
+      const fn = getFunction(files, 'reward_player')
+      expect(fn).toContain('give @s minecraft:diamond 1')
+      expect(fn).toContain('title @s title')
+      expect(fn).toContain('Zombie Slayer!')
+    })
+
+    it('registers tick functions in tick tag', () => {
+      const files = compile(source, 'zombie')
+      const tickTag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
+      expect(tickTag).toBeDefined()
+      const content = JSON.parse(tickTag!.content)
+      expect(content.values).toContain('zombie:check_zombies')
+      expect(content.values).toContain('zombie:announce')
+    })
+
+    it('generates trigger infrastructure for claim_reward', () => {
+      const files = compile(source, 'zombie')
+      
+      // Check load.mcfunction has trigger objective
+      const load = files.find(f => f.path.includes('load.mcfunction'))
+      expect(load?.content).toContain('scoreboard objectives add claim_reward trigger')
+      
+      // Check dispatch function exists
+      const dispatch = files.find(f => 
+        f.path.includes('__trigger_claim_reward_dispatch')
+      )
+      expect(dispatch).toBeDefined()
+      expect(dispatch?.content).toContain('function zombie:handle_claim')
+      
+      // Check trigger_check is registered
+      const tickTag = files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
+      const content = JSON.parse(tickTag!.content)
+      expect(content.values).toContain('zombie:__trigger_check')
+    })
+
+    it('generates function call from handle_claim to reward_player', () => {
+      const files = compile(source, 'zombie')
+      const fn = getFunction(files, 'handle_claim')
+      expect(fn).toContain('function zombie:reward_player')
+    })
+  })
 })
