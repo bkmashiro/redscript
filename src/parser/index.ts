@@ -438,13 +438,29 @@ export class Parser {
     while (true) {
       // Function call
       if (this.match('(')) {
-        if (expr.kind !== 'ident') {
-          this.error('Expected function name before (')
+        if (expr.kind === 'ident') {
+          const args = this.parseArgs()
+          this.expect(')')
+          expr = { kind: 'call', fn: expr.name, args }
+          continue
         }
-        const args = this.parseArgs()
-        this.expect(')')
-        expr = { kind: 'call', fn: expr.name, args }
-        continue
+        // Member call: entity.tag("name") → __entity_tag(entity, "name")
+        if (expr.kind === 'member') {
+          const methodMap: Record<string, string> = {
+            'tag': '__entity_tag',
+            'untag': '__entity_untag',
+            'has_tag': '__entity_has_tag',
+          }
+          const internalFn = methodMap[expr.field]
+          if (internalFn) {
+            const args = this.parseArgs()
+            this.expect(')')
+            expr = { kind: 'call', fn: internalFn, args: [expr.obj, ...args] }
+            continue
+          }
+          this.error(`Unknown method '${expr.field}'`)
+        }
+        this.error('Expected function name before (')
       }
 
       // Member access

@@ -289,6 +289,40 @@ describe('Lowering', () => {
     })
   })
 
+  describe('entity tag methods', () => {
+    it('lowers entity.tag()', () => {
+      const ir = compile('fn test() { @s.tag("boss"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('tag @s add boss')
+    })
+
+    it('lowers entity.untag()', () => {
+      const ir = compile('fn test() { @s.untag("boss"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('tag @s remove boss')
+    })
+
+    it('lowers entity.has_tag() and returns temp var', () => {
+      const ir = compile('fn test() { let x: bool = @s.has_tag("boss"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('execute store result score') && cmd.includes('if entity @s[tag=boss]')
+      )).toBe(true)
+    })
+
+    it('lowers entity.tag() on selector with filters', () => {
+      const ir = compile('fn test() { @e[type=zombie].tag("marked"); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds.some(cmd =>
+        cmd.includes('tag @e[type=zombie] add marked')
+      )).toBe(true)
+    })
+  })
+
   describe('complex programs', () => {
     it('compiles add function correctly', () => {
       const source = `

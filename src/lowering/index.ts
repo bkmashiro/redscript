@@ -526,6 +526,29 @@ export class Lowering {
       return this.lowerBuiltinCall(expr.fn, expr.args)
     }
 
+    // Handle entity methods: __entity_tag, __entity_untag, __entity_has_tag
+    if (expr.fn === '__entity_tag') {
+      const entity = this.exprToString(expr.args[0])
+      const tagName = this.exprToString(expr.args[1])
+      this.builder.emitRaw(`tag ${entity} add ${tagName}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (expr.fn === '__entity_untag') {
+      const entity = this.exprToString(expr.args[0])
+      const tagName = this.exprToString(expr.args[1])
+      this.builder.emitRaw(`tag ${entity} remove ${tagName}`)
+      return { kind: 'const', value: 0 }
+    }
+
+    if (expr.fn === '__entity_has_tag') {
+      const entity = this.exprToString(expr.args[0])
+      const tagName = this.exprToString(expr.args[1])
+      const dst = this.builder.freshTemp()
+      this.builder.emitRaw(`execute store result score ${dst} rs if entity ${entity}[tag=${tagName}]`)
+      return { kind: 'var', name: dst }
+    }
+
     // Regular function call
     const args: Operand[] = expr.args.map(arg => this.lowerExpr(arg))
     const dst = this.builder.freshTemp()
