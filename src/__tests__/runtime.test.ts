@@ -57,7 +57,7 @@ fn compute() {
     runtime.load()
     runtime.execFunction('compute')
 
-    expect(runtime.getScore('math', 'result')).toBe(11)
+    expect(runtime.getScore('math', 'runtime.result')).toBe(11)
   })
 
   it('captures say, announce, actionbar, and title output in the chat log', () => {
@@ -135,8 +135,8 @@ fn arrays() {
     runtime.load()
     runtime.execFunction('arrays')
 
-    expect(runtime.getScore('arrays', 'len')).toBe(1)
-    expect(runtime.getScore('arrays', 'last')).toBe(9)
+    expect(runtime.getScore('arrays', 'runtime.len')).toBe(1)
+    expect(runtime.getScore('arrays', 'runtime.last')).toBe(9)
     expect(runtime.getStorage('rs:heap.arr')).toEqual([4])
   })
 
@@ -177,7 +177,7 @@ fn pulse() {
     runtime.load()
     runtime.ticks(10)
 
-    expect(runtime.getScore('pulse', 'count')).toBe(2)
+    expect(runtime.getScore('pulse', 'runtime.count')).toBe(2)
   })
 
   it('executes only the matching match arm', () => {
@@ -234,7 +234,7 @@ fn test() {
     runtime.load()
     runtime.execFunction('test')
 
-    expect(runtime.getScore('lambda', 'direct')).toBe(10)
+    expect(runtime.getScore('lambda', 'runtime.direct')).toBe(10)
   })
 
   it('executes lambdas passed as callback arguments', () => {
@@ -252,7 +252,7 @@ fn test() {
     runtime.load()
     runtime.execFunction('test')
 
-    expect(runtime.getScore('lambda', 'callback')).toBe(15)
+    expect(runtime.getScore('lambda', 'runtime.callback')).toBe(15)
   })
 
   it('executes block-body lambdas', () => {
@@ -270,7 +270,7 @@ fn test() {
     runtime.load()
     runtime.execFunction('test')
 
-    expect(runtime.getScore('lambda', 'block')).toBe(11)
+    expect(runtime.getScore('lambda', 'runtime.block')).toBe(11)
   })
 
   it('executes immediately-invoked expression-body lambdas', () => {
@@ -284,6 +284,6 @@ fn test() {
     runtime.load()
     runtime.execFunction('test')
 
-    expect(runtime.getScore('lambda', 'iife')).toBe(10)
+    expect(runtime.getScore('lambda', 'runtime.iife')).toBe(10)
   })
 })

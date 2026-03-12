@@ -309,12 +309,12 @@ fn test() {
 }
 `
       const fn = getFunction(compile(source), 'test')!
-      expect(fn).toContain('scoreboard objectives setdisplay sidebar kills')
-      expect(fn).toContain('scoreboard objectives setdisplay list coins')
-      expect(fn).toContain('scoreboard objectives setdisplay belowName hp')
+      expect(fn).toContain('scoreboard objectives setdisplay sidebar test.kills')
+      expect(fn).toContain('scoreboard objectives setdisplay list test.coins')
+      expect(fn).toContain('scoreboard objectives setdisplay belowName test.hp')
       expect(fn).toContain('scoreboard objectives setdisplay sidebar')
-      expect(fn).toContain('scoreboard objectives add kills playerKillCount "Kill Count"')
-      expect(fn).toContain('scoreboard objectives remove kills')
+      expect(fn).toContain('scoreboard objectives add test.kills playerKillCount "Kill Count"')
+      expect(fn).toContain('scoreboard objectives remove test.kills')
     })
 
     it('compiles bossbar builtins', () => {
@@ -536,7 +536,7 @@ fn test() -> int {
       const fn = getFunction(files, 'test')
       expect(fn).toBeDefined()
       expect(fn).toContain('execute store result score')
-      expect(fn).toContain('scoreboard players get PlayerName kill_count')
+      expect(fn).toContain('scoreboard players get PlayerName test.kill_count')
     })
 
     it('compiles scoreboard_get with @s selector', () => {
@@ -549,7 +549,7 @@ fn test() -> int {
       const files = compile(source)
       const fn = getFunction(files, 'test')
       expect(fn).toBeDefined()
-      expect(fn).toContain('scoreboard players get @s kill_count')
+      expect(fn).toContain('scoreboard players get @s test.kill_count')
     })
 
     it('compiles scoreboard_set with constant value', () => {
@@ -561,7 +561,7 @@ fn test() {
       const files = compile(source)
       const fn = getFunction(files, 'test')
       expect(fn).toBeDefined()
-      expect(fn).toContain('scoreboard players set PlayerName kill_count 100')
+      expect(fn).toContain('scoreboard players set PlayerName test.kill_count 100')
     })
 
     it('compiles scoreboard_set with variable value', () => {
@@ -576,7 +576,7 @@ fn test() {
         .filter(f => f.path.includes('test'))
         .map(f => f.content)
         .join('\n')
-      expect(allContent).toContain('execute store result score @s score')
+      expect(allContent).toContain('execute store result score @s test.score')
     })
 
     it('compiles score() as expression', () => {
@@ -604,7 +604,7 @@ fn double_score() -> int {
       const files = compile(source)
       const fn = getFunction(files, 'double_score')
       expect(fn).toBeDefined()
-      expect(fn).toContain('scoreboard players get @s points')
+      expect(fn).toContain('scoreboard players get @s test.points')
     })
   })
 
@@ -1481,10 +1481,10 @@ fn heal(amount: int) {
 
   describe('backward compat: string objective still works', () => {
     const source = `fn test() { let x: int = scoreboard_get(@s, "kills"); }`
-    it('compiles "kills" string to bare objective name', () => {
+    it('prefixes plain string objectives with the active namespace', () => {
       const files = compile(source, 'compat')
       const fn = getFunction(files, 'test')
-      expect(fn).toContain('scoreboard players get @s kills')
+      expect(fn).toContain('scoreboard players get @s compat.kills')
     })
   })
 

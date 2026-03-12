@@ -40,6 +40,23 @@ describe('CLI API', () => {
       expect(result.ir.functions.filter(fn => fn.name === 'from_a')).toHaveLength(1)
       expect(result.ir.functions.filter(fn => fn.name === 'from_b')).toHaveLength(1)
     })
+
+    it('uses rs-prefixed scoreboard objectives for imported stdlib files', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-stdlib-'))
+      const stdlibDir = path.join(tempDir, 'src', 'stdlib')
+      const stdlibPath = path.join(stdlibDir, 'timer.mcrs')
+      const mainPath = path.join(tempDir, 'main.mcrs')
+
+      fs.mkdirSync(stdlibDir, { recursive: true })
+      fs.writeFileSync(stdlibPath, 'fn tick_timer() { scoreboard_set("#rs", "timer_ticks", 1); }\n')
+      fs.writeFileSync(mainPath, 'import "./src/stdlib/timer.mcrs"\n\nfn main() { tick_timer(); }\n')
+
+      const source = fs.readFileSync(mainPath, 'utf-8')
+      const result = compile(source, { namespace: 'mygame', filePath: mainPath })
+      const tickTimer = result.files.find(file => file.path.endsWith('/tick_timer.mcfunction'))
+
+      expect(tickTimer?.content).toContain('scoreboard players set #rs rs.timer_ticks 1')
+    })
   })
 
   describe('compile()', () => {

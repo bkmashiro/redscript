@@ -28,12 +28,12 @@ fn turret_tick() {
     const parent = getFileContent(result.files, 'data/test/function/turret_tick.mcfunction')
     const loopBody = getFileContent(result.files, 'data/test/function/turret_tick/foreach_0.mcfunction')
 
-    const hoistedRead = 'execute store result score $_0 rs run scoreboard players get config turret_range'
+    const hoistedRead = 'execute store result score $_0 rs run scoreboard players get config test.turret_range'
     const executeCall = 'execute as @e[tag=turret] run function test:turret_tick/foreach_0'
 
     expect(parent).toContain(hoistedRead)
     expect(parent.indexOf(hoistedRead)).toBeLessThan(parent.indexOf(executeCall))
-    expect(loopBody).not.toContain('scoreboard players get config turret_range')
+    expect(loopBody).not.toContain('scoreboard players get config test.turret_range')
   })
 })
 
@@ -51,7 +51,7 @@ fn read_twice() {
 
     const result = compile(source, { namespace: 'test' })
     const fn = getFileContent(result.files, 'data/test/function/read_twice.mcfunction')
-    const readMatches = fn.match(/scoreboard players get @s coins/g) ?? []
+    const readMatches = fn.match(/scoreboard players get @s test\.coins/g) ?? []
 
     expect(readMatches).toHaveLength(1)
     expect(fn).toContain('scoreboard players operation $_1 rs = $_0 rs')

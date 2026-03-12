@@ -39,6 +39,17 @@ export interface CompileResult {
   error?: DiagnosticError
 }
 
+export interface SourceRange {
+  startLine: number
+  endLine: number
+  filePath: string
+}
+
+export interface PreprocessedSource {
+  source: string
+  ranges: SourceRange[]
+}
+
 const IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/
 
 interface PreprocessOptions {
@@ -46,7 +57,19 @@ interface PreprocessOptions {
   seen?: Set<string>
 }
 
-export function preprocessSource(source: string, options: PreprocessOptions = {}): string {
+function countLines(source: string): number {
+  return source === '' ? 0 : source.split('\n').length
+}
+
+function offsetRanges(ranges: SourceRange[], lineOffset: number): SourceRange[] {
+  return ranges.map(range => ({
+    startLine: range.startLine + lineOffset,
+    endLine: range.endLine + lineOffset,
+    filePath: range.filePath,
+  }))
+}
+
+export function preprocessSourceWithMetadata(source: string, options: PreprocessOptions = {}): PreprocessedSource {
   const { filePath } = options
   const seen = options.seen ?? new Set<string>()
 
@@ -55,7 +78,7 @@ export function preprocessSource(source: string, options: PreprocessOptions = {}
   }
 
   const lines = source.split('\n')
-  const imports: string[] = []
+  const imports: PreprocessedSource[] = []
   const bodyLines: string[] = []
   let parsingHeader = true
 
@@ -90,7 +113,7 @@ export function preprocessSource(source: string, options: PreprocessOptions = {}
           )
         }
 
-        imports.push(preprocessSource(importedSource, { filePath: importPath, seen }))
+        imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen }))
       }
       continue
     }
@@ -104,7 +127,31 @@ export function preprocessSource(source: string, options: PreprocessOptions = {}
     bodyLines.push(line)
   }
 
-  return [...imports, bodyLines.join('\n')].filter(Boolean).join('\n')
+  const body = bodyLines.join('\n')
+  const parts = [...imports.map(entry => entry.source), body].filter(Boolean)
+  const combined = parts.join('\n')
+
+  const ranges: SourceRange[] = []
+  let lineOffset = 0
+
+  for (const entry of imports) {
+    ranges.push(...offsetRanges(entry.ranges, lineOffset))
+    lineOffset += countLines(entry.source)
+  }
+
+  if (filePath && body) {
+    ranges.push({
+      startLine: lineOffset + 1,
+      endLine: lineOffset + countLines(body),
+      filePath: path.resolve(filePath),
+    })
+  }
+
+  return { source: combined, ranges }
+}
+
+export function preprocessSource(source: string, options: PreprocessOptions = {}): string {
+  return preprocessSourceWithMetadata(source, options).source
 }
 
 // ---------------------------------------------------------------------------
@@ -116,7 +163,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   let sourceLines = source.split('\n')
 
   try {
-    const preprocessedSource = preprocessSource(source, { filePath })
+    const preprocessed = preprocessSourceWithMetadata(source, { filePath })
+    const preprocessedSource = preprocessed.source
     sourceLines = preprocessedSource.split('\n')
 
     // Lexing
@@ -126,7 +174,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const ast = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
 
     // Lowering
-    const ir = new Lowering(namespace).lower(ast)
+    const ir = new Lowering(namespace, preprocessed.ranges).lower(ast)
 
     // Optimization
     const optimized: IRModule = shouldOptimize

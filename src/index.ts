@@ -19,7 +19,7 @@ import {
   generateDatapackWithStats,
   DatapackFile,
 } from './codegen/mcfunction'
-import { preprocessSource } from './compile'
+import { preprocessSource, preprocessSourceWithMetadata } from './compile'
 import type { IRModule } from './ir/types'
 import type { Program } from './ast/types'
 import type { DiagnosticError } from './diagnostics'
@@ -54,7 +54,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const shouldOptimize = options.optimize ?? true
   const shouldTypeCheck = options.typeCheck ?? true
   const filePath = options.filePath
-  const preprocessedSource = preprocessSource(source, { filePath })
+  const preprocessed = preprocessSourceWithMetadata(source, { filePath })
+  const preprocessedSource = preprocessed.source
 
   // Lexing
   const tokens = new Lexer(preprocessedSource, filePath).tokenize()
@@ -70,7 +71,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   }
 
   // Lowering to IR
-  const lowering = new Lowering(namespace)
+  const lowering = new Lowering(namespace, preprocessed.ranges)
   const ir = lowering.lower(ast)
 
   let optimizedIR: IRModule = ir

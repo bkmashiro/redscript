@@ -88,6 +88,43 @@ fn test() -> int {
       const call = getInstructions(specialized!).find(i => i.op === 'call') as any
       expect(call.fn).toBe('__lambda_0')
     })
+
+    it('lowers impl methods to prefixed function names', () => {
+      const ir = compile(`
+struct Timer { duration: int }
+
+impl Timer {
+  fn elapsed(self) -> int {
+    return self.duration;
+  }
+}
+`)
+      expect(getFunction(ir, 'Timer_elapsed')).toBeDefined()
+    })
+
+    it('lowers impl instance and static method calls', () => {
+      const ir = compile(`
+struct Timer { duration: int }
+
+impl Timer {
+  fn new(duration: int) -> Timer {
+    return { duration: duration };
+  }
+
+  fn elapsed(self) -> int {
+    return self.duration;
+  }
+}
+
+fn test() -> int {
+  let timer: Timer = Timer::new(10);
+  return timer.elapsed();
+}
+`)
+      const fn = getFunction(ir, 'test')!
+      const calls = getInstructions(fn).filter((instr): instr is IRInstr & { op: 'call' } => instr.op === 'call')
+      expect(calls.map(call => call.fn)).toEqual(['Timer_new', 'Timer_elapsed'])
+    })
   })
 
   describe('let statements', () => {
@@ -630,12 +667,12 @@ fn test() {
 `)
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds).toContain('scoreboard objectives setdisplay sidebar kills')
-      expect(rawCmds).toContain('scoreboard objectives setdisplay list coins')
-      expect(rawCmds).toContain('scoreboard objectives setdisplay belowName hp')
+      expect(rawCmds).toContain('scoreboard objectives setdisplay sidebar test.kills')
+      expect(rawCmds).toContain('scoreboard objectives setdisplay list test.coins')
+      expect(rawCmds).toContain('scoreboard objectives setdisplay belowName test.hp')
       expect(rawCmds).toContain('scoreboard objectives setdisplay sidebar')
-      expect(rawCmds).toContain('scoreboard objectives add kills playerKillCount "Kill Count"')
-      expect(rawCmds).toContain('scoreboard objectives remove kills')
+      expect(rawCmds).toContain('scoreboard objectives add test.kills playerKillCount "Kill Count"')
+      expect(rawCmds).toContain('scoreboard objectives remove test.kills')
     })
 
     it('lowers bossbar management builtins', () => {
@@ -763,7 +800,7 @@ fn test() {
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
       expect(rawCmds.some(cmd =>
-        cmd.includes('run scoreboard players get @s score')
+        cmd.includes('run scoreboard players get @s test.score')
       )).toBe(true)
     })
 
@@ -771,7 +808,14 @@ fn test() {
       const ir = compile('fn test() { scoreboard_set(@a, "kills", 0); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds).toContain('scoreboard players set @a kills 0')
+      expect(rawCmds).toContain('scoreboard players set @a test.kills 0')
+    })
+
+    it('skips prefixing raw mc_name objectives', () => {
+      const ir = compile('fn test() { scoreboard_set(@s, #health, 100); }')
+      const fn = getFunction(ir, 'test')!
+      const rawCmds = getRawCommands(fn)
+      expect(rawCmds).toContain('scoreboard players set @s health 100')
     })
 
     it('warns on quoted selectors in scoreboard_get', () => {
@@ -779,7 +823,7 @@ fn test() {
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
       expect(rawCmds.some(cmd =>
-        cmd.includes('run scoreboard players get @s score')
+        cmd.includes('run scoreboard players get @s test.score')
       )).toBe(true)
       expect(warnings).toContainEqual(expect.objectContaining({
         code: 'W_QUOTED_SELECTOR',
@@ -792,7 +836,7 @@ fn test() {
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
       expect(rawCmds.some(cmd =>
-        cmd.includes('run scoreboard players get #global total')
+        cmd.includes('run scoreboard players get #global test.total')
       )).toBe(true)
       expect(warnings).toHaveLength(0)
     })

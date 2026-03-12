@@ -9,11 +9,13 @@ import type { IRBuilder } from '../ir/builder'
 import { buildModule } from '../ir/builder'
 import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
+import type { SourceRange } from '../compile'
 import type {
   Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, GlobalDecl, Program, RangeExpr, Span, Stmt,
   StructDecl, TypeNode, ExecuteSubcommand, BlockPosExpr, CoordComponent, EntityTypeName
 } from '../ast/types'
 import type { GlobalVar } from '../ir/types'
+import * as path from 'path'
 
 // ---------------------------------------------------------------------------
 // Builtin Functions
@@ -173,10 +175,12 @@ function emitBlockPos(pos: BlockPosExpr): string {
 
 export class Lowering {
   private namespace: string
+  private readonly sourceRanges: SourceRange[]
   private functions: IRFunction[] = []
   private globals: GlobalVar[] = []
   private globalNames: Map<string, { mutable: boolean }> = new Map()
   private fnDecls: Map<string, FnDecl> = new Map()
+  private implMethods: Map<string, Map<string, { fn: FnDecl; loweredName: string }>> = new Map()
   private specializedFunctions: Map<string, string> = new Map()
   private currentFn: string = ''
   private foreachCounter: number = 0
@@ -204,8 +208,9 @@ export class Lowering {
   // World object counter for unique tags
   private worldObjCounter: number = 0
 
-  constructor(namespace: string) {
+  constructor(namespace: string, sourceRanges: SourceRange[] = []) {
     this.namespace = namespace
+    this.sourceRanges = sourceRanges
     LoweringBuilder.resetTempCounter()
   }
 
@@ -247,8 +252,29 @@ export class Lowering {
       this.functionDefaults.set(fn.name, fn.params.map(param => param.default))
     }
 
+    for (const implBlock of program.implBlocks ?? []) {
+      let methods = this.implMethods.get(implBlock.typeName)
+      if (!methods) {
+        methods = new Map()
+        this.implMethods.set(implBlock.typeName, methods)
+      }
+
+      for (const method of implBlock.methods) {
+        const loweredName = `${implBlock.typeName}_${method.name}`
+        methods.set(method.name, { fn: method, loweredName })
+        this.fnDecls.set(loweredName, method)
+        this.functionDefaults.set(loweredName, method.params.map(param => param.default))
+      }
+    }
+
     for (const fn of program.declarations) {
       this.lowerFn(fn)
+    }
+
+    for (const implBlock of program.implBlocks ?? []) {
+      for (const method of implBlock.methods) {
+        this.lowerFn(method, { name: `${implBlock.typeName}_${method.name}` })
+      }
     }
 
     return buildModule(this.namespace, this.functions, this.globals)
@@ -1196,6 +1222,9 @@ export class Lowering {
       case 'call':
         return this.lowerCallExpr(expr)
 
+      case 'static_call':
+        return this.lowerStaticCallExpr(expr)
+
       case 'invoke':
         return this.lowerInvokeExpr(expr)
 
@@ -1543,6 +1572,11 @@ export class Lowering {
       return this.emitDirectFunctionCall(callbackTarget, expr.args)
     }
 
+    const implMethod = this.resolveInstanceMethod(expr)
+    if (implMethod) {
+      return this.emitMethodCall(implMethod.loweredName, implMethod.fn, expr.args)
+    }
+
     // Regular function call
     const fnDecl = this.fnDecls.get(expr.fn)
     const defaultArgs = this.functionDefaults.get(expr.fn) ?? []
@@ -1579,6 +1613,12 @@ export class Lowering {
     }
 
     return this.emitDirectFunctionCall(expr.fn, fullArgs)
+  }
+
+  private lowerStaticCallExpr(expr: Extract<Expr, { kind: 'static_call' }>): Operand {
+    const method = this.implMethods.get(expr.type)?.get(expr.method)
+    const targetFn = method?.loweredName ?? `${expr.type}_${expr.method}`
+    return this.emitMethodCall(targetFn, method?.fn, expr.args)
   }
 
   private lowerInvokeExpr(expr: Extract<Expr, { kind: 'invoke' }>): Operand {
@@ -1630,6 +1670,19 @@ export class Lowering {
     const dst = this.builder.freshTemp()
     this.builder.emitCall(fn, loweredArgs, dst)
     return { kind: 'var', name: dst }
+  }
+
+  private emitMethodCall(fn: string, fnDecl: FnDecl | undefined, args: Expr[]): Operand {
+    const defaultArgs = this.functionDefaults.get(fn) ?? fnDecl?.params.map(param => param.default) ?? []
+    const fullArgs = [...args]
+    for (let i = fullArgs.length; i < defaultArgs.length; i++) {
+      const defaultExpr = defaultArgs[i]
+      if (!defaultExpr) {
+        break
+      }
+      fullArgs.push(defaultExpr)
+    }
+    return this.emitDirectFunctionCall(fn, fullArgs)
   }
 
   private resolveFunctionRefExpr(expr: Expr): string | null {
@@ -1747,7 +1800,7 @@ export class Lowering {
     if (name === 'scoreboard_get' || name === 'score') {
       const dst = this.builder.freshTemp()
       const player = this.exprToTargetString(args[0])
-      const objective = this.exprToString(args[1])
+      const objective = this.exprToScoreboardObjective(args[1], callSpan)
       this.builder.emitRaw(`execute store result score ${dst} rs run scoreboard players get ${player} ${objective}`)
       return { kind: 'var', name: dst }
     }
@@ -1755,7 +1808,7 @@ export class Lowering {
     // Special case: scoreboard_set — write to vanilla MC scoreboard
     if (name === 'scoreboard_set') {
       const player = this.exprToTargetString(args[0])
-      const objective = this.exprToString(args[1])
+      const objective = this.exprToScoreboardObjective(args[1], callSpan)
       const value = this.lowerExpr(args[2])
       if (value.kind === 'const') {
         this.builder.emitRaw(`scoreboard players set ${player} ${objective} ${value.value}`)
@@ -1769,7 +1822,7 @@ export class Lowering {
 
     if (name === 'scoreboard_display') {
       const slot = this.exprToString(args[0])
-      const objective = this.exprToString(args[1])
+      const objective = this.exprToScoreboardObjective(args[1], callSpan)
       this.builder.emitRaw(`scoreboard objectives setdisplay ${slot} ${objective}`)
       return { kind: 'const', value: 0 }
     }
@@ -1781,7 +1834,7 @@ export class Lowering {
     }
 
     if (name === 'scoreboard_add_objective') {
-      const objective = this.exprToString(args[0])
+      const objective = this.exprToScoreboardObjective(args[0], callSpan)
       const criteria = this.exprToString(args[1])
       const displayName = args[2] ? ` ${this.exprToQuotedString(args[2])}` : ''
       this.builder.emitRaw(`scoreboard objectives add ${objective} ${criteria}${displayName}`)
@@ -1789,7 +1842,7 @@ export class Lowering {
     }
 
     if (name === 'scoreboard_remove_objective') {
-      const objective = this.exprToString(args[0])
+      const objective = this.exprToScoreboardObjective(args[0], callSpan)
       this.builder.emitRaw(`scoreboard objectives remove ${objective}`)
       return { kind: 'const', value: 0 }
     }
@@ -2267,6 +2320,39 @@ export class Lowering {
     return option === 'displayName' || option === 'prefix' || option === 'suffix'
   }
 
+  private exprToScoreboardObjective(expr: Expr, span?: Span): string {
+    if (expr.kind === 'mc_name') {
+      return expr.value
+    }
+
+    const objective = this.exprToString(expr)
+    if (objective.startsWith('#') || objective.includes('.')) {
+      return objective.startsWith('#') ? objective.slice(1) : objective
+    }
+
+    return `${this.getObjectiveNamespace(span)}.${objective}`
+  }
+
+  private getObjectiveNamespace(span?: Span): string {
+    const filePath = this.filePathForSpan(span)
+    if (!filePath) {
+      return this.namespace
+    }
+
+    const normalized = path.normalize(filePath)
+    const stdlibSegment = `${path.sep}src${path.sep}stdlib${path.sep}`
+    return normalized.includes(stdlibSegment) ? 'rs' : this.namespace
+  }
+
+  private filePathForSpan(span?: Span): string | undefined {
+    if (!span) {
+      return undefined
+    }
+
+    const line = span.line
+    return this.sourceRanges.find(range => line >= range.startLine && line <= range.endLine)?.filePath
+  }
+
   private lowerCoordinateBuiltin(name: string, args: Expr[]): string | null {
     const pos0 = args[0] ? this.resolveBlockPosExpr(args[0]) : null
     const pos1 = args[1] ? this.resolveBlockPosExpr(args[1]) : null
@@ -2383,7 +2469,11 @@ export class Lowering {
       }
     }
     if (expr.kind === 'call') {
-      return this.fnDecls.get(this.resolveFunctionRefByName(expr.fn) ?? expr.fn)?.returnType
+      const resolved = this.resolveFunctionRefByName(expr.fn) ?? this.resolveInstanceMethod(expr)?.loweredName ?? expr.fn
+      return this.fnDecls.get(resolved)?.returnType
+    }
+    if (expr.kind === 'static_call') {
+      return this.implMethods.get(expr.type)?.get(expr.method)?.fn.returnType
     }
     if (expr.kind === 'invoke') {
       const calleeType = this.inferExprType(expr.callee)
@@ -2410,6 +2500,25 @@ export class Lowering {
       return { kind: 'enum', name: expr.obj.name }
     }
     return undefined
+  }
+
+  private resolveInstanceMethod(expr: Extract<Expr, { kind: 'call' }>): { fn: FnDecl; loweredName: string } | null {
+    const receiver = expr.args[0]
+    if (!receiver) {
+      return null
+    }
+
+    const receiverType = this.inferExprType(receiver)
+    if (receiverType?.kind !== 'struct') {
+      return null
+    }
+
+    const method = this.implMethods.get(receiverType.name)?.get(expr.fn)
+    if (!method || method.fn.params[0]?.name !== 'self') {
+      return null
+    }
+
+    return method
   }
 
   private normalizeType(type: TypeNode): TypeNode {
