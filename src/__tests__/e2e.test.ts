@@ -1818,3 +1818,33 @@ describe('Global variables', () => {
     expect(() => compile(src, 'constbad')).toThrow()
   })
 })
+
+describe('@load decorator', () => {
+  it('calls @load function from __load.mcfunction', () => {
+    const src = `@load fn init() { say("Datapack loaded!"); }`
+    const files = compile(src, 'loadtest')
+    const load = getFunction(files, '__load')
+    expect(load).toContain('function loadtest:init')
+  })
+
+  it('calls multiple @load functions in order', () => {
+    const src = `
+      @load fn setup() { say("setup"); }
+      @load fn init() { say("init"); }
+    `
+    const files = compile(src, 'loadtest')
+    const load = getFunction(files, '__load')!
+    const setupIdx = load.indexOf('function loadtest:setup')
+    const initIdx = load.indexOf('function loadtest:init')
+    expect(setupIdx).toBeGreaterThan(-1)
+    expect(initIdx).toBeGreaterThan(-1)
+    expect(setupIdx).toBeLessThan(initIdx)
+  })
+
+  it('generates the @load function body normally', () => {
+    const src = `@load fn init() { say("hi"); }`
+    const files = compile(src, 'loadtest')
+    const fn = getFunction(files, 'init')
+    expect(fn).toContain('say hi')
+  })
+})

@@ -334,6 +334,11 @@ export class Lowering {
       }
     }
 
+    // Check for @load decorator
+    if (fn.decorators.some(d => d.name === 'load')) {
+      irFn.isLoadInit = true
+    }
+
     // Handle tick rate counter if needed
     if (tickRate && tickRate > 1) {
       this.wrapWithTickRate(irFn, tickRate)
