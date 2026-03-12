@@ -10,9 +10,10 @@ import { buildModule } from '../ir/builder'
 import type { IRFunction, IRModule, Operand, BinOp, CmpOp } from '../ir/types'
 import { DiagnosticError } from '../diagnostics'
 import type {
-  Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, Program, RangeExpr, Span, Stmt,
+  Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, GlobalDecl, Program, RangeExpr, Span, Stmt,
   StructDecl, TypeNode, ExecuteSubcommand, BlockPosExpr, CoordComponent
 } from '../ast/types'
+import type { GlobalVar } from '../ir/types'
 
 // ---------------------------------------------------------------------------
 // Builtin Functions
@@ -154,7 +155,8 @@ function emitBlockPos(pos: BlockPosExpr): string {
 export class Lowering {
   private namespace: string
   private functions: IRFunction[] = []
-  private globals: string[] = []
+  private globals: GlobalVar[] = []
+  private globalNames: Map<string, { mutable: boolean }> = new Map()
   private fnDecls: Map<string, FnDecl> = new Map()
   private specializedFunctions: Map<string, string> = new Map()
   private currentFn: string = ''
@@ -211,6 +213,14 @@ export class Lowering {
     for (const constDecl of program.consts ?? []) {
       this.constValues.set(constDecl.name, constDecl.value)
       this.varTypes.set(constDecl.name, this.normalizeType(constDecl.type))
+    }
+
+    // Process global variable declarations (top-level let)
+    for (const g of program.globals ?? []) {
+      this.globalNames.set(g.name, { mutable: g.mutable })
+      this.varTypes.set(g.name, this.normalizeType(g.type))
+      const initValue = g.init.kind === 'int_lit' ? g.init.value : 0
+      this.globals.push({ name: `$${g.name}`, init: initValue })
     }
 
     for (const fn of program.declarations) {
@@ -340,7 +350,7 @@ export class Lowering {
   private wrapWithTickRate(fn: IRFunction, rate: number): void {
     // Add tick counter logic to entry block
     const counterVar = `$__tick_${fn.name}`
-    this.globals.push(counterVar)
+    this.globals.push({ name: counterVar, init: 0 })
 
     // Prepend counter logic to entry block
     const entry = fn.blocks[0]
@@ -1278,6 +1288,15 @@ export class Lowering {
   }
 
   private lowerAssignExpr(expr: Extract<Expr, { kind: 'assign' }>): Operand {
+    // Check for const reassignment (both compile-time consts and immutable globals)
+    if (this.constValues.has(expr.target)) {
+      throw new DiagnosticError('LoweringError', `Cannot assign to constant '${expr.target}'`, getSpan(expr) ?? { line: 1, col: 1 })
+    }
+    const globalInfo = this.globalNames.get(expr.target)
+    if (globalInfo && !globalInfo.mutable) {
+      throw new DiagnosticError('LoweringError', `Cannot assign to constant '${expr.target}'`, getSpan(expr) ?? { line: 1, col: 1 })
+    }
+
     const blockPosValue = this.resolveBlockPosExpr(expr.value)
     if (blockPosValue) {
       this.blockPosVars.set(expr.target, blockPosValue)

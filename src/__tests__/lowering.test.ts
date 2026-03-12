@@ -959,4 +959,49 @@ fn count_down() {
       expect(bodyBlock).toBeDefined()
     })
   })
+
+  describe('Global variables', () => {
+    it('registers global in IR globals with init value', () => {
+      const ir = compile('let x: int = 42;\nfn test() { say("hi"); }')
+      expect(ir.globals).toContainEqual({ name: '$x', init: 42 })
+    })
+
+    it('reads global variable in function body', () => {
+      const ir = compile('let count: int = 0;\nfn test() { let y: int = count; }')
+      const fn = getFunction(ir, 'test')!
+      const instrs = getInstructions(fn)
+      expect(instrs.some(i =>
+        i.op === 'assign' && i.dst === '$y' && (i.src as any).kind === 'var' && (i.src as any).name === '$count'
+      )).toBe(true)
+    })
+
+    it('writes global variable in function body', () => {
+      const ir = compile('let count: int = 0;\nfn inc() { count = 5; }')
+      const fn = getFunction(ir, 'inc')!
+      const instrs = getInstructions(fn)
+      expect(instrs.some(i =>
+        i.op === 'assign' && i.dst === '$count' && (i.src as any).kind === 'const' && (i.src as any).value === 5
+      )).toBe(true)
+    })
+
+    it('compound assignment on global variable', () => {
+      const ir = compile('let count: int = 0;\nfn inc() { count += 1; }')
+      const fn = getFunction(ir, 'inc')!
+      const instrs = getInstructions(fn)
+      expect(instrs.some(i =>
+        i.op === 'binop' && (i.lhs as any).name === '$count' && i.bop === '+' && (i.rhs as any).value === 1
+      )).toBe(true)
+    })
+
+    it('const cannot be reassigned', () => {
+      const src = 'const X: int = 5;\nfn bad() { X = 10; }'
+      expect(() => compile(src)).toThrow(/Cannot assign to constant/)
+    })
+
+    it('multiple globals with different init values', () => {
+      const ir = compile('let a: int = 10;\nlet b: int = 20;\nfn test() { a = b; }')
+      expect(ir.globals).toContainEqual({ name: '$a', init: 10 })
+      expect(ir.globals).toContainEqual({ name: '$b', init: 20 })
+    })
+  })
 })

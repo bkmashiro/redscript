@@ -1794,3 +1794,27 @@ describe('Method syntax sugar', () => {
     expect(fn).toContain('data remove storage rs:sets __set_0[{value:a}]')
   })
 })
+
+describe('Global variables', () => {
+  it('initializes global in __load', () => {
+    const src = `let x: int = 42;\nfn test() { say("hi"); }`
+    const files = compile(src, 'globaltest')
+    const load = getFunction(files, '__load')
+    expect(load).toContain('scoreboard players set $x rs 42')
+  })
+
+  it('reads and writes global in function', () => {
+    const src = `let count: int = 0;\nfn inc() { count = count + 1; }`
+    const files = compile(src, 'globalrw')
+    const fn = getFunction(files, 'inc')
+    expect(fn).toBeDefined()
+    // Global should be initialized in __load
+    const load = getFunction(files, '__load')
+    expect(load).toContain('scoreboard players set $count rs 0')
+  })
+
+  it('const cannot be reassigned', () => {
+    const src = `const X: int = 5;\nfn bad() { X = 10; }`
+    expect(() => compile(src, 'constbad')).toThrow()
+  })
+})

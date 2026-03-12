@@ -112,8 +112,13 @@ export interface IRFunction {
 // Module — top-level compilation unit
 // ---------------------------------------------------------------------------
 
+export interface GlobalVar {
+  name: string
+  init: number
+}
+
 export interface IRModule {
   namespace: string        // datapack namespace (e.g. "mypack")
   functions: IRFunction[]
-  globals: string[]        // global variable names
+  globals: GlobalVar[]     // global variable declarations with init values
 }

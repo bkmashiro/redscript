@@ -109,6 +109,8 @@ export class IRBuilder {
   }
 }
 
-export function buildModule(namespace: string, fns: IRFunction[], globals: string[] = []): IRModule {
+import type { GlobalVar } from './types'
+
+export function buildModule(namespace: string, fns: IRFunction[], globals: GlobalVar[] = []): IRModule {
   return { namespace, functions: fns, globals }
 }
