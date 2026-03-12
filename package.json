@@ -10,7 +10,8 @@
     "build": "tsc",
     "dev": "tsc -w",
     "test": "jest",
-    "cli": "ts-node src/cli.ts"
+    "cli": "ts-node src/cli.ts",
+    "validate-mc": "jest src/__tests__/mc-syntax.test.ts --verbose"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
