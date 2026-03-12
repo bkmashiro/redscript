@@ -235,12 +235,22 @@ export interface ConstDecl {
   span?: Span
 }
 
+export interface GlobalDecl {
+  kind: 'global'
+  name: string
+  type: TypeNode
+  init: Expr
+  mutable: boolean  // let = true, const = false
+  span?: Span
+}
+
 // ---------------------------------------------------------------------------
 // Program (Top-Level)
 // ---------------------------------------------------------------------------
 
 export interface Program {
   namespace: string    // Inferred from filename or `namespace mypack;`
+  globals: GlobalDecl[]
   declarations: FnDecl[]
   structs: StructDecl[]
   enums: EnumDecl[]

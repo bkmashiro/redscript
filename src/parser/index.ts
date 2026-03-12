@@ -7,7 +7,7 @@
 
 import { Lexer, type Token, type TokenKind } from '../lexer'
 import type {
-  Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, LiteralExpr, Param,
+  Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, GlobalDecl, LiteralExpr, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Span, Stmt, TypeNode, AssignOp,
   StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr,
   CoordComponent, LambdaParam
@@ -132,6 +132,7 @@ export class Parser {
 
   parse(defaultNamespace = 'redscript'): Program {
     let namespace = defaultNamespace
+    const globals: GlobalDecl[] = []
     const declarations: FnDecl[] = []
     const structs: StructDecl[] = []
     const enums: EnumDecl[] = []
@@ -147,7 +148,9 @@ export class Parser {
 
     // Parse struct and function declarations
     while (!this.check('eof')) {
-      if (this.check('struct')) {
+      if (this.check('let')) {
+        globals.push(this.parseGlobalDecl(true))
+      } else if (this.check('struct')) {
         structs.push(this.parseStructDecl())
       } else if (this.check('enum')) {
         enums.push(this.parseEnumDecl())
@@ -158,7 +161,7 @@ export class Parser {
       }
     }
 
-    return { namespace, declarations, structs, enums, consts }
+    return { namespace, globals, declarations, structs, enums, consts }
   }
 
   // -------------------------------------------------------------------------
@@ -225,6 +228,17 @@ export class Parser {
     const value = this.parseLiteralExpr()
     this.match(';')
     return this.withLoc({ name, type, value }, constToken)
+  }
+
+  private parseGlobalDecl(mutable: boolean): GlobalDecl {
+    const token = this.advance() // consume 'let'
+    const name = this.expect('ident').value
+    this.expect(':')
+    const type = this.parseType()
+    this.expect('=')
+    const init = this.parseExpr()
+    this.expect(';')
+    return this.withLoc({ kind: 'global', name, type, init, mutable }, token)
   }
 
   // -------------------------------------------------------------------------

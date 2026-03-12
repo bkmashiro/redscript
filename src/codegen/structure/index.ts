@@ -89,7 +89,7 @@ function collectCommandEntriesFromModule(module: IRModule): CommandEntry[] {
   const triggerNames = new Set(triggerHandlers.map(fn => fn.triggerName!))
   const loadCommands = [
     `scoreboard objectives add ${OBJ} dummy`,
-    ...module.globals.map(globalName => `scoreboard players set ${varRef(globalName)} ${OBJ} 0`),
+    ...module.globals.map(g => `scoreboard players set ${varRef(g.name)} ${OBJ} ${g.init}`),
     ...Array.from(triggerNames).flatMap(triggerName => [
       `scoreboard objectives add ${triggerName} trigger`,
       `scoreboard players enable @a ${triggerName}`,

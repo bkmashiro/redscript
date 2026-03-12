@@ -293,7 +293,7 @@ export function generateDatapackWithStats(
     `scoreboard objectives add ${OBJ} dummy`,
   ]
   for (const g of module.globals) {
-    loadLines.push(`scoreboard players set ${varRef(g)} ${OBJ} 0`)
+    loadLines.push(`scoreboard players set ${varRef(g.name)} ${OBJ} ${g.init}`)
   }
 
   // Add trigger objectives

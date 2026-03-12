@@ -11,7 +11,7 @@ describe('generateDatapack', () => {
   })
 
   it('generates __load.mcfunction with objective setup', () => {
-    const mod: IRModule = { namespace: 'mypack', functions: [], globals: ['counter'] }
+    const mod: IRModule = { namespace: 'mypack', functions: [], globals: [{ name: 'counter', init: 0 }] }
     const files = generateDatapack(mod)
     const load = files.find(f => f.path.includes('__load.mcfunction'))
     expect(load?.content).toContain('scoreboard objectives add rs dummy')
