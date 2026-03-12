@@ -928,6 +928,10 @@ export class Lowering {
         // Strings are handled inline in builtins
         return { kind: 'const', value: 0 } // Placeholder
 
+      case 'mc_name':
+        // MC names (#health, #red) treated as string constants
+        return { kind: 'const', value: 0 } // Handled inline in exprToString
+
       case 'str_interp':
         // Interpolated strings are handled inline in message builtins.
         return { kind: 'const', value: 0 }
@@ -1833,6 +1837,8 @@ export class Lowering {
         return expr.value ? '1' : '0'
       case 'str_lit':
         return expr.value
+      case 'mc_name':
+        return expr.value   // #health → "health" (no quotes, used as bare MC name)
       case 'str_interp':
         return this.buildRichTextJson(expr)
       case 'blockpos':

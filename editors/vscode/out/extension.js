@@ -360,6 +360,19 @@ var require_lexer = __commonJS({
           this.scanString(startLine, startCol);
           return;
         }
+        if (char === "#") {
+          const nextChar = this.peek();
+          if (/[a-zA-Z_]/.test(nextChar)) {
+            let name = "#";
+            while (/[a-zA-Z0-9_]/.test(this.peek())) {
+              name += this.advance();
+            }
+            this.addToken("mc_name", name, startLine, startCol);
+            return;
+          }
+          this.error(`Unexpected character '#'`, startLine, startCol);
+          return;
+        }
         if (/[0-9]/.test(char)) {
           this.scanNumber(char, startLine, startCol);
           return;
@@ -1160,6 +1173,10 @@ var require_parser = __commonJS({
           this.advance();
           return this.parseStringExpr(token);
         }
+        if (token.kind === "mc_name") {
+          this.advance();
+          return this.withLoc({ kind: "mc_name", value: token.value.slice(1) }, token);
+        }
         if (token.kind === "true") {
           this.advance();
           return this.withLoc({ kind: "bool_lit", value: true }, token);
@@ -1861,6 +1878,7 @@ var require_typechecker = __commonJS({
           case "float_lit":
           case "bool_lit":
           case "str_lit":
+          case "mc_name":
           case "range_lit":
           case "selector":
             break;
@@ -2015,6 +2033,7 @@ var require_typechecker = __commonJS({
           case "bool_lit":
             return { kind: "named", name: "bool" };
           case "str_lit":
+          case "mc_name":
             return { kind: "named", name: "string" };
           case "str_interp":
             for (const part of expr.parts) {
@@ -2989,6 +3008,9 @@ var require_lowering = __commonJS({
           case "str_lit":
             return { kind: "const", value: 0 };
           // Placeholder
+          case "mc_name":
+            return { kind: "const", value: 0 };
+          // Handled inline in exprToString
           case "str_interp":
             return { kind: "const", value: 0 };
           case "range_lit":
@@ -3721,6 +3743,9 @@ var require_lowering = __commonJS({
             return expr.value ? "1" : "0";
           case "str_lit":
             return expr.value;
+          case "mc_name":
+            return expr.value;
+          // #health → "health" (no quotes, used as bare MC name)
           case "str_interp":
             return this.buildRichTextJson(expr);
           case "blockpos":

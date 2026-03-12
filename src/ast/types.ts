@@ -106,6 +106,7 @@ export type Expr =
   | { kind: 'float_lit';  value: number; span?: Span }
   | { kind: 'bool_lit';   value: boolean; span?: Span }
   | { kind: 'str_lit';    value: string; span?: Span }
+  | { kind: 'mc_name';   value: string; span?: Span }  // #health → "health" (MC identifier)
   | { kind: 'str_interp'; parts: Array<string | Expr>; span?: Span }
   | { kind: 'range_lit';  range: RangeExpr; span?: Span }
   | (BlockPosExpr & { span?: Span })

@@ -336,6 +336,7 @@ export class TypeChecker {
       case 'float_lit':
       case 'bool_lit':
       case 'str_lit':
+      case 'mc_name':
       case 'range_lit':
       case 'selector':
         break
@@ -548,6 +549,7 @@ export class TypeChecker {
       case 'bool_lit':
         return { kind: 'named', name: 'bool' }
       case 'str_lit':
+      case 'mc_name':
         return { kind: 'named', name: 'string' }
       case 'str_interp':
         for (const part of expr.parts) {

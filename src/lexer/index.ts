@@ -42,6 +42,7 @@ export type TokenKind =
   | ',' | ';' | ':' | '::' | '->' | '=>' | '.'
   // Special
   | 'ident'         // Variable/function names
+  | 'mc_name'       // #objective, #tag, #team — unquoted MC identifier
   | 'raw_cmd'       // raw("...") content
   | 'eof'
 
@@ -271,6 +272,22 @@ export class Lexer {
     // String literal
     if (char === '"') {
       this.scanString(startLine, startCol)
+      return
+    }
+
+    // MC name literal: #ident (e.g. #health, #red, #hasKey)
+    if (char === '#') {
+      const nextChar = this.peek()
+      if (/[a-zA-Z_]/.test(nextChar)) {
+        let name = '#'
+        while (/[a-zA-Z0-9_]/.test(this.peek())) {
+          name += this.advance()
+        }
+        this.addToken('mc_name', name, startLine, startCol)
+        return
+      }
+      // Lone # (not followed by ident) — treat as unknown char error
+      this.error(`Unexpected character '#'`, startLine, startCol)
       return
     }
 
