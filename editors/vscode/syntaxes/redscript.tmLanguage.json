@@ -11,14 +11,14 @@
         { "include": "#string-interpolation" },
         { "include": "#strings" },
         { "include": "#keywords" },
-        { "include": "#types" },
         { "include": "#selectors" },
+        { "include": "#const-definition" },
+        { "include": "#constants-upper" },
         { "include": "#fn-definition" },
         { "include": "#struct-definition" },
         { "include": "#enum-definition" },
-        { "include": "#const-definition" },
         { "include": "#fn-call" },
-        { "include": "#constants-upper" },
+        { "include": "#types" },
         { "include": "#numbers" },
         { "include": "#blockpos" },
         { "include": "#operators" },
@@ -150,9 +150,9 @@
           }
         },
         {
-          "comment": "User-defined types (PascalCase)",
+          "comment": "User-defined types (PascalCase: starts uppercase, second char lowercase)",
           "name": "entity.name.type.redscript",
-          "match": "\\b[A-Z][A-Za-z0-9]*\\b"
+          "match": "\\b[A-Z][a-z][A-Za-z0-9]*\\b"
         }
       ]
     },
@@ -242,9 +242,9 @@
     },
 
     "constants-upper": {
-      "comment": "UPPER_CASE identifiers used as constants",
+      "comment": "SCREAMING_SNAKE_CASE constants and 2+ char ALL_CAPS (e.g. GAME_TIME, MAX, PI)",
       "name": "variable.other.constant.redscript",
-      "match": "\\b[A-Z][A-Z0-9_]{2,}\\b"
+      "match": "\\b(?:[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+|[A-Z]{2,})\\b"
     },
 
     "numbers": {
