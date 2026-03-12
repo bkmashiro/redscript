@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import { registerHoverProvider } from './hover'
+import { registerSymbolProviders } from './symbols'
 // The compiler is bundled directly into this extension by esbuild.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { compile: _compile } = require('redscript') as {
@@ -60,6 +61,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Register hover documentation
   registerHoverProvider(context)
+
+  // Register Go-to-Definition and Find-References
+  registerSymbolProviders(context)
 
   // Status bar item to show compilation state
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10)
