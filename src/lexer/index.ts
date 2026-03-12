@@ -29,6 +29,10 @@ export type TokenKind =
   // Literals
   | 'int_lit'       // 42
   | 'float_lit'     // 3.14
+  | 'byte_lit'      // 20b
+  | 'short_lit'     // 100s
+  | 'long_lit'      // 1000L
+  | 'double_lit'    // 3.14d
   | 'string_lit'    // "hello"
   | 'range_lit'     // ..5  1..  1..10
   // Operators
@@ -452,7 +456,47 @@ export class Lexer {
       while (/[0-9]/.test(this.peek())) {
         value += this.advance()
       }
+      // Check for NBT float/double suffix
+      const floatSuffix = this.peek().toLowerCase()
+      if (floatSuffix === 'f') {
+        value += this.advance()
+        this.addToken('float_lit', value, startLine, startCol)
+        return
+      }
+      if (floatSuffix === 'd') {
+        value += this.advance()
+        this.addToken('double_lit', value, startLine, startCol)
+        return
+      }
       this.addToken('float_lit', value, startLine, startCol)
+      return
+    }
+
+    // Check for NBT integer suffix (b, s, L/l, f, d)
+    const intSuffix = this.peek().toLowerCase()
+    if (intSuffix === 'b' && !/[a-zA-Z_0-9]/.test(this.peek(1))) {
+      value += this.advance()
+      this.addToken('byte_lit', value, startLine, startCol)
+      return
+    }
+    if (intSuffix === 's' && !/[a-zA-Z_0-9]/.test(this.peek(1))) {
+      value += this.advance()
+      this.addToken('short_lit', value, startLine, startCol)
+      return
+    }
+    if (intSuffix === 'l' && !/[a-zA-Z_0-9]/.test(this.peek(1))) {
+      value += this.advance()
+      this.addToken('long_lit', value, startLine, startCol)
+      return
+    }
+    if (intSuffix === 'f' && !/[a-zA-Z_0-9]/.test(this.peek(1))) {
+      value += this.advance()
+      this.addToken('float_lit', value, startLine, startCol)
+      return
+    }
+    if (intSuffix === 'd' && !/[a-zA-Z_0-9]/.test(this.peek(1))) {
+      value += this.advance()
+      this.addToken('double_lit', value, startLine, startCol)
       return
     }
 
