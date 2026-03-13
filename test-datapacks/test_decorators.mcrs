@@ -1,0 +1,81 @@
+// ===== Decorator Tests =====
+// 测试: @tick, @load, @on_trigger, @keep
+
+let tick_counter: int = 0;
+let tick_test_running: bool = false;
+
+// === Test 1: @load ===
+@load fn on_load() {
+    say("[PASS] @load: fired on datapack load/reload");
+}
+
+// === Test 2: @tick ===
+@tick fn on_tick() {
+    if (!tick_test_running) { return; }
+    
+    tick_counter = tick_counter + 1;
+    
+    if (tick_counter % 20 == 0) {
+        say(f"[INFO] @tick: {tick_counter} ticks elapsed");
+    }
+    
+    if (tick_counter >= 100) {
+        tick_test_running = false;
+        say("[PASS] @tick: completed 100 ticks (5 seconds)");
+    }
+}
+
+@keep fn start_tick_test() {
+    tick_counter = 0;
+    tick_test_running = true;
+    say("[INFO] @tick test started, will run for 5 seconds...");
+}
+
+@keep fn stop_tick_test() {
+    tick_test_running = false;
+    say(f"[INFO] @tick test stopped at {tick_counter} ticks");
+}
+
+// === Test 3: @tick with rate ===
+let slow_tick_count: int = 0;
+let slow_tick_running: bool = false;
+
+@tick(rate=20) fn every_second() {
+    if (!slow_tick_running) { return; }
+    
+    slow_tick_count = slow_tick_count + 1;
+    say(f"[INFO] @tick(rate=20): second #{slow_tick_count}");
+    
+    if (slow_tick_count >= 5) {
+        slow_tick_running = false;
+        say("[PASS] @tick(rate=20): completed 5 seconds");
+    }
+}
+
+@keep fn start_slow_tick_test() {
+    slow_tick_count = 0;
+    slow_tick_running = true;
+    say("[INFO] @tick(rate=20) test started...");
+}
+
+// === Test 4: @on_trigger ===
+@on_trigger(#test_trigger)
+fn on_test_trigger() {
+    say("[PASS] @on_trigger: triggered by scoreboard!");
+}
+
+@keep fn setup_trigger_test() {
+    raw("scoreboard objectives add test_trigger trigger");
+    say("[INFO] Trigger test setup. Run:");
+    say("  /trigger test_trigger");
+}
+
+// === Run info ===
+@keep fn run_decorator_tests() {
+    say("=== Decorator Tests ===");
+    say("[INFO] @load already fired on reload");
+    say("[INFO] Run tests:");
+    say("  /function test_decorators:start_tick_test");
+    say("  /function test_decorators:start_slow_tick_test");
+    say("  /function test_decorators:setup_trigger_test");
+}

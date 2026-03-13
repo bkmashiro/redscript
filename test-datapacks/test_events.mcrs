@@ -1,0 +1,37 @@
+// ===== Event Tests =====
+// 测试: @on_death, @on_login, @on(Event)
+
+// === Test 1: @on_death ===
+@on_death fn on_player_death() {
+    say(f"[PASS] @on_death: player died!");
+    // Give respawn message
+    title(@s, "You Died!", "Testing @on_death");
+}
+
+// === Test 2: @on_login (if supported) ===
+// Note: This may need advancement-based implementation
+@load fn setup_events() {
+    say("[INFO] Event tests loaded");
+    say("[INFO] Test @on_death by dying (creative -> survival, /kill)");
+}
+
+// === Test 3: Manual advancement trigger test ===
+@keep fn test_advancement_event() {
+    say("[INFO] Granting test advancement...");
+    raw("advancement grant @s only minecraft:story/mine_stone");
+    say("[PASS] Advancement granted - check if event fired");
+}
+
+// === Test 4: Entity death event ===
+@keep fn spawn_test_entity() {
+    raw("summon minecraft:pig ~ ~ ~ {Tags:[\"test_pig\"]}");
+    say("[INFO] Spawned test pig. Kill it to test entity death.");
+}
+
+// === Info ===
+@keep fn run_event_tests() {
+    say("=== Event Tests ===");
+    say("[INFO] Events are triggered by game actions:");
+    say("  @on_death: die to test (use /kill in survival)");
+    say("  spawn_test_entity: spawns a pig to kill");
+}

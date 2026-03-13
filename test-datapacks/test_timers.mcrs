@@ -1,0 +1,35 @@
+// ===== Timer Tests =====
+// 测试: setTimeout, setInterval
+
+let interval_count: int = 0;
+
+// === Test 1: setTimeout (3 seconds) ===
+@keep fn test_set_timeout() {
+    say("[INFO] setTimeout: will fire in 3 seconds...");
+    setTimeout(3000, () => {
+        say("[PASS] setTimeout: callback fired after 3s!");
+    });
+}
+
+// === Test 2: setInterval (every 2 seconds, manual stop) ===
+@keep fn test_set_interval() {
+    interval_count = 0;
+    say("[INFO] setInterval: will fire every 2 seconds...");
+    say("[INFO] Run /function test_timers:stop_interval to stop");
+    
+    setInterval(2000, () => {
+        interval_count = interval_count + 1;
+        say(f"[INFO] setInterval tick #{interval_count}");
+    });
+}
+
+// Note: clearInterval needs the ID from setInterval
+// This is a simplified test without auto-stop
+
+// === Run info ===
+@keep fn run_timer_tests() {
+    say("=== Timer Tests ===");
+    say("[INFO] Run each test individually:");
+    say("  /function test_timers:test_set_timeout");
+    say("  /function test_timers:test_set_interval");
+}

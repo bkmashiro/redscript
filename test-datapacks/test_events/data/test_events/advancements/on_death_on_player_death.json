@@ -1,0 +1,10 @@
+{
+  "criteria": {
+    "death": {
+      "trigger": "minecraft:entity_killed_player"
+    }
+  },
+  "rewards": {
+    "function": "test_events:on_player_death"
+  }
+}

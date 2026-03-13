@@ -1,0 +1,3 @@
+# block: entry
+say [INFO] setTimeout: will fire in 3 seconds...
+schedule function test_timers:__timeout_0 3000t

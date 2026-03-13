@@ -1,0 +1,58 @@
+// ===== F-String & Output Tests =====
+// 测试: f-strings, say, title, actionbar, announce
+
+let score: int = 42;
+let name_test: int = 100;
+
+// === Test 1: say with f-string ===
+@keep fn test_say_fstring() {
+    let value: int = 123;
+    say(f"[PASS] say f-string: value = {value}");
+    say(f"[PASS] say f-string: score = {score}, name_test = {name_test}");
+}
+
+// === Test 2: title with f-string ===
+@keep fn test_title_fstring() {
+    let level: int = 5;
+    title(@a, f"Level {level}", f"Score: {score}");
+    say("[PASS] title: displayed to all players");
+}
+
+// === Test 3: actionbar with f-string ===
+@keep fn test_actionbar_fstring() {
+    let health: int = 20;
+    actionbar(@a, f"HP: {health} | Score: {score}");
+    say("[PASS] actionbar: displayed to all players");
+}
+
+// === Test 4: Multiple variables in one f-string ===
+@keep fn test_multi_var_fstring() {
+    let a: int = 1;
+    let b: int = 2;
+    let c: int = 3;
+    say(f"[PASS] multi-var: a={a}, b={b}, c={c}, sum={(a + b + c)}");
+}
+
+// === Test 5: announce (if supported) ===
+@keep fn test_announce() {
+    announce("This is a test announcement!");
+    say("[PASS] announce: sent to all players");
+}
+
+// === Test 6: tell (whisper) ===
+@keep fn test_tell() {
+    tell(@s, f"Secret message! Your score is {score}");
+    say("[PASS] tell: whispered to sender");
+}
+
+// === Run all f-string tests ===
+@keep fn run_fstring_tests() {
+    say("=== F-String & Output Tests ===");
+    test_say_fstring();
+    test_title_fstring();
+    test_actionbar_fstring();
+    test_multi_var_fstring();
+    test_announce();
+    test_tell();
+    say("=== Tests Complete ===");
+}

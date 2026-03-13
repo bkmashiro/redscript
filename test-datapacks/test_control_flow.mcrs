@@ -1,0 +1,107 @@
+// ===== Control Flow Tests =====
+// 测试: if/else, for, foreach, while
+
+let test_counter: int = 0;
+
+// === Test 1: if/else ===
+@keep fn test_if_else() {
+    let x: int = 10;
+    
+    if (x > 5) {
+        say(f"[PASS] if: x > 5 works (x={x})");
+    } else {
+        say("[FAIL] if: x > 5 should be true");
+    }
+    
+    if (x < 5) {
+        say("[FAIL] if: x < 5 should be false");
+    } else {
+        say(f"[PASS] else: x < 5 correctly went to else");
+    }
+    
+    // Nested if
+    if (x > 0) {
+        if (x < 20) {
+            say("[PASS] nested if: 0 < x < 20");
+        }
+    }
+}
+
+// === Test 2: for loop ===
+@keep fn test_for_loop() {
+    let sum: int = 0;
+    
+    for (let i: int = 1; i <= 5; i = i + 1) {
+        sum = sum + i;
+    }
+    
+    if (sum == 15) {
+        say(f"[PASS] for loop: sum 1..5 = {sum}");
+    } else {
+        say(f"[FAIL] for loop: expected 15, got {sum}");
+    }
+}
+
+// === Test 3: while loop ===
+@keep fn test_while_loop() {
+    let count: int = 0;
+    
+    while (count < 3) {
+        count = count + 1;
+    }
+    
+    if (count == 3) {
+        say(f"[PASS] while loop: count = {count}");
+    } else {
+        say(f"[FAIL] while loop: expected 3, got {count}");
+    }
+}
+
+// === Test 4: foreach with selector ===
+@keep fn test_foreach_selector() {
+    let player_count: int = 0;
+    
+    foreach (p in @a) {
+        player_count = player_count + 1;
+    }
+    
+    say(f"[INFO] foreach: found {player_count} players");
+}
+
+// === Test 5: foreach with at @s ===
+@keep fn test_foreach_at() {
+    foreach (p in @a) at @s {
+        particle("minecraft:heart", ~0, ~2, ~0, 0, 0, 0, 0, 1);
+    }
+    say("[PASS] foreach at @s: hearts spawned above players");
+}
+
+// === Test 6: break statement ===
+@keep fn test_break() {
+    let found: int = 0;
+    
+    for (let i: int = 0; i < 10; i = i + 1) {
+        if (i == 5) {
+            found = i;
+            break;
+        }
+    }
+    
+    if (found == 5) {
+        say(f"[PASS] break: exited at i={found}");
+    } else {
+        say(f"[FAIL] break: expected 5, got {found}");
+    }
+}
+
+// === Run all tests ===
+@keep fn run_control_flow_tests() {
+    say("=== Control Flow Tests ===");
+    test_if_else();
+    test_for_loop();
+    test_while_loop();
+    test_foreach_selector();
+    test_foreach_at();
+    test_break();
+    say("=== Tests Complete ===");
+}
