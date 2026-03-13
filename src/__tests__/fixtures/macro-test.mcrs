@@ -1,17 +1,12 @@
 // MC 1.20.2+ macro function test
 // Tests that functions using parameters in coordinate/type positions
 // generate macro syntax ($-prefixed commands with $(param) substitution)
-
-namespace test
+//
+// Compilation: redscript compile macro-test.mcrs -o output/ -n test
 
 // Basic macro function: parameters used as summon coordinates
 fn spawn_zombie(x: int, y: int, z: int) {
     summon("minecraft:zombie", x, y, z);
-}
-
-// Macro function with mixed params: entity type AND coordinates
-fn spawn_entity(mob: string, x: int, y: int, z: int) {
-    summon(mob, x, y, z);
 }
 
 // Macro function: particle effect at coordinates
@@ -19,17 +14,22 @@ fn show_particle(x: int, y: int, z: int) {
     particle("minecraft:flame", x, y, z);
 }
 
-// Non-macro function: all args are constants in the body
+// Macro function: setblock at variable position
+fn place_block(x: int, y: int, z: int) {
+    setblock(x, y, z, "minecraft:stone");
+}
+
+// Non-macro function: all args are compile-time constants in the body
 fn summon_fixed() {
     summon("minecraft:zombie", 100, 64, 200);
 }
 
-// Caller with constant args (should inline via regular mechanism)
+// Caller with constant args (calls macro function with inline NBT data)
 fn call_with_constants() {
     spawn_zombie(100, 64, 200);
 }
 
-// Caller with variable args (should use macro mechanism)
+// Caller with variable args (calls macro function via 'with storage rs:macro_args')
 fn call_with_vars(px: int, pz: int) {
     spawn_zombie(px, 64, pz);
 }
