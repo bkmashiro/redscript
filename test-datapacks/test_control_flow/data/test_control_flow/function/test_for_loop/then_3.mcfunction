@@ -1,3 +1,3 @@
 # block: then_3
-tellraw @a ["",{"text":"[PASS] for loop: sum 1..5 = "},{"score":{"name":"$sum","objective":"rs"}}]
+say [PASS] for loop: sum 1..5 = 15
 function test_control_flow:test_for_loop/merge_5

@@ -1,3 +1,3 @@
 # block: then_6
-tellraw @a ["",{"text":"[PASS] break: exited at i="},{"score":{"name":"$found","objective":"rs"}}]
+say [PASS] break: exited at i=5
 function test_control_flow:test_break/merge_8

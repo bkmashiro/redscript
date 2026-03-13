@@ -1,4 +1,4 @@
 # block: entry
-scoreboard players operation $_11 rs = $player_count rs
-scoreboard players operation $_11 rs += $const_1 rs
-scoreboard players operation $player_count rs = $_11 rs
+scoreboard players operation $_23 rs = $marker_count rs
+scoreboard players operation $_23 rs += $const_1 rs
+scoreboard players operation $marker_count rs = $_23 rs

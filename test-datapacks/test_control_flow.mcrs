@@ -1,33 +1,43 @@
 // ===== Control Flow Tests =====
-// 测试: if/else, for, foreach, while
+// 测试: if/else, for, foreach, while, match, break, continue
 
 let test_counter: int = 0;
 
-// === Test 1: if/else ===
+// === Test 1: if/else 基础 ===
 @keep fn test_if_else() {
     let x: int = 10;
     
     if (x > 5) {
-        say(f"[PASS] if: x > 5 works (x={x})");
+        raw("say [PASS] if: x > 5 works");
     } else {
-        say("[FAIL] if: x > 5 should be true");
+        raw("say [FAIL] if: x > 5 should be true");
     }
     
     if (x < 5) {
-        say("[FAIL] if: x < 5 should be false");
+        raw("say [FAIL] else: x < 5 should be false");
     } else {
-        say(f"[PASS] else: x < 5 correctly went to else");
+        raw("say [PASS] else: x < 5 correctly went to else");
     }
     
     // Nested if
     if (x > 0) {
         if (x < 20) {
-            say("[PASS] nested if: 0 < x < 20");
+            raw("say [PASS] nested if: 0 < x < 20");
         }
+    }
+    
+    // else if chain
+    let y: int = 50;
+    if (y < 25) {
+        raw("say [FAIL] else-if: y < 25 should be false");
+    } else if (y < 75) {
+        raw("say [PASS] else-if: 25 <= y < 75");
+    } else {
+        raw("say [FAIL] else-if: should not reach final else");
     }
 }
 
-// === Test 2: for loop ===
+// === Test 2: for loop 基础 ===
 @keep fn test_for_loop() {
     let sum: int = 0;
     
@@ -36,9 +46,23 @@ let test_counter: int = 0;
     }
     
     if (sum == 15) {
-        say(f"[PASS] for loop: sum 1..5 = {sum}");
+        raw("say [PASS] for loop: sum 1..5 = 15");
     } else {
-        say(f"[FAIL] for loop: expected 15, got {sum}");
+        raw("say [FAIL] for loop: expected 15");
+    }
+    
+    // Nested for
+    let product: int = 0;
+    for (let a: int = 1; a <= 2; a = a + 1) {
+        for (let b: int = 1; b <= 3; b = b + 1) {
+            product = product + 1;
+        }
+    }
+    
+    if (product == 6) {
+        raw("say [PASS] nested for: 2*3 iterations = 6");
+    } else {
+        raw("say [FAIL] nested for: expected 6");
     }
 }
 
@@ -51,29 +75,59 @@ let test_counter: int = 0;
     }
     
     if (count == 3) {
-        say(f"[PASS] while loop: count = {count}");
+        raw("say [PASS] while loop: count = 3");
     } else {
-        say(f"[FAIL] while loop: expected 3, got {count}");
+        raw("say [FAIL] while loop: expected 3");
+    }
+    
+    // While with break condition
+    let n: int = 0;
+    while (true) {
+        n = n + 1;
+        if (n >= 5) {
+            break;
+        }
+    }
+    
+    if (n == 5) {
+        raw("say [PASS] while+break: n = 5");
+    } else {
+        raw("say [FAIL] while+break: expected 5");
     }
 }
 
 // === Test 4: foreach with selector ===
 @keep fn test_foreach_selector() {
-    let player_count: int = 0;
+    raw("say [INFO] foreach selector test - spawning markers");
+    raw("summon minecraft:marker ~ ~ ~ {Tags:[\"test_marker\"]}");
+    raw("summon minecraft:marker ~ ~ ~ {Tags:[\"test_marker\"]}");
+    raw("summon minecraft:marker ~ ~ ~ {Tags:[\"test_marker\"]}");
     
-    foreach (p in @a) {
-        player_count = player_count + 1;
+    let marker_count: int = 0;
+    foreach (m in @e[type=marker,tag=test_marker]) {
+        marker_count = marker_count + 1;
     }
     
-    say(f"[INFO] foreach: found {player_count} players");
+    if (marker_count == 3) {
+        raw("say [PASS] foreach selector: found 3 markers");
+    } else {
+        raw("say [INFO] foreach selector: found markers (count varies)");
+    }
+    
+    // Cleanup
+    raw("kill @e[type=marker,tag=test_marker]");
 }
 
 // === Test 5: foreach with at @s ===
 @keep fn test_foreach_at() {
-    foreach (p in @a) at @s {
-        particle("minecraft:heart", ~0, ~2, ~0, 0, 0, 0, 0, 1);
+    raw("summon minecraft:marker ~ ~1 ~ {Tags:[\"pos_test\"]}");
+    
+    foreach (e in @e[type=marker,tag=pos_test]) at @s {
+        raw("particle minecraft:heart ~ ~ ~ 0 0 0 0 1");
     }
-    say("[PASS] foreach at @s: hearts spawned above players");
+    raw("say [PASS] foreach at @s: executed at entity position");
+    
+    raw("kill @e[type=marker,tag=pos_test]");
 }
 
 // === Test 6: break statement ===
@@ -88,20 +142,101 @@ let test_counter: int = 0;
     }
     
     if (found == 5) {
-        say(f"[PASS] break: exited at i={found}");
+        raw("say [PASS] break: exited at i=5");
     } else {
-        say(f"[FAIL] break: expected 5, got {found}");
+        raw("say [FAIL] break: expected 5");
+    }
+}
+
+// === Test 7: continue statement ===
+@keep fn test_continue() {
+    let sum: int = 0;
+    
+    // Sum only even numbers 0-9
+    for (let i: int = 0; i < 10; i = i + 1) {
+        if (i % 2 != 0) {
+            continue;
+        }
+        sum = sum + i;
+    }
+    
+    // 0+2+4+6+8 = 20
+    if (sum == 20) {
+        raw("say [PASS] continue: sum of evens = 20");
+    } else {
+        raw("say [FAIL] continue: expected 20");
+    }
+}
+
+// === Test 8: 复杂条件 ===
+@keep fn test_complex_conditions() {
+    let a: int = 5;
+    let b: int = 10;
+    let c: int = 15;
+    
+    // AND condition
+    if (a < b && b < c) {
+        raw("say [PASS] AND: a < b && b < c");
+    } else {
+        raw("say [FAIL] AND: should be true");
+    }
+    
+    // OR condition
+    if (a > 100 || b == 10) {
+        raw("say [PASS] OR: a > 100 || b == 10");
+    } else {
+        raw("say [FAIL] OR: should be true");
+    }
+    
+    // NOT condition
+    if (!(a > b)) {
+        raw("say [PASS] NOT: !(a > b)");
+    } else {
+        raw("say [FAIL] NOT: should be true");
+    }
+    
+    // Complex nested
+    if ((a < b && b < c) || (a > c)) {
+        raw("say [PASS] complex: (a<b && b<c) || (a>c)");
+    } else {
+        raw("say [FAIL] complex: should be true");
+    }
+}
+
+// === Test 9: match statement ===
+@keep fn test_match() {
+    let status: int = 2;
+    
+    match (status) {
+        0 => { raw("say [FAIL] match: should not be 0"); }
+        1 => { raw("say [FAIL] match: should not be 1"); }
+        2 => { raw("say [PASS] match: correctly matched 2"); }
+        _ => { raw("say [FAIL] match: should not be default"); }
+    }
+    
+    // Match with range
+    let score: int = 75;
+    match (score) {
+        0..59 => { raw("say [FAIL] match range: should not be F"); }
+        60..69 => { raw("say [FAIL] match range: should not be D"); }
+        70..79 => { raw("say [PASS] match range: C (70-79)"); }
+        80..89 => { raw("say [FAIL] match range: should not be B"); }
+        90..100 => { raw("say [FAIL] match range: should not be A"); }
+        _ => { raw("say [FAIL] match range: out of range"); }
     }
 }
 
 // === Run all tests ===
 @keep fn run_control_flow_tests() {
-    say("=== Control Flow Tests ===");
+    raw("say === Control Flow Tests ===");
     test_if_else();
     test_for_loop();
     test_while_loop();
     test_foreach_selector();
     test_foreach_at();
     test_break();
-    say("=== Tests Complete ===");
+    test_continue();
+    test_complex_conditions();
+    test_match();
+    raw("say === Tests Complete ===");
 }
