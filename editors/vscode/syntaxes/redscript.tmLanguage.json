@@ -137,7 +137,7 @@
         },
         {
           "name": "keyword.declaration.redscript",
-          "match": "\\b(fn|let|struct|enum|import|namespace|trigger)\\b"
+          "match": "\\b(fn|let|struct|enum|impl|import|namespace|trigger)\\b"
         },
         {
           "name": "keyword.declaration.const.redscript",
