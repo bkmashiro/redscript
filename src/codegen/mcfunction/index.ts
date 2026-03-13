@@ -384,6 +384,11 @@ export function generateDatapackWithStats(
         ? `data/${ns}/function/${fn.name}.mcfunction`
         : `data/${ns}/function/${fn.name}/${block.label}.mcfunction`
 
+      // Skip empty continuation blocks (only contain the block comment, no real commands)
+      // Entry block (i === 0) is always emitted so the function file exists
+      const hasRealContent = lines.some(l => !l.startsWith('#') && l.trim() !== '')
+      if (i !== 0 && !hasRealContent) continue
+
       files.push({ path: filePath, content: lines.join('\n') })
     }
   }
