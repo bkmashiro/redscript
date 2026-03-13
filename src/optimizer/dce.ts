@@ -138,6 +138,7 @@ export class DeadCodeEliminator {
         'on_death',
         'on_login',
         'on_join_team',
+        'keep',  // Prevent DCE from removing this function
       ].includes(decorator.name))) {
         entries.add(fn.name)
       }

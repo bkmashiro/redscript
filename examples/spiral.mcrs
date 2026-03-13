@@ -22,26 +22,20 @@ let running: bool = false;
 }
 
 // ===== 控制命令 =====
-// 用空的装饰器参数让 DCE 保留这些函数
-fn start() {
+// @keep 防止 DCE 删除
+@keep fn start() {
     running = true;
     counter = 0;
     say(f"Demo started!");
 }
 
-fn stop() {
+@keep fn stop() {
     running = false;
     say(f"Demo stopped at {counter} ticks.");
 }
 
-fn reset() {
+@keep fn reset() {
     running = false;
     counter = 0;
     say(f"Demo reset.");
-}
-
-// 在 load 时调用（这样 start/stop/reset 会被保留）
-@load fn init() {
-    // 调用一次让 DCE 保留这些函数
-    reset();
 }
