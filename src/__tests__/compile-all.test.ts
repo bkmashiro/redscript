@@ -2,16 +2,19 @@
  * Compile-all smoke test
  *
  * Finds every .mcrs file in the repo (excluding declaration files and node_modules)
- * and verifies that each one compiles without throwing an error.
+ * and verifies that each one compiles without errors via the CLI (which handles
+ * `import` statements, unlike the bare `compile()` function).
  *
  * This catches regressions where a language change breaks existing source files.
  */
 
 import * as fs from 'fs'
 import * as path from 'path'
-import { compile } from '../compile'
+import { execSync } from 'child_process'
+import * as os from 'os'
 
 const REPO_ROOT = path.resolve(__dirname, '../../')
+const CLI = path.join(REPO_ROOT, 'dist', 'cli.js')
 
 /** Patterns to skip */
 const SKIP_GLOBS = [
@@ -41,8 +44,9 @@ function findMcrsFiles(dir: string): string[] {
 }
 
 const mcrsFiles = findMcrsFiles(REPO_ROOT)
+const TMP_OUT = path.join(os.tmpdir(), 'redscript-compile-all')
 
-describe('compile-all: every .mcrs file should compile without errors', () => {
+describe('compile-all: every .mcrs file should compile without errors (CLI)', () => {
   test('found at least one .mcrs file', () => {
     expect(mcrsFiles.length).toBeGreaterThan(0)
   })
@@ -50,11 +54,22 @@ describe('compile-all: every .mcrs file should compile without errors', () => {
   for (const filePath of mcrsFiles) {
     const label = path.relative(REPO_ROOT, filePath)
     test(label, () => {
-      const source = fs.readFileSync(filePath, 'utf8')
-      // Should not throw
-      expect(() => {
-        compile(source, { namespace: 'smoke_test', optimize: false })
-      }).not.toThrow()
+      const outDir = path.join(TMP_OUT, label.replace(/[^a-zA-Z0-9]/g, '_'))
+      let stdout = ''
+      let stderr = ''
+      try {
+        const result = execSync(
+          `node "${CLI}" compile "${filePath}" -o "${outDir}"`,
+          { encoding: 'utf8', stdio: 'pipe' }
+        )
+        stdout = result
+      } catch (err: any) {
+        stdout = err.stdout ?? ''
+        stderr = err.stderr ?? ''
+        const output = (stdout + stderr).trim()
+        // Fail with the compiler error message
+        throw new Error(`Compile failed for ${label}:\n${output}`)
+      }
     })
   }
 })
