@@ -4,6 +4,9 @@
  * Main entry point for programmatic usage.
  */
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+export const version = '1.2.6'
+
 import { Lexer } from './lexer'
 import { Parser } from './parser'
 import { TypeChecker } from './typechecker'
