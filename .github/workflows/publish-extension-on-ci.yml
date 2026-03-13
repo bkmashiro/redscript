@@ -52,10 +52,35 @@ jobs:
             echo "should_publish=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Bump extension version
+      - name: Bump extension version and commit first
         if: steps.check.outputs.should_publish == 'true'
-        working-directory: editors/vscode
-        run: npm version patch --no-git-tag-version
+        run: |
+          cd editors/vscode
+          npm version patch --no-git-tag-version
+          NEW_VER=$(node -p "require('./package.json').version")
+          echo "new_version=${NEW_VER}" >> $GITHUB_OUTPUT
+          cd ../..
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add editors/vscode/package.json editors/vscode/package-lock.json
+          git commit -m "chore: auto-bump vscode extension to ${NEW_VER} [skip ci]" || echo "Nothing to commit"
+          git push
+        id: bump
+
+      - name: Publish npm package (redscript-mc)
+        if: steps.check.outputs.should_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Check if this version is already published
+          PKG_VER=$(node -p "require('./package.json').version")
+          if npm view "redscript-mc@${PKG_VER}" version &>/dev/null 2>&1; then
+            echo "⏭️  redscript-mc@${PKG_VER} already on npm, skipping"
+          else
+            echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+            npm publish --access public
+            echo "✅ Published redscript-mc@${PKG_VER}"
+          fi
 
       - name: Build and publish extension
         if: steps.check.outputs.should_publish == 'true'
@@ -63,15 +88,6 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: npm run publish -- -p "$VSCE_PAT"
-
-      - name: Commit version bump
-        if: steps.check.outputs.should_publish == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add editors/vscode/package.json editors/vscode/package-lock.json
-          git commit -m "chore: auto-bump vscode extension [skip ci]" || echo "Nothing to commit"
-          git push
 
       - name: Trigger IDE rebuild
         if: steps.check.outputs.should_publish == 'true'
