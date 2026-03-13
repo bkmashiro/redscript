@@ -1,0 +1,72 @@
+name: Publish VSCode Extension (Auto)
+
+# Triggers when the CI workflow completes successfully on main
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  publish:
+    # Only run if CI passed
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need full history to detect changes and push version bump
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Build compiler
+        run: npm run build
+
+      - name: Install extension dependencies
+        working-directory: editors/vscode
+        run: npm install
+
+      - name: Check if extension needs update
+        id: check
+        run: |
+          # Get last commit that changed the extension publish workflow or core compiler
+          LAST_EXT_PUBLISH=$(git log --oneline --follow -- .github/workflows/publish-extension-on-ci.yml editors/vscode/ | head -1 | awk '{print $1}')
+          CORE_CHANGED=$(git diff --name-only HEAD~1 HEAD -- src/ package.json | head -1)
+          EXT_CHANGED=$(git diff --name-only HEAD~1 HEAD -- editors/vscode/ | head -1)
+          echo "core_changed=${CORE_CHANGED}" >> $GITHUB_OUTPUT
+          echo "ext_changed=${EXT_CHANGED}" >> $GITHUB_OUTPUT
+          if [ -n "$CORE_CHANGED" ] || [ -n "$EXT_CHANGED" ]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Bump extension version
+        if: steps.check.outputs.should_publish == 'true'
+        working-directory: editors/vscode
+        run: npm version patch --no-git-tag-version
+
+      - name: Build and publish extension
+        if: steps.check.outputs.should_publish == 'true'
+        working-directory: editors/vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npm run publish -- -p "$VSCE_PAT"
+
+      - name: Commit version bump
+        if: steps.check.outputs.should_publish == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add editors/vscode/package.json editors/vscode/package-lock.json
+          git commit -m "chore: auto-bump vscode extension [skip ci]" || echo "Nothing to commit"
+          git push
