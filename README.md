@@ -31,40 +31,33 @@ You want to make a Minecraft mini-game. You need a countdown timer, kill counter
 With RedScript, it's this:
 
 ```rs
-// pvp_game.mcrs
-import "stdlib/player.mcrs"
+// particle_demo.mcrs
+let counter: int = 0;
+let running: bool = false;
 
-const GAME_TIME: int = 300;
-
-@tick(rate=20)
-fn every_second() {
-    let time: int = scoreboard_get(#game, #timer);
-
-    if (time <= 0) {
-        end_game();
-        return;
+@tick fn demo_tick() {
+    if (!running) { return; }
+    counter = counter + 1;
+    
+    // Spawn particles at each player's position
+    foreach (p in @a) at @s {
+        particle("minecraft:end_rod", ~0, ~1, ~0, 0.5, 0.5, 0.5, 0.1, 5);
     }
-
-    scoreboard_set(#game, #timer, time - 1);
-    actionbar(@a, "⏱ ${time}s remaining");
+    
+    if (counter % 20 == 0) {
+        say(f"Running for {counter} ticks");
+    }
 }
 
-fn start_game() {
-    scoreboard_set(#game, #timer, GAME_TIME);
-    scoreboard_set(#game, #running, 1);
-    title(@a, "Fight!", "Game started");
-    tp(@a, (0, 64, 0));
+@keep fn start() {
+    running = true;
+    counter = 0;
+    say(f"Demo started!");
 }
 
-fn end_game() {
-    scoreboard_set(#game, #running, 0);
-    title(@a, "Game Over!");
-    announce("Thanks for playing!");
-}
-
-@on_death
-fn on_kill() {
-    scoreboard_add(@s, #kills, 1);
+@keep fn stop() {
+    running = false;
+    say(f"Demo stopped at {counter} ticks.");
 }
 ```
 

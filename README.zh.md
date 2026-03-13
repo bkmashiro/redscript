@@ -31,40 +31,33 @@
 用 RedScript，就是这样：
 
 ```rs
-// pvp_game.mcrs
-import "stdlib/player.mcrs"
+// particle_demo.mcrs
+let counter: int = 0;
+let running: bool = false;
 
-const GAME_TIME: int = 300;
-
-@tick(rate=20)
-fn every_second() {
-    let time: int = scoreboard_get(#game, #timer);
-
-    if (time <= 0) {
-        end_game();
-        return;
+@tick fn demo_tick() {
+    if (!running) { return; }
+    counter = counter + 1;
+    
+    // 在每个玩家位置生成粒子
+    foreach (p in @a) at @s {
+        particle("minecraft:end_rod", ~0, ~1, ~0, 0.5, 0.5, 0.5, 0.1, 5);
     }
-
-    scoreboard_set(#game, #timer, time - 1);
-    actionbar(@a, "⏱ 剩余 ${time} 秒");
+    
+    if (counter % 20 == 0) {
+        say(f"已运行 {counter} ticks");
+    }
 }
 
-fn start_game() {
-    scoreboard_set(#game, #timer, GAME_TIME);
-    scoreboard_set(#game, #running, 1);
-    title(@a, "开始战斗！", "游戏已开始");
-    tp(@a, (0, 64, 0));
+@keep fn start() {
+    running = true;
+    counter = 0;
+    say(f"Demo 已启动！");
 }
 
-fn end_game() {
-    scoreboard_set(#game, #running, 0);
-    title(@a, "游戏结束！");
-    announce("感谢游玩！");
-}
-
-@on_death
-fn on_kill() {
-    scoreboard_add(@s, #kills, 1);
+@keep fn stop() {
+    running = false;
+    say(f"Demo 已停止，共运行 {counter} ticks。");
 }
 ```
 
