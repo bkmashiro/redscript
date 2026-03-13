@@ -175,7 +175,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     // Parsing
     const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
-    const ast = shouldRunDce ? eliminateDeadCode(parsedAst) : parsedAst
+    const dceResult = shouldRunDce ? eliminateDeadCode(parsedAst) : { program: parsedAst, warnings: [] }
+    const ast = dceResult.program
 
     // Lowering
     const ir = new Lowering(namespace, preprocessed.ranges).lower(ast)

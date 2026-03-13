@@ -65,7 +65,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
   // Parsing
   const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
-  const ast = shouldRunDce ? eliminateDeadCode(parsedAst) : parsedAst
+  const dceResult = shouldRunDce ? eliminateDeadCode(parsedAst) : { program: parsedAst, warnings: [] }
+  const ast = dceResult.program
 
   // Type checking (warn mode - collect errors but don't block)
   let typeErrors: DiagnosticError[] | undefined
@@ -129,7 +130,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     ast,
     ir: optimizedIR,
     typeErrors,
-    warnings: lowering.warnings,
+    warnings: [...dceResult.warnings, ...lowering.warnings],
     stats: optimizationStats,
   }
 }

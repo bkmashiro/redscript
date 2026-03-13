@@ -329,7 +329,8 @@ export function compileToStructure(
   const preprocessedSource = preprocessSource(source, { filePath })
   const tokens = new Lexer(preprocessedSource, filePath).tokenize()
   const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
-  const ast = options.dce ?? true ? eliminateDeadCode(parsedAst) : parsedAst
+  const dceResult = options.dce ?? true ? eliminateDeadCode(parsedAst) : { program: parsedAst, warnings: [] }
+  const ast = dceResult.program
   const ir = new Lowering(namespace).lower(ast)
   const stats = createEmptyOptimizationStats()
   const optimizedIRFunctions = ir.functions.map(fn => {

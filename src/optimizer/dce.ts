@@ -67,6 +67,13 @@ function isPureExpr(expr: Expr): boolean {
   }
 }
 
+export interface DCEWarning {
+  message: string
+  code: string
+  line?: number
+  col?: number
+}
+
 export class DeadCodeEliminator {
   private readonly functionMap = new Map<string, FnDecl>()
   private readonly reachableFunctions = new Set<string>()
@@ -74,6 +81,7 @@ export class DeadCodeEliminator {
   private readonly localReads = new Set<string>()
   private readonly localDeclIds = new WeakMap<Stmt, string>()
   private localIdCounter = 0
+  readonly warnings: DCEWarning[] = []
 
   eliminate(program: Program): Program {
     this.functionMap.clear()
@@ -81,6 +89,7 @@ export class DeadCodeEliminator {
     this.usedConstants.clear()
     this.localReads.clear()
     this.localIdCounter = 0
+    this.warnings.length = 0
 
     for (const fn of program.declarations) {
       this.functionMap.set(fn.name, fn)
@@ -429,6 +438,13 @@ export class DeadCodeEliminator {
           }
           return [copySpan({ ...stmt, init }, stmt)]
         }
+        // Unused variable - emit warning
+        this.warnings.push({
+          message: `Unused variable '${stmt.name}'`,
+          code: 'W_UNUSED_VAR',
+          line: stmt.span?.line,
+          col: stmt.span?.col,
+        })
         if (isPureExpr(init)) {
           return []
         }
@@ -614,6 +630,8 @@ export class DeadCodeEliminator {
   }
 }
 
-export function eliminateDeadCode(program: Program): Program {
-  return new DeadCodeEliminator().eliminate(program)
+export function eliminateDeadCode(program: Program): { program: Program; warnings: DCEWarning[] } {
+  const eliminator = new DeadCodeEliminator()
+  const result = eliminator.eliminate(program)
+  return { program: result, warnings: eliminator.warnings }
 }
