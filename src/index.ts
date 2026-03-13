@@ -5,7 +5,7 @@
  */
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-export const version = '1.2.10'
+export const version = '1.2.11'
 
 import { Lexer } from './lexer'
 import { Parser } from './parser'
