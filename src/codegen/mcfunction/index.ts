@@ -19,6 +19,7 @@
 import type { IRBlock, IRFunction, IRModule, Operand, Terminator } from '../../ir/types'
 import { optimizeCommandFunctions, type OptimizationStats, createEmptyOptimizationStats, mergeOptimizationStats } from '../../optimizer/commands'
 import { EVENT_TYPES, isEventTypeName, type EventTypeName } from '../../events/types'
+import { VarAllocator } from '../var-allocator'
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -26,19 +27,10 @@ import { EVENT_TYPES, isEventTypeName, type EventTypeName } from '../../events/t
 
 const OBJ = 'rs'  // scoreboard objective name
 
-function varRef(name: string): string {
-  // Ensure fake player prefix
-  return name.startsWith('$') ? name : `$${name}`
-}
-
-function operandToScore(op: Operand): string {
-  if (op.kind === 'var')   return `${varRef(op.name)} ${OBJ}`
-  if (op.kind === 'const') return `$const_${op.value} ${OBJ}`
+function operandToScore(op: Operand, alloc: VarAllocator): string {
+  if (op.kind === 'var')   return `${alloc.alloc(op.name)} ${OBJ}`
+  if (op.kind === 'const') return `${alloc.constant(op.value)} ${OBJ}`
   throw new Error(`Cannot convert storage operand to score: ${op.path}`)
-}
-
-function constSetup(value: number): string {
-  return `scoreboard players set $const_${value} ${OBJ} ${value}`
 }
 
 // Collect all constants used in a function for pre-setup
@@ -71,17 +63,17 @@ const BOP_OP: Record<string, string> = {
 // Instruction codegen
 // ---------------------------------------------------------------------------
 
-function emitInstr(instr: ReturnType<typeof Object.assign> & { op: string }, ns: string): string[] {
+function emitInstr(instr: ReturnType<typeof Object.assign> & { op: string }, ns: string, alloc: VarAllocator): string[] {
   const lines: string[] = []
 
   switch (instr.op) {
     case 'assign': {
-      const dst = varRef(instr.dst)
+      const dst = alloc.alloc(instr.dst)
       const src = instr.src as Operand
       if (src.kind === 'const') {
         lines.push(`scoreboard players set ${dst} ${OBJ} ${src.value}`)
       } else if (src.kind === 'var') {
-        lines.push(`scoreboard players operation ${dst} ${OBJ} = ${varRef(src.name)} ${OBJ}`)
+        lines.push(`scoreboard players operation ${dst} ${OBJ} = ${alloc.alloc(src.name)} ${OBJ}`)
       } else {
         lines.push(`execute store result score ${dst} ${OBJ} run data get storage ${src.path}`)
       }
@@ -89,19 +81,19 @@ function emitInstr(instr: ReturnType<typeof Object.assign> & { op: string }, ns:
     }
 
     case 'binop': {
-      const dst = varRef(instr.dst)
+      const dst = alloc.alloc(instr.dst)
       const bop = BOP_OP[instr.bop as string] ?? '+='
       // Copy lhs → dst, then apply op with rhs
-      lines.push(...emitInstr({ op: 'assign', dst: instr.dst, src: instr.lhs }, ns))
-      lines.push(`scoreboard players operation ${dst} ${OBJ} ${bop} ${operandToScore(instr.rhs)}`)
+      lines.push(...emitInstr({ op: 'assign', dst: instr.dst, src: instr.lhs }, ns, alloc))
+      lines.push(`scoreboard players operation ${dst} ${OBJ} ${bop} ${operandToScore(instr.rhs, alloc)}`)
       break
     }
 
     case 'cmp': {
       // MC doesn't have a direct compare-to-register; use execute store
-      const dst = varRef(instr.dst)
-      const lhsScore = operandToScore(instr.lhs)
-      const rhsScore = operandToScore(instr.rhs)
+      const dst = alloc.alloc(instr.dst)
+      const lhsScore = operandToScore(instr.lhs, alloc)
+      const rhsScore = operandToScore(instr.rhs, alloc)
       lines.push(`scoreboard players set ${dst} ${OBJ} 0`)
       switch (instr.cop) {
         case '==':
@@ -127,13 +119,15 @@ function emitInstr(instr: ReturnType<typeof Object.assign> & { op: string }, ns:
     }
 
     case 'call': {
-      // Push args as fake players $p0, $p1, ...
+      // Push args as param fake players
       for (let i = 0; i < instr.args.length; i++) {
-        lines.push(...emitInstr({ op: 'assign', dst: `$p${i}`, src: instr.args[i] }, ns))
+        const paramName = alloc.internal(`p${i}`)
+        lines.push(...emitInstr({ op: 'assign', dst: paramName, src: instr.args[i] }, ns, alloc))
       }
       lines.push(`function ${ns}:${instr.fn}`)
       if (instr.dst) {
-        lines.push(`scoreboard players operation ${varRef(instr.dst)} ${OBJ} = $ret ${OBJ}`)
+        const retName = alloc.internal('ret')
+        lines.push(`scoreboard players operation ${alloc.alloc(instr.dst)} ${OBJ} = ${retName} ${OBJ}`)
       }
       break
     }
@@ -150,31 +144,33 @@ function emitInstr(instr: ReturnType<typeof Object.assign> & { op: string }, ns:
 // Terminator codegen
 // ---------------------------------------------------------------------------
 
-function emitTerm(term: Terminator, ns: string, fnName: string): string[] {
+function emitTerm(term: Terminator, ns: string, fnName: string, alloc: VarAllocator): string[] {
   const lines: string[] = []
   switch (term.op) {
     case 'jump':
       lines.push(`function ${ns}:${fnName}/${term.target}`)
       break
     case 'jump_if':
-      lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.then}`)
-      lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.else_}`)
+      lines.push(`execute if score ${alloc.alloc(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.then}`)
+      lines.push(`execute if score ${alloc.alloc(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.else_}`)
       break
     case 'jump_unless':
-      lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.then}`)
-      lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.else_}`)
+      lines.push(`execute if score ${alloc.alloc(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.then}`)
+      lines.push(`execute if score ${alloc.alloc(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.else_}`)
       break
-    case 'return':
+    case 'return': {
+      const retName = alloc.internal('ret')
       if (term.value) {
-        lines.push(...emitInstr({ op: 'assign', dst: '$ret', src: term.value }, ns))
+        lines.push(...emitInstr({ op: 'assign', dst: retName, src: term.value }, ns, alloc))
       }
       // In MC 1.20+, use `return` command
       if (term.value?.kind === 'const') {
         lines.push(`return ${term.value.value}`)
       } else if (term.value?.kind === 'var') {
-        lines.push(`return run scoreboard players get ${varRef(term.value.name)} ${OBJ}`)
+        lines.push(`return run scoreboard players get ${alloc.alloc(term.value.name)} ${OBJ}`)
       }
       break
+    }
     case 'tick_yield':
       lines.push(`schedule function ${ns}:${fnName}/${term.continuation} 1t replace`)
       break
@@ -220,7 +216,7 @@ function applyFunctionOptimization(
 
   // Filter out files for functions that were removed (inlined trivial functions)
   const optimizedNames = new Set(optimized.functions.map(fn => fn.name))
-  
+
   return {
     files: files
       .filter(file => {
@@ -252,6 +248,7 @@ export interface DatapackGenerationResult {
 
 export interface DatapackGenerationOptions {
   optimizeCommands?: boolean
+  mangle?: boolean
 }
 
 export function countMcfunctionCommands(files: DatapackFile[]): number {
@@ -272,7 +269,8 @@ export function generateDatapackWithStats(
   module: IRModule,
   options: DatapackGenerationOptions = {},
 ): DatapackGenerationResult {
-  const { optimizeCommands = true } = options
+  const { optimizeCommands = true, mangle = false } = options
+  const alloc = new VarAllocator(mangle)
   const files: DatapackFile[] = []
   const advancements: DatapackFile[] = []
   const ns = module.namespace
@@ -307,7 +305,7 @@ export function generateDatapackWithStats(
     `scoreboard objectives add ${OBJ} dummy`,
   ]
   for (const g of module.globals) {
-    loadLines.push(`scoreboard players set ${varRef(g.name)} ${OBJ} ${g.init}`)
+    loadLines.push(`scoreboard players set ${alloc.alloc(g.name)} ${OBJ} ${g.init}`)
   }
 
   // Add trigger objectives
@@ -355,7 +353,9 @@ export function generateDatapackWithStats(
     for (const c of collectConsts(fn)) allConsts.add(c)
   }
   if (allConsts.size > 0) {
-    loadLines.push(...Array.from(allConsts).sort((a, b) => a - b).map(constSetup))
+    loadLines.push(...Array.from(allConsts).sort((a, b) => a - b).map(
+      value => `scoreboard players set ${alloc.constant(value)} ${OBJ} ${value}`
+    ))
   }
 
   // Generate each function
@@ -370,14 +370,14 @@ export function generateDatapackWithStats(
       // Param setup in entry block
       if (i === 0) {
         for (let j = 0; j < fn.params.length; j++) {
-          lines.push(`scoreboard players operation ${varRef(fn.params[j])} ${OBJ} = $p${j} ${OBJ}`)
+          lines.push(`scoreboard players operation ${alloc.alloc(fn.params[j])} ${OBJ} = ${alloc.internal(`p${j}`)} ${OBJ}`)
         }
       }
 
       for (const instr of block.instrs) {
-        lines.push(...emitInstr(instr as any, ns))
+        lines.push(...emitInstr(instr as any, ns, alloc))
       }
-      lines.push(...emitTerm(block.term, ns, fn.name))
+      lines.push(...emitTerm(block.term, ns, fn.name, alloc))
 
       const filePath = i === 0
         ? `data/${ns}/function/${fn.name}.mcfunction`
@@ -408,12 +408,12 @@ export function generateDatapackWithStats(
 
   // __tick.mcfunction — calls all @tick functions + trigger check
   const tickLines = ['# RedScript tick dispatcher']
-  
+
   // Call all @tick functions
   for (const fnName of tickFunctionNames) {
     tickLines.push(`function ${ns}:${fnName}`)
   }
-  
+
   // Call trigger check if there are triggers
   if (triggerNames.size > 0) {
     tickLines.push(`# Trigger checks`)

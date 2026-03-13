@@ -53,6 +53,7 @@ Options:
   --namespace <ns>       Datapack namespace (default: derived from filename)
   --target <target>      Output target: datapack (default), cmdblock, or structure
   --no-dce               Disable AST dead code elimination
+  --no-mangle            Disable variable name mangling (use readable names)
   --stats                Print optimizer statistics
   --hot-reload <url>     After each successful compile, POST to <url>/reload
                          (use with redscript-testharness; e.g. http://localhost:25561)
@@ -166,8 +167,9 @@ function parseArgs(args: string[]): {
   help?: boolean
   hotReload?: string
   dce?: boolean
+  mangle?: boolean
 } {
-  const result: ReturnType<typeof parseArgs> = { dce: true }
+  const result: ReturnType<typeof parseArgs> = { dce: true, mangle: true }
   let i = 0
 
   while (i < args.length) {
@@ -193,6 +195,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--no-dce') {
       result.dce = false
+      i++
+    } else if (arg === '--no-mangle') {
+      result.mangle = false
       i++
     } else if (arg === '--hot-reload') {
       result.hotReload = args[++i]
@@ -256,7 +261,8 @@ function compileCommand(
   namespace: string,
   target: string = 'datapack',
   showStats = false,
-  dce = true
+  dce = true,
+  mangle = true
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -268,7 +274,7 @@ function compileCommand(
 
   try {
     if (target === 'cmdblock') {
-      const result = compile(source, { namespace, filePath: file, dce })
+      const result = compile(source, { namespace, filePath: file, dce, mangle })
       printWarnings(result.warnings)
 
       // Generate command block JSON
@@ -288,7 +294,7 @@ function compileCommand(
         printOptimizationStats(result.stats)
       }
     } else if (target === 'structure') {
-      const structure = compileToStructure(source, namespace, file, { dce })
+      const structure = compileToStructure(source, namespace, file, { dce, mangle })
       fs.mkdirSync(path.dirname(output), { recursive: true })
       fs.writeFileSync(output, structure.buffer)
 
@@ -299,7 +305,7 @@ function compileCommand(
         printOptimizationStats(structure.stats)
       }
     } else {
-      const result = compile(source, { namespace, filePath: file, dce })
+      const result = compile(source, { namespace, filePath: file, dce, mangle })
       printWarnings(result.warnings)
 
       // Default: generate datapack
@@ -494,7 +500,8 @@ async function main(): Promise<void> {
         namespace,
         target,
         parsed.stats,
-        parsed.dce
+        parsed.dce,
+        parsed.mangle
       )
       }
       break

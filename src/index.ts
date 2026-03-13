@@ -35,6 +35,7 @@ export interface CompileOptions {
   typeCheck?: boolean
   filePath?: string
   dce?: boolean
+  mangle?: boolean
 }
 
 export interface CompileResult {
@@ -59,6 +60,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const shouldOptimize = options.optimize ?? true
   const shouldTypeCheck = options.typeCheck ?? true
   const shouldRunDce = options.dce ?? shouldOptimize
+  const mangle = options.mangle ?? false
   const filePath = options.filePath
   const preprocessed = preprocessSourceWithMetadata(source, { filePath })
   const preprocessedSource = preprocessed.source
@@ -83,7 +85,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const ir = lowering.lower(ast)
 
   let optimizedIR: IRModule = ir
-  let generated = generateDatapackWithStats(ir, { optimizeCommands: shouldOptimize })
+  let generated = generateDatapackWithStats(ir, { optimizeCommands: shouldOptimize, mangle })
   let optimizationStats: OptimizationStats | undefined
 
   if (shouldOptimize) {
@@ -105,10 +107,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const copyPropagatedIR: IRModule = { ...ir, functions: copyPropagatedFunctions }
     optimizedIR = { ...ir, functions: deadCodeEliminatedFunctions }
 
-    const baselineGenerated = generateDatapackWithStats(ir, { optimizeCommands: false })
-    const beforeDceGenerated = generateDatapackWithStats(copyPropagatedIR, { optimizeCommands: false })
-    const afterDceGenerated = generateDatapackWithStats(optimizedIR, { optimizeCommands: false })
-    generated = generateDatapackWithStats(optimizedIR, { optimizeCommands: true })
+    const baselineGenerated = generateDatapackWithStats(ir, { optimizeCommands: false, mangle })
+    const beforeDceGenerated = generateDatapackWithStats(copyPropagatedIR, { optimizeCommands: false, mangle })
+    const afterDceGenerated = generateDatapackWithStats(optimizedIR, { optimizeCommands: false, mangle })
+    generated = generateDatapackWithStats(optimizedIR, { optimizeCommands: true, mangle })
 
     stats.deadCodeRemoved =
       countMcfunctionCommands(beforeDceGenerated.files) - countMcfunctionCommands(afterDceGenerated.files)
@@ -124,7 +126,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     optimizationStats = stats
   } else {
     optimizedIR = ir
-    generated = generateDatapackWithStats(ir, { optimizeCommands: false })
+    generated = generateDatapackWithStats(ir, { optimizeCommands: false, mangle })
   }
 
   return {

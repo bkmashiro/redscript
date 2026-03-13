@@ -10,6 +10,7 @@ import { preprocessSource } from '../../compile'
 import type { IRCommand, IRFunction, IRModule } from '../../ir/types'
 import type { DatapackFile } from '../mcfunction'
 import { EVENT_TYPES, isEventTypeName, type EventTypeName } from '../../events/types'
+import { VarAllocator } from '../var-allocator'
 
 const DATA_VERSION = 3953
 const MAX_WIDTH = 16
@@ -54,14 +55,11 @@ export interface StructureCompileResult {
 
 export interface StructureCompileOptions {
   dce?: boolean
+  mangle?: boolean
 }
 
 function escapeJsonString(value: string): string {
   return JSON.stringify(value).slice(1, -1)
-}
-
-function varRef(name: string): string {
-  return name.startsWith('$') ? name : `$${name}`
 }
 
 function collectConsts(fn: IRFunction): Set<number> {
@@ -85,11 +83,8 @@ function collectConsts(fn: IRFunction): Set<number> {
   return consts
 }
 
-function constSetup(value: number): string {
-  return `scoreboard players set $const_${value} ${OBJ} ${value}`
-}
-
-function collectCommandEntriesFromModule(module: IRModule): CommandEntry[] {
+function collectCommandEntriesFromModule(module: IRModule, mangle = false): CommandEntry[] {
+  const alloc = new VarAllocator(mangle)
   const entries: CommandEntry[] = []
   const triggerHandlers = module.functions.filter(fn => fn.isTriggerHandler && fn.triggerName)
   const triggerNames = new Set(triggerHandlers.map(fn => fn.triggerName!))
@@ -99,14 +94,14 @@ function collectCommandEntriesFromModule(module: IRModule): CommandEntry[] {
   const eventTypes = new Set<EventTypeName>(eventHandlers.map(fn => fn.eventHandler.eventType))
   const loadCommands = [
     `scoreboard objectives add ${OBJ} dummy`,
-    ...module.globals.map(g => `scoreboard players set ${varRef(g.name)} ${OBJ} ${g.init}`),
+    ...module.globals.map(g => `scoreboard players set ${alloc.alloc(g.name)} ${OBJ} ${g.init}`),
     ...Array.from(triggerNames).flatMap(triggerName => [
       `scoreboard objectives add ${triggerName} trigger`,
       `scoreboard players enable @a ${triggerName}`,
     ]),
     ...Array.from(
       new Set(module.functions.flatMap(fn => Array.from(collectConsts(fn))))
-    ).map(constSetup),
+    ).map(value => `scoreboard players set ${alloc.constant(value)} ${OBJ} ${value}`),
   ]
 
   for (const eventType of eventTypes) {
@@ -289,10 +284,10 @@ function createBlockTag(entry: CommandEntry, index: number): CompoundTag {
   })
 }
 
-export function generateStructure(input: IRModule | DatapackFile[]): StructureCompileResult {
+export function generateStructure(input: IRModule | DatapackFile[], options?: { mangle?: boolean }): StructureCompileResult {
   const entries = Array.isArray(input)
     ? collectCommandEntriesFromFiles(input)
-    : collectCommandEntriesFromModule(input)
+    : collectCommandEntriesFromModule(input, options?.mangle)
 
   const blockTags = entries.map(createBlockTag)
   const sizeX = Math.max(1, Math.min(MAX_WIDTH, entries.length || 1))
@@ -345,7 +340,7 @@ export function compileToStructure(
     functions: structureOptimized.functions,
   }
   return {
-    ...generateStructure(optimizedModule),
+    ...generateStructure(optimizedModule, { mangle: options.mangle }),
     stats,
   }
 }
