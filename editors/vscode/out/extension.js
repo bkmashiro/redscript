@@ -1193,10 +1193,22 @@ var require_parser = __commonJS({
       parseForRangeStmt(forToken) {
         const varName = this.expect("ident").value;
         this.expect("in");
-        const rangeToken = this.expect("range_lit");
-        const range = this.parseRangeValue(rangeToken.value);
-        const start = this.withLoc({ kind: "int_lit", value: range.min ?? 0 }, rangeToken);
-        const end = this.withLoc({ kind: "int_lit", value: range.max ?? 0 }, rangeToken);
+        let start;
+        let end;
+        if (this.check("range_lit")) {
+          const rangeToken = this.advance();
+          const range = this.parseRangeValue(rangeToken.value);
+          start = this.withLoc({ kind: "int_lit", value: range.min ?? 0 }, rangeToken);
+          if (range.max !== null && range.max !== void 0) {
+            end = this.withLoc({ kind: "int_lit", value: range.max }, rangeToken);
+          } else {
+            end = this.parseUnaryExpr();
+          }
+        } else {
+          start = this.withLoc({ kind: "int_lit", value: 0 }, this.peek());
+          end = this.withLoc({ kind: "int_lit", value: 0 }, this.peek());
+          this.error("Dynamic range start requires a literal integer (e.g. 0..count)");
+        }
         const body = this.parseBlock();
         return this.withLoc({ kind: "for_range", varName, start, end, body }, forToken);
       }
@@ -1656,6 +1668,19 @@ var require_parser = __commonJS({
         this.error(`Unexpected token '${token.kind}'`);
       }
       parseLiteralExpr() {
+        if (this.check("-")) {
+          this.advance();
+          const token = this.peek();
+          if (token.kind === "int_lit") {
+            this.advance();
+            return this.withLoc({ kind: "int_lit", value: -Number(token.value) }, token);
+          }
+          if (token.kind === "float_lit") {
+            this.advance();
+            return this.withLoc({ kind: "float_lit", value: -Number(token.value) }, token);
+          }
+          this.error("Expected number after unary -");
+        }
         const expr = this.parsePrimaryExpr();
         if (expr.kind === "int_lit" || expr.kind === "float_lit" || expr.kind === "bool_lit" || expr.kind === "str_lit") {
           return expr;
