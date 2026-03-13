@@ -18,6 +18,8 @@ import { generateDts } from './builtins/metadata'
 import type { OptimizationStats } from './optimizer/commands'
 import * as fs from 'fs'
 import * as path from 'path'
+import * as https from 'https'
+import { execSync } from 'child_process'
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -43,6 +45,7 @@ Commands:
   generate-dts  Generate builtin function declaration file (builtins.d.mcrs)
   repl          Start an interactive RedScript REPL
   version       Print the RedScript version
+  upgrade       Upgrade to the latest version (npm install -g redscript-mc@latest)
 
 Options:
   -o, --output <path>    Output directory or file path, depending on target
@@ -62,14 +65,94 @@ Targets:
 `)
 }
 
-function printVersion(): void {
+function getLocalVersion(): string {
   const packagePath = path.join(__dirname, '..', 'package.json')
   try {
     const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf-8'))
-    console.log(`RedScript v${pkg.version}`)
+    return pkg.version ?? '0.0.0'
   } catch {
-    console.log('RedScript v0.1.0')
+    return '0.0.0'
   }
+}
+
+function printVersion(): void {
+  console.log(`RedScript v${getLocalVersion()}`)
+}
+
+/** Fetch latest version from npm registry (non-blocking, best-effort). */
+function fetchLatestVersion(): Promise<string | null> {
+  return new Promise(resolve => {
+    const req = https.get(
+      'https://registry.npmjs.org/redscript-mc/latest',
+      { timeout: 3000 },
+      res => {
+        let data = ''
+        res.on('data', chunk => { data += chunk })
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data)
+            resolve(json.version ?? null)
+          } catch {
+            resolve(null)
+          }
+        })
+      }
+    )
+    req.on('error', () => resolve(null))
+    req.on('timeout', () => { req.destroy(); resolve(null) })
+  })
+}
+
+/** Compare semver strings. Returns true if b > a. */
+function isNewer(current: string, latest: string): boolean {
+  const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number)
+  const [ca, cb, cc] = parse(current)
+  const [la, lb, lc] = parse(latest)
+  if (la !== ca) return la > ca
+  if (lb !== cb) return lb > cb
+  return lc > cc
+}
+
+/**
+ * Check for a newer version and print a notice if one exists.
+ * Runs in background — does NOT block normal CLI operation.
+ */
+async function checkForUpdates(silent = false): Promise<void> {
+  const current = getLocalVersion()
+  const latest = await fetchLatestVersion()
+  if (latest && isNewer(current, latest)) {
+    console.log(`\n💡 New version available: v${current} → v${latest}`)
+    console.log(`   Run: redscript upgrade\n`)
+  } else if (!silent && latest) {
+    // Only print when explicitly running 'version' or 'upgrade'
+    // No output for normal commands — keep startup noise-free
+  }
+}
+
+/** Run npm install -g to upgrade to latest. */
+function upgradeCommand(): void {
+  const current = getLocalVersion()
+  console.log(`Current version: v${current}`)
+  console.log('Checking latest version...')
+
+  fetchLatestVersion().then(latest => {
+    if (!latest) {
+      console.error('Could not fetch latest version from npm.')
+      process.exit(1)
+    }
+    if (!isNewer(current, latest)) {
+      console.log(`✅ Already up to date (v${current})`)
+      return
+    }
+    console.log(`Upgrading v${current} → v${latest}...`)
+    try {
+      execSync('npm install -g redscript-mc@latest', { stdio: 'inherit' })
+      console.log(`✅ Upgraded to v${latest}`)
+    } catch {
+      console.error('Upgrade failed. Try manually: npm install -g redscript-mc@latest')
+      process.exit(1)
+    }
+  })
 }
 
 function parseArgs(args: string[]): {
@@ -378,6 +461,13 @@ async function main(): Promise<void> {
     process.exit(parsed.help ? 0 : 1)
   }
 
+  // Background update check — non-blocking, only shows notice if newer version exists
+  // Skip for repl/upgrade/version to avoid double-printing
+  const noCheckCmds = new Set(['upgrade', 'update', 'version', 'repl'])
+  if (!noCheckCmds.has(parsed.command ?? '')) {
+    checkForUpdates().catch(() => { /* ignore */ })
+  }
+
   switch (parsed.command) {
     case 'compile':
       if (!parsed.file) {
@@ -458,6 +548,12 @@ async function main(): Promise<void> {
 
     case 'version':
       printVersion()
+      await checkForUpdates()
+      break
+
+    case 'upgrade':
+    case 'update':
+      upgradeCommand()
       break
 
     default:
