@@ -200,7 +200,8 @@ if (hp <= 0) {
 }
 
 for (let i: int = 0; i < 10; i = i + 1) {
-    summon("minecraft:zombie", (i, 64, 0));
+    say(f"Spawning wave {i}");
+    summon("minecraft:zombie", ~0, ~0, ~0);
 }
 
 foreach (player in @a) {
