@@ -2,6 +2,7 @@
 **/*.map
 **/.eslintrc.json
 node_modules/**
+**/node_modules/**
 src/**
 build.mjs
 tsconfig.json
@@ -9,3 +10,5 @@ package-lock.json
 *.vsix
 # out/ is included (bundled extension)
 icons/
+../../node_modules/**
+../../../node_modules/**
