@@ -1,4 +1,6 @@
 import * as vscode from 'vscode'
+import * as path from 'path'
+import * as fs from 'fs'
 
 const DECL_RE = /\b(fn|let|const|struct|enum)\s+(\w+)/g
 
@@ -128,6 +130,57 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// ---------------------------------------------------------------------------
+// Builtin go-to-definition support
+// ---------------------------------------------------------------------------
+
+/** Cache of builtin name → line number in builtins.d.mcrs */
+let builtinLineCache: Map<string, number> | null = null
+
+function getBuiltinDtsPath(context: vscode.ExtensionContext): string {
+  return path.join(context.extensionPath, 'builtins.d.mcrs')
+}
+
+function loadBuiltinLines(dtsPath: string): Map<string, number> {
+  if (builtinLineCache) return builtinLineCache
+  const cache = new Map<string, number>()
+  try {
+    const content = fs.readFileSync(dtsPath, 'utf-8')
+    const lines = content.split('\n')
+    // Find "declare fn <name>(" lines
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^declare fn (\w+)\(/)
+      if (m) {
+        cache.set(m[1], i)
+      }
+    }
+  } catch {
+    // dts file not found — skip
+  }
+  builtinLineCache = cache
+  return cache
+}
+
+/** Set of all builtin function names that have DTS entries */
+const KNOWN_BUILTINS = new Set([
+  'say', 'tell', 'tellraw', 'announce', 'title', 'subtitle', 'actionbar', 'title_times',
+  'give', 'kill', 'effect', 'effect_clear', 'clear', 'kick', 'xp_add', 'xp_set',
+  'tp', 'tp_to',
+  'setblock', 'fill', 'clone', 'summon', 'particle', 'playsound',
+  'weather', 'time_set', 'time_add', 'gamerule', 'difficulty',
+  'tag_add', 'tag_remove',
+  'scoreboard_get', 'score', 'scoreboard_set', 'scoreboard_display', 'scoreboard_hide',
+  'scoreboard_add_objective', 'scoreboard_remove_objective',
+  'random', 'random_native', 'random_sequence',
+  'data_get', 'data_merge',
+  'bossbar_add', 'bossbar_set_value', 'bossbar_set_max', 'bossbar_set_color',
+  'bossbar_set_style', 'bossbar_set_visible', 'bossbar_set_players',
+  'bossbar_remove', 'bossbar_get_value',
+  'team_add', 'team_remove', 'team_join', 'team_leave', 'team_option',
+  'set_new', 'set_add', 'set_contains', 'set_remove', 'set_clear',
+  'setTimeout', 'setInterval', 'clearInterval',
+])
+
 export function registerSymbolProviders(context: vscode.ExtensionContext): void {
   const selector: vscode.DocumentSelector = { language: 'redscript', scheme: 'file' }
 
@@ -140,6 +193,21 @@ export function registerSymbolProviders(context: vscode.ExtensionContext): void 
         const wordRange = doc.getWordRangeAtPosition(position)
         if (!wordRange) return null
         const word = doc.getText(wordRange)
+
+        // ── Go-to-definition for builtin functions ──────────────
+        // Only when used as a function call (followed by '(')
+        const line = doc.lineAt(position.line).text
+        const afterWord = line.slice(wordRange.end.character).trimStart()
+        if (afterWord.startsWith('(') && KNOWN_BUILTINS.has(word)) {
+          const dtsPath = getBuiltinDtsPath(context)
+          const lines = loadBuiltinLines(dtsPath)
+          const lineNum = lines.get(word)
+          if (lineNum !== undefined) {
+            const dtsUri = vscode.Uri.file(dtsPath)
+            const pos = new vscode.Position(lineNum, 0)
+            return new vscode.Location(dtsUri, pos)
+          }
+        }
 
         // Check if this is a struct literal field key: { fieldName: value }
         const structType = isStructLiteralField(doc, position, word)

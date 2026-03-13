@@ -172,6 +172,8 @@ var require_lexer = __commonJS({
       foreach: "foreach",
       match: "match",
       return: "return",
+      break: "break",
+      continue: "continue",
       as: "as",
       at: "at",
       in: "in",
@@ -1042,6 +1044,16 @@ var require_parser = __commonJS({
         if (this.check("return")) {
           return this.parseReturnStmt();
         }
+        if (this.check("break")) {
+          const token = this.advance();
+          this.match(";");
+          return this.withLoc({ kind: "break" }, token);
+        }
+        if (this.check("continue")) {
+          const token = this.advance();
+          this.match(";");
+          return this.withLoc({ kind: "continue" }, token);
+        }
         if (this.check("if")) {
           return this.parseIfStmt();
         }
@@ -1164,8 +1176,8 @@ var require_parser = __commonJS({
         const iterable = this.parseExpr();
         this.expect(")");
         let executeContext;
-        const execIdentKeywords = ["positioned", "rotated", "facing", "anchored", "align"];
-        if (this.check("at") || this.check("in") || this.check("ident") && execIdentKeywords.includes(this.peek().value)) {
+        const execIdentKeywords = ["positioned", "rotated", "facing", "anchored", "align", "on", "summon"];
+        if (this.check("as") || this.check("at") || this.check("in") || this.check("ident") && execIdentKeywords.includes(this.peek().value)) {
           let context = "";
           while (!this.check("{") && !this.check("eof")) {
             context += this.advance().value + " ";
@@ -1224,28 +1236,151 @@ var require_parser = __commonJS({
           } else if (this.match("at")) {
             const selector = this.parseSelector();
             subcommands.push({ kind: "at", selector });
+          } else if (this.checkIdent("positioned")) {
+            this.advance();
+            if (this.match("as")) {
+              const selector = this.parseSelector();
+              subcommands.push({ kind: "positioned_as", selector });
+            } else {
+              const x = this.parseCoordToken();
+              const y = this.parseCoordToken();
+              const z = this.parseCoordToken();
+              subcommands.push({ kind: "positioned", x, y, z });
+            }
+          } else if (this.checkIdent("rotated")) {
+            this.advance();
+            if (this.match("as")) {
+              const selector = this.parseSelector();
+              subcommands.push({ kind: "rotated_as", selector });
+            } else {
+              const yaw = this.parseCoordToken();
+              const pitch = this.parseCoordToken();
+              subcommands.push({ kind: "rotated", yaw, pitch });
+            }
+          } else if (this.checkIdent("facing")) {
+            this.advance();
+            if (this.checkIdent("entity")) {
+              this.advance();
+              const selector = this.parseSelector();
+              const anchor = this.checkIdent("eyes") || this.checkIdent("feet") ? this.advance().value : "feet";
+              subcommands.push({ kind: "facing_entity", selector, anchor });
+            } else {
+              const x = this.parseCoordToken();
+              const y = this.parseCoordToken();
+              const z = this.parseCoordToken();
+              subcommands.push({ kind: "facing", x, y, z });
+            }
+          } else if (this.checkIdent("anchored")) {
+            this.advance();
+            const anchor = this.advance().value;
+            subcommands.push({ kind: "anchored", anchor });
+          } else if (this.checkIdent("align")) {
+            this.advance();
+            const axes = this.advance().value;
+            subcommands.push({ kind: "align", axes });
+          } else if (this.checkIdent("on")) {
+            this.advance();
+            const relation = this.advance().value;
+            subcommands.push({ kind: "on", relation });
+          } else if (this.checkIdent("summon")) {
+            this.advance();
+            const entity = this.advance().value;
+            subcommands.push({ kind: "summon", entity });
+          } else if (this.checkIdent("store")) {
+            this.advance();
+            const storeType = this.advance().value;
+            if (this.checkIdent("score")) {
+              this.advance();
+              const target = this.advance().value;
+              const targetObj = this.advance().value;
+              if (storeType === "result") {
+                subcommands.push({ kind: "store_result", target, targetObj });
+              } else {
+                subcommands.push({ kind: "store_success", target, targetObj });
+              }
+            } else {
+              this.error("store currently only supports score target");
+            }
           } else if (this.match("if")) {
-            if (this.peek().kind === "ident" && this.peek().value === "entity") {
-              this.advance();
-            }
-            const selectorOrVar = this.parseSelectorOrVarSelector();
-            subcommands.push({ kind: "if_entity", ...selectorOrVar });
+            this.parseExecuteCondition(subcommands, "if");
           } else if (this.match("unless")) {
-            if (this.peek().kind === "ident" && this.peek().value === "entity") {
-              this.advance();
-            }
-            const selectorOrVar = this.parseSelectorOrVarSelector();
-            subcommands.push({ kind: "unless_entity", ...selectorOrVar });
+            this.parseExecuteCondition(subcommands, "unless");
           } else if (this.match("in")) {
-            const dim = this.expect("ident").value;
+            let dim = this.advance().value;
+            if (this.match(":")) {
+              dim += ":" + this.advance().value;
+            }
             subcommands.push({ kind: "in", dimension: dim });
           } else {
-            this.error(`Unexpected token in execute statement: ${this.peek().kind}`);
+            this.error(`Unexpected token in execute statement: ${this.peek().kind} (${this.peek().value})`);
           }
         }
         this.expect("run");
         const body = this.parseBlock();
         return this.withLoc({ kind: "execute", subcommands, body }, executeToken);
+      }
+      parseExecuteCondition(subcommands, type) {
+        if (this.checkIdent("entity") || this.check("selector")) {
+          if (this.checkIdent("entity"))
+            this.advance();
+          const selectorOrVar = this.parseSelectorOrVarSelector();
+          subcommands.push({ kind: type === "if" ? "if_entity" : "unless_entity", ...selectorOrVar });
+        } else if (this.checkIdent("block")) {
+          this.advance();
+          const x = this.parseCoordToken();
+          const y = this.parseCoordToken();
+          const z = this.parseCoordToken();
+          const block = this.parseBlockId();
+          subcommands.push({ kind: type === "if" ? "if_block" : "unless_block", pos: [x, y, z], block });
+        } else if (this.checkIdent("score")) {
+          this.advance();
+          const target = this.advance().value;
+          const targetObj = this.advance().value;
+          if (this.checkIdent("matches")) {
+            this.advance();
+            const range = this.advance().value;
+            subcommands.push({ kind: type === "if" ? "if_score_range" : "unless_score_range", target, targetObj, range });
+          } else {
+            const op = this.advance().value;
+            const source = this.advance().value;
+            const sourceObj = this.advance().value;
+            subcommands.push({
+              kind: type === "if" ? "if_score" : "unless_score",
+              target,
+              targetObj,
+              op,
+              source,
+              sourceObj
+            });
+          }
+        } else {
+          this.error(`Unknown condition type after ${type}`);
+        }
+      }
+      parseCoordToken() {
+        const token = this.peek();
+        if (token.kind === "rel_coord" || token.kind === "local_coord" || token.kind === "int_lit" || token.kind === "float_lit" || token.kind === "-" || token.kind === "ident") {
+          return this.advance().value;
+        }
+        this.error(`Expected coordinate, got ${token.kind}`);
+        return "~";
+      }
+      parseBlockId() {
+        let id = this.advance().value;
+        if (this.match(":")) {
+          id += ":" + this.advance().value;
+        }
+        if (this.check("[")) {
+          id += this.advance().value;
+          while (!this.check("]") && !this.check("eof")) {
+            id += this.advance().value;
+          }
+          id += this.advance().value;
+        }
+        return id;
+      }
+      checkIdent(value) {
+        return this.check("ident") && this.peek().value === value;
       }
       parseExprStmt() {
         const expr = this.parseExpr();
@@ -3128,7 +3263,7 @@ var require_lowering = __commonJS({
     exports2.Lowering = void 0;
     var builder_1 = require_builder();
     var diagnostics_1 = require_diagnostics();
-    var path = __importStar(require("path"));
+    var path2 = __importStar(require("path"));
     var types_1 = require_types();
     var BUILTINS2 = {
       say: ([msg]) => `say ${msg}`,
@@ -3245,20 +3380,20 @@ var require_lowering = __commonJS({
     var NAMESPACED_ENTITY_TYPE_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/;
     var BARE_ENTITY_TYPE_RE = /^[a-z0-9_./-]+$/;
     var ENTITY_TO_MC_TYPE = {
-      Player: "player",
-      Zombie: "zombie",
-      Skeleton: "skeleton",
-      Creeper: "creeper",
-      Spider: "spider",
-      Enderman: "enderman",
-      Pig: "pig",
-      Cow: "cow",
-      Sheep: "sheep",
-      Chicken: "chicken",
-      Villager: "villager",
-      ArmorStand: "armor_stand",
-      Item: "item",
-      Arrow: "arrow"
+      Player: "minecraft:player",
+      Zombie: "minecraft:zombie",
+      Skeleton: "minecraft:skeleton",
+      Creeper: "minecraft:creeper",
+      Spider: "minecraft:spider",
+      Enderman: "minecraft:enderman",
+      Pig: "minecraft:pig",
+      Cow: "minecraft:cow",
+      Sheep: "minecraft:sheep",
+      Chicken: "minecraft:chicken",
+      Villager: "minecraft:villager",
+      ArmorStand: "minecraft:armor_stand",
+      Item: "minecraft:item",
+      Arrow: "minecraft:arrow"
     };
     function normalizeSelector(selector, warnings) {
       return selector.replace(/type=([^,\]]+)/g, (match, entityType) => {
@@ -3314,6 +3449,7 @@ var require_lowering = __commonJS({
         this.currentContext = {};
         this.blockPosVars = /* @__PURE__ */ new Map();
         this.structDefs = /* @__PURE__ */ new Map();
+        this.structDecls = /* @__PURE__ */ new Map();
         this.enumDefs = /* @__PURE__ */ new Map();
         this.functionDefaults = /* @__PURE__ */ new Map();
         this.constValues = /* @__PURE__ */ new Map();
@@ -3321,18 +3457,185 @@ var require_lowering = __commonJS({
         this.varTypes = /* @__PURE__ */ new Map();
         this.floatVars = /* @__PURE__ */ new Set();
         this.worldObjCounter = 0;
+        this.loopStack = [];
+        this.currentFnParamNames = /* @__PURE__ */ new Set();
+        this.currentFnMacroParams = /* @__PURE__ */ new Set();
+        this.macroFunctionInfo = /* @__PURE__ */ new Map();
         this.namespace = namespace;
         this.sourceRanges = sourceRanges;
         LoweringBuilder.resetTempCounter();
       }
+      // ---------------------------------------------------------------------------
+      // MC Macro pre-scan: identify which function params need macro treatment
+      // ---------------------------------------------------------------------------
+      preScanMacroFunctions(program) {
+        for (const fn of program.declarations) {
+          const paramNames = new Set(fn.params.map((p) => p.name));
+          const macroParams = /* @__PURE__ */ new Set();
+          this.preScanStmts(fn.body, paramNames, macroParams);
+          if (macroParams.size > 0) {
+            this.macroFunctionInfo.set(fn.name, [...macroParams]);
+          }
+        }
+        for (const implBlock of program.implBlocks ?? []) {
+          for (const method of implBlock.methods) {
+            const paramNames = new Set(method.params.map((p) => p.name));
+            const macroParams = /* @__PURE__ */ new Set();
+            this.preScanStmts(method.body, paramNames, macroParams);
+            if (macroParams.size > 0) {
+              this.macroFunctionInfo.set(`${implBlock.typeName}_${method.name}`, [...macroParams]);
+            }
+          }
+        }
+      }
+      preScanStmts(stmts, paramNames, macroParams) {
+        for (const stmt of stmts) {
+          this.preScanStmt(stmt, paramNames, macroParams);
+        }
+      }
+      preScanStmt(stmt, paramNames, macroParams) {
+        switch (stmt.kind) {
+          case "expr":
+            this.preScanExpr(stmt.expr, paramNames, macroParams);
+            break;
+          case "let":
+            this.preScanExpr(stmt.init, paramNames, macroParams);
+            break;
+          case "return":
+            if (stmt.value)
+              this.preScanExpr(stmt.value, paramNames, macroParams);
+            break;
+          case "if":
+            this.preScanExpr(stmt.cond, paramNames, macroParams);
+            this.preScanStmts(stmt.then, paramNames, macroParams);
+            if (stmt.else_)
+              this.preScanStmts(stmt.else_, paramNames, macroParams);
+            break;
+          case "while":
+            this.preScanExpr(stmt.cond, paramNames, macroParams);
+            this.preScanStmts(stmt.body, paramNames, macroParams);
+            break;
+          case "for":
+            if (stmt.init)
+              this.preScanStmt(stmt.init, paramNames, macroParams);
+            this.preScanExpr(stmt.cond, paramNames, macroParams);
+            this.preScanStmts(stmt.body, paramNames, macroParams);
+            break;
+          case "for_range":
+            this.preScanStmts(stmt.body, paramNames, macroParams);
+            break;
+          case "foreach":
+            this.preScanStmts(stmt.body, paramNames, macroParams);
+            break;
+          case "match":
+            this.preScanExpr(stmt.expr, paramNames, macroParams);
+            for (const arm of stmt.arms) {
+              this.preScanStmts(arm.body, paramNames, macroParams);
+            }
+            break;
+          case "as_block":
+          case "at_block":
+            this.preScanStmts(stmt.body, paramNames, macroParams);
+            break;
+          case "execute":
+            this.preScanStmts(stmt.body, paramNames, macroParams);
+            break;
+        }
+      }
+      preScanExpr(expr, paramNames, macroParams) {
+        if (expr.kind === "call" && BUILTINS2[expr.fn] !== void 0) {
+          for (const arg of expr.args) {
+            if (arg.kind === "ident" && paramNames.has(arg.name)) {
+              macroParams.add(arg.name);
+            }
+          }
+          return;
+        }
+        if (expr.kind === "call") {
+          for (const arg of expr.args)
+            this.preScanExpr(arg, paramNames, macroParams);
+        } else if (expr.kind === "binary") {
+          this.preScanExpr(expr.left, paramNames, macroParams);
+          this.preScanExpr(expr.right, paramNames, macroParams);
+        } else if (expr.kind === "unary") {
+          this.preScanExpr(expr.operand, paramNames, macroParams);
+        } else if (expr.kind === "assign") {
+          this.preScanExpr(expr.value, paramNames, macroParams);
+        }
+      }
+      // ---------------------------------------------------------------------------
+      // Macro helpers
+      // ---------------------------------------------------------------------------
+      /**
+       * If `expr` is a function parameter that needs macro treatment (runtime value
+       * used in a literal position), returns the param name; otherwise null.
+       */
+      tryGetMacroParam(expr) {
+        if (expr.kind !== "ident")
+          return null;
+        if (!this.currentFnParamNames.has(expr.name))
+          return null;
+        if (this.constValues.has(expr.name))
+          return null;
+        if (this.stringValues.has(expr.name))
+          return null;
+        return expr.name;
+      }
+      /**
+       * Converts an expression to a string for use as a builtin arg.
+       * If the expression is a macro param, returns `$(name)` and sets macroParam.
+       */
+      exprToBuiltinArg(expr) {
+        const macroParam = this.tryGetMacroParam(expr);
+        if (macroParam) {
+          return { str: `$(${macroParam})`, macroParam };
+        }
+        if (expr.kind === "struct_lit" || expr.kind === "array_lit") {
+          return { str: this.exprToSnbt(expr) };
+        }
+        return { str: this.exprToString(expr) };
+      }
+      /**
+       * Emits a call to a macro function, setting up both scoreboard params
+       * (for arithmetic use) and NBT macro args (for coordinate/literal use).
+       */
+      emitMacroFunctionCall(fnName, args, macroParamNames, fnDecl) {
+        const params = fnDecl?.params ?? [];
+        const loweredArgs = args.map((arg) => this.lowerExpr(arg));
+        for (let i = 0; i < loweredArgs.length; i++) {
+          const operand = loweredArgs[i];
+          if (operand.kind === "const") {
+            this.builder.emitRaw(`scoreboard players set $p${i} rs ${operand.value}`);
+          } else if (operand.kind === "var") {
+            this.builder.emitRaw(`scoreboard players operation $p${i} rs = ${operand.name} rs`);
+          }
+        }
+        for (const macroParam of macroParamNames) {
+          const paramIdx = params.findIndex((p) => p.name === macroParam);
+          if (paramIdx < 0 || paramIdx >= loweredArgs.length)
+            continue;
+          const operand = loweredArgs[paramIdx];
+          if (operand.kind === "const") {
+            this.builder.emitRaw(`data modify storage rs:macro_args ${macroParam} set value ${operand.value}`);
+          } else if (operand.kind === "var") {
+            this.builder.emitRaw(`execute store result storage rs:macro_args ${macroParam} int 1 run scoreboard players get ${operand.name} rs`);
+          }
+        }
+        this.builder.emitRaw(`function ${this.namespace}:${fnName} with storage rs:macro_args`);
+        const dst = this.builder.freshTemp();
+        this.builder.emitRaw(`scoreboard players operation ${dst} rs = $ret rs`);
+        return { kind: "var", name: dst };
+      }
       lower(program) {
         this.namespace = program.namespace;
+        this.preScanMacroFunctions(program);
         for (const struct of program.structs ?? []) {
           const fields = /* @__PURE__ */ new Map();
           for (const field of struct.fields) {
             fields.set(field.name, field.type);
           }
           this.structDefs.set(struct.name, fields);
+          this.structDecls.set(struct.name, struct);
         }
         for (const enumDecl of program.enums ?? []) {
           const variants = /* @__PURE__ */ new Map();
@@ -3400,6 +3703,8 @@ var require_lowering = __commonJS({
         this.blockPosVars = /* @__PURE__ */ new Map();
         this.stringValues = /* @__PURE__ */ new Map();
         this.builder = new LoweringBuilder();
+        this.currentFnParamNames = new Set(runtimeParams.map((p) => p.name));
+        this.currentFnMacroParams = /* @__PURE__ */ new Set();
         if (staticEventDec) {
           for (let i = 0; i < fn.params.length; i++) {
             const param = fn.params[i];
@@ -3489,6 +3794,11 @@ var require_lowering = __commonJS({
         if (tickRate && tickRate > 1) {
           this.wrapWithTickRate(irFn, tickRate);
         }
+        if (this.currentFnMacroParams.size > 0) {
+          irFn.isMacroFunction = true;
+          irFn.macroParamNames = [...this.currentFnMacroParams];
+          this.macroFunctionInfo.set(loweredName, irFn.macroParamNames);
+        }
         this.functions.push(irFn);
       }
       getTickRate(decorators) {
@@ -3549,6 +3859,12 @@ var require_lowering = __commonJS({
           case "return":
             this.lowerReturnStmt(stmt);
             break;
+          case "break":
+            this.lowerBreakStmt();
+            break;
+          case "continue":
+            this.lowerContinueStmt();
+            break;
           case "if":
             this.lowerIfStmt(stmt);
             break;
@@ -3580,6 +3896,7 @@ var require_lowering = __commonJS({
             this.lowerExecuteStmt(stmt);
             break;
           case "raw":
+            this.checkRawCommandInterpolation(stmt.cmd, stmt.span);
             this.builder.emitRaw(stmt.cmd);
             break;
         }
@@ -3614,12 +3931,25 @@ var require_lowering = __commonJS({
         if (stmt.init.kind === "struct_lit" && stmt.type?.kind === "struct") {
           const structName = stmt.type.name.toLowerCase();
           for (const field of stmt.init.fields) {
-            const path2 = `rs:heap ${structName}_${stmt.name}.${field.name}`;
+            const path3 = `rs:heap ${structName}_${stmt.name}.${field.name}`;
             const fieldValue = this.lowerExpr(field.value);
             if (fieldValue.kind === "const") {
-              this.builder.emitRaw(`data modify storage ${path2} set value ${fieldValue.value}`);
+              this.builder.emitRaw(`data modify storage ${path3} set value ${fieldValue.value}`);
             } else if (fieldValue.kind === "var") {
-              this.builder.emitRaw(`execute store result storage ${path2} int 1 run scoreboard players get ${fieldValue.name} rs`);
+              this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${fieldValue.name} rs`);
+            }
+          }
+          return;
+        }
+        if ((stmt.init.kind === "call" || stmt.init.kind === "static_call") && stmt.type?.kind === "struct") {
+          this.lowerExpr(stmt.init);
+          const structDecl = this.structDecls.get(stmt.type.name);
+          if (structDecl) {
+            const structName = stmt.type.name.toLowerCase();
+            for (const field of structDecl.fields) {
+              const srcPath = `rs:heap __ret_struct.${field.name}`;
+              const dstPath = `rs:heap ${structName}_${stmt.name}.${field.name}`;
+              this.builder.emitRaw(`data modify storage ${dstPath} set from storage ${srcPath}`);
             }
           }
           return;
@@ -3665,11 +3995,38 @@ var require_lowering = __commonJS({
       }
       lowerReturnStmt(stmt) {
         if (stmt.value) {
+          if (stmt.value.kind === "struct_lit") {
+            for (const field of stmt.value.fields) {
+              const path3 = `rs:heap __ret_struct.${field.name}`;
+              const fieldValue = this.lowerExpr(field.value);
+              if (fieldValue.kind === "const") {
+                this.builder.emitRaw(`data modify storage ${path3} set value ${fieldValue.value}`);
+              } else if (fieldValue.kind === "var") {
+                this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${fieldValue.name} rs`);
+              }
+            }
+            this.builder.emitReturn({ kind: "const", value: 0 });
+            return;
+          }
           const value = this.lowerExpr(stmt.value);
           this.builder.emitReturn(value);
         } else {
           this.builder.emitReturn();
         }
+      }
+      lowerBreakStmt() {
+        if (this.loopStack.length === 0) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", "break statement outside of loop", { line: 1, col: 1 });
+        }
+        const loop = this.loopStack[this.loopStack.length - 1];
+        this.builder.emitJump(loop.breakLabel);
+      }
+      lowerContinueStmt() {
+        if (this.loopStack.length === 0) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", "continue statement outside of loop", { line: 1, col: 1 });
+        }
+        const loop = this.loopStack[this.loopStack.length - 1];
+        this.builder.emitJump(loop.continueLabel);
       }
       lowerIfStmt(stmt) {
         if (stmt.cond.kind === "is_check") {
@@ -3739,11 +4096,13 @@ var require_lowering = __commonJS({
         const condVar = this.lowerExpr(stmt.cond);
         const condName = this.operandToVar(condVar);
         this.builder.emitJumpIf(condName, bodyLabel, exitLabel);
+        this.loopStack.push({ breakLabel: exitLabel, continueLabel: checkLabel });
         this.builder.startBlock(bodyLabel);
         this.lowerBlock(stmt.body);
         if (!this.builder.isBlockSealed()) {
           this.builder.emitJump(checkLabel);
         }
+        this.loopStack.pop();
         this.builder.startBlock(exitLabel);
       }
       lowerForStmt(stmt) {
@@ -3752,18 +4111,23 @@ var require_lowering = __commonJS({
         }
         const checkLabel = this.builder.freshLabel("for_check");
         const bodyLabel = this.builder.freshLabel("for_body");
+        const continueLabel = this.builder.freshLabel("for_continue");
         const exitLabel = this.builder.freshLabel("for_exit");
         this.builder.emitJump(checkLabel);
         this.builder.startBlock(checkLabel);
         const condVar = this.lowerExpr(stmt.cond);
         const condName = this.operandToVar(condVar);
         this.builder.emitJumpIf(condName, bodyLabel, exitLabel);
+        this.loopStack.push({ breakLabel: exitLabel, continueLabel });
         this.builder.startBlock(bodyLabel);
         this.lowerBlock(stmt.body);
-        this.lowerExpr(stmt.step);
         if (!this.builder.isBlockSealed()) {
-          this.builder.emitJump(checkLabel);
+          this.builder.emitJump(continueLabel);
         }
+        this.builder.startBlock(continueLabel);
+        this.lowerExpr(stmt.step);
+        this.builder.emitJump(checkLabel);
+        this.loopStack.pop();
         this.builder.startBlock(exitLabel);
       }
       lowerForRangeStmt(stmt) {
@@ -3841,12 +4205,27 @@ var require_lowering = __commonJS({
             defaultArm = arm;
             continue;
           }
-          const patternValue = this.lowerExpr(arm.pattern);
-          if (patternValue.kind !== "const") {
-            throw new Error("Match patterns must lower to compile-time constants");
+          let matchCondition;
+          if (arm.pattern.kind === "range_lit") {
+            const range = arm.pattern.range;
+            if (range.min !== void 0 && range.max !== void 0) {
+              matchCondition = `${range.min}..${range.max}`;
+            } else if (range.min !== void 0) {
+              matchCondition = `${range.min}..`;
+            } else if (range.max !== void 0) {
+              matchCondition = `..${range.max}`;
+            } else {
+              matchCondition = "0..";
+            }
+          } else {
+            const patternValue = this.lowerExpr(arm.pattern);
+            if (patternValue.kind !== "const") {
+              throw new Error("Match patterns must lower to compile-time constants");
+            }
+            matchCondition = String(patternValue.value);
           }
           const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`;
-          this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${patternValue.value} run function ${this.namespace}:${subFnName}`);
+          this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${matchCondition} run function ${this.namespace}:${subFnName}`);
           this.emitMatchArmSubFunction(subFnName, matchedVar, arm.body, true);
         }
         if (defaultArm) {
@@ -3994,12 +4373,47 @@ var require_lowering = __commonJS({
         const parts = ["execute"];
         for (const sub of stmt.subcommands) {
           switch (sub.kind) {
+            // Context modifiers
             case "as":
               parts.push(`as ${this.selectorToString(sub.selector)}`);
               break;
             case "at":
               parts.push(`at ${this.selectorToString(sub.selector)}`);
               break;
+            case "positioned":
+              parts.push(`positioned ${sub.x} ${sub.y} ${sub.z}`);
+              break;
+            case "positioned_as":
+              parts.push(`positioned as ${this.selectorToString(sub.selector)}`);
+              break;
+            case "rotated":
+              parts.push(`rotated ${sub.yaw} ${sub.pitch}`);
+              break;
+            case "rotated_as":
+              parts.push(`rotated as ${this.selectorToString(sub.selector)}`);
+              break;
+            case "facing":
+              parts.push(`facing ${sub.x} ${sub.y} ${sub.z}`);
+              break;
+            case "facing_entity":
+              parts.push(`facing entity ${this.selectorToString(sub.selector)} ${sub.anchor}`);
+              break;
+            case "anchored":
+              parts.push(`anchored ${sub.anchor}`);
+              break;
+            case "align":
+              parts.push(`align ${sub.axes}`);
+              break;
+            case "in":
+              parts.push(`in ${sub.dimension}`);
+              break;
+            case "on":
+              parts.push(`on ${sub.relation}`);
+              break;
+            case "summon":
+              parts.push(`summon ${sub.entity}`);
+              break;
+            // Conditions
             case "if_entity":
               if (sub.selector) {
                 parts.push(`if entity ${this.selectorToString(sub.selector)}`);
@@ -4016,8 +4430,30 @@ var require_lowering = __commonJS({
                 parts.push(`unless entity ${this.selectorToString(sel)}`);
               }
               break;
-            case "in":
-              parts.push(`in ${sub.dimension}`);
+            case "if_block":
+              parts.push(`if block ${sub.pos[0]} ${sub.pos[1]} ${sub.pos[2]} ${sub.block}`);
+              break;
+            case "unless_block":
+              parts.push(`unless block ${sub.pos[0]} ${sub.pos[1]} ${sub.pos[2]} ${sub.block}`);
+              break;
+            case "if_score":
+              parts.push(`if score ${sub.target} ${sub.targetObj} ${sub.op} ${sub.source} ${sub.sourceObj}`);
+              break;
+            case "unless_score":
+              parts.push(`unless score ${sub.target} ${sub.targetObj} ${sub.op} ${sub.source} ${sub.sourceObj}`);
+              break;
+            case "if_score_range":
+              parts.push(`if score ${sub.target} ${sub.targetObj} matches ${sub.range}`);
+              break;
+            case "unless_score_range":
+              parts.push(`unless score ${sub.target} ${sub.targetObj} matches ${sub.range}`);
+              break;
+            // Store
+            case "store_result":
+              parts.push(`store result score ${sub.target} ${sub.targetObj}`);
+              break;
+            case "store_success":
+              parts.push(`store success score ${sub.target} ${sub.targetObj}`);
               break;
           }
         }
@@ -4136,9 +4572,9 @@ var require_lowering = __commonJS({
           }
           if (varType?.kind === "struct") {
             const structName = varType.name.toLowerCase();
-            const path2 = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
+            const path3 = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
             const dst = this.builder.freshTemp();
-            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path2}`);
+            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path3}`);
             return { kind: "var", name: dst };
           }
           if (varType?.kind === "array" && expr.field === "len") {
@@ -4176,20 +4612,20 @@ var require_lowering = __commonJS({
           }
           if (varType?.kind === "struct") {
             const structName = varType.name.toLowerCase();
-            const path2 = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
+            const path3 = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
             const value2 = this.lowerExpr(expr.value);
             if (expr.op === "=") {
               if (value2.kind === "const") {
-                this.builder.emitRaw(`data modify storage ${path2} set value ${value2.value}`);
+                this.builder.emitRaw(`data modify storage ${path3} set value ${value2.value}`);
               } else if (value2.kind === "var") {
-                this.builder.emitRaw(`execute store result storage ${path2} int 1 run scoreboard players get ${value2.name} rs`);
+                this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${value2.name} rs`);
               }
             } else {
               const dst = this.builder.freshTemp();
-              this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path2}`);
+              this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path3}`);
               const binOp = expr.op.slice(0, -1);
               this.builder.emitBinop(dst, { kind: "var", name: dst }, binOp, value2);
-              this.builder.emitRaw(`execute store result storage ${path2} int 1 run scoreboard players get ${dst} rs`);
+              this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${dst} rs`);
             }
             return { kind: "const", value: 0 };
           }
@@ -4384,6 +4820,21 @@ var require_lowering = __commonJS({
         }
         const implMethod = this.resolveInstanceMethod(expr);
         if (implMethod) {
+          const receiver = expr.args[0];
+          if (receiver?.kind === "ident") {
+            const receiverType = this.inferExprType(receiver);
+            if (receiverType?.kind === "struct") {
+              const structDecl = this.structDecls.get(receiverType.name);
+              const structName = receiverType.name.toLowerCase();
+              if (structDecl) {
+                for (const field of structDecl.fields) {
+                  const srcPath = `rs:heap ${structName}_${receiver.name}.${field.name}`;
+                  const dstPath = `rs:heap ${structName}_self.${field.name}`;
+                  this.builder.emitRaw(`data modify storage ${dstPath} set from storage ${srcPath}`);
+                }
+              }
+            }
+          }
           return this.emitMethodCall(implMethod.loweredName, implMethod.fn, expr.args);
         }
         const fnDecl = this.fnDecls.get(expr.fn);
@@ -4413,7 +4864,15 @@ var require_lowering = __commonJS({
           }
           const stdlibCallSite = this.getStdlibCallSiteContext(fnDecl, getSpan(expr));
           const targetFn = callbackBindings.size > 0 || stdlibCallSite ? this.ensureSpecializedFunctionWithContext(fnDecl, callbackBindings, stdlibCallSite) : expr.fn;
+          const macroParams = this.macroFunctionInfo.get(targetFn);
+          if (macroParams && macroParams.length > 0) {
+            return this.emitMacroFunctionCall(targetFn, runtimeArgs, macroParams, fnDecl);
+          }
           return this.emitDirectFunctionCall(targetFn, runtimeArgs);
+        }
+        const macroParamsForUnknown = this.macroFunctionInfo.get(expr.fn);
+        if (macroParamsForUnknown && macroParamsForUnknown.length > 0) {
+          return this.emitMacroFunctionCall(expr.fn, fullArgs, macroParamsForUnknown, void 0);
         }
         return this.emitDirectFunctionCall(expr.fn, fullArgs);
       }
@@ -4541,6 +5000,8 @@ var require_lowering = __commonJS({
         const savedBlockPosVars = new Map(this.blockPosVars);
         const savedStringValues = new Map(this.stringValues);
         const savedVarTypes = new Map(this.varTypes);
+        const savedCurrentFnParamNames = new Set(this.currentFnParamNames);
+        const savedCurrentFnMacroParams = new Set(this.currentFnMacroParams);
         try {
           return callback();
         } finally {
@@ -4556,6 +5017,8 @@ var require_lowering = __commonJS({
           this.blockPosVars = savedBlockPosVars;
           this.stringValues = savedStringValues;
           this.varTypes = savedVarTypes;
+          this.currentFnParamNames = savedCurrentFnParamNames;
+          this.currentFnMacroParams = savedCurrentFnMacroParams;
         }
       }
       lowerBuiltinCall(name, args, callSpan) {
@@ -4702,9 +5165,9 @@ var require_lowering = __commonJS({
           const dst = this.builder.freshTemp();
           const targetType = this.exprToString(args[0]);
           const target = targetType === "entity" ? this.exprToTargetString(args[1]) : this.exprToString(args[1]);
-          const path2 = this.exprToString(args[2]);
+          const path3 = this.exprToString(args[2]);
           const scale = args[3] ? this.exprToString(args[3]) : "1";
-          this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path2} ${scale}`);
+          this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path3} ${scale}`);
           return { kind: "var", name: dst };
         }
         if (name === "data_merge") {
@@ -4764,23 +5227,31 @@ var require_lowering = __commonJS({
             code: "W_DEPRECATED",
             ...callSpan ? { line: callSpan.line, col: callSpan.col } : {}
           });
-          const tpCommand = this.lowerTpCommand(args);
-          if (tpCommand) {
-            this.builder.emitRaw(tpCommand);
+          const tpResult = this.lowerTpCommandMacroAware(args);
+          if (tpResult) {
+            this.builder.emitRaw(tpResult.cmd);
           }
           return { kind: "const", value: 0 };
         }
         if (name === "tp") {
-          const tpCommand = this.lowerTpCommand(args);
-          if (tpCommand) {
-            this.builder.emitRaw(tpCommand);
+          const tpResult = this.lowerTpCommandMacroAware(args);
+          if (tpResult) {
+            this.builder.emitRaw(tpResult.cmd);
           }
           return { kind: "const", value: 0 };
         }
-        const strArgs = args.map((arg) => arg.kind === "struct_lit" || arg.kind === "array_lit" ? this.exprToSnbt(arg) : this.exprToString(arg));
-        const cmd = BUILTINS2[name](strArgs);
+        const argResults = args.map((arg) => this.exprToBuiltinArg(arg));
+        const hasMacroArg = argResults.some((r) => r.macroParam !== void 0);
+        if (hasMacroArg) {
+          argResults.forEach((r) => {
+            if (r.macroParam)
+              this.currentFnMacroParams.add(r.macroParam);
+          });
+        }
+        const strArgs = argResults.map((r) => r.str);
+        const cmd = BUILTINS2[name]?.(strArgs);
         if (cmd) {
-          this.builder.emitRaw(cmd);
+          this.builder.emitRaw(hasMacroArg ? `$${cmd}` : cmd);
         }
         return { kind: "const", value: 0 };
       }
@@ -5221,8 +5692,8 @@ var require_lowering = __commonJS({
         return (hash >>> 0).toString(16).padStart(8, "0").slice(0, 4);
       }
       isStdlibFile(filePath) {
-        const normalized = path.normalize(filePath);
-        const stdlibSegment = `${path.sep}src${path.sep}stdlib${path.sep}`;
+        const normalized = path2.normalize(filePath);
+        const stdlibSegment = `${path2.sep}src${path2.sep}stdlib${path2.sep}`;
         return normalized.includes(stdlibSegment);
       }
       filePathForSpan(span) {
@@ -5279,6 +5750,35 @@ var require_lowering = __commonJS({
           return `tp ${this.exprToString(args[0])} ${this.exprToString(args[1])} ${this.exprToString(args[2])} ${this.exprToString(args[3])}`;
         }
         return null;
+      }
+      lowerTpCommandMacroAware(args) {
+        const pos0 = args[0] ? this.resolveBlockPosExpr(args[0]) : null;
+        const pos1 = args[1] ? this.resolveBlockPosExpr(args[1]) : null;
+        if (args.length === 1 && pos0) {
+          return { cmd: `tp ${emitBlockPos(pos0)}` };
+        }
+        if (args.length === 2 && pos1) {
+          return { cmd: `tp ${this.exprToString(args[0])} ${emitBlockPos(pos1)}` };
+        }
+        if (args.length >= 2) {
+          const argResults = args.map((a) => this.exprToBuiltinArg(a));
+          const hasMacro = argResults.some((r) => r.macroParam !== void 0);
+          if (hasMacro) {
+            argResults.forEach((r) => {
+              if (r.macroParam)
+                this.currentFnMacroParams.add(r.macroParam);
+            });
+            const strs = argResults.map((r) => r.str);
+            if (args.length === 2) {
+              return { cmd: `$tp ${strs[0]} ${strs[1]}` };
+            }
+            if (args.length === 4) {
+              return { cmd: `$tp ${strs[0]} ${strs[1]} ${strs[2]} ${strs[3]}` };
+            }
+          }
+        }
+        const plain = this.lowerTpCommand(args);
+        return plain ? { cmd: plain } : null;
       }
       resolveBlockPosExpr(expr) {
         if (expr.kind === "blockpos") {
@@ -5372,6 +5872,28 @@ var require_lowering = __commonJS({
           return { kind: "enum", name: expr.obj.name };
         }
         return void 0;
+      }
+      /**
+       * Checks a raw() command string for `${...}` interpolation containing runtime variables.
+       * - If the interpolated name is a compile-time constant → OK, no error.
+       * - If the interpolated name is a runtime variable → DiagnosticError.
+       * This catches the common mistake of writing raw("say ${score}") expecting interpolation,
+       * which would silently emit a literal `${score}` in the MC command.
+       */
+      checkRawCommandInterpolation(cmd, span) {
+        const interpRe = /\$\{([^}]+)\}/g;
+        let match;
+        while ((match = interpRe.exec(cmd)) !== null) {
+          const name = match[1].trim();
+          if (/^\d+(\.\d+)?$/.test(name) || name === "true" || name === "false") {
+            continue;
+          }
+          if (this.constValues.has(name)) {
+            continue;
+          }
+          const loc = span ?? { line: 1, col: 1 };
+          throw new diagnostics_1.DiagnosticError("LoweringError", `raw() command contains runtime variable interpolation '\${${name}}'. Variables cannot be interpolated into raw commands at compile time. Use f-string messages for say/tell/announce, or MC macro syntax '$(${name})' for MC 1.20.2+ commands.`, loc);
+        }
       }
       resolveInstanceMethod(expr) {
         const receiver = expr.args[0];
@@ -5647,6 +6169,7 @@ var require_commands = __commonJS({
         setblockSavedCommands: 0,
         deadCodeRemoved: 0,
         constantFolds: 0,
+        inlinedTrivialFunctions: 0,
         totalCommandsBefore: 0,
         totalCommandsAfter: 0
       };
@@ -5943,11 +6466,81 @@ var require_commands = __commonJS({
       stats.totalCommandsAfter = optimized.reduce((sum, fn) => sum + fn.commands.length, 0);
       return { functions: optimized, stats };
     }
+    function inlineTrivialFunctions(functions) {
+      const FUNCTION_CMD_RE = /^function ([^:]+):(.+)$/;
+      const trivialMap = /* @__PURE__ */ new Map();
+      const emptyFunctions = /* @__PURE__ */ new Set();
+      const SYSTEM_FUNCTIONS = /* @__PURE__ */ new Set(["__tick", "__load"]);
+      for (const fn of functions) {
+        if (SYSTEM_FUNCTIONS.has(fn.name) || fn.name.startsWith("__trigger_")) {
+          continue;
+        }
+        const nonCommentCmds = fn.commands.filter((cmd) => !cmd.cmd.startsWith("#"));
+        if (nonCommentCmds.length === 0 && fn.name.includes("/")) {
+          emptyFunctions.add(fn.name);
+        } else if (nonCommentCmds.length === 1 && fn.name.includes("/")) {
+          const match = nonCommentCmds[0].cmd.match(FUNCTION_CMD_RE);
+          if (match) {
+            trivialMap.set(fn.name, match[2]);
+          }
+        }
+      }
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const [from, to] of trivialMap) {
+          if (emptyFunctions.has(to)) {
+            trivialMap.delete(from);
+            emptyFunctions.add(from);
+            changed = true;
+          } else {
+            const finalTarget = trivialMap.get(to);
+            if (finalTarget && finalTarget !== to) {
+              trivialMap.set(from, finalTarget);
+              changed = true;
+            }
+          }
+        }
+      }
+      const totalRemoved = trivialMap.size + emptyFunctions.size;
+      if (totalRemoved === 0) {
+        return { functions, stats: {} };
+      }
+      const removedNames = /* @__PURE__ */ new Set([...trivialMap.keys(), ...emptyFunctions]);
+      const result = [];
+      for (const fn of functions) {
+        if (removedNames.has(fn.name)) {
+          continue;
+        }
+        const rewrittenCmds = [];
+        for (const cmd of fn.commands) {
+          const emptyCallMatch = cmd.cmd.match(/^(?:execute .* run )?function ([^:]+):([^\s]+)$/);
+          if (emptyCallMatch) {
+            const targetFn = emptyCallMatch[2];
+            if (emptyFunctions.has(targetFn)) {
+              continue;
+            }
+          }
+          const rewritten = cmd.cmd.replace(/function ([^:]+):([^\s]+)/g, (match, ns, fnPath) => {
+            const target = trivialMap.get(fnPath);
+            return target ? `function ${ns}:${target}` : match;
+          });
+          rewrittenCmds.push({ ...cmd, cmd: rewritten });
+        }
+        result.push({ name: fn.name, commands: rewrittenCmds });
+      }
+      return {
+        functions: result,
+        stats: { inlinedTrivialFunctions: totalRemoved }
+      };
+    }
     function optimizeCommandFunctions(functions) {
       const initial = cloneFunctions(functions);
       const stats = createEmptyOptimizationStats();
       stats.totalCommandsBefore = initial.reduce((sum, fn) => sum + fn.commands.length, 0);
-      const licm = applyLICM(initial);
+      const inlined = inlineTrivialFunctions(initial);
+      mergeOptimizationStats(stats, inlined.stats);
+      const licm = applyLICM(inlined.functions);
       mergeOptimizationStats(stats, licm.stats);
       const cse = applyCSE(licm.functions);
       mergeOptimizationStats(stats, cse.stats);
@@ -6249,6 +6842,7 @@ var require_dce = __commonJS({
         this.localReads = /* @__PURE__ */ new Set();
         this.localDeclIds = /* @__PURE__ */ new WeakMap();
         this.localIdCounter = 0;
+        this.warnings = [];
       }
       eliminate(program) {
         this.functionMap.clear();
@@ -6256,6 +6850,7 @@ var require_dce = __commonJS({
         this.usedConstants.clear();
         this.localReads.clear();
         this.localIdCounter = 0;
+        this.warnings.length = 0;
         for (const fn of program.declarations) {
           this.functionMap.set(fn.name, fn);
         }
@@ -6290,7 +6885,7 @@ var require_dce = __commonJS({
       findEntryPoints(program) {
         const entries = /* @__PURE__ */ new Set();
         for (const fn of program.declarations) {
-          if (fn.name === "main") {
+          if (!fn.name.startsWith("_")) {
             entries.add(fn.name);
           }
           if (fn.decorators.some((decorator) => [
@@ -6304,7 +6899,6 @@ var require_dce = __commonJS({
             "on_login",
             "on_join_team",
             "keep"
-            // Prevent DCE from removing this function
           ].includes(decorator.name))) {
             entries.add(fn.name);
           }
@@ -6415,6 +7009,8 @@ var require_dce = __commonJS({
             this.collectNestedStmtRefs(stmt, scope);
             break;
           case "raw":
+          case "break":
+          case "continue":
             break;
         }
       }
@@ -6575,6 +7171,12 @@ var require_dce = __commonJS({
               }
               return [copySpan({ ...stmt, init }, stmt)];
             }
+            this.warnings.push({
+              message: `Unused variable '${stmt.name}'`,
+              code: "W_UNUSED_VAR",
+              line: stmt.span?.line,
+              col: stmt.span?.col
+            });
             if (isPureExpr(init)) {
               return [];
             }
@@ -6672,6 +7274,10 @@ var require_dce = __commonJS({
             return [copySpan({ ...stmt, body: this.transformBlock(stmt.body, scope) }, stmt)];
           case "raw":
             return [stmt];
+          case "break":
+            return [stmt];
+          case "continue":
+            return [stmt];
         }
       }
       transformExpr(expr, scope) {
@@ -6758,7 +7364,9 @@ var require_dce = __commonJS({
     };
     exports2.DeadCodeEliminator = DeadCodeEliminator;
     function eliminateDeadCode(program) {
-      return new DeadCodeEliminator().eliminate(program);
+      const eliminator = new DeadCodeEliminator();
+      const result = eliminator.eliminate(program);
+      return { program: result, warnings: eliminator.warnings };
     }
   }
 });
@@ -6931,8 +7539,12 @@ var require_mcfunction = __commonJS({
         commands: entry.commands
       })));
       const commandMap = new Map(optimized.functions.map((fn) => [fn.name, fn.commands]));
+      const optimizedNames = new Set(optimized.functions.map((fn) => fn.name));
       return {
-        files: files.map((file) => {
+        files: files.filter((file) => {
+          const functionName = toFunctionName(file);
+          return !functionName || optimizedNames.has(functionName);
+        }).map((file) => {
           const functionName = toFunctionName(file);
           if (!functionName)
             return file;
@@ -7086,11 +7698,11 @@ var require_mcfunction = __commonJS({
         if (!eventTrigger) {
           continue;
         }
-        let path = "";
+        let path2 = "";
         let criteria = {};
         switch (eventTrigger.kind) {
           case "advancement":
-            path = `data/${ns}/advancements/on_advancement_${fn.name}.json`;
+            path2 = `data/${ns}/advancements/on_advancement_${fn.name}.json`;
             criteria = {
               trigger: {
                 trigger: `minecraft:${eventTrigger.value}`
@@ -7098,7 +7710,7 @@ var require_mcfunction = __commonJS({
             };
             break;
           case "craft":
-            path = `data/${ns}/advancements/on_craft_${fn.name}.json`;
+            path2 = `data/${ns}/advancements/on_craft_${fn.name}.json`;
             criteria = {
               crafted: {
                 trigger: "minecraft:inventory_changed",
@@ -7113,7 +7725,7 @@ var require_mcfunction = __commonJS({
             };
             break;
           case "death":
-            path = `data/${ns}/advancements/on_death_${fn.name}.json`;
+            path2 = `data/${ns}/advancements/on_death_${fn.name}.json`;
             criteria = {
               death: {
                 trigger: "minecraft:entity_killed_player"
@@ -7125,7 +7737,7 @@ var require_mcfunction = __commonJS({
             continue;
         }
         advancements.push({
-          path,
+          path: path2,
           content: JSON.stringify({
             criteria,
             rewards: {
@@ -7195,8 +7807,8 @@ var require_compile = __commonJS({
     exports2.preprocessSource = preprocessSource;
     exports2.compile = compile;
     exports2.formatCompileError = formatCompileError;
-    var fs = __importStar(require("fs"));
-    var path = __importStar(require("path"));
+    var fs2 = __importStar(require("fs"));
+    var path2 = __importStar(require("path"));
     var lexer_1 = require_lexer();
     var parser_1 = require_parser();
     var lowering_1 = require_lowering();
@@ -7219,7 +7831,7 @@ var require_compile = __commonJS({
       const { filePath } = options;
       const seen = options.seen ?? /* @__PURE__ */ new Set();
       if (filePath) {
-        seen.add(path.resolve(filePath));
+        seen.add(path2.resolve(filePath));
       }
       const lines = source.split("\n");
       const imports = [];
@@ -7233,12 +7845,12 @@ var require_compile = __commonJS({
           if (!filePath) {
             throw new diagnostics_1.DiagnosticError("ParseError", "Import statements require a file path", { line: i + 1, col: 1 }, lines);
           }
-          const importPath = path.resolve(path.dirname(filePath), match[1]);
+          const importPath = path2.resolve(path2.dirname(filePath), match[1]);
           if (!seen.has(importPath)) {
             seen.add(importPath);
             let importedSource;
             try {
-              importedSource = fs.readFileSync(importPath, "utf-8");
+              importedSource = fs2.readFileSync(importPath, "utf-8");
             } catch {
               throw new diagnostics_1.DiagnosticError("ParseError", `Cannot import '${match[1]}'`, { file: filePath, line: i + 1, col: 1 }, lines);
             }
@@ -7266,7 +7878,7 @@ var require_compile = __commonJS({
         ranges.push({
           startLine: lineOffset + 1,
           endLine: lineOffset + countLines(body),
-          filePath: path.resolve(filePath)
+          filePath: path2.resolve(filePath)
         });
       }
       return { source: combined, ranges };
@@ -7284,7 +7896,8 @@ var require_compile = __commonJS({
         sourceLines = preprocessedSource.split("\n");
         const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
         const parsedAst = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
-        const ast = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst) : parsedAst;
+        const dceResult = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst) : { program: parsedAst, warnings: [] };
+        const ast = dceResult.program;
         const ir = new lowering_1.Lowering(namespace, preprocessed.ranges).lower(ast);
         const optimized = shouldOptimize ? { ...ir, functions: ir.functions.map((fn) => (0, passes_1.optimize)(fn)) } : ir;
         const generated = (0, mcfunction_1.generateDatapackWithStats)(optimized);
@@ -7364,7 +7977,7 @@ var require_mc_validator = __commonJS({
     })();
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.MCCommandValidator = void 0;
-    var fs = __importStar(require("fs"));
+    var fs2 = __importStar(require("fs"));
     var FUNCTION_ID_RE = /^[0-9a-z_.-]+:[0-9a-z_./-]+$/i;
     var INTEGER_RE = /^-?\d+$/;
     var SCORE_RANGE_RE = /^-?\d+\.\.$|^\.\.-?\d+$|^-?\d+\.\.-?\d+$|^-?\d+$/;
@@ -7377,7 +7990,7 @@ var require_mc_validator = __commonJS({
     var SCOREBOARD_OPERATIONS = /* @__PURE__ */ new Set(["=", "+=", "-=", "*=", "/=", "%=", "<", ">", "><"]);
     var MCCommandValidator = class {
       constructor(commandsPath) {
-        const parsed = JSON.parse(fs.readFileSync(commandsPath, "utf-8"));
+        const parsed = JSON.parse(fs2.readFileSync(commandsPath, "utf-8"));
         this.root = parsed.root;
         this.rootChildren = parsed.root.children ?? [];
       }
@@ -7653,9 +8266,10 @@ var require_dist = __commonJS({
   "../../dist/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.MCCommandValidator = exports2.generateDatapack = exports2.optimize = exports2.Lowering = exports2.TypeChecker = exports2.Parser = exports2.Lexer = void 0;
+    exports2.MCCommandValidator = exports2.generateDatapack = exports2.optimize = exports2.Lowering = exports2.TypeChecker = exports2.Parser = exports2.Lexer = exports2.version = void 0;
     exports2.compile = compile;
     exports2.check = check;
+    exports2.version = "1.2.11";
     var lexer_1 = require_lexer();
     var parser_1 = require_parser();
     var typechecker_1 = require_typechecker();
@@ -7675,7 +8289,8 @@ var require_dist = __commonJS({
       const preprocessedSource = preprocessed.source;
       const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
       const parsedAst = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
-      const ast = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst) : parsedAst;
+      const dceResult = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst) : { program: parsedAst, warnings: [] };
+      const ast = dceResult.program;
       let typeErrors;
       if (shouldTypeCheck) {
         const checker = new typechecker_1.TypeChecker(preprocessedSource, filePath);
@@ -7725,7 +8340,7 @@ var require_dist = __commonJS({
         ast,
         ir: optimizedIR,
         typeErrors,
-        warnings: lowering.warnings,
+        warnings: [...dceResult.warnings, ...lowering.warnings],
         stats: optimizationStats
       };
     }
@@ -8950,6 +9565,8 @@ function registerCompletionProvider(context) {
 
 // src/symbols.ts
 var vscode4 = __toESM(require("vscode"));
+var path = __toESM(require("path"));
+var fs = __toESM(require("fs"));
 var DECL_RE = /\b(fn|let|const|struct|enum)\s+(\w+)/g;
 function findDeclarations(doc) {
   const text = doc.getText();
@@ -9028,6 +9645,94 @@ function findAllOccurrences(doc, word) {
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+var builtinLineCache = null;
+function getBuiltinDtsPath(context) {
+  return path.join(context.extensionPath, "builtins.d.mcrs");
+}
+function loadBuiltinLines(dtsPath) {
+  if (builtinLineCache) return builtinLineCache;
+  const cache = /* @__PURE__ */ new Map();
+  try {
+    const content = fs.readFileSync(dtsPath, "utf-8");
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^declare fn (\w+)\(/);
+      if (m) {
+        cache.set(m[1], i);
+      }
+    }
+  } catch {
+  }
+  builtinLineCache = cache;
+  return cache;
+}
+var KNOWN_BUILTINS = /* @__PURE__ */ new Set([
+  "say",
+  "tell",
+  "tellraw",
+  "announce",
+  "title",
+  "subtitle",
+  "actionbar",
+  "title_times",
+  "give",
+  "kill",
+  "effect",
+  "effect_clear",
+  "clear",
+  "kick",
+  "xp_add",
+  "xp_set",
+  "tp",
+  "tp_to",
+  "setblock",
+  "fill",
+  "clone",
+  "summon",
+  "particle",
+  "playsound",
+  "weather",
+  "time_set",
+  "time_add",
+  "gamerule",
+  "difficulty",
+  "tag_add",
+  "tag_remove",
+  "scoreboard_get",
+  "score",
+  "scoreboard_set",
+  "scoreboard_display",
+  "scoreboard_hide",
+  "scoreboard_add_objective",
+  "scoreboard_remove_objective",
+  "random",
+  "random_native",
+  "random_sequence",
+  "data_get",
+  "data_merge",
+  "bossbar_add",
+  "bossbar_set_value",
+  "bossbar_set_max",
+  "bossbar_set_color",
+  "bossbar_set_style",
+  "bossbar_set_visible",
+  "bossbar_set_players",
+  "bossbar_remove",
+  "bossbar_get_value",
+  "team_add",
+  "team_remove",
+  "team_join",
+  "team_leave",
+  "team_option",
+  "set_new",
+  "set_add",
+  "set_contains",
+  "set_remove",
+  "set_clear",
+  "setTimeout",
+  "setInterval",
+  "clearInterval"
+]);
 function registerSymbolProviders(context) {
   const selector = { language: "redscript", scheme: "file" };
   context.subscriptions.push(
@@ -9037,6 +9742,18 @@ function registerSymbolProviders(context) {
         const wordRange = doc.getWordRangeAtPosition(position);
         if (!wordRange) return null;
         const word = doc.getText(wordRange);
+        const line = doc.lineAt(position.line).text;
+        const afterWord = line.slice(wordRange.end.character).trimStart();
+        if (afterWord.startsWith("(") && KNOWN_BUILTINS.has(word)) {
+          const dtsPath = getBuiltinDtsPath(context);
+          const lines = loadBuiltinLines(dtsPath);
+          const lineNum = lines.get(word);
+          if (lineNum !== void 0) {
+            const dtsUri = vscode4.Uri.file(dtsPath);
+            const pos = new vscode4.Position(lineNum, 0);
+            return new vscode4.Location(dtsUri, pos);
+          }
+        }
         const structType = isStructLiteralField(doc, position, word);
         if (structType) {
           const structFields = findStructFields(doc);
