@@ -785,6 +785,7 @@ export class Lowering {
         this.lowerExecuteStmt(stmt)
         break
       case 'raw':
+        this.checkRawCommandInterpolation(stmt.cmd, stmt.span)
         this.builder.emitRaw(stmt.cmd)
         break
     }
@@ -3251,6 +3252,38 @@ export class Lowering {
       return { kind: 'enum', name: expr.obj.name }
     }
     return undefined
+  }
+
+  /**
+   * Checks a raw() command string for `${...}` interpolation containing runtime variables.
+   * - If the interpolated name is a compile-time constant → OK, no error.
+   * - If the interpolated name is a runtime variable → DiagnosticError.
+   * This catches the common mistake of writing raw("say ${score}") expecting interpolation,
+   * which would silently emit a literal `${score}` in the MC command.
+   */
+  private checkRawCommandInterpolation(cmd: string, span?: Span): void {
+    const interpRe = /\$\{([^}]+)\}/g
+    let match: RegExpExecArray | null
+    while ((match = interpRe.exec(cmd)) !== null) {
+      const name = match[1].trim()
+      // Constant expressions (pure numbers, booleans) are fine
+      if (/^\d+(\.\d+)?$/.test(name) || name === 'true' || name === 'false') {
+        continue
+      }
+      // Compile-time constants (declared via `const`) are fine
+      if (this.constValues.has(name)) {
+        continue
+      }
+      // Everything else is a runtime variable → emit error
+      const loc = span ?? { line: 1, col: 1 }
+      throw new DiagnosticError(
+        'LoweringError',
+        `raw() command contains runtime variable interpolation '\${${name}}'. ` +
+        `Variables cannot be interpolated into raw commands at compile time. ` +
+        `Use f-string messages for say/tell/announce, or MC macro syntax '$(${name})' for MC 1.20.2+ commands.`,
+        loc
+      )
+    }
   }
 
   private resolveInstanceMethod(expr: Extract<Expr, { kind: 'call' }>): { fn: FnDecl; loweredName: string } | null {
