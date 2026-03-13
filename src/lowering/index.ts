@@ -387,7 +387,26 @@ export class Lowering {
     if (macroParam) {
       return { str: `$(${macroParam})`, macroParam }
     }
-    // Handle ~ident (e.g. ~height) - relative coord with variable offset
+    // Handle ~ident / ^ident syntax — relative/local coord with a VARIABLE offset.
+    //
+    // WHY macros are required here:
+    //   Minecraft's ~N and ^N coordinate syntax requires N to be a compile-time
+    //   literal number. There is no command that accepts a scoreboard value as a
+    //   relative offset. Therefore `~height` (where height is a runtime int) can
+    //   only be expressed at the MC level via the 1.20.2+ function macro system,
+    //   which substitutes $(height) into the command text at call time.
+    //
+    //   Contrast with absolute coords: `tp(target, x, y, z)` where x/y/z are
+    //   plain ints — those become $(x) etc. as literal replacements, same mechanism,
+    //   but the distinction matters to callers: ~$(height) means "relative by height
+    //   blocks from current pos", not "teleport to absolute scoreboard value".
+    //
+    //   Example:
+    //     fn launch_up(target: selector, height: int) {
+    //       tp(target, ~0, ~height, ~0);   // "~height" parsed as rel_coord
+    //     }
+    //   Emits:  $tp $(target) ~0 ~$(height) ~0
+    //   Called: function ns:launch_up with storage rs:macro_args
     if (expr.kind === 'rel_coord' || expr.kind === 'local_coord') {
       const val = expr.value  // e.g. "~height" or "^depth"
       const prefix = val[0]   // ~ or ^
