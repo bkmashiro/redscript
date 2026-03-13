@@ -16,6 +16,12 @@ import * as os from 'os'
 const REPO_ROOT = path.resolve(__dirname, '../../')
 const CLI = path.join(REPO_ROOT, 'dist', 'cli.js')
 
+// Ensure dist/cli.js exists — build first if not (e.g. in CI)
+if (!fs.existsSync(CLI)) {
+  console.log('[compile-all] dist/cli.js not found, running npm run build...')
+  execSync('npm run build', { cwd: REPO_ROOT, stdio: 'inherit' })
+}
+
 /** Patterns to skip */
 const SKIP_GLOBS = [
   'node_modules',
