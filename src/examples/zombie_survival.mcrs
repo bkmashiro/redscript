@@ -29,7 +29,7 @@ struct SurvivalState {
     total_kills: int
 }
 
-let state: SurvivalState = SurvivalState {
+let state: SurvivalState = {
     running: 0,
     wave: 0,
     zombies_left: 0,

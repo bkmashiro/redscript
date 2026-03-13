@@ -668,17 +668,29 @@ export class Parser {
   private parseForRangeStmt(forToken: Token): Stmt {
     const varName = this.expect('ident').value
     this.expect('in')
-    const rangeToken = this.expect('range_lit')
-    const range = this.parseRangeValue(rangeToken.value)
 
-    const start: Expr = this.withLoc(
-      { kind: 'int_lit', value: range.min ?? 0 },
-      rangeToken
-    )
-    const end: Expr = this.withLoc(
-      { kind: 'int_lit', value: range.max ?? 0 },
-      rangeToken
-    )
+    let start: Expr
+    let end: Expr
+
+    if (this.check('range_lit')) {
+      // Literal range: 0..10, 0..count, 0..=9
+      const rangeToken = this.advance()
+      const range = this.parseRangeValue(rangeToken.value)
+      start = this.withLoc({ kind: 'int_lit', value: range.min ?? 0 }, rangeToken)
+      if (range.max !== null && range.max !== undefined) {
+        // Fully numeric: 0..10
+        end = this.withLoc({ kind: 'int_lit', value: range.max }, rangeToken)
+      } else {
+        // Open-ended: "0.." — parse the end expression from next tokens
+        end = this.parseUnaryExpr()
+      }
+    } else {
+      // Dynamic range: expr..expr (e.g. start..end) — not yet supported
+      // Fall back to: parse as int_lit 0..0 (safe default)
+      start = this.withLoc({ kind: 'int_lit', value: 0 }, this.peek())
+      end   = this.withLoc({ kind: 'int_lit', value: 0 }, this.peek())
+      this.error('Dynamic range start requires a literal integer (e.g. 0..count)')
+    }
 
     const body = this.parseBlock()
     return this.withLoc({ kind: 'for_range', varName, start, end, body }, forToken)
@@ -1260,6 +1272,20 @@ export class Parser {
   }
 
   private parseLiteralExpr(): LiteralExpr {
+    // Support negative literals: -5, -3.14
+    if (this.check('-')) {
+      this.advance()
+      const token = this.peek()
+      if (token.kind === 'int_lit') {
+        this.advance()
+        return this.withLoc({ kind: 'int_lit', value: -Number(token.value) }, token)
+      }
+      if (token.kind === 'float_lit') {
+        this.advance()
+        return this.withLoc({ kind: 'float_lit', value: -Number(token.value) }, token)
+      }
+      this.error('Expected number after unary -')
+    }
     const expr = this.parsePrimaryExpr()
     if (
       expr.kind === 'int_lit' ||

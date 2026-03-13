@@ -31,7 +31,7 @@ struct HGState {
     alive_count: int
 }
 
-let game: HGState = HGState {
+let game: HGState = {
     running: 0,
     phase: 0,
     countdown: 0,
