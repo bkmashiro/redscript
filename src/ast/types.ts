@@ -139,6 +139,8 @@ export type Expr =
   | { kind: 'short_lit';  value: number; span?: Span }
   | { kind: 'long_lit';   value: number; span?: Span }
   | { kind: 'double_lit'; value: number; span?: Span }
+  | { kind: 'rel_coord';  value: string; span?: Span }   // ~  ~5  ~-3  (relative coordinate)
+  | { kind: 'local_coord'; value: string; span?: Span }  // ^  ^5  ^-3  (local/facing coordinate)
   | { kind: 'bool_lit';   value: boolean; span?: Span }
   | { kind: 'str_lit';    value: string; span?: Span }
   | { kind: 'mc_name';   value: string; span?: Span }  // #health → "health" (MC identifier)

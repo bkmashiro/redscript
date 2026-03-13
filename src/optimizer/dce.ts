@@ -28,6 +28,8 @@ function isPureExpr(expr: Expr): boolean {
     case 'short_lit':
     case 'long_lit':
     case 'double_lit':
+    case 'rel_coord':
+    case 'local_coord':
     case 'bool_lit':
     case 'str_lit':
     case 'mc_name':
@@ -601,6 +603,8 @@ export class DeadCodeEliminator {
       case 'long_lit':
       case 'mc_name':
       case 'range_lit':
+      case 'rel_coord':
+      case 'local_coord':
       case 'selector':
       case 'short_lit':
       case 'str_lit':

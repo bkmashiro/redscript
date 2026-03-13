@@ -2422,6 +2422,10 @@ export class Lowering {
         return `${expr.value}L`
       case 'double_lit':
         return `${expr.value}d`
+      case 'rel_coord':
+        return expr.value   // ~ or ~5 or ~-3 - output as-is for MC commands
+      case 'local_coord':
+        return expr.value   // ^ or ^5 or ^-3 - output as-is for MC commands
       case 'bool_lit':
         return expr.value ? '1' : '0'
       case 'str_lit':

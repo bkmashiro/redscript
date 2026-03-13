@@ -178,8 +178,19 @@ describe('Lexer', () => {
 
   describe('operators', () => {
     it('tokenizes arithmetic operators', () => {
-      const tokens = tokenize('+ - * / % ~ ^')
-      expect(kinds(tokens)).toEqual(['+', '-', '*', '/', '%', '~', '^', 'eof'])
+      const tokens = tokenize('+ - * / %')
+      expect(kinds(tokens)).toEqual(['+', '-', '*', '/', '%', 'eof'])
+    })
+
+    it('tokenizes relative and local coordinates', () => {
+      const tokens = tokenize('~ ~5 ~-3 ^ ^10 ^-2')
+      expect(kinds(tokens)).toEqual(['rel_coord', 'rel_coord', 'rel_coord', 'local_coord', 'local_coord', 'local_coord', 'eof'])
+      expect(tokens[0].value).toBe('~')
+      expect(tokens[1].value).toBe('~5')
+      expect(tokens[2].value).toBe('~-3')
+      expect(tokens[3].value).toBe('^')
+      expect(tokens[4].value).toBe('^10')
+      expect(tokens[5].value).toBe('^-2')
     })
 
     it('tokenizes comparison operators', () => {

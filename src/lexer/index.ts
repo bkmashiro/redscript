@@ -36,6 +36,8 @@ export type TokenKind =
   | 'string_lit'    // "hello"
   | 'f_string'      // f"hello {name}"
   | 'range_lit'     // ..5  1..  1..10
+  | 'rel_coord'     // ~  ~5  ~-3  (relative coordinate)
+  | 'local_coord'   // ^  ^5  ^-3  (local/facing coordinate)
   // Operators
   | '+' | '-' | '*' | '/' | '%'
   | '~' | '^'
@@ -276,8 +278,52 @@ export class Lexer {
       return
     }
 
+    // Relative coordinate: ~ or ~5 or ~-3 or ~0.5
+    if (char === '~') {
+      let value = '~'
+      // Check for optional sign
+      if (this.peek() === '-' || this.peek() === '+') {
+        value += this.advance()
+      }
+      // Check for number
+      while (/[0-9]/.test(this.peek())) {
+        value += this.advance()
+      }
+      // Check for decimal part
+      if (this.peek() === '.' && /[0-9]/.test(this.peek(1))) {
+        value += this.advance() // .
+        while (/[0-9]/.test(this.peek())) {
+          value += this.advance()
+        }
+      }
+      this.addToken('rel_coord', value, startLine, startCol)
+      return
+    }
+
+    // Local coordinate: ^ or ^5 or ^-3 or ^0.5
+    if (char === '^') {
+      let value = '^'
+      // Check for optional sign
+      if (this.peek() === '-' || this.peek() === '+') {
+        value += this.advance()
+      }
+      // Check for number
+      while (/[0-9]/.test(this.peek())) {
+        value += this.advance()
+      }
+      // Check for decimal part
+      if (this.peek() === '.' && /[0-9]/.test(this.peek(1))) {
+        value += this.advance() // .
+        while (/[0-9]/.test(this.peek())) {
+          value += this.advance()
+        }
+      }
+      this.addToken('local_coord', value, startLine, startCol)
+      return
+    }
+
     // Single-character operators and delimiters
-    const singleChar: TokenKind[] = ['+', '-', '*', '/', '%', '~', '^', '<', '>', '!', '=',
+    const singleChar: TokenKind[] = ['+', '-', '*', '/', '%', '<', '>', '!', '=',
       '{', '}', '(', ')', '[', ']', ',', ';', ':', '.']
     if (singleChar.includes(char as TokenKind)) {
       this.addToken(char as TokenKind, char, startLine, startCol)

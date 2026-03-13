@@ -965,6 +965,18 @@ export class Parser {
       return this.withLoc({ kind: 'float_lit', value: parseFloat(token.value) }, token)
     }
 
+    // Relative coordinate: ~  ~5  ~-3  ~0.5
+    if (token.kind === 'rel_coord') {
+      this.advance()
+      return this.withLoc({ kind: 'rel_coord', value: token.value }, token)
+    }
+
+    // Local coordinate: ^  ^5  ^-3  ^0.5
+    if (token.kind === 'local_coord') {
+      this.advance()
+      return this.withLoc({ kind: 'local_coord', value: token.value }, token)
+    }
+
     // NBT suffix literals
     if (token.kind === 'byte_lit') {
       this.advance()
@@ -1409,20 +1421,11 @@ export class Parser {
       return this.peek(offset + 1).kind === 'int_lit' ? 2 : 0
     }
 
-    if (token.kind !== '~' && token.kind !== '^') {
-      return 0
-    }
-
-    const next = this.peek(offset + 1)
-    if (next.kind === ',' || next.kind === ')') {
+    // rel_coord (~, ~5, ~-3) and local_coord (^, ^5, ^-3) are single tokens now
+    if (token.kind === 'rel_coord' || token.kind === 'local_coord') {
       return 1
     }
-    if (next.kind === 'int_lit') {
-      return 2
-    }
-    if (next.kind === '-' && this.peek(offset + 2).kind === 'int_lit') {
-      return 3
-    }
+
     return 0
   }
 
@@ -1440,15 +1443,26 @@ export class Parser {
   private parseCoordComponent(): CoordComponent {
     const token = this.peek()
 
-    if (token.kind === '~' || token.kind === '^') {
+    // Handle rel_coord (~, ~5, ~-3) and local_coord (^, ^5, ^-3) tokens
+    if (token.kind === 'rel_coord') {
       this.advance()
-      const offset = this.parseSignedCoordOffset()
-      return token.kind === '~'
-        ? { kind: 'relative', offset }
-        : { kind: 'local', offset }
+      // Parse the offset from the token value (e.g., "~5" -> 5, "~" -> 0, "~-3" -> -3)
+      const offset = this.parseCoordOffsetFromValue(token.value.slice(1))
+      return { kind: 'relative', offset }
+    }
+
+    if (token.kind === 'local_coord') {
+      this.advance()
+      const offset = this.parseCoordOffsetFromValue(token.value.slice(1))
+      return { kind: 'local', offset }
     }
 
     return { kind: 'absolute', value: this.parseSignedCoordOffset(true) }
+  }
+
+  private parseCoordOffsetFromValue(value: string): number {
+    if (value === '' || value === undefined) return 0
+    return parseFloat(value)
   }
 
   private parseSignedCoordOffset(requireValue = false): number {
