@@ -339,14 +339,46 @@ var require_lexer = __commonJS({
           this.addToken("range_lit", value, startLine, startCol);
           return;
         }
+        if (char === "~") {
+          let value = "~";
+          if (this.peek() === "-" || this.peek() === "+") {
+            value += this.advance();
+          }
+          while (/[0-9]/.test(this.peek())) {
+            value += this.advance();
+          }
+          if (this.peek() === "." && /[0-9]/.test(this.peek(1))) {
+            value += this.advance();
+            while (/[0-9]/.test(this.peek())) {
+              value += this.advance();
+            }
+          }
+          this.addToken("rel_coord", value, startLine, startCol);
+          return;
+        }
+        if (char === "^") {
+          let value = "^";
+          if (this.peek() === "-" || this.peek() === "+") {
+            value += this.advance();
+          }
+          while (/[0-9]/.test(this.peek())) {
+            value += this.advance();
+          }
+          if (this.peek() === "." && /[0-9]/.test(this.peek(1))) {
+            value += this.advance();
+            while (/[0-9]/.test(this.peek())) {
+              value += this.advance();
+            }
+          }
+          this.addToken("local_coord", value, startLine, startCol);
+          return;
+        }
         const singleChar = [
           "+",
           "-",
           "*",
           "/",
           "%",
-          "~",
-          "^",
           "<",
           ">",
           "!",
@@ -368,6 +400,11 @@ var require_lexer = __commonJS({
         }
         if (char === "@") {
           this.scanAtToken(startLine, startCol);
+          return;
+        }
+        if (char === "f" && this.peek() === '"') {
+          this.advance();
+          this.scanFString(startLine, startCol);
           return;
         }
         if (char === '"') {
@@ -485,6 +522,46 @@ var require_lexer = __commonJS({
         }
         this.advance();
         this.addToken("string_lit", value, startLine, startCol);
+      }
+      scanFString(startLine, startCol) {
+        let value = "";
+        let interpolationDepth = 0;
+        let interpolationString = false;
+        while (!this.isAtEnd()) {
+          if (interpolationDepth === 0 && this.peek() === '"') {
+            break;
+          }
+          if (this.peek() === "\\" && this.peek(1) === '"') {
+            this.advance();
+            value += this.advance();
+            continue;
+          }
+          if (interpolationDepth === 0 && this.peek() === "{") {
+            value += this.advance();
+            interpolationDepth = 1;
+            interpolationString = false;
+            continue;
+          }
+          const char = this.advance();
+          value += char;
+          if (interpolationDepth === 0)
+            continue;
+          if (char === '"' && this.source[this.pos - 2] !== "\\") {
+            interpolationString = !interpolationString;
+            continue;
+          }
+          if (interpolationString)
+            continue;
+          if (char === "{")
+            interpolationDepth++;
+          if (char === "}")
+            interpolationDepth--;
+        }
+        if (this.isAtEnd()) {
+          this.error("Unterminated f-string", startLine, startCol);
+        }
+        this.advance();
+        this.addToken("f_string", value, startLine, startCol);
       }
       scanNumber(firstChar, startLine, startCol) {
         let value = firstChar;
@@ -1321,6 +1398,14 @@ var require_parser = __commonJS({
           this.advance();
           return this.withLoc({ kind: "float_lit", value: parseFloat(token.value) }, token);
         }
+        if (token.kind === "rel_coord") {
+          this.advance();
+          return this.withLoc({ kind: "rel_coord", value: token.value }, token);
+        }
+        if (token.kind === "local_coord") {
+          this.advance();
+          return this.withLoc({ kind: "local_coord", value: token.value }, token);
+        }
         if (token.kind === "byte_lit") {
           this.advance();
           return this.withLoc({ kind: "byte_lit", value: parseInt(token.value.slice(0, -1), 10) }, token);
@@ -1340,6 +1425,10 @@ var require_parser = __commonJS({
         if (token.kind === "string_lit") {
           this.advance();
           return this.parseStringExpr(token);
+        }
+        if (token.kind === "f_string") {
+          this.advance();
+          return this.parseFStringExpr(token);
         }
         if (token.kind === "mc_name") {
           this.advance();
@@ -1479,6 +1568,55 @@ var require_parser = __commonJS({
           parts.push(current);
         }
         return this.withLoc({ kind: "str_interp", parts }, token);
+      }
+      parseFStringExpr(token) {
+        const parts = [];
+        let current = "";
+        let index = 0;
+        while (index < token.value.length) {
+          if (token.value[index] === "{") {
+            if (current) {
+              parts.push({ kind: "text", value: current });
+              current = "";
+            }
+            index++;
+            let depth = 1;
+            let exprSource = "";
+            let inString = false;
+            while (index < token.value.length && depth > 0) {
+              const char = token.value[index];
+              if (char === '"' && token.value[index - 1] !== "\\") {
+                inString = !inString;
+              }
+              if (!inString) {
+                if (char === "{") {
+                  depth++;
+                } else if (char === "}") {
+                  depth--;
+                  if (depth === 0) {
+                    index++;
+                    break;
+                  }
+                }
+              }
+              if (depth > 0) {
+                exprSource += char;
+              }
+              index++;
+            }
+            if (depth !== 0) {
+              this.error("Unterminated f-string interpolation");
+            }
+            parts.push({ kind: "expr", expr: this.parseEmbeddedExpr(exprSource) });
+            continue;
+          }
+          current += token.value[index];
+          index++;
+        }
+        if (current) {
+          parts.push({ kind: "text", value: current });
+        }
+        return this.withLoc({ kind: "f_string", parts }, token);
       }
       parseEmbeddedExpr(source) {
         const tokens = new lexer_1.Lexer(source, this.filePath).tokenize();
@@ -1621,18 +1759,8 @@ var require_parser = __commonJS({
         if (token.kind === "-") {
           return this.peek(offset + 1).kind === "int_lit" ? 2 : 0;
         }
-        if (token.kind !== "~" && token.kind !== "^") {
-          return 0;
-        }
-        const next = this.peek(offset + 1);
-        if (next.kind === "," || next.kind === ")") {
+        if (token.kind === "rel_coord" || token.kind === "local_coord") {
           return 1;
-        }
-        if (next.kind === "int_lit") {
-          return 2;
-        }
-        if (next.kind === "-" && this.peek(offset + 2).kind === "int_lit") {
-          return 3;
         }
         return 0;
       }
@@ -1648,12 +1776,22 @@ var require_parser = __commonJS({
       }
       parseCoordComponent() {
         const token = this.peek();
-        if (token.kind === "~" || token.kind === "^") {
+        if (token.kind === "rel_coord") {
           this.advance();
-          const offset = this.parseSignedCoordOffset();
-          return token.kind === "~" ? { kind: "relative", offset } : { kind: "local", offset };
+          const offset = this.parseCoordOffsetFromValue(token.value.slice(1));
+          return { kind: "relative", offset };
+        }
+        if (token.kind === "local_coord") {
+          this.advance();
+          const offset = this.parseCoordOffsetFromValue(token.value.slice(1));
+          return { kind: "local", offset };
         }
         return { kind: "absolute", value: this.parseSignedCoordOffset(true) };
+      }
+      parseCoordOffsetFromValue(value) {
+        if (value === "" || value === void 0)
+          return 0;
+        return parseFloat(value);
       }
       parseSignedCoordOffset(requireValue = false) {
         let sign = 1;
@@ -1948,6 +2086,8 @@ var require_typechecker = __commonJS({
     };
     var VOID_TYPE = { kind: "named", name: "void" };
     var INT_TYPE = { kind: "named", name: "int" };
+    var STRING_TYPE = { kind: "named", name: "string" };
+    var FORMAT_STRING_TYPE = { kind: "named", name: "format_string" };
     var BUILTIN_SIGNATURES = {
       setTimeout: {
         params: [INT_TYPE, { kind: "function_type", params: [], return: VOID_TYPE }],
@@ -1973,6 +2113,15 @@ var require_typechecker = __commonJS({
         this.currentReturnType = null;
         this.scope = /* @__PURE__ */ new Map();
         this.selfTypeStack = ["entity"];
+        this.richTextBuiltins = /* @__PURE__ */ new Map([
+          ["say", { messageIndex: 0 }],
+          ["announce", { messageIndex: 0 }],
+          ["tell", { messageIndex: 1 }],
+          ["tellraw", { messageIndex: 1 }],
+          ["title", { messageIndex: 1 }],
+          ["actionbar", { messageIndex: 1 }],
+          ["subtitle", { messageIndex: 1 }]
+        ]);
         this.collector = new diagnostics_1.DiagnosticCollector(source, filePath);
       }
       getNodeLocation(node) {
@@ -2295,6 +2444,18 @@ var require_typechecker = __commonJS({
               }
             }
             break;
+          case "f_string":
+            for (const part of expr.parts) {
+              if (part.kind !== "expr") {
+                continue;
+              }
+              this.checkExpr(part.expr);
+              const partType = this.inferType(part.expr);
+              if (!(partType.kind === "named" && (partType.name === "int" || partType.name === "string" || partType.name === "format_string"))) {
+                this.report(`f-string placeholder must be int or string, got ${this.typeToString(partType)}`, part.expr);
+              }
+            }
+            break;
           case "array_lit":
             for (const elem of expr.elements) {
               this.checkExpr(elem);
@@ -2323,6 +2484,11 @@ var require_typechecker = __commonJS({
       checkCallExpr(expr) {
         if (expr.fn === "tp" || expr.fn === "tp_to") {
           this.checkTpCall(expr);
+        }
+        const richTextBuiltin = this.richTextBuiltins.get(expr.fn);
+        if (richTextBuiltin) {
+          this.checkRichTextBuiltinCall(expr, richTextBuiltin.messageIndex);
+          return;
         }
         const builtin = BUILTIN_SIGNATURES[expr.fn];
         if (builtin) {
@@ -2360,6 +2526,19 @@ var require_typechecker = __commonJS({
         }
         for (const arg of expr.args) {
           this.checkExpr(arg);
+        }
+      }
+      checkRichTextBuiltinCall(expr, messageIndex) {
+        for (let i = 0; i < expr.args.length; i++) {
+          this.checkExpr(expr.args[i], i === messageIndex ? void 0 : STRING_TYPE);
+        }
+        const message = expr.args[messageIndex];
+        if (!message) {
+          return;
+        }
+        const messageType = this.inferType(message);
+        if (messageType.kind !== "named" || messageType.name !== "string" && messageType.name !== "format_string") {
+          this.report(`Argument ${messageIndex + 1} of '${expr.fn}' expects string or format_string, got ${this.typeToString(messageType)}`, message);
         }
       }
       checkInvokeExpr(expr) {
@@ -2541,6 +2720,13 @@ var require_typechecker = __commonJS({
               }
             }
             return { kind: "named", name: "string" };
+          case "f_string":
+            for (const part of expr.parts) {
+              if (part.kind === "expr") {
+                this.checkExpr(part.expr);
+              }
+            }
+            return FORMAT_STRING_TYPE;
           case "blockpos":
             return { kind: "named", name: "BlockPos" };
           case "ident":
@@ -2938,6 +3124,7 @@ var require_lowering = __commonJS({
     var BUILTINS2 = {
       say: ([msg]) => `say ${msg}`,
       tell: ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
+      tellraw: ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
       title: ([sel, msg]) => `title ${sel} title {"text":"${msg}"}`,
       actionbar: ([sel, msg]) => `title ${sel} actionbar {"text":"${msg}"}`,
       subtitle: ([sel, msg]) => `title ${sel} subtitle {"text":"${msg}"}`,
@@ -3869,6 +4056,7 @@ var require_lowering = __commonJS({
             return { kind: "const", value: 0 };
           // Handled inline in exprToString
           case "str_interp":
+          case "f_string":
             return { kind: "const", value: 0 };
           case "range_lit":
             return { kind: "const", value: 0 };
@@ -4676,7 +4864,7 @@ var require_lowering = __commonJS({
           return null;
         }
         const messageExpr = args[messageArgIndex];
-        if (!messageExpr || messageExpr.kind !== "str_interp") {
+        if (!messageExpr || messageExpr.kind !== "str_interp" && messageExpr.kind !== "f_string") {
           return null;
         }
         const json = this.buildRichTextJson(messageExpr);
@@ -4685,6 +4873,7 @@ var require_lowering = __commonJS({
           case "announce":
             return `tellraw @a ${json}`;
           case "tell":
+          case "tellraw":
             return `tellraw ${this.exprToString(args[0])} ${json}`;
           case "title":
             return `title ${this.exprToString(args[0])} title ${json}`;
@@ -4702,6 +4891,7 @@ var require_lowering = __commonJS({
           case "announce":
             return 0;
           case "tell":
+          case "tellraw":
           case "title":
           case "actionbar":
           case "subtitle":
@@ -4712,6 +4902,18 @@ var require_lowering = __commonJS({
       }
       buildRichTextJson(expr) {
         const components = [""];
+        if (expr.kind === "f_string") {
+          for (const part of expr.parts) {
+            if (part.kind === "text") {
+              if (part.value.length > 0) {
+                components.push({ text: part.value });
+              }
+              continue;
+            }
+            this.appendRichTextExpr(components, part.expr);
+          }
+          return JSON.stringify(components);
+        }
         for (const part of expr.parts) {
           if (typeof part === "string") {
             if (part.length > 0) {
@@ -4754,6 +4956,18 @@ var require_lowering = __commonJS({
           }
           return;
         }
+        if (expr.kind === "f_string") {
+          for (const part of expr.parts) {
+            if (part.kind === "text") {
+              if (part.value.length > 0) {
+                components.push({ text: part.value });
+              }
+            } else {
+              this.appendRichTextExpr(components, part.expr);
+            }
+          }
+          return;
+        }
         if (expr.kind === "bool_lit") {
           components.push({ text: expr.value ? "true" : "false" });
           return;
@@ -4787,6 +5001,12 @@ var require_lowering = __commonJS({
             return `${expr.value}L`;
           case "double_lit":
             return `${expr.value}d`;
+          case "rel_coord":
+            return expr.value;
+          // ~ or ~5 or ~-3 - output as-is for MC commands
+          case "local_coord":
+            return expr.value;
+          // ^ or ^5 or ^-3 - output as-is for MC commands
           case "bool_lit":
             return expr.value ? "1" : "0";
           case "str_lit":
@@ -4795,6 +5015,7 @@ var require_lowering = __commonJS({
             return expr.value;
           // #health → "health" (no quotes, used as bare MC name)
           case "str_interp":
+          case "f_string":
             return this.buildRichTextJson(expr);
           case "blockpos":
             return emitBlockPos(expr);
@@ -5082,6 +5303,8 @@ var require_lowering = __commonJS({
           return { kind: "named", name: "bool" };
         if (expr.kind === "str_lit" || expr.kind === "str_interp")
           return { kind: "named", name: "string" };
+        if (expr.kind === "f_string")
+          return { kind: "named", name: "format_string" };
         if (expr.kind === "blockpos")
           return { kind: "named", name: "BlockPos" };
         if (expr.kind === "ident") {
@@ -5941,6 +6164,592 @@ var require_passes = __commonJS({
   }
 });
 
+// ../../dist/optimizer/dce.js
+var require_dce = __commonJS({
+  "../../dist/optimizer/dce.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.DeadCodeEliminator = void 0;
+    exports2.eliminateDeadCode = eliminateDeadCode;
+    function copySpan(target, source) {
+      const descriptor = Object.getOwnPropertyDescriptor(source, "span");
+      if (descriptor) {
+        Object.defineProperty(target, "span", descriptor);
+      }
+      return target;
+    }
+    function isConstantBoolean(expr) {
+      if (expr.kind === "bool_lit") {
+        return expr.value;
+      }
+      return null;
+    }
+    function isPureExpr(expr) {
+      switch (expr.kind) {
+        case "int_lit":
+        case "float_lit":
+        case "byte_lit":
+        case "short_lit":
+        case "long_lit":
+        case "double_lit":
+        case "rel_coord":
+        case "local_coord":
+        case "bool_lit":
+        case "str_lit":
+        case "mc_name":
+        case "range_lit":
+        case "selector":
+        case "ident":
+        case "blockpos":
+          return true;
+        case "str_interp":
+          return expr.parts.every((part) => typeof part === "string" || isPureExpr(part));
+        case "f_string":
+          return expr.parts.every((part) => part.kind === "text" || isPureExpr(part.expr));
+        case "binary":
+          return isPureExpr(expr.left) && isPureExpr(expr.right);
+        case "is_check":
+          return isPureExpr(expr.expr);
+        case "unary":
+          return isPureExpr(expr.operand);
+        case "member":
+          return isPureExpr(expr.obj);
+        case "index":
+          return isPureExpr(expr.obj) && isPureExpr(expr.index);
+        case "array_lit":
+          return expr.elements.every(isPureExpr);
+        case "struct_lit":
+          return expr.fields.every((field) => isPureExpr(field.value));
+        case "lambda":
+          return true;
+        case "assign":
+        case "member_assign":
+        case "call":
+        case "invoke":
+        case "static_call":
+          return false;
+      }
+    }
+    var DeadCodeEliminator = class {
+      constructor() {
+        this.functionMap = /* @__PURE__ */ new Map();
+        this.reachableFunctions = /* @__PURE__ */ new Set();
+        this.usedConstants = /* @__PURE__ */ new Set();
+        this.localReads = /* @__PURE__ */ new Set();
+        this.localDeclIds = /* @__PURE__ */ new WeakMap();
+        this.localIdCounter = 0;
+      }
+      eliminate(program) {
+        this.functionMap.clear();
+        this.reachableFunctions.clear();
+        this.usedConstants.clear();
+        this.localReads.clear();
+        this.localIdCounter = 0;
+        for (const fn of program.declarations) {
+          this.functionMap.set(fn.name, fn);
+        }
+        const entryPoints = this.findEntryPoints(program);
+        if (entryPoints.length === 0) {
+          for (const fn of program.declarations) {
+            this.markReachable(fn.name);
+          }
+        } else {
+          for (const fnName of entryPoints) {
+            this.markReachable(fnName);
+          }
+        }
+        for (const global of program.globals) {
+          this.collectExprRefs(global.init, []);
+        }
+        for (const implBlock of program.implBlocks) {
+          for (const method of implBlock.methods) {
+            this.collectFunctionRefs(method);
+          }
+        }
+        return {
+          ...program,
+          declarations: program.declarations.filter((fn) => this.reachableFunctions.has(fn.name)).map((fn) => this.transformFunction(fn)),
+          consts: program.consts.filter((constDecl) => this.usedConstants.has(constDecl.name)),
+          implBlocks: program.implBlocks.map((implBlock) => ({
+            ...implBlock,
+            methods: implBlock.methods.map((method) => this.transformFunction(method))
+          }))
+        };
+      }
+      findEntryPoints(program) {
+        const entries = /* @__PURE__ */ new Set();
+        for (const fn of program.declarations) {
+          if (fn.name === "main") {
+            entries.add(fn.name);
+          }
+          if (fn.decorators.some((decorator) => [
+            "tick",
+            "load",
+            "on",
+            "on_trigger",
+            "on_advancement",
+            "on_craft",
+            "on_death",
+            "on_login",
+            "on_join_team"
+          ].includes(decorator.name))) {
+            entries.add(fn.name);
+          }
+        }
+        return [...entries];
+      }
+      markReachable(fnName) {
+        if (this.reachableFunctions.has(fnName)) {
+          return;
+        }
+        const fn = this.functionMap.get(fnName);
+        if (!fn) {
+          return;
+        }
+        this.reachableFunctions.add(fnName);
+        this.collectFunctionRefs(fn);
+      }
+      collectFunctionRefs(fn) {
+        const scope = [fn.params.map((param) => ({ id: `param:${fn.name}:${param.name}`, name: param.name }))];
+        for (const param of fn.params) {
+          if (param.default) {
+            this.collectExprRefs(param.default, scope);
+          }
+        }
+        this.collectStmtRefs(fn.body, scope);
+      }
+      collectStmtRefs(block, scope) {
+        scope.push([]);
+        for (const stmt of block) {
+          this.collectStmtRef(stmt, scope);
+        }
+        scope.pop();
+      }
+      collectStmtRef(stmt, scope) {
+        switch (stmt.kind) {
+          case "let": {
+            this.collectExprRefs(stmt.init, scope);
+            const id = `local:${stmt.name}:${this.localIdCounter++}:${stmt.span?.line ?? 0}:${stmt.span?.col ?? 0}`;
+            this.localDeclIds.set(stmt, id);
+            scope[scope.length - 1].push({ id, name: stmt.name });
+            break;
+          }
+          case "expr":
+            this.collectExprRefs(stmt.expr, scope);
+            break;
+          case "return":
+            if (stmt.value) {
+              this.collectExprRefs(stmt.value, scope);
+            }
+            break;
+          case "if": {
+            this.collectExprRefs(stmt.cond, scope);
+            const constant = isConstantBoolean(stmt.cond);
+            if (constant === true) {
+              this.collectStmtRefs(stmt.then, scope);
+            } else if (constant === false) {
+              if (stmt.else_) {
+                this.collectStmtRefs(stmt.else_, scope);
+              }
+            } else {
+              this.collectStmtRefs(stmt.then, scope);
+              if (stmt.else_) {
+                this.collectStmtRefs(stmt.else_, scope);
+              }
+            }
+            break;
+          }
+          case "while":
+            this.collectExprRefs(stmt.cond, scope);
+            this.collectStmtRefs(stmt.body, scope);
+            break;
+          case "for":
+            scope.push([]);
+            if (stmt.init) {
+              this.collectStmtRef(stmt.init, scope);
+            }
+            this.collectExprRefs(stmt.cond, scope);
+            this.collectExprRefs(stmt.step, scope);
+            this.collectStmtRefs(stmt.body, scope);
+            scope.pop();
+            break;
+          case "foreach":
+            this.collectExprRefs(stmt.iterable, scope);
+            scope.push([{ id: `foreach:${stmt.binding}:${stmt.span?.line ?? 0}:${stmt.span?.col ?? 0}`, name: stmt.binding }]);
+            this.collectStmtRefs(stmt.body, scope);
+            scope.pop();
+            break;
+          case "for_range":
+            this.collectExprRefs(stmt.start, scope);
+            this.collectExprRefs(stmt.end, scope);
+            scope.push([{ id: `range:${stmt.varName}:${stmt.span?.line ?? 0}:${stmt.span?.col ?? 0}`, name: stmt.varName }]);
+            this.collectStmtRefs(stmt.body, scope);
+            scope.pop();
+            break;
+          case "match":
+            this.collectExprRefs(stmt.expr, scope);
+            for (const arm of stmt.arms) {
+              if (arm.pattern) {
+                this.collectExprRefs(arm.pattern, scope);
+              }
+              this.collectStmtRefs(arm.body, scope);
+            }
+            break;
+          case "as_block":
+          case "at_block":
+          case "as_at":
+          case "execute":
+            this.collectNestedStmtRefs(stmt, scope);
+            break;
+          case "raw":
+            break;
+        }
+      }
+      collectNestedStmtRefs(stmt, scope) {
+        if (stmt.kind === "execute") {
+          for (const sub of stmt.subcommands) {
+            if ("varName" in sub && sub.varName) {
+              const resolved = this.resolveLocal(sub.varName, scope);
+              if (resolved) {
+                this.localReads.add(resolved.id);
+              }
+            }
+          }
+        }
+        this.collectStmtRefs(stmt.body, scope);
+      }
+      collectExprRefs(expr, scope) {
+        switch (expr.kind) {
+          case "ident": {
+            const resolved = this.resolveLocal(expr.name, scope);
+            if (resolved) {
+              this.localReads.add(resolved.id);
+            } else {
+              this.usedConstants.add(expr.name);
+            }
+            break;
+          }
+          case "call":
+            {
+              const resolved = this.resolveLocal(expr.fn, scope);
+              if (resolved) {
+                this.localReads.add(resolved.id);
+              } else if (this.functionMap.has(expr.fn)) {
+                this.markReachable(expr.fn);
+              }
+            }
+            for (const arg of expr.args) {
+              this.collectExprRefs(arg, scope);
+            }
+            break;
+          case "static_call":
+            for (const arg of expr.args) {
+              this.collectExprRefs(arg, scope);
+            }
+            break;
+          case "invoke":
+            this.collectExprRefs(expr.callee, scope);
+            for (const arg of expr.args) {
+              this.collectExprRefs(arg, scope);
+            }
+            break;
+          case "member":
+            this.collectExprRefs(expr.obj, scope);
+            break;
+          case "member_assign":
+            this.collectExprRefs(expr.obj, scope);
+            this.collectExprRefs(expr.value, scope);
+            break;
+          case "index":
+            this.collectExprRefs(expr.obj, scope);
+            this.collectExprRefs(expr.index, scope);
+            break;
+          case "array_lit":
+            expr.elements.forEach((element) => this.collectExprRefs(element, scope));
+            break;
+          case "struct_lit":
+            expr.fields.forEach((field) => this.collectExprRefs(field.value, scope));
+            break;
+          case "binary":
+            this.collectExprRefs(expr.left, scope);
+            this.collectExprRefs(expr.right, scope);
+            break;
+          case "is_check":
+            this.collectExprRefs(expr.expr, scope);
+            break;
+          case "unary":
+            this.collectExprRefs(expr.operand, scope);
+            break;
+          case "assign": {
+            this.collectExprRefs(expr.value, scope);
+            break;
+          }
+          case "str_interp":
+            expr.parts.forEach((part) => {
+              if (typeof part !== "string") {
+                this.collectExprRefs(part, scope);
+              }
+            });
+            break;
+          case "f_string":
+            expr.parts.forEach((part) => {
+              if (part.kind === "expr") {
+                this.collectExprRefs(part.expr, scope);
+              }
+            });
+            break;
+          case "lambda": {
+            const lambdaScope = [
+              ...scope.map((entries) => [...entries]),
+              expr.params.map((param) => ({ id: `lambda:${param.name}:${expr.span?.line ?? 0}:${expr.span?.col ?? 0}`, name: param.name }))
+            ];
+            if (Array.isArray(expr.body)) {
+              this.collectStmtRefs(expr.body, lambdaScope);
+            } else {
+              this.collectExprRefs(expr.body, lambdaScope);
+            }
+            break;
+          }
+          case "blockpos":
+          case "bool_lit":
+          case "byte_lit":
+          case "double_lit":
+          case "float_lit":
+          case "int_lit":
+          case "long_lit":
+          case "mc_name":
+          case "range_lit":
+          case "selector":
+          case "short_lit":
+          case "str_lit":
+            break;
+        }
+      }
+      resolveLocal(name, scope) {
+        for (let i = scope.length - 1; i >= 0; i--) {
+          for (let j = scope[i].length - 1; j >= 0; j--) {
+            if (scope[i][j].name === name) {
+              return scope[i][j];
+            }
+          }
+        }
+        return null;
+      }
+      transformFunction(fn) {
+        const scope = [fn.params.map((param) => ({ id: `param:${fn.name}:${param.name}`, name: param.name }))];
+        const body = this.transformBlock(fn.body, scope);
+        return body === fn.body ? fn : copySpan({ ...fn, body }, fn);
+      }
+      transformBlock(block, scope) {
+        scope.push([]);
+        const transformed = [];
+        for (const stmt of block) {
+          const next = this.transformStmt(stmt, scope);
+          transformed.push(...next);
+        }
+        scope.pop();
+        return transformed;
+      }
+      transformStmt(stmt, scope) {
+        switch (stmt.kind) {
+          case "let": {
+            const init = this.transformExpr(stmt.init, scope);
+            const id = this.localDeclIds.get(stmt) ?? `local:${stmt.name}:${stmt.span?.line ?? 0}:${stmt.span?.col ?? 0}`;
+            scope[scope.length - 1].push({ id, name: stmt.name });
+            if (this.localReads.has(id)) {
+              if (init === stmt.init) {
+                return [stmt];
+              }
+              return [copySpan({ ...stmt, init }, stmt)];
+            }
+            if (isPureExpr(init)) {
+              return [];
+            }
+            return [copySpan({ kind: "expr", expr: init }, stmt)];
+          }
+          case "expr": {
+            const expr = this.transformExpr(stmt.expr, scope);
+            if (expr.kind === "assign") {
+              const resolved = this.resolveLocal(expr.target, scope);
+              if (resolved && !this.localReads.has(resolved.id)) {
+                if (isPureExpr(expr.value)) {
+                  return [];
+                }
+                return [copySpan({ kind: "expr", expr: expr.value }, stmt)];
+              }
+            }
+            if (expr === stmt.expr) {
+              return [stmt];
+            }
+            return [copySpan({ ...stmt, expr }, stmt)];
+          }
+          case "return": {
+            if (!stmt.value) {
+              return [stmt];
+            }
+            const value = this.transformExpr(stmt.value, scope);
+            if (value === stmt.value) {
+              return [stmt];
+            }
+            return [copySpan({ ...stmt, value }, stmt)];
+          }
+          case "if": {
+            const cond = this.transformExpr(stmt.cond, scope);
+            const constant = isConstantBoolean(cond);
+            if (constant === true) {
+              return this.transformBlock(stmt.then, scope);
+            }
+            if (constant === false) {
+              return stmt.else_ ? this.transformBlock(stmt.else_, scope) : [];
+            }
+            const thenBlock = this.transformBlock(stmt.then, scope);
+            const elseBlock = stmt.else_ ? this.transformBlock(stmt.else_, scope) : void 0;
+            if (cond === stmt.cond && thenBlock === stmt.then && elseBlock === stmt.else_) {
+              return [stmt];
+            }
+            return [copySpan({ ...stmt, cond, then: thenBlock, else_: elseBlock }, stmt)];
+          }
+          case "while": {
+            const cond = this.transformExpr(stmt.cond, scope);
+            if (isConstantBoolean(cond) === false) {
+              return [];
+            }
+            const body = this.transformBlock(stmt.body, scope);
+            return [copySpan({ ...stmt, cond, body }, stmt)];
+          }
+          case "for": {
+            const forScope = [...scope, []];
+            const init = stmt.init ? this.transformStmt(stmt.init, forScope)[0] : void 0;
+            const cond = this.transformExpr(stmt.cond, forScope);
+            if (isConstantBoolean(cond) === false) {
+              return init ? [init] : [];
+            }
+            const step = this.transformExpr(stmt.step, forScope);
+            const body = this.transformBlock(stmt.body, forScope);
+            return [copySpan({ ...stmt, init, cond, step, body }, stmt)];
+          }
+          case "foreach": {
+            const iterable = this.transformExpr(stmt.iterable, scope);
+            const foreachScope = [...scope, [{ id: `foreach:${stmt.binding}:${stmt.span?.line ?? 0}:${stmt.span?.col ?? 0}`, name: stmt.binding }]];
+            const body = this.transformBlock(stmt.body, foreachScope);
+            return [copySpan({ ...stmt, iterable, body }, stmt)];
+          }
+          case "for_range": {
+            const start = this.transformExpr(stmt.start, scope);
+            const end = this.transformExpr(stmt.end, scope);
+            const rangeScope = [...scope, [{ id: `range:${stmt.varName}:${stmt.span?.line ?? 0}:${stmt.span?.col ?? 0}`, name: stmt.varName }]];
+            const body = this.transformBlock(stmt.body, rangeScope);
+            return [copySpan({ ...stmt, start, end, body }, stmt)];
+          }
+          case "match": {
+            const expr = this.transformExpr(stmt.expr, scope);
+            const arms = stmt.arms.map((arm) => ({
+              pattern: arm.pattern ? this.transformExpr(arm.pattern, scope) : null,
+              body: this.transformBlock(arm.body, scope)
+            }));
+            return [copySpan({ ...stmt, expr, arms }, stmt)];
+          }
+          case "as_block":
+            return [copySpan({ ...stmt, body: this.transformBlock(stmt.body, scope) }, stmt)];
+          case "at_block":
+            return [copySpan({ ...stmt, body: this.transformBlock(stmt.body, scope) }, stmt)];
+          case "as_at":
+            return [copySpan({ ...stmt, body: this.transformBlock(stmt.body, scope) }, stmt)];
+          case "execute":
+            return [copySpan({ ...stmt, body: this.transformBlock(stmt.body, scope) }, stmt)];
+          case "raw":
+            return [stmt];
+        }
+      }
+      transformExpr(expr, scope) {
+        switch (expr.kind) {
+          case "call":
+            return copySpan({ ...expr, args: expr.args.map((arg) => this.transformExpr(arg, scope)) }, expr);
+          case "static_call":
+            return copySpan({ ...expr, args: expr.args.map((arg) => this.transformExpr(arg, scope)) }, expr);
+          case "invoke":
+            return copySpan({
+              ...expr,
+              callee: this.transformExpr(expr.callee, scope),
+              args: expr.args.map((arg) => this.transformExpr(arg, scope))
+            }, expr);
+          case "binary":
+            return copySpan({
+              ...expr,
+              left: this.transformExpr(expr.left, scope),
+              right: this.transformExpr(expr.right, scope)
+            }, expr);
+          case "is_check":
+            return copySpan({ ...expr, expr: this.transformExpr(expr.expr, scope) }, expr);
+          case "unary":
+            return copySpan({ ...expr, operand: this.transformExpr(expr.operand, scope) }, expr);
+          case "assign":
+            return copySpan({ ...expr, value: this.transformExpr(expr.value, scope) }, expr);
+          case "member":
+            return copySpan({ ...expr, obj: this.transformExpr(expr.obj, scope) }, expr);
+          case "member_assign":
+            return copySpan({
+              ...expr,
+              obj: this.transformExpr(expr.obj, scope),
+              value: this.transformExpr(expr.value, scope)
+            }, expr);
+          case "index":
+            return copySpan({
+              ...expr,
+              obj: this.transformExpr(expr.obj, scope),
+              index: this.transformExpr(expr.index, scope)
+            }, expr);
+          case "array_lit":
+            return copySpan({ ...expr, elements: expr.elements.map((element) => this.transformExpr(element, scope)) }, expr);
+          case "struct_lit":
+            return copySpan({
+              ...expr,
+              fields: expr.fields.map((field) => ({ ...field, value: this.transformExpr(field.value, scope) }))
+            }, expr);
+          case "str_interp":
+            return copySpan({
+              ...expr,
+              parts: expr.parts.map((part) => typeof part === "string" ? part : this.transformExpr(part, scope))
+            }, expr);
+          case "f_string":
+            return copySpan({
+              ...expr,
+              parts: expr.parts.map((part) => part.kind === "text" ? part : { kind: "expr", expr: this.transformExpr(part.expr, scope) })
+            }, expr);
+          case "lambda": {
+            const lambdaScope = [
+              ...scope.map((entries) => [...entries]),
+              expr.params.map((param) => ({ id: `lambda:${param.name}:${expr.span?.line ?? 0}:${expr.span?.col ?? 0}`, name: param.name }))
+            ];
+            const body = Array.isArray(expr.body) ? this.transformBlock(expr.body, lambdaScope) : this.transformExpr(expr.body, lambdaScope);
+            return copySpan({ ...expr, body }, expr);
+          }
+          case "blockpos":
+          case "bool_lit":
+          case "byte_lit":
+          case "double_lit":
+          case "float_lit":
+          case "ident":
+          case "int_lit":
+          case "long_lit":
+          case "mc_name":
+          case "range_lit":
+          case "rel_coord":
+          case "local_coord":
+          case "selector":
+          case "short_lit":
+          case "str_lit":
+            return expr;
+        }
+      }
+    };
+    exports2.DeadCodeEliminator = DeadCodeEliminator;
+    function eliminateDeadCode(program) {
+      return new DeadCodeEliminator().eliminate(program);
+    }
+  }
+});
+
 // ../../dist/codegen/mcfunction/index.js
 var require_mcfunction = __commonJS({
   "../../dist/codegen/mcfunction/index.js"(exports2) {
@@ -6379,6 +7188,7 @@ var require_compile = __commonJS({
     var parser_1 = require_parser();
     var lowering_1 = require_lowering();
     var passes_1 = require_passes();
+    var dce_1 = require_dce();
     var mcfunction_1 = require_mcfunction();
     var diagnostics_1 = require_diagnostics();
     var IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/;
@@ -6453,13 +7263,15 @@ var require_compile = __commonJS({
     }
     function compile(source, options = {}) {
       const { namespace = "redscript", filePath, optimize: shouldOptimize = true } = options;
+      const shouldRunDce = options.dce ?? shouldOptimize;
       let sourceLines = source.split("\n");
       try {
         const preprocessed = preprocessSourceWithMetadata(source, { filePath });
         const preprocessedSource = preprocessed.source;
         sourceLines = preprocessedSource.split("\n");
         const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
-        const ast = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
+        const parsedAst = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
+        const ast = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst) : parsedAst;
         const ir = new lowering_1.Lowering(namespace, preprocessed.ranges).lower(ast);
         const optimized = shouldOptimize ? { ...ir, functions: ir.functions.map((fn) => (0, passes_1.optimize)(fn)) } : ir;
         const generated = (0, mcfunction_1.generateDatapackWithStats)(optimized);
@@ -6836,6 +7648,7 @@ var require_dist = __commonJS({
     var typechecker_1 = require_typechecker();
     var lowering_1 = require_lowering();
     var passes_1 = require_passes();
+    var dce_1 = require_dce();
     var mcfunction_1 = require_mcfunction();
     var compile_1 = require_compile();
     var commands_1 = require_commands();
@@ -6843,11 +7656,13 @@ var require_dist = __commonJS({
       const namespace = options.namespace ?? "redscript";
       const shouldOptimize = options.optimize ?? true;
       const shouldTypeCheck = options.typeCheck ?? true;
+      const shouldRunDce = options.dce ?? shouldOptimize;
       const filePath = options.filePath;
       const preprocessed = (0, compile_1.preprocessSourceWithMetadata)(source, { filePath });
       const preprocessedSource = preprocessed.source;
       const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
-      const ast = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
+      const parsedAst = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
+      const ast = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst) : parsedAst;
       let typeErrors;
       if (shouldTypeCheck) {
         const checker = new typechecker_1.TypeChecker(preprocessedSource, filePath);
