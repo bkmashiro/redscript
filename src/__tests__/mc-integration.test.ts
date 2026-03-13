@@ -122,7 +122,7 @@ beforeAll(async () => {
         scoreboard_set("#game", #ended, 1);
       }
     }
-    fn start_game() {
+    @keep fn start_game() {
       scoreboard_set("#game", #timer, 5);
       scoreboard_set("#game", #ended, 0);
     }

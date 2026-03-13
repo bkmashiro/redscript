@@ -213,6 +213,8 @@ export class Lowering {
 
   // Struct definitions: name → { fieldName: TypeNode }
   private structDefs: Map<string, Map<string, TypeNode>> = new Map()
+  // Full struct declarations for field iteration
+  private structDecls: Map<string, StructDecl> = new Map()
   private enumDefs: Map<string, Map<string, number>> = new Map()
   private functionDefaults: Map<string, Array<Expr | undefined>> = new Map()
   private constValues: Map<string, ConstDecl['value']> = new Map()
@@ -243,6 +245,7 @@ export class Lowering {
         fields.set(field.name, field.type)
       }
       this.structDefs.set(struct.name, fields)
+      this.structDecls.set(struct.name, struct)
     }
 
     for (const enumDecl of program.enums ?? []) {
@@ -630,6 +633,23 @@ export class Lowering {
       return
     }
 
+    // Handle struct initialization from function call (copy from __ret_struct)
+    if ((stmt.init.kind === 'call' || stmt.init.kind === 'static_call') && stmt.type?.kind === 'struct') {
+      // First, execute the function call
+      this.lowerExpr(stmt.init)
+      // Then copy all fields from __ret_struct to the variable's storage
+      const structDecl = this.structDecls.get(stmt.type.name)
+      if (structDecl) {
+        const structName = stmt.type.name.toLowerCase()
+        for (const field of structDecl.fields) {
+          const srcPath = `rs:heap __ret_struct.${field.name}`
+          const dstPath = `rs:heap ${structName}_${stmt.name}.${field.name}`
+          this.builder.emitRaw(`data modify storage ${dstPath} set from storage ${srcPath}`)
+        }
+      }
+      return
+    }
+
     // Handle array literal initialization
     if (stmt.init.kind === 'array_lit') {
       // Initialize empty NBT array
@@ -684,6 +704,20 @@ export class Lowering {
 
   private lowerReturnStmt(stmt: Extract<Stmt, { kind: 'return' }>): void {
     if (stmt.value) {
+      // Handle struct literal return: store fields to __ret_struct storage
+      if (stmt.value.kind === 'struct_lit') {
+        for (const field of stmt.value.fields) {
+          const path = `rs:heap __ret_struct.${field.name}`
+          const fieldValue = this.lowerExpr(field.value)
+          if (fieldValue.kind === 'const') {
+            this.builder.emitRaw(`data modify storage ${path} set value ${fieldValue.value}`)
+          } else if (fieldValue.kind === 'var') {
+            this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${fieldValue.name} rs`)
+          }
+        }
+        this.builder.emitReturn({ kind: 'const', value: 0 })
+        return
+      }
       const value = this.lowerExpr(stmt.value)
       this.builder.emitReturn(value)
     } else {
@@ -1761,6 +1795,22 @@ export class Lowering {
 
     const implMethod = this.resolveInstanceMethod(expr)
     if (implMethod) {
+      // Copy struct fields from instance to 'self' storage before calling
+      const receiver = expr.args[0]
+      if (receiver?.kind === 'ident') {
+        const receiverType = this.inferExprType(receiver)
+        if (receiverType?.kind === 'struct') {
+          const structDecl = this.structDecls.get(receiverType.name)
+          const structName = receiverType.name.toLowerCase()
+          if (structDecl) {
+            for (const field of structDecl.fields) {
+              const srcPath = `rs:heap ${structName}_${receiver.name}.${field.name}`
+              const dstPath = `rs:heap ${structName}_self.${field.name}`
+              this.builder.emitRaw(`data modify storage ${dstPath} set from storage ${srcPath}`)
+            }
+          }
+        }
+      }
       return this.emitMethodCall(implMethod.loweredName, implMethod.fn, expr.args)
     }
 
