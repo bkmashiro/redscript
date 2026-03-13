@@ -271,7 +271,7 @@
         {
           "comment": "Builtin functions",
           "name": "support.function.builtin.redscript",
-          "match": "\\b(say|tell|announce|title|subtitle|actionbar|title_times|give|kill|effect|clear|kick|xp_add|xp_set|tp|tp_to|setblock|fill|clone|summon|particle|playsound|weather|time_set|time_add|gamerule|difficulty|tag_add|tag_remove|scoreboard_get|scoreboard_set|scoreboard_add|scoreboard_display|scoreboard_hide|scoreboard_add_objective|scoreboard_remove_objective|score|random|random_native|random_sequence|data_get|str_len|push|pop|bossbar_add|bossbar_set_value|bossbar_set_max|bossbar_set_color|bossbar_set_style|bossbar_set_visible|bossbar_set_players|bossbar_remove|bossbar_get_value|team_add|team_remove|team_join|team_leave|team_option|spawn_object|if_entity|unless_entity)(?=\\s*\\()"
+          "match": "\\b(say|tell|tellraw|announce|title|subtitle|actionbar|title_times|give|kill|effect|effect_clear|clear|kick|xp_add|xp_set|tp|tp_to|setblock|fill|clone|summon|particle|playsound|weather|time_set|time_add|gamerule|difficulty|tag_add|tag_remove|scoreboard_get|score|scoreboard_set|scoreboard_add|scoreboard_display|scoreboard_hide|scoreboard_add_objective|scoreboard_remove_objective|random|random_native|random_sequence|data_get|data_merge|str_len|push|pop|bossbar_add|bossbar_set_value|bossbar_set_max|bossbar_set_color|bossbar_set_style|bossbar_set_visible|bossbar_set_players|bossbar_remove|bossbar_get_value|team_add|team_remove|team_join|team_leave|team_option|set_new|set_add|set_contains|set_remove|set_clear|setTimeout|setInterval|clearInterval|spawn_object|if_entity|unless_entity)(?=\\s*\\()"
         },
         {
           "comment": "User-defined function calls",
