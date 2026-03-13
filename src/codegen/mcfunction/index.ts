@@ -244,6 +244,7 @@ export interface DatapackGenerationResult {
   files: DatapackFile[]
   advancements: DatapackFile[]
   stats: OptimizationStats
+  sourceMap?: Record<string, string>
 }
 
 export interface DatapackGenerationOptions {
@@ -506,13 +507,15 @@ export function generateDatapackWithStats(
   }
 
   const stats = createEmptyOptimizationStats()
+  const sourceMap = mangle ? alloc.toSourceMap() : undefined
+
   if (!optimizeCommands) {
-    return { files, advancements, stats }
+    return { files, advancements, stats, sourceMap }
   }
 
   const optimized = applyFunctionOptimization(files)
   mergeOptimizationStats(stats, optimized.stats)
-  return { files: optimized.files, advancements, stats }
+  return { files: optimized.files, advancements, stats, sourceMap }
 }
 
 export function generateDatapack(module: IRModule): DatapackFile[] {

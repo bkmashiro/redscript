@@ -55,4 +55,17 @@ export class VarAllocator {
     } while (remaining >= 0)
     return result
   }
+
+  /**
+   * Returns a sourcemap object mapping allocated name → original name.
+   * Useful for debugging: write to <output>.map.json alongside the datapack.
+   * Only meaningful when mangle=true.
+   */
+  toSourceMap(): Record<string, string> {
+    const map: Record<string, string> = {}
+    for (const [orig, alloc] of this.varCache)    map[alloc] = orig
+    for (const [val,  alloc] of this.constCache)  map[alloc] = `const(${val})`
+    for (const [suf,  alloc] of this.internalCache) map[alloc] = `__${suf}`
+    return map
+  }
 }

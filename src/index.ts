@@ -46,6 +46,7 @@ export interface CompileResult {
   typeErrors?: DiagnosticError[]
   warnings?: Warning[]
   stats?: OptimizationStats
+  sourceMap?: Record<string, string>
 }
 
 /**
@@ -137,6 +138,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     typeErrors,
     warnings: [...dceResult.warnings, ...lowering.warnings],
     stats: optimizationStats,
+    sourceMap: generated.sourceMap,
   }
 }
 

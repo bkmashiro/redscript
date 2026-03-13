@@ -320,6 +320,13 @@ function compileCommand(
         fs.writeFileSync(filePath, dataFile.content)
       }
 
+      // Write sourcemap alongside datapack when mangle mode is active
+      if (mangle && result.sourceMap && Object.keys(result.sourceMap).length > 0) {
+        const mapPath = path.join(output, `${namespace}.map.json`)
+        fs.writeFileSync(mapPath, JSON.stringify(result.sourceMap, null, 2))
+        console.log(`  Sourcemap: ${mapPath}`)
+      }
+
       console.log(`✓ Compiled ${file} to ${output}/`)
       console.log(`  Namespace: ${namespace}`)
       console.log(`  Functions: ${result.ir.functions.length}`)
