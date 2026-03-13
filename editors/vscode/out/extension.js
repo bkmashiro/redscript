@@ -186,6 +186,7 @@ var require_lexer = __commonJS({
       execute: "execute",
       run: "run",
       unless: "unless",
+      declare: "declare",
       int: "int",
       bool: "bool",
       float: "float",
@@ -354,6 +355,13 @@ var require_lexer = __commonJS({
             while (/[0-9]/.test(this.peek())) {
               value += this.advance();
             }
+          }
+          if (/[a-zA-Z_]/.test(this.peek())) {
+            let ident = "";
+            while (/[a-zA-Z0-9_]/.test(this.peek())) {
+              ident += this.advance();
+            }
+            value += ident;
           }
           this.addToken("rel_coord", value, startLine, startCol);
           return;
@@ -815,6 +823,9 @@ var require_parser = __commonJS({
             enums.push(this.parseEnumDecl());
           } else if (this.check("const")) {
             consts.push(this.parseConstDecl());
+          } else if (this.check("declare")) {
+            this.advance();
+            this.parseDeclareStub();
           } else {
             declarations.push(this.parseFnDecl());
           }
@@ -877,12 +888,15 @@ var require_parser = __commonJS({
       parseConstDecl() {
         const constToken = this.expect("const");
         const name = this.expect("ident").value;
-        this.expect(":");
-        const type = this.parseType();
+        let type;
+        if (this.match(":")) {
+          type = this.parseType();
+        }
         this.expect("=");
         const value = this.parseLiteralExpr();
         this.match(";");
-        return this.withLoc({ name, type, value }, constToken);
+        const inferredType = type ?? (value.kind === "str_lit" ? { kind: "named", name: "string" } : value.kind === "bool_lit" ? { kind: "named", name: "bool" } : value.kind === "float_lit" ? { kind: "named", name: "float" } : { kind: "named", name: "int" });
+        return this.withLoc({ name, type: inferredType, value }, constToken);
       }
       parseGlobalDecl(mutable) {
         const token = this.advance();
@@ -910,6 +924,24 @@ var require_parser = __commonJS({
         }
         const body = this.parseBlock();
         return this.withLoc({ name, params, returnType, decorators, body }, fnToken);
+      }
+      /** Parse a `declare fn name(params): returnType;` stub — no body, just discard. */
+      parseDeclareStub() {
+        this.expect("fn");
+        this.expect("ident");
+        this.expect("(");
+        let depth = 1;
+        while (!this.check("eof") && depth > 0) {
+          const t = this.advance();
+          if (t.kind === "(")
+            depth++;
+          else if (t.kind === ")")
+            depth--;
+        }
+        if (this.match(":") || this.match("->")) {
+          this.parseType();
+        }
+        this.match(";");
       }
       parseDecorators() {
         const decorators = [];
@@ -3581,6 +3613,15 @@ var require_lowering = __commonJS({
           return null;
         return expr.name;
       }
+      tryGetMacroParamByName(name) {
+        if (!this.currentFnParamNames.has(name))
+          return null;
+        if (this.constValues.has(name))
+          return null;
+        if (this.stringValues.has(name))
+          return null;
+        return name;
+      }
       /**
        * Converts an expression to a string for use as a builtin arg.
        * If the expression is a macro param, returns `$(name)` and sets macroParam.
@@ -3589,6 +3630,17 @@ var require_lowering = __commonJS({
         const macroParam = this.tryGetMacroParam(expr);
         if (macroParam) {
           return { str: `$(${macroParam})`, macroParam };
+        }
+        if (expr.kind === "rel_coord" || expr.kind === "local_coord") {
+          const val = expr.value;
+          const prefix = val[0];
+          const rest = val.slice(1);
+          if (rest && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(rest)) {
+            const paramName = this.tryGetMacroParamByName(rest);
+            if (paramName) {
+              return { str: `${prefix}$(${paramName})`, macroParam: paramName };
+            }
+          }
         }
         if (expr.kind === "struct_lit" || expr.kind === "array_lit") {
           return { str: this.exprToSnbt(expr) };
@@ -5875,8 +5927,11 @@ var require_lowering = __commonJS({
       }
       /**
        * Checks a raw() command string for `${...}` interpolation containing runtime variables.
-       * - If the interpolated name is a compile-time constant → OK, no error.
-       * - If the interpolated name is a runtime variable → DiagnosticError.
+       * - If the interpolated expression is a numeric literal → OK (MC macro syntax).
+       * - If the interpolated name is a compile-time constant (in constValues) → OK.
+       * - If the interpolated name is a known runtime variable (in varMap) → DiagnosticError.
+       * - Unknown names → OK (could be MC macro params or external constants).
+       *
        * This catches the common mistake of writing raw("say ${score}") expecting interpolation,
        * which would silently emit a literal `${score}` in the MC command.
        */
@@ -5891,8 +5946,10 @@ var require_lowering = __commonJS({
           if (this.constValues.has(name)) {
             continue;
           }
-          const loc = span ?? { line: 1, col: 1 };
-          throw new diagnostics_1.DiagnosticError("LoweringError", `raw() command contains runtime variable interpolation '\${${name}}'. Variables cannot be interpolated into raw commands at compile time. Use f-string messages for say/tell/announce, or MC macro syntax '$(${name})' for MC 1.20.2+ commands.`, loc);
+          if (this.varMap.has(name) || this.currentFnParamNames.has(name)) {
+            const loc = span ?? { line: 1, col: 1 };
+            throw new diagnostics_1.DiagnosticError("LoweringError", `raw() command contains runtime variable interpolation '\${${name}}'. Variables cannot be interpolated into raw commands at compile time. Use f-string messages (say/tell/announce) or MC macro syntax '$(${name})' for MC 1.20.2+ commands.`, loc);
+          }
         }
       }
       resolveInstanceMethod(expr) {
