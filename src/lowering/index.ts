@@ -1200,17 +1200,51 @@ export class Lowering {
     const parts: string[] = ['execute']
     for (const sub of stmt.subcommands) {
       switch (sub.kind) {
+        // Context modifiers
         case 'as':
           parts.push(`as ${this.selectorToString(sub.selector)}`)
           break
         case 'at':
           parts.push(`at ${this.selectorToString(sub.selector)}`)
           break
+        case 'positioned':
+          parts.push(`positioned ${sub.x} ${sub.y} ${sub.z}`)
+          break
+        case 'positioned_as':
+          parts.push(`positioned as ${this.selectorToString(sub.selector)}`)
+          break
+        case 'rotated':
+          parts.push(`rotated ${sub.yaw} ${sub.pitch}`)
+          break
+        case 'rotated_as':
+          parts.push(`rotated as ${this.selectorToString(sub.selector)}`)
+          break
+        case 'facing':
+          parts.push(`facing ${sub.x} ${sub.y} ${sub.z}`)
+          break
+        case 'facing_entity':
+          parts.push(`facing entity ${this.selectorToString(sub.selector)} ${sub.anchor}`)
+          break
+        case 'anchored':
+          parts.push(`anchored ${sub.anchor}`)
+          break
+        case 'align':
+          parts.push(`align ${sub.axes}`)
+          break
+        case 'in':
+          parts.push(`in ${sub.dimension}`)
+          break
+        case 'on':
+          parts.push(`on ${sub.relation}`)
+          break
+        case 'summon':
+          parts.push(`summon ${sub.entity}`)
+          break
+        // Conditions
         case 'if_entity':
           if (sub.selector) {
             parts.push(`if entity ${this.selectorToString(sub.selector)}`)
           } else if (sub.varName) {
-            // Variable with filters - substitute with @s and apply filters
             const sel: EntitySelector = { kind: '@s', filters: sub.filters }
             parts.push(`if entity ${this.selectorToString(sel)}`)
           }
@@ -1219,13 +1253,34 @@ export class Lowering {
           if (sub.selector) {
             parts.push(`unless entity ${this.selectorToString(sub.selector)}`)
           } else if (sub.varName) {
-            // Variable with filters - substitute with @s and apply filters
             const sel: EntitySelector = { kind: '@s', filters: sub.filters }
             parts.push(`unless entity ${this.selectorToString(sel)}`)
           }
           break
-        case 'in':
-          parts.push(`in ${sub.dimension}`)
+        case 'if_block':
+          parts.push(`if block ${sub.pos[0]} ${sub.pos[1]} ${sub.pos[2]} ${sub.block}`)
+          break
+        case 'unless_block':
+          parts.push(`unless block ${sub.pos[0]} ${sub.pos[1]} ${sub.pos[2]} ${sub.block}`)
+          break
+        case 'if_score':
+          parts.push(`if score ${sub.target} ${sub.targetObj} ${sub.op} ${sub.source} ${sub.sourceObj}`)
+          break
+        case 'unless_score':
+          parts.push(`unless score ${sub.target} ${sub.targetObj} ${sub.op} ${sub.source} ${sub.sourceObj}`)
+          break
+        case 'if_score_range':
+          parts.push(`if score ${sub.target} ${sub.targetObj} matches ${sub.range}`)
+          break
+        case 'unless_score_range':
+          parts.push(`unless score ${sub.target} ${sub.targetObj} matches ${sub.range}`)
+          break
+        // Store
+        case 'store_result':
+          parts.push(`store result score ${sub.target} ${sub.targetObj}`)
+          break
+        case 'store_success':
+          parts.push(`store success score ${sub.target} ${sub.targetObj}`)
           break
       }
     }

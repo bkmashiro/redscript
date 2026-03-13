@@ -738,25 +738,84 @@ export class Parser {
       } else if (this.match('at')) {
         const selector = this.parseSelector()
         subcommands.push({ kind: 'at', selector })
+      } else if (this.checkIdent('positioned')) {
+        this.advance()
+        if (this.match('as')) {
+          const selector = this.parseSelector()
+          subcommands.push({ kind: 'positioned_as', selector })
+        } else {
+          const x = this.parseCoordToken()
+          const y = this.parseCoordToken()
+          const z = this.parseCoordToken()
+          subcommands.push({ kind: 'positioned', x, y, z })
+        }
+      } else if (this.checkIdent('rotated')) {
+        this.advance()
+        if (this.match('as')) {
+          const selector = this.parseSelector()
+          subcommands.push({ kind: 'rotated_as', selector })
+        } else {
+          const yaw = this.parseCoordToken()
+          const pitch = this.parseCoordToken()
+          subcommands.push({ kind: 'rotated', yaw, pitch })
+        }
+      } else if (this.checkIdent('facing')) {
+        this.advance()
+        if (this.checkIdent('entity')) {
+          this.advance()
+          const selector = this.parseSelector()
+          const anchor = this.checkIdent('eyes') || this.checkIdent('feet') ? this.advance().value as 'eyes' | 'feet' : 'feet'
+          subcommands.push({ kind: 'facing_entity', selector, anchor })
+        } else {
+          const x = this.parseCoordToken()
+          const y = this.parseCoordToken()
+          const z = this.parseCoordToken()
+          subcommands.push({ kind: 'facing', x, y, z })
+        }
+      } else if (this.checkIdent('anchored')) {
+        this.advance()
+        const anchor = this.advance().value as 'eyes' | 'feet'
+        subcommands.push({ kind: 'anchored', anchor })
+      } else if (this.checkIdent('align')) {
+        this.advance()
+        const axes = this.advance().value
+        subcommands.push({ kind: 'align', axes })
+      } else if (this.checkIdent('on')) {
+        this.advance()
+        const relation = this.advance().value
+        subcommands.push({ kind: 'on', relation })
+      } else if (this.checkIdent('summon')) {
+        this.advance()
+        const entity = this.advance().value
+        subcommands.push({ kind: 'summon', entity })
+      } else if (this.checkIdent('store')) {
+        this.advance()
+        const storeType = this.advance().value // 'result' or 'success'
+        if (this.checkIdent('score')) {
+          this.advance()
+          const target = this.advance().value
+          const targetObj = this.advance().value
+          if (storeType === 'result') {
+            subcommands.push({ kind: 'store_result', target, targetObj })
+          } else {
+            subcommands.push({ kind: 'store_success', target, targetObj })
+          }
+        } else {
+          this.error('store currently only supports score target')
+        }
       } else if (this.match('if')) {
-        // Expect 'entity' keyword (as ident) or just parse selector directly
-        if (this.peek().kind === 'ident' && this.peek().value === 'entity') {
-          this.advance() // consume 'entity'
-        }
-        const selectorOrVar = this.parseSelectorOrVarSelector()
-        subcommands.push({ kind: 'if_entity', ...selectorOrVar })
+        this.parseExecuteCondition(subcommands, 'if')
       } else if (this.match('unless')) {
-        // Expect 'entity' keyword (as ident) or just parse selector directly  
-        if (this.peek().kind === 'ident' && this.peek().value === 'entity') {
-          this.advance() // consume 'entity'
-        }
-        const selectorOrVar = this.parseSelectorOrVarSelector()
-        subcommands.push({ kind: 'unless_entity', ...selectorOrVar })
+        this.parseExecuteCondition(subcommands, 'unless')
       } else if (this.match('in')) {
-        const dim = this.expect('ident').value
+        // Dimension can be namespaced: minecraft:the_nether
+        let dim = this.advance().value
+        if (this.match(':')) {
+          dim += ':' + this.advance().value
+        }
         subcommands.push({ kind: 'in', dimension: dim })
       } else {
-        this.error(`Unexpected token in execute statement: ${this.peek().kind}`)
+        this.error(`Unexpected token in execute statement: ${this.peek().kind} (${this.peek().value})`)
       }
     }
 
@@ -764,6 +823,74 @@ export class Parser {
     const body = this.parseBlock()
 
     return this.withLoc({ kind: 'execute', subcommands, body }, executeToken)
+  }
+
+  private parseExecuteCondition(subcommands: ExecuteSubcommand[], type: 'if' | 'unless'): void {
+    if (this.checkIdent('entity') || this.check('selector')) {
+      if (this.checkIdent('entity')) this.advance()
+      const selectorOrVar = this.parseSelectorOrVarSelector()
+      subcommands.push({ kind: type === 'if' ? 'if_entity' : 'unless_entity', ...selectorOrVar })
+    } else if (this.checkIdent('block')) {
+      this.advance()
+      const x = this.parseCoordToken()
+      const y = this.parseCoordToken()
+      const z = this.parseCoordToken()
+      const block = this.parseBlockId()
+      subcommands.push({ kind: type === 'if' ? 'if_block' : 'unless_block', pos: [x, y, z], block })
+    } else if (this.checkIdent('score')) {
+      this.advance()
+      const target = this.advance().value
+      const targetObj = this.advance().value
+      // Check for range or comparison
+      if (this.checkIdent('matches')) {
+        this.advance()
+        const range = this.advance().value
+        subcommands.push({ kind: type === 'if' ? 'if_score_range' : 'unless_score_range', target, targetObj, range })
+      } else {
+        const op = this.advance().value  // <, <=, =, >=, >
+        const source = this.advance().value
+        const sourceObj = this.advance().value
+        subcommands.push({ 
+          kind: type === 'if' ? 'if_score' : 'unless_score', 
+          target, targetObj, op, source, sourceObj 
+        })
+      }
+    } else {
+      this.error(`Unknown condition type after ${type}`)
+    }
+  }
+
+  private parseCoordToken(): string {
+    // Handle ~, ^, numbers, relative coords like ~5, ^-3
+    const token = this.peek()
+    if (token.kind === 'rel_coord' || token.kind === 'local_coord' || 
+        token.kind === 'int_lit' || token.kind === 'float_lit' ||
+        token.kind === '-' || token.kind === 'ident') {
+      return this.advance().value
+    }
+    this.error(`Expected coordinate, got ${token.kind}`)
+    return '~'
+  }
+
+  private parseBlockId(): string {
+    // Parse block ID like minecraft:stone or stone
+    let id = this.advance().value
+    if (this.match(':')) {
+      id += ':' + this.advance().value
+    }
+    // Handle block states [facing=north]
+    if (this.check('[')) {
+      id += this.advance().value // [
+      while (!this.check(']') && !this.check('eof')) {
+        id += this.advance().value
+      }
+      id += this.advance().value // ]
+    }
+    return id
+  }
+
+  private checkIdent(value: string): boolean {
+    return this.check('ident') && this.peek().value === value
   }
 
   private parseExprStmt(): Stmt {

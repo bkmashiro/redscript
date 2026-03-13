@@ -179,11 +179,32 @@ export type LiteralExpr =
 // ---------------------------------------------------------------------------
 
 export type ExecuteSubcommand =
+  // Context modifiers
   | { kind: 'as'; selector: EntitySelector }
   | { kind: 'at'; selector: EntitySelector }
+  | { kind: 'positioned'; x: string; y: string; z: string }
+  | { kind: 'positioned_as'; selector: EntitySelector }
+  | { kind: 'rotated'; yaw: string; pitch: string }
+  | { kind: 'rotated_as'; selector: EntitySelector }
+  | { kind: 'facing'; x: string; y: string; z: string }
+  | { kind: 'facing_entity'; selector: EntitySelector; anchor: 'eyes' | 'feet' }
+  | { kind: 'anchored'; anchor: 'eyes' | 'feet' }
+  | { kind: 'align'; axes: string }
+  | { kind: 'in'; dimension: string }
+  | { kind: 'on'; relation: string }
+  | { kind: 'summon'; entity: string }
+  // Conditions
   | { kind: 'if_entity'; selector?: EntitySelector; varName?: string; filters?: SelectorFilter }
   | { kind: 'unless_entity'; selector?: EntitySelector; varName?: string; filters?: SelectorFilter }
-  | { kind: 'in'; dimension: string }
+  | { kind: 'if_block'; pos: [string, string, string]; block: string }
+  | { kind: 'unless_block'; pos: [string, string, string]; block: string }
+  | { kind: 'if_score'; target: string; targetObj: string; op: string; source: string; sourceObj: string }
+  | { kind: 'unless_score'; target: string; targetObj: string; op: string; source: string; sourceObj: string }
+  | { kind: 'if_score_range'; target: string; targetObj: string; range: string }
+  | { kind: 'unless_score_range'; target: string; targetObj: string; range: string }
+  // Store
+  | { kind: 'store_result'; target: string; targetObj: string }
+  | { kind: 'store_success'; target: string; targetObj: string }
 
 export type Stmt =
   | { kind: 'let';        name: string; type?: TypeNode; init: Expr; span?: Span }
