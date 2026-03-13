@@ -20,6 +20,8 @@
 
 ### 🚀 [在线试用 — 无需安装！](https://redscript-ide.pages.dev)
 
+<img src="./demo.gif" alt="RedScript Demo" width="400" />
+
 </div>
 
 ---

@@ -20,6 +20,8 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 ### 🚀 [Try it online — no install needed!](https://redscript-ide.pages.dev)
 
+<img src="./demo.gif" alt="RedScript Demo" width="400" />
+
 </div>
 
 ---
