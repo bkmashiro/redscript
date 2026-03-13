@@ -14,7 +14,7 @@ enum Rank {
     Diamond = 10
 }
 
-fn test_enum() {
+@keep fn test_enum() {
     // Basic enum value (use . not ::)
     let phase: int = GamePhase.Playing;
     scoreboard_set("#enum_phase", #rs, phase);

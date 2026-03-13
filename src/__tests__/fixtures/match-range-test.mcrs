@@ -1,6 +1,6 @@
 // Match with range patterns test
 
-fn test_match_range() {
+@keep fn test_match_range() {
     // Test score grading
     let score: int = 85;
     let grade: int = 0;

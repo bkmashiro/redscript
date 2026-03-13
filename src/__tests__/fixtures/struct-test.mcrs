@@ -11,7 +11,7 @@ struct Player {
     alive: bool
 }
 
-fn test_struct() {
+@keep fn test_struct() {
     // Create struct instance
     let p: Point = { x: 10, y: 64, z: -5 };
     
