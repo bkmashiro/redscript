@@ -61,7 +61,7 @@
       "patterns": [
         {
           "comment": "Decorator with arguments: @tick(rate=20)",
-          "begin": "(@(?:tick|on_advancement|on_craft|on_death|on_trigger|on_join_team|on_login))\\s*(\\()",
+          "begin": "(@(?:tick|load|keep|on|on_advancement|on_craft|on_death|on_trigger|on_join_team|on_login))\\s*(\\()",
           "beginCaptures": {
             "1": { "name": "entity.name.function.decorator.redscript" },
             "2": { "name": "punctuation.definition.parameters.redscript" }
@@ -86,7 +86,7 @@
         {
           "comment": "Bare decorator: @on_death",
           "name": "entity.name.function.decorator.redscript",
-          "match": "@(?:tick|on_advancement|on_craft|on_death|on_trigger|on_join_team|on_login)\\b"
+          "match": "@(?:tick|load|keep|on|on_advancement|on_craft|on_death|on_trigger|on_join_team|on_login)\\b"
         }
       ]
     },

@@ -6291,7 +6291,9 @@ var require_dce = __commonJS({
             "on_craft",
             "on_death",
             "on_login",
-            "on_join_team"
+            "on_join_team",
+            "keep"
+            // Prevent DCE from removing this function
           ].includes(decorator.name))) {
             entries.add(fn.name);
           }
