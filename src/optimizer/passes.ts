@@ -177,7 +177,11 @@ export function deadCodeEliminationWithStats(fn: IRFunction): { fn: IRFunction; 
     instrs: block.instrs.filter(instr => {
       // Only assignments/binops/cmps with an unused dst are candidates for removal
       if (instr.op === 'assign' || instr.op === 'binop' || instr.op === 'cmp') {
-        const keep = readVars.has(instr.dst)
+        // Always keep assignments to global variables (they may be read by other functions)
+        // Temps are $t0, $t1, ...; params are $p0, $p1, ...; locals are $_0, $_1, ...
+        // Everything else is a potential global
+        const isTemp = /^\$t\d+$/.test(instr.dst) || /^\$p\d+$/.test(instr.dst) || /^\$_\d+$/.test(instr.dst)
+        const keep = !isTemp || readVars.has(instr.dst)
         if (!keep) removed++
         return keep
       }

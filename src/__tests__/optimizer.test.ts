@@ -79,12 +79,12 @@ describe('copyPropagation', () => {
 describe('deadCodeElimination', () => {
   it('removes unused assignment', () => {
     const fn = makeFn([
-      { op: 'assign', dst: '$unused', src: { kind: 'const', value: 99 } },
-      { op: 'assign', dst: '$used', src: { kind: 'const', value: 1 } },
-    ], { op: 'return', value: { kind: 'var', name: '$used' } })
+      { op: 'assign', dst: '$t0', src: { kind: 'const', value: 99 } },  // unused temp
+      { op: 'assign', dst: '$t1', src: { kind: 'const', value: 1 } },   // used temp
+    ], { op: 'return', value: { kind: 'var', name: '$t1' } })
     const opt = deadCodeElimination(fn)
     expect(opt.blocks[0].instrs).toHaveLength(1)
-    expect((opt.blocks[0].instrs[0] as any).dst).toBe('$used')
+    expect((opt.blocks[0].instrs[0] as any).dst).toBe('$t1')
   })
 
   it('keeps call even if return value unused (side effects)', () => {
@@ -115,13 +115,13 @@ describe('optimize pipeline', () => {
     const fn = makeFn([
       { op: 'binop', dst: '$t0', lhs: { kind: 'const', value: 2 }, bop: '+', rhs: { kind: 'const', value: 3 } },
       { op: 'assign', dst: '$x', src: { kind: 'var', name: '$t0' } },
-      { op: 'assign', dst: '$unused', src: { kind: 'const', value: 0 } },
+      { op: 'assign', dst: '$t1', src: { kind: 'const', value: 0 } },  // unused temp, should be removed
     ], { op: 'return', value: { kind: 'var', name: '$x' } })
 
     const opt = optimize(fn)
     const instrs = opt.blocks[0].instrs
-    // $unused should be gone
-    expect(instrs.some((i: any) => i.dst === '$unused')).toBe(false)
+    // $t1 (unused temp) should be gone
+    expect(instrs.some((i: any) => i.dst === '$t1')).toBe(false)
     // $x should be const 5 (after folding + propagation)
     const xInstr = instrs.find((i: any) => i.dst === '$x') as any
     expect(xInstr?.src).toEqual({ kind: 'const', value: 5 })
