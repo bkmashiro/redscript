@@ -25,10 +25,8 @@ import { EVENT_TYPES, getEventParamSpecs, isEventTypeName } from '../events/type
 // require MC macro syntax when called with runtime variables.
 // ---------------------------------------------------------------------------
 
-const MACRO_AWARE_BUILTINS = new Set([
-  'summon', 'particle', 'setblock', 'fill', 'clone',
-  'playsound', 'tp', 'tp_to', 'effect', 'effect_clear', 'give',
-])
+// All builtins support macro parameters - any arg that's a function param
+// will automatically use MC 1.20.2+ macro syntax when needed
 
 // ---------------------------------------------------------------------------
 // Builtin Functions
@@ -335,7 +333,7 @@ export class Lowering {
   }
 
   private preScanExpr(expr: Expr, paramNames: Set<string>, macroParams: Set<string>): void {
-    if (expr.kind === 'call' && MACRO_AWARE_BUILTINS.has(expr.fn)) {
+    if (expr.kind === 'call' && BUILTINS[expr.fn] !== undefined) {
       // All ident args to macro-aware builtins that are params → macro params
       for (const arg of expr.args) {
         if (arg.kind === 'ident' && paramNames.has(arg.name)) {
@@ -2528,30 +2526,16 @@ export class Lowering {
       return { kind: 'const', value: 0 }
     }
 
-    // For macro-aware builtins, check if any arg is a param needing macro treatment
-    if (MACRO_AWARE_BUILTINS.has(name)) {
-      const argResults = args.map(arg => this.exprToBuiltinArg(arg))
-      const hasMacroArg = argResults.some(r => r.macroParam !== undefined)
-      if (hasMacroArg) {
-        argResults.forEach(r => { if (r.macroParam) this.currentFnMacroParams.add(r.macroParam) })
-      }
-      const strArgs = argResults.map(r => r.str)
-      const cmd = BUILTINS[name]?.(strArgs)
-      if (cmd) {
-        this.builder.emitRaw(hasMacroArg ? `$${cmd}` : cmd)
-      }
-      return { kind: 'const', value: 0 }
+    // All builtins support macro params - check if any arg is a param needing macro treatment
+    const argResults = args.map(arg => this.exprToBuiltinArg(arg))
+    const hasMacroArg = argResults.some(r => r.macroParam !== undefined)
+    if (hasMacroArg) {
+      argResults.forEach(r => { if (r.macroParam) this.currentFnMacroParams.add(r.macroParam) })
     }
-
-    // Convert args to strings for builtin (use SNBT for struct/array literals)
-    const strArgs = args.map(arg =>
-      arg.kind === 'struct_lit' || arg.kind === 'array_lit'
-        ? this.exprToSnbt(arg)
-        : this.exprToString(arg)
-    )
-    const cmd = BUILTINS[name](strArgs)
+    const strArgs = argResults.map(r => r.str)
+    const cmd = BUILTINS[name]?.(strArgs)
     if (cmd) {
-      this.builder.emitRaw(cmd)
+      this.builder.emitRaw(hasMacroArg ? `$${cmd}` : cmd)
     }
 
     return { kind: 'const', value: 0 }
