@@ -22,7 +22,7 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 <img src="./demo.gif" alt="RedScript Demo" width="400" />
 
-*↑ Particles spawning at player position every tick — written in just 30 lines of RedScript with full control flow: `if`, `foreach`, `@tick`, f-strings, and more.*
+*↑ Particles spawning at player position every tick — 100% vanilla, no mods! Just 30 lines of RedScript with full control flow: `if`, `foreach`, `@tick`, f-strings, and more.*
 
 </div>
 

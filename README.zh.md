@@ -22,7 +22,7 @@
 
 <img src="./demo.gif" alt="RedScript Demo" width="400" />
 
-*↑ 每 tick 在玩家位置生成粒子 — 仅 30 行 RedScript，包含完整控制流：`if`、`foreach`、`@tick`、f-strings 等。*
+*↑ 每 tick 在玩家位置生成粒子 — 纯原版，无需 MOD！仅 30 行 RedScript，包含完整控制流：`if`、`foreach`、`@tick`、f-strings 等。*
 
 </div>
 
