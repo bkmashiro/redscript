@@ -645,9 +645,23 @@ export class Parser {
     this.expect('in')
     const iterable = this.parseExpr()
     this.expect(')')
+
+    // Parse optional execute context modifiers (at, positioned, rotated, facing, etc.)
+    let executeContext: string | undefined
+    // Check for 'at' keyword or identifiers like 'positioned', 'rotated', 'facing', 'anchored', 'align'
+    const execIdentKeywords = ['positioned', 'rotated', 'facing', 'anchored', 'align']
+    if (this.check('at') || this.check('in') || (this.check('ident') && execIdentKeywords.includes(this.peek().value))) {
+      // Collect everything until we hit '{'
+      let context = ''
+      while (!this.check('{') && !this.check('eof')) {
+        context += this.advance().value + ' '
+      }
+      executeContext = context.trim()
+    }
+
     const body = this.parseBlock()
 
-    return this.withLoc({ kind: 'foreach', binding, iterable, body }, foreachToken)
+    return this.withLoc({ kind: 'foreach', binding, iterable, body, executeContext }, foreachToken)
   }
 
   private parseMatchStmt(): Stmt {

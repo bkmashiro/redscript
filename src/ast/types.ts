@@ -192,7 +192,7 @@ export type Stmt =
   | { kind: 'if';         cond: Expr; then: Block; else_?: Block; span?: Span }
   | { kind: 'while';      cond: Expr; body: Block; span?: Span }
   | { kind: 'for';        init?: Stmt; cond: Expr; step: Expr; body: Block; span?: Span }
-  | { kind: 'foreach';    binding: string; iterable: Expr; body: Block; span?: Span }
+  | { kind: 'foreach';    binding: string; iterable: Expr; body: Block; executeContext?: string; span?: Span }
   | { kind: 'for_range';  varName: string; start: Expr; end: Expr; body: Block; span?: Span }
   | { kind: 'match';      expr: Expr; arms: { pattern: Expr | null; body: Block }[]; span?: Span }
   | { kind: 'as_block';   selector: EntitySelector; body: Block; span?: Span }

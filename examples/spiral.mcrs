@@ -13,7 +13,9 @@ let running: bool = false;
     counter = counter + 1;
     
     // 在每个玩家位置生成粒子
-    raw("execute as @a at @s run particle minecraft:end_rod ~ ~1 ~ 0.5 0.5 0.5 0.1 5");
+    foreach (p in @a) at @s {
+        particle("minecraft:end_rod", ~0, ~1, ~0, 0.5, 0.5, 0.5, 0.1, 5);
+    }
     
     // 每 20 ticks (1秒) 报告一次
     if (counter % 20 == 0) {

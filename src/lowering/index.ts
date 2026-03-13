@@ -898,8 +898,9 @@ export class Lowering {
     const subFnName = `${this.currentFn}/foreach_${this.foreachCounter++}`
     const selector = this.exprToString(stmt.iterable)
 
-    // Emit execute as ... run function ...
-    this.builder.emitRaw(`execute as ${selector} run function ${this.namespace}:${subFnName}`)
+    // Emit execute as ... [context modifiers] run function ...
+    const execContext = stmt.executeContext ? ` ${stmt.executeContext}` : ''
+    this.builder.emitRaw(`execute as ${selector}${execContext} run function ${this.namespace}:${subFnName}`)
 
     // Create the sub-function
     const savedBuilder = this.builder
