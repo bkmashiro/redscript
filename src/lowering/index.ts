@@ -3256,8 +3256,11 @@ export class Lowering {
 
   /**
    * Checks a raw() command string for `${...}` interpolation containing runtime variables.
-   * - If the interpolated name is a compile-time constant → OK, no error.
-   * - If the interpolated name is a runtime variable → DiagnosticError.
+   * - If the interpolated expression is a numeric literal → OK (MC macro syntax).
+   * - If the interpolated name is a compile-time constant (in constValues) → OK.
+   * - If the interpolated name is a known runtime variable (in varMap) → DiagnosticError.
+   * - Unknown names → OK (could be MC macro params or external constants).
+   *
    * This catches the common mistake of writing raw("say ${score}") expecting interpolation,
    * which would silently emit a literal `${score}` in the MC command.
    */
@@ -3266,23 +3269,26 @@ export class Lowering {
     let match: RegExpExecArray | null
     while ((match = interpRe.exec(cmd)) !== null) {
       const name = match[1].trim()
-      // Constant expressions (pure numbers, booleans) are fine
+      // Numeric/boolean literals are fine (intentional MC macro syntax)
       if (/^\d+(\.\d+)?$/.test(name) || name === 'true' || name === 'false') {
         continue
       }
-      // Compile-time constants (declared via `const`) are fine
+      // Compile-time constants are fine
       if (this.constValues.has(name)) {
         continue
       }
-      // Everything else is a runtime variable → emit error
-      const loc = span ?? { line: 1, col: 1 }
-      throw new DiagnosticError(
-        'LoweringError',
-        `raw() command contains runtime variable interpolation '\${${name}}'. ` +
-        `Variables cannot be interpolated into raw commands at compile time. ` +
-        `Use f-string messages for say/tell/announce, or MC macro syntax '$(${name})' for MC 1.20.2+ commands.`,
-        loc
-      )
+      // Only error if it's a known runtime variable (in varMap or function params)
+      // Unknown identifiers are left alone (could be MC macro params the user intends)
+      if (this.varMap.has(name) || this.currentFnParamNames.has(name)) {
+        const loc = span ?? { line: 1, col: 1 }
+        throw new DiagnosticError(
+          'LoweringError',
+          `raw() command contains runtime variable interpolation '\${${name}}'. ` +
+          `Variables cannot be interpolated into raw commands at compile time. ` +
+          `Use f-string messages (say/tell/announce) or MC macro syntax '$(${name})' for MC 1.20.2+ commands.`,
+          loc
+        )
+      }
     }
   }
 
