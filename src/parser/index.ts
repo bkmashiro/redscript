@@ -180,6 +180,10 @@ export class Parser {
         enums.push(this.parseEnumDecl())
       } else if (this.check('const')) {
         consts.push(this.parseConstDecl())
+      } else if (this.check('declare')) {
+        // Declaration-only stub (e.g. from builtins.d.mcrs) — parse and discard
+        this.advance() // consume 'declare'
+        this.parseDeclareStub()
       } else {
         declarations.push(this.parseFnDecl())
       }
@@ -309,6 +313,25 @@ export class Parser {
     const body = this.parseBlock()
 
     return this.withLoc({ name, params, returnType, decorators, body }, fnToken)
+  }
+
+  /** Parse a `declare fn name(params): returnType;` stub — no body, just discard. */
+  private parseDeclareStub(): void {
+    this.expect('fn')
+    this.expect('ident') // name
+    this.expect('(')
+    // consume params until ')'
+    let depth = 1
+    while (!this.check('eof') && depth > 0) {
+      const t = this.advance()
+      if (t.kind === '(') depth++
+      else if (t.kind === ')') depth--
+    }
+    // optional return type annotation `: type` or `-> type`
+    if (this.match(':') || this.match('->')) {
+      this.parseType()
+    }
+    this.match(';') // consume trailing semicolon
   }
 
   private parseDecorators(): Decorator[] {
