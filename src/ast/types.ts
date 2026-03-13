@@ -189,6 +189,8 @@ export type Stmt =
   | { kind: 'let';        name: string; type?: TypeNode; init: Expr; span?: Span }
   | { kind: 'expr';       expr: Expr; span?: Span }
   | { kind: 'return';     value?: Expr; span?: Span }
+  | { kind: 'break';      span?: Span }
+  | { kind: 'continue';   span?: Span }
   | { kind: 'if';         cond: Expr; then: Block; else_?: Block; span?: Span }
   | { kind: 'while';      cond: Expr; body: Block; span?: Span }
   | { kind: 'for';        init?: Stmt; cond: Expr; step: Expr; body: Block; span?: Span }

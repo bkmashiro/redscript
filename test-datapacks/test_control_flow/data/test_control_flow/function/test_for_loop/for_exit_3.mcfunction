@@ -1,0 +1,5 @@
+# block: for_exit_3
+scoreboard players set $_9 rs 0
+execute if score $sum rs = $const_15 rs run scoreboard players set $_9 rs 1
+execute if score $_9 rs matches 1.. run function test_control_flow:test_for_loop/then_4
+execute if score $_9 rs matches ..0 run function test_control_flow:test_for_loop/else_5

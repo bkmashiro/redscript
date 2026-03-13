@@ -267,6 +267,8 @@ export class DeadCodeEliminator {
         this.collectNestedStmtRefs(stmt, scope)
         break
       case 'raw':
+      case 'break':
+      case 'continue':
         break
     }
   }
@@ -541,6 +543,10 @@ export class DeadCodeEliminator {
       case 'execute':
         return [copySpan({ ...stmt, body: this.transformBlock(stmt.body, scope) }, stmt)]
       case 'raw':
+        return [stmt]
+      case 'break':
+        return [stmt]
+      case 'continue':
         return [stmt]
     }
   }

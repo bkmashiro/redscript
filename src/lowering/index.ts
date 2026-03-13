@@ -224,6 +224,9 @@ export class Lowering {
   // World object counter for unique tags
   private worldObjCounter: number = 0
 
+  // Loop context stack for break/continue
+  private loopStack: Array<{ breakLabel: string; continueLabel: string; stepFn?: () => void }> = []
+
   constructor(namespace: string, sourceRanges: SourceRange[] = []) {
     this.namespace = namespace
     this.sourceRanges = sourceRanges
@@ -530,6 +533,12 @@ export class Lowering {
       case 'return':
         this.lowerReturnStmt(stmt)
         break
+      case 'break':
+        this.lowerBreakStmt()
+        break
+      case 'continue':
+        this.lowerContinueStmt()
+        break
       case 'if':
         this.lowerIfStmt(stmt)
         break
@@ -682,6 +691,22 @@ export class Lowering {
     }
   }
 
+  private lowerBreakStmt(): void {
+    if (this.loopStack.length === 0) {
+      throw new DiagnosticError('LoweringError', 'break statement outside of loop', { line: 1, col: 1 })
+    }
+    const loop = this.loopStack[this.loopStack.length - 1]
+    this.builder.emitJump(loop.breakLabel)
+  }
+
+  private lowerContinueStmt(): void {
+    if (this.loopStack.length === 0) {
+      throw new DiagnosticError('LoweringError', 'continue statement outside of loop', { line: 1, col: 1 })
+    }
+    const loop = this.loopStack[this.loopStack.length - 1]
+    this.builder.emitJump(loop.continueLabel)
+  }
+
   private lowerIfStmt(stmt: Extract<Stmt, { kind: 'if' }>): void {
     if (stmt.cond.kind === 'is_check') {
       this.lowerIsCheckIfStmt(stmt)
@@ -790,12 +815,18 @@ export class Lowering {
     const condName = this.operandToVar(condVar)
     this.builder.emitJumpIf(condName, bodyLabel, exitLabel)
 
+    // Push loop context for break/continue (while has no step, so continue goes to check)
+    this.loopStack.push({ breakLabel: exitLabel, continueLabel: checkLabel })
+
     // Body block
     this.builder.startBlock(bodyLabel)
     this.lowerBlock(stmt.body)
     if (!this.builder.isBlockSealed()) {
       this.builder.emitJump(checkLabel)
     }
+
+    // Pop loop context
+    this.loopStack.pop()
 
     // Exit block
     this.builder.startBlock(exitLabel)
@@ -811,6 +842,7 @@ export class Lowering {
 
     const checkLabel = this.builder.freshLabel('for_check')
     const bodyLabel = this.builder.freshLabel('for_body')
+    const continueLabel = this.builder.freshLabel('for_continue')
     const exitLabel = this.builder.freshLabel('for_exit')
 
     this.builder.emitJump(checkLabel)
@@ -821,14 +853,23 @@ export class Lowering {
     const condName = this.operandToVar(condVar)
     this.builder.emitJumpIf(condName, bodyLabel, exitLabel)
 
+    // Push loop context for break/continue
+    this.loopStack.push({ breakLabel: exitLabel, continueLabel })
+
     // Body block
     this.builder.startBlock(bodyLabel)
     this.lowerBlock(stmt.body)
-    // Step expression
-    this.lowerExpr(stmt.step)
     if (!this.builder.isBlockSealed()) {
-      this.builder.emitJump(checkLabel)
+      this.builder.emitJump(continueLabel)
     }
+
+    // Continue block (step + loop back)
+    this.builder.startBlock(continueLabel)
+    this.lowerExpr(stmt.step)
+    this.builder.emitJump(checkLabel)
+
+    // Pop loop context
+    this.loopStack.pop()
 
     // Exit block
     this.builder.startBlock(exitLabel)
@@ -945,13 +986,29 @@ export class Lowering {
         continue
       }
 
-      const patternValue = this.lowerExpr(arm.pattern)
-      if (patternValue.kind !== 'const') {
-        throw new Error('Match patterns must lower to compile-time constants')
+      // Handle range patterns specially
+      let matchCondition: string
+      if (arm.pattern.kind === 'range_lit') {
+        const range = arm.pattern.range
+        if (range.min !== undefined && range.max !== undefined) {
+          matchCondition = `${range.min}..${range.max}`
+        } else if (range.min !== undefined) {
+          matchCondition = `${range.min}..`
+        } else if (range.max !== undefined) {
+          matchCondition = `..${range.max}`
+        } else {
+          matchCondition = '0..'  // Match any
+        }
+      } else {
+        const patternValue = this.lowerExpr(arm.pattern)
+        if (patternValue.kind !== 'const') {
+          throw new Error('Match patterns must lower to compile-time constants')
+        }
+        matchCondition = String(patternValue.value)
       }
 
       const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`
-      this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${patternValue.value} run function ${this.namespace}:${subFnName}`)
+      this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${matchCondition} run function ${this.namespace}:${subFnName}`)
       this.emitMatchArmSubFunction(subFnName, matchedVar, arm.body, true)
     }
 

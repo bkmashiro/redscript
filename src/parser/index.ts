@@ -470,6 +470,20 @@ export class Parser {
       return this.parseReturnStmt()
     }
 
+    // Break statement
+    if (this.check('break')) {
+      const token = this.advance()
+      this.match(';')
+      return this.withLoc({ kind: 'break' }, token)
+    }
+
+    // Continue statement
+    if (this.check('continue')) {
+      const token = this.advance()
+      this.match(';')
+      return this.withLoc({ kind: 'continue' }, token)
+    }
+
     // If statement
     if (this.check('if')) {
       return this.parseIfStmt()
