@@ -133,7 +133,7 @@
       "patterns": [
         {
           "name": "keyword.control.redscript",
-          "match": "\\b(if|else|while|for|foreach|return|match|in|execute|as|at|unless|run)\\b"
+          "match": "\\b(if|else|while|for|foreach|return|match|in|execute|as|at|unless|run|is)\\b"
         },
         {
           "name": "keyword.declaration.redscript",
@@ -146,6 +146,10 @@
         {
           "name": "constant.language.boolean.redscript",
           "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "variable.language.self.redscript",
+          "match": "\\bself\\b"
         }
       ]
     },
