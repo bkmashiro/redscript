@@ -371,6 +371,13 @@ export class Lowering {
     return expr.name
   }
 
+  private tryGetMacroParamByName(name: string): string | null {
+    if (!this.currentFnParamNames.has(name)) return null
+    if (this.constValues.has(name)) return null
+    if (this.stringValues.has(name)) return null
+    return name
+  }
+
   /**
    * Converts an expression to a string for use as a builtin arg.
    * If the expression is a macro param, returns `$(name)` and sets macroParam.
@@ -379,6 +386,19 @@ export class Lowering {
     const macroParam = this.tryGetMacroParam(expr)
     if (macroParam) {
       return { str: `$(${macroParam})`, macroParam }
+    }
+    // Handle ~ident (e.g. ~height) - relative coord with variable offset
+    if (expr.kind === 'rel_coord' || expr.kind === 'local_coord') {
+      const val = expr.value  // e.g. "~height" or "^depth"
+      const prefix = val[0]   // ~ or ^
+      const rest = val.slice(1)
+      // If rest is an identifier (not a number), treat as macro param
+      if (rest && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(rest)) {
+        const paramName = this.tryGetMacroParamByName(rest)
+        if (paramName) {
+          return { str: `${prefix}$(${paramName})`, macroParam: paramName }
+        }
+      }
     }
     if (expr.kind === 'struct_lit' || expr.kind === 'array_lit') {
       return { str: this.exprToSnbt(expr) }

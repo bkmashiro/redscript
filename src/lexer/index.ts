@@ -298,6 +298,15 @@ export class Lexer {
           value += this.advance()
         }
       }
+      // Check for ident (e.g. ~height → macro variable offset)
+      if (/[a-zA-Z_]/.test(this.peek())) {
+        let ident = ''
+        while (/[a-zA-Z0-9_]/.test(this.peek())) {
+          ident += this.advance()
+        }
+        // Store as rel_coord with embedded ident: ~height
+        value += ident
+      }
       this.addToken('rel_coord', value, startLine, startCol)
       return
     }

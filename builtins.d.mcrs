@@ -8,14 +8,12 @@
 // ──────────────────────────────────────────────────────────────────────
 
 /// Displays a message to all players in chat as the server.
-/// 以服务器名义向所有玩家发送聊天消息。
 /// @param message Message to broadcast to all players
 /// @example say("Hello, world!");
 /// @example say("Game has started!");
 declare fn say(message: string): void;
 
 /// Sends a private message to a player or selector using tellraw.
-/// 使用 tellraw 向玩家或选择器发送私信。
 /// @param target Target player or entity selector
 /// @param message Message to send privately
 /// @example tell(@s, "You won!");
@@ -23,20 +21,17 @@ declare fn say(message: string): void;
 declare fn tell(target: selector, message: string): void;
 
 /// Alias for tell(). Sends a raw text message using tellraw.
-/// tell() 的别名，使用 tellraw 发送原始文本消息。
 /// @param target Target player or entity selector
 /// @param message Message text (supports f-string interpolation)
 /// @example tellraw(@s, "Hello!");
 declare fn tellraw(target: selector, message: string): void;
 
 /// Sends a message to all players in chat (@a).
-/// 向所有玩家（@a）发送聊天消息。
 /// @param message Message to broadcast
 /// @example announce("Round 1 starts in 3 seconds!");
 declare fn announce(message: string): void;
 
 /// Shows a large title on screen for target players.
-/// 为目标玩家在屏幕上显示大标题。
 /// @param target Target player(s)
 /// @param message Title text to display
 /// @example title(@a, "Round 1");
@@ -44,21 +39,18 @@ declare fn announce(message: string): void;
 declare fn title(target: selector, message: string): void;
 
 /// Shows subtitle text below the main title on screen.
-/// 在屏幕主标题下方显示副标题文字。
 /// @param target Target player(s)
 /// @param message Subtitle text (appears below title)
 /// @example subtitle(@a, "Fight!");
 declare fn subtitle(target: selector, message: string): void;
 
 /// Displays text in the action bar (above the hotbar).
-/// 在动作栏（快捷栏上方）显示文字。
 /// @param target Target player(s)
 /// @param message Action bar text (above hotbar)
 /// @example actionbar(@a, "⏱ ${time}s remaining");
 declare fn actionbar(target: selector, message: string): void;
 
 /// Sets title display timing in ticks. 20 ticks = 1 second.
-/// 设置标题显示时间（以 tick 为单位），20 tick = 1 秒。
 /// @param target Target player(s)
 /// @param fadeIn Fade-in duration in ticks
 /// @param stay Stay duration in ticks
@@ -72,83 +64,74 @@ declare fn title_times(target: selector, fadeIn: int, stay: int, fadeOut: int): 
 // ──────────────────────────────────────────────────────────────────────
 
 /// Gives item(s) to a player.
-/// 给予玩家物品。
 /// @param target Target player(s)
 /// @param item Item ID (e.g. "minecraft:diamond")
-/// @param count? Number of items to give
-/// @param nbt? Optional NBT data for the item
+/// @param count Number of items to give (optional)
+/// @param nbt Optional NBT data for the item (optional)
 /// @example give(@s, "minecraft:diamond", 5);
 /// @example give(@a, "minecraft:apple");
 /// @example give(@s, "minecraft:diamond_sword", 1, "{Enchantments:[{id:\"minecraft:sharpness\",lvl:5s}]}");
-declare fn give(target: selector, item: string, count?: int, nbt?: string): void;
+declare fn give(target: selector, item: string, count: int = 1, nbt: string): void;
 
 /// Kills the target entity. Defaults to the executing entity (@s).
-/// 击杀目标实体，默认击杀当前执行实体（@s）。
-/// @param target? Target to kill (default: @s)
+/// @param target Target to kill (default: @s) (optional)
 /// @example kill(@e[type=minecraft:zombie]);
 /// @example kill(@s);
 /// @example kill(@e[tag=enemy]);
-declare fn kill(target?: selector): void;
+declare fn kill(target: selector = @s): void;
 
 /// Applies a status effect to an entity.
-/// 为实体应用药水状态效果。
 /// @param target Target entity or player
 /// @param effect Effect ID (e.g. "minecraft:speed")
-/// @param duration? Duration in seconds
-/// @param amplifier? Effect level (0-255, where 0 = level 1)
+/// @param duration Duration in seconds (optional)
+/// @param amplifier Effect level (0-255, where 0 = level 1) (optional)
 /// @example effect(@s, "minecraft:speed", 60, 1);
 /// @example effect(@a, "minecraft:regeneration", 10);
 /// @example effect(@e[type=minecraft:zombie], "minecraft:slowness", 20, 2);
-declare fn effect(target: selector, effect: string, duration?: int, amplifier?: int): void;
+declare fn effect(target: selector, effect: string, duration: int = 30, amplifier: int = 0): void;
 
 /// Removes a status effect from an entity, or clears all effects.
-/// 移除实体的药水效果，省略 effect 参数则清除所有效果。
 /// @param target Target entity or player
-/// @param effect? Effect to remove (omit to clear all)
+/// @param effect Effect to remove (omit to clear all) (optional)
 /// @example effect_clear(@s, "minecraft:poison");
 /// @example effect_clear(@a);
-declare fn effect_clear(target: selector, effect?: string): void;
+declare fn effect_clear(target: selector, effect: string): void;
 
 /// Removes items from a player's inventory.
-/// 清除玩家背包中的物品。
 /// @param target Target player
-/// @param item? Specific item to remove (omit to clear all)
+/// @param item Specific item to remove (omit to clear all) (optional)
 /// @example clear(@s, "minecraft:dirt");
 /// @example clear(@a);
-declare fn clear(target: selector, item?: string): void;
+declare fn clear(target: selector, item: string): void;
 
 /// Kicks a player from the server with an optional reason.
-/// 将玩家踢出服务器，可附加原因。
 /// @param player Target player to kick
-/// @param reason? Kick message shown to the player
+/// @param reason Kick message shown to the player (optional)
 /// @example kick(@s, "You lost!");
 /// @example kick(@p, "AFK too long");
-declare fn kick(player: selector, reason?: string): void;
+declare fn kick(player: selector, reason: string): void;
 
 /// Adds experience points or levels to a player.
-/// 给玩家增加经验点或等级。
 /// @param target Target player
 /// @param amount Amount of XP to add
-/// @param type? "points" or "levels"
+/// @param type "points" or "levels" (optional)
 /// @example xp_add(@s, 100);
 /// @example xp_add(@s, 5, "levels");
-declare fn xp_add(target: selector, amount: int, type?: string): void;
+declare fn xp_add(target: selector, amount: int, type: string = points): void;
 
 /// Sets a player's experience points or levels.
-/// 设置玩家的经验点或等级。
 /// @param target Target player
 /// @param amount New XP value
-/// @param type? "points" or "levels"
+/// @param type "points" or "levels" (optional)
 /// @example xp_set(@s, 0, "levels");
 /// @example xp_set(@s, 500);
-declare fn xp_set(target: selector, amount: int, type?: string): void;
+declare fn xp_set(target: selector, amount: int, type: string = points): void;
 
 // ──────────────────────────────────────────────────────────────────────
 // World & Block
 // ──────────────────────────────────────────────────────────────────────
 
 /// Teleports an entity to a player or position.
-/// 将实体传送到指定玩家或坐标。
 /// @param target Entity to teleport
 /// @param destination Target player or BlockPos coordinates
 /// @example tp(@s, (0, 64, 0));
@@ -157,14 +140,12 @@ declare fn xp_set(target: selector, amount: int, type?: string): void;
 declare fn tp(target: selector, destination: selector): void;
 
 /// @deprecated Use tp() instead. Teleports an entity to a position.
-/// @deprecated 请使用 tp()。将实体传送到指定位置。
 /// @param target Entity to teleport
 /// @param destination Target player or position
 /// @example tp(@s, (0, 64, 0));  // use tp instead
 declare fn tp_to(target: selector, destination: selector): void;
 
 /// Places a block at the specified coordinates.
-/// 在指定坐标放置方块。
 /// @param pos Block position, e.g. (0, 64, 0) or (~1, ~0, ~0)
 /// @param block Block ID (e.g. "minecraft:stone")
 /// @example setblock((0, 64, 0), "minecraft:stone");
@@ -172,7 +153,6 @@ declare fn tp_to(target: selector, destination: selector): void;
 declare fn setblock(pos: BlockPos, block: string): void;
 
 /// Fills a cuboid region with a specified block.
-/// 用指定方块填充一个立方体区域。
 /// @param from Start corner of the region
 /// @param to End corner of the region
 /// @param block Block to fill with
@@ -181,7 +161,6 @@ declare fn setblock(pos: BlockPos, block: string): void;
 declare fn fill(from: BlockPos, to: BlockPos, block: string): void;
 
 /// Clones a region of blocks to a new location.
-/// 将一个区域的方块复制到新的位置。
 /// @param from Source region start corner
 /// @param to Source region end corner
 /// @param dest Destination corner
@@ -189,64 +168,57 @@ declare fn fill(from: BlockPos, to: BlockPos, block: string): void;
 declare fn clone(from: BlockPos, to: BlockPos, dest: BlockPos): void;
 
 /// Summons an entity at the specified position.
-/// 在指定位置生成实体。
 /// @param type Entity type ID (e.g. "minecraft:zombie")
-/// @param x? X coordinate (default: ~)
-/// @param y? Y coordinate (default: ~)
-/// @param z? Z coordinate (default: ~)
-/// @param nbt? Optional NBT data for the entity
+/// @param x X coordinate (default: ~) (optional)
+/// @param y Y coordinate (default: ~) (optional)
+/// @param z Z coordinate (default: ~) (optional)
+/// @param nbt Optional NBT data for the entity (optional)
 /// @example summon("minecraft:zombie", ~0, ~0, ~0);
 /// @example summon("minecraft:armor_stand", (0, 64, 0));
 /// @example summon("minecraft:zombie", ~0, ~0, ~0, "{CustomName:\"Boss\"}");
-declare fn summon(type: string, x?: coord, y?: coord, z?: coord, nbt?: string): void;
+declare fn summon(type: string, x: coord = ~, y: coord = ~, z: coord = ~, nbt: string): void;
 
 /// Spawns a particle effect at the specified position.
-/// 在指定位置生成粒子效果。
 /// @param name Particle type ID (e.g. "minecraft:flame")
-/// @param x? X coordinate
-/// @param y? Y coordinate
-/// @param z? Z coordinate
+/// @param x X coordinate (optional)
+/// @param y Y coordinate (optional)
+/// @param z Z coordinate (optional)
 /// @example particle("minecraft:flame", (~0, ~1, ~0));
 /// @example particle("minecraft:explosion", (0, 100, 0));
-declare fn particle(name: string, x?: coord, y?: coord, z?: coord): void;
+declare fn particle(name: string, x: coord = ~, y: coord = ~, z: coord = ~): void;
 
 /// Plays a sound effect for target players.
-/// 为目标玩家播放音效。
 /// @param sound Sound event ID (e.g. "entity.experience_orb.pickup")
 /// @param source Sound category: "master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient", "voice"
 /// @param target Target player to hear the sound
-/// @param x? X origin position
-/// @param y? Y origin position
-/// @param z? Z origin position
-/// @param volume? Volume (default: 1.0)
-/// @param pitch? Pitch (default: 1.0)
-/// @param minVolume? Minimum volume for distant players
+/// @param x X origin position (optional)
+/// @param y Y origin position (optional)
+/// @param z Z origin position (optional)
+/// @param volume Volume (default: 1.0) (optional)
+/// @param pitch Pitch (default: 1.0) (optional)
+/// @param minVolume Minimum volume for distant players (optional)
 /// @example playsound("entity.experience_orb.pickup", "player", @s);
 /// @example playsound("ui.toast.challenge_complete", "master", @a);
-declare fn playsound(sound: string, source: string, target: selector, x?: coord, y?: coord, z?: coord, volume?: float, pitch?: float, minVolume?: float): void;
+declare fn playsound(sound: string, source: string, target: selector, x: coord, y: coord, z: coord, volume: float = 1.0, pitch: float = 1.0, minVolume: float): void;
 
 /// Sets the weather condition.
-/// 设置天气状态。
 /// @param type "clear", "rain", or "thunder"
 /// @example weather("clear");
 /// @example weather("thunder");
 declare fn weather(type: string): void;
 
 /// Sets the world time.
-/// 设置世界时间。
 /// @param value Time in ticks, or "day"/"night"/"noon"/"midnight"
 /// @example time_set(0);  // dawn
 /// @example time_set("midnight");
 declare fn time_set(value: string): void;
 
 /// Advances the world time by a number of ticks.
-/// 将世界时间推进指定的 tick 数。
 /// @param ticks Number of ticks to advance
 /// @example time_add(6000);  // advance by half a day
 declare fn time_add(ticks: int): void;
 
 /// Sets a gamerule value.
-/// 设置游戏规则的值。
 /// @param rule Gamerule name (e.g. "keepInventory")
 /// @param value New value (true/false for boolean rules, integer for numeric)
 /// @example gamerule("keepInventory", true);
@@ -254,7 +226,6 @@ declare fn time_add(ticks: int): void;
 declare fn gamerule(rule: string, value: string): void;
 
 /// Sets the game difficulty.
-/// 设置游戏难度。
 /// @param level "peaceful", "easy", "normal", or "hard"
 /// @example difficulty("hard");
 /// @example difficulty("peaceful");
@@ -265,7 +236,6 @@ declare fn difficulty(level: string): void;
 // ──────────────────────────────────────────────────────────────────────
 
 /// Adds a scoreboard tag to an entity.
-/// 为实体添加计分板标签。
 /// @param target Target entity
 /// @param tag Tag name to add
 /// @example tag_add(@s, "hasKey");
@@ -273,7 +243,6 @@ declare fn difficulty(level: string): void;
 declare fn tag_add(target: selector, tag: string): void;
 
 /// Removes a scoreboard tag from an entity.
-/// 从实体身上移除计分板标签。
 /// @param target Target entity
 /// @param tag Tag name to remove
 /// @example tag_remove(@s, "hasKey");
@@ -284,7 +253,6 @@ declare fn tag_remove(target: selector, tag: string): void;
 // ──────────────────────────────────────────────────────────────────────
 
 /// Reads a value from a vanilla MC scoreboard objective.
-/// 从原版 MC 计分板目标读取数值。
 /// @param target Player, entity, or fake player name (e.g. "#counter")
 /// @param objective Scoreboard objective name
 /// @returns int
@@ -293,7 +261,6 @@ declare fn tag_remove(target: selector, tag: string): void;
 declare fn scoreboard_get(target: selector, objective: string): int;
 
 /// Alias for scoreboard_get(). Reads a value from a scoreboard.
-/// scoreboard_get() 的别名，从计分板读取数值。
 /// @param target Player, entity, or fake player name
 /// @param objective Scoreboard objective name
 /// @returns int
@@ -301,7 +268,6 @@ declare fn scoreboard_get(target: selector, objective: string): int;
 declare fn score(target: selector, objective: string): int;
 
 /// Sets a value in a vanilla MC scoreboard objective.
-/// 设置原版 MC 计分板目标中的数值。
 /// @param target Player, entity, or fake player
 /// @param objective Objective name
 /// @param value New score value
@@ -310,29 +276,25 @@ declare fn score(target: selector, objective: string): int;
 declare fn scoreboard_set(target: selector, objective: string, value: int): void;
 
 /// Displays a scoreboard objective in a display slot.
-/// 在指定显示位置展示计分板目标。
 /// @param slot "list", "sidebar", or "belowName"
 /// @param objective Objective name to display
 /// @example scoreboard_display("sidebar", "kills");
 declare fn scoreboard_display(slot: string, objective: string): void;
 
 /// Clears the display in a scoreboard slot.
-/// 清除计分板显示位置的内容。
 /// @param slot "list", "sidebar", or "belowName"
 /// @example scoreboard_hide("sidebar");
 declare fn scoreboard_hide(slot: string): void;
 
 /// Creates a new scoreboard objective.
-/// 创建新的计分板目标。
 /// @param name Objective name
 /// @param criteria Criteria (e.g. "dummy", "playerKillCount")
-/// @param displayName? Optional display name
+/// @param displayName Optional display name (optional)
 /// @example scoreboard_add_objective("kills", "playerKillCount");
 /// @example scoreboard_add_objective("timer", "dummy", "Game Timer");
-declare fn scoreboard_add_objective(name: string, criteria: string, displayName?: string): void;
+declare fn scoreboard_add_objective(name: string, criteria: string, displayName: string): void;
 
 /// Removes a scoreboard objective.
-/// 删除计分板目标。
 /// @param name Objective name to remove
 /// @example scoreboard_remove_objective("kills");
 declare fn scoreboard_remove_objective(name: string): void;
@@ -342,7 +304,6 @@ declare fn scoreboard_remove_objective(name: string): void;
 // ──────────────────────────────────────────────────────────────────────
 
 /// Generates a random integer in range [min, max] using scoreboard arithmetic. Compatible with all MC versions.
-/// 使用计分板运算生成 [min, max] 范围内的随机整数，兼容所有 MC 版本。
 /// @param min Minimum value (inclusive)
 /// @param max Maximum value (inclusive)
 /// @returns int
@@ -351,7 +312,6 @@ declare fn scoreboard_remove_objective(name: string): void;
 declare fn random(min: int, max: int): int;
 
 /// Generates a random integer using /random command (MC 1.20.3+). Faster and more reliable than random().
-/// 使用 /random 命令（MC 1.20.3+）生成随机整数，比 random() 更快更可靠。
 /// @param min Minimum value (inclusive)
 /// @param max Maximum value (inclusive)
 /// @returns int
@@ -359,29 +319,26 @@ declare fn random(min: int, max: int): int;
 declare fn random_native(min: int, max: int): int;
 
 /// Resets a random sequence with an optional seed (MC 1.20.3+).
-/// 重置随机序列，可指定种子（MC 1.20.3+）。
 /// @param sequence Sequence name (namespaced, e.g. "mypack:loot")
-/// @param seed? Seed value
+/// @param seed Seed value (optional)
 /// @example random_sequence("mypack:loot", 42);
-declare fn random_sequence(sequence: string, seed?: int): void;
+declare fn random_sequence(sequence: string, seed: int = 0): void;
 
 // ──────────────────────────────────────────────────────────────────────
 // Data (NBT)
 // ──────────────────────────────────────────────────────────────────────
 
 /// Reads NBT data from an entity, block, or storage into an integer variable.
-/// 从实体、方块或存储读取 NBT 数据到整型变量。
 /// @param targetType "entity", "block", or "storage"
 /// @param target Target selector or storage path
 /// @param path NBT path (e.g. "Health")
-/// @param scale? Scale factor
+/// @param scale Scale factor (optional)
 /// @returns int
 /// @example let hp: int = data_get("entity", "@s", "Health");
 /// @example let val: int = data_get("storage", "mypack:data", "myKey");
-declare fn data_get(targetType: string, target: string, path: string, scale?: float): int;
+declare fn data_get(targetType: string, target: string, path: string, scale: float = 1): int;
 
 /// Merges NBT data into an entity, block, or storage.
-/// 将 NBT 数据合并到实体、方块或存储中。
 /// @param target Target entity selector or block position
 /// @param nbt NBT data to merge (struct literal or string)
 /// @example data_merge(@s, { Invisible: 1b, Silent: 1b });
@@ -392,62 +349,53 @@ declare fn data_merge(target: selector, nbt: string): void;
 // ──────────────────────────────────────────────────────────────────────
 
 /// Creates a new boss bar.
-/// 创建新的 Boss 血条。
 /// @param id Boss bar ID (namespaced, e.g. "minecraft:health")
 /// @param name Display name
 /// @example bossbar_add("mymod:timer", "Time Left");
 declare fn bossbar_add(id: string, name: string): void;
 
 /// Sets the current value of a boss bar.
-/// 设置 Boss 血条的当前值。
 /// @param id Boss bar ID
 /// @param value Current value
 /// @example bossbar_set_value("mymod:timer", 60);
 declare fn bossbar_set_value(id: string, value: int): void;
 
 /// Sets the maximum value of a boss bar.
-/// 设置 Boss 血条的最大值。
 /// @param id Boss bar ID
 /// @param max Maximum value
 /// @example bossbar_set_max("mymod:timer", 300);
 declare fn bossbar_set_max(id: string, max: int): void;
 
 /// Sets the color of a boss bar.
-/// 设置 Boss 血条的颜色。
 /// @param id Boss bar ID
 /// @param color "blue", "green", "pink", "purple", "red", "white", or "yellow"
 /// @example bossbar_set_color("mymod:timer", "red");
 declare fn bossbar_set_color(id: string, color: string): void;
 
 /// Sets the style (segmentation) of a boss bar.
-/// 设置 Boss 血条的样式（分段方式）。
 /// @param id Boss bar segmentation style
 /// @param style "notched_6", "notched_10", "notched_12", "notched_20", or "progress"
 /// @example bossbar_set_style("mymod:timer", "notched_10");
 declare fn bossbar_set_style(id: string, style: string): void;
 
 /// Shows or hides a boss bar.
-/// 显示或隐藏 Boss 血条。
 /// @param id Boss bar ID
 /// @param visible Visibility state (true = show, false = hide)
 /// @example bossbar_set_visible("mymod:timer", true);
 declare fn bossbar_set_visible(id: string, visible: bool): void;
 
 /// Sets which players can see the boss bar.
-/// 设置哪些玩家能看到 Boss 血条。
 /// @param id Boss bar ID
 /// @param target Players who should see the boss bar
 /// @example bossbar_set_players("mymod:timer", @a);
 declare fn bossbar_set_players(id: string, target: selector): void;
 
 /// Removes a boss bar.
-/// 移除 Boss 血条。
 /// @param id Boss bar ID to remove
 /// @example bossbar_remove("mymod:timer");
 declare fn bossbar_remove(id: string): void;
 
 /// Gets the current value of a boss bar.
-/// 获取 Boss 血条的当前值。
 /// @param id Boss bar ID
 /// @returns int
 /// @example let v: int = bossbar_get_value("mymod:timer");
@@ -458,21 +406,18 @@ declare fn bossbar_get_value(id: string): int;
 // ──────────────────────────────────────────────────────────────────────
 
 /// Creates a new team.
-/// 创建新的队伍。
 /// @param name Team name
-/// @param displayName? Optional display name
+/// @param displayName Optional display name (optional)
 /// @example team_add("red");
 /// @example team_add("blue", "Blue Team");
-declare fn team_add(name: string, displayName?: string): void;
+declare fn team_add(name: string, displayName: string): void;
 
 /// Removes a team.
-/// 移除队伍。
 /// @param name Team name to remove
 /// @example team_remove("red");
 declare fn team_remove(name: string): void;
 
 /// Adds entities to a team.
-/// 将实体加入队伍。
 /// @param name Team name to join
 /// @param target Entities to add to the team
 /// @example team_join("red", @s);
@@ -480,13 +425,11 @@ declare fn team_remove(name: string): void;
 declare fn team_join(name: string, target: selector): void;
 
 /// Removes entities from their current team.
-/// 将实体从当前队伍中移除。
 /// @param target Entities to remove from their team
 /// @example team_leave(@s);
 declare fn team_leave(target: selector): void;
 
 /// Sets a team option/property.
-/// 设置队伍选项/属性。
 /// @param name Team name
 /// @param option Option name (e.g. "color", "friendlyFire", "prefix")
 /// @param value Option value
@@ -499,21 +442,18 @@ declare fn team_option(name: string, option: string, value: string): void;
 // ──────────────────────────────────────────────────────────────────────
 
 /// Creates a new unique set backed by NBT storage. Returns the set ID.
-/// 创建新的基于 NBT 存储的唯一集合，返回集合 ID。
 /// @returns string
 /// @example let enemies: string = set_new();
 /// @example set_add(enemies, "@s");
 declare fn set_new(): string;
 
 /// Adds a value to a set (no-op if already present).
-/// 向集合添加值（若已存在则不操作）。
 /// @param setId Set ID returned by set_new()
 /// @param value Value to add
 /// @example set_add(enemies, "@s");
 declare fn set_add(setId: string, value: string): void;
 
 /// Returns 1 if the set contains the value, 0 otherwise.
-/// 若集合包含该值返回 1，否则返回 0。
 /// @param setId Set ID
 /// @param value Value to check
 /// @returns int
@@ -521,14 +461,12 @@ declare fn set_add(setId: string, value: string): void;
 declare fn set_contains(setId: string, value: string): int;
 
 /// Removes a value from a set.
-/// 从集合中移除一个值。
 /// @param setId Set ID
 /// @param value Value to remove
 /// @example set_remove(enemies, "@s");
 declare fn set_remove(setId: string, value: string): void;
 
 /// Removes all values from a set.
-/// 清空集合中的所有值。
 /// @param setId Set ID to clear
 /// @example set_clear(enemies);
 declare fn set_clear(setId: string): void;
@@ -538,14 +476,12 @@ declare fn set_clear(setId: string): void;
 // ──────────────────────────────────────────────────────────────────────
 
 /// Executes a callback function after a delay (in ticks).
-/// 在指定延迟（tick）后执行回调函数。
 /// @param delay Delay in ticks before executing the callback
 /// @param callback Lambda function to execute after delay
 /// @example setTimeout(100, () => { say("5 seconds passed!"); });
 declare fn setTimeout(delay: int, callback: string): void;
 
 /// Executes a callback function repeatedly at a fixed interval. Returns an interval ID.
-/// 以固定间隔重复执行回调函数，返回间隔 ID。
 /// @param interval Interval in ticks between executions
 /// @param callback Lambda function to execute repeatedly
 /// @returns int
@@ -553,7 +489,6 @@ declare fn setTimeout(delay: int, callback: string): void;
 declare fn setInterval(interval: int, callback: string): int;
 
 /// Cancels a repeating interval created by setInterval().
-/// 取消由 setInterval() 创建的重复间隔。
 /// @param id Interval ID returned by setInterval()
 /// @example clearInterval(timer);
 declare fn clearInterval(id: int): void;

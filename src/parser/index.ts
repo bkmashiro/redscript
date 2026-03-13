@@ -260,12 +260,21 @@ export class Parser {
   private parseConstDecl(): ConstDecl {
     const constToken = this.expect('const')
     const name = this.expect('ident').value
-    this.expect(':')
-    const type = this.parseType()
+    let type: TypeNode | undefined
+    if (this.match(':')) {
+      type = this.parseType()
+    }
     this.expect('=')
     const value = this.parseLiteralExpr()
     this.match(';')
-    return this.withLoc({ name, type, value }, constToken)
+    // Infer type from value if not provided
+    const inferredType: TypeNode = type ?? (
+      value.kind === 'str_lit' ? { kind: 'named', name: 'string' } :
+      value.kind === 'bool_lit' ? { kind: 'named', name: 'bool' } :
+      value.kind === 'float_lit' ? { kind: 'named', name: 'float' } :
+      { kind: 'named', name: 'int' }
+    )
+    return this.withLoc({ name, type: inferredType, value }, constToken)
   }
 
   private parseGlobalDecl(mutable: boolean): GlobalDecl {

@@ -1029,16 +1029,13 @@ export const BUILTIN_METADATA: Record<string, BuiltinDef> = {
 export function builtinToDeclaration(def: BuiltinDef): string {
   const lines: string[] = []
 
-  // Doc comments
+  // Doc comments (English only)
   lines.push(`/// ${def.doc}`)
-  if (def.docZh) {
-    lines.push(`/// ${def.docZh}`)
-  }
 
   // Param docs
   for (const p of def.params) {
-    const opt = p.required ? '' : '?'
-    lines.push(`/// @param ${p.name}${opt} ${p.doc}`)
+    const optTag = p.required ? '' : ' (optional)'
+    lines.push(`/// @param ${p.name} ${p.doc}${optTag}`)
   }
 
   // Returns
@@ -1051,13 +1048,9 @@ export function builtinToDeclaration(def: BuiltinDef): string {
     lines.push(`/// @example ${ex.split('\n')[0]}`)
   }
 
-  // Signature
+  // Signature - use default value syntax instead of ? for optional params
   const paramStrs = def.params.map(p => {
-    const opt = p.required ? '' : '?'
     let type = p.type
-    // Map to .d.mcrs types
-    if (type === 'selector') type = 'selector'
-    if (type === 'BlockPos') type = 'BlockPos'
     if (type === 'effect') type = 'string'
     if (type === 'sound') type = 'string'
     if (type === 'block') type = 'string'
@@ -1065,8 +1058,10 @@ export function builtinToDeclaration(def: BuiltinDef): string {
     if (type === 'entity') type = 'string'
     if (type === 'dimension') type = 'string'
     if (type === 'nbt') type = 'string'
-    if (type === 'coord') type = 'coord'
-    return `${p.name}${opt}: ${type}`
+    if (!p.required && p.default !== undefined) {
+      return `${p.name}: ${type} = ${p.default}`
+    }
+    return `${p.name}: ${type}`
   })
 
   const retType = def.returns
