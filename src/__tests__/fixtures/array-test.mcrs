@@ -1,6 +1,6 @@
 // Array operations test
 
-@keep fn test_array() {
+@tick fn test_array() {
     // Array initialization
     let nums: int[] = [10, 20, 30, 40, 50];
     

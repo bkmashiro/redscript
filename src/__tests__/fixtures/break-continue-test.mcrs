@@ -1,6 +1,6 @@
 // Break and continue statements test
 
-@keep fn test_break_continue() {
+fn test_break_continue() {
     // Test break - should stop at i=5
     let break_at: int = -1;
     for (let i: int = 0; i < 10; i = i + 1) {

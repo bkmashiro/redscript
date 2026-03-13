@@ -14,17 +14,18 @@ function getFileContent(files: ReturnType<typeof compile>['files'], suffix: stri
 }
 
 describe('AST dead code elimination', () => {
-  it('removes unused functions reachable from entry points', () => {
+  it('removes private unused functions (prefixed with _)', () => {
     const source = `
-fn unused() { say("never called"); }
+fn _unused() { say("never called"); }
 fn used() { say("called"); }
 @tick fn main() { used(); }
 `
 
     const result = compile(source, { namespace: 'test' })
 
+    // _unused is removed because it starts with _ (private) and is not called
     expect(result.ast.declarations.map(fn => fn.name)).toEqual(['used', 'main'])
-    expect(result.ir.functions.some(fn => fn.name === 'unused')).toBe(false)
+    expect(result.ir.functions.some(fn => fn.name === '_unused')).toBe(false)
   })
 
   it('removes unused local variables from the AST body', () => {

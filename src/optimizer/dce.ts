@@ -133,10 +133,13 @@ export class DeadCodeEliminator {
     const entries = new Set<string>()
 
     for (const fn of program.declarations) {
-      if (fn.name === 'main') {
+      // All top-level functions are entry points (callable via /function)
+      // Exception: functions starting with _ are considered private/internal
+      if (!fn.name.startsWith('_')) {
         entries.add(fn.name)
       }
 
+      // Decorated functions are always entry points (even if prefixed with _)
       if (fn.decorators.some(decorator => [
         'tick',
         'load',
@@ -147,7 +150,7 @@ export class DeadCodeEliminator {
         'on_death',
         'on_login',
         'on_join_team',
-        'keep',  // Prevent DCE from removing this function
+        'keep',
       ].includes(decorator.name))) {
         entries.add(fn.name)
       }

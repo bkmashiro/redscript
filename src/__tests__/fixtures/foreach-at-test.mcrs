@@ -6,7 +6,7 @@
     scoreboard_set("#foreach_at_count", #rs, 0);
 }
 
-@keep fn test_foreach_at() {
+fn test_foreach_at() {
     // Spawn test entities
     raw("summon minecraft:armor_stand ~ ~ ~ {Tags:[\"test_foreach\"],NoGravity:1b}");
     raw("summon minecraft:armor_stand ~2 ~ ~ {Tags:[\"test_foreach\"],NoGravity:1b}");
