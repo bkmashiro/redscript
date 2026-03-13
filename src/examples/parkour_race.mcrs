@@ -1,8 +1,8 @@
 // ============================================
-// Parkour Race - 跑酷竞速
+// Parkour Race - Parkour Race
 // ============================================
-// 场景：玩家从起点跑到终点，记录最快时间
-// 设有多个检查点，掉落会传送回最近检查点
+// Scenario: Players race from start to finish, recording the fastest time
+// Multiple checkpoints set; falling respawns the player at the nearest checkpoint
 // Scenario: Race from start to finish with checkpoints
 // ============================================
 
@@ -11,28 +11,28 @@ import "../stdlib/world.mcrs"
 import "../stdlib/bossbar.mcrs"
 import "../stdlib/particles.mcrs"
 
-// ===== 配置 =====
+// ===== Configuration =====
 const START_X: int = 0;
 const START_Y: int = 64;
 const START_Z: int = 0;
-const FALL_Y: int = 50;  // 低于此高度视为掉落
+const FALL_Y: int = 50;  // Below this height is considered a fall
 
 const CHECKPOINT_COUNT: int = 5;
 
-// ===== 游戏状态 =====
-// 记分板:
-// - pk_time: 当前用时 (ticks)
-// - pk_best: 最佳记录
-// - pk_checkpoint: 当前检查点
-// - pk_running: 是否在比赛中
+// ===== Game State =====
+// Scoreboards:
+// - pk_time: Current elapsed time (ticks)
+// - pk_best: Best record
+// - pk_checkpoint: Current checkpoint
+// - pk_running: Whether in a race
 
-// 检查点坐标 (简化为直线跑酷)
-// CP0: 0,64,0 (起点)
+// Checkpoint coordinates (simplified to linear parkour)
+// CP0: 0,64,0 (start)
 // CP1: 0,64,50
 // CP2: 0,70,100
 // CP3: 0,75,150
 // CP4: 0,80,200
-// CP5: 0,64,250 (终点)
+// CP5: 0,64,250 (finish)
 
 @load
 fn init() {
@@ -41,21 +41,21 @@ fn init() {
     scoreboard_add_objective("pk_checkpoint", "dummy");
     scoreboard_add_objective("pk_running", "dummy");
     
-    // 显示最佳时间
+    // Display best time
     scoreboard_display("sidebar", "pk_best");
     
     set_day();
     weather_clear();
     
-    announce("§b[跑酷] §f已加载！踩压力板开始");
+    announce("§b[Parkour] §fLoaded! Step on pressure plate to start");
 }
 
-// ===== 开始比赛 =====
+// ===== Start Race =====
 fn start_race(player: selector) {
-    // 检查是否已在比赛中
+    // Check if already in a race
     let running: int = scoreboard_get(player, "pk_running");
     if (running == 1) {
-        tell(player, "§c你已经在比赛中了！");
+        tell(player, "§cYou are already in a race!");
         return;
     }
     
@@ -63,53 +63,53 @@ fn start_race(player: selector) {
     scoreboard_set(player, "pk_time", 0);
     scoreboard_set(player, "pk_checkpoint", 0);
     
-    // 传送到起点
+    // Teleport to start
     tp(player, START_X, START_Y, START_Z);
     
-    // 清除效果，给速度
+    // Clear effects, give speed
     effect_clear(player);
     
-    title(player, "§b开始！");
-    subtitle(player, "§7跑向终点！");
+    title(player, "§bGo!");
+    subtitle(player, "§7Race to the finish!");
     
-    // 创建计时 bossbar
-    tell(player, "§b[跑酷] §a比赛开始！到达终点完成比赛");
+    // Create timer bossbar
+    tell(player, "§b[Parkour] §aRace started! Reach the finish to complete");
     
     sparkles(player);
 }
 
-// ===== 每 tick =====
+// ===== Every Tick =====
 @tick  
 fn race_tick() {
-    // 对每个比赛中的玩家
+    // For each player in a race
     foreach (p in @a) {
         let running: int = scoreboard_get(p, "pk_running");
         if (running == 1) {
-            // 增加时间
+            // Increment time
             scoreboard_add(p, "pk_time", 1);
             
-            // 显示当前时间
+            // Display current time
             let time: int = scoreboard_get(p, "pk_time");
             let seconds: int = time / 20;
             let ms: int = (time % 20) * 5;
-            actionbar(p, "§e⏱ " + seconds + "." + ms + " 秒");
+            actionbar(p, "§e⏱ " + seconds + "." + ms + "s");
             
-            // 检查掉落
+            // Check fall
             check_fall(p);
             
-            // 检查检查点
+            // Check checkpoints
             check_checkpoints(p);
         }
     }
 }
 
 fn check_fall(player: selector) {
-    // 如果玩家低于 FALL_Y，传送回检查点
-    // 使用 execute positioned 检查
+    // If player is below FALL_Y, teleport back to checkpoint
+    // Using execute positioned to check
     execute if entity player[y=..50] run {
         let cp: int = scoreboard_get(player, "pk_checkpoint");
         respawn_at_checkpoint(player, cp);
-        tell(player, "§c掉落！返回检查点 " + cp);
+        tell(player, "§cFell! Returning to checkpoint " + cp);
         angry(player);
     }
 }
@@ -117,35 +117,35 @@ fn check_fall(player: selector) {
 fn check_checkpoints(player: selector) {
     let current_cp: int = scoreboard_get(player, "pk_checkpoint");
     
-    // 检查点 1 (0, 64, 50)
+    // Checkpoint 1 (0, 64, 50)
     if (current_cp == 0) {
         execute if entity player[x=-2..2, y=62..68, z=48..52] run {
             reach_checkpoint(player, 1);
         }
     }
     
-    // 检查点 2 (0, 70, 100)
+    // Checkpoint 2 (0, 70, 100)
     if (current_cp == 1) {
         execute if entity player[x=-2..2, y=68..74, z=98..102] run {
             reach_checkpoint(player, 2);
         }
     }
     
-    // 检查点 3 (0, 75, 150)
+    // Checkpoint 3 (0, 75, 150)
     if (current_cp == 2) {
         execute if entity player[x=-2..2, y=73..79, z=148..152] run {
             reach_checkpoint(player, 3);
         }
     }
     
-    // 检查点 4 (0, 80, 200)
+    // Checkpoint 4 (0, 80, 200)
     if (current_cp == 3) {
         execute if entity player[x=-2..2, y=78..84, z=198..202] run {
             reach_checkpoint(player, 4);
         }
     }
     
-    // 终点 (0, 64, 250)
+    // Finish (0, 64, 250)
     if (current_cp == 4) {
         execute if entity player[x=-2..2, y=62..68, z=248..252] run {
             finish_race(player);
@@ -157,7 +157,7 @@ fn reach_checkpoint(player: selector, cp: int) {
     scoreboard_set(player, "pk_checkpoint", cp);
     
     title(player, "");
-    subtitle(player, "§a检查点 " + cp + " / " + CHECKPOINT_COUNT);
+    subtitle(player, "§aCheckpoint " + cp + " / " + CHECKPOINT_COUNT);
     
     happy(player);
     playsound("minecraft:entity.experience_orb.pickup", "player", player);
@@ -189,45 +189,45 @@ fn finish_race(player: selector) {
     let seconds: int = time / 20;
     let ms: int = (time % 20) * 5;
     
-    // 检查是否是新纪录
+    // Check if it's a new record
     if (best == 0) {
-        // 第一次完成
+        // First completion
         scoreboard_set(player, "pk_best", time);
-        title(player, "§6完成！");
-        subtitle(player, "§e" + seconds + "." + ms + " 秒 §7(首次记录)");
-        announce("§b[跑酷] §f玩家完成比赛！用时 §e" + seconds + "." + ms + " 秒");
+        title(player, "§6Finished!");
+        subtitle(player, "§e" + seconds + "." + ms + "s §7(first record)");
+        announce("§b[Parkour] §fA player finished! Time: §e" + seconds + "." + ms + "s");
     } else {
         if (time < best) {
-            // 新纪录！
+            // New record!
             scoreboard_set(player, "pk_best", time);
-            title(player, "§6新纪录！");
-            subtitle(player, "§e" + seconds + "." + ms + " 秒");
-            announce("§b[跑酷] §6新纪录！§f用时 §e" + seconds + "." + ms + " 秒");
+            title(player, "§6New Record!");
+            subtitle(player, "§e" + seconds + "." + ms + "s");
+            announce("§b[Parkour] §6New Record! §fTime: §e" + seconds + "." + ms + "s");
             totem_effect(player);
         } else {
-            title(player, "§a完成！");
-            subtitle(player, "§e" + seconds + "." + ms + " 秒");
+            title(player, "§aFinished!");
+            subtitle(player, "§e" + seconds + "." + ms + "s");
         }
     }
     
-    // 特效
+    // Effects
     sparkles(player);
     playsound("minecraft:ui.toast.challenge_complete", "player", player);
 }
 
-// ===== 放弃比赛 =====
+// ===== Quit Race =====
 fn quit_race(player: selector) {
     let running: int = scoreboard_get(player, "pk_running");
     if (running == 1) {
         scoreboard_set(player, "pk_running", 0);
-        tell(player, "§c已放弃比赛");
+        tell(player, "§cRace abandoned");
         tp(player, START_X, START_Y, START_Z);
     }
 }
 
-// ===== 查看排行榜 =====
+// ===== View Leaderboard =====
 fn show_leaderboard() {
-    announce("§b===== 跑酷排行榜 =====");
-    // 显示前 5 名 (需要记分板排序)
+    announce("§b===== Parkour Leaderboard =====");
+    // Display top 5 (requires scoreboard sorting)
     scoreboard_display("sidebar", "pk_best");
 }

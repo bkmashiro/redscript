@@ -1,7 +1,7 @@
 // ============================================
 // Capture the Flag Mini-Game
 // ============================================
-// 场景：两队对抗，抢夺对方旗帜带回己方基地得分
+// Scenario: Two teams compete, capture the enemy flag and return it to your base to score
 // Scenario: Two teams compete to capture enemy flag
 // ============================================
 
@@ -11,7 +11,7 @@ import "../stdlib/world.mcrs"
 import "../stdlib/inventory.mcrs"
 import "../stdlib/particles.mcrs"
 
-// ===== 配置 =====
+// ===== Configuration =====
 const RED_BASE_X: int = -50;
 const RED_BASE_Z: int = 0;
 const BLUE_BASE_X: int = 50;
@@ -19,7 +19,7 @@ const BLUE_BASE_Z: int = 0;
 const BASE_Y: int = 64;
 const WIN_SCORE: int = 3;
 
-// ===== 游戏状态 =====
+// ===== Game State =====
 struct GameState {
     running: int,
     red_score: int,
@@ -36,54 +36,54 @@ let game: GameState = {
     blue_flag_taken: 0
 };
 
-// ===== 初始化 =====
+// ===== Initialization =====
 @load
 fn init() {
-    // 创建记分板
+    // Create scoreboards
     scoreboard_add_objective("ctf_team", "dummy");
     scoreboard_add_objective("ctf_flag", "dummy");
     
-    // 创建队伍
+    // Create teams
     setup_two_teams();
     
-    // 世界设置
+    // World settings
     set_day();
     weather_clear();
     enable_keep_inventory();
     
-    announce("§e[CTF] §f夺旗战已加载！使用 /trigger start 开始游戏");
+    announce("§e[CTF] §fCapture the Flag loaded! Use /trigger start to begin");
 }
 
-// ===== 开始游戏 =====
+// ===== Start Game =====
 fn start_game() {
     game.running = 1;
     game.red_score = 0;
     game.blue_score = 0;
     
-    // 随机分配队伍
+    // Randomly assign teams
     assign_teams();
     
-    // 传送到各自基地
+    // Teleport to respective bases
     tp(@a[team=red], RED_BASE_X, BASE_Y, RED_BASE_Z);
     tp(@a[team=blue], BLUE_BASE_X, BASE_Y, BLUE_BASE_Z);
     
-    // 给装备
+    // Give equipment
     foreach (p in @a) {
         clear_inventory(p);
         give_kit_warrior(p);
     }
     
-    // 放置旗帜（盔甲架）
+    // Place flags (banners)
     place_flags();
     
-    announce("§e[CTF] §a游戏开始！抢夺敌方旗帜！");
-    title(@a, "§6夺旗战开始！");
+    announce("§e[CTF] §aGame started! Capture the enemy flag!");
+    title(@a, "§6Capture the Flag - Start!");
 }
 
 fn place_flags() {
-    // 红方旗帜（红色旗帜方块）
+    // Red team flag (red banner block)
     setblock(RED_BASE_X, BASE_Y + 1, RED_BASE_Z, "minecraft:red_banner");
-    // 蓝方旗帜
+    // Blue team flag
     setblock(BLUE_BASE_X, BASE_Y + 1, BLUE_BASE_Z, "minecraft:blue_banner");
     
     game.red_flag_taken = 0;
@@ -104,7 +104,7 @@ fn assign_teams() {
     }
 }
 
-// ===== 每 tick 检查 =====
+// ===== Tick Check =====
 @tick
 fn game_tick() {
     if (game.running == 1) {
@@ -115,22 +115,22 @@ fn game_tick() {
 }
 
 fn check_flag_pickup() {
-    // 检查蓝队玩家是否靠近红旗
+    // Check if blue team players are near the red flag
     foreach (p in @a[team=blue]) {
-        // 如果在红方基地附近且旗帜未被拿走
+        // If near red team base and flag has not been taken
         let dist: int = distance_to(p, RED_BASE_X, BASE_Y, RED_BASE_Z);
         if (dist < 3) {
             if (game.red_flag_taken == 0) {
                 game.red_flag_taken = 1;
                 tag_add(p, "has_flag");
                 setblock(RED_BASE_X, BASE_Y + 1, RED_BASE_Z, "minecraft:air");
-                announce("§e[CTF] §9蓝队 §f拿到了 §c红方旗帜§f！");
+                announce("§e[CTF] §9Blue Team §fhas taken the §cRed Flag§f!");
                 glow(p, 9999);
             }
         }
     }
     
-    // 检查红队玩家是否靠近蓝旗
+    // Check if red team players are near the blue flag
     foreach (p in @a[team=red]) {
         let dist: int = distance_to(p, BLUE_BASE_X, BASE_Y, BLUE_BASE_Z);
         if (dist < 3) {
@@ -138,7 +138,7 @@ fn check_flag_pickup() {
                 game.blue_flag_taken = 1;
                 tag_add(p, "has_flag");
                 setblock(BLUE_BASE_X, BASE_Y + 1, BLUE_BASE_Z, "minecraft:air");
-                announce("§e[CTF] §c红队 §f拿到了 §9蓝方旗帜§f！");
+                announce("§e[CTF] §cRed Team §fhas taken the §9Blue Flag§f!");
                 glow(p, 9999);
             }
         }
@@ -146,12 +146,12 @@ fn check_flag_pickup() {
 }
 
 fn check_flag_capture() {
-    // 蓝队带红旗回蓝方基地
+    // Blue team carries red flag back to blue base
     foreach (p in @a[team=blue, tag=has_flag]) {
         let dist: int = distance_to(p, BLUE_BASE_X, BASE_Y, BLUE_BASE_Z);
         if (dist < 5) {
             game.blue_score = game.blue_score + 1;
-            announce("§e[CTF] §9蓝队 §a得分！§f (" + game.blue_score + "/" + WIN_SCORE + ")");
+            announce("§e[CTF] §9Blue Team §ascores! §f(" + game.blue_score + "/" + WIN_SCORE + ")");
             tag_remove(p, "has_flag");
             effect_clear(p, "minecraft:glowing");
             place_flags();
@@ -159,12 +159,12 @@ fn check_flag_capture() {
         }
     }
     
-    // 红队带蓝旗回红方基地  
+    // Red team carries blue flag back to red base
     foreach (p in @a[team=red, tag=has_flag]) {
         let dist: int = distance_to(p, RED_BASE_X, BASE_Y, RED_BASE_Z);
         if (dist < 5) {
             game.red_score = game.red_score + 1;
-            announce("§e[CTF] §c红队 §a得分！§f (" + game.red_score + "/" + WIN_SCORE + ")");
+            announce("§e[CTF] §cRed Team §ascores! §f(" + game.red_score + "/" + WIN_SCORE + ")");
             tag_remove(p, "has_flag");
             effect_clear(p, "minecraft:glowing");
             place_flags();
@@ -186,23 +186,23 @@ fn end_game(winner: string) {
     game.running = 0;
     
     if (winner == "red") {
-        title(@a, "§c红队获胜！");
-        announce("§e[CTF] §c红队 §6赢得了比赛！");
+        title(@a, "§cRed Team Wins!");
+        announce("§e[CTF] §cRed Team §6wins the match!");
     } else {
-        title(@a, "§9蓝队获胜！");
-        announce("§e[CTF] §9蓝队 §6赢得了比赛！");
+        title(@a, "§9Blue Team Wins!");
+        announce("§e[CTF] §9Blue Team §6wins the match!");
     }
     
-    // 清理
+    // Cleanup
     foreach (p in @a[tag=has_flag]) {
         tag_remove(p, "has_flag");
         effect_clear(p);
     }
 }
 
-// ===== 辅助函数 =====
+// ===== Helper Functions =====
 fn distance_to(target: selector, x: int, y: int, z: int) -> int {
-    // 简化的距离计算（使用记分板）
+    // Simplified distance calculation (using scoreboard)
     let dist: int = scoreboard_get(target, "ctf_dist");
     return dist;
 }

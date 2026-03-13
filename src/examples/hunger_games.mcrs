@@ -1,8 +1,8 @@
 // ============================================
-// Hunger Games - 饥饿游戏
+// Hunger Games - Hunger Games
 // ============================================
-// 场景：玩家从中央补给点开始，搜刮物资生存
-// 边界逐渐缩小，最后存活者获胜
+// Scenario: Players start from the central supply point, scavenge for resources
+// Border gradually shrinks, last survivor wins
 // Scenario: Battle royale with shrinking border
 // ============================================
 
@@ -11,19 +11,19 @@ import "../stdlib/world.mcrs"
 import "../stdlib/bossbar.mcrs"
 import "../stdlib/particles.mcrs"
 
-// ===== 配置 =====
+// ===== Configuration =====
 const CENTER_X: int = 0;
 const CENTER_Y: int = 64;
 const CENTER_Z: int = 0;
 const INITIAL_BORDER: int = 200;
 const FINAL_BORDER: int = 20;
-const GRACE_PERIOD: int = 600;  // 30秒无敌时间
-const SHRINK_INTERVAL: int = 1200;  // 每60秒缩圈
+const GRACE_PERIOD: int = 600;  // 30-second grace period
+const SHRINK_INTERVAL: int = 1200;  // Shrink every 60 seconds
 
-// ===== 游戏状态 =====
+// ===== Game State =====
 struct HGState {
     running: int,
-    phase: int,        // 0=等待, 1=倒计时, 2=游戏中, 3=结束
+    phase: int,        // 0=waiting, 1=countdown, 2=in-game, 3=ended
     countdown: int,
     grace_timer: int,
     border_timer: int,
@@ -46,36 +46,36 @@ fn init() {
     scoreboard_add_objective("hg_kills", "dummy");
     scoreboard_add_objective("hg_alive", "dummy");
     
-    // 设置世界边界
+    // Set world border
     // worldborder center 0 0
     // worldborder set 200
     
-    announce("§c[饥饿游戏] §f已加载！等待玩家加入...");
+    announce("§c[Hunger Games] §fLoaded! Waiting for players to join...");
 }
 
-// ===== 开始游戏 =====
+// ===== Start Game =====
 fn start_countdown() {
     game.phase = 1;
-    game.countdown = 200;  // 10秒倒计时
+    game.countdown = 200;  // 10-second countdown
     
-    // 传送所有玩家到中央
+    // Teleport all players to center
     foreach (p in @a) {
-        tp(p, CENTER_X, CENTER_Y + 50, CENTER_Z);  // 高空开始
+        tp(p, CENTER_X, CENTER_Y + 50, CENTER_Z);  // Start from high altitude
         scoreboard_set(p, "hg_kills", 0);
         scoreboard_set(p, "hg_alive", 1);
         
-        // 清空背包
+        // Clear inventory
         clear(p);
         
-        // 冻结玩家
+        // Freeze players
         effect(p, "minecraft:slowness", 15, 255);
-        effect(p, "minecraft:jump_boost", 15, 250);  // 防止跳跃
+        effect(p, "minecraft:jump_boost", 15, 250);  // Prevent jumping
     }
     
-    // 创建边界 bossbar
-    create_progress_bar("hg_border", "§c边界缩小中", INITIAL_BORDER);
+    // Create border bossbar
+    create_progress_bar("hg_border", "§cBorder Shrinking", INITIAL_BORDER);
     
-    announce("§c[饥饿游戏] §e游戏即将开始！");
+    announce("§c[Hunger Games] §eGame starting soon!");
 }
 
 fn start_game() {
@@ -85,25 +85,25 @@ fn start_game() {
     game.border_timer = SHRINK_INTERVAL;
     game.current_border = INITIAL_BORDER;
     
-    // 计算存活人数
+    // Count alive players
     game.alive_count = 0;
     foreach (p in @a) {
         game.alive_count = game.alive_count + 1;
         
-        // 清除效果
+        // Clear effects
         effect_clear(p);
         
-        // 缓降
+        // Slow fall
         slow_fall(p, 100);
     }
     
-    title(@a, "§c游戏开始！");
-    subtitle(@a, "§7搜刮物资，成为最后的生存者！");
+    title(@a, "§cGame Start!");
+    subtitle(@a, "§7Scavenge for supplies, be the last survivor!");
     
-    announce("§c[饥饿游戏] §a游戏开始！§730秒内无法互相伤害");
+    announce("§c[Hunger Games] §aGame started! §7No PvP for 30 seconds");
 }
 
-// ===== 每 tick =====
+// ===== Every Tick =====
 @tick
 fn game_tick() {
     if (game.phase == 1) {
@@ -118,7 +118,7 @@ fn game_tick() {
 fn countdown_tick() {
     game.countdown = game.countdown - 1;
     
-    // 倒计时提示
+    // Countdown hints
     if (game.countdown == 100) {
         title(@a, "§e5");
         playsound("minecraft:block.note_block.pling", "player", @a);
@@ -146,30 +146,30 @@ fn countdown_tick() {
 }
 
 fn main_game_tick() {
-    // 无敌时间
+    // Grace period
     if (game.grace_timer > 0) {
         game.grace_timer = game.grace_timer - 1;
         
         if (game.grace_timer == 0) {
-            announce("§c[饥饿游戏] §4无敌时间结束！可以开始战斗！");
-            title(@a, "§c战斗开始！");
+            announce("§c[Hunger Games] §4Grace period ended! Combat is now allowed!");
+            title(@a, "§cCombat Start!");
         }
     }
     
-    // 边界缩小
+    // Border shrink
     game.border_timer = game.border_timer - 1;
     if (game.border_timer <= 0) {
         shrink_border();
         game.border_timer = SHRINK_INTERVAL;
     }
     
-    // 更新 bossbar
+    // Update bossbar
     update_bar("hg_border", game.current_border);
     
-    // 检查边界伤害
+    // Check border damage
     check_border_damage();
     
-    // 检查存活人数
+    // Check alive count
     check_alive();
 }
 
@@ -182,13 +182,13 @@ fn shrink_border() {
         }
         
         // worldborder set game.current_border 60
-        announce("§c[饥饿游戏] §e边界正在缩小！当前大小：" + game.current_border);
+        announce("§c[Hunger Games] §eBorder is shrinking! Current size: " + game.current_border);
         
-        // 更新 bossbar
+        // Update bossbar
         bossbar_set_max("hg_border", INITIAL_BORDER);
         bossbar_set_value("hg_border", game.current_border);
         
-        // 颜色变化
+        // Color change
         if (game.current_border < 50) {
             bossbar_set_color("hg_border", "red");
         } else {
@@ -200,12 +200,12 @@ fn shrink_border() {
 }
 
 fn check_border_damage() {
-    // 对边界外的玩家造成伤害
-    // 需要检查玩家是否在边界外
+    // Deal damage to players outside the border
+    // Need to check if player is outside the border
     foreach (p in @a) {
-        // 简化：使用 execute positioned
+        // Simplified: using execute positioned
         let _dist: int = 0;  // TODO: calculate distance from center
-        // 如果超出边界，造成伤害
+        // If outside border, deal damage
         // effect(p, "minecraft:wither", 1, 0);
     }
 }
@@ -224,15 +224,15 @@ fn check_alive() {
     
     game.alive_count = alive;
     
-    // 更新记分板显示
-    actionbar(@a, "§c存活: " + alive + " 人");
+    // Update scoreboard display
+    actionbar(@a, "§cAlive: " + alive);
     
-    // 检查胜利
+    // Check for victory
     if (alive <= 1) {
         if (alive == 1) {
             declare_winner(winner);
         } else {
-            // 无人存活
+            // No survivors
             end_game_no_winner();
         }
     }
@@ -244,11 +244,11 @@ fn declare_winner(winner: selector) {
     
     let kills: int = scoreboard_get(winner, "hg_kills");
     
-    title(@a, "§6胜利者！");
-    announce("§c[饥饿游戏] §6游戏结束！");
-    announce("§a胜利者击杀数：" + kills);
+    title(@a, "§6Winner!");
+    announce("§c[Hunger Games] §6Game Over!");
+    announce("§aWinner's kills: " + kills);
     
-    // 胜利特效
+    // Victory effects
     totem_effect(winner);
     buff_all(winner, 200);
     
@@ -259,27 +259,27 @@ fn end_game_no_winner() {
     game.phase = 3;
     game.running = 0;
     
-    title(@a, "§7游戏结束");
-    subtitle(@a, "§c无人存活");
+    title(@a, "§7Game Over");
+    subtitle(@a, "§cNo survivors");
     
     remove_bar("hg_border");
 }
 
-// ===== 玩家死亡处理 =====
+// ===== Player Death Handler =====
 fn on_player_death(player: selector, killer: selector) {
     scoreboard_set(player, "hg_alive", 0);
     
-    // 更新击杀数
+    // Update kill count
     scoreboard_add(killer, "hg_kills", 1);
     
-    // 切换观察模式
+    // Switch to spectator mode
     // gamemode spectator player
     
     let kills: int = scoreboard_get(killer, "hg_kills");
-    announce("§c☠ §7玩家被击杀！击杀者已有 " + kills + " 杀");
+    announce("§c☠ §7A player was eliminated! Killer now has " + kills + " kills");
 }
 
-// ===== 重置游戏 =====
+// ===== Reset Game =====
 fn reset_game() {
     game.phase = 0;
     game.running = 0;
@@ -291,11 +291,11 @@ fn reset_game() {
         // gamemode survival p
     }
     
-    // 重置边界
+    // Reset border
     game.current_border = INITIAL_BORDER;
     // worldborder set 200
     
     remove_bar("hg_border");
     
-    announce("§c[饥饿游戏] §7游戏已重置");
+    announce("§c[Hunger Games] §7Game has been reset");
 }
