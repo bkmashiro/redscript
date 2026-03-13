@@ -25,15 +25,19 @@ export interface Span {
 export type PrimitiveType = 'int' | 'bool' | 'float' | 'string' | 'void' | 'BlockPos' | 'byte' | 'short' | 'long' | 'double' | 'format_string'
 
 // Entity type hierarchy
-export type EntityTypeName = 
+export type EntityTypeName =
   | 'entity'      // Base type
   | 'Player'      // @a, @p, @r
   | 'Mob'         // Base mob type
   | 'HostileMob'  // Hostile mobs
   | 'PassiveMob'  // Passive mobs
-  // Specific mob types (common ones)
+  // Hostile mob types
   | 'Zombie' | 'Skeleton' | 'Creeper' | 'Spider' | 'Enderman'
-  | 'Pig' | 'Cow' | 'Sheep' | 'Chicken' | 'Villager'
+  | 'Blaze' | 'Witch' | 'Slime' | 'ZombieVillager' | 'Husk'
+  | 'Drowned' | 'Stray' | 'WitherSkeleton' | 'CaveSpider'
+  // Passive mob types
+  | 'Pig' | 'Cow' | 'Sheep' | 'Chicken' | 'Villager' | 'WanderingTrader'
+  // Non-mob entities
   | 'ArmorStand' | 'Item' | 'Arrow'
 
 export type TypeNode =
@@ -43,7 +47,7 @@ export type TypeNode =
   | { kind: 'enum'; name: string }
   | { kind: 'function_type'; params: TypeNode[]; return: TypeNode }
   | { kind: 'entity'; entityType: EntityTypeName }  // Entity types
-  | { kind: 'selector' }  // Selector type (multiple entities)
+  | { kind: 'selector'; entityType?: string }  // Selector type, optionally parameterized: selector<Player>
 
 export interface LambdaParam {
   name: string

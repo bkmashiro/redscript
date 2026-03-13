@@ -17,6 +17,7 @@ import type {
 import type { GlobalVar } from '../ir/types'
 import * as path from 'path'
 import { EVENT_TYPES, getEventParamSpecs, isEventTypeName } from '../events/types'
+import { getBaseSelectorType, areCompatibleTypes, getConcreteSubtypes } from '../types/entity-hierarchy'
 
 // ---------------------------------------------------------------------------
 // Macro-aware builtins (MC 1.20.2+)
@@ -134,11 +135,21 @@ const ENTITY_TO_MC_TYPE: Partial<Record<EntityTypeName, string>> = {
   Creeper: 'minecraft:creeper',
   Spider: 'minecraft:spider',
   Enderman: 'minecraft:enderman',
+  Blaze: 'minecraft:blaze',
+  Witch: 'minecraft:witch',
+  Slime: 'minecraft:slime',
+  ZombieVillager: 'minecraft:zombie_villager',
+  Husk: 'minecraft:husk',
+  Drowned: 'minecraft:drowned',
+  Stray: 'minecraft:stray',
+  WitherSkeleton: 'minecraft:wither_skeleton',
+  CaveSpider: 'minecraft:cave_spider',
   Pig: 'minecraft:pig',
   Cow: 'minecraft:cow',
   Sheep: 'minecraft:sheep',
   Chicken: 'minecraft:chicken',
   Villager: 'minecraft:villager',
+  WanderingTrader: 'minecraft:wandering_trader',
   ArmorStand: 'minecraft:armor_stand',
   Item: 'minecraft:item',
   Arrow: 'minecraft:arrow',
@@ -210,6 +221,15 @@ export class Lowering {
   private timeoutCounter: number = 0
   private intervalCounter: number = 0
   readonly warnings: Warning[] = []
+
+  // Entity type context stack for W_IMPOSSIBLE_AS warnings
+  private entityContextStack: string[] = []
+
+  private currentEntityContext(): string {
+    return this.entityContextStack.length > 0
+      ? this.entityContextStack[this.entityContextStack.length - 1]
+      : 'Entity'
+  }
 
   // Builder state for current function
   private builder!: LoweringBuilder
@@ -1056,16 +1076,30 @@ export class Lowering {
     }
 
     const mcType = ENTITY_TO_MC_TYPE[cond.entityType]
-    if (!mcType) {
-      throw new DiagnosticError(
-        'LoweringError',
-        `Cannot lower entity type check for '${cond.entityType}'`,
-        cond.span ?? stmt.span ?? { line: 0, col: 0 }
-      )
-    }
-
     const thenFnName = `${this.currentFn}/then_${this.foreachCounter++}`
-    this.builder.emitRaw(`execute if entity ${this.appendTypeFilter(selector, mcType)} run function ${this.namespace}:${thenFnName}`)
+
+    if (!mcType) {
+      // Abstract type — check all concrete subtypes
+      const subtypes = getConcreteSubtypes(cond.entityType)
+      if (subtypes.length === 0) {
+        throw new DiagnosticError(
+          'LoweringError',
+          `Cannot lower entity type check for '${cond.entityType}'`,
+          cond.span ?? stmt.span ?? { line: 0, col: 0 }
+        )
+      }
+      // Use a temp scoreboard variable to OR multiple type checks
+      this.builder.emitRaw(`scoreboard players set __is_result rs:temp 0`)
+      for (const subtype of subtypes) {
+        if (subtype.mcId) {
+          this.builder.emitRaw(`execute if entity ${this.appendTypeFilter(selector, subtype.mcId)} run scoreboard players set __is_result rs:temp 1`)
+        }
+      }
+      this.builder.emitRaw(`execute if score __is_result rs:temp matches 1 run function ${this.namespace}:${thenFnName}`)
+    } else {
+      // Concrete type — single check
+      this.builder.emitRaw(`execute if entity ${this.appendTypeFilter(selector, mcType)} run function ${this.namespace}:${thenFnName}`)
+    }
 
     const savedBuilder = this.builder
     const savedVarMap = new Map(this.varMap)
@@ -1243,10 +1277,20 @@ export class Lowering {
     // In foreach body, the binding maps to @s
     this.varMap.set(stmt.binding, '@s')
 
+    // Track entity context for type narrowing
+    const selectorEntityType = getBaseSelectorType(selector)
+    if (selectorEntityType) {
+      this.entityContextStack.push(selectorEntityType)
+    }
+
     this.builder.startBlock('entry')
     this.lowerBlock(stmt.body)
     if (!this.builder.isBlockSealed()) {
       this.builder.emitReturn()
+    }
+
+    if (selectorEntityType) {
+      this.entityContextStack.pop()
     }
 
     const subFn = this.builder.build(subFnName, [], false)
@@ -1397,6 +1441,18 @@ export class Lowering {
     const selector = this.selectorToString(stmt.selector)
     const subFnName = `${this.currentFn}/as_${this.foreachCounter++}`
 
+    // Check for impossible type assertions (W_IMPOSSIBLE_AS)
+    const innerType = getBaseSelectorType(selector)
+    const outerType = this.currentEntityContext()
+    if (innerType && outerType !== 'Entity' && innerType !== 'Entity' && !areCompatibleTypes(outerType, innerType)) {
+      this.warnings.push({
+        message: `Impossible type assertion: @s is ${outerType} but as-block targets ${innerType}`,
+        code: 'W_IMPOSSIBLE_AS',
+        line: stmt.span?.line,
+        col: stmt.span?.col,
+      })
+    }
+
     this.builder.emitRaw(`execute as ${selector} run function ${this.namespace}:${subFnName}`)
 
     // Create sub-function
@@ -1408,10 +1464,19 @@ export class Lowering {
     this.varMap = new Map(savedVarMap)
     this.blockPosVars = new Map(savedBlockPosVars)
 
+    // Track entity context inside as-block
+    if (innerType) {
+      this.entityContextStack.push(innerType)
+    }
+
     this.builder.startBlock('entry')
     this.lowerBlock(stmt.body)
     if (!this.builder.isBlockSealed()) {
       this.builder.emitReturn()
+    }
+
+    if (innerType) {
+      this.entityContextStack.pop()
     }
 
     const subFn = this.builder.build(subFnName, [], false)

@@ -41,11 +41,21 @@ const ENTITY_TYPE_NAMES = new Set<EntityTypeName>([
   'Creeper',
   'Spider',
   'Enderman',
+  'Blaze',
+  'Witch',
+  'Slime',
+  'ZombieVillager',
+  'Husk',
+  'Drowned',
+  'Stray',
+  'WitherSkeleton',
+  'CaveSpider',
   'Pig',
   'Cow',
   'Sheep',
   'Chicken',
   'Villager',
+  'WanderingTrader',
   'ArmorStand',
   'Item',
   'Arrow',
@@ -446,7 +456,16 @@ export class Parser {
       type = { kind: 'named', name: token.kind }
     } else if (token.kind === 'ident') {
       this.advance()
-      type = { kind: 'struct', name: token.value }
+      if (token.value === 'selector' && this.check('<')) {
+        this.advance() // consume <
+        const entityType = this.expect('ident').value
+        this.expect('>')
+        type = { kind: 'selector', entityType }
+      } else if (token.value === 'selector') {
+        type = { kind: 'selector' }
+      } else {
+        type = { kind: 'struct', name: token.value }
+      }
     } else {
       this.error(`Expected type, got '${token.kind}'`)
     }
