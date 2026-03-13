@@ -10,6 +10,7 @@ export interface OptimizationStats {
   setblockSavedCommands: number
   deadCodeRemoved: number
   constantFolds: number
+  inlinedTrivialFunctions: number
   totalCommandsBefore: number
   totalCommandsAfter: number
 }
@@ -40,6 +41,7 @@ export function createEmptyOptimizationStats(): OptimizationStats {
     setblockSavedCommands: 0,
     deadCodeRemoved: 0,
     constantFolds: 0,
+    inlinedTrivialFunctions: 0,
     totalCommandsBefore: 0,
     totalCommandsAfter: 0,
   }
@@ -394,12 +396,122 @@ export function batchSetblocks(functions: CommandFunction[]): { functions: Comma
   return { functions: optimized, stats }
 }
 
+/**
+ * Inline trivial functions:
+ * 1. Functions that only contain a single `function` call → inline the call
+ * 2. Empty functions (no commands) → remove and eliminate all calls to them
+ */
+function inlineTrivialFunctions(functions: CommandFunction[]): { functions: CommandFunction[]; stats: Partial<OptimizationStats> } {
+  const FUNCTION_CMD_RE = /^function ([^:]+):(.+)$/
+  
+  // Find trivial functions (only a single function call, no other commands)
+  const trivialMap = new Map<string, string>()  // fn name -> target fn name
+  const emptyFunctions = new Set<string>()      // functions with no commands
+  
+  // System functions that should never be removed
+  const SYSTEM_FUNCTIONS = new Set(['__tick', '__load'])
+  
+  for (const fn of functions) {
+    // Never remove system functions
+    if (SYSTEM_FUNCTIONS.has(fn.name) || fn.name.startsWith('__trigger_')) {
+      continue
+    }
+    
+    const nonCommentCmds = fn.commands.filter(cmd => !cmd.cmd.startsWith('#'))
+    if (nonCommentCmds.length === 0 && fn.name.includes('/')) {
+      // Empty control-flow block (e.g., main/merge_5) - mark for removal
+      // Only remove if it's a sub-block (contains /), not a top-level function
+      emptyFunctions.add(fn.name)
+    } else if (nonCommentCmds.length === 1 && fn.name.includes('/')) {
+      const match = nonCommentCmds[0].cmd.match(FUNCTION_CMD_RE)
+      if (match) {
+        // This function only calls another function
+        trivialMap.set(fn.name, match[2])
+      }
+    }
+  }
+  
+  // Resolve chains: if A -> B -> C, then A -> C
+  // Also handle: A -> B where B is empty → A is effectively empty
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const [from, to] of trivialMap) {
+      if (emptyFunctions.has(to)) {
+        // Target is empty, so this function is effectively empty too
+        trivialMap.delete(from)
+        emptyFunctions.add(from)
+        changed = true
+      } else {
+        const finalTarget = trivialMap.get(to)
+        if (finalTarget && finalTarget !== to) {
+          trivialMap.set(from, finalTarget)
+          changed = true
+        }
+      }
+    }
+  }
+  
+  const totalRemoved = trivialMap.size + emptyFunctions.size
+  if (totalRemoved === 0) {
+    return { functions, stats: {} }
+  }
+  
+  // Set of all functions to remove
+  const removedNames = new Set([...trivialMap.keys(), ...emptyFunctions])
+  
+  // Rewrite all function calls to skip trivial wrappers or remove empty calls
+  const result: CommandFunction[] = []
+  
+  for (const fn of functions) {
+    // Skip removed functions
+    if (removedNames.has(fn.name)) {
+      continue
+    }
+    
+    // Rewrite function calls in this function
+    const rewrittenCmds: typeof fn.commands = []
+    for (const cmd of fn.commands) {
+      // Check if this is a call to an empty function
+      const emptyCallMatch = cmd.cmd.match(/^(?:execute .* run )?function ([^:]+):([^\s]+)$/)
+      if (emptyCallMatch) {
+        const targetFn = emptyCallMatch[2]
+        if (emptyFunctions.has(targetFn)) {
+          // Skip calls to empty functions entirely
+          continue
+        }
+      }
+      
+      // Rewrite calls to trivial wrapper functions
+      const rewritten = cmd.cmd.replace(
+        /function ([^:]+):([^\s]+)/g,
+        (match, ns, fnPath) => {
+          const target = trivialMap.get(fnPath)
+          return target ? `function ${ns}:${target}` : match
+        }
+      )
+      rewrittenCmds.push({ ...cmd, cmd: rewritten })
+    }
+    
+    result.push({ name: fn.name, commands: rewrittenCmds })
+  }
+  
+  return {
+    functions: result,
+    stats: { inlinedTrivialFunctions: totalRemoved }
+  }
+}
+
 export function optimizeCommandFunctions(functions: CommandFunction[]): { functions: CommandFunction[]; stats: OptimizationStats } {
   const initial = cloneFunctions(functions)
   const stats = createEmptyOptimizationStats()
   stats.totalCommandsBefore = initial.reduce((sum, fn) => sum + fn.commands.length, 0)
 
-  const licm = applyLICM(initial)
+  // First pass: inline trivial functions
+  const inlined = inlineTrivialFunctions(initial)
+  mergeOptimizationStats(stats, inlined.stats)
+
+  const licm = applyLICM(inlined.functions)
   mergeOptimizationStats(stats, licm.stats)
 
   const cse = applyCSE(licm.functions)

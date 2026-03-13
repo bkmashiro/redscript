@@ -218,19 +218,28 @@ function applyFunctionOptimization(
   })))
   const commandMap = new Map(optimized.functions.map(fn => [fn.name, fn.commands]))
 
+  // Filter out files for functions that were removed (inlined trivial functions)
+  const optimizedNames = new Set(optimized.functions.map(fn => fn.name))
+  
   return {
-    files: files.map(file => {
-    const functionName = toFunctionName(file)
-    if (!functionName) return file
-    const commands = commandMap.get(functionName)
-    if (!commands) return file
-    const lines = file.content.split('\n')
-    const header = lines.filter(line => line.trim().startsWith('#'))
-    return {
-      ...file,
-      content: [...header, ...commands.map(command => command.cmd)].join('\n'),
-    }
-    }),
+    files: files
+      .filter(file => {
+        const functionName = toFunctionName(file)
+        // Keep non-function files and functions that weren't removed
+        return !functionName || optimizedNames.has(functionName)
+      })
+      .map(file => {
+        const functionName = toFunctionName(file)
+        if (!functionName) return file
+        const commands = commandMap.get(functionName)
+        if (!commands) return file
+        const lines = file.content.split('\n')
+        const header = lines.filter(line => line.trim().startsWith('#'))
+        return {
+          ...file,
+          content: [...header, ...commands.map(command => command.cmd)].join('\n'),
+        }
+      }),
     stats: optimized.stats,
   }
 }
