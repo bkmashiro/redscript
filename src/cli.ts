@@ -14,6 +14,7 @@ import { generateCommandBlocks } from './codegen/cmdblock'
 import { compileToStructure } from './codegen/structure'
 import { formatError } from './diagnostics'
 import { startRepl } from './repl'
+import { generateDts } from './builtins/metadata'
 import type { OptimizationStats } from './optimizer/commands'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -30,16 +31,18 @@ Usage:
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
   redscript fmt <file.mcrs> [file2.mcrs ...]
+  redscript generate-dts [-o <file>]
   redscript repl
   redscript version
 
 Commands:
-  compile   Compile a RedScript file to a Minecraft datapack
-  watch     Watch a directory for .mcrs file changes, recompile, and hot reload
-  check     Check a RedScript file for errors without generating output
-  fmt       Auto-format RedScript source files
-  repl      Start an interactive RedScript REPL
-  version   Print the RedScript version
+  compile       Compile a RedScript file to a Minecraft datapack
+  watch         Watch a directory for .mcrs file changes, recompile, and hot reload
+  check         Check a RedScript file for errors without generating output
+  fmt           Auto-format RedScript source files
+  generate-dts  Generate builtin function declaration file (builtins.d.mcrs)
+  repl          Start an interactive RedScript REPL
+  version       Print the RedScript version
 
 Options:
   -o, --output <path>    Output directory or file path, depending on target
@@ -438,6 +441,14 @@ async function main(): Promise<void> {
         fs.writeFileSync(file, formatted)
         console.log(`Formatted: ${file}`)
       }
+      break
+    }
+
+    case 'generate-dts': {
+      const output = parsed.output ?? 'builtins.d.mcrs'
+      const dtsContent = generateDts()
+      fs.writeFileSync(output, dtsContent, 'utf-8')
+      console.log(`Generated ${output}`)
       break
     }
 
