@@ -2,6 +2,45 @@
 
 All notable changes to RedScript will be documented in this file.
 
+## [1.2.15] - 2026-03-13
+
+### Changed
+- All builtin functions now support macro parameters, so runtime variables can be used in any argument position
+
+## [1.2.14] - 2026-03-13
+
+### Added
+- Automatic Minecraft 1.20.2+ function macro support
+
+### Changed
+- Runtime variables now work in more command positions, including coordinates and entity types
+
+## [1.2.13] - 2026-03-13
+
+### Changed
+- Trivial control-flow helper functions are now inlined during optimization
+- Empty blocks are removed automatically during optimization
+
+## [1.2.12] - 2026-03-13
+
+### Changed
+- Dead code elimination now preserves all public functions automatically
+- Functions whose names start with `_` are treated as private by default
+
+## [1.2.11] - 2026-03-13
+
+### Fixed
+- Entity types now compile with the `minecraft:` namespace where required
+- Struct method field storage and method-call state restoration
+
+## [1.2.10] - 2026-03-13
+
+### Added
+- `break` and `continue` statements
+- `match` range patterns such as `70..79`
+- `foreach` execute context modifiers like `at @s` and `positioned`
+- Complete support for Minecraft `execute` subcommands
+
 ## [1.2.0] - 2026-03-12
 
 ### Added

@@ -51,13 +51,13 @@ let running: bool = false;
     }
 }
 
-@keep fn start() {
+fn start() {
     running = true;
     counter = 0;
     say(f"Demo started!");
 }
 
-@keep fn stop() {
+fn stop() {
     running = false;
     say(f"Demo stopped at {counter} ticks.");
 }
@@ -65,11 +65,14 @@ let running: bool = false;
 
 **What you get:**
 - ✅ `let` / `const` variables (no more `scoreboard players set`)
-- ✅ `if` / `else` / `for` / `foreach` control flow
+- ✅ `if` / `else` / `for` / `foreach` / `break` / `continue` control flow
 - ✅ `@tick` / `@load` / `@on(Event)` decorators
-- ✅ `foreach (p in @a) at @s` — iterate entities with execute context
+- ✅ `foreach (p in @a) at @s positioned ~ ~1 ~` and full `execute` subcommand support
+- ✅ `match` with range patterns like `70..79`
+- ✅ Builtins accept runtime macro variables in any argument position
 - ✅ f-strings like `f"Score: {points}"` for dynamic output
-- ✅ One file → ready-to-use datapack
+- ✅ Public functions are preserved automatically; `_privateFn()` stays private
+- ✅ One file -> ready-to-use datapack
 
 ---
 
@@ -81,7 +84,11 @@ let running: bool = false;
 - Runtime f-strings for `say`, `title`, `actionbar`, and related output
 - Timer OOP API with `Timer::new(...)` and instance methods
 - `setTimeout(...)` and `setInterval(...)` scheduling helpers
-- Dead code elimination in the optimizer
+- `break` / `continue`, match range patterns, and full `execute` subcommands
+- `foreach` execute context modifiers like `at`, `positioned`, and `rotated`
+- Automatic MC 1.20.2+ function macro support for runtime variables
+- Builtins now accept macro parameters in any position
+- Dead code elimination that preserves public functions automatically
 - 313 Minecraft tag constants in the standard library
 
 ---
