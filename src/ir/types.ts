@@ -111,6 +111,9 @@ export interface IRFunction {
     eventType: string
     tag: string
   }
+  // MC 1.20.2+ macro function support
+  isMacroFunction?: boolean   // true → function uses MC macro syntax ($-prefixed commands)
+  macroParamNames?: string[]  // parameter names that are passed via NBT macro (not just scoreboard)
 }
 
 // ---------------------------------------------------------------------------

@@ -19,6 +19,18 @@ import * as path from 'path'
 import { EVENT_TYPES, getEventParamSpecs, isEventTypeName } from '../events/types'
 
 // ---------------------------------------------------------------------------
+// Macro-aware builtins (MC 1.20.2+)
+// These builtins generate commands where parameter variables cannot appear
+// as literal values (coordinates, entity types, block types), so they
+// require MC macro syntax when called with runtime variables.
+// ---------------------------------------------------------------------------
+
+const MACRO_AWARE_BUILTINS = new Set([
+  'summon', 'particle', 'setblock', 'fill', 'clone',
+  'playsound', 'tp', 'tp_to', 'effect', 'effect_clear', 'give',
+])
+
+// ---------------------------------------------------------------------------
 // Builtin Functions
 // ---------------------------------------------------------------------------
 
@@ -229,14 +241,205 @@ export class Lowering {
   // Loop context stack for break/continue
   private loopStack: Array<{ breakLabel: string; continueLabel: string; stepFn?: () => void }> = []
 
+  // MC 1.20.2+ macro function support
+  // Names of params in the current function being lowered
+  private currentFnParamNames: Set<string> = new Set()
+  // Params in the current function that need macro treatment (used in literal positions)
+  private currentFnMacroParams: Set<string> = new Set()
+  // Global registry: fnName → macroParamNames (populated by pre-scan + lowering)
+  private macroFunctionInfo: Map<string, string[]> = new Map()
+
   constructor(namespace: string, sourceRanges: SourceRange[] = []) {
     this.namespace = namespace
     this.sourceRanges = sourceRanges
     LoweringBuilder.resetTempCounter()
   }
 
+  // ---------------------------------------------------------------------------
+  // MC Macro pre-scan: identify which function params need macro treatment
+  // ---------------------------------------------------------------------------
+
+  private preScanMacroFunctions(program: Program): void {
+    for (const fn of program.declarations) {
+      const paramNames = new Set(fn.params.map(p => p.name))
+      const macroParams = new Set<string>()
+      this.preScanStmts(fn.body, paramNames, macroParams)
+      if (macroParams.size > 0) {
+        this.macroFunctionInfo.set(fn.name, [...macroParams])
+      }
+    }
+    for (const implBlock of program.implBlocks ?? []) {
+      for (const method of implBlock.methods) {
+        const paramNames = new Set(method.params.map(p => p.name))
+        const macroParams = new Set<string>()
+        this.preScanStmts(method.body, paramNames, macroParams)
+        if (macroParams.size > 0) {
+          this.macroFunctionInfo.set(`${implBlock.typeName}_${method.name}`, [...macroParams])
+        }
+      }
+    }
+  }
+
+  private preScanStmts(stmts: Block, paramNames: Set<string>, macroParams: Set<string>): void {
+    for (const stmt of stmts) {
+      this.preScanStmt(stmt, paramNames, macroParams)
+    }
+  }
+
+  private preScanStmt(stmt: Stmt, paramNames: Set<string>, macroParams: Set<string>): void {
+    switch (stmt.kind) {
+      case 'expr':
+        this.preScanExpr(stmt.expr, paramNames, macroParams)
+        break
+      case 'let':
+        this.preScanExpr(stmt.init, paramNames, macroParams)
+        break
+      case 'return':
+        if (stmt.value) this.preScanExpr(stmt.value, paramNames, macroParams)
+        break
+      case 'if':
+        this.preScanExpr(stmt.cond, paramNames, macroParams)
+        this.preScanStmts(stmt.then, paramNames, macroParams)
+        if (stmt.else_) this.preScanStmts(stmt.else_, paramNames, macroParams)
+        break
+      case 'while':
+        this.preScanExpr(stmt.cond, paramNames, macroParams)
+        this.preScanStmts(stmt.body, paramNames, macroParams)
+        break
+      case 'for':
+        if (stmt.init) this.preScanStmt(stmt.init, paramNames, macroParams)
+        this.preScanExpr(stmt.cond, paramNames, macroParams)
+        this.preScanStmts(stmt.body, paramNames, macroParams)
+        break
+      case 'for_range':
+        this.preScanStmts(stmt.body, paramNames, macroParams)
+        break
+      case 'foreach':
+        this.preScanStmts(stmt.body, paramNames, macroParams)
+        break
+      case 'match':
+        this.preScanExpr(stmt.expr, paramNames, macroParams)
+        for (const arm of stmt.arms) {
+          this.preScanStmts(arm.body, paramNames, macroParams)
+        }
+        break
+      case 'as_block':
+      case 'at_block':
+        this.preScanStmts(stmt.body, paramNames, macroParams)
+        break
+      case 'execute':
+        this.preScanStmts(stmt.body, paramNames, macroParams)
+        break
+      // raw, break, continue have no nested exprs of interest
+    }
+  }
+
+  private preScanExpr(expr: Expr, paramNames: Set<string>, macroParams: Set<string>): void {
+    if (expr.kind === 'call' && MACRO_AWARE_BUILTINS.has(expr.fn)) {
+      // All ident args to macro-aware builtins that are params → macro params
+      for (const arg of expr.args) {
+        if (arg.kind === 'ident' && paramNames.has(arg.name)) {
+          macroParams.add(arg.name)
+        }
+      }
+      return
+    }
+    // Recurse into sub-expressions for other call types
+    if (expr.kind === 'call') {
+      for (const arg of expr.args) this.preScanExpr(arg, paramNames, macroParams)
+    } else if (expr.kind === 'binary') {
+      this.preScanExpr(expr.left, paramNames, macroParams)
+      this.preScanExpr(expr.right, paramNames, macroParams)
+    } else if (expr.kind === 'unary') {
+      this.preScanExpr(expr.operand, paramNames, macroParams)
+    } else if (expr.kind === 'assign') {
+      this.preScanExpr(expr.value, paramNames, macroParams)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Macro helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * If `expr` is a function parameter that needs macro treatment (runtime value
+   * used in a literal position), returns the param name; otherwise null.
+   */
+  private tryGetMacroParam(expr: Expr): string | null {
+    if (expr.kind !== 'ident') return null
+    if (!this.currentFnParamNames.has(expr.name)) return null
+    if (this.constValues.has(expr.name)) return null
+    if (this.stringValues.has(expr.name)) return null
+    return expr.name
+  }
+
+  /**
+   * Converts an expression to a string for use as a builtin arg.
+   * If the expression is a macro param, returns `$(name)` and sets macroParam.
+   */
+  private exprToBuiltinArg(expr: Expr): { str: string; macroParam?: string } {
+    const macroParam = this.tryGetMacroParam(expr)
+    if (macroParam) {
+      return { str: `$(${macroParam})`, macroParam }
+    }
+    if (expr.kind === 'struct_lit' || expr.kind === 'array_lit') {
+      return { str: this.exprToSnbt(expr) }
+    }
+    return { str: this.exprToString(expr) }
+  }
+
+  /**
+   * Emits a call to a macro function, setting up both scoreboard params
+   * (for arithmetic use) and NBT macro args (for coordinate/literal use).
+   */
+  private emitMacroFunctionCall(
+    fnName: string,
+    args: Expr[],
+    macroParamNames: string[],
+    fnDecl: FnDecl | undefined,
+  ): Operand {
+    const params = fnDecl?.params ?? []
+    const loweredArgs: Operand[] = args.map(arg => this.lowerExpr(arg))
+
+    // Set up regular scoreboard params (for arithmetic within the function)
+    for (let i = 0; i < loweredArgs.length; i++) {
+      const operand = loweredArgs[i]
+      if (operand.kind === 'const') {
+        this.builder.emitRaw(`scoreboard players set $p${i} rs ${operand.value}`)
+      } else if (operand.kind === 'var') {
+        this.builder.emitRaw(`scoreboard players operation $p${i} rs = ${operand.name} rs`)
+      }
+    }
+
+    // Set up NBT storage for each macro param
+    for (const macroParam of macroParamNames) {
+      const paramIdx = params.findIndex(p => p.name === macroParam)
+      if (paramIdx < 0 || paramIdx >= loweredArgs.length) continue
+
+      const operand = loweredArgs[paramIdx]
+      if (operand.kind === 'const') {
+        this.builder.emitRaw(`data modify storage rs:macro_args ${macroParam} set value ${operand.value}`)
+      } else if (operand.kind === 'var') {
+        this.builder.emitRaw(
+          `execute store result storage rs:macro_args ${macroParam} int 1 run scoreboard players get ${operand.name} rs`
+        )
+      }
+    }
+
+    // Call with macro storage
+    this.builder.emitRaw(`function ${this.namespace}:${fnName} with storage rs:macro_args`)
+
+    // Copy return value (callers may use it)
+    const dst = this.builder.freshTemp()
+    this.builder.emitRaw(`scoreboard players operation ${dst} rs = $ret rs`)
+    return { kind: 'var', name: dst }
+  }
+
   lower(program: Program): IRModule {
     this.namespace = program.namespace
+
+    // Pre-scan for macro functions before main lowering (so call sites can detect them)
+    this.preScanMacroFunctions(program)
 
     // Load struct definitions
     for (const struct of program.structs ?? []) {
@@ -335,6 +538,9 @@ export class Lowering {
     this.blockPosVars = new Map()
     this.stringValues = new Map()
     this.builder = new LoweringBuilder()
+    // Initialize macro tracking for this function
+    this.currentFnParamNames = new Set(runtimeParams.map(p => p.name))
+    this.currentFnMacroParams = new Set()
 
     // Map parameters
     if (staticEventDec) {
@@ -456,6 +662,14 @@ export class Lowering {
     // Handle tick rate counter if needed
     if (tickRate && tickRate > 1) {
       this.wrapWithTickRate(irFn, tickRate)
+    }
+
+    // Set macro metadata if this function uses MC macro syntax
+    if (this.currentFnMacroParams.size > 0) {
+      irFn.isMacroFunction = true
+      irFn.macroParamNames = [...this.currentFnMacroParams]
+      // Update registry (may refine the pre-scan result)
+      this.macroFunctionInfo.set(loweredName, irFn.macroParamNames)
     }
 
     this.functions.push(irFn)
@@ -1847,7 +2061,20 @@ export class Lowering {
       const targetFn = callbackBindings.size > 0 || stdlibCallSite
         ? this.ensureSpecializedFunctionWithContext(fnDecl, callbackBindings, stdlibCallSite)
         : expr.fn
+
+      // Check if this is a call to a known macro function
+      const macroParams = this.macroFunctionInfo.get(targetFn)
+      if (macroParams && macroParams.length > 0) {
+        return this.emitMacroFunctionCall(targetFn, runtimeArgs, macroParams, fnDecl)
+      }
+
       return this.emitDirectFunctionCall(targetFn, runtimeArgs)
+    }
+
+    // Check for macro function (forward-declared or external)
+    const macroParamsForUnknown = this.macroFunctionInfo.get(expr.fn)
+    if (macroParamsForUnknown && macroParamsForUnknown.length > 0) {
+      return this.emitMacroFunctionCall(expr.fn, fullArgs, macroParamsForUnknown, undefined)
     }
 
     return this.emitDirectFunctionCall(expr.fn, fullArgs)
@@ -1998,6 +2225,9 @@ export class Lowering {
     const savedBlockPosVars = new Map(this.blockPosVars)
     const savedStringValues = new Map(this.stringValues)
     const savedVarTypes = new Map(this.varTypes)
+    // Macro tracking state
+    const savedCurrentFnParamNames = new Set(this.currentFnParamNames)
+    const savedCurrentFnMacroParams = new Set(this.currentFnMacroParams)
 
     try {
       return callback()
@@ -2014,6 +2244,8 @@ export class Lowering {
       this.blockPosVars = savedBlockPosVars
       this.stringValues = savedStringValues
       this.varTypes = savedVarTypes
+      this.currentFnParamNames = savedCurrentFnParamNames
+      this.currentFnMacroParams = savedCurrentFnMacroParams
     }
   }
 
@@ -2281,17 +2513,32 @@ export class Lowering {
         code: 'W_DEPRECATED',
         ...(callSpan ? { line: callSpan.line, col: callSpan.col } : {}),
       })
-      const tpCommand = this.lowerTpCommand(args)
-      if (tpCommand) {
-        this.builder.emitRaw(tpCommand)
+      const tpResult = this.lowerTpCommandMacroAware(args)
+      if (tpResult) {
+        this.builder.emitRaw(tpResult.cmd)
       }
       return { kind: 'const', value: 0 }
     }
 
     if (name === 'tp') {
-      const tpCommand = this.lowerTpCommand(args)
-      if (tpCommand) {
-        this.builder.emitRaw(tpCommand)
+      const tpResult = this.lowerTpCommandMacroAware(args)
+      if (tpResult) {
+        this.builder.emitRaw(tpResult.cmd)
+      }
+      return { kind: 'const', value: 0 }
+    }
+
+    // For macro-aware builtins, check if any arg is a param needing macro treatment
+    if (MACRO_AWARE_BUILTINS.has(name)) {
+      const argResults = args.map(arg => this.exprToBuiltinArg(arg))
+      const hasMacroArg = argResults.some(r => r.macroParam !== undefined)
+      if (hasMacroArg) {
+        argResults.forEach(r => { if (r.macroParam) this.currentFnMacroParams.add(r.macroParam) })
+      }
+      const strArgs = argResults.map(r => r.str)
+      const cmd = BUILTINS[name]?.(strArgs)
+      if (cmd) {
+        this.builder.emitRaw(hasMacroArg ? `$${cmd}` : cmd)
       }
       return { kind: 'const', value: 0 }
     }
@@ -2896,6 +3143,39 @@ export class Lowering {
     }
 
     return null
+  }
+
+  private lowerTpCommandMacroAware(args: Expr[]): { cmd: string } | null {
+    const pos0 = args[0] ? this.resolveBlockPosExpr(args[0]) : null
+    const pos1 = args[1] ? this.resolveBlockPosExpr(args[1]) : null
+
+    // If blockpos args are used, no macro needed (coords are already resolved)
+    if (args.length === 1 && pos0) {
+      return { cmd: `tp ${emitBlockPos(pos0)}` }
+    }
+    if (args.length === 2 && pos1) {
+      return { cmd: `tp ${this.exprToString(args[0])} ${emitBlockPos(pos1)}` }
+    }
+
+    // Check for macro args (int params used as coordinates)
+    if (args.length >= 2) {
+      const argResults = args.map(a => this.exprToBuiltinArg(a))
+      const hasMacro = argResults.some(r => r.macroParam !== undefined)
+      if (hasMacro) {
+        argResults.forEach(r => { if (r.macroParam) this.currentFnMacroParams.add(r.macroParam) })
+        const strs = argResults.map(r => r.str)
+        if (args.length === 2) {
+          return { cmd: `$tp ${strs[0]} ${strs[1]}` }
+        }
+        if (args.length === 4) {
+          return { cmd: `$tp ${strs[0]} ${strs[1]} ${strs[2]} ${strs[3]}` }
+        }
+      }
+    }
+
+    // Fallback to non-macro
+    const plain = this.lowerTpCommand(args)
+    return plain ? { cmd: plain } : null
   }
 
   private resolveBlockPosExpr(expr: Expr): BlockPosExpr | null {
