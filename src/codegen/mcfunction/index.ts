@@ -349,13 +349,17 @@ export function generateDatapackWithStats(
     })
   }
 
-  // Generate each function (and collect constants for load)
+  // Collect all constants across all functions first (deduplicated)
+  const allConsts = new Set<number>()
   for (const fn of module.functions) {
-    // Constant setup — place constants in __load.mcfunction
-    const consts = collectConsts(fn)
-    if (consts.size > 0) {
-      loadLines.push(...Array.from(consts).map(constSetup))
-    }
+    for (const c of collectConsts(fn)) allConsts.add(c)
+  }
+  if (allConsts.size > 0) {
+    loadLines.push(...Array.from(allConsts).sort((a, b) => a - b).map(constSetup))
+  }
+
+  // Generate each function
+  for (const fn of module.functions) {
 
     // Entry block → <fn_name>.mcfunction
     // Continuation blocks → <fn_name>/<label>.mcfunction
