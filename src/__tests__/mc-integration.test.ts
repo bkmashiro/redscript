@@ -797,3 +797,100 @@ describe('MC Integration - New Features', () => {
     expect(tickResult.ok).toBe(true)
   })
 })
+
+describe('MC Integration - Extended Coverage', () => {
+  test('struct-test.mcrs: struct instantiation and field access', async () => {
+    if (!serverOnline) return
+
+    writeFixtureFile('struct-test.mcrs', 'struct_test')
+    await mc.reload()
+    await mc.command('/function struct_test:__load').catch(() => {})
+    await mc.command('/function struct_test:test_struct')
+    await mc.ticks(5)
+
+    expect(await mc.scoreboard('#struct_x', 'rs')).toBe(10)
+    expect(await mc.scoreboard('#struct_y', 'rs')).toBe(64)
+    expect(await mc.scoreboard('#struct_z', 'rs')).toBe(-5)
+    expect(await mc.scoreboard('#struct_x2', 'rs')).toBe(15)   // 10+5
+    expect(await mc.scoreboard('#struct_z2', 'rs')).toBe(-10)  // -5*2
+    expect(await mc.scoreboard('#struct_alive', 'rs')).toBe(1)
+    expect(await mc.scoreboard('#struct_score', 'rs')).toBe(100)
+  })
+
+  test('enum-test.mcrs: enum values and match', async () => {
+    if (!serverOnline) return
+
+    writeFixtureFile('enum-test.mcrs', 'enum_test')
+    await mc.reload()
+    await mc.command('/function enum_test:__load').catch(() => {})
+    await mc.command('/function enum_test:test_enum')
+    await mc.ticks(5)
+
+    expect(await mc.scoreboard('#enum_phase', 'rs')).toBe(2)  // Playing=2
+    expect(await mc.scoreboard('#enum_match', 'rs')).toBe(2)  // matched Playing
+    expect(await mc.scoreboard('#enum_rank', 'rs')).toBe(10)  // Diamond=10
+    expect(await mc.scoreboard('#enum_high', 'rs')).toBe(1)   // Diamond > Gold
+  })
+
+  test('array-test.mcrs: array operations', async () => {
+    if (!serverOnline) return
+
+    writeFixtureFile('array-test.mcrs', 'array_test')
+    await mc.reload()
+    await mc.command('/function array_test:__load').catch(() => {})
+    await mc.command('/function array_test:test_array')
+    await mc.ticks(5)
+
+    expect(await mc.scoreboard('#arr_0', 'rs')).toBe(10)
+    expect(await mc.scoreboard('#arr_2', 'rs')).toBe(30)
+    expect(await mc.scoreboard('#arr_4', 'rs')).toBe(50)
+    expect(await mc.scoreboard('#arr_len', 'rs')).toBe(5)
+    expect(await mc.scoreboard('#arr_sum', 'rs')).toBe(150)  // 10+20+30+40+50
+    expect(await mc.scoreboard('#arr_push', 'rs')).toBe(4)   // [1,2,3,4].len
+    expect(await mc.scoreboard('#arr_pop', 'rs')).toBe(4)    // popped value
+  })
+
+  test('break-continue-test.mcrs: break and continue statements', async () => {
+    if (!serverOnline) return
+
+    writeFixtureFile('break-continue-test.mcrs', 'break_continue_test')
+    await mc.reload()
+    await mc.command('/function break_continue_test:__load').catch(() => {})
+    await mc.command('/function break_continue_test:test_break_continue')
+    await mc.ticks(10)
+
+    expect(await mc.scoreboard('#break_at', 'rs')).toBe(5)
+    expect(await mc.scoreboard('#sum_evens', 'rs')).toBe(20)  // 0+2+4+6+8
+    expect(await mc.scoreboard('#while_break', 'rs')).toBe(7)
+    expect(await mc.scoreboard('#nested_break', 'rs')).toBe(3)  // outer completes 3 times
+  })
+
+  test('match-range-test.mcrs: match with range patterns', async () => {
+    if (!serverOnline) return
+
+    writeFixtureFile('match-range-test.mcrs', 'match_range_test')
+    await mc.reload()
+    await mc.command('/function match_range_test:__load').catch(() => {})
+    await mc.command('/function match_range_test:test_match_range')
+    await mc.ticks(5)
+
+    expect(await mc.scoreboard('#grade', 'rs')).toBe(4)       // score=85 → B
+    expect(await mc.scoreboard('#boundary_59', 'rs')).toBe(1) // 59 matches 0..59
+    expect(await mc.scoreboard('#boundary_60', 'rs')).toBe(2) // 60 matches 60..100
+    expect(await mc.scoreboard('#neg_range', 'rs')).toBe(1)   // -5 matches ..0
+  })
+
+  test('foreach-at-test.mcrs: foreach with at @s context', async () => {
+    if (!serverOnline) return
+
+    writeFixtureFile('foreach-at-test.mcrs', 'foreach_at_test')
+    await mc.reload()
+    await mc.fullReset({ clearArea: false, killEntities: true, resetScoreboards: false })
+    await mc.command('/function foreach_at_test:setup').catch(() => {})
+    await mc.command('/function foreach_at_test:test_foreach_at')
+    await mc.ticks(10)
+
+    expect(await mc.scoreboard('#foreach_count', 'rs')).toBe(3)
+    expect(await mc.scoreboard('#foreach_at_count', 'rs')).toBe(3)
+  })
+})

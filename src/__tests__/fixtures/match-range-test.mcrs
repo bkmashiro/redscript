@@ -1,0 +1,45 @@
+// Match with range patterns test
+
+fn test_match_range() {
+    // Test score grading
+    let score: int = 85;
+    let grade: int = 0;
+    
+    match (score) {
+        0..59 => { grade = 1; }    // F
+        60..69 => { grade = 2; }   // D
+        70..79 => { grade = 3; }   // C
+        80..89 => { grade = 4; }   // B
+        90..100 => { grade = 5; }  // A
+        _ => { grade = 0; }
+    }
+    scoreboard_set("#grade", #rs, grade);
+    
+    // Test boundary values
+    let val1: int = 59;
+    let result1: int = 0;
+    match (val1) {
+        0..59 => { result1 = 1; }
+        60..100 => { result1 = 2; }
+        _ => { result1 = 0; }
+    }
+    scoreboard_set("#boundary_59", #rs, result1);
+    
+    let val2: int = 60;
+    let result2: int = 0;
+    match (val2) {
+        0..59 => { result2 = 1; }
+        60..100 => { result2 = 2; }
+        _ => { result2 = 0; }
+    }
+    scoreboard_set("#boundary_60", #rs, result2);
+    
+    // Open-ended ranges
+    let neg: int = -5;
+    let neg_result: int = 0;
+    match (neg) {
+        ..0 => { neg_result = 1; }
+        0.. => { neg_result = 2; }
+    }
+    scoreboard_set("#neg_range", #rs, neg_result);
+}

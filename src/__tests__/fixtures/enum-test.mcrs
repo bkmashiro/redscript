@@ -1,0 +1,37 @@
+// Enum definition and matching test
+
+enum GamePhase {
+    Lobby,      // 0
+    Starting,   // 1
+    Playing,    // 2
+    Ended       // 3
+}
+
+enum Rank {
+    Bronze = 1,
+    Silver = 2,
+    Gold = 3,
+    Diamond = 10
+}
+
+fn test_enum() {
+    // Basic enum value (use . not ::)
+    let phase: int = GamePhase.Playing;
+    scoreboard_set("#enum_phase", #rs, phase);
+    
+    // Match on enum
+    match (phase) {
+        GamePhase.Lobby => { scoreboard_set("#enum_match", #rs, 0); }
+        GamePhase.Playing => { scoreboard_set("#enum_match", #rs, 2); }
+        _ => { scoreboard_set("#enum_match", #rs, -1); }
+    }
+    
+    // Custom values
+    let rank: int = Rank.Diamond;
+    scoreboard_set("#enum_rank", #rs, rank);
+    
+    // Comparison
+    if (rank > Rank.Gold) {
+        scoreboard_set("#enum_high", #rs, 1);
+    }
+}

@@ -1,0 +1,34 @@
+// Struct instantiation and field access test
+
+struct Point {
+    x: int,
+    y: int,
+    z: int
+}
+
+struct Player {
+    score: int,
+    alive: bool
+}
+
+fn test_struct() {
+    // Create struct instance
+    let p: Point = { x: 10, y: 64, z: -5 };
+    
+    // Access fields
+    scoreboard_set("#struct_x", #rs, p.x);
+    scoreboard_set("#struct_y", #rs, p.y);
+    scoreboard_set("#struct_z", #rs, p.z);
+    
+    // Modify via new instance
+    let p2: Point = { x: p.x + 5, y: p.y, z: p.z * 2 };
+    scoreboard_set("#struct_x2", #rs, p2.x);
+    scoreboard_set("#struct_z2", #rs, p2.z);
+    
+    // Bool field
+    let player: Player = { score: 100, alive: true };
+    if (player.alive) {
+        scoreboard_set("#struct_alive", #rs, 1);
+    }
+    scoreboard_set("#struct_score", #rs, player.score);
+}

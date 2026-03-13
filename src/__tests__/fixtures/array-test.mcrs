@@ -1,0 +1,30 @@
+// Array operations test
+
+fn test_array() {
+    // Array initialization
+    let nums: int[] = [10, 20, 30, 40, 50];
+    
+    // Array access
+    scoreboard_set("#arr_0", #rs, nums[0]);
+    scoreboard_set("#arr_2", #rs, nums[2]);
+    scoreboard_set("#arr_4", #rs, nums[4]);
+    
+    // Array length via .len property
+    scoreboard_set("#arr_len", #rs, nums.len);
+    
+    // Sum via foreach
+    let sum: int = 0;
+    foreach (n in nums) {
+        sum = sum + n;
+    }
+    scoreboard_set("#arr_sum", #rs, sum);
+    
+    // Push operation
+    let arr2: int[] = [1, 2, 3];
+    arr2.push(4);
+    scoreboard_set("#arr_push", #rs, arr2.len);
+    
+    // Pop operation
+    let popped: int = arr2.pop();
+    scoreboard_set("#arr_pop", #rs, popped);
+}

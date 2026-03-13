@@ -1,0 +1,33 @@
+// Foreach with execute context modifiers test
+
+@load fn setup() {
+    scoreboard_add("rs");
+    scoreboard_set("#foreach_count", #rs, 0);
+    scoreboard_set("#foreach_at_count", #rs, 0);
+}
+
+fn test_foreach_at() {
+    // Spawn test entities
+    raw("summon minecraft:armor_stand ~ ~ ~ {Tags:[\"test_foreach\"],NoGravity:1b}");
+    raw("summon minecraft:armor_stand ~2 ~ ~ {Tags:[\"test_foreach\"],NoGravity:1b}");
+    raw("summon minecraft:armor_stand ~4 ~ ~ {Tags:[\"test_foreach\"],NoGravity:1b}");
+    
+    // Basic foreach
+    let count: int = 0;
+    foreach (e in @e[type=armor_stand,tag=test_foreach]) {
+        count = count + 1;
+    }
+    scoreboard_set("#foreach_count", #rs, count);
+    
+    // Foreach with at @s (execute at entity position)
+    let at_count: int = 0;
+    foreach (e in @e[type=armor_stand,tag=test_foreach]) at @s {
+        // This runs at each entity's position
+        at_count = at_count + 1;
+        raw("particle minecraft:heart ~ ~1 ~ 0 0 0 0 1");
+    }
+    scoreboard_set("#foreach_at_count", #rs, at_count);
+    
+    // Cleanup
+    raw("kill @e[type=armor_stand,tag=test_foreach]");
+}

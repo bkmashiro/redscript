@@ -1,0 +1,46 @@
+// Break and continue statements test
+
+fn test_break_continue() {
+    // Test break - should stop at i=5
+    let break_at: int = -1;
+    for (let i: int = 0; i < 10; i = i + 1) {
+        if (i == 5) {
+            break_at = i;
+            break;
+        }
+    }
+    scoreboard_set("#break_at", #rs, break_at);
+    
+    // Test continue - sum only even numbers
+    let sum_evens: int = 0;
+    for (let i: int = 0; i < 10; i = i + 1) {
+        if (i % 2 != 0) {
+            continue;
+        }
+        sum_evens = sum_evens + i;
+    }
+    // 0+2+4+6+8 = 20
+    scoreboard_set("#sum_evens", #rs, sum_evens);
+    
+    // While with break
+    let count: int = 0;
+    while (true) {
+        count = count + 1;
+        if (count >= 7) {
+            break;
+        }
+    }
+    scoreboard_set("#while_break", #rs, count);
+    
+    // Nested loop break (breaks inner only)
+    let outer_count: int = 0;
+    for (let a: int = 0; a < 3; a = a + 1) {
+        for (let b: int = 0; b < 10; b = b + 1) {
+            if (b == 2) {
+                break;
+            }
+        }
+        outer_count = outer_count + 1;
+    }
+    scoreboard_set("#nested_break", #rs, outer_count);
+}
