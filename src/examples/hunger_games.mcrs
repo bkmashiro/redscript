@@ -204,7 +204,7 @@ fn check_border_damage() {
     // 需要检查玩家是否在边界外
     foreach (p in @a) {
         // 简化：使用 execute positioned
-        let dist: int = 0;  // 需要计算距离中心的距离
+        let _dist: int = 0;  // TODO: calculate distance from center
         // 如果超出边界，造成伤害
         // effect(p, "minecraft:wither", 1, 0);
     }
