@@ -63,9 +63,13 @@ export class VarAllocator {
    */
   toSourceMap(): Record<string, string> {
     const map: Record<string, string> = {}
-    for (const [orig, alloc] of this.varCache)    map[alloc] = orig
-    for (const [val,  alloc] of this.constCache)  map[alloc] = `const(${val})`
-    for (const [suf,  alloc] of this.internalCache) map[alloc] = `__${suf}`
+    for (const [orig, alloc] of this.varCache) {
+      // Skip compiler-generated temporaries (start with _ followed by digits)
+      if (/^_\d+$/.test(orig)) continue
+      map[alloc] = orig
+    }
+    for (const [val,  alloc] of this.constCache)    map[alloc] = `const:${val}`
+    for (const [suf,  alloc] of this.internalCache) map[alloc] = `internal:${suf}`
     return map
   }
 }
