@@ -1,79 +1,40 @@
-// ===== Spiral Particle Tower =====
-// 简单但视觉效果很酷的 demo
-// 展示: @tick, impl blocks, 三角函数近似, 粒子效果
-
-// 配置
-const RADIUS: int = 5;      // 螺旋半径
-const HEIGHT: int = 20;     // 塔高度
-const SPEED: int = 3;       // 旋转速度
+// ===== Simple Particle Demo =====
+// 展示: @tick, 状态管理, f-strings, 控制命令
 
 // 状态
-let angle: int = 0;         // 当前角度 (0-360)
-let height: int = 0;        // 当前高度
+let counter: int = 0;
 let running: bool = false;
 
-// ===== 简化的三角函数 (查表法) =====
-// sin 和 cos 的近似值 * 100 (避免浮点)
-
-fn sin100(deg: int): int {
-    let d: int = deg % 360;
-    if (d < 0) { d = d + 360; }
-    
-    // 简化: 只处理 0, 90, 180, 270
-    if (d < 45) { return d * 2; }           // ~0 到 ~90
-    if (d < 135) { return 100; }            // ~90
-    if (d < 225) { return (180 - d) * 2; }  // ~90 到 ~-90
-    if (d < 315) { return -100; }           // ~-90
-    return (d - 360) * 2;                   // ~-90 到 ~0
-}
-
-fn cos100(deg: int): int {
-    return sin100(deg + 90);
-}
-
-// ===== 粒子生成 =====
-fn spawn_particle(x: int, y: int, z: int) {
-    // x, y, z 是 *100 的值，需要转换
-    raw("particle end_rod ~${x/100} ~${y/100} ~${z/100} 0 0 0 0 1");
-}
-
 // ===== 主循环 =====
-@tick fn spiral_tick() {
+@tick fn demo_tick() {
     if (!running) { return; }
     
-    // 计算螺旋位置
-    let x: int = cos100(angle) * RADIUS;  // x * 100
-    let z: int = sin100(angle) * RADIUS;  // z * 100
-    let y: int = height * 100;
+    // 每 tick 增加计数器
+    counter = counter + 1;
     
-    // 生成粒子
-    spawn_particle(x, y, z);
+    // 在玩家位置生成粒子
+    particle("minecraft:end_rod", ~0, ~1, ~0, 0.5, 0.5, 0.5, 0.1, 5);
     
-    // 更新状态
-    angle = angle + SPEED;
-    if (angle >= 360) {
-        angle = 0;
-        height = height + 1;
-        if (height >= HEIGHT) {
-            height = 0;
-        }
+    // 每 20 ticks (1秒) 报告一次
+    if (counter % 20 == 0) {
+        say(f"Running for {counter} ticks");
     }
 }
 
 // ===== 控制命令 =====
 fn start() {
     running = true;
-    say(f"Spiral started!");
+    counter = 0;
+    say(f"Demo started!");
 }
 
 fn stop() {
     running = false;
-    say(f"Spiral stopped.");
+    say(f"Demo stopped at {counter} ticks.");
 }
 
 fn reset() {
     running = false;
-    angle = 0;
-    height = 0;
-    say(f"Spiral reset.");
+    counter = 0;
+    say(f"Demo reset.");
 }
