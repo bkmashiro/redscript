@@ -133,7 +133,7 @@
       "patterns": [
         {
           "name": "keyword.control.redscript",
-          "match": "\\b(if|else|while|for|foreach|return|match|in|execute|as|at|unless|run|is)\\b"
+          "match": "\\b(if|else|while|for|foreach|return|match|in|execute|as|at|unless|run|is|positioned|rotated|facing|anchored|align)\\b"
         },
         {
           "name": "keyword.declaration.redscript",

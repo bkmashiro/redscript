@@ -1163,8 +1163,17 @@ var require_parser = __commonJS({
         this.expect("in");
         const iterable = this.parseExpr();
         this.expect(")");
+        let executeContext;
+        const execIdentKeywords = ["positioned", "rotated", "facing", "anchored", "align"];
+        if (this.check("at") || this.check("in") || this.check("ident") && execIdentKeywords.includes(this.peek().value)) {
+          let context = "";
+          while (!this.check("{") && !this.check("eof")) {
+            context += this.advance().value + " ";
+          }
+          executeContext = context.trim();
+        }
         const body = this.parseBlock();
-        return this.withLoc({ kind: "foreach", binding, iterable, body }, foreachToken);
+        return this.withLoc({ kind: "foreach", binding, iterable, body, executeContext }, foreachToken);
       }
       parseMatchStmt() {
         const matchToken = this.expect("match");
@@ -3799,7 +3808,8 @@ var require_lowering = __commonJS({
         }
         const subFnName = `${this.currentFn}/foreach_${this.foreachCounter++}`;
         const selector = this.exprToString(stmt.iterable);
-        this.builder.emitRaw(`execute as ${selector} run function ${this.namespace}:${subFnName}`);
+        const execContext = stmt.executeContext ? ` ${stmt.executeContext}` : "";
+        this.builder.emitRaw(`execute as ${selector}${execContext} run function ${this.namespace}:${subFnName}`);
         const savedBuilder = this.builder;
         const savedVarMap = new Map(this.varMap);
         const savedContext = this.currentContext;
@@ -6122,7 +6132,8 @@ var require_passes = __commonJS({
         ...block,
         instrs: block.instrs.filter((instr) => {
           if (instr.op === "assign" || instr.op === "binop" || instr.op === "cmp") {
-            const keep = readVars.has(instr.dst);
+            const isTemp = /^\$t\d+$/.test(instr.dst) || /^\$p\d+$/.test(instr.dst) || /^\$_\d+$/.test(instr.dst);
+            const keep = !isTemp || readVars.has(instr.dst);
             if (!keep)
               removed++;
             return keep;
