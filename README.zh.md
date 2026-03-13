@@ -30,12 +30,11 @@
 
 ### RedScript 是什么？
 
-你想做一个 Minecraft 小游戏——倒计时、击杀计数、复活逻辑、记分板显示。用原版 MC 的话，这意味着 40+ 个 `.mcfunction` 文件、几百条 `execute if score` 命令，还要花一个周末调试。
+RedScript 是一门编译到原版 Minecraft 数据包的脚本语言。用变量、函数、循环、事件写代码，RedScript 帮你生成记分板命令和 `.mcfunction` 文件。
 
-用 RedScript，就是这样：
+**上面的演示？** 只有 30 行：
 
 ```rs
-// particle_demo.mcrs
 let counter: int = 0;
 let running: bool = false;
 
@@ -43,7 +42,6 @@ let running: bool = false;
     if (!running) { return; }
     counter = counter + 1;
     
-    // 在每个玩家位置生成粒子
     foreach (p in @a) at @s {
         particle("minecraft:end_rod", ~0, ~1, ~0, 0.5, 0.5, 0.5, 0.1, 5);
     }
@@ -65,7 +63,13 @@ let running: bool = false;
 }
 ```
 
-一个文件，几秒钟编译出可以直接用的 datapack。
+**你得到：**
+- ✅ `let` / `const` 变量（告别 `scoreboard players set`）
+- ✅ `if` / `else` / `for` / `foreach` 完整控制流
+- ✅ `@tick` / `@load` / `@on(Event)` 装饰器
+- ✅ `foreach (p in @a) at @s` — 遍历实体并设置执行上下文
+- ✅ f-strings 如 `f"分数: {points}"` 动态输出
+- ✅ 一个文件 → 可直接使用的 datapack
 
 ---
 

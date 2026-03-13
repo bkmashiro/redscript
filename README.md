@@ -30,12 +30,11 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 ### What is RedScript?
 
-You want to make a Minecraft mini-game. You need a countdown timer, kill counter, respawn logic, and a scoreboard display. In vanilla MC, that's 40+ `.mcfunction` files, hundreds of `execute if score` commands, and a weekend of debugging.
+RedScript is a typed scripting language that compiles to vanilla Minecraft datapacks. Write clean code with variables, functions, loops, and events — RedScript handles the scoreboard commands and `.mcfunction` files for you.
 
-With RedScript, it's this:
+**The demo above?** Just 30 lines:
 
 ```rs
-// particle_demo.mcrs
 let counter: int = 0;
 let running: bool = false;
 
@@ -43,7 +42,6 @@ let running: bool = false;
     if (!running) { return; }
     counter = counter + 1;
     
-    // Spawn particles at each player's position
     foreach (p in @a) at @s {
         particle("minecraft:end_rod", ~0, ~1, ~0, 0.5, 0.5, 0.5, 0.1, 5);
     }
@@ -65,7 +63,13 @@ let running: bool = false;
 }
 ```
 
-One file. Compiles to a ready-to-use datapack in seconds.
+**What you get:**
+- ✅ `let` / `const` variables (no more `scoreboard players set`)
+- ✅ `if` / `else` / `for` / `foreach` control flow
+- ✅ `@tick` / `@load` / `@on(Event)` decorators
+- ✅ `foreach (p in @a) at @s` — iterate entities with execute context
+- ✅ f-strings like `f"Score: {points}"` for dynamic output
+- ✅ One file → ready-to-use datapack
 
 ---
 
