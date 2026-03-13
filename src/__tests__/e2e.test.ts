@@ -196,8 +196,8 @@ fn main() {
       const thenFiles = files.filter(file => file.path.includes('/main/then_') && file.content.includes('kill @s'))
 
       expect(mainFn).toContain('execute as @e run function test:main/foreach_0')
-      expect(foreachFn).toContain('execute if entity @s[type=player] run function test:main/then_')
-      expect(foreachFn).toContain('execute if entity @s[type=zombie] run function test:main/then_')
+      expect(foreachFn).toContain('execute if entity @s[type=minecraft:player] run function test:main/then_')
+      expect(foreachFn).toContain('execute if entity @s[type=minecraft:zombie] run function test:main/then_')
       expect(thenFiles).toHaveLength(2)
     })
   })

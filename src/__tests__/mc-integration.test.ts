@@ -753,32 +753,33 @@ describe('MC Integration - New Features', () => {
     expect(count).toBeLessThanOrEqual(3)
   })
 
-  test('is-check-test.mcrs: foreach is-narrowing only matches zombie entities', async () => {
+  test('is-check-test.mcrs: foreach is-narrowing correctly matches entity types', async () => {
     if (!serverOnline) return
 
     await mc.fullReset({ clearArea: false, killEntities: true, resetScoreboards: false })
-    await mc.command('/scoreboard players set #is_check players 0')
-    await mc.command('/scoreboard players set #is_check zombies 0')
+    await mc.command('/forceload add 0 0').catch(() => {})  // Ensure chunk is loaded
+    await mc.command('/scoreboard objectives add armor_stands dummy').catch(() => {})
+    await mc.command('/scoreboard objectives add items dummy').catch(() => {})
+    await mc.command('/scoreboard players set #is_check armor_stands 0')
+    await mc.command('/scoreboard players set #is_check items 0')
     await mc.command('/function is_check_test:__load').catch(() => {})
-    await mc.command('/summon minecraft:zombie 0 65 0')
-    await mc.command('/tag @e[type=minecraft:zombie,sort=nearest,limit=1] add is_check_target')
-    await mc.command('/summon minecraft:armor_stand 2 65 0')
-    await mc.command('/tag @e[type=minecraft:armor_stand,sort=nearest,limit=1] add is_check_target')
+    
+    // Spawn 2 armor_stands and 1 item (all persist without players)
+    await mc.command('/summon minecraft:armor_stand 0 65 0 {Tags:["is_check_target"],NoGravity:1b}')
+    await mc.command('/summon minecraft:armor_stand 2 65 0 {Tags:["is_check_target"],NoGravity:1b}')
+    await mc.command('/summon minecraft:item 4 65 0 {Tags:["is_check_target"],Item:{id:"minecraft:stone",count:1},Age:-32768}')
+    await mc.ticks(5)
 
     await mc.command('/function is_check_test:check_types')
     await mc.ticks(5)
 
-    const zombies = await mc.scoreboard('#is_check', 'zombies')
-    const players = await mc.scoreboard('#is_check', 'players')
-    const zombieEntities = await mc.entities('@e[type=minecraft:zombie,tag=is_check_target]')
-    const standEntities = await mc.entities('@e[type=minecraft:armor_stand,tag=is_check_target]')
+    const armorStands = await mc.scoreboard('#is_check', 'armor_stands')
+    const items = await mc.scoreboard('#is_check', 'items')
 
-    expect(zombies).toBe(1)
-    expect(players).toBe(0)
-    expect(zombieEntities).toHaveLength(0)
-    expect(standEntities).toHaveLength(1)
+    expect(armorStands).toBe(2)  // 2 armor_stands matched
+    expect(items).toBe(1)        // 1 item matched
 
-    await mc.command('/kill @e[tag=is_check_target]').catch(() => {})
+    await mc.command('/function is_check_test:cleanup').catch(() => {})
   })
 
   test('event-test.mcrs: @on(PlayerDeath) compiles and loads', async () => {

@@ -118,20 +118,20 @@ const NAMESPACED_ENTITY_TYPE_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/
 const BARE_ENTITY_TYPE_RE = /^[a-z0-9_./-]+$/
 
 const ENTITY_TO_MC_TYPE: Partial<Record<EntityTypeName, string>> = {
-  Player: 'player',
-  Zombie: 'zombie',
-  Skeleton: 'skeleton',
-  Creeper: 'creeper',
-  Spider: 'spider',
-  Enderman: 'enderman',
-  Pig: 'pig',
-  Cow: 'cow',
-  Sheep: 'sheep',
-  Chicken: 'chicken',
-  Villager: 'villager',
-  ArmorStand: 'armor_stand',
-  Item: 'item',
-  Arrow: 'arrow',
+  Player: 'minecraft:player',
+  Zombie: 'minecraft:zombie',
+  Skeleton: 'minecraft:skeleton',
+  Creeper: 'minecraft:creeper',
+  Spider: 'minecraft:spider',
+  Enderman: 'minecraft:enderman',
+  Pig: 'minecraft:pig',
+  Cow: 'minecraft:cow',
+  Sheep: 'minecraft:sheep',
+  Chicken: 'minecraft:chicken',
+  Villager: 'minecraft:villager',
+  ArmorStand: 'minecraft:armor_stand',
+  Item: 'minecraft:item',
+  Arrow: 'minecraft:arrow',
 }
 
 function normalizeSelector(selector: string, warnings: Warning[]): string {

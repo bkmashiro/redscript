@@ -285,7 +285,7 @@ fn scan() {
 `)
       const foreachFn = ir.functions.find(fn => fn.name.includes('scan/foreach'))!
       const rawCmds = getRawCommands(foreachFn)
-      const isCheckCmd = rawCmds.find(cmd => cmd.startsWith('execute if entity @s[type=player] run function test:scan/then_'))
+      const isCheckCmd = rawCmds.find(cmd => cmd.startsWith('execute if entity @s[type=minecraft:player] run function test:scan/then_'))
       expect(isCheckCmd).toBeDefined()
 
       const thenFn = ir.functions.find(fn => fn.name.startsWith('scan/then_'))!
@@ -360,8 +360,8 @@ fn test() {
 
       expect(getRawCommands(mainFn)).toContain('execute as @e run function test:test/foreach_0')
       expect(thenFns).toHaveLength(2)
-      expect(rawCmds).toContain(`execute if entity @s[type=player] run function test:${playerThenFn.name}`)
-      expect(rawCmds).toContain(`execute if entity @s[type=zombie] run function test:${zombieThenFn.name}`)
+      expect(rawCmds).toContain(`execute if entity @s[type=minecraft:player] run function test:${playerThenFn.name}`)
+      expect(rawCmds).toContain(`execute if entity @s[type=minecraft:zombie] run function test:${zombieThenFn.name}`)
       expect(getRawCommands(playerThenFn).some(cmd => cmd.includes('give @s diamond 1'))).toBe(true)
       expect(getRawCommands(zombieThenFn)).toContain('kill @s')
     })
