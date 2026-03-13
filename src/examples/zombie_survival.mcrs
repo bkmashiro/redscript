@@ -1,8 +1,8 @@
 // ============================================
-// Zombie Survival - 僵尸生存模式
+// Zombie Survival - Zombie Survival Mode
 // ============================================
-// 场景：玩家在竞技场中心抵御一波波僵尸
-// 每波结束后可以购买装备升级
+// Scenario: Players defend against waves of zombies in the arena center
+// Players can purchase equipment upgrades between waves
 // Scenario: Survive zombie waves, buy upgrades between rounds
 // ============================================
 
@@ -12,19 +12,19 @@ import "../stdlib/inventory.mcrs"
 import "../stdlib/bossbar.mcrs"
 import "../stdlib/particles.mcrs"
 
-// ===== 配置 =====
+// ===== Configuration =====
 const ARENA_X: int = 0;
 const ARENA_Y: int = 64;
 const ARENA_Z: int = 0;
 const ARENA_RADIUS: int = 30;
-const WAVE_DELAY: int = 200;  // 10秒准备时间
+const WAVE_DELAY: int = 200;  // 10-second preparation time
 
-// ===== 游戏状态 =====
+// ===== Game State =====
 struct SurvivalState {
     running: int,
     wave: int,
     zombies_left: int,
-    phase: int,         // 0=准备, 1=战斗
+    phase: int,         // 0=prep, 1=combat
     prep_timer: int,
     total_kills: int
 }
@@ -38,33 +38,33 @@ let state: SurvivalState = {
     total_kills: 0
 };
 
-// ===== 玩家数据 =====
-// 金币记分板: zs_coins
-// 击杀数: zs_kills
+// ===== Player Data =====
+// Coin scoreboard: zs_coins
+// Kill count: zs_kills
 
-// ===== 初始化 =====
+// ===== Initialization =====
 @load
 fn init() {
     scoreboard_add_objective("zs_coins", "dummy");
     scoreboard_add_objective("zs_kills", "dummy");
     scoreboard_add_objective("zs_display", "dummy");
     
-    // 显示记分板
+    // Display scoreboard
     scoreboard_display("sidebar", "zs_display");
     
     set_night();
     disable_mob_griefing();
     
-    announce("§4[僵尸生存] §f已加载！输入 /trigger start 开始");
+    announce("§4[Zombie Survival] §fLoaded! Type /trigger start to begin");
 }
 
-// ===== 开始游戏 =====
+// ===== Start Game =====
 fn start_game() {
     state.running = 1;
     state.wave = 0;
     state.total_kills = 0;
     
-    // 初始化玩家
+    // Initialize players
     foreach (p in @a) {
         scoreboard_set(p, "zs_coins", 0);
         scoreboard_set(p, "zs_kills", 0);
@@ -74,74 +74,74 @@ fn start_game() {
         tp(p, ARENA_X, ARENA_Y, ARENA_Z);
     }
     
-    // 创建 bossbar
-    create_progress_bar("zs_wave", "§c僵尸剩余", 10);
+    // Create bossbar
+    create_progress_bar("zs_wave", "§cZombies Remaining", 10);
     
-    title(@a, "§4僵尸生存");
-    subtitle(@a, "§7准备战斗...");
+    title(@a, "§4Zombie Survival");
+    subtitle(@a, "§7Prepare for battle...");
     
-    // 开始第一波
+    // Start first wave
     start_prep_phase();
 }
 
-// ===== 阶段控制 =====
+// ===== Phase Control =====
 fn start_prep_phase() {
     state.phase = 0;
     state.prep_timer = WAVE_DELAY;
     state.wave = state.wave + 1;
     
-    announce("§4[僵尸生存] §e第 " + state.wave + " 波即将来袭！");
-    announce("§7准备时间 10 秒...");
+    announce("§4[Zombie Survival] §eWave " + state.wave + " incoming!");
+    announce("§7Preparation time: 10 seconds...");
     
-    // 商店提示
+    // Shop hint
     if (state.wave > 1) {
-        announce("§a[商店] §f输入 /trigger buy 购买装备");
+        announce("§a[Shop] §fType /trigger buy to purchase equipment");
     }
 }
 
 fn start_combat_phase() {
     state.phase = 1;
     
-    // 计算僵尸数量 (每波增加)
+    // Calculate zombie count (increases each wave)
     let zombie_count: int = 3 + (state.wave * 2);
     state.zombies_left = zombie_count;
     
-    // 更新 bossbar
+    // Update bossbar
     bossbar_set_max("zs_wave", zombie_count);
     bossbar_set_value("zs_wave", zombie_count);
     
-    title(@a, "§c第 " + state.wave + " 波");
+    title(@a, "§cWave " + state.wave);
     
-    // 生成僵尸
+    // Spawn zombies
     spawn_zombies(zombie_count);
 }
 
 fn spawn_zombies(count: int) {
     for i in 0..count {
-        // 在竞技场边缘随机生成
+        // Spawn randomly at arena edge
         let _angle: int = i * 30;  // spread spawning
         let spawn_x: int = ARENA_X + (ARENA_RADIUS - 5);
         let spawn_z: int = ARENA_Z;
         
-        // 根据波数增加僵尸强度
+        // Increase zombie difficulty based on wave number
         if (state.wave < 3) {
             summon("minecraft:zombie", spawn_x, ARENA_Y, spawn_z);
         } else {
             if (state.wave < 5) {
-                // 穿盔甲的僵尸
+                // Armored zombies
                 summon("minecraft:zombie", spawn_x, ARENA_Y, spawn_z, 
                     {ArmorItems: [{}, {}, {id: "iron_chestplate", Count: 1}, {}]});
             } else {
-                // 快速僵尸
+                // Fast zombies
                 summon("minecraft:husk", spawn_x, ARENA_Y, spawn_z);
             }
         }
     }
     
-    announce("§c" + count + " 只僵尸出现了！");
+    announce("§c" + count + " zombies have appeared!");
 }
 
-// ===== 每 tick =====
+// ===== Every Tick =====
 @tick
 fn game_tick() {
     if (state.running == 0) {
@@ -149,10 +149,10 @@ fn game_tick() {
     }
     
     if (state.phase == 0) {
-        // 准备阶段
+        // Preparation phase
         prep_tick();
     } else {
-        // 战斗阶段
+        // Combat phase
         combat_tick();
     }
     
@@ -162,15 +162,15 @@ fn game_tick() {
 fn prep_tick() {
     state.prep_timer = state.prep_timer - 1;
     
-    // 倒计时提示
+    // Countdown hints
     if (state.prep_timer == 100) {
-        actionbar(@a, "§e5 秒...");
+        actionbar(@a, "§e5 seconds...");
     }
     if (state.prep_timer == 60) {
-        actionbar(@a, "§e3 秒...");
+        actionbar(@a, "§e3 seconds...");
     }
     if (state.prep_timer == 20) {
-        actionbar(@a, "§c1 秒...");
+        actionbar(@a, "§c1 second...");
     }
     
     if (state.prep_timer <= 0) {
@@ -179,20 +179,20 @@ fn prep_tick() {
 }
 
 fn combat_tick() {
-    // 检查僵尸数量
+    // Check zombie count
     let zombies: int = count_entities(@e[type=zombie, distance=..50]);
     let husks: int = count_entities(@e[type=husk, distance=..50]);
     state.zombies_left = zombies + husks;
     
-    // 更新 bossbar
+    // Update bossbar
     update_bar("zs_wave", state.zombies_left);
     
-    // 检查波次完成
+    // Check wave completion
     if (state.zombies_left <= 0) {
         wave_complete();
     }
     
-    // 检查玩家存活
+    // Check player survival
     let alive: int = count_entities(@a[gamemode=survival]);
     if (alive <= 0) {
         game_over();
@@ -200,17 +200,17 @@ fn combat_tick() {
 }
 
 fn wave_complete() {
-    announce("§4[僵尸生存] §a第 " + state.wave + " 波完成！");
+    announce("§4[Zombie Survival] §aWave " + state.wave + " complete!");
     
-    // 奖励金币
+    // Reward coins
     let reward: int = 50 + (state.wave * 25);
     foreach (p in @a) {
         scoreboard_add(p, "zs_coins", reward);
         happy(p);
     }
-    announce("§6+" + reward + " 金币");
+    announce("§6+" + reward + " coins");
     
-    // 检查特殊波
+    // Check special wave
     if (state.wave == 10) {
         victory();
         return;
@@ -219,65 +219,65 @@ fn wave_complete() {
     start_prep_phase();
 }
 
-// ===== 商店系统 =====
+// ===== Shop System =====
 fn buy_item(player: selector, item_id: int) {
     let coins: int = scoreboard_get(player, "zs_coins");
     
     if (item_id == 1) {
-        // 铁剑 - 100 金币
+        // Iron sword - 100 coins
         if (coins >= 100) {
             scoreboard_add(player, "zs_coins", -100);
             give(player, "minecraft:iron_sword", 1);
-            tell(player, "§a购买成功：铁剑");
+            tell(player, "§aPurchased: Iron Sword");
         } else {
-            tell(player, "§c金币不足！需要 100");
+            tell(player, "§cNot enough coins! Need 100");
         }
     }
     
     if (item_id == 2) {
-        // 铁甲 - 200 金币
+        // Iron armor - 200 coins
         if (coins >= 200) {
             scoreboard_add(player, "zs_coins", -200);
             give(player, "minecraft:iron_chestplate", 1);
             give(player, "minecraft:iron_leggings", 1);
             give(player, "minecraft:iron_boots", 1);
-            tell(player, "§a购买成功：铁甲套装");
+            tell(player, "§aPurchased: Iron Armor Set");
         } else {
-            tell(player, "§c金币不足！需要 200");
+            tell(player, "§cNot enough coins! Need 200");
         }
     }
     
     if (item_id == 3) {
-        // 弓箭 - 150 金币
+        // Bow and arrows - 150 coins
         if (coins >= 150) {
             scoreboard_add(player, "zs_coins", -150);
             give(player, "minecraft:bow", 1);
             give(player, "minecraft:arrow", 32);
-            tell(player, "§a购买成功：弓 + 32 箭");
+            tell(player, "§aPurchased: Bow + 32 Arrows");
         } else {
-            tell(player, "§c金币不足！需要 150");
+            tell(player, "§cNot enough coins! Need 150");
         }
     }
     
     if (item_id == 4) {
-        // 金苹果 - 75 金币
+        // Golden apple - 75 coins
         if (coins >= 75) {
             scoreboard_add(player, "zs_coins", -75);
             give(player, "minecraft:golden_apple", 2);
-            tell(player, "§a购买成功：金苹果 x2");
+            tell(player, "§aPurchased: Golden Apple x2");
         } else {
-            tell(player, "§c金币不足！需要 75");
+            tell(player, "§cNot enough coins! Need 75");
         }
     }
 }
 
-// ===== 结束 =====
+// ===== End =====
 fn victory() {
     state.running = 0;
     
-    title(@a, "§6胜利！");
-    subtitle(@a, "§a你们生存了 10 波！");
-    announce("§4[僵尸生存] §6恭喜！完成全部 10 波！");
+    title(@a, "§6Victory!");
+    subtitle(@a, "§aYou survived 10 waves!");
+    announce("§4[Zombie Survival] §6Congratulations! Completed all 10 waves!");
     
     foreach (p in @a) {
         totem_effect(p);
@@ -290,11 +290,11 @@ fn victory() {
 fn game_over() {
     state.running = 0;
     
-    title(@a, "§c游戏结束");
-    subtitle(@a, "§7生存了 " + state.wave + " 波");
-    announce("§4[僵尸生存] §c全员阵亡！最高波数：" + state.wave);
+    title(@a, "§cGame Over");
+    subtitle(@a, "§7Survived " + state.wave + " waves");
+    announce("§4[Zombie Survival] §cAll players eliminated! Highest wave: " + state.wave);
     
-    // 清理僵尸
+    // Clean up zombies
     kill(@e[type=zombie]);
     kill(@e[type=husk]);
     
@@ -307,8 +307,8 @@ fn update_scoreboard() {
 }
 
 fn count_entities(sel: selector) -> int {
-    // 使用 execute store 计算实体数量
+    // Use execute store to count entities
     let count: int = 0;
-    // 实际实现需要 execute store
+    // Actual implementation requires execute store
     return count;
 }

@@ -52,6 +52,24 @@ export interface PreprocessedSource {
   ranges: SourceRange[]
 }
 
+/**
+ * Resolve a combined-source line number back to the original file and line.
+ * Returns { filePath, line } if a mapping is found, otherwise returns the input unchanged.
+ */
+export function resolveSourceLine(
+  combinedLine: number,
+  ranges: SourceRange[],
+  fallbackFile?: string
+): { filePath?: string; line: number } {
+  for (const range of ranges) {
+    if (combinedLine >= range.startLine && combinedLine <= range.endLine) {
+      const localLine = combinedLine - range.startLine + 1
+      return { filePath: range.filePath, line: localLine }
+    }
+  }
+  return { filePath: fallbackFile, line: combinedLine }
+}
+
 const IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/
 
 interface PreprocessOptions {

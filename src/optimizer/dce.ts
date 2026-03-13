@@ -72,6 +72,7 @@ export interface DCEWarning {
   code: string
   line?: number
   col?: number
+  filePath?: string
 }
 
 export class DeadCodeEliminator {
@@ -639,8 +640,23 @@ export class DeadCodeEliminator {
   }
 }
 
-export function eliminateDeadCode(program: Program): { program: Program; warnings: DCEWarning[] } {
+export function eliminateDeadCode(
+  program: Program,
+  sourceRanges?: import('../compile').SourceRange[]
+): { program: Program; warnings: DCEWarning[] } {
   const eliminator = new DeadCodeEliminator()
   const result = eliminator.eliminate(program)
-  return { program: result, warnings: eliminator.warnings }
+  let warnings = eliminator.warnings
+
+  // Resolve combined-source line numbers back to original file + line
+  if (sourceRanges && sourceRanges.length > 0) {
+    const { resolveSourceLine } = require('../compile') as typeof import('../compile')
+    warnings = warnings.map(w => {
+      if (w.line == null) return w
+      const resolved = resolveSourceLine(w.line, sourceRanges)
+      return { ...w, line: resolved.line, filePath: resolved.filePath ?? w.filePath }
+    })
+  }
+
+  return { program: result, warnings }
 }

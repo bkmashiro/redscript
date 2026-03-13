@@ -217,13 +217,19 @@ function deriveNamespace(filePath: string): string {
   return basename.toLowerCase().replace(/[^a-z0-9]/g, '_')
 }
 
-function printWarnings(warnings: Array<{ code: string; message: string }> | undefined): void {
+function printWarnings(warnings: Array<{ code: string; message: string; line?: number; col?: number; filePath?: string }> | undefined): void {
   if (!warnings || warnings.length === 0) {
     return
   }
 
   for (const warning of warnings) {
-    console.error(`Warning [${warning.code}]: ${warning.message}`)
+    const loc = warning.filePath
+      ? `${warning.filePath}:${warning.line ?? '?'}`
+      : warning.line != null
+        ? `line ${warning.line}`
+        : null
+    const locStr = loc ? ` (${loc})` : ''
+    console.error(`Warning [${warning.code}]: ${warning.message}${locStr}`)
   }
 }
 
