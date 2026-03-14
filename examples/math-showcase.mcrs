@@ -9,27 +9,40 @@ import "../src/stdlib/advanced.mcrs"
 import "../src/stdlib/bigint.mcrs"
 
 // ─── 1. Trig table — print sin & cos for 0°, 15°, 30° … 90° ────────────────
+// NOTE: sin_fixed/cos_fixed return values in ×1000 space (sin(30°) = 500, not 0.5).
+//       s*s + c*c ≈ 1000000 because (sin×1000)²+(cos×1000)² = 10⁶×(sin²+cos²) = 10⁶.
+//       Requires __load to have run (initializes the sin table).
 fn trig_table() {
-    say("§e=== Trig Table (×1000 fixed-point) ===");
+    say("§e=== Trig Table (×1000 fixed-point, needs __load) ===");
     let deg: int = 0;
     while (deg <= 90) {
         let s: int = sin_fixed(deg);
         let c: int = cos_fixed(deg);
-        say(f"  {deg}°  sin={s}  cos={c}  sin²+cos²={mulfix(s,s)+mulfix(c,c)}  (expect 1000000)");
+        say(f"  {deg}°  sin={s}  cos={c}  s²+c²={s*s + c*c}  (expect ~1000000)");
         deg = deg + 15;
     }
 }
 
 // ─── 2. Newton–Raphson sqrt — compare isqrt vs sqrt_fixed ──────────────────
+// isqrt(n)      → floor(sqrt(n)), raw integer
+// sqrt_fixed(x) → sqrt of x/1000 expressed in ×1000 format
+//                 e.g. sqrt_fixed(2000) = sqrt(2.0)×1000 = 1414
+//                 Input must be in ×1000 space. Max input ≈ 2147000 (before overflow).
 fn sqrt_showcase() {
-    say("§e=== Integer & Fixed-Point Square Roots ===");
-    say(f"  isqrt(2)              = {isqrt(2)}         (exact: 1)");
-    say(f"  isqrt(144)            = {isqrt(144)}        (exact: 12)");
-    say(f"  isqrt(1000000)        = {isqrt(1000000)}    (exact: 1000)");
-    say(f"  isqrt(2147395600)     = {isqrt(2147395600)} (exact: 46340)");
-    say(f"  sqrt_fixed(2)         = {sqrt_fixed(2)}     (×1000, expect 1414)");
-    say(f"  sqrt_fixed(3)         = {sqrt_fixed(3)}     (×1000, expect 1732)");
-    say(f"  sqrt_fixed(10)        = {sqrt_fixed(10)}    (×1000, expect 3162)");
+    say("§e=== Integer Square Root (isqrt) ===");
+    say(f"  isqrt(1)       = {isqrt(1)}     (exact: 1)");
+    say(f"  isqrt(2)       = {isqrt(2)}     (exact: 1)");
+    say(f"  isqrt(144)     = {isqrt(144)}   (exact: 12)");
+    say(f"  isqrt(1000000) = {isqrt(1000000)} (exact: 1000)");
+    say(f"  isqrt(99980001)= {isqrt(99980001)} (exact: 9999)");
+
+    say("§e=== Fixed-Point sqrt (input&output in ×1000) ===");
+    say(f"  sqrt_fixed(1000)  = {sqrt_fixed(1000)}  (sqrt(1.0) = 1.000)");
+    say(f"  sqrt_fixed(2000)  = {sqrt_fixed(2000)}  (sqrt(2.0) ≈ 1.414)");
+    say(f"  sqrt_fixed(3000)  = {sqrt_fixed(3000)}  (sqrt(3.0) ≈ 1.732)");
+    say(f"  sqrt_fixed(4000)  = {sqrt_fixed(4000)}  (sqrt(4.0) = 2.000)");
+    say(f"  sqrt_fixed(10000) = {sqrt_fixed(10000)} (sqrt(10.0) ≈ 3.162)");
+    say(f"  sqrt_fixed(100000)= {sqrt_fixed(100000)} (sqrt(100.0) = 10.000)");
 }
 
 // ─── 3. 2D vector geometry ──────────────────────────────────────────────────
