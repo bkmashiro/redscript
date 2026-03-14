@@ -1,0 +1,448 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  RedScript v1.2.26 — Capability Showcase                            ║
+// ║                                                                      ║
+// ║  Demonstrates every major feature in one datapack:                   ║
+// ║    • Math stdlib:    sin/cos table, sqrt_fixed, atan2, smoothstep    ║
+// ║    • Vec stdlib:     2D length, normalize, rotate                    ║
+// ║    • BigInt:         arbitrary-precision Fibonacci up to F(100)      ║
+// ║    • Advanced:       primes, Collatz, Bézier, noise, Mandelbrot      ║
+// ║    • Language:       structs, impl blocks, enums, match, lambdas,    ║
+// ║                      @tick/@load, foreach, f-strings, break/continue ║
+// ║    • Game effects:   particles, actionbar, fireworks, titles         ║
+// ║                                                                      ║
+// ║  Usage:                                                              ║
+// ║    /function showcase:start        begin the showcase                ║
+// ║    /function showcase:stop         stop everything                   ║
+// ║    /function showcase:dump_math    print math table to chat          ║
+// ║    /function showcase:dump_bigint  print Fibonacci to chat           ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+import "stdlib/math.mcrs"
+import "stdlib/vec.mcrs"
+import "stdlib/bigint.mcrs"
+import "stdlib/advanced.mcrs"
+
+// ── Enums ─────────────────────────────────────────────────────────────────
+
+enum Phase {
+    Idle,       // 0 — waiting
+    Math,       // 1 — trig / fixed-point showcase
+    BigInt,     // 2 — arbitrary-precision arithmetic
+    Advanced,   // 3 — primes, noise, fractals
+    Visual,     // 4 — live particle ring + sin/cos actionbar
+}
+
+// ── State struct ───────────────────────────────────────────────────────────
+
+struct ShowcaseState {
+    phase:    int,   // current Phase
+    tick:     int,   // frame counter since start
+    angle:    int,   // 0–359 degrees; advances 2°/tick during Visual phase
+    running:  bool
+}
+
+let state: ShowcaseState = {
+    phase:   0,
+    tick:    0,
+    angle:   0,
+    running: false
+};
+
+// ── Timer (OOP demo) ───────────────────────────────────────────────────────
+
+struct PhaseTimer {
+    interval: int,   // ticks between phase advances
+    elapsed:  int
+}
+
+impl PhaseTimer {
+    fn new(interval: int) -> PhaseTimer {
+        return { interval: interval, elapsed: 0 };
+    }
+
+    fn tick(self) -> bool {
+        self.elapsed = self.elapsed + 1;
+        if (self.elapsed >= self.interval) {
+            self.elapsed = 0;
+            return true;
+        }
+        return false;
+    }
+
+    fn reset(self) {
+        self.elapsed = 0;
+    }
+}
+
+let phase_timer: PhaseTimer = { interval: 200, elapsed: 0 };   // advance every 10 seconds
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+fn _divider() {
+    say("§8§m══════════════════════════════");
+}
+
+fn _section(title: string) {
+    _divider();
+    say(f"§6§l  {title}");
+    _divider();
+}
+
+// Format a fixed-point ×1000 value as "X.XXX"
+fn _fp(n: int) -> int {
+    // Just return raw for now; f-string handles display
+    return n;
+}
+
+// ── @load ─────────────────────────────────────────────────────────────────
+
+@load
+fn showcase_load() {
+    say("§a[Showcase] §rRedScript v1.2.26 loaded.");
+    say("§7  /function showcase:start  §f— begin the showcase");
+    say("§7  /function showcase:dump_math  §f— print math tables");
+    say("§7  /function showcase:dump_bigint  §f— print big Fibonacci numbers");
+}
+
+// ── @tick ──────────────────────────────────────────────────────────────────
+
+@tick
+fn showcase_tick() {
+    if (!state.running) { return; }
+
+    state.tick = state.tick + 1;
+
+    // Advance phase on timer
+    if (phase_timer.tick()) {
+        _next_phase();
+    }
+
+    // Per-phase work
+    match (state.phase) {
+        Phase.Math     => { _tick_math(); }
+        Phase.BigInt   => { _tick_bigint_live(); }
+        Phase.Advanced => { _tick_advanced_live(); }
+        Phase.Visual   => { _tick_visual(); }
+    }
+}
+
+fn _next_phase() {
+    state.phase = state.phase + 1;
+    if (state.phase > 4) { state.phase = 1; }
+
+    match (state.phase) {
+        Phase.Math     => { _dump_math_phase(); }
+        Phase.BigInt   => { _dump_bigint_phase(); }
+        Phase.Advanced => { _dump_advanced_phase(); }
+        Phase.Visual   => {
+            _section("Live Visual FX");
+            say("§bOrbital ring + live sin/cos on actionbar.");
+            say("§7(runs for 10 seconds, then loops back to Math)");
+        }
+    }
+}
+
+// ── Phase 1: Math Stdlib ──────────────────────────────────────────────────
+
+fn _dump_math_phase() {
+    _section("Math Stdlib — Fixed-Point Trigonometry");
+
+    // Sin/cos table samples
+    say("§eTrig (×1000 fixed-point):");
+    let deg: int = 0;
+    while (deg <= 90) {
+        let s: int = sin_fixed(deg);
+        let c: int = cos_fixed(deg);
+        say(f"  sin({deg}°)={s}  cos({deg}°)={c}");
+        deg = deg + 15;
+    }
+
+    // sqrt, pow, gcd, lcm
+    say("§eRoots & Powers:");
+    say(f"  sqrt_fixed(2) = {sqrt_fixed(2)}  (expect 1414)");
+    say(f"  sqrt_fixed(3) = {sqrt_fixed(3)}  (expect 1732)");
+    say(f"  isqrt(360000000000) = {isqrt(360000000000)}  (expect 600000)");
+    say(f"  pow_int(2, 20) = {pow_int(2, 20)}  (expect 1048576)");
+
+    say("§eNumber Theory:");
+    say(f"  gcd(48, 36) = {gcd(48, 36)}  (expect 12)");
+    say(f"  lcm(4, 6) = {lcm(4, 6)}  (expect 12)");
+    say(f"  log2_int(1024) = {log2_int(1024)}  (expect 10)");
+
+    say("§eInterpolation:");
+    say(f"  lerp(0, 1000, 250) = {lerp(0, 1000, 250)}  (expect 250)");
+    say(f"  smoothstep(0,1000,0)   = {smoothstep(0, 1000, 0)}");
+    say(f"  smoothstep(0,1000,500) = {smoothstep(0, 1000, 500)}  (expect ~500)");
+    say(f"  smoothstep(0,1000,1000)= {smoothstep(0, 1000, 1000)}");
+    say(f"  smootherstep(0,1000,500)={smootherstep(0, 1000, 500)}");
+
+    say("§eFixed-Point Multiply/Divide:");
+    say(f"  mulfix(1414, 1414) = {mulfix(1414, 1414)}  (≈ 2×1000=2000)");
+    say(f"  divfix(1000, 3) = {divfix(1000, 3)}  (≈ 333)");
+}
+
+fn _tick_math() {
+    // Animate: show atan2 of a rotating unit vector on actionbar
+    state.angle = (state.angle + 3) % 360;
+    let s: int = sin_fixed(state.angle);
+    let c: int = cos_fixed(state.angle);
+    let theta: int = atan2_fixed(s, c) / 1000;   // millideg → deg
+    foreach (p in @a[limit=1]) {
+        actionbar(p, f"§bsin={s} §dcos={c} §eatan2={theta}°");
+    }
+}
+
+// ── Phase 2: BigInt ───────────────────────────────────────────────────────
+
+fn _dump_bigint_phase() {
+    _section("BigInt — 32-Digit Arbitrary Precision");
+
+    say("§eFibonacci sequence (BigInt, base-10000 limbs):");
+
+    // Small Fibonacci — fits in single limb
+    let i: int = 0;
+    while (i <= 20) {
+        bigint_fib(i);
+        let v: int = bigint_get_a(0);
+        say(f"  F({i}) = {v}");
+        i = i + 5;
+    }
+
+    // F(50) = 12,586,269,025 (3 limbs)
+    bigint_fib(50);
+    let f50_2: int = bigint_get_a(2);
+    let f50_1: int = bigint_get_a(1);
+    let f50_0: int = bigint_get_a(0);
+    say(f"  F(50) = {f50_2}_{f50_1}_{f50_0}  [= 12,586,269,025]");
+
+    // F(100) = 354,224,848,179,261,915,075 (6 limbs)
+    bigint_fib(100);
+    let f100_5: int = bigint_get_a(5);
+    let f100_4: int = bigint_get_a(4);
+    let f100_3: int = bigint_get_a(3);
+    let f100_2: int = bigint_get_a(2);
+    let f100_1: int = bigint_get_a(1);
+    let f100_0: int = bigint_get_a(0);
+    say(f"  F(100)= {f100_5}_{f100_4}_{f100_3}_{f100_2}_{f100_1}_{f100_0}");
+    say(f"  [= 354,224,848,179,261,915,075]");
+
+    // BigInt multiplication: 999999999 × 999999999
+    say("§eBigInt Multiply:");
+    bigint_init();
+    bigint_from_int_a(999999999);
+    bigint_from_int_b(999999999);
+    bigint_mul();
+    let m2: int = bigint_get_c(2);
+    let m1: int = bigint_get_c(1);
+    let m0: int = bigint_get_c(0);
+    say(f"  999999999² = {m2}_{m1}_{m0}");
+    say(f"  [= 999999998_000000001]");
+
+    // BigInt subtract
+    say("§eBigInt Subtract:");
+    bigint_init();
+    bigint_from_int_a(1000000000);
+    bigint_from_int_b(1);
+    bigint_sub();
+    let s0: int = bigint_get_c(0);
+    let s1: int = bigint_get_c(1);
+    say(f"  1,000,000,000 - 1 = {s1}_{s0}  [= 999999999]");
+}
+
+fn _tick_bigint_live() {
+    // Show incremental Fibonacci on actionbar
+    if (state.tick % 10 == 0) {
+        let n: int = (state.tick / 10) % 30;
+        bigint_fib(n);
+        let v0: int = bigint_get_a(0);
+        let v1: int = bigint_get_a(1);
+        foreach (p in @a[limit=1]) {
+            actionbar(p, f"§dF({n}) limb[1]={v1} limb[0]={v0}");
+        }
+    }
+}
+
+// ── Phase 3: Advanced Stdlib ──────────────────────────────────────────────
+
+fn _dump_advanced_phase() {
+    _section("Advanced Stdlib — Number Theory & More");
+
+    // Primes
+    say("§ePrime numbers up to 50:");
+    let j: int = 2;
+    while (j <= 50) {
+        if (is_prime(j) == 1) {
+            say(f"  {j}");
+        }
+        j = j + 1;
+    }
+
+    // Collatz conjecture
+    say("§eCollatz sequences:");
+    say(f"  collatz_steps(27)  = {collatz_steps(27)}  (expect 111)");
+    say(f"  collatz_steps(97)  = {collatz_steps(97)}");
+    say(f"  collatz_steps(871) = {collatz_steps(871)}  (longest for n≤1000)");
+
+    // Number utilities
+    say("§eNumber Utilities:");
+    say(f"  digit_sum(9999)   = {digit_sum(9999)}   (expect 36)");
+    say(f"  reverse_int(12345)= {reverse_int(12345)} (expect 54321)");
+    say(f"  digital_root(493) = {digital_root(493)}  (expect 7)");
+
+    // Hash & noise
+    say("§eHash (splitmix32) & 1D Noise:");
+    say(f"  hash_int(0)   = {hash_int(0)}");
+    say(f"  hash_int(1)   = {hash_int(1)}");
+    say(f"  noise1d(0,42) = {noise1d(0, 42)}");
+    say(f"  noise1d(1,42) = {noise1d(1, 42)}");
+    say(f"  noise1d(2,42) = {noise1d(2, 42)}");
+
+    // Modular exponentiation
+    say("§eModular Exponentiation:");
+    say(f"  mod_pow(2, 31, 1000000007) = {mod_pow(2, 31, 1000000007)}");
+    say(f"  mod_pow(3, 100, 997) = {mod_pow(3, 100, 997)}");
+
+    // Bézier curve
+    say("§eQuadratic Bézier (P0=0, P1=1000, P2=0) — shape like ∩:");
+    let t: int = 0;
+    while (t <= 1000) {
+        let bz: int = bezier_quad(0, 1000, 0, t);
+        say(f"  t={t}  → {bz}");
+        t = t + 200;
+    }
+
+    // Mandelbrot iteration counts at selected points
+    say("§eMandelbrot Iteration Counts:");
+    say(f"  (0, 0)       → {mandelbrot_iter(0, 0, 50)} iters  [inside set]");
+    say(f"  (2000, 0)    → {mandelbrot_iter(2000, 0, 50)} iters  [outside]");
+    say(f"  (-1250, 0)   → {mandelbrot_iter(-1250, 0, 50)} iters  [boundary]");
+    say(f"  (-750, 1000) → {mandelbrot_iter(-750, 1000, 50)} iters  [boundary]");
+
+    // Vec math
+    say("§eVector Math (×1000 fixed-point):");
+    say(f"  length2d_fixed(3, 4) = {length2d_fixed(3, 4)}  (expect 5000)");
+    say(f"  dot2d(1000,0, 0,1000) = {dot2d(1000, 0, 0, 1000)}  (perpendicular = 0)");
+    say(f"  dot2d(1000,0, 1000,0) = {dot2d(1000, 0, 1000, 0)}  (parallel = 1e6)");
+    say(f"  atan2_fixed(1000, 1000)/1000 = {atan2_fixed(1000, 1000) / 1000}°  (expect 45)");
+    say(f"  normalize2d_x(3, 4) = {normalize2d_x(3, 4)}  (expect 600)");
+    say(f"  normalize2d_y(3, 4) = {normalize2d_y(3, 4)}  (expect 800)");
+}
+
+fn _tick_advanced_live() {
+    // Scan Mandelbrot x-axis in real time on actionbar
+    if (state.tick % 5 == 0) {
+        let cx: int = -2000 + (state.tick % 200) * 20;  // -2000 to 2000
+        let iters: int = mandelbrot_iter(cx, 0, 30);
+        foreach (p in @a[limit=1]) {
+            actionbar(p, f"§aMandelbrot scan: cx={cx}  iters={iters}");
+        }
+    }
+}
+
+// ── Phase 4: Visual Effects ────────────────────────────────────────────────
+
+fn _tick_visual() {
+    // Advance rotation angle
+    state.angle = (state.angle + 2) % 360;
+
+    // Live sin/cos on actionbar
+    let s: int = sin_fixed(state.angle);
+    let c: int = cos_fixed(state.angle);
+    let len: int = length2d_fixed(s, c);
+    foreach (p in @a[limit=1]) {
+        actionbar(p, f"§6angle={state.angle}°  §bsin={s}  §dcos={c}  §alen={len}");
+    }
+
+    // Particle ring: 8 cardinal + diagonal points pulsing in Y
+    // Y-offset is driven by sin (rises and falls with angle)
+    // Note: ~Y syntax uses a macro param; we use fixed ~1 here and
+    // place two rings (ground ~0 and elevated ~2) at alternating ticks
+    if (state.tick % 2 == 0) {
+        foreach (p in @a[limit=1]) at @s {
+            // Cardinal — end_rod (blue-white)
+            particle("minecraft:end_rod", ~0,  ~1, ~5,  0, 0, 0, 0, 1);
+            particle("minecraft:end_rod", ~5,  ~1, ~0,  0, 0, 0, 0, 1);
+            particle("minecraft:end_rod", ~0,  ~1, ~-5, 0, 0, 0, 0, 1);
+            particle("minecraft:end_rod", ~-5, ~1, ~0,  0, 0, 0, 0, 1);
+            // Diagonal — flame (orange)
+            particle("minecraft:flame", ~3,  ~1, ~3,  0, 0, 0, 0, 1);
+            particle("minecraft:flame", ~-3, ~1, ~3,  0, 0, 0, 0, 1);
+            particle("minecraft:flame", ~3,  ~1, ~-3, 0, 0, 0, 0, 1);
+            particle("minecraft:flame", ~-3, ~1, ~-3, 0, 0, 0, 0, 1);
+        }
+    } else {
+        foreach (p in @a[limit=1]) at @s {
+            // Upper ring offset by 2 (creates helix effect alternating ticks)
+            particle("minecraft:end_rod", ~0,  ~3, ~5,  0, 0, 0, 0, 1);
+            particle("minecraft:end_rod", ~5,  ~3, ~0,  0, 0, 0, 0, 1);
+            particle("minecraft:end_rod", ~0,  ~3, ~-5, 0, 0, 0, 0, 1);
+            particle("minecraft:end_rod", ~-5, ~3, ~0,  0, 0, 0, 0, 1);
+            particle("minecraft:flame", ~3,  ~3, ~3,  0, 0, 0, 0, 1);
+            particle("minecraft:flame", ~-3, ~3, ~3,  0, 0, 0, 0, 1);
+            particle("minecraft:flame", ~3,  ~3, ~-3, 0, 0, 0, 0, 1);
+            particle("minecraft:flame", ~-3, ~3, ~-3, 0, 0, 0, 0, 1);
+        }
+    }
+
+    // Firework burst at tick multiples of 100
+    if (state.tick % 100 == 0) {
+        foreach (p in @a[limit=1]) at @s {
+            summon("minecraft:firework_rocket", ~0, ~2, ~0);
+        }
+    }
+}
+
+// ── Public commands ────────────────────────────────────────────────────────
+
+fn start() {
+    state.running = true;
+    state.phase   = 0;
+    state.tick    = 0;
+    state.angle   = 0;
+    phase_timer.reset();
+
+    _section("RedScript v1.2.26 Showcase");
+    say("§aStarting capability demo — phases cycle every 10 seconds.");
+    say("§7Math → BigInt → Advanced → Visual FX → (repeat)");
+    say("§7Use §f/function showcase:dump_math §7or §f/function showcase:dump_bigint");
+    say("§7for the full printed output at any time.");
+
+    // Kick off phase 1 immediately
+    _next_phase();
+}
+
+fn stop() {
+    state.running = false;
+    foreach (p in @a[limit=1]) {
+        actionbar(p, "§c[Showcase stopped]");
+    }
+    say("§c[Showcase] §rStopped.");
+}
+
+// Stand-alone dump commands for reference
+
+fn dump_math() {
+    _dump_math_phase();
+}
+
+fn dump_bigint() {
+    _dump_bigint_phase();
+}
+
+fn dump_advanced() {
+    _dump_advanced_phase();
+}
+
+// ── Lambda demo (standalone — shows higher-order functions work) ───────────
+
+fn _apply(f: (int) -> int, x: int) -> int {
+    return f(x);
+}
+
+fn lambda_demo() {
+    let double: (int) -> int = (x: int) => x * 2;
+    let square: (int) -> int = (x: int) => x * x;
+
+    say(f"  double(7) = {_apply(double, 7)}");
+    say(f"  square(9) = {_apply(square, 9)}");
+}
