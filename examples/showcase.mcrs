@@ -433,6 +433,53 @@ fn dump_advanced() {
     _dump_advanced_phase();
 }
 
+// ── BigInt step-by-step debug ─────────────────────────────────────────────
+// /function showcase:debug_bigint
+fn debug_bigint() {
+    say("§e=== BigInt Debug ===");
+
+    // Step 1: init
+    bigint_init();
+    say("§7[1] bigint_init() done");
+
+    // Step 2: from_int_a (STATIC index — no macro)
+    bigint_from_int_a(12345);
+    let a0: int = bigint_get_a(0);
+    let a1: int = bigint_get_a(1);
+    say(f"§7[2] from_int_a(12345) → get_a(0)={a0}  get_a(1)={a1}");
+    say(f"§7    expect: a0=2345  a1=1");
+
+    // Step 3: fib(1) = 1  (no carry, simplest case)
+    bigint_fib(1);
+    let f1: int = bigint_get_a(0);
+    say(f"§7[3] fib(1) → get_a(0)={f1}  (expect 1)");
+
+    // Step 4: fib(5) = 5
+    bigint_fib(5);
+    let f5: int = bigint_get_a(0);
+    say(f"§7[4] fib(5) → get_a(0)={f5}  (expect 5)");
+
+    // Step 5: fib(10) = 55
+    bigint_fib(10);
+    let f10: int = bigint_get_a(0);
+    say(f"§7[5] fib(10) → get_a(0)={f10}  (expect 55)");
+
+    // Step 6: fib(20) = 6765
+    bigint_fib(20);
+    let f20: int = bigint_get_a(0);
+    say(f"§7[6] fib(20) → get_a(0)={f20}  (expect 6765)");
+
+    // Step 7: manual add — bigint_add() writes via __ssi macro
+    bigint_init();
+    bigint_from_int_a(1);
+    bigint_from_int_b(1);
+    bigint_add();
+    let c0: int = bigint_get_c(0);
+    say(f"§7[7] 1+1=? get_c(0)={c0}  (expect 2)");
+
+    say("§a=== Done ===");
+}
+
 // ── Lambda demo (standalone — shows higher-order functions work) ───────────
 
 fn _apply(f: (int) -> int, x: int) -> int {
