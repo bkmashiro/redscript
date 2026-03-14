@@ -247,3 +247,84 @@ fn julia_iter(z0r: int, z0i: int, cr: int, ci: int, max_iter: int) -> int {
     }
     return max_iter;
 }
+
+// ─── Category 5: Geometry experiments ────────────────────────────────────────
+
+// Angle between two 2D vectors in degrees (×1 = degrees, unsigned 0..180).
+// Strategy: normalize both vectors to unit (×1000 components), then
+//   angle = atan2(|cross|, dot)  where cross,dot are from the unit vectors.
+// Unit vector components are ≤ 1000, so cross/dot ≤ 10^6 (no overflow).
+// After dividing by 1000 to re-scale, pass to atan2_fixed.
+//
+// angle_between(1000, 0, 0, 1000) == 90
+// angle_between(1000, 0, 1000, 0) == 0
+// angle_between(1000, 0, -1000, 0) == 180
+fn angle_between(x1: int, y1: int, x2: int, y2: int) -> int {
+    let nx1: int = normalize2d_x(x1, y1);
+    let ny1: int = normalize2d_y(x1, y1);
+    let nx2: int = normalize2d_x(x2, y2);
+    let ny2: int = normalize2d_y(x2, y2);
+    if (nx1 == 0 && ny1 == 0) { return 0; }
+    if (nx2 == 0 && ny2 == 0) { return 0; }
+    // dot and cross of unit vectors (components ×1000 → result ×1000000)
+    let d: int = dot2d(nx1, ny1, nx2, ny2) / 1000;   // cos × 1000
+    let c: int = abs(cross2d(nx1, ny1, nx2, ny2)) / 1000; // |sin| × 1000
+    return atan2_fixed(c, d);
+}
+
+// Clamp a 2D point to lie within a circle of radius r centred at origin.
+// r is in the same units as x, y (raw block coords, NOT fixed-point).
+// Returns the clamped x component.
+// Note: keep x, y < ~2000 to avoid overflow in normalize2d_x (x * 10^6).
+//
+// clamp_circle_x(3, 4, 10) == 3   (point at dist 5, inside r=10)
+// clamp_circle_x(600, 0, 500) == 500
+fn clamp_circle_x(x: int, y: int, r: int) -> int {
+    // length2d_fixed returns dist × 1000; compare with r × 1000
+    let dist: int = length2d_fixed(x, y);
+    if (dist <= r * 1000) { return x; }
+    return normalize2d_x(x, y) * r / 1000;
+}
+
+// Y component of circle clamp.
+// clamp_circle_y(0, 600, 500) == 500
+fn clamp_circle_y(x: int, y: int, r: int) -> int {
+    let dist: int = length2d_fixed(x, y);
+    if (dist <= r * 1000) { return y; }
+    return normalize2d_y(x, y) * r / 1000;
+}
+
+// Newton's method integer square root (alternative to isqrt).
+// Converges quadratically; validates our while loop + division.
+// newton_sqrt(25) == 5, newton_sqrt(100) == 10, newton_sqrt(2) == 1
+fn newton_sqrt(n: int) -> int {
+    if (n <= 0) { return 0; }
+    if (n == 1) { return 1; }
+    let x: int = n / 2;
+    let prev: int = 0;
+    while (x != prev) {
+        prev = x;
+        x = (x + n / x) / 2;
+    }
+    return x;
+}
+
+// Digital root: repeatedly sum digits until single digit.
+// digital_root(493) == 7  (4+9+3=16 → 1+6=7)
+// digital_root(9) == 9
+// digital_root(0) == 0
+fn digital_root(n: int) -> int {
+    if (n == 0) { return 0; }
+    let r: int = n % 9;
+    if (r == 0) { return 9; }
+    return r;
+}
+
+// Ulam spiral ring number: which concentric square ring is n on?
+// Ring 0: n=1; Ring 1: n=2..9 (3×3 square); Ring 2: n=10..25 (5×5); etc.
+// Formula: floor((isqrt(n-1) + 1) / 2)
+// spiral_ring(1) == 0, spiral_ring(9) == 1, spiral_ring(25) == 2
+fn spiral_ring(n: int) -> int {
+    if (n <= 1) { return 0; }
+    return (isqrt(n - 1) + 1) / 2;
+}

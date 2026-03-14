@@ -71,16 +71,29 @@ fn lerp(a: int, b: int, t: int) -> int {
 // Uses Newton's method, converges in ≤16 iterations for all int32.
 // isqrt(9) == 3, isqrt(10) == 3, isqrt(0) == 0
 fn isqrt(n: int) -> int {
-    if (n <= 0) {
-        return 0;
+    if (n <= 0) { return 0; }
+    if (n == 1) { return 1; }
+    // Bit-length of n: how many bits needed to represent n.
+    let bits: int = 0;
+    let tmp: int = n;
+    while (tmp > 0) {
+        tmp = tmp / 2;
+        bits = bits + 1;
     }
-    let x: int = n;
+    // Initial guess: 2^((bits+1)/2).  Always ≥ sqrt(n), so Newton converges
+    // monotonically from above — the standard floor-sqrt Newton iteration.
+    let half: int = (bits + 1) / 2;
+    let x: int = 1;
+    let j: int = 0;
+    while (j < half) {
+        x = x * 2;
+        j = j + 1;
+    }
+    // Newton–Raphson floor-sqrt: converges in ≤ 8 iterations from a 2× overestimate.
     let i: int = 0;
     while (i < 16) {
         let next: int = (x + n / x) / 2;
-        if (next >= x) {
-            return x;
-        }
+        if (next >= x) { return x; }
         x = next;
         i = i + 1;
     }

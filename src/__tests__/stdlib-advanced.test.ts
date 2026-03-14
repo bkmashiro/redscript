@@ -257,3 +257,123 @@ describe('julia_iter', () => {
     expect(scoreOf(rt, 'r')).toBe(0)
   })
 })
+
+// ─── Experiment: cross-stdlib (vec + math + advanced) ────────────────────────
+
+const VEC_SRC = fs.readFileSync(path.join(__dirname, '../../src/stdlib/vec.mcrs'), 'utf-8')
+
+function runAll(driver: string): MCRuntime {
+  const result = compile(driver, {
+    namespace: 'exptest',
+    librarySources: [MATH_SRC, VEC_SRC, ADV_SRC],
+  })
+  if (!result.success) throw new Error(result.error?.message ?? 'compile failed: ' + result.error?.message)
+  const rt = new MCRuntime('exptest')
+  for (const file of result.files ?? []) {
+    if (!file.path.endsWith('.mcfunction')) continue
+    const match = file.path.match(/data\/([^/]+)\/function\/(.+)\.mcfunction$/)
+    if (!match) continue
+    rt.loadFunction(`${match[1]}:${match[2]}`, file.content.split('\n'))
+  }
+  rt.load()
+  return rt
+}
+
+function exp(rt: MCRuntime, key: string): number {
+  return rt.getScore('out', `exptest.${key}`) ?? 0
+}
+
+describe('newton_sqrt', () => {
+  it('newton_sqrt(25) == 5', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", newton_sqrt(25)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(5)
+  })
+  it('newton_sqrt(100) == 10', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", newton_sqrt(100)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(10)
+  })
+  it('newton_sqrt(2) == 1', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", newton_sqrt(2)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(1)
+  })
+  it('newton_sqrt(0) == 0', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", newton_sqrt(0)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(0)
+  })
+})
+
+describe('digital_root', () => {
+  it('digital_root(493) == 7', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", digital_root(493)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(7)
+  })
+  it('digital_root(9) == 9', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", digital_root(9)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(9)
+  })
+  it('digital_root(0) == 0', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", digital_root(0)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(0)
+  })
+})
+
+describe('spiral_ring', () => {
+  it('spiral_ring(1) == 0', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", spiral_ring(1)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(0)
+  })
+  it('spiral_ring(9) == 1', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", spiral_ring(9)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(1)
+  })
+  it('spiral_ring(25) == 2', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", spiral_ring(25)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(2)
+  })
+})
+
+describe('clamp_circle', () => {
+  it('point inside: clamp_circle_x(3,4,10) == 3', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", clamp_circle_x(3, 4, 10)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(3)
+  })
+  it('point outside: clamp_circle_x(600,0,500) == 500', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", clamp_circle_x(600, 0, 500)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(500)
+  })
+  it('clamp_circle_y(0,600,500) == 500', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", clamp_circle_y(0, 600, 500)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(500)
+  })
+})
+
+describe('angle_between', () => {
+  it('perpendicular vectors: angle_between(1000,0,0,1000) == 90', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", angle_between(1000, 0, 0, 1000)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(90)
+  })
+  it('parallel vectors: angle_between(1000,0,1000,0) == 0', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", angle_between(1000, 0, 1000, 0)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(0)
+  })
+  it('opposite vectors: angle_between(1000,0,-1000,0) == 180', () => {
+    const rt = runAll(`fn test() { scoreboard_set("out", "r", angle_between(1000, 0, -1000, 0)); }`)
+    rt.execFunction('test')
+    expect(exp(rt, 'r')).toBe(180)
+  })
+})
