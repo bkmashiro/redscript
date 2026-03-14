@@ -57,6 +57,10 @@ export interface SourceRange {
 export interface PreprocessedSource {
   source: string
   ranges: SourceRange[]
+  /** Imported files that declared `module library;` — parsed separately
+   *  in library mode so their functions are DCE-eligible.  Never concatenated
+   *  into `source`. */
+  libraryImports?: Array<{ source: string; filePath: string }>
 }
 
 /**
@@ -78,6 +82,17 @@ export function resolveSourceLine(
 }
 
 const IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/
+
+/** Returns true if the source file declares `module library;` at its top
+ *  (before any non-comment/non-blank lines). */
+function isLibrarySource(source: string): boolean {
+  for (const line of source.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('//')) continue
+    return /^module\s+library\s*;/.test(trimmed)
+  }
+  return false
+}
 
 interface PreprocessOptions {
   filePath?: string
@@ -106,6 +121,8 @@ export function preprocessSourceWithMetadata(source: string, options: Preprocess
 
   const lines = source.split('\n')
   const imports: PreprocessedSource[] = []
+  /** Library imports: `module library;` files routed here instead of concatenated. */
+  const libraryImports: Array<{ source: string; filePath: string }> = []
   const bodyLines: string[] = []
   let parsingHeader = true
 
@@ -140,7 +157,16 @@ export function preprocessSourceWithMetadata(source: string, options: Preprocess
           )
         }
 
-        imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen }))
+        if (isLibrarySource(importedSource)) {
+          // Library file: parse separately so its functions are DCE-eligible.
+          // Also collect any transitive library imports inside it.
+          const nested = preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen })
+          libraryImports.push({ source: importedSource, filePath: importPath })
+          // Propagate transitive library imports (e.g. math.mcrs imports vec.mcrs)
+          if (nested.libraryImports) libraryImports.push(...nested.libraryImports)
+        } else {
+          imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen }))
+        }
       }
       continue
     }
@@ -174,7 +200,11 @@ export function preprocessSourceWithMetadata(source: string, options: Preprocess
     })
   }
 
-  return { source: combined, ranges }
+  return {
+    source: combined,
+    ranges,
+    libraryImports: libraryImports.length > 0 ? libraryImports : undefined,
+  }
 }
 
 export function preprocessSource(source: string, options: PreprocessOptions = {}): string {
@@ -201,28 +231,33 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Parsing — user source
     const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
 
-    // Library sources: parsed independently (fresh Parser per source) so that
+    // Collect all library sources: explicit `librarySources` option +
+    // auto-detected imports (files with `module library;` pulled out by the
+    // preprocessor rather than concatenated).
+    const allLibrarySources: Array<{ src: string; fp?: string }> = []
+    for (const libSrc of options.librarySources ?? []) {
+      allLibrarySources.push({ src: libSrc })
+    }
+    for (const li of preprocessed.libraryImports ?? []) {
+      allLibrarySources.push({ src: li.source, fp: li.filePath })
+    }
+
+    // Parse library sources independently (fresh Parser per source) so that
     // `inLibraryMode` never bleeds into user code.  All resulting functions get
     // isLibraryFn=true (either via `module library;` in the source, or forced below).
-    if (options.librarySources?.length) {
-      for (const libSrc of options.librarySources) {
-        const libPreprocessed = preprocessSourceWithMetadata(libSrc, {})
-        const libTokens = new Lexer(libPreprocessed.source).tokenize()
-        const libAst = new Parser(libTokens, libPreprocessed.source).parse(namespace)
-        // Force all functions to library mode (even if source lacks `module library;`)
-        for (const fn of libAst.declarations) fn.isLibraryFn = true
-        // Merge into main AST
-        parsedAst.declarations.push(...libAst.declarations)
-        parsedAst.structs.push(...libAst.structs)
-        parsedAst.implBlocks.push(...libAst.implBlocks)
-        parsedAst.enums.push(...libAst.enums)
-        parsedAst.consts.push(...libAst.consts)
-        parsedAst.globals.push(...libAst.globals)
-        // Merge source ranges so error reporting still works
-        if (preprocessed.ranges && libPreprocessed.ranges) {
-          preprocessed.ranges.push(...libPreprocessed.ranges)
-        }
-      }
+    for (const { src, fp } of allLibrarySources) {
+      const libPreprocessed = preprocessSourceWithMetadata(src, fp ? { filePath: fp } : {})
+      const libTokens = new Lexer(libPreprocessed.source, fp).tokenize()
+      const libAst = new Parser(libTokens, libPreprocessed.source, fp).parse(namespace)
+      // Force all functions to library mode (even if source lacks `module library;`)
+      for (const fn of libAst.declarations) fn.isLibraryFn = true
+      // Merge into main AST
+      parsedAst.declarations.push(...libAst.declarations)
+      parsedAst.structs.push(...libAst.structs)
+      parsedAst.implBlocks.push(...libAst.implBlocks)
+      parsedAst.enums.push(...libAst.enums)
+      parsedAst.consts.push(...libAst.consts)
+      parsedAst.globals.push(...libAst.globals)
     }
     const dceResult = shouldRunDce ? eliminateDeadCode(parsedAst) : { program: parsedAst, warnings: [] }
     const ast = dceResult.program

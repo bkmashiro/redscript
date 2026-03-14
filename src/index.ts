@@ -69,8 +69,28 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   // Lexing
   const tokens = new Lexer(preprocessedSource, filePath).tokenize()
 
-  // Parsing
+  // Parsing — user source
   const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+
+  // Library imports: files that declared `module library;` are parsed independently
+  // (fresh Parser per file) so their functions are DCE-eligible but never bleed into user code.
+  const allLibrarySources: Array<{ src: string; fp?: string }> = []
+  for (const li of preprocessed.libraryImports ?? []) {
+    allLibrarySources.push({ src: li.source, fp: li.filePath })
+  }
+  for (const { src, fp } of allLibrarySources) {
+    const libPreprocessed = preprocessSourceWithMetadata(src, fp ? { filePath: fp } : {})
+    const libTokens = new Lexer(libPreprocessed.source, fp).tokenize()
+    const libAst = new Parser(libTokens, libPreprocessed.source, fp).parse(namespace)
+    for (const fn of libAst.declarations) fn.isLibraryFn = true
+    parsedAst.declarations.push(...libAst.declarations)
+    parsedAst.structs.push(...libAst.structs)
+    parsedAst.implBlocks.push(...libAst.implBlocks)
+    parsedAst.enums.push(...libAst.enums)
+    parsedAst.consts.push(...libAst.consts)
+    parsedAst.globals.push(...libAst.globals)
+  }
+
   const dceResult = shouldRunDce ? eliminateDeadCode(parsedAst, preprocessed.ranges) : { program: parsedAst, warnings: [] }
   const ast = dceResult.program
 
