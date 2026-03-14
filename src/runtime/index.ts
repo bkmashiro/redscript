@@ -697,17 +697,26 @@ export class MCRuntime {
         continue
       }
 
-      // Handle 'store result storage <ns:path> <field> <type> <scale>'
+      // Handle 'store result storage <ns:path> <field>[<idx>] <type> <scale>'  (array element)
       if (rest.startsWith('store result storage ')) {
-        rest = rest.slice(21)
-        // format: <ns:path> <field> <type> <scale> <run-cmd>
-        const storageParts = rest.match(/^(\S+)\s+(\S+)\s+(\S+)\s+([\d.]+)\s+(.*)$/)
+        const sliced = rest.slice(21)
+        // Try array-index form first: <ns:path> <field>[<idx>] <type> <scale> <run-cmd>
+        const arrParts = sliced.match(/^(\S+)\s+(\S+)\[(\d+)\]\s+(\S+)\s+([\d.]+)\s+(.*)$/)
+        if (arrParts) {
+          const [, storagePath, field, indexStr, , , remaining] = arrParts
+          storeTarget = { storagePath, field: `${field}[${indexStr}]`, type: 'result' }
+          rest = remaining.trim()
+          continue
+        }
+        // Plain form: <ns:path> <field> <type> <scale> <run-cmd>
+        const storageParts = sliced.match(/^(\S+)\s+(\S+)\s+(\S+)\s+([\d.]+)\s+(.*)$/)
         if (storageParts) {
           const [, storagePath, field, , , remaining] = storageParts
           storeTarget = { storagePath, field, type: 'result' }
           rest = remaining.trim()
           continue
         }
+        rest = sliced
       }
 
       // Handle 'store result score <player> <obj>'
@@ -830,6 +839,18 @@ export class MCRuntime {
       if (Array.isArray(current)) {
         current.push(value)
         this.setStorageField(storagePath, field, current)
+      }
+      return true
+    }
+
+    // data modify storage <ns:path> <field>[<index>] set value <val>  (array element write)
+    const setArrMatch = cmd.match(/^data modify storage (\S+) (\S+)\[(\d+)\] set value (.+)$/)
+    if (setArrMatch) {
+      const [, storagePath, field, indexStr, valueStr] = setArrMatch
+      const arr = this.getStorageField(storagePath, field)
+      const idx = parseInt(indexStr, 10)
+      if (Array.isArray(arr) && idx >= 0 && idx < arr.length) {
+        arr[idx] = this.parseDataValue(valueStr)
       }
       return true
     }

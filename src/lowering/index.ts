@@ -108,6 +108,7 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   clearInterval: () => null, // Special handling
   storage_get_int: () => null, // Special handling (dynamic NBT array read via macro)
   storage_set_array: () => null, // Special handling (write literal NBT array to storage)
+  storage_set_int: () => null, // Special handling (dynamic NBT array write via macro)
 }
 
 export interface Warning {
@@ -2626,6 +2627,59 @@ export class Lowering {
       this.builder.emitRaw(
         `data modify storage ${storageNs} ${arrayKey} set value ${nbtLiteral}`
       )
+      return { kind: 'const', value: 0 }
+    }
+
+    // storage_set_int(storage_ns, array_key, index, value) -> void
+    // Writes one integer element into an NBT int-array stored in data storage.
+    //   storage_ns : e.g. "rs:bigint"
+    //   array_key  : e.g. "a"
+    //   index      : element index (const or runtime)
+    //   value      : integer value to write (const or runtime)
+    //
+    // Const index + const value:
+    //   execute store result storage <ns> <key>[N] int 1 run scoreboard players set $const_V rs V
+    // Runtime index or value: macro sub-function via rs:heap
+    if (name === 'storage_set_int') {
+      const storageNs    = this.exprToString(args[0])
+      const arrayKey     = this.exprToString(args[1])
+      const indexOperand = this.lowerExpr(args[2])
+      const valueOperand = this.lowerExpr(args[3])
+
+      if (indexOperand.kind === 'const') {
+        // Static index — use execute store result to write to the fixed slot
+        const valVar = valueOperand.kind === 'var'
+          ? valueOperand.name
+          : this.operandToVar(valueOperand)
+        this.builder.emitRaw(
+          `execute store result storage ${storageNs} ${arrayKey}[${indexOperand.value}] int 1 run scoreboard players get ${valVar} rs`
+        )
+      } else {
+        // Runtime index: we need a macro sub-function.
+        // Store index + value into rs:heap, call macro that does:
+        //   $data modify storage <ns> <key>[$(idx_key)] set value $(val_key)
+        const macroIdxKey = `__ssi_i_${this.foreachCounter++}`
+        const macroValKey = `__ssi_v_${this.foreachCounter++}`
+        const subFnName   = `${this.currentFn}/__ssi_${this.foreachCounter++}`
+        const indexVar = indexOperand.kind === 'var'
+          ? indexOperand.name
+          : this.operandToVar(indexOperand)
+        const valVar = valueOperand.kind === 'var'
+          ? valueOperand.name
+          : this.operandToVar(valueOperand)
+        this.builder.emitRaw(
+          `execute store result storage rs:heap ${macroIdxKey} int 1 run scoreboard players get ${indexVar} rs`
+        )
+        this.builder.emitRaw(
+          `execute store result storage rs:heap ${macroValKey} int 1 run scoreboard players get ${valVar} rs`
+        )
+        this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
+        // \x01 = sentinel for '$' macro line-start prefix (see storage_get_int)
+        this.emitRawSubFunction(
+          subFnName,
+          `\x01data modify storage ${storageNs} ${arrayKey}[$(${macroIdxKey})] set value $(${macroValKey})`
+        )
+      }
       return { kind: 'const', value: 0 }
     }
 
