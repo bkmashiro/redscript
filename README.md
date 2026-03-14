@@ -2,14 +2,14 @@
 
 <img src="./logo.png" alt="RedScript Logo" width="64" />
 
-<img src="https://img.shields.io/badge/RedScript-1.2.26-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+<img src="https://img.shields.io/badge/RedScript-1.2.27-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
 
 **A typed scripting language that compiles to Minecraft datapacks.**
 
 Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-917%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
+[![Tests](https://img.shields.io/badge/tests-918%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
@@ -75,17 +75,6 @@ fn stop() {
 - ✅ One file -> ready-to-use datapack
 
 ---
-
-### What's New in v1.2.26
-
-- **Math stdlib** (`math.mcrs`): 18 fixed-point functions — `abs`, `sign`, `min`, `max`, `clamp`, `lerp`, `isqrt`, `sqrt_fixed`, `pow_int`, `gcd`, `lcm`, `sin_fixed`, `cos_fixed`, `map`, `ceil_div`, `log2_int`, `mulfix`, `divfix`, `smoothstep`, `smootherstep`
-- **Vector stdlib** (`vec.mcrs`): 2D and 3D geometry — dot/cross products, `length2d_fixed`, `atan2_fixed` (binary search, O(log 46)), `normalize2d`, `rotate2d`, `lerp2d`, full 3D cross product
-- **Advanced stdlib** (`advanced.mcrs`): number theory (`fib`, `is_prime`, `collatz_steps`, `gcd`, `mod_pow`), hash/noise (`hash_int` splitmix32, `noise1d`), curves (`bezier_quad`), fractals (`mandelbrot_iter`, `julia_iter`), geometry experiments
-- **BigInt** (`bigint.mcrs`): arbitrary precision integers — base 10,000 × 8 limbs = up to 32 decimal digits; `bigint_add/sub/compare/mul/fib` running on MC scoreboard + NBT storage
-- **`module library;` pragma**: declare a file as a library; functions are tree-shaken out unless called — stdlib never bloats your pack
-- **`storage_get_int` / `storage_set_int` builtins**: dynamic NBT int array read/write with runtime indices via MC 1.20.2 macro sub-functions
-- **`@require_on_load(fn)` decorator**: declarative load-time dependency tracking for stdlib initializers (sin/cos table setup etc.)
-- **Compiler fixes**: `isqrt` large-number convergence, optimizer copy propagation alias invalidation, cross-function variable collision, MCRuntime array-index regex
 
 ### What's New in v1.2.25
 
@@ -343,7 +332,29 @@ fn show_fib() {
 
 ---
 
+### What's New in v1.2.27
+
+- **BigInt confirmed working in real Minecraft** (`bigint.mcrs`): arbitrary precision integers on MC scoreboard + NBT — base 10,000 × 8 limbs = up to 32 decimal digits; `bigint_add`, `bigint_sub`, `bigint_compare`, `bigint_mul`, `bigint_fib(50)` = 12,586,269,025 all verified on Paper 1.21.4
+- **`storage_set_int` macro fix**: dynamic NBT array writes now use `execute store result storage` instead of `data modify set value $(n)` — avoids a silent Minecraft macro substitution bug with integer values
+- **Full stdlib** (`math.mcrs`, `vec.mcrs`, `advanced.mcrs`, `bigint.mcrs`, `showcase.mcrs`): 18 math functions, 14 vector geometry functions, 20+ advanced number-theory and fractal functions
+- **`module library;` pragma**: tree-shaking for library files — stdlib never bloats your pack
+- **`storage_get_int` / `storage_set_int` builtins**: dynamic NBT int array read/write with runtime indices via MC 1.20.2+ macro sub-functions
+- **`@require_on_load(fn)` decorator**: declarative load-time dependency tracking for sin/cos/atan table initializers
+
+### What's New in v1.2.26
+
+- **Math stdlib** (`math.mcrs`): 18 fixed-point functions — `abs`, `sign`, `min`, `max`, `clamp`, `lerp`, `isqrt`, `sqrt_fixed`, `pow_int`, `gcd`, `lcm`, `sin_fixed`, `cos_fixed`, `map`, `ceil_div`, `log2_int`, `mulfix`, `divfix`, `smoothstep`, `smootherstep`
+- **Vector stdlib** (`vec.mcrs`): 2D and 3D geometry — dot/cross products, `length2d_fixed`, `atan2_fixed` (binary search, O(log 46)), `normalize2d`, `rotate2d`, `lerp2d`, full 3D cross product
+- **Advanced stdlib** (`advanced.mcrs`): number theory (`fib`, `is_prime`, `collatz_steps`, `gcd`, `mod_pow`), hash/noise (`hash_int` splitmix32, `noise1d`), curves (`bezier_quad`), fractals (`mandelbrot_iter`, `julia_iter`), geometry experiments
+- **BigInt** (`bigint.mcrs`): arbitrary precision integers — base 10,000 × 8 limbs = up to 32 decimal digits; `bigint_add/sub/compare/mul/fib` running on MC scoreboard + NBT storage
+- **Compiler fixes**: `isqrt` large-number convergence, optimizer copy propagation alias invalidation, cross-function variable collision, MCRuntime array-index regex
+
 ### Changelog Highlights
+
+#### v1.2.27 (2026-03-14)
+
+- **BigInt real-MC fix**: `storage_set_int` macro now uses `execute store result storage` instead of `data modify set value $(n)` — avoids a Minecraft macro substitution bug with integer values; BigInt confirmed working on Paper 1.21.4
+- **showcase**: `atan2_fixed` returns degrees (0–360), not millidegrees; fixed over-division in examples; `mod_pow` test cases use small safe-range moduli (no INT32 overflow)
 
 #### v1.2.26 (2026-03-14)
 

@@ -2,14 +2,14 @@
 
 <img src="./logo.png" alt="RedScript Logo" width="64" />
 
-<img src="https://img.shields.io/badge/RedScript-1.2.26-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+<img src="https://img.shields.io/badge/RedScript-1.2.27-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
 
 **一个编译到 Minecraft Datapack 的类型化脚本语言。**
 
 写干净的游戏逻辑，把记分板的面条代码交给 RedScript 处理。
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-917%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
+[![Tests](https://img.shields.io/badge/tests-918%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![VSCode](https://img.shields.io/badge/VSCode-插件-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
@@ -73,14 +73,20 @@ let running: bool = false;
 
 ---
 
+### v1.2.27 新增内容
+
+- **BigInt 实机验证通过** (`bigint.mcrs`)：任意精度整数在 MC 记分板 + NBT 上完整运行 — base 10000 × 8 limbs = 最多 32 位十进制数；`bigint_fib(50)` = 12,586,269,025 在 Paper 1.21.4 实机验证正确
+- **`storage_set_int` 宏修复**：动态 NBT 数组写入改用 `execute store result storage` 而非 `data modify set value $(n)` — 规避 Minecraft 宏机制对整数值的静默替换 bug
+- **完整标准库** (`math.mcrs`、`vec.mcrs`、`advanced.mcrs`、`bigint.mcrs`、`showcase.mcrs`)：18 个数学函数、14 个向量几何函数、20+ 数论与分形函数
+- **`module library;` pragma**：库文件零成本树摇 — 标准库永远不会撑大你的数据包
+- **`@require_on_load(fn)` 装饰器**：sin/cos/atan 查找表初始化器的声明式加载依赖跟踪
+
 ### v1.2.26 新增内容
 
 - **数学标准库** (`math.mcrs`)：18 个定点数函数 — `abs`、`sign`、`min`、`max`、`clamp`、`lerp`、`isqrt`、`sqrt_fixed`、`pow_int`、`gcd`、`lcm`、`sin_fixed`、`cos_fixed`、`map`、`ceil_div`、`log2_int`、`mulfix`、`divfix`、`smoothstep`、`smootherstep`
 - **向量标准库** (`vec.mcrs`)：2D / 3D 几何 — 点积/叉积、`length2d_fixed`、`atan2_fixed`（二分搜索正切表，O(log 46)）、`normalize2d`、`rotate2d`、`lerp2d`、完整 3D 叉积
 - **高级标准库** (`advanced.mcrs`)：数论（`fib`、`is_prime`、`collatz_steps`、`mod_pow`）、哈希/噪声（splitmix32 `hash_int`、`noise1d`）、曲线（`bezier_quad`）、分形（`mandelbrot_iter`、`julia_iter`）、几何实验
-- **BigInt** (`bigint.mcrs`)：任意精度整数 — base 10000 × 8 limbs = 最多 32 位十进制数；`bigint_add/sub/compare/mul/fib` 全部运行在 MC 记分板 + NBT storage 上
-- **`module library;` pragma**：将文件声明为库，未被调用的函数会被树摇消除 — 标准库永远不会撑大你的数据包
-- **`storage_get_int` / `storage_set_int` 内置函数**：通过 MC 1.20.2 宏子函数实现动态 NBT int 数组读写
+- **BigInt** (`bigint.mcrs`)：任意精度整数架构设计 — base 10000 × 8 limbs = 最多 32 位十进制数
 - **编译器修复**：`isqrt` 大数收敛、优化器拷贝传播别名失效、跨函数变量命名冲突、MCRuntime 数组索引正则
 
 ### v1.2.25 新增内容
@@ -336,6 +342,11 @@ fn show_fib() {
 ---
 
 ### 更新日志亮点
+
+#### v1.2.27（2026-03-14）
+
+- **BigInt 实机修复**：`storage_set_int` 宏改用 `execute store result storage`，规避 MC 宏整数替换 bug；BigInt 在 Paper 1.21.4 实机验证通过
+- showcase 示例修复：`atan2_fixed` 返回度数（0–360），更正不必要的除以 1000；`mod_pow` 测试改用小 modulus 避免 INT32 溢出
 
 #### v1.2.26（2026-03-14）
 
