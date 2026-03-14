@@ -701,7 +701,8 @@ export class MCRuntime {
       if (rest.startsWith('store result storage ')) {
         const sliced = rest.slice(21)
         // Try array-index form first: <ns:path> <field>[<idx>] <type> <scale> <run-cmd>
-        const arrParts = sliced.match(/^(\S+)\s+(\S+)\[(\d+)\]\s+(\S+)\s+([\d.]+)\s+(.*)$/)
+        // Use [^\[\s]+ for field (no brackets or spaces) so that \[ matches correctly.
+        const arrParts = sliced.match(/^(\S+)\s+([^\[\s]+)\[(\d+)\]\s+(\S+)\s+([\d.]+)\s+(.*)$/)
         if (arrParts) {
           const [, storagePath, field, indexStr, , , remaining] = arrParts
           storeTarget = { storagePath, field: `${field}[${indexStr}]`, type: 'result' }
@@ -844,7 +845,7 @@ export class MCRuntime {
     }
 
     // data modify storage <ns:path> <field>[<index>] set value <val>  (array element write)
-    const setArrMatch = cmd.match(/^data modify storage (\S+) (\S+)\[(\d+)\] set value (.+)$/)
+    const setArrMatch = cmd.match(/^data modify storage (\S+) ([^\[\s]+)\[(\d+)\] set value (.+)$/)
     if (setArrMatch) {
       const [, storagePath, field, indexStr, valueStr] = setArrMatch
       const arr = this.getStorageField(storagePath, field)
@@ -856,7 +857,7 @@ export class MCRuntime {
     }
 
     // data get storage <ns:path> <field>[<index>] [scale]  (array element access)
-    const getArrMatch = cmd.match(/^data get storage (\S+) (\S+)\[(\d+)\](?:\s+[\d.]+)?$/)
+    const getArrMatch = cmd.match(/^data get storage (\S+) ([^\[\s]+)\[(\d+)\](?:\s+[\d.]+)?$/)
     if (getArrMatch) {
       const [, storagePath, field, indexStr] = getArrMatch
       const arr = this.getStorageField(storagePath, field)

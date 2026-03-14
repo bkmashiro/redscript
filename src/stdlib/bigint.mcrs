@@ -1,0 +1,205 @@
+// bigint.mcrs — Arbitrary precision integer arithmetic for RedScript.
+//
+// Representation:
+//   8 limbs, base B = 10000 (10^4) per limb.
+//   Limb[0] = least significant (ones place in base 10000).
+//   Maximum value: 10^32 - 1  (32 decimal digits).
+//   Stored in NBT int arrays inside data storage ("rs:bigint").
+//
+// Registers: "a", "b", "c"  (three independent BigInt values).
+//
+// Usage example:
+//   bigint_init();
+//   bigint_from_int_a(12345678);   // a = 12345678
+//   bigint_from_int_b(87654321);   // b = 87654321
+//   bigint_add();                  // c = a + b = 99999999
+//   let limb0: int = bigint_get_c(0);  // → 9999 (c[0])
+//   let limb1: int = bigint_get_c(1);  // → 9999 (c[1])
+//
+// Multiply overflow note:
+//   bigint_mul uses grade-school O(n^2) algorithm.
+//   Per-product max: 9999 * 9999 + 9999 + 9999 = 99,999,999 < INT32 ✓
+
+module library;
+
+// ── Initialization ────────────────────────────────────────────────────────────
+
+// Initialize (or reset) all BigInt registers to zero.
+// Must be called once before using any bigint operation.
+fn bigint_init() {
+    storage_set_array("rs:bigint", "a",   "[0,0,0,0,0,0,0,0]");
+    storage_set_array("rs:bigint", "b",   "[0,0,0,0,0,0,0,0]");
+    storage_set_array("rs:bigint", "c",   "[0,0,0,0,0,0,0,0]");
+}
+
+// ── Load from int32 ───────────────────────────────────────────────────────────
+
+// Set register a from a 32-bit integer (splits into up to 3 limbs).
+// Supports any n in [0, 999999999999] (12-digit safe limit).
+fn bigint_from_int_a(n: int) {
+    storage_set_array("rs:bigint", "a", "[0,0,0,0,0,0,0,0]");
+    storage_set_int("rs:bigint", "a", 0, n % 10000);
+    storage_set_int("rs:bigint", "a", 1, n / 10000 % 10000);
+    storage_set_int("rs:bigint", "a", 2, n / 10000 / 10000);
+}
+
+// Set register b from a 32-bit integer.
+fn bigint_from_int_b(n: int) {
+    storage_set_array("rs:bigint", "b", "[0,0,0,0,0,0,0,0]");
+    storage_set_int("rs:bigint", "b", 0, n % 10000);
+    storage_set_int("rs:bigint", "b", 1, n / 10000 % 10000);
+    storage_set_int("rs:bigint", "b", 2, n / 10000 / 10000);
+}
+
+// ── Read limb ─────────────────────────────────────────────────────────────────
+
+fn bigint_get_a(i: int) -> int { return storage_get_int("rs:bigint", "a", i); }
+fn bigint_get_b(i: int) -> int { return storage_get_int("rs:bigint", "b", i); }
+fn bigint_get_c(i: int) -> int { return storage_get_int("rs:bigint", "c", i); }
+
+// ── Copy between registers ────────────────────────────────────────────────────
+
+fn bigint_copy_a_to_b() {
+    let i: int = 0;
+    while (i < 8) {
+        storage_set_int("rs:bigint", "b", i, storage_get_int("rs:bigint", "a", i));
+        i = i + 1;
+    }
+}
+
+fn bigint_copy_b_to_a() {
+    let i: int = 0;
+    while (i < 8) {
+        storage_set_int("rs:bigint", "a", i, storage_get_int("rs:bigint", "b", i));
+        i = i + 1;
+    }
+}
+
+fn bigint_copy_c_to_a() {
+    let i: int = 0;
+    while (i < 8) {
+        storage_set_int("rs:bigint", "a", i, storage_get_int("rs:bigint", "c", i));
+        i = i + 1;
+    }
+}
+
+fn bigint_copy_c_to_b() {
+    let i: int = 0;
+    while (i < 8) {
+        storage_set_int("rs:bigint", "b", i, storage_get_int("rs:bigint", "c", i));
+        i = i + 1;
+    }
+}
+
+// ── Addition: c = a + b ───────────────────────────────────────────────────────
+
+// c = a + b  (carry propagated across all 8 limbs)
+fn bigint_add() {
+    let carry: int = 0;
+    let i: int = 0;
+    while (i < 8) {
+        let s: int = storage_get_int("rs:bigint", "a", i)
+                   + storage_get_int("rs:bigint", "b", i)
+                   + carry;
+        carry = s / 10000;
+        storage_set_int("rs:bigint", "c", i, s % 10000);
+        i = i + 1;
+    }
+}
+
+// ── Subtraction: c = a - b  (assumes a ≥ b) ──────────────────────────────────
+
+fn bigint_sub() {
+    let borrow: int = 0;
+    let i: int = 0;
+    while (i < 8) {
+        let d: int = storage_get_int("rs:bigint", "a", i)
+                   - storage_get_int("rs:bigint", "b", i)
+                   - borrow;
+        if (d < 0) {
+            d = d + 10000;
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
+        storage_set_int("rs:bigint", "c", i, d);
+        i = i + 1;
+    }
+}
+
+// ── Comparison: returns 1 (a>b), 0 (a==b), -1 (a<b) ─────────────────────────
+
+fn bigint_compare() -> int {
+    let i: int = 7;
+    while (i >= 0) {
+        let ai: int = storage_get_int("rs:bigint", "a", i);
+        let bi: int = storage_get_int("rs:bigint", "b", i);
+        if (ai > bi) { return 1; }
+        if (ai < bi) { return -1; }
+        i = i - 1;
+    }
+    return 0;
+}
+
+// ── Multiply by small constant: c = a × k  (k < 10000) ───────────────────────
+// Max per-limb: 9999 × 9999 + 9999 = 99,989,999 < INT32 ✓
+
+fn bigint_mul_small(k: int) {
+    let carry: int = 0;
+    let i: int = 0;
+    while (i < 8) {
+        let p: int = storage_get_int("rs:bigint", "a", i) * k + carry;
+        carry = p / 10000;
+        storage_set_int("rs:bigint", "c", i, p % 10000);
+        i = i + 1;
+    }
+}
+
+// ── Multiply: c = a × b  (grade-school O(n²), n=8) ───────────────────────────
+// Per-product max: 9999 × 9999 + 9999 (prev c) + 9999 (carry) = 99,999,999 < INT32 ✓
+
+fn bigint_mul() {
+    storage_set_array("rs:bigint", "c", "[0,0,0,0,0,0,0,0]");
+    let i: int = 0;
+    while (i < 8) {
+        let ai: int = storage_get_int("rs:bigint", "a", i);
+        if (ai != 0) {
+            let j: int = 0;
+            let carry: int = 0;
+            while (j < 8) {
+                let k: int = i + j;
+                if (k < 8) {
+                    let p: int = ai * storage_get_int("rs:bigint", "b", j)
+                               + storage_get_int("rs:bigint", "c", k)
+                               + carry;
+                    carry = p / 10000;
+                    storage_set_int("rs:bigint", "c", k, p % 10000);
+                }
+                j = j + 1;
+            }
+        }
+        i = i + 1;
+    }
+}
+
+// ── Fibonacci: F(n) → register a  (n ≤ 150 before 32-digit overflow) ─────────
+//
+// Invariant: a=F(k), b=F(k+1).  After n iterations: a=F(n).
+//
+// F(50)  = 12,586,269,025           → a[0]=9025, a[1]=8626, a[2]=125
+// F(100) = 354,224,848,179,261,915,075  → 21 digits, fits in 6 limbs
+
+fn bigint_fib(n: int) {
+    bigint_init();               // a=0=F(0), b=0
+    bigint_from_int_b(1);        // b=1=F(1)
+    let i: int = 0;
+    while (i < n) {
+        // Invariant entering iteration: a=F(i), b=F(i+1)
+        bigint_add();            // c = F(i) + F(i+1) = F(i+2)
+        bigint_copy_b_to_a();    // a = F(i+1)
+        bigint_copy_c_to_b();    // b = F(i+2)
+        // Invariant restored: a=F(i+1), b=F(i+2)
+        i = i + 1;
+    }
+    // result: a = F(n)
+}

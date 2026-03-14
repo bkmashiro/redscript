@@ -365,12 +365,24 @@ export class Lowering {
 
   private preScanExpr(expr: Expr, paramNames: Set<string>, macroParams: Set<string>): void {
     if (expr.kind === 'call' && BUILTINS[expr.fn] !== undefined) {
-      // All ident args to macro-aware builtins that are params → macro params
-      for (const arg of expr.args) {
-        if (arg.kind === 'ident' && paramNames.has(arg.name)) {
-          macroParams.add(arg.name)
+      // Only trigger macro param detection for builtins that actually emit
+      // MC commands with $(param) inline in the current function body.
+      // Special-handled builtins (storage_get_int / storage_set_int / etc.) are
+      // declared as `() => null` — they create their own sub-functions for macro
+      // indirection and do NOT require the surrounding function to be a macro.
+      const handler = BUILTINS[expr.fn]!
+      const isSpecialHandled: boolean = (() => {
+        try { return (handler as () => string | null)() === null } catch { return false }
+      })()
+      if (!isSpecialHandled) {
+        for (const arg of expr.args) {
+          if (arg.kind === 'ident' && paramNames.has(arg.name)) {
+            macroParams.add(arg.name)
+          }
         }
       }
+      // Always recurse into args for nested calls/expressions
+      for (const arg of expr.args) this.preScanExpr(arg, paramNames, macroParams)
       return
     }
     // Recurse into sub-expressions for other call types
