@@ -150,9 +150,9 @@ fn _math_init() {
 // sin_fixed(180) == 0
 // sin_fixed(270) == -1000
 //
-// @requires("_math_init"): the sin lookup table is written to NBT storage at
+// @require_on_load(_math_init): the sin lookup table is written to NBT storage at
 // world load automatically when this function is included in a project.
-@requires("_math_init")
+@require_on_load(_math_init)
 fn sin_fixed(deg: int) -> int {
     // Normalise to [0, 359]
     let d: int = deg % 360;
@@ -178,7 +178,7 @@ fn sin_fixed(deg: int) -> int {
 // cos_fixed(0)   == 1000
 // cos_fixed(90)  == 0
 // cos_fixed(180) == -1000
-@requires("_math_init")
+@require_on_load(_math_init)
 fn cos_fixed(deg: int) -> int {
     return sin_fixed(deg + 90);
 }

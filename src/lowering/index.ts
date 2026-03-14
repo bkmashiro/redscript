@@ -727,7 +727,7 @@ export class Lowering {
     // private (_) function that only runs at load time when this fn is used.
     const requiredLoads: string[] = []
     for (const d of fn.decorators) {
-      if (d.name === 'requires') {
+      if (d.name === 'require_on_load') {
         for (const arg of d.rawArgs ?? []) {
           if (arg.kind === 'string') {
             requiredLoads.push(arg.value)

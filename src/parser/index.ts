@@ -397,17 +397,22 @@ export class Parser {
       }
     }
 
-    // @requires("fn_name") — generic string-arg decorator
-    if (name === 'requires') {
+    // @require_on_load(fn_name) — when this fn is used, fn_name is called from __load.
+    // Accepts bare identifiers (with optional leading _) or quoted strings.
+    if (name === 'require_on_load') {
       const rawArgs: NonNullable<Decorator['rawArgs']> = []
       for (const part of argsStr.split(',')) {
         const trimmed = part.trim()
-        const strMatch = trimmed.match(/^"([^"]*)"$/)
-        if (strMatch) {
-          rawArgs.push({ kind: 'string', value: strMatch[1] })
+        // Bare identifier: @require_on_load(_math_init)
+        const identMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)$/)
+        if (identMatch) {
+          rawArgs.push({ kind: 'string', value: identMatch[1] })
         } else {
-          const num = parseFloat(trimmed)
-          if (!isNaN(num)) rawArgs.push({ kind: 'number', value: num })
+          // Quoted string fallback: @require_on_load("_math_init")
+          const strMatch = trimmed.match(/^"([^"]*)"$/)
+          if (strMatch) {
+            rawArgs.push({ kind: 'string', value: strMatch[1] })
+          }
         }
       }
       return { name, rawArgs }

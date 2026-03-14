@@ -176,7 +176,7 @@ export class DeadCodeEliminator {
     // @requires("dep") — when fn is reachable, its required dependencies are
     // also pulled into the reachable set so they survive DCE.
     for (const decorator of fn.decorators) {
-      if (decorator.name === 'requires') {
+      if (decorator.name === 'require_on_load') {
         for (const arg of decorator.rawArgs ?? []) {
           if (arg.kind === 'string') {
             this.markReachable(arg.value)
