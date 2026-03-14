@@ -1,5 +1,5 @@
 // readme-demo.mcrs — RedScript v1.2.27 README visual showcase
-// What 60 lines of RedScript can do on a vanilla Minecraft server.
+// What 55 lines of RedScript can do on a vanilla Minecraft server.
 //
 // Compile:  node dist/cli.js compile examples/readme-demo.mcrs -o <datapack> --namespace rsdemo
 // In-game:  /function rsdemo:start   (then record your gif)
@@ -26,53 +26,42 @@ let on:    bool = false;
     let c:   int = cos_fixed(t);        // -1000 .. 1000
     let mag: int = abs(s);              // 0 .. 1000
 
-    // ── Particle rings using rotated ^ local coordinates ─────────────────
-    // A "^0 ^1 ^2" particle spawns 2 blocks in front of the current facing.
-    // By running the same command from 12 different yaw angles we get a ring.
-    // Inner ring (always on) — 12 points, radius ^1
-    foreach (p in @a) at @s rotated 0   0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 30  0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 60  0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 90  0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 120 0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 150 0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 180 0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 210 0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 240 0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 270 0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 300 0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-    foreach (p in @a) at @s rotated 330 0 { particle("minecraft:end_rod", ^0, ^1, ^1, 0, 0, 0, 0, 1); }
-
-    // Outer ring — only when sin > 0 (upper half of cycle) — radius ^2
-    if (s > 0) {
-        foreach (p in @a) at @s rotated 0   0 { particle("minecraft:end_rod", ^0, ^1, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 45  0 { particle("minecraft:end_rod", ^0, ^1, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 90  0 { particle("minecraft:end_rod", ^0, ^1, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 135 0 { particle("minecraft:end_rod", ^0, ^1, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 180 0 { particle("minecraft:end_rod", ^0, ^1, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 225 0 { particle("minecraft:end_rod", ^0, ^1, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 270 0 { particle("minecraft:end_rod", ^0, ^1, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 315 0 { particle("minecraft:end_rod", ^0, ^1, ^2, 0, 0, 0, 0, 1); }
+    // ── Particle rings: spread values scale with sin(t) ─────────────────
+    // Inner ring — always visible, small tight shimmer
+    foreach (p in @a) at @s {
+        particle("minecraft:end_rod", ~0, ~1, ~0, 0.25, 0.08, 0.25, 0.02, 6);
     }
 
-    // Peak flash — only when sin > 930
-    if (s > 930) {
+    // Mid ring — appears when sin > 0 (upper half of cycle)
+    if (s > 0) {
         foreach (p in @a) at @s {
-            particle("minecraft:flash", ~0, ~3, ~0, 0, 0, 0, 0, 1);
+            particle("minecraft:end_rod", ~0, ~1, ~0, 0.9, 0.25, 0.9, 0.02, 12);
         }
     }
 
-    // Negative trough — portal swirl
-    if (s < -700) {
-        foreach (p in @a) at @s rotated 0   0 { particle("minecraft:portal", ^0, ^0, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 60  0 { particle("minecraft:portal", ^0, ^0, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 120 0 { particle("minecraft:portal", ^0, ^0, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 180 0 { particle("minecraft:portal", ^0, ^0, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 240 0 { particle("minecraft:portal", ^0, ^0, ^2, 0, 0, 0, 0, 1); }
-        foreach (p in @a) at @s rotated 300 0 { particle("minecraft:portal", ^0, ^0, ^2, 0, 0, 0, 0, 1); }
+    // Outer ring + soul fire — sin > 600
+    if (s > 600) {
+        foreach (p in @a) at @s {
+            particle("minecraft:end_rod", ~0, ~1, ~0, 1.8, 0.4, 1.8, 0.02, 18);
+            particle("minecraft:soul_fire_flame", ~0, ~2, ~0, 0.9, 0.3, 0.9, 0.03, 8);
+        }
     }
 
-    // ── Actionbar: live math ─────────────────────────────────────────────
+    // Peak flash — fires ~4 ticks per cycle
+    if (s > 940) {
+        foreach (p in @a) at @s {
+            particle("minecraft:flash", ~0, ~3, ~0, 0.4, 0.3, 0.4, 0.1, 3);
+        }
+    }
+
+    // Negative trough — ground portal swirl
+    if (s < -700) {
+        foreach (p in @a) at @s {
+            particle("minecraft:portal", ~0, ~0.5, ~0, 1.2, 0.4, 1.2, 0.05, 12);
+        }
+    }
+
+    // ── Actionbar: live math rotating every 3 s ──────────────────────────
     let seg: int = (frame / 45) % 4;
     if (seg == 0) {
         actionbar(@a, f"§3⚡ §bsin({t}°) = §e{s}‰   cos({t}°) = §e{c}‰");
@@ -81,10 +70,10 @@ let on:    bool = false;
         actionbar(@a, f"§3⚡ §bsmoothstep(|sin|) = §e{smoothstep(0, 1000, mag)}‰   isqrt({frame}) = §e{isqrt(frame)}");
     }
     if (seg == 2) {
-        actionbar(@a, f"§3⚡ §bgcd(360, {t+1}) = §e{gcd(360, t + 1)}   log2({mag+1}) = §e{log2_int(mag + 1)}");
+        actionbar(@a, f"§3⚡ §bgcd(360, {t + 1}) = §e{gcd(360, t + 1)}   log2({mag + 1}) = §e{log2_int(mag + 1)}");
     }
     if (seg == 3) {
-        actionbar(@a, f"§3⚡ §bpow(2, {(frame/30)%10+1}) = §e{pow_int(2, (frame / 30) % 10 + 1)}   clamp={clamp(s, -500, 500)}");
+        actionbar(@a, f"§3⚡ §bpow(2, {(frame / 30) % 10 + 1}) = §e{pow_int(2, (frame / 30) % 10 + 1)}   clamp(sin) = §e{clamp(s, -500, 500)}");
     }
 }
 
@@ -93,11 +82,11 @@ fn start() {
     t = 0;
     frame = 0;
     title(@a, f"§e✦ §bRedScript§e ✦", f"§7trig-driven particle rings");
-    say("§a▶ readme-demo: rings expand & contract with sin(t)");
+    say("§a▶ readme-demo started  — /function rsdemo:stop to end");
 }
 
 fn stop() {
     on = false;
-    actionbar(@a, f"§7[demo stopped]");
+    actionbar(@a, f"§7[ demo stopped ]");
     say("§c■ readme-demo stopped");
 }

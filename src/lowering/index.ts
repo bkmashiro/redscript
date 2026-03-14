@@ -469,6 +469,16 @@ export class Lowering {
     if (expr.kind === 'struct_lit' || expr.kind === 'array_lit') {
       return { str: this.exprToSnbt(expr) }
     }
+    // Float literals: preserve the float value for MC commands that accept floats
+    // (particle spread, playsound volume/pitch, etc.)
+    // We do NOT truncate here — that only applies to scoreboard/IR contexts.
+    if (expr.kind === 'float_lit') {
+      return { str: expr.value.toString() }
+    }
+    // Unary minus applied to a float literal (e.g. -0.5)
+    if (expr.kind === 'unary' && expr.op === '-' && expr.operand.kind === 'float_lit') {
+      return { str: (-expr.operand.value).toString() }
+    }
     return { str: this.exprToString(expr) }
   }
 
