@@ -9,7 +9,7 @@ import * as path from 'path'
 
 import { Lexer } from './lexer'
 import { Parser } from './parser'
-import { Lowering } from './lowering'
+import { Lowering, setScoreboardObjective } from './lowering'
 import { optimize } from './optimizer/passes'
 import { eliminateDeadCode } from './optimizer/dce'
 import { generateDatapackWithStats, DatapackFile } from './codegen/mcfunction'
@@ -27,6 +27,10 @@ export interface CompileOptions {
   optimize?: boolean
   dce?: boolean
   mangle?: boolean
+  /** Scoreboard objective used for all variable slots.
+   *  Defaults to 'rs'. Set to a unique value (e.g. 'mypack_rs') when loading
+   *  multiple RedScript datapacks simultaneously to avoid variable collisions. */
+  scoreboardObjective?: string
   /** Additional source files that should be treated as *library* code.
    *  Functions in these files are DCE-eligible: they are only compiled into
    *  the datapack when actually called from user code.  Each string is parsed
@@ -262,6 +266,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const dceResult = shouldRunDce ? eliminateDeadCode(parsedAst) : { program: parsedAst, warnings: [] }
     const ast = dceResult.program
 
+    // Configure scoreboard objective for this compilation
+    setScoreboardObjective(options.scoreboardObjective ?? 'rs')
+
     // Lowering
     const ir = new Lowering(namespace, preprocessed.ranges).lower(ast)
 
@@ -272,7 +279,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     // Code generation — mangle=true by default to prevent cross-function
     // scoreboard variable collisions in the global MC scoreboard namespace.
-    const generated = generateDatapackWithStats(optimized, { mangle: options.mangle ?? true })
+    const generated = generateDatapackWithStats(optimized, {
+      mangle: options.mangle ?? true,
+      scoreboardObjective: options.scoreboardObjective ?? 'rs',
+    })
 
     return {
       success: true,

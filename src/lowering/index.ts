@@ -30,6 +30,15 @@ import { getBaseSelectorType, areCompatibleTypes, getConcreteSubtypes } from '..
 // will automatically use MC 1.20.2+ macro syntax when needed
 
 // ---------------------------------------------------------------------------
+// Scoreboard Objective
+// Set per-compilation via setScoreboardObjective() — defaults to 'rs'.
+// ---------------------------------------------------------------------------
+
+/** Current scoreboard objective. Set once per compile() call. */
+export let LOWERING_OBJ = 'rs'
+export function setScoreboardObjective(obj: string): void { LOWERING_OBJ = obj }
+
+// ---------------------------------------------------------------------------
 // Builtin Functions
 // ---------------------------------------------------------------------------
 
@@ -499,9 +508,9 @@ export class Lowering {
     for (let i = 0; i < loweredArgs.length; i++) {
       const operand = loweredArgs[i]
       if (operand.kind === 'const') {
-        this.builder.emitRaw(`scoreboard players set $p${i} rs ${operand.value}`)
+        this.builder.emitRaw(`scoreboard players set $p${i} ${LOWERING_OBJ} ${operand.value}`)
       } else if (operand.kind === 'var') {
-        this.builder.emitRaw(`scoreboard players operation $p${i} rs = ${operand.name} rs`)
+        this.builder.emitRaw(`scoreboard players operation $p${i} ${LOWERING_OBJ} = ${operand.name} ${LOWERING_OBJ}`)
       }
     }
 
@@ -515,7 +524,7 @@ export class Lowering {
         this.builder.emitRaw(`data modify storage rs:macro_args ${macroParam} set value ${operand.value}`)
       } else if (operand.kind === 'var') {
         this.builder.emitRaw(
-          `execute store result storage rs:macro_args ${macroParam} int 1 run scoreboard players get ${operand.name} rs`
+          `execute store result storage rs:macro_args ${macroParam} int 1 run scoreboard players get ${operand.name} ${LOWERING_OBJ}`
         )
       }
     }
@@ -525,7 +534,7 @@ export class Lowering {
 
     // Copy return value (callers may use it)
     const dst = this.builder.freshTemp()
-    this.builder.emitRaw(`scoreboard players operation ${dst} rs = $ret rs`)
+    this.builder.emitRaw(`scoreboard players operation ${dst} ${LOWERING_OBJ} = $ret ${LOWERING_OBJ}`)
     return { kind: 'var', name: dst }
   }
 
@@ -957,7 +966,7 @@ export class Lowering {
           this.builder.emitRaw(`data modify storage ${path} set value ${fieldValue.value}`)
         } else if (fieldValue.kind === 'var') {
           // Copy from scoreboard to NBT
-          this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${fieldValue.name} rs`)
+          this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${fieldValue.name} ${LOWERING_OBJ}`)
         }
       }
       return
@@ -991,7 +1000,7 @@ export class Lowering {
           this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value ${elemValue.value}`)
         } else if (elemValue.kind === 'var') {
           this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value 0`)
-          this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${elemValue.name} rs`)
+          this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${elemValue.name} ${LOWERING_OBJ}`)
         }
       }
       return
@@ -1042,7 +1051,7 @@ export class Lowering {
           if (fieldValue.kind === 'const') {
             this.builder.emitRaw(`data modify storage ${path} set value ${fieldValue.value}`)
           } else if (fieldValue.kind === 'var') {
-            this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${fieldValue.name} rs`)
+            this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${fieldValue.name} ${LOWERING_OBJ}`)
           }
         }
         this.builder.emitReturn({ kind: 'const', value: 0 })
@@ -1261,9 +1270,9 @@ export class Lowering {
     this.varMap.set(stmt.varName, loopVar)
     const startVal = this.lowerExpr(stmt.start)
     if (startVal.kind === 'const') {
-      this.builder.emitRaw(`scoreboard players set ${loopVar} rs ${startVal.value}`)
+      this.builder.emitRaw(`scoreboard players set ${loopVar} ${LOWERING_OBJ} ${startVal.value}`)
     } else if (startVal.kind === 'var') {
-      this.builder.emitRaw(`scoreboard players operation ${loopVar} rs = ${startVal.name} rs`)
+      this.builder.emitRaw(`scoreboard players operation ${loopVar} ${LOWERING_OBJ} = ${startVal.name} ${LOWERING_OBJ}`)
     }
 
     // Call loop function
@@ -1476,7 +1485,7 @@ export class Lowering {
     this.builder.emitAssign(bindingVar, element)
     this.lowerBlock(stmt.body)
     if (!this.builder.isBlockSealed()) {
-      this.builder.emitRaw(`scoreboard players operation ${indexVar} rs += ${oneVar} rs`)
+      this.builder.emitRaw(`scoreboard players operation ${indexVar} ${LOWERING_OBJ} += ${oneVar} ${LOWERING_OBJ}`)
       this.builder.emitJump(checkLabel)
     }
 
@@ -1855,7 +1864,7 @@ export class Lowering {
       if (mapped && mapped.startsWith('@e[tag=__rs_obj_')) {
         // World object field access → scoreboard get
         const dst = this.builder.freshTemp()
-        this.builder.emitRaw(`scoreboard players operation ${dst} rs = ${mapped} rs`)
+        this.builder.emitRaw(`scoreboard players operation ${dst} ${LOWERING_OBJ} = ${mapped} ${LOWERING_OBJ}`)
         return { kind: 'var', name: dst }
       }
 
@@ -1890,9 +1899,9 @@ export class Lowering {
         const value = this.lowerExpr(expr.value)
         if (expr.op === '=') {
           if (value.kind === 'const') {
-            this.builder.emitRaw(`scoreboard players set ${mapped} rs ${value.value}`)
+            this.builder.emitRaw(`scoreboard players set ${mapped} ${LOWERING_OBJ} ${value.value}`)
           } else if (value.kind === 'var') {
-            this.builder.emitRaw(`scoreboard players operation ${mapped} rs = ${value.name} rs`)
+            this.builder.emitRaw(`scoreboard players operation ${mapped} ${LOWERING_OBJ} = ${value.name} ${LOWERING_OBJ}`)
           }
         } else {
           // Compound assignment
@@ -1901,9 +1910,9 @@ export class Lowering {
           if (value.kind === 'const') {
             const constTemp = this.builder.freshTemp()
             this.builder.emitAssign(constTemp, value)
-            this.builder.emitRaw(`scoreboard players operation ${mapped} rs ${opMap[binOp]} ${constTemp} rs`)
+            this.builder.emitRaw(`scoreboard players operation ${mapped} ${LOWERING_OBJ} ${opMap[binOp]} ${constTemp} ${LOWERING_OBJ}`)
           } else if (value.kind === 'var') {
-            this.builder.emitRaw(`scoreboard players operation ${mapped} rs ${opMap[binOp]} ${value.name} rs`)
+            this.builder.emitRaw(`scoreboard players operation ${mapped} ${LOWERING_OBJ} ${opMap[binOp]} ${value.name} ${LOWERING_OBJ}`)
           }
         }
         return { kind: 'const', value: 0 }
@@ -1918,7 +1927,7 @@ export class Lowering {
           if (value.kind === 'const') {
             this.builder.emitRaw(`data modify storage ${path} set value ${value.value}`)
           } else if (value.kind === 'var') {
-            this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${value.name} rs`)
+            this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${value.name} ${LOWERING_OBJ}`)
           }
         } else {
           // Compound assignment: read, modify, write back
@@ -1926,7 +1935,7 @@ export class Lowering {
           this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path}`)
           const binOp = expr.op.slice(0, -1)
           this.builder.emitBinop(dst, { kind: 'var', name: dst }, binOp as any, value)
-          this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${dst} rs`)
+          this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${dst} ${LOWERING_OBJ}`)
         }
         return { kind: 'const', value: 0 }
       }
@@ -1959,13 +1968,13 @@ export class Lowering {
         this.builder.emitAssign(dst, left)
         const rightVar = this.operandToVar(right)
         // dst = dst && right → if dst != 0 then dst = right
-        this.builder.emitRaw(`execute if score ${dst} rs matches 1.. run scoreboard players operation ${dst} rs = ${rightVar} rs`)
+        this.builder.emitRaw(`execute if score ${dst} rs matches 1.. run scoreboard players operation ${dst} ${LOWERING_OBJ} = ${rightVar} ${LOWERING_OBJ}`)
       } else {
         // Short-circuit OR
         this.builder.emitAssign(dst, left)
         const rightVar = this.operandToVar(right)
         // dst = dst || right → if dst == 0 then dst = right
-        this.builder.emitRaw(`execute if score ${dst} rs matches ..0 run scoreboard players operation ${dst} rs = ${rightVar} rs`)
+        this.builder.emitRaw(`execute if score ${dst} rs matches ..0 run scoreboard players operation ${dst} ${LOWERING_OBJ} = ${rightVar} ${LOWERING_OBJ}`)
       }
       return { kind: 'var', name: dst }
     }
@@ -1984,15 +1993,15 @@ export class Lowering {
           // Divide by 1000 to correct for double scaling
           const constDiv = this.builder.freshTemp()
           this.builder.emitAssign(constDiv, { kind: 'const', value: 1000 })
-          this.builder.emitRaw(`scoreboard players operation ${dst} rs /= ${constDiv} rs`)
+          this.builder.emitRaw(`scoreboard players operation ${dst} ${LOWERING_OBJ} /= ${constDiv} ${LOWERING_OBJ}`)
         } else {
           // Division: a * 1000 / b
           const constMul = this.builder.freshTemp()
           this.builder.emitAssign(constMul, { kind: 'const', value: 1000 })
           this.builder.emitAssign(dst, left)
-          this.builder.emitRaw(`scoreboard players operation ${dst} rs *= ${constMul} rs`)
+          this.builder.emitRaw(`scoreboard players operation ${dst} ${LOWERING_OBJ} *= ${constMul} ${LOWERING_OBJ}`)
           const rightVar = this.operandToVar(right)
-          this.builder.emitRaw(`scoreboard players operation ${dst} rs /= ${rightVar} rs`)
+          this.builder.emitRaw(`scoreboard players operation ${dst} ${LOWERING_OBJ} /= ${rightVar} ${LOWERING_OBJ}`)
         }
         return { kind: 'var', name: dst }
       }
@@ -2124,7 +2133,7 @@ export class Lowering {
           this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value ${value.value}`)
         } else if (value.kind === 'var') {
           this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value 0`)
-          this.builder.emitRaw(`execute store result storage rs:heap ${arrName}[-1] int 1 run scoreboard players get ${value.name} rs`)
+          this.builder.emitRaw(`execute store result storage rs:heap ${arrName}[-1] int 1 run scoreboard players get ${value.name} ${LOWERING_OBJ}`)
         }
       }
       return { kind: 'const', value: 0 }
@@ -2434,7 +2443,7 @@ export class Lowering {
       const dst = this.builder.freshTemp()
       const min = args[0] ? this.exprToLiteral(args[0]) : '0'
       const max = args[1] ? this.exprToLiteral(args[1]) : '100'
-      this.builder.emitRaw(`scoreboard players random ${dst} rs ${min} ${max}`)
+      this.builder.emitRaw(`scoreboard players random ${dst} ${LOWERING_OBJ} ${min} ${max}`)
       return { kind: 'var', name: dst }
     }
 
@@ -2474,7 +2483,7 @@ export class Lowering {
       } else if (value.kind === 'var') {
         // Read directly from the computed scoreboard temp. Routing through a fresh
         // temp here breaks once optimization removes the apparently-dead assign.
-        this.builder.emitRaw(`execute store result score ${player} ${objective} run scoreboard players get ${value.name} rs`)
+        this.builder.emitRaw(`execute store result score ${player} ${objective} run scoreboard players get ${value.name} ${LOWERING_OBJ}`)
       }
       return { kind: 'const', value: 0 }
     }
@@ -2628,7 +2637,7 @@ export class Lowering {
           ? indexOperand.name
           : this.operandToVar(indexOperand)
         this.builder.emitRaw(
-          `execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} rs`
+          `execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} ${LOWERING_OBJ}`
         )
         this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
         // Prefix \x01 is a sentinel for the MC macro '$' line-start marker.
@@ -2678,7 +2687,7 @@ export class Lowering {
           ? valueOperand.name
           : this.operandToVar(valueOperand)
         this.builder.emitRaw(
-          `execute store result storage ${storageNs} ${arrayKey}[${indexOperand.value}] int 1 run scoreboard players get ${valVar} rs`
+          `execute store result storage ${storageNs} ${arrayKey}[${indexOperand.value}] int 1 run scoreboard players get ${valVar} ${LOWERING_OBJ}`
         )
       } else {
         // Runtime index: we need a macro sub-function.
@@ -2694,13 +2703,13 @@ export class Lowering {
           ? valueOperand.name
           : this.operandToVar(valueOperand)
         this.builder.emitRaw(
-          `execute store result storage rs:heap ${macroIdxKey} int 1 run scoreboard players get ${indexVar} rs`
+          `execute store result storage rs:heap ${macroIdxKey} int 1 run scoreboard players get ${indexVar} ${LOWERING_OBJ}`
         )
         // Pin valVar in the optimizer's read-set so the assignment is not dead-code-eliminated.
         // The value is stored to rs:heap but NOT used by the macro (the macro reads the scoreboard
         // slot directly to avoid the MC 'data modify set value $(n)' macro substitution bug).
         this.builder.emitRaw(
-          `execute store result storage rs:heap ${macroValKey} int 1 run scoreboard players get ${valVar} rs`
+          `execute store result storage rs:heap ${macroValKey} int 1 run scoreboard players get ${valVar} ${LOWERING_OBJ}`
         )
         this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
         // Use execute store result (not 'data modify set value $(val)') to avoid MC macro
@@ -2708,7 +2717,7 @@ export class Lowering {
         // into the macro sub-function at compile time — only the array index is macro-substituted.
         this.emitRawSubFunction(
           subFnName,
-          `\x01execute store result storage ${storageNs} ${arrayKey}[$(${macroIdxKey})] int 1 run scoreboard players get ${valVar} rs`
+          `\x01execute store result storage ${storageNs} ${arrayKey}[$(${macroIdxKey})] int 1 run scoreboard players get ${valVar} ${LOWERING_OBJ}`
         )
       }
       return { kind: 'const', value: 0 }
@@ -3614,7 +3623,7 @@ export class Lowering {
     const macroKey = `__rs_index_${this.foreachCounter++}`
     const subFnName = `${this.currentFn}/array_get_${this.foreachCounter++}`
     const indexVar = index.kind === 'var' ? index.name : this.operandToVar(index)
-    this.builder.emitRaw(`execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} rs`)
+    this.builder.emitRaw(`execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} ${LOWERING_OBJ}`)
     this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
     this.emitRawSubFunction(
       subFnName,

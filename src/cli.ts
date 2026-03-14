@@ -29,7 +29,7 @@ function printUsage(): void {
 RedScript Compiler
 
 Usage:
-  redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>] [--target <target>] [--no-dce]
+  redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>] [--scoreboard <obj>] [--target <target>] [--no-dce]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
   redscript fmt <file.mcrs> [file2.mcrs ...]
@@ -54,6 +54,9 @@ Options:
   --target <target>      Output target: datapack (default), cmdblock, or structure
   --no-dce               Disable AST dead code elimination
   --no-mangle            Disable variable name mangling (use readable names)
+  --scoreboard <obj>     Scoreboard objective for variables (default: 'rs').
+                         Use a unique value per datapack when loading multiple
+                         RedScript datapacks simultaneously, e.g. --scoreboard mypack_rs
   --stats                Print optimizer statistics
   --hot-reload <url>     After each successful compile, POST to <url>/reload
                          (use with redscript-testharness; e.g. http://localhost:25561)
@@ -168,6 +171,7 @@ function parseArgs(args: string[]): {
   hotReload?: string
   dce?: boolean
   mangle?: boolean
+  scoreboardObjective?: string
 } {
   const result: ReturnType<typeof parseArgs> = { dce: true, mangle: true }
   let i = 0
@@ -198,6 +202,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--no-mangle') {
       result.mangle = false
+      i++
+    } else if (arg === '--scoreboard') {
+      result.scoreboardObjective = args[++i]
       i++
     } else if (arg === '--hot-reload') {
       result.hotReload = args[++i]
@@ -262,7 +269,8 @@ function compileCommand(
   target: string = 'datapack',
   showStats = false,
   dce = true,
-  mangle = true
+  mangle = true,
+  scoreboardObjective = 'rs'
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -274,7 +282,7 @@ function compileCommand(
 
   try {
     if (target === 'cmdblock') {
-      const result = compile(source, { namespace, filePath: file, dce, mangle })
+      const result = compile(source, { namespace, filePath: file, dce, mangle, scoreboardObjective })
       printWarnings(result.warnings)
 
       // Generate command block JSON
@@ -305,7 +313,7 @@ function compileCommand(
         printOptimizationStats(structure.stats)
       }
     } else {
-      const result = compile(source, { namespace, filePath: file, dce, mangle })
+      const result = compile(source, { namespace, filePath: file, dce, mangle, scoreboardObjective })
       printWarnings(result.warnings)
 
       // Default: generate datapack
@@ -508,7 +516,8 @@ async function main(): Promise<void> {
         target,
         parsed.stats,
         parsed.dce,
-        parsed.mangle
+        parsed.mangle,
+        parsed.scoreboardObjective ?? 'rs'
       )
       }
       break

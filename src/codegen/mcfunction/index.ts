@@ -25,7 +25,8 @@ import { VarAllocator } from '../var-allocator'
 // Utilities
 // ---------------------------------------------------------------------------
 
-const OBJ = 'rs'  // scoreboard objective name
+// Default scoreboard objective — overridden per-compilation via DatapackGenerationOptions.scoreboardObjective
+let OBJ = 'rs'
 
 function operandToScore(op: Operand, alloc: VarAllocator): string {
   if (op.kind === 'var')   return `${alloc.alloc(op.name)} ${OBJ}`
@@ -284,6 +285,10 @@ export interface DatapackGenerationResult {
 export interface DatapackGenerationOptions {
   optimizeCommands?: boolean
   mangle?: boolean
+  /** Scoreboard objective used for all scoreboard variables.
+   *  Defaults to 'rs'. Override per-datapack to avoid collisions
+   *  when multiple RedScript datapacks are loaded simultaneously. */
+  scoreboardObjective?: string
 }
 
 export function countMcfunctionCommands(files: DatapackFile[]): number {
@@ -354,7 +359,10 @@ export function generateDatapackWithStats(
   module: IRModule,
   options: DatapackGenerationOptions = {},
 ): DatapackGenerationResult {
-  const { optimizeCommands = true, mangle = false } = options
+  const { optimizeCommands = true, mangle = false, scoreboardObjective = 'rs' } = options
+  // Set module-level OBJ so all helper functions in this module use the correct objective.
+  // This is safe because compilation is synchronous.
+  OBJ = scoreboardObjective
   const alloc = new VarAllocator(mangle)
   const files: DatapackFile[] = []
   const advancements: DatapackFile[] = []
