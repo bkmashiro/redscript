@@ -2671,7 +2671,7 @@ export class Lowering {
         // Store index + value into rs:heap, call macro that does:
         //   $data modify storage <ns> <key>[$(idx_key)] set value $(val_key)
         const macroIdxKey = `__ssi_i_${this.foreachCounter++}`
-        const macroValKey = `__ssi_v_${this.foreachCounter++}`
+        const macroValKey = `__ssi_v_${this.foreachCounter++}`  // kept to pin valVar in optimizer
         const subFnName   = `${this.currentFn}/__ssi_${this.foreachCounter++}`
         const indexVar = indexOperand.kind === 'var'
           ? indexOperand.name
@@ -2682,14 +2682,19 @@ export class Lowering {
         this.builder.emitRaw(
           `execute store result storage rs:heap ${macroIdxKey} int 1 run scoreboard players get ${indexVar} rs`
         )
+        // Pin valVar in the optimizer's read-set so the assignment is not dead-code-eliminated.
+        // The value is stored to rs:heap but NOT used by the macro (the macro reads the scoreboard
+        // slot directly to avoid the MC 'data modify set value $(n)' macro substitution bug).
         this.builder.emitRaw(
           `execute store result storage rs:heap ${macroValKey} int 1 run scoreboard players get ${valVar} rs`
         )
         this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
-        // \x01 = sentinel for '$' macro line-start prefix (see storage_get_int)
+        // Use execute store result (not 'data modify set value $(val)') to avoid MC macro
+        // substitution bugs with numeric values. The scoreboard slot ${valVar} is hardcoded
+        // into the macro sub-function at compile time — only the array index is macro-substituted.
         this.emitRawSubFunction(
           subFnName,
-          `\x01data modify storage ${storageNs} ${arrayKey}[$(${macroIdxKey})] set value $(${macroValKey})`
+          `\x01execute store result storage ${storageNs} ${arrayKey}[$(${macroIdxKey})] int 1 run scoreboard players get ${valVar} rs`
         )
       }
       return { kind: 'const', value: 0 }
