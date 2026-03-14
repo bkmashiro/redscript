@@ -106,6 +106,39 @@ describe('deadCodeElimination', () => {
   })
 })
 
+describe('copyPropagation – stale alias invalidation', () => {
+  it('does not propagate $tmp = $y after $y is overwritten (swap pattern)', () => {
+    // Simulates: let tmp = y; y = x % y; x = tmp
+    // The copy $tmp = $y must be invalidated when $y is reassigned.
+    // Before fix: x = tmp was propagated to x = y (new y, wrong value).
+    const fn = makeFn([
+      { op: 'assign',  dst: '$tmp', src: { kind: 'var', name: '$y' } },          // tmp = y
+      { op: 'binop',   dst: '$r',   lhs: { kind: 'var', name: '$x' }, bop: '%', rhs: { kind: 'var', name: '$y' } }, // r = x%y
+      { op: 'assign',  dst: '$y',   src: { kind: 'var', name: '$r' } },           // y = r  ← stale: tmp still points to OLD y
+      { op: 'assign',  dst: '$x',   src: { kind: 'var', name: '$tmp' } },         // x = tmp (should NOT be x = y)
+    ])
+    const opt = copyPropagation(fn)
+    const instrs = opt.blocks[0].instrs
+    const xAssign = instrs.find((i: any) => i.dst === '$x') as any
+    // x = tmp must NOT be optimised to x = $y (stale) or x = $r (new y).
+    // It should stay as x = $tmp (the original copy).
+    expect(xAssign.src).toEqual({ kind: 'var', name: '$tmp' })
+  })
+
+  it('still propagates simple non-conflicting copies', () => {
+    // a = 5; b = a; c = b → after propagation b and c should both be const 5
+    const fn = makeFn([
+      { op: 'assign', dst: '$a', src: { kind: 'const', value: 5 } },
+      { op: 'assign', dst: '$b', src: { kind: 'var', name: '$a' } },
+      { op: 'assign', dst: '$c', src: { kind: 'var', name: '$b' } },
+    ])
+    const opt = copyPropagation(fn)
+    const instrs = opt.blocks[0].instrs
+    const cAssign = instrs.find((i: any) => i.dst === '$c') as any
+    expect(cAssign.src).toEqual({ kind: 'const', value: 5 })
+  })
+})
+
 describe('optimize pipeline', () => {
   it('combines all passes', () => {
     // t0 = 2 + 3  (→ constant fold → t0 = 5)

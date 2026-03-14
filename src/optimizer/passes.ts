@@ -95,30 +95,43 @@ export function copyPropagation(fn: IRFunction): IRFunction {
       return copies.get(op.name) ?? op
     }
 
+    /**
+     * Invalidate all copies that became stale because `written` was modified.
+     * When $y is overwritten, any mapping copies[$tmp] = $y is now stale:
+     * reading $tmp would return the OLD $y value via the copy, but $y now holds
+     * a different value.  Remove both the direct entry (copies[$y]) and every
+     * reverse entry that points at $y.
+     */
+    function invalidate(written: string): void {
+      copies.delete(written)
+      for (const [k, v] of copies) {
+        if (v.kind === 'var' && v.name === written) copies.delete(k)
+      }
+    }
+
     const newInstrs: IRInstr[] = []
     for (const instr of block.instrs) {
       switch (instr.op) {
         case 'assign': {
           const src = resolve(instr.src)
+          invalidate(instr.dst)
           // Only propagate scalars (var or const), not storage
           if (src.kind === 'var' || src.kind === 'const') {
             copies.set(instr.dst, src)
-          } else {
-            copies.delete(instr.dst)
           }
           newInstrs.push({ ...instr, src })
           break
         }
         case 'binop':
-          copies.delete(instr.dst)
+          invalidate(instr.dst)
           newInstrs.push({ ...instr, lhs: resolve(instr.lhs), rhs: resolve(instr.rhs) })
           break
         case 'cmp':
-          copies.delete(instr.dst)
+          invalidate(instr.dst)
           newInstrs.push({ ...instr, lhs: resolve(instr.lhs), rhs: resolve(instr.rhs) })
           break
         case 'call':
-          if (instr.dst) copies.delete(instr.dst)
+          if (instr.dst) invalidate(instr.dst)
           newInstrs.push({ ...instr, args: instr.args.map(resolve) })
           break
         default:
