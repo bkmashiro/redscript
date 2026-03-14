@@ -17,10 +17,10 @@
 // ║    /function showcase:dump_bigint  print Fibonacci to chat           ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
-import "stdlib/math.mcrs"
-import "stdlib/vec.mcrs"
-import "stdlib/bigint.mcrs"
-import "stdlib/advanced.mcrs"
+import "../src/stdlib/math.mcrs"
+import "../src/stdlib/vec.mcrs"
+import "../src/stdlib/bigint.mcrs"
+import "../src/stdlib/advanced.mcrs"
 
 // ── Enums ─────────────────────────────────────────────────────────────────
 
