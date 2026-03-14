@@ -134,13 +134,18 @@ export class DeadCodeEliminator {
     const entries = new Set<string>()
 
     for (const fn of program.declarations) {
-      // All top-level functions are entry points (callable via /function)
-      // Exception: functions starting with _ are considered private/internal
-      if (!fn.name.startsWith('_')) {
-        entries.add(fn.name)
+      // Library functions (from `module library;` or `librarySources`) are
+      // NOT MC entry points — they're only kept if reachable from user code.
+      // Exception: decorators like @tick / @load / @on / @keep always force inclusion.
+      if (!fn.isLibraryFn) {
+        // All top-level non-library functions are entry points (callable via /function)
+        // Exception: functions starting with _ are considered private/internal
+        if (!fn.name.startsWith('_')) {
+          entries.add(fn.name)
+        }
       }
 
-      // Decorated functions are always entry points (even if prefixed with _)
+      // Decorated functions are always entry points regardless of library mode or _ prefix
       if (fn.decorators.some(decorator => [
         'tick',
         'load',

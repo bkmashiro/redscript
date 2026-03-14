@@ -16,8 +16,8 @@ const MATH_SRC = fs.readFileSync(
 )
 
 function run(driver: string): MCRuntime {
-  const source = MATH_SRC + '\n' + driver
-  const result = compile(source, { namespace: 'mathtest' })
+  // Use librarySources so math functions are only compiled when actually called
+  const result = compile(driver, { namespace: 'mathtest', librarySources: [MATH_SRC] })
   if (!result.success) throw new Error(result.error?.message ?? 'compile failed')
   const runtime = new MCRuntime('mathtest')
   for (const file of result.files ?? []) {
@@ -272,39 +272,48 @@ describe('log2_int', () => {
 // can simulate the scoreboard value after we manually stub the lookup.
 
 describe('sin table init', () => {
-  it('_math_init emits data modify storage for the sin table', () => {
-    // Just ensure the source compiles; the @load function must exist.
+  it('_math_init in __load when sin_fixed is called (via librarySources)', () => {
+    const mathSrc = require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8')
     const result = require('../compile').compile(
-      require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8'),
-      { namespace: 'mathtest' }
+      'fn test() { scoreboard_set("out", "r", sin_fixed(30)); }',
+      { namespace: 'mathtest', librarySources: [mathSrc] }
     )
     expect(result.success).toBe(true)
-    const loadFn = result.files?.find((f: any) =>
-      f.path.includes('_math_init.mcfunction') || f.path.includes('__load.mcfunction')
-    )
-    // __load or _math_init must contain the sin table literal
     const hasSinTable = result.files?.some((f: any) =>
       f.content?.includes('data modify storage math:tables sin set value')
     )
     expect(hasSinTable).toBe(true)
   })
+
+  it('_math_init NOT in output when sin_fixed is not used (library DCE)', () => {
+    const mathSrc = require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8')
+    const result = require('../compile').compile(
+      'fn test() { scoreboard_set("out", "r", abs(-5)); }',
+      { namespace: 'mathtest', librarySources: [mathSrc] }
+    )
+    expect(result.success).toBe(true)
+    const hasSinTable = result.files?.some((f: any) =>
+      f.content?.includes('data modify storage math:tables sin set value')
+    )
+    expect(hasSinTable).toBe(false)
+  })
 })
 
 describe('sin_fixed compile check', () => {
   it('sin_fixed compiles without errors', () => {
+    const mathSrc = require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8')
     const result = require('../compile').compile(
-      require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8') +
-      '\nfn test() { scoreboard_set("out", "r", sin_fixed(30)); }',
-      { namespace: 'mathtest' }
+      'fn test() { scoreboard_set("out", "r", sin_fixed(30)); }',
+      { namespace: 'mathtest', librarySources: [mathSrc] }
     )
     expect(result.success).toBe(true)
   })
 
   it('cos_fixed compiles without errors', () => {
+    const mathSrc = require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8')
     const result = require('../compile').compile(
-      require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8') +
-      '\nfn test() { scoreboard_set("out", "r", cos_fixed(0)); }',
-      { namespace: 'mathtest' }
+      'fn test() { scoreboard_set("out", "r", cos_fixed(0)); }',
+      { namespace: 'mathtest', librarySources: [mathSrc] }
     )
     expect(result.success).toBe(true)
   })
@@ -418,19 +427,20 @@ describe('smoothstep', () => {
 })
 
 describe('atan2_fixed compile check', () => {
+  const mathSrc = require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8')
+
   it('atan2_fixed compiles', () => {
     const result = require('../compile').compile(
-      require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8') +
-      '\nfn test() { scoreboard_set("out", "r", atan2_fixed(1, 1)); }',
-      { namespace: 'mathtest' }
+      'fn test() { scoreboard_set("out", "r", atan2_fixed(1, 1)); }',
+      { namespace: 'mathtest', librarySources: [mathSrc] }
     )
     expect(result.success).toBe(true)
   })
-  it('@require_on_load: _atan_init appears in __load when atan2_fixed is used', () => {
+
+  it('@require_on_load: _atan_init in __load when atan2_fixed is called', () => {
     const result = require('../compile').compile(
-      require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8') +
-      '\nfn test() { scoreboard_set("out", "r", atan2_fixed(1, 0)); }',
-      { namespace: 'mathtest' }
+      'fn test() { scoreboard_set("out", "r", atan2_fixed(1, 0)); }',
+      { namespace: 'mathtest', librarySources: [mathSrc] }
     )
     expect(result.success).toBe(true)
     const hasTanTable = result.files?.some((f: any) =>
@@ -438,21 +448,18 @@ describe('atan2_fixed compile check', () => {
     )
     expect(hasTanTable).toBe(true)
   })
-  it('@require_on_load: _atan_init IS in __load whenever math.mcrs is included (atan2_fixed is public)', () => {
-    // atan2_fixed is a public function (no _ prefix) → always compiled in as an
-    // MC entry point (callable via /function), which keeps _atan_init via
-    // @require_on_load.  The conditional optimisation only fires when the
-    // declaring function is itself private (_-prefixed).
+
+  it('@require_on_load: _atan_init NOT in output when atan2_fixed unused (library DCE)', () => {
+    // With librarySources, atan2_fixed is library-mode → not an entry point.
+    // User only calls abs(-5) → atan2_fixed not reachable → _atan_init DCE'd.
     const result = require('../compile').compile(
-      require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8') +
-      '\nfn test() { scoreboard_set("out", "r", abs(-5)); }',
-      { namespace: 'mathtest' }
+      'fn test() { scoreboard_set("out", "r", abs(-5)); }',
+      { namespace: 'mathtest', librarySources: [mathSrc] }
     )
     expect(result.success).toBe(true)
     const hasTanTable = result.files?.some((f: any) =>
       f.content?.includes('data modify storage math:tables tan set value')
     )
-    // atan2_fixed public → pulls in _atan_init → tan table present
-    expect(hasTanTable).toBe(true)
+    expect(hasTanTable).toBe(false)
   })
 })

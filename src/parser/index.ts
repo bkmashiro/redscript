@@ -76,6 +76,11 @@ export class Parser {
   private pos: number = 0
   private sourceLines: string[]
   private filePath?: string
+  /** Set to true once `module library;` is seen — all subsequent fn declarations
+   *  will be marked isLibraryFn=true.  When library sources are parsed via the
+   *  `librarySources` compile option, each source is parsed by its own fresh
+   *  Parser instance, so this flag never bleeds into user code. */
+  private inLibraryMode: boolean = false
 
   constructor(tokens: Token[], source?: string, filePath?: string) {
     this.tokens = tokens
@@ -169,12 +174,27 @@ export class Parser {
     const implBlocks: ImplBlock[] = []
     const enums: EnumDecl[] = []
     const consts: ConstDecl[] = []
+    let isLibrary = false
 
     // Check for namespace declaration
     if (this.check('namespace')) {
       this.advance()
       const name = this.expect('ident')
       namespace = name.value
+      this.expect(';')
+    }
+
+    // Check for module declaration: `module library;`
+    // Library-mode: all functions parsed from this point are marked isLibraryFn=true.
+    // When using the `librarySources` compile option, each library source is parsed
+    // by its own fresh Parser — so this flag never bleeds into user code.
+    if (this.check('module')) {
+      this.advance()
+      const modKind = this.expect('ident')
+      if (modKind.value === 'library') {
+        isLibrary = true
+        this.inLibraryMode = true
+      }
       this.expect(';')
     }
 
@@ -199,7 +219,7 @@ export class Parser {
       }
     }
 
-    return { namespace, globals, declarations, structs, implBlocks, enums, consts }
+    return { namespace, globals, declarations, structs, implBlocks, enums, consts, isLibrary }
   }
 
   // -------------------------------------------------------------------------
@@ -322,7 +342,11 @@ export class Parser {
 
     const body = this.parseBlock()
 
-    return this.withLoc({ name, params, returnType, decorators, body }, fnToken)
+    const fn: import('../ast/types').FnDecl = this.withLoc(
+      { name, params, returnType, decorators, body, isLibraryFn: this.inLibraryMode || undefined },
+      fnToken,
+    )
+    return fn
   }
 
   /** Parse a `declare fn name(params): returnType;` stub — no body, just discard. */

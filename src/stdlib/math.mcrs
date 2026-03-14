@@ -8,6 +8,11 @@
 // Phase 1: basic integer helpers (abs, sign, min, max, clamp, lerp)
 // Phase 2: iterative algorithms (isqrt, sqrt_fixed, pow_int, gcd)
 // Phase 3: trig (sin_fixed, cos_fixed) — lookup table in NBT storage
+
+// All functions in this file are library-mode: only compiled into the
+// datapack if actually called from user code.  Use via `librarySources`
+// compile option or concatenate with user code (module library; handles it).
+module library;
 // Phase 4: number theory & utilities (lcm, map, ceil_div, log2_int)
 
 // ─── Phase 1: Basic integer helpers ──────────────────────────────────────────

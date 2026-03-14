@@ -27,6 +27,12 @@ export interface CompileOptions {
   optimize?: boolean
   dce?: boolean
   mangle?: boolean
+  /** Additional source files that should be treated as *library* code.
+   *  Functions in these files are DCE-eligible: they are only compiled into
+   *  the datapack when actually called from user code.  Each string is parsed
+   *  independently (as if it had `module library;` at the top), so library
+   *  mode never bleeds into the main `source`. */
+  librarySources?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -192,8 +198,32 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Lexing
     const tokens = new Lexer(preprocessedSource, filePath).tokenize()
 
-    // Parsing
+    // Parsing — user source
     const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+
+    // Library sources: parsed independently (fresh Parser per source) so that
+    // `inLibraryMode` never bleeds into user code.  All resulting functions get
+    // isLibraryFn=true (either via `module library;` in the source, or forced below).
+    if (options.librarySources?.length) {
+      for (const libSrc of options.librarySources) {
+        const libPreprocessed = preprocessSourceWithMetadata(libSrc, {})
+        const libTokens = new Lexer(libPreprocessed.source).tokenize()
+        const libAst = new Parser(libTokens, libPreprocessed.source).parse(namespace)
+        // Force all functions to library mode (even if source lacks `module library;`)
+        for (const fn of libAst.declarations) fn.isLibraryFn = true
+        // Merge into main AST
+        parsedAst.declarations.push(...libAst.declarations)
+        parsedAst.structs.push(...libAst.structs)
+        parsedAst.implBlocks.push(...libAst.implBlocks)
+        parsedAst.enums.push(...libAst.enums)
+        parsedAst.consts.push(...libAst.consts)
+        parsedAst.globals.push(...libAst.globals)
+        // Merge source ranges so error reporting still works
+        if (preprocessed.ranges && libPreprocessed.ranges) {
+          preprocessed.ranges.push(...libPreprocessed.ranges)
+        }
+      }
+    }
     const dceResult = shouldRunDce ? eliminateDeadCode(parsedAst) : { program: parsedAst, warnings: [] }
     const ast = dceResult.program
 

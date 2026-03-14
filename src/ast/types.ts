@@ -259,6 +259,10 @@ export interface Param {
 }
 
 export interface FnDecl {
+  /** Set when this function was parsed from a `module library;` source.
+   *  Library functions are NOT MC entry points — DCE only keeps them if they
+   *  are reachable from a non-library (user) entry point. */
+  isLibraryFn?: boolean
   name: string
   params: Param[]
   returnType: TypeNode
@@ -328,4 +332,8 @@ export interface Program {
   implBlocks: ImplBlock[]
   enums: EnumDecl[]
   consts: ConstDecl[]
+  /** True when the source file declares `module library;`.
+   *  Library-mode: all functions are DCE-eligible by default — none are treated
+   *  as MC entry points unless they carry @tick / @load / @on / @keep etc. */
+  isLibrary?: boolean
 }
