@@ -438,6 +438,12 @@ fn dump_advanced() {
 fn debug_bigint() {
     say("§e=== BigInt Debug ===");
 
+    // Step 0: check scoreboard objective 'rs' exists (set by __load)
+    // If this reads 0, __load hasn't run — do /reload first!
+    scoreboard_set("__dbgcheck", #rs, 9999);
+    let rs_check: int = scoreboard_get("__dbgcheck", #rs);
+    say(f"§7[0] rs-objective check={rs_check}  (expect 9999; if 0 → run /reload first!)");
+
     // Step 1: init
     bigint_init();
     say("§7[1] bigint_init() done");
