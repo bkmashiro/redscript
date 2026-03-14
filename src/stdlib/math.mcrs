@@ -228,7 +228,9 @@ fn log2_int(n: int) -> int {
     return result;
 }
 
-// ─── Phase 5: Vectors, directions & easing ───────────────────────────────────
+// ─── Phase 5: Fixed-point arithmetic & easing ────────────────────────────────
+// Vector functions (dot2d, cross2d, length2d_fixed, manhattan, chebyshev,
+// atan2_fixed, rotate2d, normalize2d, etc.) have moved to vec.mcrs.
 
 // Fixed-point multiply: (a × b) / 1000
 // Use instead of a*b when both operands are fixed-point (scale=1000),
@@ -244,131 +246,6 @@ fn mulfix(a: int, b: int) -> int {
 fn divfix(a: int, b: int) -> int {
     if (b == 0) { return 0; }
     return a * 1000 / b;
-}
-
-// 2D dot product (integer inputs, integer result)
-// dot2d(3, 4, 3, 4) == 25
-fn dot2d(ax: int, ay: int, bx: int, by: int) -> int {
-    return ax * bx + ay * by;
-}
-
-// 2D cross product (z-component): ax*by - ay*bx
-// Positive = b is counter-clockwise from a.
-// cross2d(1, 0, 0, 1) == 1
-fn cross2d(ax: int, ay: int, bx: int, by: int) -> int {
-    return ax * by - ay * bx;
-}
-
-// 2D Euclidean distance (fixed-point output, integer inputs)
-// length2d_fixed(3, 4) == 5000  (√(9+16) = 5, ×1000)
-// length2d_fixed(1, 1) == 1414  (√2 × 1000)
-// Note: overflow risk if x²+y² > ~2,100,000 (i.e. |x|,|y| > ~1000).
-//   For large vectors, scale down first: length2d_fixed(x/k, y/k) * k
-fn length2d_fixed(x: int, y: int) -> int {
-    // sqrt_fixed(n) = isqrt(n * 1000). We want isqrt((x²+y²) * 1000000),
-    // which equals sqrt_fixed((x²+y²) * 1000).
-    return sqrt_fixed((x * x + y * y) * 1000);
-}
-
-// Manhattan distance between two integer-coordinate points
-// manhattan(0, 0, 3, 4) == 7
-fn manhattan(x1: int, y1: int, x2: int, y2: int) -> int {
-    let dx: int = x1 - x2;
-    let dy: int = y1 - y2;
-    if (dx < 0) { dx = 0 - dx; }
-    if (dy < 0) { dy = 0 - dy; }
-    return dx + dy;
-}
-
-// Chebyshev distance (chess-king distance): max(|dx|, |dy|)
-// chebyshev(0, 0, 3, 4) == 4
-fn chebyshev(x1: int, y1: int, x2: int, y2: int) -> int {
-    let dx: int = x1 - x2;
-    let dy: int = y1 - y2;
-    if (dx < 0) { dx = 0 - dx; }
-    if (dy < 0) { dy = 0 - dy; }
-    if (dx > dy) { return dx; }
-    return dy;
-}
-
-// atan table: tan(i°) × 1000 for i = 0..45
-// Used internally by atan2_fixed for O(log 46) binary-search lookup.
-fn _atan_init() {
-    storage_set_array("math:tables", "tan",
-        "[0, 17, 35, 52, 70, 87, 105, 123, 141, 158, 176, 194, 213, 231, 249, 268, 287, 306, 325, 344, 364, 384, 404, 424, 445, 466, 488, 510, 532, 554, 577, 601, 625, 649, 675, 700, 727, 754, 781, 810, 839, 869, 900, 933, 966, 1000]"
-    );
-}
-
-// atan2_fixed(y, x) → angle in integer degrees [0, 359]
-// Uses binary search on the tan table for first-octant angle, then maps
-// to the correct quadrant using sign of x/y.
-//
-// atan2_fixed(0,  1) ==   0   (east)
-// atan2_fixed(1,  0) ==  90   (north in MC top-down)
-// atan2_fixed(0, -1) == 180   (west)
-// atan2_fixed(-1, 0) == 270
-// atan2_fixed(1,  1) ==  45
-//
-// Precision: ±1° (integer degree output).
-// Overflow note: inputs are clamped to ≤ 46340 to prevent s*ax overflow.
-// For larger vectors, scale them down before calling:
-//   atan2_fixed(dy / 1000, dx / 1000)
-@require_on_load(_atan_init)
-fn atan2_fixed(y: int, x: int) -> int {
-    // Degenerate cases
-    if (x == 0) {
-        if (y > 0) { return 90; }
-        if (y < 0) { return 270; }
-        return 0;
-    }
-    if (y == 0) {
-        if (x > 0) { return 0; }
-        return 180;
-    }
-
-    // Work in absolute values, remember signs
-    let ax: int = x;
-    if (ax < 0) { ax = 0 - ax; }
-    let ay: int = y;
-    if (ay < 0) { ay = 0 - ay; }
-
-    // Clamp to prevent overflow in binary search (tan_table[i] * ax max 46340)
-    if (ax > 46340) { ax = 46340; }
-    if (ay > 46340) { ay = 46340; }
-
-    // Reduce to first octant: 0 ≤ ay ≤ ax  (swap if ay > ax, add 90° at end)
-    let swapped: int = 0;
-    if (ay > ax) {
-        let tmp: int = ax;
-        ax = ay;
-        ay = tmp;
-        swapped = 1;
-    }
-
-    // Binary search: find θ in [0, 45] where tan(θ) ≈ ay / ax
-    // i.e. tan_table[θ] * ax ≈ ay * 1000
-    let lo: int = 0;
-    let hi: int = 45;
-    while (lo < hi) {
-        let mid: int = (lo + hi + 1) / 2;
-        let t: int = storage_get_int("math:tables", "tan", mid);
-        if (t * ax > ay * 1000) {
-            hi = mid - 1;
-        } else {
-            lo = mid;
-        }
-    }
-    let theta: int = lo;
-    if (swapped == 1) { theta = 90 - theta; }
-
-    // Map to full circle
-    if (x > 0) {
-        if (y >= 0) { return theta; }
-        return 360 - theta;
-    }
-    // x < 0
-    if (y >= 0) { return 180 - theta; }
-    return 180 + theta;
 }
 
 // Smooth Hermite interpolation (Ken Perlin's smoothstep).

@@ -124,7 +124,7 @@ fn main() {
 `)
       const mainFn = getFunction(files, 'main')
       expect(mainFn).toBeDefined()
-      expect(mainFn).toContain('scoreboard players set $hp rs 105')
+      expect(mainFn).toContain('scoreboard players set $main_hp rs 105')
       expect(mainFn).toContain('Arena Battle')
     })
   })
@@ -1852,7 +1852,7 @@ describe('for-range loop', () => {
     const src = `fn test() { for i in 0..5 { say("hi"); } }`
     const files = compile(src, 'forloop')
     const fn = getFunction(files, 'test')
-    expect(fn).toContain('scoreboard players set $i rs 0')
+    expect(fn).toContain('scoreboard players set $test_i rs 0')
   })
 
   it('generates loop sub-function with increment and condition', () => {
@@ -1861,17 +1861,17 @@ describe('for-range loop', () => {
     const subFn = files.find(f => f.path.includes('__for_0'))
     expect(subFn).toBeDefined()
     expect(subFn?.content).toContain('say hi')
-    expect(subFn?.content).toContain('scoreboard players add $i rs 1')
-    expect(subFn?.content).toContain('execute if score $i rs matches ..4 run function forloop:test/__for_0')
+    expect(subFn?.content).toContain('scoreboard players add $test_i rs 1')
+    expect(subFn?.content).toContain('execute if score $test_i rs matches ..4 run function forloop:test/__for_0')
   })
 
   it('supports non-zero start', () => {
     const src = `fn test() { for x in 3..8 { say("loop"); } }`
     const files = compile(src, 'forloop2')
     const fn = getFunction(files, 'test')
-    expect(fn).toContain('scoreboard players set $x rs 3')
+    expect(fn).toContain('scoreboard players set $test_x rs 3')
     const subFn = files.find(f => f.path.includes('__for_0'))
-    expect(subFn?.content).toContain('execute if score $x rs matches ..7 run function forloop2:test/__for_0')
+    expect(subFn?.content).toContain('execute if score $test_x rs matches ..7 run function forloop2:test/__for_0')
   })
 })
 

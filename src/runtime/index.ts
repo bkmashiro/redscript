@@ -266,6 +266,9 @@ export class MCRuntime {
   // Flag to stop function execution (for return)
   private shouldReturn: boolean = false
 
+  // Current MC macro context: key → value (set by 'function ... with storage')
+  private currentMacroContext: Record<string, any> | null = null
+
   constructor(namespace: string) {
     this.namespace = namespace
     // Initialize default objective
@@ -362,6 +365,13 @@ export class MCRuntime {
   execCommand(cmd: string, executor?: Entity): boolean {
     cmd = cmd.trim()
     if (!cmd || cmd.startsWith('#')) return true
+
+    // MC macro command: line starts with '$'.
+    // Expand $(key) placeholders from currentMacroContext, then execute.
+    if (cmd.startsWith('$')) {
+      const expanded = this.expandMacro(cmd.slice(1))
+      return this.execCommand(expanded, executor)
+    }
 
     // Parse command
     if (cmd.startsWith('scoreboard ')) {
@@ -542,7 +552,10 @@ export class MCRuntime {
     // Track execute state
     let currentExecutor = executor
     let condition: boolean = true
-    let storeTarget: { player: string; objective: string; type: 'result' | 'success' } | null = null
+    let storeTarget: 
+      | { player: string; objective: string; type: 'result' | 'success' }
+      | { storagePath: string; field: string; type: 'result' }
+      | null = null
 
     while (rest.length > 0) {
       rest = rest.trimStart()
@@ -557,7 +570,11 @@ export class MCRuntime {
           const value = storeTarget.type === 'result'
             ? (this.returnValue ?? (result ? 1 : 0))
             : (result ? 1 : 0)
-          this.setScore(storeTarget.player, storeTarget.objective, value)
+          if ('storagePath' in storeTarget) {
+            this.setStorageField(storeTarget.storagePath, storeTarget.field, value)
+          } else {
+            this.setScore(storeTarget.player, storeTarget.objective, value)
+          }
         }
 
         return result
@@ -630,12 +647,31 @@ export class MCRuntime {
       // Handle 'unless score ...'
       if (rest.startsWith('unless score ')) {
         rest = rest.slice(13)
-        const scoreParts = rest.match(/^(\S+)\s+(\S+)\s+matches\s+(\S+)(.*)$/)
-        if (scoreParts) {
-          const [, player, obj, rangeStr, remaining] = scoreParts
+        // unless score <player> <obj> matches <range>
+        const matchesParts = rest.match(/^(\S+)\s+(\S+)\s+matches\s+(\S+)(.*)$/)
+        if (matchesParts) {
+          const [, player, obj, rangeStr, remaining] = matchesParts
           const range = parseRange(rangeStr)
           const score = this.getScore(player, obj)
           condition = condition && !matchesRange(score, range)
+          rest = remaining.trim()
+          continue
+        }
+        // unless score <p1> <o1> <op> <p2> <o2>
+        const compareMatch = rest.match(/^(\S+)\s+(\S+)\s+([<>=]+)\s+(\S+)\s+(\S+)(.*)$/)
+        if (compareMatch) {
+          const [, p1, o1, op, p2, o2, remaining] = compareMatch
+          const v1 = this.getScore(p1, o1)
+          const v2 = this.getScore(p2, o2)
+          let matches = false
+          switch (op) {
+            case '=': matches = v1 === v2; break
+            case '<': matches = v1 < v2; break
+            case '<=': matches = v1 <= v2; break
+            case '>': matches = v1 > v2; break
+            case '>=': matches = v1 >= v2; break
+          }
+          condition = condition && !matches  // unless = negate
           rest = remaining.trim()
           continue
         }
@@ -659,6 +695,19 @@ export class MCRuntime {
         const entities = parseSelector(selector, this.entities, currentExecutor)
         condition = condition && entities.length === 0
         continue
+      }
+
+      // Handle 'store result storage <ns:path> <field> <type> <scale>'
+      if (rest.startsWith('store result storage ')) {
+        rest = rest.slice(21)
+        // format: <ns:path> <field> <type> <scale> <run-cmd>
+        const storageParts = rest.match(/^(\S+)\s+(\S+)\s+(\S+)\s+([\d.]+)\s+(.*)$/)
+        if (storageParts) {
+          const [, storagePath, field, , , remaining] = storageParts
+          storeTarget = { storagePath, field, type: 'result' }
+          rest = remaining.trim()
+          continue
+        }
       }
 
       // Handle 'store result score <player> <obj>'
@@ -695,7 +744,11 @@ export class MCRuntime {
       const value = storeTarget.type === 'result'
         ? (this.returnValue ?? (condition ? 1 : 0))
         : (condition ? 1 : 0)
-      this.setScore(storeTarget.player, storeTarget.objective, value)
+      if ('storagePath' in storeTarget) {
+        this.setStorageField(storeTarget.storagePath, storeTarget.field, value)
+      } else {
+        this.setScore(storeTarget.player, storeTarget.objective, value)
+      }
     }
 
     return condition
@@ -721,11 +774,37 @@ export class MCRuntime {
   // -------------------------------------------------------------------------
 
   private execFunctionCmd(cmd: string, executor?: Entity): boolean {
-    const fnName = cmd.slice(9).trim() // remove 'function '
+    let fnRef = cmd.slice(9).trim() // remove 'function '
+
+    // Handle 'function ns:name with storage ns:path' — MC macro calling convention.
+    // The called function may have $( ) placeholders that need to be expanded
+    // using the provided storage compound. We execute the function after
+    // expanding its macro context.
+    const withStorageMatch = fnRef.match(/^(\S+)\s+with\s+storage\s+(\S+)$/)
+    if (withStorageMatch) {
+      const [, actualFnName, storagePath] = withStorageMatch
+      const macroContext = this.getStorageCompound(storagePath) ?? {}
+      const outerShouldReturn = this.shouldReturn
+      const outerMacroCtx = this.currentMacroContext
+      this.currentMacroContext = macroContext
+      this.execFunction(actualFnName, executor)
+      this.currentMacroContext = outerMacroCtx
+      this.shouldReturn = outerShouldReturn
+      return true
+    }
+
     const outerShouldReturn = this.shouldReturn
-    this.execFunction(fnName, executor)
+    this.execFunction(fnRef, executor)
     this.shouldReturn = outerShouldReturn
     return true
+  }
+
+  /** Expand MC macro placeholders: $(key) → value from currentMacroContext */
+  private expandMacro(cmd: string): string {
+    return cmd.replace(/\$\(([^)]+)\)/g, (_, key) => {
+      const val = this.currentMacroContext?.[key]
+      return val !== undefined ? String(val) : `$(${key})`
+    })
   }
 
   // -------------------------------------------------------------------------
@@ -755,8 +834,19 @@ export class MCRuntime {
       return true
     }
 
-    // data get storage <ns:path> <field>
-    const getMatch = cmd.match(/^data get storage (\S+) (\S+)$/)
+    // data get storage <ns:path> <field>[<index>] [scale]  (array element access)
+    const getArrMatch = cmd.match(/^data get storage (\S+) (\S+)\[(\d+)\](?:\s+[\d.]+)?$/)
+    if (getArrMatch) {
+      const [, storagePath, field, indexStr] = getArrMatch
+      const arr = this.getStorageField(storagePath, field)
+      const idx = parseInt(indexStr, 10)
+      const value = Array.isArray(arr) ? arr[idx] : undefined
+      this.returnValue = typeof value === 'number' ? value : 0
+      return true
+    }
+
+    // data get storage <ns:path> <field> [scale]
+    const getMatch = cmd.match(/^data get storage (\S+) (\S+)(?:\s+[\d.]+)?$/)
     if (getMatch) {
       const [, storagePath, field] = getMatch
       const value = this.getStorageField(storagePath, field)
@@ -801,6 +891,14 @@ export class MCRuntime {
       // Return as string
       return str
     }
+  }
+
+  /** Return the whole storage compound at storagePath as a flat key→value map.
+   *  Used by 'function ... with storage' to provide macro context. */
+  private getStorageCompound(storagePath: string): Record<string, any> | null {
+    const data = this.storage.get(storagePath)
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null
+    return data as Record<string, any>
   }
 
   private getStorageField(storagePath: string, field: string): any {

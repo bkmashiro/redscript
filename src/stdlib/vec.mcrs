@@ -1,0 +1,246 @@
+// vec.mcrs — 2D and 3D vector math for RedScript datapacks.
+//
+// Fixed-point convention: scale = 1000  (same as math.mcrs)
+//   A unit vector has components in [-1000, 1000].
+//   A position / displacement in block coordinates uses raw integers.
+//
+// Dependency: import "math.mcrs" before this file (or compile with librarySources).
+//   Requires: abs, sqrt_fixed, sin_fixed, cos_fixed, lerp, mulfix, length2d_fixed
+//
+// Phase 1: 2D geometry (dot, cross, distance, length, normalize, lerp)
+// Phase 2: 2D direction (rotate, atan2)
+// Phase 3: 3D geometry (dot, cross, length, distance, manhattan, chebyshev)
+
+module library;
+
+// ─── Phase 1: 2D geometry ────────────────────────────────────────────────────
+
+// Dot product of two 2D integer vectors.
+// dot2d(3, 4, 3, 4) == 25
+fn dot2d(ax: int, ay: int, bx: int, by: int) -> int {
+    return ax * bx + ay * by;
+}
+
+// Z-component of the 3D cross product (ax*by − ay*bx).
+// Positive: b is counter-clockwise from a.
+// cross2d(1, 0, 0, 1) == 1
+fn cross2d(ax: int, ay: int, bx: int, by: int) -> int {
+    return ax * by - ay * bx;
+}
+
+// Euclidean length of a 2D integer vector, result in fixed-point (×1000).
+// length2d_fixed(3, 4) == 5000   (√25 × 1000)
+// Note: |x|, |y| ≤ ~1000 to avoid overflow; scale larger vectors down first.
+fn length2d_fixed(x: int, y: int) -> int {
+    return sqrt_fixed((x * x + y * y) * 1000);
+}
+
+// Euclidean distance between two integer-coordinate points, result ×1000.
+// distance2d_fixed(0, 0, 3, 4) == 5000
+fn distance2d_fixed(x1: int, y1: int, x2: int, y2: int) -> int {
+    let dx: int = x1 - x2;
+    let dy: int = y1 - y2;
+    return length2d_fixed(dx, dy);
+}
+
+// Manhattan distance (taxicab): |dx| + |dy|.
+// manhattan(0, 0, 3, 4) == 7
+fn manhattan(x1: int, y1: int, x2: int, y2: int) -> int {
+    let dx: int = x1 - x2;
+    let dy: int = y1 - y2;
+    if (dx < 0) { dx = 0 - dx; }
+    if (dy < 0) { dy = 0 - dy; }
+    return dx + dy;
+}
+
+// Chebyshev distance (chess-king): max(|dx|, |dy|).
+// chebyshev(0, 0, 3, 4) == 4
+fn chebyshev(x1: int, y1: int, x2: int, y2: int) -> int {
+    let dx: int = x1 - x2;
+    let dy: int = y1 - y2;
+    if (dx < 0) { dx = 0 - dx; }
+    if (dy < 0) { dy = 0 - dy; }
+    if (dx > dy) { return dx; }
+    return dy;
+}
+
+// X-component of the normalized unit vector (× 1000).
+// normalize2d_x(3, 4) == 600   (3/5 × 1000)
+// Returns 0 for the zero vector.
+fn normalize2d_x(x: int, y: int) -> int {
+    let len: int = length2d_fixed(x, y);
+    if (len == 0) { return 0; }
+    return x * 1000000 / len;
+}
+
+// Y-component of the normalized unit vector (× 1000).
+// normalize2d_y(3, 4) == 800   (4/5 × 1000)
+fn normalize2d_y(x: int, y: int) -> int {
+    let len: int = length2d_fixed(x, y);
+    if (len == 0) { return 0; }
+    return y * 1000000 / len;
+}
+
+// Linearly interpolate between vectors a=(ax,ay) and b=(bx,by), return x.
+// t in [0, 1000] (fixed-point).
+// lerp2d_x(0, 0, 100, 200, 500) == 50
+fn lerp2d_x(ax: int, ay: int, bx: int, by: int, t: int) -> int {
+    return ax + (bx - ax) * t / 1000;
+}
+
+// Linearly interpolate between vectors a and b, return y.
+// lerp2d_y(0, 0, 100, 200, 500) == 100
+fn lerp2d_y(ax: int, ay: int, bx: int, by: int, t: int) -> int {
+    return ay + (by - ay) * t / 1000;
+}
+
+// ─── Phase 2: 2D direction ────────────────────────────────────────────────────
+
+// tan lookup table for atan2_fixed binary search
+fn _atan_init() {
+    storage_set_array("math:tables", "tan",
+        "[0, 17, 35, 52, 70, 87, 105, 123, 141, 158, 176, 194, 213, 231, 249, 268, 287, 306, 325, 344, 364, 384, 404, 424, 445, 466, 488, 510, 532, 554, 577, 601, 625, 649, 675, 700, 727, 754, 781, 810, 839, 869, 900, 933, 966, 1000]"
+    );
+}
+
+// Angle of the vector (y, x) in integer degrees [0, 359].
+// Uses binary search on the tan table → O(log 46) per call.
+//
+// atan2_fixed(0,  1) ==   0   (east)
+// atan2_fixed(1,  0) ==  90
+// atan2_fixed(0, -1) == 180   (west)
+// atan2_fixed(-1, 0) == 270
+// atan2_fixed(1,  1) ==  45
+//
+// Inputs clamped to ≤ 46340 to avoid overflow.  For larger vectors:
+//   atan2_fixed(dy / 1000, dx / 1000)
+@require_on_load(_atan_init)
+fn atan2_fixed(y: int, x: int) -> int {
+    if (x == 0) {
+        if (y > 0) { return 90; }
+        if (y < 0) { return 270; }
+        return 0;
+    }
+    if (y == 0) {
+        if (x > 0) { return 0; }
+        return 180;
+    }
+
+    let ax: int = x;
+    if (ax < 0) { ax = 0 - ax; }
+    let ay: int = y;
+    if (ay < 0) { ay = 0 - ay; }
+
+    if (ax > 46340) { ax = 46340; }
+    if (ay > 46340) { ay = 46340; }
+
+    let swapped: int = 0;
+    if (ay > ax) {
+        let tmp: int = ax;
+        ax = ay;
+        ay = tmp;
+        swapped = 1;
+    }
+
+    let lo: int = 0;
+    let hi: int = 45;
+    while (lo < hi) {
+        let mid: int = (lo + hi + 1) / 2;
+        let t: int = storage_get_int("math:tables", "tan", mid);
+        if (t * ax > ay * 1000) {
+            hi = mid - 1;
+        } else {
+            lo = mid;
+        }
+    }
+    let theta: int = lo;
+    if (swapped == 1) { theta = 90 - theta; }
+
+    if (x > 0) {
+        if (y >= 0) { return theta; }
+        return 360 - theta;
+    }
+    if (y >= 0) { return 180 - theta; }
+    return 180 + theta;
+}
+
+// Rotate a 2D vector (x, y) by deg degrees, return the new X component.
+// Uses sin/cos table from math.mcrs — @require_on_load(_math_init) is
+// automatically pulled in because this function calls sin_fixed/cos_fixed.
+// rotate2d_x(1000, 0, 90) == 0      (unit vector east, rotated 90° = north)
+// rotate2d_x(1000, 0, 45) == 707    (cos 45° × 1000)
+fn rotate2d_x(x: int, y: int, deg: int) -> int {
+    // x' = x*cos(deg) - y*sin(deg)   (all in fixed-point, /1000 via mulfix)
+    return mulfix(x, cos_fixed(deg)) - mulfix(y, sin_fixed(deg));
+}
+
+// Rotate a 2D vector (x, y) by deg degrees, return the new Y component.
+// rotate2d_y(1000, 0, 90) == 1000   (unit vector east, rotated 90° = north)
+fn rotate2d_y(x: int, y: int, deg: int) -> int {
+    // y' = x*sin(deg) + y*cos(deg)
+    return mulfix(x, sin_fixed(deg)) + mulfix(y, cos_fixed(deg));
+}
+
+// ─── Phase 3: 3D geometry ────────────────────────────────────────────────────
+
+// Dot product of two 3D integer vectors.
+fn dot3d(ax: int, ay: int, az: int, bx: int, by: int, bz: int) -> int {
+    return ax * bx + ay * by + az * bz;
+}
+
+// Cross product X component: ay*bz − az*by
+fn cross3d_x(ax: int, ay: int, az: int, bx: int, by: int, bz: int) -> int {
+    return ay * bz - az * by;
+}
+
+// Cross product Y component: az*bx − ax*bz
+fn cross3d_y(ax: int, ay: int, az: int, bx: int, by: int, bz: int) -> int {
+    return az * bx - ax * bz;
+}
+
+// Cross product Z component: ax*by − ay*bx
+fn cross3d_z(ax: int, ay: int, az: int, bx: int, by: int, bz: int) -> int {
+    return ax * by - ay * bx;
+}
+
+// Euclidean length of a 3D integer vector, result in fixed-point (×1000).
+// length3d_fixed(1, 1, 1) == 1732   (√3 × 1000)
+// Note: |x|, |y|, |z| ≤ ~800 to keep x²+y²+z² ≤ ~2,000,000 (safe for *1000).
+fn length3d_fixed(x: int, y: int, z: int) -> int {
+    return sqrt_fixed((x * x + y * y + z * z) * 1000);
+}
+
+// Euclidean distance between two 3D integer points, result ×1000.
+fn distance3d_fixed(x1: int, y1: int, z1: int, x2: int, y2: int, z2: int) -> int {
+    let dx: int = x1 - x2;
+    let dy: int = y1 - y2;
+    let dz: int = z1 - z2;
+    return length3d_fixed(dx, dy, dz);
+}
+
+// Manhattan distance in 3D.
+// manhattan3d(0,0,0, 1,2,3) == 6
+fn manhattan3d(x1: int, y1: int, z1: int, x2: int, y2: int, z2: int) -> int {
+    let dx: int = x1 - x2;
+    let dy: int = y1 - y2;
+    let dz: int = z1 - z2;
+    if (dx < 0) { dx = 0 - dx; }
+    if (dy < 0) { dy = 0 - dy; }
+    if (dz < 0) { dz = 0 - dz; }
+    return dx + dy + dz;
+}
+
+// Chebyshev distance in 3D.
+// chebyshev3d(0,0,0, 3,1,2) == 3
+fn chebyshev3d(x1: int, y1: int, z1: int, x2: int, y2: int, z2: int) -> int {
+    let dx: int = x1 - x2;
+    let dy: int = y1 - y2;
+    let dz: int = z1 - z2;
+    if (dx < 0) { dx = 0 - dx; }
+    if (dy < 0) { dy = 0 - dy; }
+    if (dz < 0) { dz = 0 - dz; }
+    let m: int = dx;
+    if (dy > m) { m = dy; }
+    if (dz > m) { m = dz; }
+    return m;
+}

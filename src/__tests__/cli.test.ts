@@ -173,7 +173,7 @@ describe('CLI API', () => {
       const mainFn = result.files.find(file => file.path.endsWith('/main.mcfunction'))
       expect(doneFn?.content).toContain('scoreboard players get timer_ticks rs')
       expect(doneFn?.content).toContain('return run scoreboard players get')
-      expect(mainFn?.content).toContain('execute if score $finished rs matches 1..')
+      expect(mainFn?.content).toContain('execute if score $main_finished rs matches 1..')
     })
 
     it('Timer.tick increments', () => {

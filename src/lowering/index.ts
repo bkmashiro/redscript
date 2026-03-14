@@ -217,6 +217,14 @@ export class Lowering {
   private implMethods: Map<string, Map<string, { fn: FnDecl; loweredName: string }>> = new Map()
   private specializedFunctions: Map<string, string> = new Map()
   private currentFn: string = ''
+
+  /** Unique IR variable name for a local variable, scoped to the current function.
+   *  Prevents cross-function scoreboard slot collisions: $fn_x ≠ $gn_x.
+   *  Only applies to user-defined locals/params; internal slots ($p0, $ret) are
+   *  intentionally global (calling convention). */
+  private fnVar(name: string): string {
+    return `$${this.currentFn}_${name}`
+  }
   private currentStdlibCallSite?: StdlibCallSiteContext
   private foreachCounter: number = 0
   private lambdaCounter: number = 0
@@ -619,12 +627,12 @@ export class Lowering {
           continue
         }
 
-        this.varMap.set(param.name, `$${param.name}`)
+        this.varMap.set(param.name, this.fnVar(param.name))
       }
     } else {
       for (const param of runtimeParams) {
         const paramName = param.name
-        this.varMap.set(paramName, `$${paramName}`)
+        this.varMap.set(paramName, this.fnVar(paramName))
         this.varTypes.set(paramName, this.normalizeType(param.type))
       }
     }
@@ -644,7 +652,7 @@ export class Lowering {
     // named 'p0'/'p1' that occurred with { kind: 'var', name: '$p0' }.
     for (let i = 0; i < runtimeParams.length; i++) {
       const paramName = runtimeParams[i].name
-      const varName = `$${paramName}`
+      const varName = this.fnVar(paramName)
       this.builder.emitAssign(varName, { kind: 'param', index: i })
     }
 
@@ -653,7 +661,7 @@ export class Lowering {
         const param = fn.params[i]
         const expected = eventParamSpecs[i]
         if (expected?.type.kind === 'named' && expected.type.name !== 'string') {
-          this.builder.emitAssign(`$${param.name}`, { kind: 'const', value: 0 })
+          this.builder.emitAssign(this.fnVar(param.name), { kind: 'const', value: 0 })
         }
       }
     }
@@ -883,7 +891,7 @@ export class Lowering {
       )
     }
     
-    const varName = `$${stmt.name}`
+    const varName = this.fnVar(stmt.name)
     this.varMap.set(stmt.name, varName)
 
     // Track variable type
@@ -1219,7 +1227,7 @@ export class Lowering {
   }
 
   private lowerForRangeStmt(stmt: Extract<Stmt, { kind: 'for_range' }>): void {
-    const loopVar = `$${stmt.varName}`
+    const loopVar = this.fnVar(stmt.varName)
     const subFnName = `${this.currentFn}/__for_${this.foreachCounter++}`
 
     // Initialize loop variable
@@ -1408,7 +1416,7 @@ export class Lowering {
     }
 
     const arrayType = this.inferExprType(stmt.iterable)
-    const bindingVar = `$${stmt.binding}`
+    const bindingVar = this.fnVar(stmt.binding)
     const indexVar = this.builder.freshTemp()
     const lengthVar = this.builder.freshTemp()
     const condVar = this.builder.freshTemp()
@@ -2596,9 +2604,13 @@ export class Lowering {
           `execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} rs`
         )
         this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
+        // Prefix \x01 is a sentinel for the MC macro '$' line-start marker.
+        // We avoid using literal '$execute' here so the pre-alloc pass
+        // doesn't mistakenly register 'execute' as a scoreboard variable.
+        // Codegen replaces \x01 → '$' when emitting the mc function file.
         this.emitRawSubFunction(
           subFnName,
-          `$execute store result score ${dst} rs run data get storage ${storageNs} ${arrayKey}[$(${macroKey})] 1`
+          `\x01execute store result score ${dst} rs run data get storage ${storageNs} ${arrayKey}[$(${macroKey})] 1`
         )
       }
       return { kind: 'var', name: dst }
@@ -3521,7 +3533,7 @@ export class Lowering {
     this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
     this.emitRawSubFunction(
       subFnName,
-      `$execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[$(${macroKey})]`
+      `\x01execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[$(${macroKey})]`
     )
     return { kind: 'var', name: dst }
   }

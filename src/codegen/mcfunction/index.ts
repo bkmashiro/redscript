@@ -146,12 +146,17 @@ function emitInstr(instr: ReturnType<typeof Object.assign> & { op: string }, ns:
       break
     }
 
-    case 'raw':
+    case 'raw': {
       // resolveRaw rewrites $var tokens that are registered in the allocator
       // so that mangle=true mode produces correct mangled names instead of
       // the raw IR names embedded by the lowering phase.
-      lines.push(alloc.resolveRaw(instr.cmd as string))
+      // \x01 is a sentinel for the MC macro line-start '$' (used by
+      // storage_get_int sub-functions). Replace it last, after resolveRaw,
+      // so '$execute' is never treated as a variable reference.
+      const rawResolved = alloc.resolveRaw(instr.cmd as string).replace(/^\x01/, '$')
+      lines.push(rawResolved)
       break
+    }
   }
 
   return lines

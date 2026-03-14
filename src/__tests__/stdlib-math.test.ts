@@ -345,63 +345,8 @@ describe('mulfix / divfix', () => {
   })
 })
 
-describe('dot2d / cross2d', () => {
-  it('dot2d(3, 4, 3, 4) == 25', () => {
-    const rt = run(`fn test() { scoreboard_set("out", "r", dot2d(3, 4, 3, 4)); }`)
-    rt.execFunction('test')
-    expect(scoreOf(rt, 'r')).toBe(25)
-  })
-  it('dot2d perpendicular == 0', () => {
-    const rt = run(`fn test() { scoreboard_set("out", "r", dot2d(1, 0, 0, 1)); }`)
-    rt.execFunction('test')
-    expect(scoreOf(rt, 'r')).toBe(0)
-  })
-  it('cross2d(1, 0, 0, 1) == 1', () => {
-    const rt = run(`fn test() { scoreboard_set("out", "r", cross2d(1, 0, 0, 1)); }`)
-    rt.execFunction('test')
-    expect(scoreOf(rt, 'r')).toBe(1)
-  })
-  it('cross2d parallel == 0', () => {
-    const rt = run(`fn test() { scoreboard_set("out", "r", cross2d(3, 0, 6, 0)); }`)
-    rt.execFunction('test')
-    expect(scoreOf(rt, 'r')).toBe(0)
-  })
-})
-
-describe('length2d_fixed', () => {
-  it.each([
-    [3, 4, 5000],    // 3-4-5 triangle
-    [0, 5, 5000],
-    [5, 0, 5000],
-    [1, 1, 1414],    // √2 × 1000
-  ])('length2d_fixed(%d, %d) == %d', (x, y, expected) => {
-    const rt = run(`fn test() { scoreboard_set("out", "r", length2d_fixed(${x}, ${y})); }`)
-    rt.execFunction('test')
-    expect(scoreOf(rt, 'r')).toBe(expected)
-  })
-})
-
-describe('manhattan / chebyshev', () => {
-  it.each([
-    [0, 0, 3, 4, 7],
-    [0, 0, 0, 5, 5],
-    [1, 1, 1, 1, 0],
-  ])('manhattan(%d,%d,%d,%d) == %d', (x1, y1, x2, y2, expected) => {
-    const rt = run(`fn test() { scoreboard_set("out", "r", manhattan(${x1}, ${y1}, ${x2}, ${y2})); }`)
-    rt.execFunction('test')
-    expect(scoreOf(rt, 'r')).toBe(expected)
-  })
-
-  it.each([
-    [0, 0, 3, 4, 4],
-    [0, 0, 4, 3, 4],
-    [0, 0, 5, 5, 5],
-  ])('chebyshev(%d,%d,%d,%d) == %d', (x1, y1, x2, y2, expected) => {
-    const rt = run(`fn test() { scoreboard_set("out", "r", chebyshev(${x1}, ${y1}, ${x2}, ${y2})); }`)
-    rt.execFunction('test')
-    expect(scoreOf(rt, 'r')).toBe(expected)
-  })
-})
+// dot2d, cross2d, length2d_fixed, manhattan, chebyshev, atan2_fixed
+// have moved to vec.mcrs — tested in stdlib-vec.test.ts
 
 describe('smoothstep', () => {
   it.each([
@@ -426,40 +371,4 @@ describe('smoothstep', () => {
   })
 })
 
-describe('atan2_fixed compile check', () => {
-  const mathSrc = require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8')
-
-  it('atan2_fixed compiles', () => {
-    const result = require('../compile').compile(
-      'fn test() { scoreboard_set("out", "r", atan2_fixed(1, 1)); }',
-      { namespace: 'mathtest', librarySources: [mathSrc] }
-    )
-    expect(result.success).toBe(true)
-  })
-
-  it('@require_on_load: _atan_init in __load when atan2_fixed is called', () => {
-    const result = require('../compile').compile(
-      'fn test() { scoreboard_set("out", "r", atan2_fixed(1, 0)); }',
-      { namespace: 'mathtest', librarySources: [mathSrc] }
-    )
-    expect(result.success).toBe(true)
-    const hasTanTable = result.files?.some((f: any) =>
-      f.content?.includes('data modify storage math:tables tan set value')
-    )
-    expect(hasTanTable).toBe(true)
-  })
-
-  it('@require_on_load: _atan_init NOT in output when atan2_fixed unused (library DCE)', () => {
-    // With librarySources, atan2_fixed is library-mode → not an entry point.
-    // User only calls abs(-5) → atan2_fixed not reachable → _atan_init DCE'd.
-    const result = require('../compile').compile(
-      'fn test() { scoreboard_set("out", "r", abs(-5)); }',
-      { namespace: 'mathtest', librarySources: [mathSrc] }
-    )
-    expect(result.success).toBe(true)
-    const hasTanTable = result.files?.some((f: any) =>
-      f.content?.includes('data modify storage math:tables tan set value')
-    )
-    expect(hasTanTable).toBe(false)
-  })
-})
+// atan2_fixed / _atan_init tests moved to stdlib-vec.test.ts

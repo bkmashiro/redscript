@@ -1,0 +1,249 @@
+// advanced.mcrs — Higher-order integer math and "fun" algorithms.
+//
+// Requires: math.mcrs (for lerp, smoothstep, mulfix, abs, isqrt, sqrt_fixed)
+//
+// Category 1: Number theory  — fib, is_prime, collatz_steps, digit_sum, reverse_int, mod_pow
+// Category 2: Hashing/noise  — hash_int, noise1d
+// Category 3: Curves         — bezier_quad, bezier_cubic
+// Category 4: Fractals 🤯    — mandelbrot_iter (fixed-point complex arithmetic)
+
+module library;
+
+// ─── Category 1: Number theory ───────────────────────────────────────────────
+
+// Fibonacci number F(n) using simple iteration.
+// Overflow: F(46) = 1836311903 ≈ INT_MAX; use n ≤ 46.
+// fib(0) == 0, fib(1) == 1, fib(10) == 55
+fn fib(n: int) -> int {
+    if (n <= 0) { return 0; }
+    if (n == 1) { return 1; }
+    let a: int = 0;
+    let b: int = 1;
+    let i: int = 2;
+    while (i <= n) {
+        let c: int = a + b;
+        a = b;
+        b = c;
+        i = i + 1;
+    }
+    return b;
+}
+
+// Primality test by trial division up to √n.
+// Returns 1 if n is prime, 0 otherwise.
+// is_prime(2) == 1, is_prime(4) == 0, is_prime(97) == 1
+fn is_prime(n: int) -> int {
+    if (n < 2) { return 0; }
+    if (n == 2) { return 1; }
+    if (n % 2 == 0) { return 0; }
+    let i: int = 3;
+    while (i * i <= n) {
+        if (n % i == 0) { return 0; }
+        i = i + 2;
+    }
+    return 1;
+}
+
+// Number of steps in the Collatz sequence starting at n until reaching 1.
+// collatz_steps(1)  == 0
+// collatz_steps(6)  == 8
+// collatz_steps(27) == 111   (world record among small numbers)
+fn collatz_steps(n: int) -> int {
+    if (n <= 1) { return 0; }
+    let x: int = n;
+    let steps: int = 0;
+    while (x != 1) {
+        if (x % 2 == 0) {
+            x = x / 2;
+        } else {
+            x = 3 * x + 1;
+        }
+        steps = steps + 1;
+    }
+    return steps;
+}
+
+// Sum of decimal digits.  Negative input uses absolute value.
+// digit_sum(123) == 6, digit_sum(0) == 0
+fn digit_sum(n: int) -> int {
+    let x: int = n;
+    if (x < 0) { x = 0 - x; }
+    if (x == 0) { return 0; }
+    let sum: int = 0;
+    while (x > 0) {
+        sum = sum + x % 10;
+        x = x / 10;
+    }
+    return sum;
+}
+
+// Count decimal digits.  0 has 1 digit.  Negative: counts absolute digits.
+// count_digits(0) == 1, count_digits(100) == 3
+fn count_digits(n: int) -> int {
+    let x: int = n;
+    if (x < 0) { x = 0 - x; }
+    if (x == 0) { return 1; }
+    let cnt: int = 0;
+    while (x > 0) {
+        cnt = cnt + 1;
+        x = x / 10;
+    }
+    return cnt;
+}
+
+// Reverse the decimal digits of an integer.  Sign is preserved.
+// reverse_int(12345) == 54321, reverse_int(-42) == -24
+fn reverse_int(n: int) -> int {
+    let x: int = n;
+    let neg: int = 0;
+    if (x < 0) { x = 0 - x; neg = 1; }
+    let result: int = 0;
+    while (x > 0) {
+        result = result * 10 + x % 10;
+        x = x / 10;
+    }
+    if (neg == 1) { return 0 - result; }
+    return result;
+}
+
+// Modular exponentiation: (base ^ exp) mod m  using fast O(log exp) squaring.
+// IMPORTANT: m must be ≤ 46340 to avoid b*b overflow (46340² < INT_MAX).
+// mod_pow(2, 10, 1000) == 24   (1024 mod 1000)
+fn mod_pow(base: int, exp: int, m: int) -> int {
+    if (m == 1) { return 0; }
+    let result: int = 1;
+    let b: int = base % m;
+    if (b < 0) { b = b + m; }
+    let e: int = exp;
+    while (e > 0) {
+        if (e % 2 == 1) {
+            result = result * b % m;
+        }
+        b = b * b % m;
+        e = e / 2;
+    }
+    return result;
+}
+
+// ─── Category 2: Hashing & noise ─────────────────────────────────────────────
+
+// Integer hash function.  Output is non-negative, range [0, ~2 × 10⁹).
+// Deterministic, no randomness — same input always produces the same output.
+// Suitable as a seeded pseudo-random value for procedural generation.
+// hash_int(0) != hash_int(1), repeatable across runs.
+fn hash_int(n: int) -> int {
+    let h: int = n;
+    if (h < 0) { h = 0 - h; }
+    h = h % 46340;               // Clamp so h² fits in int32
+    h = h * 46337 + 97;          // 46337 is prime; h*46337 ≤ 46340*46337 < INT_MAX
+    if (h < 0) { h = 0 - h; }
+    h = h % 46340;
+    h = h * 46337 + 211;
+    if (h < 0) { h = 0 - h; }
+    return h;
+}
+
+// 1D value noise.  Input x in fixed-point (scale = 1000).
+// Output in [0, 999] — smoothly interpolated between hashed lattice points.
+// noise1d(0) == noise1d(0), noise1d(500) is between noise1d(0) and noise1d(1000).
+fn noise1d(x: int) -> int {
+    let ix: int = x / 1000;
+    let frac: int = x % 1000;
+    // Handle negative x so frac is always in [0, 999]
+    if (frac < 0) {
+        ix = ix - 1;
+        frac = frac + 1000;
+    }
+    let h0: int = hash_int(ix) % 1000;
+    let h1: int = hash_int(ix + 1) % 1000;
+    if (h0 < 0) { h0 = 0 - h0; }
+    if (h1 < 0) { h1 = 0 - h1; }
+    // Smoothstep for C1 continuity
+    let t: int = smoothstep(0, 1000, frac);
+    return lerp(h0, h1, t);
+}
+
+// ─── Category 3: Curves ──────────────────────────────────────────────────────
+
+// Quadratic Bezier: B(t) = lerp(lerp(p0,p1,t), lerp(p1,p2,t), t)
+// De Casteljau's algorithm — numerically stable, safe for large coordinates.
+// t in [0, 1000] (fixed-point).
+//
+// bezier_quad(0, 500, 1000, 0)    == 0     (t=0: start)
+// bezier_quad(0, 500, 1000, 500)  == 500   (t=500: midpoint of curve)
+// bezier_quad(0, 500, 1000, 1000) == 1000  (t=1000: end)
+// bezier_quad(0, 1000, 0, 500)    == 500   (arch at midpoint)
+fn bezier_quad(p0: int, p1: int, p2: int, t: int) -> int {
+    let m0: int = lerp(p0, p1, t);
+    let m1: int = lerp(p1, p2, t);
+    return lerp(m0, m1, t);
+}
+
+// Cubic Bezier: 4-point curve using De Casteljau's algorithm.
+// t in [0, 1000].
+// bezier_cubic(0, 333, 667, 1000, 0)    == 0
+// bezier_cubic(0, 333, 667, 1000, 1000) == 1000
+fn bezier_cubic(p0: int, p1: int, p2: int, p3: int, t: int) -> int {
+    let m0: int = lerp(p0, p1, t);
+    let m1: int = lerp(p1, p2, t);
+    let m2: int = lerp(p2, p3, t);
+    let n0: int = lerp(m0, m1, t);
+    let n1: int = lerp(m1, m2, t);
+    return lerp(n0, n1, t);
+}
+
+// ─── Category 4: Fractals 🤯 ─────────────────────────────────────────────────
+
+// Mandelbrot set iteration count.
+//
+// cx, cy: fixed-point coordinates of the complex number c = cx/1000 + i*cy/1000
+//   cx = -2000..1000  (i.e. real part -2.0..1.0)
+//   cy = -1000..1000  (imaginary part -1.0..1.0)
+//
+// Returns the number of iterations before |z| > 2 (escape), or max_iter if
+// the point is in the Mandelbrot set.  Use the return value to colour blocks!
+//
+// Points in the set: mandelbrot_iter(-1000, 0, 100) == 100  (c = -1+0i)
+// Points outside:   mandelbrot_iter(1000, 0, 100)  == 0   (c = 1+0i, escapes immediately)
+// Boundary region:  mandelbrot_iter(-500, 500, 50) → varies
+//
+// Algorithm: z₀ = 0, z_{n+1} = z_n² + c
+//   z_n = (zr + zi·i),  z_n² = zr²−zi² + 2·zr·zi·i
+//   Escape when |z|² = (zr²+zi²)/10⁶ > 4  ↔  mulfix(zr,zr)+mulfix(zi,zi) > 4000
+fn mandelbrot_iter(cx: int, cy: int, max_iter: int) -> int {
+    let zr: int = 0;
+    let zi: int = 0;
+    let i: int = 0;
+    while (i < max_iter) {
+        let zr2: int = mulfix(zr, zr) - mulfix(zi, zi) + cx;
+        let zi2: int = 2 * mulfix(zr, zi) + cy;
+        zr = zr2;
+        zi = zi2;
+        if (mulfix(zr, zr) + mulfix(zi, zi) > 4000) {
+            return i;
+        }
+        i = i + 1;
+    }
+    return max_iter;
+}
+
+// Julia set iteration count (generalised Mandelbrot with fixed c and variable z₀).
+// z0r, z0i: starting point (fixed-point, scale=1000)
+// cr, ci:   constant c   (fixed-point, scale=1000)
+// Same escape condition as mandelbrot_iter.
+fn julia_iter(z0r: int, z0i: int, cr: int, ci: int, max_iter: int) -> int {
+    let zr: int = z0r;
+    let zi: int = z0i;
+    let i: int = 0;
+    while (i < max_iter) {
+        let zr2: int = mulfix(zr, zr) - mulfix(zi, zi) + cr;
+        let zi2: int = 2 * mulfix(zr, zi) + ci;
+        zr = zr2;
+        zi = zi2;
+        if (mulfix(zr, zr) + mulfix(zi, zi) > 4000) {
+            return i;
+        }
+        i = i + 1;
+    }
+    return max_iter;
+}

@@ -50,7 +50,7 @@ describe('Lowering', () => {
       const fn = getFunction(ir, 'foo')!
       const instrs = getInstructions(fn)
       expect(instrs.some(i =>
-        i.op === 'assign' && i.dst === '$x' && (i.src as any).kind === 'param' && (i.src as any).index === 0
+        i.op === 'assign' && i.dst === '$foo_x' && (i.src as any).kind === 'param' && (i.src as any).index === 0
       )).toBe(true)
     })
 
@@ -139,7 +139,7 @@ fn foo() {
       const fn = getFunction(ir, 'foo')!
       const instrs = getInstructions(fn)
       expect(instrs.some(i =>
-        i.op === 'assign' && i.dst === '$x' && (i.src as any).kind === 'const' && (i.src as any).value === 100
+        i.op === 'assign' && i.dst === '$foo_x' && (i.src as any).kind === 'const' && (i.src as any).value === 100
       )).toBe(true)
       expect(ir.globals).not.toContain('$MAX_HP')
     })
@@ -149,7 +149,7 @@ fn foo() {
       const fn = getFunction(ir, 'foo')!
       const instrs = getInstructions(fn)
       expect(instrs.some(i =>
-        i.op === 'assign' && i.dst === '$x' && (i.src as any).value === 42
+        i.op === 'assign' && i.dst === '$foo_x' && (i.src as any).value === 42
       )).toBe(true)
     })
 
@@ -579,16 +579,16 @@ fn choose(dir: Direction) {
       const ir = compile('fn test() { let score: int = 7; say("You have ${score} points"); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds).toContain('tellraw @a ["",{"text":"You have "},{"score":{"name":"$score","objective":"rs"}},{"text":" points"}]')
+      expect(rawCmds).toContain('tellraw @a ["",{"text":"You have "},{"score":{"name":"$test_score","objective":"rs"}},{"text":" points"}]')
     })
 
     it('lowers f-string output builtins to tellraw/title JSON components', () => {
       const ir = compile('fn test() { let score: int = 7; say(f"Score: {score}"); tellraw(@a, f"Score: {score}"); actionbar(@s, f"Score: {score}"); title(@s, f"Score: {score}"); }')
       const fn = getFunction(ir, 'test')!
       const rawCmds = getRawCommands(fn)
-      expect(rawCmds).toContain('tellraw @a ["",{"text":"Score: "},{"score":{"name":"$score","objective":"rs"}}]')
-      expect(rawCmds).toContain('title @s actionbar ["",{"text":"Score: "},{"score":{"name":"$score","objective":"rs"}}]')
-      expect(rawCmds).toContain('title @s title ["",{"text":"Score: "},{"score":{"name":"$score","objective":"rs"}}]')
+      expect(rawCmds).toContain('tellraw @a ["",{"text":"Score: "},{"score":{"name":"$test_score","objective":"rs"}}]')
+      expect(rawCmds).toContain('title @s actionbar ["",{"text":"Score: "},{"score":{"name":"$test_score","objective":"rs"}}]')
+      expect(rawCmds).toContain('title @s title ["",{"text":"Score: "},{"score":{"name":"$test_score","objective":"rs"}}]')
     })
 
     it('lowers summon()', () => {
@@ -1149,7 +1149,7 @@ fn count_down() {
       const fn = getFunction(ir, 'test')!
       const instrs = getInstructions(fn)
       expect(instrs.some(i =>
-        i.op === 'assign' && i.dst === '$y' && (i.src as any).kind === 'var' && (i.src as any).name === '$count'
+        i.op === 'assign' && i.dst === '$test_y' && (i.src as any).kind === 'var' && (i.src as any).name === '$count'
       )).toBe(true)
     })
 
