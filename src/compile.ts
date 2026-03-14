@@ -26,6 +26,7 @@ export interface CompileOptions {
   filePath?: string
   optimize?: boolean
   dce?: boolean
+  mangle?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +206,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       : ir
 
     // Code generation
-    const generated = generateDatapackWithStats(optimized)
+    const generated = generateDatapackWithStats(optimized, { mangle: options.mangle ?? false })
 
     return {
       success: true,

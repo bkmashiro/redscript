@@ -111,7 +111,8 @@ fn pow_int(base: int, exp: int) -> int {
 // Greatest common divisor (Euclidean algorithm)
 // gcd(12, 8) == 4, gcd(0, 5) == 5
 fn gcd(a: int, b: int) -> int {
-    // Inline abs to avoid $ret register pollution from nested calls
+    // Inline abs: no-mangle mode shares variable names across functions,
+    // so calling abs() here would clobber gcd's own $x slot.
     let x: int = a;
     if (x < 0) { x = 0 - x; }
     let y: int = b;
