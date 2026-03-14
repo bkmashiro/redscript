@@ -134,7 +134,11 @@ fn gcd(a: int, b: int) -> int {
 // Accuracy: ≤ 1 unit error (≤0.1% relative) for all integer degrees.
 // Cost: ~4 MC commands per call + 1 NBT read per call (O(1)).
 
-// Initialize the sin lookup table.  Called automatically by @load.
+// Initialize the sin lookup table.  Called once at world load.
+// Cost: one `data modify storage` command at load time — negligible.
+// This runs whenever math.mcrs is included in a project, regardless of
+// whether sin_fixed / cos_fixed are actually called.  If your project only
+// uses Phase 1/2/4 functions, the overhead is ~1 command at load time only.
 @load
 fn _math_init() {
     storage_set_array("math:tables", "sin",
@@ -142,17 +146,14 @@ fn _math_init() {
     );
 }
 
-// Internal: look up sin for a normalised angle in [0, 90] degrees.
-// Exposed for testing; prefer sin_fixed / cos_fixed.
-fn _sin_q1(deg: int) -> int {
-    return storage_get_int("math:tables", "sin", deg);
-}
-
 // sin_fixed(deg) → sin(deg°) × 1000   (integer degrees, any value)
 // sin_fixed(30)  == 500
 // sin_fixed(90)  == 1000
 // sin_fixed(180) == 0
 // sin_fixed(270) == -1000
+//
+// Calling sin_fixed/cos_fixed causes _math_init to be kept by DCE and
+// called from __load — so the table is always ready at runtime.
 fn sin_fixed(deg: int) -> int {
     // Normalise to [0, 359]
     let d: int = deg % 360;
