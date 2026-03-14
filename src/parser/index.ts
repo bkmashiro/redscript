@@ -397,6 +397,22 @@ export class Parser {
       }
     }
 
+    // @requires("fn_name") — generic string-arg decorator
+    if (name === 'requires') {
+      const rawArgs: NonNullable<Decorator['rawArgs']> = []
+      for (const part of argsStr.split(',')) {
+        const trimmed = part.trim()
+        const strMatch = trimmed.match(/^"([^"]*)"$/)
+        if (strMatch) {
+          rawArgs.push({ kind: 'string', value: strMatch[1] })
+        } else {
+          const num = parseFloat(trimmed)
+          if (!isNaN(num)) rawArgs.push({ kind: 'number', value: num })
+        }
+      }
+      return { name, rawArgs }
+    }
+
     // Handle key=value format (e.g., rate=20)
     for (const part of argsStr.split(',')) {
       const [key, val] = part.split('=').map(s => s.trim())

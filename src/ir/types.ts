@@ -102,6 +102,7 @@ export interface IRFunction {
   commands?: IRCommand[]   // structure target command stream
   isTickLoop?: boolean     // true → Repeat command block (runs every tick)
   isLoadInit?: boolean     // true → called from __load.mcfunction
+  requiredLoads?: string[] // @requires("fn") — these fns are also called from __load when this fn is compiled in
   isTriggerHandler?: boolean  // true → handles a trigger event
   triggerName?: string        // the trigger objective name
   eventTrigger?: {

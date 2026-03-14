@@ -134,12 +134,10 @@ fn gcd(a: int, b: int) -> int {
 // Accuracy: ≤ 1 unit error (≤0.1% relative) for all integer degrees.
 // Cost: ~4 MC commands per call + 1 NBT read per call (O(1)).
 
-// Initialize the sin lookup table.  Called once at world load.
-// Cost: one `data modify storage` command at load time — negligible.
-// This runs whenever math.mcrs is included in a project, regardless of
-// whether sin_fixed / cos_fixed are actually called.  If your project only
-// uses Phase 1/2/4 functions, the overhead is ~1 command at load time only.
-@load
+// Initialize the sin lookup table.
+// This function has NO @load — it is called from __load only when sin_fixed
+// or cos_fixed are compiled into the project (via @requires).  If you only
+// use Phase 1/2/4 functions, this never runs and adds zero overhead.
 fn _math_init() {
     storage_set_array("math:tables", "sin",
         "[0, 17, 35, 52, 70, 87, 105, 122, 139, 156, 174, 191, 208, 225, 242, 259, 276, 292, 309, 326, 342, 358, 375, 391, 407, 423, 438, 454, 469, 485, 500, 515, 530, 545, 559, 574, 588, 602, 616, 629, 643, 656, 669, 682, 695, 707, 719, 731, 743, 755, 766, 777, 788, 799, 809, 819, 829, 839, 848, 857, 866, 875, 883, 891, 899, 906, 914, 921, 927, 934, 940, 946, 951, 956, 961, 966, 970, 974, 978, 982, 985, 988, 990, 993, 995, 996, 998, 999, 999, 1000, 1000]"
@@ -152,8 +150,9 @@ fn _math_init() {
 // sin_fixed(180) == 0
 // sin_fixed(270) == -1000
 //
-// Calling sin_fixed/cos_fixed causes _math_init to be kept by DCE and
-// called from __load — so the table is always ready at runtime.
+// @requires("_math_init"): the sin lookup table is written to NBT storage at
+// world load automatically when this function is included in a project.
+@requires("_math_init")
 fn sin_fixed(deg: int) -> int {
     // Normalise to [0, 359]
     let d: int = deg % 360;
@@ -179,6 +178,7 @@ fn sin_fixed(deg: int) -> int {
 // cos_fixed(0)   == 1000
 // cos_fixed(90)  == 0
 // cos_fixed(180) == -1000
+@requires("_math_init")
 fn cos_fixed(deg: int) -> int {
     return sin_fixed(deg + 90);
 }

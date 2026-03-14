@@ -722,6 +722,23 @@ export class Lowering {
       irFn.isLoadInit = true
     }
 
+    // @requires("dep_fn") — when this function is compiled in, dep_fn is also
+    // called from __load.  The dep_fn itself does NOT need @load; it can be a
+    // private (_) function that only runs at load time when this fn is used.
+    const requiredLoads: string[] = []
+    for (const d of fn.decorators) {
+      if (d.name === 'requires') {
+        for (const arg of d.rawArgs ?? []) {
+          if (arg.kind === 'string') {
+            requiredLoads.push(arg.value)
+          }
+        }
+      }
+    }
+    if (requiredLoads.length > 0) {
+      irFn.requiredLoads = requiredLoads
+    }
+
     // Handle tick rate counter if needed
     if (tickRate && tickRate > 1) {
       this.wrapWithTickRate(irFn, tickRate)

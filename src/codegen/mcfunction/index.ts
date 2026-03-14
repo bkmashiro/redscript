@@ -503,11 +503,20 @@ export function generateDatapackWithStats(
     }
   }
 
-  // Call @load functions from __load
+  // Call @load functions and @requires-referenced load helpers from __load.
+  // We collect them in a set to deduplicate (multiple fns might @requires the same dep).
+  const loadCalls = new Set<string>()
   for (const fn of module.functions) {
     if (fn.isLoadInit) {
-      loadLines.push(`function ${ns}:${fn.name}`)
+      loadCalls.add(fn.name)
     }
+    // @requires: if this fn is compiled in, its required load-helpers must also run
+    for (const dep of fn.requiredLoads ?? []) {
+      loadCalls.add(dep)
+    }
+  }
+  for (const name of loadCalls) {
+    loadLines.push(`function ${ns}:${name}`)
   }
 
   // Write __load.mcfunction
