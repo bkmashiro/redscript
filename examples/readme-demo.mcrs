@@ -1,0 +1,124 @@
+// readme-demo.mcrs — RedScript v1.2.27 README visual showcase
+// What 38 lines of RedScript can do on a vanilla Minecraft server.
+//
+// Compile:  node dist/cli.js compile examples/readme-demo.mcrs -o <datapack> --namespace rsdemo
+// In-game:  /function rsdemo:start   (then record your gif)
+//           /function rsdemo:stop
+
+import "../src/stdlib/math.mcrs"
+
+let t:     int = 0;     // 0..359 degrees, 4° per tick = full cycle every 1.5 s
+let frame: int = 0;     // overall tick counter for isqrt showcase
+let on:    bool = false;
+
+@load fn _init() {
+    t = 0;
+    frame = 0;
+}
+
+@tick fn _wave_tick() {
+    if (!on) { return; }
+
+    t = (t + 4) % 360;
+    frame = frame + 1;
+
+    let s:   int = sin_fixed(t);          // -1000 .. 1000
+    let c:   int = cos_fixed(t);          // -1000 .. 1000
+    let mag: int = abs(s);                // 0 .. 1000  (absolute intensity)
+
+    // ── Particle rings: each layer activates as sin climbs ──────────────────
+    foreach (p in @a) at @s {
+
+        // Always on — tiny inner shimmer
+        particle("minecraft:end_rod",
+            ~0, ~1, ~0,
+            0.25, 0.1, 0.25, 0.02, 5);
+
+        // Mid ring  — appears when sin > 0
+        if (s > 0) {
+            particle("minecraft:end_rod",
+                ~0, ~1, ~0,
+                0.9, 0.3, 0.9, 0.02, 10);
+        }
+
+        // Outer ring + soul fire — sin > 600
+        if (s > 600) {
+            particle("minecraft:end_rod",
+                ~0, ~1, ~0,
+                1.8, 0.5, 1.8, 0.02, 16);
+            particle("minecraft:soul_fire_flame",
+                ~0, ~2, ~0,
+                1.0, 0.4, 1.0, 0.03, 8);
+        }
+
+        // Peak flash — sin > 930  (fires ~4 ticks per cycle)
+        if (s > 930) {
+            particle("minecraft:flash",
+                ~0, ~3, ~0,
+                0.4, 0.4, 0.4, 0.1, 4);
+        }
+
+        // Negative trough — reverse blue spiral feel
+        if (s < -600) {
+            particle("minecraft:portal",
+                ~0, ~0.5, ~0,
+                1.2, 0.5, 1.2, 0.05, 12);
+        }
+    }
+
+    // ── Actionbar: live math ─────────────────────────────────────────────────
+    // Show a rotating showcase of different stdlib functions each 3 s
+    let seg: int = (frame / 45) % 6;
+
+    if (seg == 0) {
+        foreach (p in @a) {
+            actionbar(f"§3⚡ §bsin({t}°) = §e{s}‰   cos({t}°) = §e{c}‰");
+        }
+    }
+    if (seg == 1) {
+        let sq: int = isqrt(frame * frame + 1);
+        foreach (p in @a) {
+            actionbar(f"§3⚡ §bisqrt({frame}² + 1) = §e{sq}");
+        }
+    }
+    if (seg == 2) {
+        let d: int = clamp(mag, 0, 360);
+        foreach (p in @a) {
+            actionbar(f"§3⚡ §bclamp(|sin|, 0, 360) = §e{d}   log2({mag}) = §e{log2_int(mag + 1)}");
+        }
+    }
+    if (seg == 3) {
+        let ss: int = smoothstep(0, 1000, mag);
+        foreach (p in @a) {
+            actionbar(f"§3⚡ §bsmoothstep(|sin({t}°)|) = §e{ss}‰");
+        }
+    }
+    if (seg == 4) {
+        let a: int = atan2_fixed(s, c);
+        foreach (p in @a) {
+            actionbar(f"§3⚡ §batan2(sin, cos) = §e{a}°  §7(should track ≈ {t}°)");
+        }
+    }
+    if (seg == 5) {
+        let p2: int = pow_int(2, (frame / 10) % 10 + 1);
+        foreach (p in @a) {
+            actionbar(f"§3⚡ §b2^{(frame / 10) % 10 + 1} = §e{p2}   gcd(360, {t + 1}) = §e{gcd(360, t + 1)}");
+        }
+    }
+}
+
+fn start() {
+    on = true;
+    t = 0;
+    frame = 0;
+    title(@a, f"§e✦ §bRedScript§e ✦", f"§7particles driven by sin(t)");
+    say("§a▶ readme-demo started — /function rsdemo:stop to end");
+}
+
+fn stop() {
+    on = false;
+    foreach (p in @a) {
+        actionbar(f"§7[demo stopped]");
+    }
+    say("§c■ readme-demo stopped");
+}

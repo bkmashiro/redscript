@@ -1,0 +1,133 @@
+// math-showcase.mcrs — Fancy math examples for README / demo
+// Run each fn individually:  /function mathshow:<name>
+//
+// Compile:  node dist/cli.js compile examples/math-showcase.mcrs -o <dp> --namespace mathshow
+
+import "../src/stdlib/math.mcrs"
+import "../src/stdlib/vec.mcrs"
+import "../src/stdlib/advanced.mcrs"
+import "../src/stdlib/bigint.mcrs"
+
+// ─── 1. Trig table — print sin & cos for 0°, 15°, 30° … 90° ────────────────
+fn trig_table() {
+    say("§e=== Trig Table (×1000 fixed-point) ===");
+    let deg: int = 0;
+    while (deg <= 90) {
+        let s: int = sin_fixed(deg);
+        let c: int = cos_fixed(deg);
+        say(f"  {deg}°  sin={s}  cos={c}  sin²+cos²={mulfix(s,s)+mulfix(c,c)}  (expect 1000000)");
+        deg = deg + 15;
+    }
+}
+
+// ─── 2. Newton–Raphson sqrt — compare isqrt vs sqrt_fixed ──────────────────
+fn sqrt_showcase() {
+    say("§e=== Integer & Fixed-Point Square Roots ===");
+    say(f"  isqrt(2)              = {isqrt(2)}         (exact: 1)");
+    say(f"  isqrt(144)            = {isqrt(144)}        (exact: 12)");
+    say(f"  isqrt(1000000)        = {isqrt(1000000)}    (exact: 1000)");
+    say(f"  isqrt(2147395600)     = {isqrt(2147395600)} (exact: 46340)");
+    say(f"  sqrt_fixed(2)         = {sqrt_fixed(2)}     (×1000, expect 1414)");
+    say(f"  sqrt_fixed(3)         = {sqrt_fixed(3)}     (×1000, expect 1732)");
+    say(f"  sqrt_fixed(10)        = {sqrt_fixed(10)}    (×1000, expect 3162)");
+}
+
+// ─── 3. 2D vector geometry ──────────────────────────────────────────────────
+fn vector_showcase() {
+    say("§e=== 2D Vector Geometry ===");
+    // 3-4-5 right triangle
+    let d345: int = distance2d_fixed(0, 0, 300, 400);
+    say(f"  dist((0,0)→(300,400))  = {d345}  (expect 500)");
+    // unit circle
+    let d_unit: int = length2d_fixed(1000, 0);
+    say(f"  length(1000, 0)        = {d_unit}  (expect 1000)");
+    // atan2
+    say(f"  atan2(1000, 0)         = {atan2_fixed(1000, 0)}°  (expect 90)");
+    say(f"  atan2(1000, 1000)      = {atan2_fixed(1000, 1000)}°  (expect 45)");
+    say(f"  atan2(-1, 0)           = {atan2_fixed(-1, 0)}°  (expect 270)");
+    // dot product: orthogonal vectors → 0
+    say(f"  dot2d(1000,0, 0,1000)  = {dot2d(1000, 0, 0, 1000)}  (expect 0, orthogonal)");
+    say(f"  dot2d(1000,0, 1000,0)  = {dot2d(1000, 0, 1000, 0)}  (expect 1000000, parallel)");
+}
+
+// ─── 4. Number theory ───────────────────────────────────────────────────────
+fn number_theory() {
+    say("§e=== Number Theory ===");
+    say(f"  gcd(360, 252)         = {gcd(360, 252)}      (expect 36)");
+    say(f"  lcm(12, 18)           = {lcm(12, 18)}        (expect 36)");
+    say(f"  is_prime(97)          = {is_prime(97)}       (expect 1)");
+    say(f"  is_prime(100)         = {is_prime(100)}      (expect 0)");
+    say(f"  fib(20)               = {fib(20)}            (expect 6765)");
+    say(f"  collatz_steps(27)     = {collatz_steps(27)}  (expect 111)");
+    say(f"  digit_sum(123456789)  = {digit_sum(123456789)} (expect 45)");
+    say(f"  mod_pow(2, 10, 1000)  = {mod_pow(2, 10, 1000)} (expect 24)");
+    say(f"  mod_pow(7, 5, 13)     = {mod_pow(7, 5, 13)}    (expect 11)");
+}
+
+// ─── 5. Fixed-point interpolation & easing ──────────────────────────────────
+fn easing_showcase() {
+    say("§e=== Easing & Interpolation (t = 0..1000) ===");
+    let t: int = 0;
+    while (t <= 1000) {
+        let lin: int = lerp(0, 1000, t);
+        let sm:  int = smoothstep(0, 1000, t);
+        let smr: int = smootherstep(0, 1000, t);
+        say(f"  t={t}  lerp={lin}  smooth={sm}  smoother={smr}");
+        t = t + 250;
+    }
+}
+
+// ─── 6. Hash & noise ────────────────────────────────────────────────────────
+fn hash_showcase() {
+    say("§e=== Hash & Procedural Noise ===");
+    say(f"  hash_int(0)           = {hash_int(0)}");
+    say(f"  hash_int(1)           = {hash_int(1)}");
+    say(f"  hash_int(42)          = {hash_int(42)}");
+    say(f"  noise1d(0)            = {noise1d(0)}   (0..1000)");
+    say(f"  noise1d(100)          = {noise1d(100)}");
+    say(f"  noise1d(200)          = {noise1d(200)}");
+    say(f"  noise1d(300)          = {noise1d(300)}");
+}
+
+// ─── 7. BigInt Fibonacci — numbers beyond INT32 ─────────────────────────────
+fn bigint_showcase() {
+    say("§e=== BigInt — Arbitrary Precision (base 10000, 8 limbs) ===");
+    bigint_fib(50);
+    let l0: int = bigint_get_a(0);
+    let l1: int = bigint_get_a(1);
+    let l2: int = bigint_get_a(2);
+    say(f"  fib(50)  limbs: [{l2}][{l1}][{l0}]");
+    say(f"           = {l2}×10⁸ + {l1}×10⁴ + {l0}");
+    say(f"           = 12,586,269,025  (verify: l0=9025 l1=8626 l2=125)");
+
+    bigint_fib(70);
+    let m0: int = bigint_get_a(0);
+    let m1: int = bigint_get_a(1);
+    let m2: int = bigint_get_a(2);
+    let m3: int = bigint_get_a(3);
+    say(f"  fib(70)  limbs: [{m3}][{m2}][{m1}][{m0}]");
+    say(f"           = 190,392,490,709,135");
+}
+
+// ─── 8. Mandelbrot / Julia — fractals in integer arithmetic ─────────────────
+fn fractal_showcase() {
+    say("§e=== Mandelbrot & Julia (fixed-point, scale=1000) ===");
+    // Mandelbrot: does (cr, ci) escape in <max_iter> steps?
+    say(f"  mandelbrot_iter(0, 0, 64)         = {mandelbrot_iter(0, 0, 64)}  (inside, expect 64)");
+    say(f"  mandelbrot_iter(2000, 0, 64)      = {mandelbrot_iter(2000, 0, 64)}  (outside, < 64)");
+    say(f"  mandelbrot_iter(-500, 500, 64)    = {mandelbrot_iter(-500, 500, 64)}");
+    say(f"  julia_iter(0, 0, -500, 250, 64)  = {julia_iter(0, 0, -500, 250, 64)}");
+    say(f"  julia_iter(500, 0, -500, 250, 64)= {julia_iter(500, 0, -500, 250, 64)}");
+}
+
+// ─── 9. Run everything ──────────────────────────────────────────────────────
+fn run_all() {
+    trig_table();
+    sqrt_showcase();
+    vector_showcase();
+    number_theory();
+    easing_showcase();
+    hash_showcase();
+    bigint_showcase();
+    fractal_showcase();
+}
