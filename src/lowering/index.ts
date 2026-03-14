@@ -50,9 +50,13 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
     const pos = [x ?? '~', y ?? '~', z ?? '~'].join(' ')
     return nbt ? `summon ${type} ${pos} ${nbt}` : `summon ${type} ${pos}`
   },
-  particle: ([name, x, y, z]) => {
+  particle: ([name, x, y, z, dx, dy, dz, speed, count]) => {
     const pos = [x ?? '~', y ?? '~', z ?? '~'].join(' ')
-    return `particle ${name} ${pos}`
+    // dx/dy/dz/speed/count are optional; omit trailing undefineds
+    const extra = [dx, dy, dz, speed, count].filter(v => v !== undefined && v !== null)
+    return extra.length > 0
+      ? `particle ${name} ${pos} ${extra.join(' ')}`
+      : `particle ${name} ${pos}`
   },
   playsound:  ([sound, source, sel, x, y, z, volume, pitch, minVolume]) =>
     ['playsound', sound, source, sel, x, y, z, volume, pitch, minVolume].filter(Boolean).join(' '),
