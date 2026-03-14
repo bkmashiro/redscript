@@ -186,7 +186,7 @@ fn _tick_math() {
     state.angle = (state.angle + 3) % 360;
     let s: int = sin_fixed(state.angle);
     let c: int = cos_fixed(state.angle);
-    let theta: int = atan2_fixed(s, c) / 1000;   // millideg → deg
+    let theta: int = atan2_fixed(s, c);         // returns degrees directly
     foreach (p in @a[limit=1]) {
         actionbar(p, f"§bsin={s} §dcos={c} §eatan2={theta}°");
     }
@@ -299,8 +299,8 @@ fn _dump_advanced_phase() {
 
     // Modular exponentiation
     say("§eModular Exponentiation:");
-    say(f"  mod_pow(2, 31, 1000000007) = {mod_pow(2, 31, 1000000007)}");
-    say(f"  mod_pow(3, 100, 997) = {mod_pow(3, 100, 997)}");
+    say(f"  mod_pow(2, 10, 1000) = {mod_pow(2, 10, 1000)}  (expect 24)");
+    say(f"  mod_pow(7, 5, 13) = {mod_pow(7, 5, 13)}  (expect 11)  // NOTE: m<46340 to avoid INT32 overflow");
 
     // Bézier curve
     say("§eQuadratic Bézier (P0=0, P1=1000, P2=0) — shape like ∩:");
@@ -323,7 +323,7 @@ fn _dump_advanced_phase() {
     say(f"  length2d_fixed(3, 4) = {length2d_fixed(3, 4)}  (expect 5000)");
     say(f"  dot2d(1000,0, 0,1000) = {dot2d(1000, 0, 0, 1000)}  (perpendicular = 0)");
     say(f"  dot2d(1000,0, 1000,0) = {dot2d(1000, 0, 1000, 0)}  (parallel = 1e6)");
-    say(f"  atan2_fixed(1000, 1000)/1000 = {atan2_fixed(1000, 1000) / 1000}°  (expect 45)");
+    say(f"  atan2_fixed(1000, 1000) = {atan2_fixed(1000, 1000)}°  (expect 45)");
     say(f"  normalize2d_x(3, 4) = {normalize2d_x(3, 4)}  (expect 600)");
     say(f"  normalize2d_y(3, 4) = {normalize2d_y(3, 4)}  (expect 800)");
 }
