@@ -309,3 +309,150 @@ describe('sin_fixed compile check', () => {
     expect(result.success).toBe(true)
   })
 })
+
+// ─── Phase 5: Vectors, directions & easing ───────────────────────────────────
+
+describe('mulfix / divfix', () => {
+  it.each([
+    [500, 707, 353],   // 0.5 × 0.707 ≈ 0.353
+    [1000, 1000, 1000],
+    [1000, 500, 500],
+    [0, 999, 0],
+  ])('mulfix(%d, %d) == %d', (a, b, expected) => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", mulfix(${a}, ${b})); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(expected)
+  })
+
+  it.each([
+    [1, 3, 333],
+    [1, 2, 500],
+    [2, 1, 2000],
+    [0, 5, 0],
+  ])('divfix(%d, %d) == %d', (a, b, expected) => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", divfix(${a}, ${b})); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(expected)
+  })
+})
+
+describe('dot2d / cross2d', () => {
+  it('dot2d(3, 4, 3, 4) == 25', () => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", dot2d(3, 4, 3, 4)); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(25)
+  })
+  it('dot2d perpendicular == 0', () => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", dot2d(1, 0, 0, 1)); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(0)
+  })
+  it('cross2d(1, 0, 0, 1) == 1', () => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", cross2d(1, 0, 0, 1)); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(1)
+  })
+  it('cross2d parallel == 0', () => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", cross2d(3, 0, 6, 0)); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(0)
+  })
+})
+
+describe('length2d_fixed', () => {
+  it.each([
+    [3, 4, 5000],    // 3-4-5 triangle
+    [0, 5, 5000],
+    [5, 0, 5000],
+    [1, 1, 1414],    // √2 × 1000
+  ])('length2d_fixed(%d, %d) == %d', (x, y, expected) => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", length2d_fixed(${x}, ${y})); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(expected)
+  })
+})
+
+describe('manhattan / chebyshev', () => {
+  it.each([
+    [0, 0, 3, 4, 7],
+    [0, 0, 0, 5, 5],
+    [1, 1, 1, 1, 0],
+  ])('manhattan(%d,%d,%d,%d) == %d', (x1, y1, x2, y2, expected) => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", manhattan(${x1}, ${y1}, ${x2}, ${y2})); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(expected)
+  })
+
+  it.each([
+    [0, 0, 3, 4, 4],
+    [0, 0, 4, 3, 4],
+    [0, 0, 5, 5, 5],
+  ])('chebyshev(%d,%d,%d,%d) == %d', (x1, y1, x2, y2, expected) => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", chebyshev(${x1}, ${y1}, ${x2}, ${y2})); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(expected)
+  })
+})
+
+describe('smoothstep', () => {
+  it.each([
+    [0,   0],
+    [100, 1000],
+    [50,  500],  // midpoint: 3×0.5²−2×0.5³ = 0.5 → 500
+  ])('smoothstep(0,100,%d) == %d', (x, expected) => {
+    const rt = run(`fn test() { scoreboard_set("out", "r", smoothstep(0, 100, ${x})); }`)
+    rt.execFunction('test')
+    expect(scoreOf(rt, 'r')).toBe(expected)
+  })
+
+  it('smoothstep is monotonically increasing', () => {
+    let prev = -1
+    for (const x of [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]) {
+      const rt = run(`fn test() { scoreboard_set("out", "r", smoothstep(0, 100, ${x})); }`)
+      rt.execFunction('test')
+      const v = scoreOf(rt, 'r')
+      expect(v).toBeGreaterThanOrEqual(prev)
+      prev = v
+    }
+  })
+})
+
+describe('atan2_fixed compile check', () => {
+  it('atan2_fixed compiles', () => {
+    const result = require('../compile').compile(
+      require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8') +
+      '\nfn test() { scoreboard_set("out", "r", atan2_fixed(1, 1)); }',
+      { namespace: 'mathtest' }
+    )
+    expect(result.success).toBe(true)
+  })
+  it('@require_on_load: _atan_init appears in __load when atan2_fixed is used', () => {
+    const result = require('../compile').compile(
+      require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8') +
+      '\nfn test() { scoreboard_set("out", "r", atan2_fixed(1, 0)); }',
+      { namespace: 'mathtest' }
+    )
+    expect(result.success).toBe(true)
+    const hasTanTable = result.files?.some((f: any) =>
+      f.content?.includes('data modify storage math:tables tan set value')
+    )
+    expect(hasTanTable).toBe(true)
+  })
+  it('@require_on_load: _atan_init IS in __load whenever math.mcrs is included (atan2_fixed is public)', () => {
+    // atan2_fixed is a public function (no _ prefix) → always compiled in as an
+    // MC entry point (callable via /function), which keeps _atan_init via
+    // @require_on_load.  The conditional optimisation only fires when the
+    // declaring function is itself private (_-prefixed).
+    const result = require('../compile').compile(
+      require('fs').readFileSync(require('path').join(__dirname, '../../src/stdlib/math.mcrs'), 'utf-8') +
+      '\nfn test() { scoreboard_set("out", "r", abs(-5)); }',
+      { namespace: 'mathtest' }
+    )
+    expect(result.success).toBe(true)
+    const hasTanTable = result.files?.some((f: any) =>
+      f.content?.includes('data modify storage math:tables tan set value')
+    )
+    // atan2_fixed public → pulls in _atan_init → tan table present
+    expect(hasTanTable).toBe(true)
+  })
+})
