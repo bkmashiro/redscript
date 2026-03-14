@@ -16,7 +16,7 @@
  *   parameters:           "$p0", "$p1", ...
  */
 
-import type { IRBlock, IRFunction, IRModule, Operand, Terminator } from '../../ir/types'
+import type { IRBlock, IRFunction, IRInstr, IRModule, Operand, Terminator } from '../../ir/types'
 import { optimizeCommandFunctions, type OptimizationStats, createEmptyOptimizationStats, mergeOptimizationStats } from '../../optimizer/commands'
 import { EVENT_TYPES, isEventTypeName, type EventTypeName } from '../../events/types'
 import { VarAllocator } from '../var-allocator'
@@ -30,6 +30,7 @@ const OBJ = 'rs'  // scoreboard objective name
 function operandToScore(op: Operand, alloc: VarAllocator): string {
   if (op.kind === 'var')   return `${alloc.alloc(op.name)} ${OBJ}`
   if (op.kind === 'const') return `${alloc.constant(op.value)} ${OBJ}`
+  if (op.kind === 'param') return `${alloc.internal(`p${op.index}`)} ${OBJ}`
   throw new Error(`Cannot convert storage operand to score: ${op.path}`)
 }
 
@@ -74,6 +75,8 @@ function emitInstr(instr: ReturnType<typeof Object.assign> & { op: string }, ns:
         lines.push(`scoreboard players set ${dst} ${OBJ} ${src.value}`)
       } else if (src.kind === 'var') {
         lines.push(`scoreboard players operation ${dst} ${OBJ} = ${alloc.alloc(src.name)} ${OBJ}`)
+      } else if (src.kind === 'param') {
+        lines.push(`scoreboard players operation ${dst} ${OBJ} = ${alloc.internal(`p${src.index}`)} ${OBJ}`)
       } else {
         lines.push(`execute store result score ${dst} ${OBJ} run data get storage ${src.path}`)
       }
@@ -119,21 +122,35 @@ function emitInstr(instr: ReturnType<typeof Object.assign> & { op: string }, ns:
     }
 
     case 'call': {
-      // Push args as param fake players
+      // Push args into the internal parameter slots ($p0, $p1, ...).
+      // We emit the copy commands directly (not via emitInstr/alloc.alloc) to
+      // ensure the destination resolves to alloc.internal('p{i}') rather than
+      // alloc.alloc('p{i}') which would create a *different* user-var slot.
       for (let i = 0; i < instr.args.length; i++) {
-        const paramName = alloc.internal(`p${i}`)
-        lines.push(...emitInstr({ op: 'assign', dst: paramName, src: instr.args[i] }, ns, alloc))
+        const paramSlot = alloc.internal(`p${i}`)
+        const arg = instr.args[i] as Operand
+        if (arg.kind === 'const') {
+          lines.push(`scoreboard players set ${paramSlot} ${OBJ} ${arg.value}`)
+        } else if (arg.kind === 'var') {
+          lines.push(`scoreboard players operation ${paramSlot} ${OBJ} = ${alloc.alloc(arg.name)} ${OBJ}`)
+        } else if (arg.kind === 'param') {
+          lines.push(`scoreboard players operation ${paramSlot} ${OBJ} = ${alloc.internal(`p${arg.index}`)} ${OBJ}`)
+        }
+        // storage args are rare for call sites; fall through to no-op
       }
       lines.push(`function ${ns}:${instr.fn}`)
       if (instr.dst) {
-        const retName = alloc.internal('ret')
-        lines.push(`scoreboard players operation ${alloc.alloc(instr.dst)} ${OBJ} = ${retName} ${OBJ}`)
+        const retSlot = alloc.internal('ret')
+        lines.push(`scoreboard players operation ${alloc.alloc(instr.dst)} ${OBJ} = ${retSlot} ${OBJ}`)
       }
       break
     }
 
     case 'raw':
-      lines.push(instr.cmd as string)
+      // resolveRaw rewrites $var tokens that are registered in the allocator
+      // so that mangle=true mode produces correct mangled names instead of
+      // the raw IR names embedded by the lowering phase.
+      lines.push(alloc.resolveRaw(instr.cmd as string))
       break
   }
 
@@ -159,15 +176,27 @@ function emitTerm(term: Terminator, ns: string, fnName: string, alloc: VarAlloca
       lines.push(`execute if score ${alloc.alloc(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.else_}`)
       break
     case 'return': {
-      const retName = alloc.internal('ret')
+      // Emit the copy to the shared return slot directly — do NOT go through
+      // emitInstr/alloc.alloc(retSlot) which would allocate a *user* var slot
+      // (different from the internal slot) and break mangle mode.
+      const retSlot = alloc.internal('ret')
       if (term.value) {
-        lines.push(...emitInstr({ op: 'assign', dst: retName, src: term.value }, ns, alloc))
+        if (term.value.kind === 'const') {
+          lines.push(`scoreboard players set ${retSlot} ${OBJ} ${term.value.value}`)
+        } else if (term.value.kind === 'var') {
+          lines.push(`scoreboard players operation ${retSlot} ${OBJ} = ${alloc.alloc(term.value.name)} ${OBJ}`)
+        } else if (term.value.kind === 'param') {
+          lines.push(`scoreboard players operation ${retSlot} ${OBJ} = ${alloc.internal(`p${term.value.index}`)} ${OBJ}`)
+        }
       }
-      // In MC 1.20+, use `return` command
+      // MC 1.20+: use `return` to propagate the value back to the caller's
+      // `execute store result … run function …` without an extra scoreboard read.
       if (term.value?.kind === 'const') {
         lines.push(`return ${term.value.value}`)
       } else if (term.value?.kind === 'var') {
         lines.push(`return run scoreboard players get ${alloc.alloc(term.value.name)} ${OBJ}`)
+      } else if (term.value?.kind === 'param') {
+        lines.push(`return run scoreboard players get ${alloc.internal(`p${term.value.index}`)} ${OBJ}`)
       }
       break
     }
@@ -266,6 +295,56 @@ export function countMcfunctionCommands(files: DatapackFile[]): number {
   }, 0)
 }
 
+// ---------------------------------------------------------------------------
+// Pre-allocation helpers for the two-pass mangle strategy
+// ---------------------------------------------------------------------------
+
+/** Register every variable referenced in an instruction with the allocator. */
+function preAllocInstr(instr: IRInstr, alloc: VarAllocator): void {
+  switch (instr.op) {
+    case 'assign':
+      alloc.alloc(instr.dst)
+      if (instr.src.kind === 'var') alloc.alloc(instr.src.name)
+      break
+    case 'binop':
+      alloc.alloc(instr.dst)
+      if (instr.lhs.kind === 'var') alloc.alloc(instr.lhs.name)
+      if (instr.rhs.kind === 'var') alloc.alloc(instr.rhs.name)
+      break
+    case 'cmp':
+      alloc.alloc(instr.dst)
+      if (instr.lhs.kind === 'var') alloc.alloc(instr.lhs.name)
+      if (instr.rhs.kind === 'var') alloc.alloc(instr.rhs.name)
+      break
+    case 'call':
+      for (const arg of instr.args) {
+        if (arg.kind === 'var') alloc.alloc(arg.name)
+      }
+      if (instr.dst) alloc.alloc(instr.dst)
+      break
+    case 'raw':
+      // Scan for $varname tokens and pre-register each one
+      ;(instr.cmd as string).replace(/\$[A-Za-z_][A-Za-z0-9_]*/g, (tok) => {
+        alloc.alloc(tok)
+        return tok
+      })
+      break
+  }
+}
+
+/** Register every variable referenced in a terminator with the allocator. */
+function preAllocTerm(term: Terminator, alloc: VarAllocator): void {
+  switch (term.op) {
+    case 'jump_if':
+    case 'jump_unless':
+      alloc.alloc(term.cond)
+      break
+    case 'return':
+      if (term.value?.kind === 'var') alloc.alloc(term.value.name)
+      break
+  }
+}
+
 export function generateDatapackWithStats(
   module: IRModule,
   options: DatapackGenerationOptions = {},
@@ -359,6 +438,40 @@ export function generateDatapackWithStats(
     ))
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Pre-allocation pass (mangle mode only)
+  //
+  // When mangle=true, the codegen assigns sequential names ($a, $b, …) the
+  // FIRST time alloc.alloc() is called for a given variable.  Raw IR commands
+  // embed variable names (e.g. "$_0") as plain strings; resolveRaw() can only
+  // substitute them if the name was already registered in the allocator.
+  //
+  // Problem: a freshTemp ($\_0) used in a `raw` instruction and then in the
+  // immediately following `assign` gets registered by the `assign` AFTER the
+  // `raw` has already been emitted — so resolveRaw sees an unknown name and
+  // passes it through verbatim ($\_0), while the assign emits a different
+  // mangled slot ($e).  The two slots never meet and the value is lost.
+  //
+  // Fix: walk every instruction (and terminator) of every function in order
+  // and call alloc.alloc() for each variable reference.  This registers all
+  // names — with the same sequential order the main emit pass will encounter
+  // them — so that resolveRaw() can always find the correct mangled name.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (mangle) {
+    for (const fn of module.functions) {
+      // Register internals used by the calling convention
+      for (let i = 0; i < fn.params.length; i++) alloc.internal(`p${i}`)
+      alloc.internal('ret')
+
+      for (const block of fn.blocks) {
+        for (const instr of block.instrs) {
+          preAllocInstr(instr as IRInstr, alloc)
+        }
+        preAllocTerm(block.term, alloc)
+      }
+    }
+  }
+
   // Generate each function
   for (const fn of module.functions) {
 
@@ -368,12 +481,9 @@ export function generateDatapackWithStats(
       const block = fn.blocks[i]
       const lines: string[] = [`# block: ${block.label}`]
 
-      // Param setup in entry block
-      if (i === 0) {
-        for (let j = 0; j < fn.params.length; j++) {
-          lines.push(`scoreboard players operation ${alloc.alloc(fn.params[j])} ${OBJ} = ${alloc.internal(`p${j}`)} ${OBJ}`)
-        }
-      }
+      // Param setup is now handled by the lowering IR itself via { kind: 'param' }
+      // operands, so we no longer need a separate codegen param-copy loop here.
+      // (Removing it prevents the double-assignment that caused mangle-mode collisions.)
 
       for (const instr of block.instrs) {
         lines.push(...emitInstr(instr as any, ns, alloc))

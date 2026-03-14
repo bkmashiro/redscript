@@ -50,7 +50,7 @@ describe('Lowering', () => {
       const fn = getFunction(ir, 'foo')!
       const instrs = getInstructions(fn)
       expect(instrs.some(i =>
-        i.op === 'assign' && i.dst === '$x' && (i.src as any).name === '$p0'
+        i.op === 'assign' && i.dst === '$x' && (i.src as any).kind === 'param' && (i.src as any).index === 0
       )).toBe(true)
     })
 

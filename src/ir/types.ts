@@ -19,6 +19,7 @@ export type Operand =
   | { kind: 'var';     name: string }        // scoreboard fake player
   | { kind: 'const';   value: number }       // integer literal
   | { kind: 'storage'; path: string }        // NBT storage path (e.g. "redscript:heap data.x")
+  | { kind: 'param';   index: number }       // function parameter slot (alloc.internal('p{i}')), avoids mangle collision
 
 // ---------------------------------------------------------------------------
 // Binary operators (all map to `scoreboard players operation`)

@@ -19,26 +19,32 @@ describe('generateDatapack', () => {
   })
 
   it('generates function file for simple add(a, b)', () => {
+    // IR now uses { kind: 'param', index: i } for param-copy instructions,
+    // matching what the lowering emits.  Pass mangle:false so we can check
+    // readable names without worrying about sequential mangled names.
     const mod: IRModule = {
       namespace: 'mypack',
       globals: [],
       functions: [{
         name: 'add',
-        params: ['a', 'b'],
-        locals: ['a', 'b', 'result'],
+        params: ['$a', '$b'],
+        locals: ['$a', '$b', '$result'],
         blocks: [{
           label: 'entry',
           instrs: [
-            { op: 'binop', dst: 'result', lhs: { kind: 'var', name: 'a' }, bop: '+', rhs: { kind: 'var', name: 'b' } },
+            // param-copy instructions (what the lowering now emits)
+            { op: 'assign', dst: '$a', src: { kind: 'param', index: 0 } },
+            { op: 'assign', dst: '$b', src: { kind: 'param', index: 1 } },
+            { op: 'binop', dst: '$result', lhs: { kind: 'var', name: '$a' }, bop: '+', rhs: { kind: 'var', name: '$b' } },
           ],
-          term: { op: 'return', value: { kind: 'var', name: 'result' } },
+          term: { op: 'return', value: { kind: 'var', name: '$result' } },
         }],
       }],
     }
-    const files = generateDatapack(mod)
+    const files = generateDatapackWithStats(mod, { mangle: false }).files
     const fn = files.find(f => f.path.includes('add.mcfunction'))
     expect(fn).toBeDefined()
-    // Should have param setup
+    // param setup emitted from the IR
     expect(fn!.content).toContain('scoreboard players operation $a rs = $p0 rs')
     expect(fn!.content).toContain('scoreboard players operation $b rs = $p1 rs')
     // Should have add operation

@@ -635,11 +635,15 @@ export class Lowering {
     // Start entry block
     this.builder.startBlock('entry')
 
-    // Copy params from $p0, $p1, ... to named variables
+    // Copy params from the parameter-passing slots to named local variables.
+    // Use { kind: 'param', index: i } so the codegen resolves to
+    // alloc.internal('p{i}') consistently in both mangle and no-mangle modes,
+    // avoiding the slot-collision between the internal register and a user variable
+    // named 'p0'/'p1' that occurred with { kind: 'var', name: '$p0' }.
     for (let i = 0; i < runtimeParams.length; i++) {
       const paramName = runtimeParams[i].name
       const varName = `$${paramName}`
-      this.builder.emitAssign(varName, { kind: 'var', name: `$p${i}` })
+      this.builder.emitAssign(varName, { kind: 'param', index: i })
     }
 
     if (staticEventDec) {

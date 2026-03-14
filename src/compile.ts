@@ -205,8 +205,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       ? { ...ir, functions: ir.functions.map(fn => optimize(fn)) }
       : ir
 
-    // Code generation
-    const generated = generateDatapackWithStats(optimized, { mangle: options.mangle ?? false })
+    // Code generation — mangle=true by default to prevent cross-function
+    // scoreboard variable collisions in the global MC scoreboard namespace.
+    const generated = generateDatapackWithStats(optimized, { mangle: options.mangle ?? true })
 
     return {
       success: true,

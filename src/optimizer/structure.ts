@@ -24,7 +24,8 @@ function varRef(name: string): string {
 function operandToScore(op: Operand): string {
   if (op.kind === 'var') return `${varRef(op.name)} ${OBJ}`
   if (op.kind === 'const') return `$const_${op.value} ${OBJ}`
-  throw new Error(`Cannot convert storage operand to score: ${op.path}`)
+  if (op.kind === 'param') return `$p${op.index} ${OBJ}`
+  throw new Error(`Cannot convert storage operand to score: ${(op as any).path}`)
 }
 
 function emitInstr(instr: IRInstr, namespace: string): IRCommand[] {
@@ -37,6 +38,10 @@ function emitInstr(instr: IRInstr, namespace: string): IRCommand[] {
       } else if (instr.src.kind === 'var') {
         commands.push({
           cmd: `scoreboard players operation ${varRef(instr.dst)} ${OBJ} = ${varRef(instr.src.name)} ${OBJ}`,
+        })
+      } else if (instr.src.kind === 'param') {
+        commands.push({
+          cmd: `scoreboard players operation ${varRef(instr.dst)} ${OBJ} = $p${instr.src.index} ${OBJ}`,
         })
       } else {
         commands.push({

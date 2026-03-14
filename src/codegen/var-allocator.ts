@@ -35,6 +35,35 @@ export class VarAllocator {
     return name
   }
 
+  /**
+   * Look up the allocated name for a raw scoreboard fake-player name such as
+   * "$_2", "$x", "$p0", or "$ret".  Returns the mangled name when mangle=true,
+   * or the original name when mangle=false or the name is not yet known.
+   *
+   * Unlike alloc/internal/constant this does NOT create a new slot — it only
+   * resolves names that were already registered.  Used by the codegen to
+   * rewrite variable references inside `raw` IR instructions.
+   */
+  resolve(rawName: string): string {
+    const clean = rawName.startsWith('$') ? rawName.slice(1) : rawName
+    // Check every cache in priority order: vars, internals, consts
+    return (
+      this.varCache.get(clean) ??
+      this.internalCache.get(clean) ??
+      rawName  // not registered → return as-is (literal fake player, not a var)
+    )
+  }
+
+  /**
+   * Rewrite all $varname tokens in a raw mcfunction command string so that
+   * IR variable names are replaced by their allocated (possibly mangled) names.
+   * Tokens that are not registered in the allocator are left untouched (they
+   * are literal scoreboard fake-player names like "out" or "#rs").
+   */
+  resolveRaw(cmd: string): string {
+    return cmd.replace(/\$[A-Za-z_][A-Za-z0-9_]*/g, (tok) => this.resolve(tok))
+  }
+
   /** Allocate a name for a compiler internal (e.g. "ret", "p0"). */
   internal(suffix: string): string {
     const cached = this.internalCache.get(suffix)
