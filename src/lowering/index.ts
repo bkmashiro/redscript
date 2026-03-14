@@ -106,6 +106,8 @@ const BUILTINS: Record<string, (args: string[]) => string | null> = {
   setTimeout: () => null, // Special handling
   setInterval: () => null, // Special handling
   clearInterval: () => null, // Special handling
+  storage_get_int: () => null, // Special handling (dynamic NBT array read via macro)
+  storage_set_array: () => null, // Special handling (write literal NBT array to storage)
 }
 
 export interface Warning {
@@ -2545,6 +2547,57 @@ export class Lowering {
       const scale = args[3] ? this.exprToString(args[3]) : '1'
       this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`)
       return { kind: 'var', name: dst }
+    }
+
+    // storage_get_int(storage_ns, array_key, index) -> int
+    // Reads one element from an NBT int-array stored in data storage.
+    //   storage_ns : e.g. "math:tables"
+    //   array_key  : e.g. "sin"
+    //   index      : integer index (const or runtime)
+    //
+    // Const index: execute store result score $dst rs run data get storage math:tables sin[N] 1
+    // Runtime index: macro sub-function via rs:heap, mirrors readArrayElement.
+    if (name === 'storage_get_int') {
+      const storageNs  = this.exprToString(args[0])  // "math:tables"
+      const arrayKey   = this.exprToString(args[1])  // "sin"
+      const indexOperand = this.lowerExpr(args[2])
+      const dst = this.builder.freshTemp()
+
+      if (indexOperand.kind === 'const') {
+        this.builder.emitRaw(
+          `execute store result score ${dst} rs run data get storage ${storageNs} ${arrayKey}[${indexOperand.value}] 1`
+        )
+      } else {
+        // Runtime index: store the index into rs:heap under a unique key,
+        // then call a macro sub-function that uses $(key) to index the array.
+        const macroKey  = `__sgi_${this.foreachCounter++}`
+        const subFnName = `${this.currentFn}/__sgi_${this.foreachCounter++}`
+        const indexVar  = indexOperand.kind === 'var'
+          ? indexOperand.name
+          : this.operandToVar(indexOperand)
+        this.builder.emitRaw(
+          `execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} rs`
+        )
+        this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
+        this.emitRawSubFunction(
+          subFnName,
+          `$execute store result score ${dst} rs run data get storage ${storageNs} ${arrayKey}[$(${macroKey})] 1`
+        )
+      }
+      return { kind: 'var', name: dst }
+    }
+
+    // storage_set_array(storage_ns, array_key, nbt_array_literal)
+    // Writes a literal NBT int array to data storage (used in @load for tables).
+    //   storage_set_array("math:tables", "sin", "[0, 17, 35, ...]")
+    if (name === 'storage_set_array') {
+      const storageNs  = this.exprToString(args[0])
+      const arrayKey   = this.exprToString(args[1])
+      const nbtLiteral = this.exprToString(args[2])
+      this.builder.emitRaw(
+        `data modify storage ${storageNs} ${arrayKey} set value ${nbtLiteral}`
+      )
+      return { kind: 'const', value: 0 }
     }
 
     // data_merge(target, nbt) — merge NBT into entity/block/storage
