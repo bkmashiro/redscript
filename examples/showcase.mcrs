@@ -50,13 +50,13 @@ let state: ShowcaseState = {
 
 // ── Timer (OOP demo) ───────────────────────────────────────────────────────
 
-struct PhaseTimer {
+struct ptimer {
     interval: int,   // ticks between phase advances
     elapsed:  int
 }
 
-impl PhaseTimer {
-    fn new(interval: int) -> PhaseTimer {
+impl ptimer {
+    fn new(interval: int) -> ptimer {
         return { interval: interval, elapsed: 0 };
     }
 
@@ -74,7 +74,7 @@ impl PhaseTimer {
     }
 }
 
-let phase_timer: PhaseTimer = { interval: 200, elapsed: 0 };   // advance every 10 seconds
+let phase_timer: ptimer = { interval: 200, elapsed: 0 };   // advance every 10 seconds
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
