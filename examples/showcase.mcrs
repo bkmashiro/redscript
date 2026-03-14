@@ -442,12 +442,16 @@ fn debug_bigint() {
     bigint_init();
     say("§7[1] bigint_init() done");
 
-    // Step 2: from_int_a (STATIC index — no macro)
+    // Step 2: from_int_a (STATIC index writes, no macro)
     bigint_from_int_a(12345);
+    // 2a: static read (data get storage rs:bigint a[0] — NO macro)
+    let direct0: int = storage_get_int("rs:bigint", "a", 0);
+    let direct1: int = storage_get_int("rs:bigint", "a", 1);
+    say(f"§7[2a] static-read a[0]={direct0}  a[1]={direct1}  (expect 2345,1)");
+    // 2b: macro read (bigint_get_a uses macro sub-function)
     let a0: int = bigint_get_a(0);
     let a1: int = bigint_get_a(1);
-    say(f"§7[2] from_int_a(12345) → get_a(0)={a0}  get_a(1)={a1}");
-    say(f"§7    expect: a0=2345  a1=1");
+    say(f"§7[2b] macro-read  a[0]={a0}  a[1]={a1}  (expect 2345,1)");
 
     // Step 3: fib(1) = 1  (no carry, simplest case)
     bigint_fib(1);
