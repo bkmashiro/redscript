@@ -1,49 +1,132 @@
-// Integer math helpers for RedScript datapacks.
+// math.mcrs — Integer & fixed-point math helpers for RedScript datapacks.
+//
+// Fixed-point convention: scale = 1000
+//   1.0  → 1000
+//   3.14 → 3140
+//   Use `sqrt_fixed` / `lerp` for sub-integer precision.
+//
+// Phase 1: basic integer helpers (abs, sign, min, max, clamp, lerp)
+// Phase 2: iterative algorithms (isqrt, sqrt_fixed, pow_int)
+// Phase 3: trig (sin_fixed, cos_fixed) — requires NBT array builtin (TODO)
+
+// ─── Phase 1: Basic integer helpers ──────────────────────────────────────────
 
 fn abs(x: int) -> int {
     if (x < 0) {
-        return -x;
-    } else {
-        return x;
+        return 0 - x;
     }
-}
-
-fn min(a: int, b: int) -> int {
-    if (a < b) {
-        return a;
-    } else {
-        return b;
-    }
-}
-
-fn max(a: int, b: int) -> int {
-    if (a > b) {
-        return a;
-    } else {
-        return b;
-    }
-}
-
-fn clamp(x: int, lo: int, hi: int) -> int {
-    if (x < lo) {
-        return lo;
-    } else {
-        if (x > hi) {
-            return hi;
-        } else {
-            return x;
-        }
-    }
+    return x;
 }
 
 fn sign(x: int) -> int {
     if (x > 0) {
         return 1;
-    } else {
-        if (x < 0) {
-            return -1;
-        } else {
-            return 0;
-        }
     }
+    if (x < 0) {
+        return -1;
+    }
+    return 0;
 }
+
+fn min(a: int, b: int) -> int {
+    if (a < b) {
+        return a;
+    }
+    return b;
+}
+
+fn max(a: int, b: int) -> int {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+
+fn clamp(x: int, lo: int, hi: int) -> int {
+    if (x < lo) {
+        return lo;
+    }
+    if (x > hi) {
+        return hi;
+    }
+    return x;
+}
+
+// Linear interpolation (fixed-point t, t in [0, 1000])
+// lerp(0, 1000, 500) == 500
+// lerp(100, 200, 750) == 175
+fn lerp(a: int, b: int, t: int) -> int {
+    return a + (b - a) * t / 1000;
+}
+
+// ─── Phase 2: Iterative algorithms ───────────────────────────────────────────
+
+// Integer square root: floor(sqrt(n))
+// Uses Newton's method, converges from above in ≤16 iterations for all int32.
+// isqrt(9) == 3, isqrt(10) == 3, isqrt(0) == 0
+fn isqrt(n: int) -> int {
+    if (n <= 0) {
+        return 0;
+    }
+    let x: int = n;
+    let i: int = 0;
+    while (i < 16) {
+        let next: int = (x + n / x) / 2;
+        if (next >= x) {
+            return x;
+        }
+        x = next;
+        i = i + 1;
+    }
+    return x;
+}
+
+// Fixed-point sqrt (scale = 1000)
+// sqrt_fixed(2000) ≈ 1414  (sqrt(2.0) * 1000)
+// sqrt_fixed(1000) == 1000 (sqrt(1.0) * 1000)
+fn sqrt_fixed(x: int) -> int {
+    return isqrt(x * 1000);
+}
+
+// Integer power: base^exp  (exp >= 0)
+// Fast exponentiation by squaring: O(log exp)
+// pow_int(2, 10) == 1024, pow_int(3, 0) == 1
+fn pow_int(base: int, exp: int) -> int {
+    if (exp <= 0) {
+        return 1;
+    }
+    let result: int = 1;
+    let b: int = base;
+    let e: int = exp;
+    while (e > 0) {
+        if (e % 2 == 1) {
+            result = result * b;
+        }
+        b = b * b;
+        e = e / 2;
+    }
+    return result;
+}
+
+// Greatest common divisor (Euclidean algorithm)
+// gcd(12, 8) == 4, gcd(0, 5) == 5
+fn gcd(a: int, b: int) -> int {
+    // Inline abs to avoid $ret register pollution from nested calls
+    let x: int = a;
+    if (x < 0) { x = 0 - x; }
+    let y: int = b;
+    if (y < 0) { y = 0 - y; }
+    while (y > 0) {
+        let r: int = x % y;
+        x = y;
+        y = r;
+    }
+    return x;
+}
+
+// ─── Phase 3: Trigonometry (TODO) ────────────────────────────────────────────
+// Requires NBT array lookup via macro: data get storage math:tables sin[$(idx)]
+// Plan:
+//   __load: data modify storage math:tables sin set value [0, 17, 34, ...]
+//   sin_fixed(deg): normalize → quadrant reduce → table[idx % 91]
+//   cos_fixed(deg): sin_fixed(deg + 90)
