@@ -1,6 +1,7 @@
 // readme-demo.mcrs — RedScript v1.2.29 README visual showcase
-// Draws three mathematical curves using particles traced along fixed curve points.
-// Curves:  y=x·sin(x)  |  Lissajous 3:2  |  y=sin(x)+½sin(2x)
+// 5 mathematical curves traced with particles:
+//   1. y = x·sin(x)            2. y = sin(x)+½sin(2x)
+//   3. y = e^(-|x|)·sin(4x)   4. y = tanh(2x)   5. r = cos(2θ) rose
 //
 // Compile:  node dist/cli.js compile examples/readme-demo.mcrs -o <out> --namespace rsdemo
 // In-game:  /function rsdemo:start   (face any direction)
@@ -17,236 +18,369 @@ let on:    bool = false;
     if (!on) { return; }
     frame = frame + 1;
 
-    let curve_id: int = (frame / 300) % 3;   // switch curve every 15 s
-    let idx:      int = frame % 32;           // tracer position (0..31)
+    // 5 curves × 128 ticks each
+    let curve_id: int = (frame / 128) % 5;
 
-    // Actionbar
-    if (curve_id == 0) { actionbar(@a, f"§e  y = x·sin(x)   §7idx={idx}"); }
-    if (curve_id == 1) { actionbar(@a, f"§b  Lissajous  x=sin(3t), y=cos(2t)   §7t={idx}/32"); }
-    if (curve_id == 2) { actionbar(@a, f"§c  y = sin(x) + ½sin(2x)   §7idx={idx}"); }
+    if (curve_id == 0) { actionbar(@a, "§e  y = x·sin(x)"); }
+    if (curve_id == 1) { actionbar(@a, "§c  y = sin(x) + ½sin(2x)"); }
+    if (curve_id == 2) { actionbar(@a, "§b  y = e^{-|x|}·sin(4x)  (damped)"); }
+    if (curve_id == 3) { actionbar(@a, "§a  y = tanh(2x)  (sigmoid / S-curve)"); }
+    if (curve_id == 4) { actionbar(@a, "§d  r = cos(2θ)  (rose curve)"); }
 
     foreach (p in @a) at @s {
-        if (curve_id == 0) { _draw_xsinx(idx); }
-        if (curve_id == 1) { _draw_lissajous(idx); }
-        if (curve_id == 2) { _draw_harmonic(idx); }
+        if (curve_id == 0) { _draw_xsinx(); }
+        if (curve_id == 1) { _draw_harmonic(); }
+        if (curve_id == 2) { _draw_damped(); }
+        if (curve_id == 3) { _draw_tanh(); }
+        if (curve_id == 4) { _draw_rose(); }
     }
 }
 
-fn _draw_xsinx(idx: int) {
-    // Curve: §e y = x·sin(x)  (32 points, all drawn every tick)
-    particle("minecraft:end_rod", ^-7.50, ^2.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-7.02, ^2.88, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-6.53, ^3.19, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-6.05, ^3.42, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-5.56, ^3.58, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-5.08, ^3.65, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-4.60, ^3.65, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-4.11, ^3.58, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-3.63, ^3.47, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-3.15, ^3.31, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-2.66, ^3.14, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-2.18, ^2.96, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-1.69, ^2.79, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-1.21, ^2.66, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-0.73, ^2.56, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^-0.24, ^2.51, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^0.24, ^2.51, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^0.73, ^2.56, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^1.21, ^2.66, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^1.69, ^2.79, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^2.18, ^2.96, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^2.66, ^3.14, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^3.15, ^3.31, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^3.63, ^3.47, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^4.11, ^3.58, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^4.60, ^3.65, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^5.08, ^3.65, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^5.56, ^3.58, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^6.05, ^3.42, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^6.53, ^3.19, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^7.02, ^2.88, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:end_rod", ^7.50, ^2.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-
-    // Tracer — bright moving dot along the curve
-    if (idx == 0) { particle("minecraft:flash", ^-7.50, ^2.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 1) { particle("minecraft:flash", ^-7.02, ^2.88, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 2) { particle("minecraft:flash", ^-6.53, ^3.19, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 3) { particle("minecraft:flash", ^-6.05, ^3.42, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 4) { particle("minecraft:flash", ^-5.56, ^3.58, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 5) { particle("minecraft:flash", ^-5.08, ^3.65, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 6) { particle("minecraft:flash", ^-4.60, ^3.65, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 7) { particle("minecraft:flash", ^-4.11, ^3.58, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 8) { particle("minecraft:flash", ^-3.63, ^3.47, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 9) { particle("minecraft:flash", ^-3.15, ^3.31, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 10) { particle("minecraft:flash", ^-2.66, ^3.14, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 11) { particle("minecraft:flash", ^-2.18, ^2.96, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 12) { particle("minecraft:flash", ^-1.69, ^2.79, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 13) { particle("minecraft:flash", ^-1.21, ^2.66, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 14) { particle("minecraft:flash", ^-0.73, ^2.56, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 15) { particle("minecraft:flash", ^-0.24, ^2.51, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 16) { particle("minecraft:flash", ^0.24, ^2.51, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 17) { particle("minecraft:flash", ^0.73, ^2.56, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 18) { particle("minecraft:flash", ^1.21, ^2.66, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 19) { particle("minecraft:flash", ^1.69, ^2.79, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 20) { particle("minecraft:flash", ^2.18, ^2.96, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 21) { particle("minecraft:flash", ^2.66, ^3.14, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 22) { particle("minecraft:flash", ^3.15, ^3.31, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 23) { particle("minecraft:flash", ^3.63, ^3.47, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 24) { particle("minecraft:flash", ^4.11, ^3.58, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 25) { particle("minecraft:flash", ^4.60, ^3.65, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 26) { particle("minecraft:flash", ^5.08, ^3.65, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 27) { particle("minecraft:flash", ^5.56, ^3.58, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 28) { particle("minecraft:flash", ^6.05, ^3.42, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 29) { particle("minecraft:flash", ^6.53, ^3.19, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 30) { particle("minecraft:flash", ^7.02, ^2.88, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 31) { particle("minecraft:flash", ^7.50, ^2.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
+fn _draw_xsinx() {
+    // §e y = x·sin(x)  —  64 points
+    particle("minecraft:end_rod", ^-7.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-6.78, ^2.71, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-6.56, ^2.91, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-6.33, ^3.09, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-6.11, ^3.25, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.89, ^3.39, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.67, ^3.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.44, ^3.60, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.22, ^3.67, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.00, ^3.73, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-4.78, ^3.76, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-4.56, ^3.77, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-4.33, ^3.77, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-4.11, ^3.74, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.89, ^3.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.67, ^3.65, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.44, ^3.58, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.22, ^3.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.00, ^3.42, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-2.78, ^3.33, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-2.56, ^3.23, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-2.33, ^3.14, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-2.11, ^3.04, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.89, ^2.95, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.67, ^2.86, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.44, ^2.77, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.22, ^2.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.00, ^2.64, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-0.78, ^2.58, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-0.56, ^2.54, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-0.33, ^2.52, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-0.11, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^0.11, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^0.33, ^2.52, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^0.56, ^2.54, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^0.78, ^2.58, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.00, ^2.64, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.22, ^2.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.44, ^2.77, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.67, ^2.86, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.89, ^2.95, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^2.11, ^3.04, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^2.33, ^3.14, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^2.56, ^3.23, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^2.78, ^3.33, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.00, ^3.42, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.22, ^3.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.44, ^3.58, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.67, ^3.65, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.89, ^3.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^4.11, ^3.74, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^4.33, ^3.77, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^4.56, ^3.77, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^4.78, ^3.76, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.00, ^3.73, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.22, ^3.67, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.44, ^3.60, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.67, ^3.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.89, ^3.39, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^6.11, ^3.25, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^6.33, ^3.09, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^6.56, ^2.91, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^6.78, ^2.71, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^7.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
 }
 
-fn _draw_lissajous(idx: int) {
-    // Curve: §b x=sin(3t), y=cos(2t)  Lissajous  (32 points, all drawn every tick)
-    particle("minecraft:soul_fire_flame", ^0.00, ^4.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^4.17, ^4.35, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^6.93, ^3.91, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^7.36, ^3.27, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^5.30, ^2.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^1.46, ^1.73, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-2.87, ^1.09, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-6.24, ^0.65, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-7.50, ^0.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-6.24, ^0.65, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-2.87, ^1.09, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^1.46, ^1.73, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^5.30, ^2.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^7.36, ^3.27, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^6.93, ^3.91, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^4.17, ^4.35, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^0.00, ^4.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-4.17, ^4.35, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-6.93, ^3.91, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-7.36, ^3.27, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-5.30, ^2.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-1.46, ^1.73, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^2.87, ^1.09, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^6.24, ^0.65, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^7.50, ^0.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^6.24, ^0.65, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^2.87, ^1.09, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-1.46, ^1.73, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-5.30, ^2.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-7.36, ^3.27, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-6.93, ^3.91, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:soul_fire_flame", ^-4.17, ^4.35, ^6, 0.04,0.04,0.04, 0.0, 1);
-
-    // Tracer — bright moving dot along the curve
-    if (idx == 0) { particle("minecraft:flash", ^0.00, ^4.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 1) { particle("minecraft:flash", ^4.17, ^4.35, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 2) { particle("minecraft:flash", ^6.93, ^3.91, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 3) { particle("minecraft:flash", ^7.36, ^3.27, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 4) { particle("minecraft:flash", ^5.30, ^2.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 5) { particle("minecraft:flash", ^1.46, ^1.73, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 6) { particle("minecraft:flash", ^-2.87, ^1.09, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 7) { particle("minecraft:flash", ^-6.24, ^0.65, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 8) { particle("minecraft:flash", ^-7.50, ^0.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 9) { particle("minecraft:flash", ^-6.24, ^0.65, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 10) { particle("minecraft:flash", ^-2.87, ^1.09, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 11) { particle("minecraft:flash", ^1.46, ^1.73, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 12) { particle("minecraft:flash", ^5.30, ^2.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 13) { particle("minecraft:flash", ^7.36, ^3.27, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 14) { particle("minecraft:flash", ^6.93, ^3.91, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 15) { particle("minecraft:flash", ^4.17, ^4.35, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 16) { particle("minecraft:flash", ^0.00, ^4.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 17) { particle("minecraft:flash", ^-4.17, ^4.35, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 18) { particle("minecraft:flash", ^-6.93, ^3.91, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 19) { particle("minecraft:flash", ^-7.36, ^3.27, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 20) { particle("minecraft:flash", ^-5.30, ^2.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 21) { particle("minecraft:flash", ^-1.46, ^1.73, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 22) { particle("minecraft:flash", ^2.87, ^1.09, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 23) { particle("minecraft:flash", ^6.24, ^0.65, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 24) { particle("minecraft:flash", ^7.50, ^0.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 25) { particle("minecraft:flash", ^6.24, ^0.65, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 26) { particle("minecraft:flash", ^2.87, ^1.09, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 27) { particle("minecraft:flash", ^-1.46, ^1.73, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 28) { particle("minecraft:flash", ^-5.30, ^2.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 29) { particle("minecraft:flash", ^-7.36, ^3.27, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 30) { particle("minecraft:flash", ^-6.93, ^3.91, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 31) { particle("minecraft:flash", ^-4.17, ^4.35, ^6, 0.08,0.08,0.08, 0.0, 3); }
+fn _draw_harmonic() {
+    // §c y = sin(x) + ½sin(2x)  —  64 points
+    particle("minecraft:flame", ^-7.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-6.78, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-6.56, ^2.49, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-6.33, ^2.48, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-6.11, ^2.46, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-5.89, ^2.41, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-5.67, ^2.36, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-5.44, ^2.28, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-5.22, ^2.18, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-5.00, ^2.07, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-4.78, ^1.94, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-4.56, ^1.79, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-4.33, ^1.63, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-4.11, ^1.47, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-3.89, ^1.31, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-3.67, ^1.15, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-3.44, ^1.00, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-3.22, ^0.86, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-3.00, ^0.75, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-2.78, ^0.67, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-2.56, ^0.61, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-2.33, ^0.59, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-2.11, ^0.61, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-1.89, ^0.67, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-1.67, ^0.77, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-1.44, ^0.91, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-1.22, ^1.08, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-1.00, ^1.29, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-0.78, ^1.53, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-0.56, ^1.79, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-0.33, ^2.07, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^-0.11, ^2.35, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^0.11, ^2.65, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^0.33, ^2.93, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^0.56, ^3.21, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^0.78, ^3.47, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^1.00, ^3.71, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^1.22, ^3.92, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^1.44, ^4.09, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^1.67, ^4.23, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^1.89, ^4.33, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^2.11, ^4.39, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^2.33, ^4.41, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^2.56, ^4.39, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^2.78, ^4.33, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^3.00, ^4.25, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^3.22, ^4.14, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^3.44, ^4.00, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^3.67, ^3.85, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^3.89, ^3.69, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^4.11, ^3.53, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^4.33, ^3.37, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^4.56, ^3.21, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^4.78, ^3.06, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^5.00, ^2.93, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^5.22, ^2.82, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^5.44, ^2.72, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^5.67, ^2.64, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^5.89, ^2.59, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^6.11, ^2.54, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^6.33, ^2.52, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^6.56, ^2.51, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^6.78, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:flame", ^7.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
 }
 
-fn _draw_harmonic(idx: int) {
-    // Curve: §c y = sin(x) + ½sin(2x)  (32 points, all drawn every tick)
-    particle("minecraft:flame", ^-7.50, ^2.50, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-7.02, ^2.49, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-6.53, ^2.45, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-6.05, ^2.35, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-5.56, ^2.17, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-5.08, ^1.91, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-4.60, ^1.60, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-4.11, ^1.27, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-3.63, ^0.96, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-3.15, ^0.72, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-2.66, ^0.60, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-2.18, ^0.63, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-1.69, ^0.82, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-1.21, ^1.17, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-0.73, ^1.64, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^-0.24, ^2.20, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^0.24, ^2.80, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^0.73, ^3.36, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^1.21, ^3.83, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^1.69, ^4.18, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^2.18, ^4.37, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^2.66, ^4.40, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^3.15, ^4.28, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^3.63, ^4.04, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^4.11, ^3.73, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^4.60, ^3.40, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^5.08, ^3.09, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^5.56, ^2.83, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^6.05, ^2.65, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^6.53, ^2.55, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^7.02, ^2.51, ^6, 0.04,0.04,0.04, 0.0, 1);
-    particle("minecraft:flame", ^7.50, ^2.50, ^6, 0.04,0.04,0.04, 0.0, 1);
+fn _draw_damped() {
+    // §b y = e^{-|x|}·sin(4x)  damped  —  64 points
+    particle("minecraft:soul_fire_flame", ^-7.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-6.78, ^2.56, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-6.56, ^2.61, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-6.33, ^2.66, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-6.11, ^2.69, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-5.89, ^2.69, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-5.67, ^2.65, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-5.44, ^2.58, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-5.22, ^2.49, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-5.00, ^2.37, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-4.78, ^2.26, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-4.56, ^2.17, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-4.33, ^2.12, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-4.11, ^2.13, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-3.89, ^2.21, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-3.67, ^2.35, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-3.44, ^2.55, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-3.22, ^2.79, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-3.00, ^3.01, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-2.78, ^3.19, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-2.56, ^3.28, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-2.33, ^3.24, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-2.11, ^3.07, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.89, ^2.75, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.67, ^2.33, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.44, ^1.86, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.22, ^1.41, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.00, ^1.07, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.78, ^0.92, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.56, ^1.02, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.33, ^1.42, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.11, ^2.08, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.11, ^2.92, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.33, ^3.58, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.56, ^3.98, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.78, ^4.08, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.00, ^3.93, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.22, ^3.59, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.44, ^3.14, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.67, ^2.67, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.89, ^2.25, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^2.11, ^1.93, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^2.33, ^1.76, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^2.56, ^1.72, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^2.78, ^1.81, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^3.00, ^1.99, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^3.22, ^2.21, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^3.44, ^2.45, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^3.67, ^2.65, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^3.89, ^2.79, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^4.11, ^2.87, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^4.33, ^2.88, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^4.56, ^2.83, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^4.78, ^2.74, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^5.00, ^2.63, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^5.22, ^2.51, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^5.44, ^2.42, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^5.67, ^2.35, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^5.89, ^2.31, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^6.11, ^2.31, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^6.33, ^2.34, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^6.56, ^2.39, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^6.78, ^2.44, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^7.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+}
 
-    // Tracer — bright moving dot along the curve
-    if (idx == 0) { particle("minecraft:flash", ^-7.50, ^2.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 1) { particle("minecraft:flash", ^-7.02, ^2.49, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 2) { particle("minecraft:flash", ^-6.53, ^2.45, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 3) { particle("minecraft:flash", ^-6.05, ^2.35, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 4) { particle("minecraft:flash", ^-5.56, ^2.17, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 5) { particle("minecraft:flash", ^-5.08, ^1.91, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 6) { particle("minecraft:flash", ^-4.60, ^1.60, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 7) { particle("minecraft:flash", ^-4.11, ^1.27, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 8) { particle("minecraft:flash", ^-3.63, ^0.96, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 9) { particle("minecraft:flash", ^-3.15, ^0.72, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 10) { particle("minecraft:flash", ^-2.66, ^0.60, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 11) { particle("minecraft:flash", ^-2.18, ^0.63, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 12) { particle("minecraft:flash", ^-1.69, ^0.82, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 13) { particle("minecraft:flash", ^-1.21, ^1.17, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 14) { particle("minecraft:flash", ^-0.73, ^1.64, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 15) { particle("minecraft:flash", ^-0.24, ^2.20, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 16) { particle("minecraft:flash", ^0.24, ^2.80, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 17) { particle("minecraft:flash", ^0.73, ^3.36, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 18) { particle("minecraft:flash", ^1.21, ^3.83, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 19) { particle("minecraft:flash", ^1.69, ^4.18, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 20) { particle("minecraft:flash", ^2.18, ^4.37, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 21) { particle("minecraft:flash", ^2.66, ^4.40, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 22) { particle("minecraft:flash", ^3.15, ^4.28, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 23) { particle("minecraft:flash", ^3.63, ^4.04, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 24) { particle("minecraft:flash", ^4.11, ^3.73, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 25) { particle("minecraft:flash", ^4.60, ^3.40, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 26) { particle("minecraft:flash", ^5.08, ^3.09, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 27) { particle("minecraft:flash", ^5.56, ^2.83, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 28) { particle("minecraft:flash", ^6.05, ^2.65, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 29) { particle("minecraft:flash", ^6.53, ^2.55, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 30) { particle("minecraft:flash", ^7.02, ^2.51, ^6, 0.08,0.08,0.08, 0.0, 3); }
-    if (idx == 31) { particle("minecraft:flash", ^7.50, ^2.50, ^6, 0.08,0.08,0.08, 0.0, 3); }
+fn _draw_tanh() {
+    // §a y = tanh(2x)  S-curve  —  64 points
+    particle("minecraft:end_rod", ^-7.00, ^0.30, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-6.78, ^0.30, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-6.56, ^0.30, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-6.33, ^0.30, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-6.11, ^0.30, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.89, ^0.31, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.67, ^0.31, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.44, ^0.31, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.22, ^0.31, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-5.00, ^0.31, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-4.78, ^0.32, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-4.56, ^0.32, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-4.33, ^0.33, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-4.11, ^0.34, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.89, ^0.35, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.67, ^0.37, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.44, ^0.38, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.22, ^0.41, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-3.00, ^0.44, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-2.78, ^0.48, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-2.56, ^0.53, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-2.33, ^0.59, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-2.11, ^0.66, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.89, ^0.76, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.67, ^0.87, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.44, ^1.01, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.22, ^1.17, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-1.00, ^1.36, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-0.78, ^1.58, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-0.56, ^1.82, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-0.33, ^2.09, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^-0.11, ^2.36, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^0.11, ^2.64, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^0.33, ^2.91, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^0.56, ^3.18, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^0.78, ^3.42, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.00, ^3.64, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.22, ^3.83, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.44, ^3.99, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.67, ^4.13, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^1.89, ^4.24, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^2.11, ^4.34, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^2.33, ^4.41, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^2.56, ^4.47, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^2.78, ^4.52, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.00, ^4.56, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.22, ^4.59, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.44, ^4.62, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.67, ^4.63, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^3.89, ^4.65, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^4.11, ^4.66, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^4.33, ^4.67, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^4.56, ^4.68, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^4.78, ^4.68, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.00, ^4.69, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.22, ^4.69, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.44, ^4.69, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.67, ^4.69, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^5.89, ^4.69, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^6.11, ^4.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^6.33, ^4.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^6.56, ^4.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^6.78, ^4.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:end_rod", ^7.00, ^4.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+}
+
+fn _draw_rose() {
+    // §d r = cos(2θ)  rose curve  —  64 points
+    particle("minecraft:soul_fire_flame", ^6.30, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^6.15, ^2.71, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^5.71, ^2.90, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^5.01, ^3.03, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^4.12, ^3.10, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^3.09, ^3.08, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^2.00, ^2.97, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.95, ^2.77, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.78, ^2.17, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.34, ^1.80, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.65, ^1.42, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.70, ^1.06, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.52, ^0.75, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.14, ^0.51, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.61, ^0.35, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.00, ^0.30, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.61, ^0.35, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.14, ^0.51, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.52, ^0.75, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.70, ^1.06, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.65, ^1.42, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.34, ^1.80, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.78, ^2.17, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.95, ^2.77, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-2.00, ^2.97, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-3.09, ^3.08, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-4.12, ^3.10, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-5.01, ^3.03, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-5.71, ^2.90, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-6.15, ^2.71, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-6.30, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-6.15, ^2.29, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-5.71, ^2.10, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-5.01, ^1.97, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-4.12, ^1.90, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-3.09, ^1.92, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-2.00, ^2.03, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.95, ^2.23, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.78, ^2.83, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.34, ^3.20, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.65, ^3.58, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.70, ^3.94, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.52, ^4.25, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^1.14, ^4.49, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.61, ^4.65, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.00, ^4.70, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.61, ^4.65, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.14, ^4.49, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.52, ^4.25, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.70, ^3.94, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.65, ^3.58, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-1.34, ^3.20, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.78, ^2.83, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^-0.00, ^2.50, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^0.95, ^2.23, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^2.00, ^2.03, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^3.09, ^1.92, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^4.12, ^1.90, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^5.01, ^1.97, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^5.71, ^2.10, ^6, 0.03,0.03,0.03, 0.0, 1);
+    particle("minecraft:soul_fire_flame", ^6.15, ^2.29, ^6, 0.03,0.03,0.03, 0.0, 1);
 }
 
 fn start() {
     on = true;
     frame = 0;
-    title(@a, "§e y = x·sin(x)", "§7curve demo  ·  face forward  ·  3 curves");
-    say("§a▶ curve demo — face any direction");
+    title(@a, "§e RedScript", "§7math curve demo  ·  5 curves");
+    say("§a▶ curve demo — face forward, stand back ~12 blocks");
     say("§7stop: /function rsdemo:stop");
 }
 
