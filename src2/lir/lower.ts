@@ -57,6 +57,10 @@ class LoweringContext {
   }
 
   slot(temp: Temp): Slot {
+    // Return field temps are global (shared between caller/callee)
+    if (temp.startsWith('__rf_')) {
+      return { player: `$ret_${temp.slice(5)}`, obj: this.objective }
+    }
     // Prefix temp names with function name to avoid caller/callee collision
     const fn = this.currentMIRFn
     const prefix = fn ? fn.name : ''
@@ -64,7 +68,9 @@ class LoweringContext {
   }
 
   qualifiedName(fnName: string): string {
-    return `${this.namespace}:${fnName}`
+    // Convert :: to / and lowercase for MC function paths
+    const mcName = fnName.replace(/::/g, '/').toLowerCase()
+    return `${this.namespace}:${mcName}`
   }
 
   addFunction(fn: LIRFunction): void {
