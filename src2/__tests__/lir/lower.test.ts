@@ -29,8 +29,9 @@ function mkBlock(id: string, instrs: MIRInstr[], term: MIRInstr, preds: string[]
 const c = (v: number): Operand => ({ kind: 'const', value: v })
 const t = (n: string): Operand => ({ kind: 'temp', name: n })
 
-function slot(name: string): Slot {
-  return { player: `$${name}`, obj: OBJ }
+/** Build a slot with the function-name prefix that LIR lowering adds */
+function slot(name: string, fn = 'main'): Slot {
+  return { player: `$${fn}_${name}`, obj: OBJ }
 }
 
 function findInstr(instrs: LIRInstr[], kind: string): LIRInstr | undefined {
@@ -204,7 +205,7 @@ describe('MIR→LIR lowering — negation', () => {
 // ---------------------------------------------------------------------------
 
 describe('MIR→LIR lowering — comparison', () => {
-  test('cmp eq → score_set 0, store_cmd_to_score', () => {
+  test('cmp eq → score_set 0, raw execute if score', () => {
     const mod = mkModule([
       mkFn('main', [
         mkBlock('entry', [
@@ -217,16 +218,15 @@ describe('MIR→LIR lowering — comparison', () => {
     const lir = lowerToLIR(mod)
     const main = lir.functions.find(f => f.name === 'main')!
     const instrs = main.instructions
-    // After score_set for a and b:
-    // score_set $r 0
-    // store_cmd_to_score $r (call_if_score '' $a eq $b)
-    const setCmp = instrs.find(i => i.kind === 'score_set' && (i as any).dst.player === '$r')
+    // score_set $r 0, then raw execute if score
+    const setCmp = instrs.find(i => i.kind === 'score_set' && (i as any).dst.player === '$main_r')
     expect(setCmp).toEqual({ kind: 'score_set', dst: slot('r'), value: 0 })
-    const store = instrs.find(i => i.kind === 'store_cmd_to_score') as any
-    expect(store).toBeDefined()
-    expect(store.dst).toEqual(slot('r'))
-    expect(store.cmd.kind).toBe('call_if_score')
-    expect(store.cmd.op).toBe('eq')
+    const raw = instrs.find(i => i.kind === 'raw') as any
+    expect(raw).toBeDefined()
+    expect(raw.cmd).toContain('execute if score')
+    expect(raw.cmd).toContain('$main_a')
+    expect(raw.cmd).toContain('$main_b')
+    expect(raw.cmd).toContain('scoreboard players set $main_r')
   })
 })
 
