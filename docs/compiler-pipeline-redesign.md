@@ -774,3 +774,185 @@ readable via `execute store result score $ret <obj> run function ...`.
 | `call_macro fn(args...)` | store args in `rs:macro_args`, `function ... with storage` |
 | `return x` | `scoreboard players operation $ret <obj> = $x <obj>` |
 
+
+---
+
+## Current Debugging & Tooling
+
+### CLI commands
+
+```
+redscript compile <file> [-o <out>] [--namespace <ns>] [--scoreboard <obj>] [--no-dce] [--no-mangle]
+redscript watch   <dir>  [-o <out>] [--namespace <ns>] [--hot-reload <url>]
+redscript check   <file>
+redscript fmt     <file> [file2 ...]
+redscript repl
+redscript generate-dts [-o <file>]
+```
+
+---
+
+### `redscript check` — local syntax checker
+
+**What it does:** Parse + preprocess only. Exits 0 if the file is syntactically
+valid, non-zero with a formatted error otherwise. Does **not** run the type
+checker, lowering, or optimizer.
+
+```bash
+redscript check examples/readme-demo.mcrs
+# ✓ examples/readme-demo.mcrs is valid
+```
+
+**Known bug:** `check` always passes `namespace = 'redscript'` hardcoded to the
+parser, regardless of the filename or any `--namespace` flag. This means
+namespace-sensitive parse errors (e.g. a symbol that happens to conflict with
+the literal string `"redscript"`) may behave differently under `check` vs
+`compile`. Fix: derive namespace from filename (same logic as `compile`) or
+accept a `--namespace` flag.
+
+Additionally, `check` only calls the parser — it does **not** call the type
+checker (`TypeChecker`). Type errors silently pass `check` and only surface
+during `compile`. The type checker itself is currently in "warn mode" (collects
+errors but does not block compilation), so even `compile` does not hard-fail on
+type errors.
+
+**Redesign:** `check` should run: parse → name resolution → full type checking,
+and exit non-zero on any diagnostic. The current "warn mode" type checker should
+become "error mode".
+
+---
+
+### `redscript watch` + `--hot-reload` — live reload against a running server
+
+Watch mode recompiles on every `.mcrs` file change in a directory, then
+optionally POSTs to a hot-reload endpoint:
+
+```bash
+redscript watch src/ -o ~/mc-test-server/world/datapacks/rsdemo \
+    --namespace rsdemo \
+    --hot-reload http://localhost:25570
+```
+
+On each successful compile, it calls `POST <url>/reload`, which is expected
+to trigger `/reload` on the MC server. This gives a **save → auto-deploy →
+`/reload`** loop without switching to the game.
+
+```
+Save .mcrs
+  → recompile (< 1 s)
+  → write .mcfunction files to datapack dir
+  → POST /reload
+  → server reloads datapack
+  → test in-game immediately
+```
+
+The hot-reload server is a tiny HTTP listener that must be running alongside
+the MC server. Currently this is a manual setup (run a small HTTP server that
+calls RCON `/reload`).
+
+**Known limitation:** watch mode compiles all `.mcrs` files in the directory on
+every change, not just the changed file. For large projects this is wasteful.
+Incremental compilation (track which files changed, only recompile affected
+functions) is a future improvement.
+
+---
+
+### `redscript repl` — interactive expression evaluator
+
+Starts a read-eval-print loop. Accepts RedScript expressions and statements,
+compiles them, runs them through `MCRuntime` (the in-process scoreboard
+simulator), and prints the result.
+
+Useful for quickly testing arithmetic, `sin_fixed` values, or algorithm
+correctness without deploying to a server.
+
+```
+> let x: int = sin_fixed(45);
+x = 707
+> x * x + (cos_fixed(45) * cos_fixed(45) / 1000)
+= 999649
+```
+
+**Known limitation:** the REPL resets all state between expressions (no
+persistent variable binding across lines). Calling stdlib functions that depend
+on `@load` initialization (e.g. `sin_fixed` table load) may not work correctly
+unless the REPL explicitly runs the load function first.
+
+---
+
+### `--no-mangle` flag — readable variable names for debugging
+
+By default, IR variable names are mangled to short names (`$a`, `$b`, `$ad`...)
+to keep scoreboard objective slot names short. With `--no-mangle`, the original
+source variable names are preserved:
+
+```bash
+redscript compile demo.mcrs -o /tmp/out --no-mangle
+```
+
+Generated mcfunction uses `$phase __rsdemo` instead of `$c __rsdemo`, making
+it possible to read the output and correlate with source.
+
+---
+
+### Sourcemap
+
+Every compile outputs a `.map.json` file alongside the datapack:
+
+```
+/tmp/rsdemo/rsdemo.map.json
+```
+
+Maps each generated `.mcfunction` path back to the source `.mcrs` file and
+line number. Currently used for error reporting. Future use: step-through
+debugger that maps MC function calls back to source lines.
+
+---
+
+### `MCRuntime` — in-process MC simulator (used by tests)
+
+`src/runtime/index.ts` implements a simulated MC execution environment:
+- Scoreboard: fake-player → objective → INT32 value
+- NBT storage: nested map of NBT values
+- Function call stack: dispatches `function ns:path` to the compiled output
+- `execute if/unless score`: evaluated against the simulated scoreboard
+- `execute store result score ... run ...`: captures command return value
+
+All 920 tests use `MCRuntime` to run compiled datapacks in-process without a
+real MC server. This makes the test suite fast (< 35 s for all 920 tests) and
+server-independent.
+
+**What `MCRuntime` does not simulate:**
+- Entity selectors (`@a`, `@e`, `@p`, `@s`) — tests must mock these
+- World block state (`setblock`, `fill`) — not tracked
+- Particle/sound/title commands — silently ignored
+- Tick scheduling — tests call `@tick` functions manually
+
+---
+
+### Test server: Paper 1.21.4 at `~/mc-test-server`
+
+For integration testing that requires real MC behavior (entity selectors,
+actual particle rendering, boss bars, etc.):
+
+```bash
+# Start
+cd ~/mc-test-server
+/opt/homebrew/opt/openjdk@21/bin/java -jar paper.jar --nogui
+
+# Deploy a datapack
+redscript compile examples/readme-demo.mcrs \
+    -o ~/mc-test-server/world/datapacks/rsdemo \
+    --namespace rsdemo
+
+# In-game or via RCON
+/reload
+/function rsdemo:start
+```
+
+Server details:
+- Paper 1.21.4-232
+- Port 25561
+- Java: `/opt/homebrew/opt/openjdk@21/bin/java`
+- Accessible via Tailscale at `100.73.231.27:25561`
+
