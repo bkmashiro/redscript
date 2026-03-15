@@ -19,8 +19,13 @@ import type {
 // ---------------------------------------------------------------------------
 
 export function lowerToMIR(hir: HIRModule): MIRModule {
+  const allFunctions: MIRFunction[] = []
+  for (const f of hir.functions) {
+    const { fn, helpers } = lowerFunction(f, hir.namespace)
+    allFunctions.push(fn, ...helpers)
+  }
   return {
-    functions: hir.functions.map(f => lowerFunction(f, hir.namespace)),
+    functions: allFunctions,
     namespace: hir.namespace,
     objective: `__${hir.namespace}`,
   }
@@ -109,7 +114,7 @@ class FnContext {
 // Function lowering
 // ---------------------------------------------------------------------------
 
-function lowerFunction(fn: HIRFunction, namespace: string): MIRFunction {
+function lowerFunction(fn: HIRFunction, namespace: string): { fn: MIRFunction; helpers: MIRFunction[] } {
   const ctx = new FnContext(namespace, fn.name)
 
   // Create temps for parameters
@@ -147,7 +152,7 @@ function lowerFunction(fn: HIRFunction, namespace: string): MIRFunction {
     isMacro: false,
   }
 
-  return result
+  return { fn: result, helpers: ctx.helperFunctions }
 }
 
 function isPlaceholderTerm(term: MIRInstr): boolean {
