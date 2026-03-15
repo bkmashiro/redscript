@@ -165,3 +165,14 @@ node dist/cli.js compile examples/readme-demo.mcrs \
 | `src/stdlib/math.mcrs` | sin/cos/sqrt/mulfix/divfix |
 | `src/__tests__/` | 920 Jest tests — do not break these |
 | `src/runtime/index.ts` | MCRuntime (scoreboard + NBT simulator) |
+
+---
+
+## Profiler (planned)
+
+`MCRuntime` will gain a profiling mode (`{ profiling: { enabled: true } }`):
+- Per-function command counts
+- Error analysis vs JS float ground truth for math functions
+- Coroutine BATCH auto-calibration
+
+See `docs/compiler-pipeline-redesign.md` → "MCRuntime Profiler" section.
