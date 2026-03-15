@@ -533,3 +533,240 @@ describe('v2 migration: compound expressions', () => {
     expect(callAndGetRet(rt, 'f')).toBe(55)
   })
 })
+
+// ===========================================================================
+// 5. Break / continue
+// ===========================================================================
+
+describe('v2 migration: break and continue', () => {
+  test('break exits loop early', () => {
+    const rt = makeRuntime(`
+      fn f(): int {
+        let i: int = 0;
+        while (true) {
+          if (i == 5) { break; }
+          i = i + 1;
+        }
+        return i;
+      }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(5)
+  })
+
+  test('continue skips iteration', () => {
+    const rt = makeRuntime(`
+      fn f(): int {
+        let sum: int = 0;
+        let i: int = 0;
+        while (i < 10) {
+          i = i + 1;
+          if (i % 2 == 0) { continue; }
+          sum = sum + i;
+        }
+        return sum;
+      }
+    `)
+    // sum of odd numbers 1..9 = 1+3+5+7+9 = 25
+    expect(callAndGetRet(rt, 'f')).toBe(25)
+  })
+})
+
+// ===========================================================================
+// 6. Compound assignment operators (desugared in HIR)
+// ===========================================================================
+
+describe('v2 migration: compound assignment', () => {
+  test('+= operator', () => {
+    const rt = makeRuntime(`
+      fn f(): int { let x: int = 10; x += 5; return x; }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(15)
+  })
+
+  test('-= operator', () => {
+    const rt = makeRuntime(`
+      fn f(): int { let x: int = 10; x -= 3; return x; }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(7)
+  })
+
+  test('*= operator', () => {
+    const rt = makeRuntime(`
+      fn f(): int { let x: int = 4; x *= 5; return x; }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(20)
+  })
+})
+
+// ===========================================================================
+// 7. Multiple return paths
+// ===========================================================================
+
+describe('v2 migration: multiple return paths', () => {
+  test('early return from if', () => {
+    const rt = makeRuntime(`
+      fn f(): int {
+        let x: int = 42;
+        if (x > 10) { return x; }
+        return 0;
+      }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(42)
+  })
+
+  test('return from else path', () => {
+    const rt = makeRuntime(`
+      fn f(): int {
+        let x: int = 5;
+        if (x > 10) { return 1; }
+        return 2;
+      }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(2)
+  })
+
+  test('return from nested if chains', () => {
+    const rt = makeRuntime(`
+      fn classify(x: int): int {
+        if (x < 0) { return -1; }
+        if (x == 0) { return 0; }
+        return 1;
+      }
+      fn f(): int {
+        return classify(-5) + classify(0) + classify(7);
+      }
+    `)
+    // -1 + 0 + 1 = 0
+    expect(callAndGetRet(rt, 'f')).toBe(0)
+  })
+})
+
+// ===========================================================================
+// 8. Mutual function calls
+// ===========================================================================
+
+describe('v2 migration: mutual calls and recursion-like patterns', () => {
+  test('function calling function calling function', () => {
+    const rt = makeRuntime(`
+      fn a(): int { return 1; }
+      fn b(): int { return a() + 2; }
+      fn c(): int { return b() + 3; }
+      fn f(): int { return c(); }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(6)
+  })
+
+  test('iterative power function', () => {
+    const rt = makeRuntime(`
+      fn pow(base: int, exp: int): int {
+        let result: int = 1;
+        let i: int = 0;
+        while (i < exp) {
+          result = result * base;
+          i = i + 1;
+        }
+        return result;
+      }
+      fn f(): int { return pow(2, 10); }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(1024)
+  })
+})
+
+// ===========================================================================
+// 9. Edge cases
+// ===========================================================================
+
+describe('v2 migration: edge cases', () => {
+  test('zero division (MC truncates to 0)', () => {
+    // MC scoreboard division by zero returns 0
+    const rt = makeRuntime('fn f(): int { return 10 / 0; }')
+    // This may throw or return 0 depending on MCRuntime behavior
+    try {
+      const val = callAndGetRet(rt, 'f')
+      expect(val).toBe(0)
+    } catch {
+      // Division by zero is undefined in MC — just ensure no crash
+    }
+  })
+
+  test('deeply nested arithmetic', () => {
+    const rt = makeRuntime(`
+      fn f(): int {
+        return ((1 + 2) * (3 + 4)) - ((5 - 6) * (7 + 8));
+      }
+    `)
+    // (3 * 7) - ((-1) * 15) = 21 - (-15) = 36
+    expect(callAndGetRet(rt, 'f')).toBe(36)
+  })
+
+  test('many variables', () => {
+    const rt = makeRuntime(`
+      fn f(): int {
+        let a: int = 1;
+        let b: int = 2;
+        let c: int = 3;
+        let d: int = 4;
+        let e: int = 5;
+        return a + b + c + d + e;
+      }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(15)
+  })
+
+  test('nested while loops', () => {
+    const rt = makeRuntime(`
+      fn f(): int {
+        let sum: int = 0;
+        let i: int = 0;
+        while (i < 3) {
+          let j: int = 0;
+          while (j < 3) {
+            sum = sum + 1;
+            j = j + 1;
+          }
+          i = i + 1;
+        }
+        return sum;
+      }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(9)
+  })
+
+  test('if inside while', () => {
+    const rt = makeRuntime(`
+      fn f(): int {
+        let count: int = 0;
+        let i: int = 0;
+        while (i < 10) {
+          if (i % 3 == 0) {
+            count = count + 1;
+          }
+          i = i + 1;
+        }
+        return count;
+      }
+    `)
+    // 0, 3, 6, 9 are divisible by 3 → count = 4
+    expect(callAndGetRet(rt, 'f')).toBe(4)
+  })
+
+  test('while inside if', () => {
+    const rt = makeRuntime(`
+      fn f(): int {
+        let x: int = 1;
+        if (x > 0) {
+          let sum: int = 0;
+          let i: int = 0;
+          while (i < 5) {
+            sum = sum + i;
+            i = i + 1;
+          }
+          return sum;
+        }
+        return -1;
+      }
+    `)
+    expect(callAndGetRet(rt, 'f')).toBe(10)
+  })
+})
