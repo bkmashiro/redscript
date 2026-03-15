@@ -57,7 +57,10 @@ class LoweringContext {
   }
 
   slot(temp: Temp): Slot {
-    return { player: `$${temp}`, obj: this.objective }
+    // Prefix temp names with function name to avoid caller/callee collision
+    const fn = this.currentMIRFn
+    const prefix = fn ? fn.name : ''
+    return { player: `$${prefix}_${temp}`, obj: this.objective }
   }
 
   qualifiedName(fnName: string): string {
@@ -228,20 +231,25 @@ function lowerInstr(
     }
 
     case 'cmp': {
-      // Use execute store success to compare
-      // For eq: execute store success → if score a = b
       // Strategy: set dst=0, then conditionally set to 1
+      // MC pattern: execute if score $a <op> $b run scoreboard players set $dst 1
       const dst = ctx.slot(instr.dst)
       const aSlot = operandToSlot(instr.a, ctx, instrs)
       const bSlot = operandToSlot(instr.b, ctx, instrs)
 
       instrs.push({ kind: 'score_set', dst, value: 0 })
-      // Use store_cmd_to_score with a call_if_score pattern
-      // execute store success score dst run execute if score a op b
+
+      const cmpOps: Record<string, string> = {
+        eq: '=', ne: '=', lt: '<', le: '<=', gt: '>', ge: '>=',
+      }
+      const op = cmpOps[instr.op]
+      const guard = instr.op === 'ne' ? 'unless' : 'if'
+      const dstStr = `${dst.player} ${dst.obj}`
+      const aStr = `${aSlot.player} ${aSlot.obj}`
+      const bStr = `${bSlot.player} ${bSlot.obj}`
       instrs.push({
-        kind: 'store_cmd_to_score',
-        dst,
-        cmd: { kind: 'call_if_score', fn: '', a: aSlot, op: instr.op, b: bSlot },
+        kind: 'raw',
+        cmd: `execute ${guard} score ${aStr} ${op} ${bStr} run scoreboard players set ${dstStr} 1`,
       })
       break
     }
