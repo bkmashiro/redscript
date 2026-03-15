@@ -324,7 +324,13 @@ function lowerInstr(
 
       // Handle raw commands embedded in call
       if (instr.fn.startsWith('__raw:')) {
-        instrs.push({ kind: 'raw', cmd: instr.fn.slice(6) })
+        const cmd = instr.fn.slice(6)
+        if (cmd.startsWith('\x01')) {
+          // Macro sentinel → emit as macro_line ($ prefix added by emit)
+          instrs.push({ kind: 'macro_line', template: cmd.slice(1) })
+        } else {
+          instrs.push({ kind: 'raw', cmd })
+        }
       } else {
         instrs.push({ kind: 'call', fn: ctx.qualifiedName(instr.fn) })
       }

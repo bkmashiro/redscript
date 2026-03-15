@@ -7,12 +7,13 @@
 
 import type {
   HIRModule, HIRFunction, HIRStmt, HIRBlock, HIRExpr,
-  HIRExecuteSubcommand,
+  HIRExecuteSubcommand, HIRParam,
 } from '../hir/types'
 import type {
   MIRModule, MIRFunction, MIRBlock, MIRInstr, BlockId,
-  Operand, Temp, CmpOp, ExecuteSubcmd,
+  Operand, Temp, CmpOp, ExecuteSubcmd, NBTType,
 } from './types'
+import { detectMacroFunctions, BUILTIN_SET, type MacroFunctionInfo } from './macro'
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -36,16 +37,30 @@ export function lowerToMIR(hir: HIRModule): MIRModule {
     implMethods.set(ib.typeName, methods)
   }
 
+  // Pre-scan for macro functions
+  const macroInfo = detectMacroFunctions(hir)
+
+  // Build function param info for call_macro generation at call sites
+  const fnParamInfo = new Map<string, HIRParam[]>()
+  for (const f of hir.functions) {
+    fnParamInfo.set(f.name, f.params)
+  }
+  for (const ib of hir.implBlocks) {
+    for (const m of ib.methods) {
+      fnParamInfo.set(`${ib.typeName}::${m.name}`, m.params)
+    }
+  }
+
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo)
     allFunctions.push(fn, ...helpers)
   }
 
   // Lower impl block methods
   for (const ib of hir.implBlocks) {
     for (const m of ib.methods) {
-      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods)
+      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo)
       allFunctions.push(fn, ...helpers)
     }
   }
@@ -78,17 +93,28 @@ class FnContext {
   readonly implMethods: Map<string, Map<string, { hasSelf: boolean }>>
   /** Struct variable tracking: varName → { typeName, fields: fieldName → temp } */
   readonly structVars = new Map<string, { typeName: string; fields: Map<string, Temp> }>()
+  /** Macro function info for all functions in the module */
+  readonly macroInfo: Map<string, MacroFunctionInfo>
+  /** Function parameter info for call_macro generation */
+  readonly fnParamInfo: Map<string, HIRParam[]>
+  /** Macro params for the current function being lowered */
+  readonly currentMacroParams: Set<string>
 
   constructor(
     namespace: string,
     fnName: string,
     structDefs: Map<string, string[]> = new Map(),
     implMethods: Map<string, Map<string, { hasSelf: boolean }>> = new Map(),
+    macroInfo: Map<string, MacroFunctionInfo> = new Map(),
+    fnParamInfo: Map<string, HIRParam[]> = new Map(),
   ) {
     this.namespace = namespace
     this.fnName = fnName
     this.structDefs = structDefs
     this.implMethods = implMethods
+    this.macroInfo = macroInfo
+    this.fnParamInfo = fnParamInfo
+    this.currentMacroParams = macroInfo.get(fnName)?.macroParams ?? new Set()
     const entry = this.makeBlock('entry')
     this.currentBlock = entry
   }
@@ -158,13 +184,16 @@ function lowerFunction(
   namespace: string,
   structDefs: Map<string, string[]> = new Map(),
   implMethods: Map<string, Map<string, { hasSelf: boolean }>> = new Map(),
+  macroInfo: Map<string, MacroFunctionInfo> = new Map(),
+  fnParamInfo: Map<string, HIRParam[]> = new Map(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
-  const ctx = new FnContext(namespace, fn.name, structDefs, implMethods)
+  const ctx = new FnContext(namespace, fn.name, structDefs, implMethods, macroInfo, fnParamInfo)
+  const fnMacroInfo = macroInfo.get(fn.name)
 
   // Create temps for parameters
   const params: { name: Temp; isMacroParam: boolean }[] = fn.params.map(p => {
     const t = ctx.freshTemp()
-    return { name: t, isMacroParam: false }
+    return { name: t, isMacroParam: fnMacroInfo?.macroParams.has(p.name) ?? false }
   })
 
   // Map parameter names to their temps
@@ -193,7 +222,7 @@ function lowerFunction(
     params,
     blocks: liveBlocks,
     entry: 'entry',
-    isMacro: false,
+    isMacro: fnMacroInfo != null,
   }
 
   return { fn: result, helpers: ctx.helperFunctions }
@@ -205,9 +234,11 @@ function lowerImplMethod(
   namespace: string,
   structDefs: Map<string, string[]>,
   implMethods: Map<string, Map<string, { hasSelf: boolean }>>,
+  macroInfo: Map<string, MacroFunctionInfo> = new Map(),
+  fnParamInfo: Map<string, HIRParam[]> = new Map(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
-  const ctx = new FnContext(namespace, fnName, structDefs, implMethods)
+  const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo)
   const fields = structDefs.get(typeName) ?? []
   const hasSelf = method.params.length > 0 && method.params[0].name === 'self'
 
@@ -254,7 +285,7 @@ function lowerImplMethod(
     params,
     blocks: liveBlocks,
     entry: 'entry',
-    isMacro: false,
+    isMacro: macroInfo.has(fnName),
   }
 
   return { fn: result, helpers: ctx.helperFunctions }
@@ -761,6 +792,15 @@ function lowerExpr(
     }
 
     case 'call': {
+      // Handle builtin calls → raw MC commands
+      if (BUILTIN_SET.has(expr.fn)) {
+        const cmd = formatBuiltinCall(expr.fn, expr.args, ctx.currentMacroParams)
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:${cmd}`, args: [] })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+
       // Check for struct instance method call: parser desugars v.method() → call('method', [v, ...])
       if (expr.args.length > 0 && expr.args[0].kind === 'ident') {
         const sv = ctx.structVars.get(expr.args[0].name)
@@ -781,6 +821,31 @@ function lowerExpr(
           }
         }
       }
+
+      // Check if calling a macro function → emit call_macro
+      const targetMacro = ctx.macroInfo.get(expr.fn)
+      if (targetMacro) {
+        const args = expr.args.map(a => lowerExpr(a, ctx, scope))
+        const targetParams = ctx.fnParamInfo.get(expr.fn) ?? []
+        const macroArgs: { name: string; value: Operand; type: NBTType; scale: number }[] = []
+        for (let i = 0; i < targetParams.length && i < args.length; i++) {
+          const paramName = targetParams[i].name
+          if (targetMacro.macroParams.has(paramName)) {
+            const paramTypeName = targetMacro.paramTypes.get(paramName) ?? 'int'
+            const isFloat = paramTypeName === 'float'
+            macroArgs.push({
+              name: paramName,
+              value: args[i],
+              type: isFloat ? 'double' : 'int',
+              scale: isFloat ? 0.01 : 1,
+            })
+          }
+        }
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'call_macro', dst: t, fn: expr.fn, args: macroArgs })
+        return { kind: 'temp', name: t }
+      }
+
       const args = expr.args.map(a => lowerExpr(a, ctx, scope))
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'call', dst: t, fn: expr.fn, args })
@@ -964,4 +1029,132 @@ function selectorToString(sel: { kind: string; filters?: any }): string {
     }
   }
   return `${sel.kind}[${parts.join(',')}]`
+}
+
+// ---------------------------------------------------------------------------
+// Builtin call formatting → raw MC command strings
+// ---------------------------------------------------------------------------
+
+const MACRO_SENTINEL = '\x01'
+
+/**
+ * Format a builtin call as a raw MC command string.
+ * If any argument uses a macro param, the command is prefixed with \x01
+ * (converted to $ in LIR emission).
+ */
+function formatBuiltinCall(
+  fn: string,
+  args: HIRExpr[],
+  macroParams: Set<string>,
+): string {
+  const fmtArgs = args.map(a => exprToCommandArg(a, macroParams))
+  const strs = fmtArgs.map(a => a.str)
+  const hasMacro = fmtArgs.some(a => a.isMacro)
+
+  let cmd: string
+  switch (fn) {
+    case 'summon': {
+      const [type, x, y, z, nbt] = strs
+      const pos = [x ?? '~', y ?? '~', z ?? '~'].join(' ')
+      cmd = nbt ? `summon ${type} ${pos} ${nbt}` : `summon ${type} ${pos}`
+      break
+    }
+    case 'particle': {
+      const [name, x, y, z, ...rest] = strs
+      const pos = [x ?? '~', y ?? '~', z ?? '~'].join(' ')
+      const extra = rest.filter(v => v !== undefined)
+      cmd = extra.length > 0 ? `particle ${name} ${pos} ${extra.join(' ')}` : `particle ${name} ${pos}`
+      break
+    }
+    case 'setblock': {
+      const [x, y, z, block] = strs
+      cmd = `setblock ${x} ${y} ${z} ${block}`
+      break
+    }
+    case 'fill': {
+      const [x1, y1, z1, x2, y2, z2, block] = strs
+      cmd = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}`
+      break
+    }
+    case 'say': cmd = `say ${strs[0] ?? ''}`; break
+    case 'tell':
+    case 'tellraw': cmd = `tellraw ${strs[0]} {"text":"${strs[1]}"}`; break
+    case 'title': cmd = `title ${strs[0]} title {"text":"${strs[1]}"}`; break
+    case 'actionbar': cmd = `title ${strs[0]} actionbar {"text":"${strs[1]}"}`; break
+    case 'subtitle': cmd = `title ${strs[0]} subtitle {"text":"${strs[1]}"}`; break
+    case 'title_times': cmd = `title ${strs[0]} times ${strs[1]} ${strs[2]} ${strs[3]}`; break
+    case 'announce': cmd = `tellraw @a {"text":"${strs[0]}"}`; break
+    case 'give': {
+      const nbt = strs[3] ? strs[3] : ''
+      cmd = `give ${strs[0]} ${strs[1]}${nbt} ${strs[2] ?? '1'}`
+      break
+    }
+    case 'kill': cmd = `kill ${strs[0] ?? '@s'}`; break
+    case 'effect': cmd = `effect give ${strs[0]} ${strs[1]} ${strs[2] ?? '30'} ${strs[3] ?? '0'}`; break
+    case 'effect_clear': cmd = strs[1] ? `effect clear ${strs[0]} ${strs[1]}` : `effect clear ${strs[0]}`; break
+    case 'playsound': cmd = ['playsound', ...strs].filter(Boolean).join(' '); break
+    case 'clear': cmd = `clear ${strs[0]} ${strs[1] ?? ''}`.trim(); break
+    case 'weather': cmd = `weather ${strs[0]}`; break
+    case 'time_set': cmd = `time set ${strs[0]}`; break
+    case 'time_add': cmd = `time add ${strs[0]}`; break
+    case 'gamerule': cmd = `gamerule ${strs[0]} ${strs[1]}`; break
+    case 'tag_add': cmd = `tag ${strs[0]} add ${strs[1]}`; break
+    case 'tag_remove': cmd = `tag ${strs[0]} remove ${strs[1]}`; break
+    case 'kick': cmd = `kick ${strs[0]} ${strs[1] ?? ''}`.trim(); break
+    case 'clone': cmd = `clone ${strs.join(' ')}`; break
+    case 'difficulty': cmd = `difficulty ${strs[0]}`; break
+    case 'xp_add': cmd = `xp add ${strs[0]} ${strs[1]} ${strs[2] ?? 'points'}`; break
+    case 'xp_set': cmd = `xp set ${strs[0]} ${strs[1]} ${strs[2] ?? 'points'}`; break
+    default: cmd = `${fn} ${strs.join(' ')}`
+  }
+
+  return hasMacro ? `${MACRO_SENTINEL}${cmd}` : cmd
+}
+
+/** Convert an HIR expression to its MC command string representation */
+function exprToCommandArg(
+  expr: HIRExpr,
+  macroParams: Set<string>,
+): { str: string; isMacro: boolean } {
+  switch (expr.kind) {
+    case 'int_lit': return { str: String(expr.value), isMacro: false }
+    case 'float_lit': return { str: String(expr.value), isMacro: false }
+    case 'byte_lit': return { str: String(expr.value), isMacro: false }
+    case 'short_lit': return { str: String(expr.value), isMacro: false }
+    case 'long_lit': return { str: String(expr.value), isMacro: false }
+    case 'double_lit': return { str: String(expr.value), isMacro: false }
+    case 'bool_lit': return { str: expr.value ? 'true' : 'false', isMacro: false }
+    case 'str_lit': return { str: expr.value, isMacro: false }
+    case 'mc_name': return { str: expr.value, isMacro: false }
+    case 'selector': return { str: expr.raw, isMacro: false }
+    case 'ident':
+      if (macroParams.has(expr.name)) return { str: `$(${expr.name})`, isMacro: true }
+      return { str: expr.name, isMacro: false }
+    case 'local_coord': {
+      const prefix = expr.value[0] // ^
+      const rest = expr.value.slice(1)
+      if (rest && /^[a-zA-Z_]\w*$/.test(rest) && macroParams.has(rest)) {
+        return { str: `${prefix}$(${rest})`, isMacro: true }
+      }
+      return { str: expr.value, isMacro: false }
+    }
+    case 'rel_coord': {
+      const prefix = expr.value[0] // ~
+      const rest = expr.value.slice(1)
+      if (rest && /^[a-zA-Z_]\w*$/.test(rest) && macroParams.has(rest)) {
+        return { str: `${prefix}$(${rest})`, isMacro: true }
+      }
+      return { str: expr.value, isMacro: false }
+    }
+    case 'unary':
+      if (expr.op === '-' && expr.operand.kind === 'float_lit') {
+        return { str: String(-expr.operand.value), isMacro: false }
+      }
+      if (expr.op === '-' && expr.operand.kind === 'int_lit') {
+        return { str: String(-expr.operand.value), isMacro: false }
+      }
+      return { str: '~', isMacro: false }
+    default:
+      return { str: '~', isMacro: false }
+  }
 }
