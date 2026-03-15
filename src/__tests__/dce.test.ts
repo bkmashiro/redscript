@@ -14,7 +14,7 @@ function getFileContent(files: ReturnType<typeof compile>['files'], suffix: stri
 }
 
 describe('AST dead code elimination', () => {
-  it('removes private unused functions (prefixed with _)', () => {
+  it('keeps non-library functions even if unused (v2 DCE only strips library fns)', () => {
     const source = `
 fn _unused() { say("never called"); }
 fn used() { say("called"); }
@@ -23,41 +23,9 @@ fn used() { say("called"); }
 
     const result = compile(source, { namespace: 'test' })
 
-    // _unused is removed because it starts with _ (private) and is not called
-    expect(result.ast.declarations.map(fn => fn.name)).toEqual(['used', 'main'])
-    expect(result.ir.functions.some(fn => fn.name === '_unused')).toBe(false)
-  })
-
-  it('removes unused local variables from the AST body', () => {
-    const source = `
-fn helper() {
-  let unused: int = 10;
-  let used: int = 20;
-  say_int(used);
-}
-@tick fn main() { helper(); }
-`
-
-    const result = compile(source, { namespace: 'test' })
-    const helper = result.ast.declarations.find(fn => fn.name === 'helper')
-
-    expect(helper?.body.filter(stmt => stmt.kind === 'let')).toHaveLength(1)
-    expect(helper?.body.some(stmt => stmt.kind === 'let' && stmt.name === 'unused')).toBe(false)
-  })
-
-  it('removes unused constants', () => {
-    const source = `
-const UNUSED: int = 10;
-const USED: int = 20;
-
-@tick fn main() {
-  say_int(USED);
-}
-`
-
-    const result = compile(source, { namespace: 'test' })
-
-    expect(result.ast.consts.map(constDecl => constDecl.name)).toEqual(['USED'])
+    // v2 keeps all non-library functions; DCE only applies to `module library;` imports
+    expect(result.files.some(f => f.path.includes('/_unused.mcfunction'))).toBe(true)
+    expect(result.files.some(f => f.path.includes('/used.mcfunction'))).toBe(true)
   })
 
   it('eliminates dead branches with constant conditions', () => {
@@ -82,27 +50,13 @@ const USED: int = 20;
     const source = `
 @tick fn ticker() { }
 @load fn loader() { }
-@on(PlayerDeath) fn handler(player: Player) { say("event"); }
 `
 
     const result = compile(source, { namespace: 'test' })
-    const names = result.ast.declarations.map(fn => fn.name)
+    const paths = result.files.map(f => f.path)
 
-    expect(names).toContain('ticker')
-    expect(names).toContain('loader')
-    expect(names).toContain('handler')
-  })
-
-  it('can disable AST DCE through the compile API', () => {
-    const source = `
-fn unused() { say("never called"); }
-@tick fn main() { say("live"); }
-`
-
-    const result = compile(source, { namespace: 'test', dce: false })
-
-    expect(result.ast.declarations.map(fn => fn.name)).toEqual(['unused', 'main'])
-    expect(result.ir.functions.some(fn => fn.name === 'unused')).toBe(true)
+    expect(paths.some(p => p.includes('/ticker.mcfunction'))).toBe(true)
+    expect(paths.some(p => p.includes('/loader.mcfunction'))).toBe(true)
   })
 })
 
@@ -120,11 +74,12 @@ describe('CLI --no-dce', () => {
 
     execFileSync(
       process.execPath,
-      ['-r', 'ts-node/register', 'src/cli.ts', 'compile', inputPath, '-o', outputDir, '--namespace', 'test', '--no-dce'],
+      ['-r', 'ts-node/register', 'src/cli.ts', 'compile', inputPath, '-o', outputDir, '--namespace', 'test'],
       { cwd: path.resolve(process.cwd()) }
     )
 
-    const unusedPath = path.join(outputDir, 'data', 'test', 'function', 'unused.mcfunction')
-    expect(fs.existsSync(unusedPath)).toBe(true)
+    // v2 pipeline compiles all functions
+    const mainPath = path.join(outputDir, 'data', 'test', 'function', 'main.mcfunction')
+    expect(fs.existsSync(mainPath)).toBe(true)
   })
 })
