@@ -224,7 +224,7 @@ function compileCommand(
     console.log(`  Namespace: ${namespace}`)
     console.log(`  Files: ${result.files.length}`)
   } catch (err) {
-    console.error(formatError(err as Error, source))
+    console.error(formatError(err as Error, source, file))
     process.exit(1)
   }
 }
@@ -240,11 +240,11 @@ function checkCommand(file: string): void {
 
   const error = check(source, 'redscript', file)
   if (error) {
-    console.error(formatError(error, source))
+    console.error(formatError(error, source, file))
     process.exit(1)
   }
 
-  console.log(`✓ ${file} is valid`)
+  console.log(`✓ No errors found`)
 }
 
 async function hotReload(url: string): Promise<void> {
@@ -316,7 +316,7 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
       } catch (err) {
         hasErrors = true
         const timestamp = new Date().toLocaleTimeString()
-        console.error(`✗ [${timestamp}] ${formatError(err as Error, source)}`)
+        console.error(`✗ [${timestamp}] ${formatError(err as Error, source, file)}`)
       }
     }
 

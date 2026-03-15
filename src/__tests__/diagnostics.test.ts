@@ -21,10 +21,9 @@ describe('DiagnosticError', () => {
       )
 
       expect(formatError(error, source)).toBe([
-        'Error at line 2, col 11:',
+        '<input>:2:11: error: Unknown function: foo',
         '    let x = foo(',
         '            ^',
-        'Unknown function: foo',
       ].join('\n'))
     })
 
@@ -37,7 +36,7 @@ describe('DiagnosticError', () => {
         source.split('\n')
       )
 
-      expect(formatError(error, source)).toContain('Error in test.mcrs at line 1, col 9:')
+      expect(formatError(error, source)).toContain('test.mcrs:1:9: error: Unknown function: foo')
     })
   })
 

@@ -161,26 +161,23 @@ export function parseErrorMessage(
   return new DiagnosticError(kind, rawMessage, { file: filePath, line: 1, col: 1 }, sourceLines)
 }
 
-export function formatError(error: Error | DiagnosticError, source?: string): string {
+export function formatError(error: Error | DiagnosticError, source?: string, filePath?: string): string {
   if (error instanceof DiagnosticError) {
     const sourceLines = source?.split('\n') ?? error.sourceLines ?? []
     const { file, line, col } = error.location
-    const locationPart = file
-      ? ` in ${file} at line ${line}, col ${col}`
-      : ` at line ${line}, col ${col}`
-    const lines = [`Error${locationPart}:`]
+    const fileStr = file ?? filePath ?? '<input>'
+    const header = `${fileStr}:${line}:${col}: error: ${error.message}`
     const pointerLines = formatSourcePointer(sourceLines, line, col)
-    if (pointerLines.length > 0) {
-      lines.push(...pointerLines)
+    if (pointerLines.length === 0) {
+      return header
     }
-    lines.push(error.message)
-    return lines.join('\n')
+    return [header, ...pointerLines].join('\n')
   }
 
   if (!source) {
     return error.message
   }
 
-  const parsed = parseErrorMessage('ParseError', error.message, source.split('\n'))
-  return formatError(parsed, source)
+  const parsed = parseErrorMessage('ParseError', error.message, source.split('\n'), filePath)
+  return formatError(parsed, source, filePath)
 }

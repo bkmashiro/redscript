@@ -7,6 +7,7 @@
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
 import { preprocessSourceWithMetadata } from '../compile'
+import { DiagnosticError, parseErrorMessage } from '../diagnostics'
 import { lowerToHIR } from '../hir/lower'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
@@ -71,33 +72,41 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
   }
 
-  // Stage 2: AST → HIR
-  const hir = lowerToHIR(ast)
+  // Stage 2–7: lower, optimize, emit
+  // Wrap non-DiagnosticError from later stages so CLI always gets structured errors.
+  try {
+    // Stage 2: AST → HIR
+    const hir = lowerToHIR(ast)
 
-  // Extract @tick and @load functions from HIR (before decorator info is lost)
-  const tickFunctions: string[] = []
-  const loadFunctions: string[] = []
-  for (const fn of hir.functions) {
-    for (const dec of fn.decorators) {
-      if (dec.name === 'tick') tickFunctions.push(fn.name)
-      if (dec.name === 'load') loadFunctions.push(fn.name)
+    // Extract @tick and @load functions from HIR (before decorator info is lost)
+    const tickFunctions: string[] = []
+    const loadFunctions: string[] = []
+    for (const fn of hir.functions) {
+      for (const dec of fn.decorators) {
+        if (dec.name === 'tick') tickFunctions.push(fn.name)
+        if (dec.name === 'load') loadFunctions.push(fn.name)
+      }
     }
+
+    // Stage 3: HIR → MIR
+    const mir = lowerToMIR(hir)
+
+    // Stage 4: MIR optimization
+    const mirOpt = optimizeModule(mir)
+
+    // Stage 5: MIR → LIR
+    const lir = lowerToLIR(mirOpt)
+
+    // Stage 6: LIR optimization
+    const lirOpt = lirOptimizeModule(lir)
+
+    // Stage 7: LIR → .mcfunction
+    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions })
+
+    return { files, warnings, success: true as const }
+  } catch (err) {
+    if (err instanceof DiagnosticError) throw err
+    const sourceLines = processedSource.split('\n')
+    throw parseErrorMessage('LoweringError', (err as Error).message, sourceLines, filePath)
   }
-
-  // Stage 3: HIR → MIR
-  const mir = lowerToMIR(hir)
-
-  // Stage 4: MIR optimization
-  const mirOpt = optimizeModule(mir)
-
-  // Stage 5: MIR → LIR
-  const lir = lowerToLIR(mirOpt)
-
-  // Stage 6: LIR optimization
-  const lirOpt = lirOptimizeModule(lir)
-
-  // Stage 7: LIR → .mcfunction
-  const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions })
-
-  return { files, warnings, success: true as const }
 }
