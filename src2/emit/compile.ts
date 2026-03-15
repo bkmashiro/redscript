@@ -14,7 +14,7 @@ import { lowerToLIR } from '../lir/lower'
 import { emit, type DatapackFile } from './index'
 
 export interface CompileOptions {
-  namespace: string
+  namespace?: string
   filePath?: string
   /** v1 compat: inline library sources (treated as `module library;` imports) */
   librarySources?: string[]
@@ -27,8 +27,8 @@ export interface CompileResult {
   readonly success: true
 }
 
-export function compile(source: string, options: CompileOptions): CompileResult {
-  const { namespace, filePath } = options
+export function compile(source: string, options: CompileOptions = {}): CompileResult {
+  const { namespace = 'redscript', filePath } = options
   const warnings: string[] = []
 
   // Preprocess: resolve import directives, merge imported sources
