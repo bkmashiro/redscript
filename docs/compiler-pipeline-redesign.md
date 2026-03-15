@@ -1224,10 +1224,14 @@ apply to `async/await`, Python applies to `yield`, and C# applies to
 #### Usage (proposed syntax)
 
 ```redscript
-@coroutine(batch=10) fn process_all() {
+@coroutine(batch=10, onDone=after_process_all)
+fn process_all() {
     for (let i: int = 0; i < 1000; i++) {
         do_work(i);   // heavy per-iteration work
     }
+}
+
+fn after_process_all() {
     finish();
 }
 ```
@@ -1235,6 +1239,11 @@ apply to `async/await`, Python applies to `yield`, and C# applies to
 `@coroutine(batch=N)` tells the compiler: "split this function's loops so that
 each tick advances at most N iterations". If `batch` is omitted, the compiler
 estimates it from the loop body's command count.
+
+`onDone=<fn>` is an optional completion callback. When the coroutine reaches
+`pc = -1` (done), the runtime schedules `onDone` once on the next tick.
+This covers most "await-like" workflows without introducing `await` syntax
+or Promise/Future semantics into the language.
 
 #### How the transform works
 
@@ -1325,9 +1334,17 @@ It is not run by default — only on functions annotated `@coroutine`. The
 compiler will warn if a non-annotated loop is estimated to exceed the tick
 budget, suggesting the user add `@coroutine`.
 
+#### Why no `await` in v1 coroutine
+
+This feature is for **tick-slicing** (budget control), not asynchronous IO.
+Minecraft execution is single-threaded and tick-driven, so a state-machine +
+`onDone` callback model is enough for most needs while keeping language
+complexity low. If needed later, `join()` / `is_done()` / `get_result()` can be
+added on top without changing the core transform.
+
 #### What the transform does NOT do
 
-- Does not handle `return` with a value from inside a coroutine (complex; deferred).
+- Does not propagate coroutine return values in v1; completion is signaled via `onDone` callback (no value payload yet).
 - Does not support nested coroutines (a `@coroutine` calling another `@coroutine`).
 - Does not handle exceptions (RedScript has none, so this is fine).
 - Does not parallelize — MC is single-threaded; `@tick` runs one coroutine step per tick.
