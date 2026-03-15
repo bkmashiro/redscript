@@ -176,3 +176,47 @@ node dist/cli.js compile examples/readme-demo.mcrs \
 - Coroutine BATCH auto-calibration
 
 See `docs/compiler-pipeline-redesign.md` → "MCRuntime Profiler" section.
+
+---
+
+## VSCode Extension & npm Package Maintenance
+
+### npm package (`redscript-mc`)
+
+Claude can maintain fully:
+- Version bumps via `npm version patch/minor/major` in root `package.json`
+- Publishing: push to main → CI handles it automatically
+- The 920 tests verify CLI behavior end-to-end
+
+### VSCode extension (`editors/vscode/`)
+
+**What Claude can verify automatically:**
+```bash
+cd editors/vscode
+npm run build      # esbuild bundle must succeed
+vsce package       # .vsix must build without errors
+```
+
+Grammar unit tests (if set up with `vscode-tmgrammar-test`):
+```bash
+# Tests that specific source lines tokenize as expected
+# e.g. "fn foo(x: int): int" → keyword.fn, entity.function, etc.
+npm test
+```
+
+**What Claude cannot verify:** visual rendering, hover UI, color themes,
+real-time IntelliSense behavior. These require a running VS Code instance.
+
+**Division of labor:**
+- Claude: grammar files, manifest, version sync, CI publish, update tokens on syntax changes
+- You: visual check before major releases (`code --install-extension *.vsix`)
+
+**When syntax changes (e.g. `->` → `:`, `@keep` → `export`):**
+Claude must update `editors/vscode/syntaxes/redscript.tmLanguage.json`
+to match the new grammar, then rebuild and repackage.
+
+**CI publish flow:**
+Push to main → `publish-extension-on-ci.yml` auto-bumps patch version and
+publishes via `VSCE_PAT` secret. Manual minor/major bump: edit
+`editors/vscode/package.json` version directly before pushing.
+
