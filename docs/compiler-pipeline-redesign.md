@@ -1723,3 +1723,212 @@ When handing this to Claude for implementation:
 5. Commit after each stage gate passes
 6. Do not start Stage N+1 until Stage N gate is green
 
+
+---
+
+## Standard Library Redesign
+
+The current stdlib was built incrementally and has several design problems.
+The refactor is an opportunity to fix them properly.
+
+### Current problems
+
+**1. Naming inconsistency**
+
+```
+sin_fixed   cos_fixed   sqrt_fixed   ← _fixed suffix
+mulfix      divfix                   ← no underscore, no _fixed
+lerp        clamp                    ← takes int but semantics are fixed-point
+```
+
+No unified convention. A user reading code cannot tell which functions operate
+on fixed-point values without reading the docs.
+
+**2. No type enforcement for fixed-point values**
+
+Every fixed-point function takes and returns `int`. There is nothing stopping
+a user from passing a raw integer (e.g. pixel coordinate `px = 10`) to
+`mulfix` where a fixed-point value (e.g. `sin_fixed(45) = 707`) was expected.
+The compiler cannot catch this. Silent wrong-answer bugs.
+
+**3. `mulfix` overflow**
+
+```redscript
+fn mulfix(a: int, b: int) -> int { return a * b / 1000; }
+```
+
+`a * b` is a scoreboard `*=` operation, which wraps at INT32 (~2.1 billion).
+If `a = 50000` (= 50.0 in fixed-point) and `b = 50000`, then
+`a * b = 2,500,000,000` which overflows. Result is silently wrong.
+Safe range: both inputs < ~46340 (√2³¹ ≈ 46341).
+
+**4. Vector functions: flat parameters, split return values**
+
+```redscript
+// Current: flat args, two separate functions for one 2D result
+fn normalize2d_x(x: int, y: int) -> int { ... }
+fn normalize2d_y(x: int, y: int) -> int { ... }
+```
+
+No struct-based API. Every 2D/3D operation takes 2–6 separate int parameters.
+`normalize2d_x` / `normalize2d_y` is especially bad — one logical operation
+split into two functions that each recompute the length independently.
+
+Internal overflow: `x * 1000000` before dividing by length — overflows if
+either component > ~2147 (documented but easy to miss).
+
+**5. `lerp(a, b, t)` mixes int and fixed-point semantics**
+
+`lerp(0, 100, 500)` = 50. The `t` parameter is fixed-point (500 = 0.5),
+but `a` and `b` are plain integers. This is logically inconsistent.
+If everything were `float`, it would just be `lerp(0.0, 100.0, 0.5) = 50.0`.
+
+---
+
+### Root cause: no `float` type in the old compiler
+
+All of the above stem from the same source: without a first-class `float` type,
+there is no way to distinguish `500` (the integer) from `500` (= 0.5 in ×1000
+fixed-point). The programmer must track the scale mentally. The API carries
+that burden in naming conventions (`_fixed` suffix) instead of in types.
+
+---
+
+### New stdlib design: `float` type does the heavy lifting
+
+With the new type system, `float` = INT32 ×1000 fixed-point, enforced by the
+compiler. Arithmetic rules:
+
+| Operation | Left | Right | Result | Codegen |
+|---|---|---|---|---|
+| `a + b` | float | float | float | `+=` (no correction) |
+| `a - b` | float | float | float | `-=` |
+| `a * b` | float | float | float | `*=` then `/= 1000` (mulfix) |
+| `a / b` | float | float | float | `*= 1000` then `/=` (divfix) |
+| `a * n` | float | int | float | `*=` (scale by integer, no correction) |
+| `a / n` | float | int | float | `/=` |
+| `int as float` | int → float | — | — | `*= 1000` |
+| `float as int` | float → int | — | — | `/= 1000` |
+
+The user never writes `mulfix` or `divfix` — those become `*` and `/` on `float`.
+
+---
+
+### New stdlib API
+
+#### math module
+
+```redscript
+// Integer math (unchanged semantics, cleaned up)
+fn abs(x: int): int
+fn sign(x: int): int                        // -1, 0, 1
+fn min(a: int, b: int): int
+fn max(a: int, b: int): int
+fn clamp(x: int, lo: int, hi: int): int
+fn pow_int(base: int, exp: int): int
+fn gcd(a: int, b: int): int
+fn lcm(a: int, b: int): int
+fn isqrt(n: int): int                       // integer square root
+
+// Fixed-point math (now properly typed)
+fn sin(deg: int): float                     // was sin_fixed; returns float (×1000)
+fn cos(deg: int): float                     // was cos_fixed
+fn sqrt(x: float): float                    // was sqrt_fixed; input & output float
+fn abs_f(x: float): float                   // float abs
+fn clamp_f(x: float, lo: float, hi: float): float
+fn lerp(a: float, b: float, t: float): float   // t in [0.0, 1.0] = [0, 1000]
+fn map(x: float, in_lo: float, in_hi: float, out_lo: float, out_hi: float): float
+fn smoothstep(t: float): float              // t in [0.0, 1.0], was smoothstep(lo, hi, x)
+fn smootherstep(t: float): float
+fn atan2(y: float, x: float): int          // returns degrees (int, 0-359)
+```
+
+Removed from public API: `mulfix`, `divfix` — these become `*` and `/` on `float`.
+
+**`smoothstep` interface change:** `smoothstep(lo, hi, x)` → `smoothstep(t)` where
+caller normalizes `t` first using `map`. This is simpler and more composable.
+
+#### vec module (struct-based)
+
+```redscript
+struct Vec2 { x: float; y: float; }
+struct Vec3 { x: float; y: float; z: float; }
+
+impl Vec2 {
+    fn add(self, other: Vec2): Vec2
+    fn sub(self, other: Vec2): Vec2
+    fn scale(self, s: float): Vec2          // scalar multiply
+    fn dot(self, other: Vec2): float
+    fn length_sq(self): float               // x*x + y*y (no sqrt, no overflow)
+    fn length(self): float                  // sqrt of length_sq
+    fn dist(self, other: Vec2): float
+    fn manhattan(self, other: Vec2): float
+    fn chebyshev(self, other: Vec2): float
+    fn lerp(self, other: Vec2, t: float): Vec2
+}
+```
+
+**Multi-value return problem:** `normalize()` must return a `Vec2` (two values),
+but MC functions return one INT32. Options:
+
+1. **Two functions:** `fn normalize_x(self): float` + `fn normalize_y(self): float`
+   (current approach — ugly but simple)
+
+2. **Write to output parameter via well-known storage:**
+   ```redscript
+   fn normalize(self): Vec2
+   // compiler generates: compute into $ret_x / $ret_y slots
+   // call site: reads those slots back into the dest Vec2
+   ```
+   Requires compiler support for multi-slot struct return values.
+
+3. **Explicit output parameter:**
+   ```redscript
+   fn normalize(self, out_x: int, out_y: int)  // caller passes NBT paths
+   ```
+   Awkward in user code.
+
+**Decision: implement option 2 for the new compiler.** Struct return values
+use per-field "return slots" (`$ret_<field> __ns`). The caller reads them after
+the call. The compiler generates this transparently.
+
+#### timer module (multi-instance)
+
+```redscript
+struct Timer { _id: int; }
+
+impl Timer {
+    @static fn new(): Timer              // allocates a slot, returns id
+    fn start(self, ticks: int)          // begin countdown
+    fn tick(self)                        // call in @tick — decrements if active
+    fn is_done(self): bool
+    fn cancel(self)
+}
+```
+
+Uses `_id`-scoped fake player names: `timer_0_ticks`, `timer_1_ticks`, etc.
+Breaks the single-instance limitation.
+
+#### bigint module (unchanged API, internal cleanup)
+
+BigInt API is already reasonable. Internal cleanup:
+- Use struct: `struct BigInt { _id: int }`
+- Slot-based NBT storage (already uses `rs:bigint`, extend to per-instance paths)
+- Add: `shift_left`, `mod_pow`, string conversion
+
+---
+
+### Overflow: permanent constraints
+
+These cannot be eliminated — they are fundamental to INT32 scoreboard arithmetic.
+
+| Operation | Safe range | Notes |
+|---|---|---|
+| `a * b` (int × int) | both < 46341 | INT32 overflow at 46341² |
+| `float * float` | both < 46.341 (= 46341 fixed-point) | same limit |
+| `normalize2d` | input components < ~2147 | intermediate `x * 1000000` |
+| `sin(deg) * r` (float × float) | r < 46341 | sin output ≤ 1000 |
+
+The stdlib should document these clearly and provide overflow-safe variants
+(e.g. `length_sq` instead of `length` when the square is sufficient).
+
