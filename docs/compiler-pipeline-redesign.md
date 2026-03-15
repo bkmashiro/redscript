@@ -1932,3 +1932,71 @@ These cannot be eliminated — they are fundamental to INT32 scoreboard arithmet
 The stdlib should document these clearly and provide overflow-safe variants
 (e.g. `length_sq` instead of `length` when the square is sufficient).
 
+
+---
+
+## Testing During the Refactor (Addendum)
+
+### Write tests alongside implementation, not after
+
+Each stage should produce its own tests as it is built.
+Do not batch all testing to the end.
+
+```
+Implement Stage N → write unit tests for Stage N → tests pass → commit → Stage N+1
+```
+
+Stage-local tests are small and focused:
+- HIR tests: "this source snippet produces this HIR node"
+- MIR tests: "this HIR function produces this 3-address sequence"
+- Optimizer tests: "this MIR input becomes this MIR output after pass X"
+- LIR tests: "this MIR instruction lowers to this LIR instruction"
+
+The 920 e2e tests are a final integration check, not a substitute for unit tests.
+
+### Syntax changes will break many existing tests — that's fine
+
+The new compiler introduces syntax changes that are not backward-compatible
+with the current `.mcrs` test fixtures. This is expected and acceptable.
+
+Known breaking changes:
+
+| Old syntax | New syntax |
+|---|---|
+| `fn foo(x: int) -> int` | `fn foo(x: int): int` |
+| `@keep fn foo()` | `export fn foo()` |
+| `struct Foo` + `impl Foo` (separate) | `struct Foo { ... impl ... }` or keep separate — TBD |
+| `use "path"` (current) | may stay the same |
+| `float` type was mostly `int` in practice | `float` is now distinct |
+
+**Strategy for existing tests:**
+- Tests whose source syntax changes must be updated before they can run against the new compiler
+- Do not force the new compiler to accept old syntax for test compatibility
+- Update test fixtures as part of Stage 7 (when the full pipeline is wired up and tests are being migrated)
+- The old compiler in `src/` still exists until the refactor is complete — old tests can still run against it at any time
+
+### Test structure for the new compiler (`src2/__tests__/`)
+
+```
+src2/__tests__/
+  hir/
+    desugar.test.ts       for → while transforms, ternary expansion, etc.
+    execute-blocks.test.ts  execute context block lowering to helper fns
+  mir/
+    arithmetic.test.ts    int/float arithmetic sequences
+    control-flow.test.ts  if/while/loop → CFG branch structure
+    calls.test.ts         regular + macro function calls
+    verify.test.ts        MIR verifier catches malformed IR
+  optimizer/
+    constant-fold.test.ts
+    copy-prop.test.ts
+    dce.test.ts
+    block-merge.test.ts
+  lir/
+    scoreboard.test.ts    score_copy/add/etc lowering
+    execute.test.ts       call_if_matches, call_context lowering
+    macro.test.ts         macro_line generation
+  e2e/
+    *.test.ts             updated versions of the 920 tests (staged migration)
+```
+
