@@ -4,13 +4,13 @@
     "module": "commonjs",
     "lib": ["ES2021"],
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "declaration": true,
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "src2/**/*"],
   "exclude": ["dist", "node_modules"]
 }
