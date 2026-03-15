@@ -576,3 +576,201 @@ Zed, and any LSP-capable editor get support from one implementation.
 A tsc plugin would be harder, VS Code-only, and still require all the same
 semantic analysis.
 
+
+---
+
+## MC Compilation Target: Computational Commands
+
+This section covers the MC commands that actually participate in computation —
+not side-effect commands like `particle`, `summon`, `say`, `playsound`, etc.
+Every operation in the IR must ultimately map to one or more of these.
+
+### Scoreboard: the "CPU registers" of MC
+
+Scoreboard objectives hold named fake-player slots, each storing one INT32.
+This is the primary computational medium.
+
+```
+# Initialization
+scoreboard objectives add <obj> dummy
+
+# Write constant
+scoreboard players set <fake_player> <obj> <value>
+
+# Copy
+scoreboard players operation $dst <obj> = $src <obj>
+
+# Arithmetic (all in-place, 2-address)
+scoreboard players operation $dst <obj> += $src <obj>   # add
+scoreboard players operation $dst <obj> -= $src <obj>   # sub
+scoreboard players operation $dst <obj> *= $src <obj>   # mul
+scoreboard players operation $dst <obj> /= $src <obj>   # integer div (truncates toward zero)
+scoreboard players operation $dst <obj> %= $src <obj>   # mod (sign follows dividend)
+
+# Min / max
+scoreboard players operation $dst <obj> < $src <obj>    # dst = min(dst, src)
+scoreboard players operation $dst <obj> > $src <obj>    # dst = max(dst, src)
+
+# Swap
+scoreboard players operation $a <obj> >< $b <obj>
+```
+
+**Constraints:**
+- INT32 only. No float, no 64-bit.
+- Division is truncated toward zero (Java `int` semantics).
+- No bitwise operations. XOR/AND/OR must be emulated with arithmetic.
+- No comparison that produces a value — comparisons only appear in `execute if score`.
+
+### `execute store result score` — bridge from commands to scores
+
+Captures the integer result of a command into a score slot:
+
+```
+execute store result score $dst <obj> run <command>
+```
+
+Used for:
+- Reading entity NBT: `run data get entity @s Health 1`
+- Reading storage: `run data get storage <ns> <path> <scale>`
+- Capturing command success: `execute store success score $dst <obj> run ...`
+- Returning from a function: `run function <ns>:<fn>` (captures `return` value)
+
+### `execute if/unless score` — the only conditional
+
+All control flow in the compiled output is expressed with score comparisons:
+
+```
+# Range check (most common — if score matches an integer range)
+execute if score $x <obj> matches <N>           run function <ns>:then_block
+execute if score $x <obj> matches <N>..<M>      run function <ns>:range_block
+execute if score $x <obj> matches ..<N>         run function <ns>:le_block
+
+# Two-operand comparison
+execute if     score $a <obj> = $b <obj>        run ...   # a == b
+execute if     score $a <obj> < $b <obj>        run ...   # a < b
+execute unless score $a <obj> = $b <obj>        run ...   # a != b
+```
+
+**Why `matches` vs two-operand:**
+- `matches N..` is cheaper than `= $const` (no extra fake-player needed).
+- `matches 1..` is the canonical boolean-true check.
+- Two-operand form needed for dynamic comparisons (`a < b` where both vary).
+
+### NBT Storage: heap memory
+
+NBT storage (`data storage <ns>:<path>`) is the only persistent structured
+memory available. It holds typed NBT values (int, double, string, list, compound).
+
+```
+# Write literal
+data modify storage <ns> <path> set value <nbt_literal>
+
+# Copy between paths
+data modify storage <ns> <dst_path> set from storage <ns> <src_path>
+
+# Read into score (with optional scale factor)
+execute store result score $dst <obj> run data get storage <ns> <path> 1
+
+# Write score into storage (with scale: useful for float conversion)
+execute store result storage <ns> <path> int    1     run scoreboard players get $src <obj>
+execute store result storage <ns> <path> double 0.01  run scoreboard players get $src <obj>
+# → stores (score × 0.01) as a double; e.g. score=975 → NBT 9.75d
+```
+
+**Scale factor:**
+The `<scale>` in `data get` / `execute store result storage` is a multiplier
+applied on read/write. This is the only way to convert between integer scores
+and fractional NBT values (used for float-coordinate macro parameters).
+
+### Array indexing via NBT
+
+Static index (compile-time constant):
+
+```
+execute store result score $dst <obj> run data get storage rs:heap array[5] 1
+data modify storage rs:heap array[3] set value 42
+```
+
+Dynamic index (runtime variable) — requires MC 1.20.2+ macros:
+
+```
+# Step 1: write index into macro args storage
+execute store result storage rs:macro_args i int 1 run scoreboard players get $idx <obj>
+
+# Step 2: call macro function
+function ns:_read_array with storage rs:macro_args
+
+# Step 3: inside _read_array.mcfunction (macro function)
+$execute store result score $ret <obj> run data get storage rs:heap array[$(i)] 1
+```
+
+**RedScript `storage_get_int` / `storage_set_int` builtins compile to exactly this pattern.**
+
+### MC 1.20.2+ Function Macros
+
+A function file that contains `$(key)` substitutions must be called with
+`function <ns>:<fn> with storage <ns>:<macro_storage>`.
+Any line containing `$(...)` must begin with `$`.
+
+```
+# Caller: populate rs:macro_args, then call
+execute store result storage rs:macro_args px double 0.01 run scoreboard players get $px_int <obj>
+execute store result storage rs:macro_args py double 0.01 run scoreboard players get $py_int <obj>
+function rsdemo:_draw with storage rs:macro_args
+
+# Inside _draw.mcfunction (macro function):
+$particle minecraft:end_rod ^$(px) ^$(py) ^5 0.02 0.02 0.02 0 10
+```
+
+**What macros unlock:**
+- Dynamic array indexing (above)
+- Dynamic coordinates in `particle`, `setblock`, `tp`, `fill`, etc.
+- Dynamic entity selectors and NBT paths
+
+**Constraint:** Macro substitution is string interpolation at the command level.
+The substituted value must be a valid literal for that position (integer, float,
+coordinate, selector string). No arithmetic is performed during substitution.
+
+### `function` and `return`: call graph and early exit
+
+```
+# Unconditional call
+function <ns>:<path>
+
+# Conditional call (the compiled form of if/else branches)
+execute if score $cond <obj> matches 1.. run function <ns>:then_0
+execute if score $cond <obj> matches ..0 run function <ns>:else_0
+
+# Macro function call
+function <ns>:<path> with storage <ns>:<macro_storage>
+
+# Return a value (MC 1.20.3+)
+return 42
+return run scoreboard players get $x <obj>
+
+# Early return (MC 1.20.2+, exits current function immediately)
+return 0
+```
+
+`return run <cmd>` stores the command's result as the function's return value,
+readable via `execute store result score $ret <obj> run function ...`.
+
+### Summary: IR operation → MC command mapping
+
+| IR operation | MC command |
+|---|---|
+| `x = const N` | `scoreboard players set $x <obj> N` |
+| `x = copy y` | `scoreboard players operation $x <obj> = $y <obj>` |
+| `x = add y, z` | copy y→x, then `+= $z` |
+| `x = sub y, z` | copy y→x, then `-= $z` |
+| `x = mul y, z` | copy y→x, then `*= $z` |
+| `x = div y, z` | copy y→x, then `/= $z` |
+| `x = mod y, z` | copy y→x, then `%= $z` |
+| `if x == 0` | `execute if score $x <obj> matches 0 run ...` |
+| `if x > y` | `execute if score $x <obj> > $y <obj> run ...` |
+| `x = array[i]` | macro: store i, call macro fn, read `$ret` |
+| `array[i] = v` | macro: store i+v, call macro fn |
+| `call fn(args...)` | set up params in `$p0..$pN`, `function <ns>:<fn>` |
+| `call_macro fn(args...)` | store args in `rs:macro_args`, `function ... with storage` |
+| `return x` | `scoreboard players operation $ret <obj> = $x <obj>` |
+
