@@ -11,8 +11,8 @@ import { Parser } from './parser'
 import { preprocessSource } from './compile'
 
 // Re-export v2 compile API
-export { compile, CompileOptions, CompileResult } from '../src2/emit/compile'
-export type { DatapackFile } from '../src2/emit/index'
+export { compile, CompileOptions, CompileResult } from './emit/compile'
+export type { DatapackFile } from './emit/index'
 
 // Re-export utilities
 export { Lexer } from './lexer'

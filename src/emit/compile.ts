@@ -4,9 +4,9 @@
  * Pipeline: source → Lexer → Parser → HIR → MIR → optimize → LIR → emit
  */
 
-import { Lexer } from '../../src/lexer'
-import { Parser } from '../../src/parser'
-import { preprocessSourceWithMetadata } from '../../src/compile'
+import { Lexer } from '../lexer'
+import { Parser } from '../parser'
+import { preprocessSourceWithMetadata } from '../compile'
 import { lowerToHIR } from '../hir/lower'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'

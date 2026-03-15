@@ -1,5 +1,5 @@
-import { Lexer } from '../../../src/lexer'
-import { Parser } from '../../../src/parser'
+import { Lexer } from '../../lexer'
+import { Parser } from '../../parser'
 import { lowerToHIR } from '../../hir/lower'
 import { lowerToMIR } from '../../mir/lower'
 import { verifyMIR } from '../../mir/verify'

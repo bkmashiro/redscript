@@ -23,8 +23,8 @@ import type {
   SelectorFilter,
   EntityTypeName,
   LambdaParam,
-} from '../../src/ast/types'
-import type { BinOp, CmpOp } from '../../src/ast/types'
+} from '../ast/types'
+import type { BinOp, CmpOp } from '../ast/types'
 
 // Re-export types that HIR shares with AST unchanged
 export type {

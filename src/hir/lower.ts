@@ -14,7 +14,7 @@
 import type {
   Program, Expr, Stmt, Block, FnDecl, Param,
   AssignOp, ExecuteSubcommand,
-} from '../../src/ast/types'
+} from '../ast/types'
 import type {
   HIRModule, HIRFunction, HIRParam, HIRExpr, HIRStmt, HIRBlock,
   HIRExecuteSubcommand, HIRStruct, HIRImplBlock, HIREnum, HIRConst, HIRGlobal,

@@ -12,7 +12,7 @@
  */
 
 import { compile } from '../../emit/compile'
-import { MCRuntime } from '../../../src/runtime'
+import { MCRuntime } from '../../runtime'
 
 // ---------------------------------------------------------------------------
 // Helpers
