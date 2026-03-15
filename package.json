@@ -13,7 +13,7 @@
     "test": "jest",
     "cli": "ts-node src/cli.ts",
     "validate-mc": "jest src/__tests__/mc-syntax.test.ts --verbose",
-    "postbuild": "cp dist/src/cli.js dist/cli.js && cp dist/src/index.js dist/index.js && cp dist/src/compile.js dist/compile.js 2>/dev/null || true"
+    "postbuild": "node scripts/postbuild.js"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",

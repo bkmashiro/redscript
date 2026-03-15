@@ -1,57 +1,24 @@
 /**
  * RedScript Compile API
  *
- * Main compile function with proper error handling and diagnostics.
+ * Preprocessing utilities and v2 compile re-export.
  */
 
 import * as fs from 'fs'
 import * as path from 'path'
 
-import { Lexer } from './lexer'
-import { Parser } from './parser'
-import { Lowering, setScoreboardObjective } from './lowering'
-import { optimize } from './optimizer/passes'
-import { eliminateDeadCode } from './optimizer/dce'
-import { generateDatapackWithStats, DatapackFile } from './codegen/mcfunction'
-import { DiagnosticError, formatError, parseErrorMessage } from './diagnostics'
-import type { IRModule } from './ir/types'
-import type { Program } from './ast/types'
+import { DiagnosticError } from './diagnostics'
 
 // ---------------------------------------------------------------------------
-// Compile Options
+// Re-export v2 compile
 // ---------------------------------------------------------------------------
 
-export interface CompileOptions {
-  namespace?: string
-  filePath?: string
-  optimize?: boolean
-  dce?: boolean
-  mangle?: boolean
-  /** Scoreboard objective used for all variable slots.
-   *  Defaults to '__<namespace>' (e.g. '__mathshow') — the double-underscore
-   *  prefix signals compiler-internal and avoids occupying the user's namespace.
-   *  Each datapack gets a unique objective automatically; no manual setup needed. */
-  scoreboardObjective?: string
-  /** Additional source files that should be treated as *library* code.
-   *  Functions in these files are DCE-eligible: they are only compiled into
-   *  the datapack when actually called from user code.  Each string is parsed
-   *  independently (as if it had `module library;` at the top), so library
-   *  mode never bleeds into the main `source`. */
-  librarySources?: string[]
-}
+export { compile, CompileOptions, CompileResult } from '../src2/emit/compile'
+export type { DatapackFile } from '../src2/emit/index'
 
 // ---------------------------------------------------------------------------
-// Compile Result
+// Source Range / Preprocessing
 // ---------------------------------------------------------------------------
-
-export interface CompileResult {
-  success: boolean
-  files?: DatapackFile[]
-  advancements?: DatapackFile[]
-  ast?: Program
-  ir?: IRModule
-  error?: DiagnosticError
-}
 
 export interface SourceRange {
   startLine: number
@@ -214,127 +181,4 @@ export function preprocessSourceWithMetadata(source: string, options: Preprocess
 
 export function preprocessSource(source: string, options: PreprocessOptions = {}): string {
   return preprocessSourceWithMetadata(source, options).source
-}
-
-// ---------------------------------------------------------------------------
-// Main Compile Function
-// ---------------------------------------------------------------------------
-
-export function compile(source: string, options: CompileOptions = {}): CompileResult {
-  const { namespace = 'redscript', filePath, optimize: shouldOptimize = true } = options
-  const shouldRunDce = options.dce ?? shouldOptimize
-  let sourceLines = source.split('\n')
-
-  try {
-    const preprocessed = preprocessSourceWithMetadata(source, { filePath })
-    const preprocessedSource = preprocessed.source
-    sourceLines = preprocessedSource.split('\n')
-
-    // Lexing
-    const tokens = new Lexer(preprocessedSource, filePath).tokenize()
-
-    // Parsing — user source
-    const parsedAst = new Parser(tokens, preprocessedSource, filePath).parse(namespace)
-
-    // Collect all library sources: explicit `librarySources` option +
-    // auto-detected imports (files with `module library;` pulled out by the
-    // preprocessor rather than concatenated).
-    const allLibrarySources: Array<{ src: string; fp?: string }> = []
-    for (const libSrc of options.librarySources ?? []) {
-      allLibrarySources.push({ src: libSrc })
-    }
-    for (const li of preprocessed.libraryImports ?? []) {
-      allLibrarySources.push({ src: li.source, fp: li.filePath })
-    }
-
-    // Parse library sources independently (fresh Parser per source) so that
-    // `inLibraryMode` never bleeds into user code.  All resulting functions get
-    // isLibraryFn=true (either via `module library;` in the source, or forced below).
-    for (const { src, fp } of allLibrarySources) {
-      const libPreprocessed = preprocessSourceWithMetadata(src, fp ? { filePath: fp } : {})
-      const libTokens = new Lexer(libPreprocessed.source, fp).tokenize()
-      const libAst = new Parser(libTokens, libPreprocessed.source, fp).parse(namespace)
-      // Force all functions to library mode (even if source lacks `module library;`)
-      for (const fn of libAst.declarations) fn.isLibraryFn = true
-      // Merge into main AST
-      parsedAst.declarations.push(...libAst.declarations)
-      parsedAst.structs.push(...libAst.structs)
-      parsedAst.implBlocks.push(...libAst.implBlocks)
-      parsedAst.enums.push(...libAst.enums)
-      parsedAst.consts.push(...libAst.consts)
-      parsedAst.globals.push(...libAst.globals)
-    }
-    const dceResult = shouldRunDce ? eliminateDeadCode(parsedAst) : { program: parsedAst, warnings: [] }
-    const ast = dceResult.program
-
-    // Configure scoreboard objective for this compilation.
-    // Default: use the datapack namespace so each datapack gets its own objective
-    // automatically, preventing variable collisions when multiple datapacks coexist.
-    const scoreboardObj = options.scoreboardObjective ?? `__${namespace}`
-    setScoreboardObjective(scoreboardObj)
-
-    // Lowering
-    const ir = new Lowering(namespace, preprocessed.ranges).lower(ast)
-
-    // Optimization
-    const optimized: IRModule = shouldOptimize
-      ? { ...ir, functions: ir.functions.map(fn => optimize(fn)) }
-      : ir
-
-    // Code generation — mangle=true by default to prevent cross-function
-    // scoreboard variable collisions in the global MC scoreboard namespace.
-    const generated = generateDatapackWithStats(optimized, {
-      mangle: options.mangle ?? true,
-      scoreboardObjective: scoreboardObj,
-    })
-
-    return {
-      success: true,
-      files: [...generated.files, ...generated.advancements],
-      advancements: generated.advancements,
-      ast,
-      ir: optimized,
-    }
-  } catch (err) {
-    // Already a DiagnosticError
-    if (err instanceof DiagnosticError) {
-      return { success: false, error: err }
-    }
-
-    // Try to parse the error message for line/col info
-    if (err instanceof Error) {
-      const diagnostic = parseErrorMessage(
-        'ParseError',
-        err.message,
-        sourceLines,
-        filePath
-      )
-      return { success: false, error: diagnostic }
-    }
-
-    // Unknown error
-    return {
-      success: false,
-      error: new DiagnosticError(
-        'ParseError',
-        String(err),
-        { file: filePath, line: 1, col: 1 },
-        sourceLines
-      )
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Format Compile Error
-// ---------------------------------------------------------------------------
-
-export function formatCompileError(result: CompileResult): string {
-  if (result.success) {
-    return 'Compilation successful'
-  }
-  if (result.error) {
-    return formatError(result.error, result.error.sourceLines?.join('\n'))
-  }
-  return 'Unknown error'
 }

@@ -1496,7 +1496,7 @@ export class MCRuntime {
 
   compileAndLoad(source: string): void {
     const result = rsCompile(source, { namespace: this.namespace })
-    if (!result.success || !result.files) {
+    if (!result.files) {
       throw new Error('Compilation failed')
     }
 

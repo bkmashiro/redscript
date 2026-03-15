@@ -1,30 +1,22 @@
 /**
  * End-to-End Tests
  *
- * Tests the complete pipeline: Source → Lexer → Parser → Lowering → Optimizer → CodeGen
+ * Tests the complete pipeline: Source → Lexer → Parser → HIR → MIR → LIR → emit
  */
 
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
-import { Lowering } from '../lowering'
 import { TypeChecker } from '../typechecker'
-import { optimize } from '../optimizer/passes'
-import { generateDatapack, generateDatapackWithStats, DatapackFile } from '../codegen/mcfunction'
-import type { IRModule } from '../ir/types'
+import { compile as compileV2 } from '../../src2/emit/compile'
+import type { DatapackFile } from '../../src2/emit/index'
 
 // ---------------------------------------------------------------------------
 // Test Helpers
 // ---------------------------------------------------------------------------
 
 function compile(source: string, namespace = 'test'): DatapackFile[] {
-  const tokens = new Lexer(source).tokenize()
-  const ast = new Parser(tokens).parse(namespace)
-  const ir = new Lowering(namespace).lower(ast)
-  const optimized: IRModule = {
-    ...ir,
-    functions: ir.functions.map(fn => optimize(fn)),
-  }
-  return generateDatapack(optimized)
+  const result = compileV2(source, { namespace })
+  return result.files
 }
 
 function getFunction(files: DatapackFile[], name: string): string | undefined {
@@ -50,65 +42,9 @@ function typeCheck(source: string) {
   return new TypeChecker(source).check(ast)
 }
 
-import { generateCommandBlocks } from '../codegen/cmdblock'
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-describe('Command Block Target', () => {
-  it('generates cmdblock structure with load block', () => {
-    const result = generateCommandBlocks('mypack', false, true)
-    
-    expect(result.format).toBe('redscript-cmdblock-v1')
-    expect(result.namespace).toBe('mypack')
-    expect(result.blocks).toHaveLength(1)
-    expect(result.blocks[0].type).toBe('impulse')
-    expect(result.blocks[0].command).toBe('function mypack:__load')
-    expect(result.blocks[0].auto).toBe(true)
-  })
-
-  it('generates cmdblock structure with tick block', () => {
-    const result = generateCommandBlocks('mypack', true, false)
-    
-    expect(result.blocks).toHaveLength(1)
-    expect(result.blocks[0].type).toBe('repeat')
-    expect(result.blocks[0].command).toBe('function mypack:__tick')
-  })
-
-  it('generates cmdblock structure with both blocks', () => {
-    const result = generateCommandBlocks('game', true, true)
-    
-    expect(result.namespace).toBe('game')
-    expect(result.blocks).toHaveLength(2)
-    
-    // Load block first
-    expect(result.blocks[0].type).toBe('impulse')
-    expect(result.blocks[0].command).toBe('function game:__load')
-    expect(result.blocks[0].pos).toEqual([0, 0, 0])
-    expect(result.blocks[0].auto).toBe(true)
-    
-    // Tick block second
-    expect(result.blocks[1].type).toBe('repeat')
-    expect(result.blocks[1].command).toBe('function game:__tick')
-    expect(result.blocks[1].pos).toEqual([1, 0, 0])
-  })
-
-  it('generates empty blocks when no tick or load', () => {
-    const result = generateCommandBlocks('empty', false, false)
-    
-    expect(result.blocks).toHaveLength(0)
-  })
-
-  it('produces valid JSON structure', () => {
-    const result = generateCommandBlocks('test', true, true)
-    const json = JSON.stringify(result)
-    const parsed = JSON.parse(json)
-    
-    expect(parsed.format).toBe('redscript-cmdblock-v1')
-    expect(Array.isArray(parsed.blocks)).toBe(true)
-  })
-})
 
 describe('E2E: Complete Pipeline', () => {
   describe('const declarations', () => {

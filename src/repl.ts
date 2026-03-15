@@ -1,7 +1,7 @@
 import * as readline from 'readline'
 
 import { compile } from './index'
-import type { DatapackFile } from './codegen/mcfunction'
+import type { DatapackFile } from '../src2/emit/index'
 
 const REPL_FN = '__repl'
 

@@ -1,22 +1,18 @@
 #!/usr/bin/env node
 /**
  * RedScript CLI
- * 
+ *
  * Usage:
- *   redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>]
+ *   redscript compile <file> [-o <out>] [--namespace <ns>]
  *   redscript check <file>
  *   redscript repl
  *   redscript version
  */
 
-import { compile as compileV1, check } from './index'
-import { compile as compileV2 } from '../src2/emit/compile'
-import { generateCommandBlocks } from './codegen/cmdblock'
-import { compileToStructure } from './codegen/structure'
+import { compile, check } from './index'
 import { formatError } from './diagnostics'
 import { startRepl } from './repl'
 import { generateDts } from './builtins/metadata'
-import type { OptimizationStats } from './optimizer/commands'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as https from 'https'
@@ -27,10 +23,10 @@ const args = process.argv.slice(2)
 
 function printUsage(): void {
   console.log(`
-RedScript Compiler
+RedScript Compiler v2
 
 Usage:
-  redscript compile <file> [-o <out>] [--output-nbt <file>] [--namespace <ns>] [--scoreboard <obj>] [--target <target>] [--no-dce]
+  redscript compile <file> [-o <out>] [--namespace <ns>]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
   redscript fmt <file.mcrs> [file2.mcrs ...]
@@ -49,24 +45,11 @@ Commands:
   upgrade       Upgrade to the latest version (npm install -g redscript-mc@latest)
 
 Options:
-  -o, --output <path>    Output directory or file path, depending on target
-  --output-nbt <file>    Output .nbt file path for structure target
+  -o, --output <path>    Output directory or file path
   --namespace <ns>       Datapack namespace (default: derived from filename)
-  --target <target>      Output target: datapack (default), cmdblock, or structure
-  --no-dce               Disable AST dead code elimination
-  --no-mangle            Disable variable name mangling (use readable names)
-  --scoreboard <obj>     Scoreboard objective for variables (default: namespace).
-                         Each datapack automatically uses its namespace as the objective
-                         so multiple datapacks can coexist without collisions.
-  --stats                Print optimizer statistics
   --hot-reload <url>     After each successful compile, POST to <url>/reload
                          (use with redscript-testharness; e.g. http://localhost:25561)
   -h, --help             Show this help message
-
-Targets:
-  datapack  Generate a full Minecraft datapack (default)
-  cmdblock  Generate JSON structure for command block placement
-  structure Generate a Minecraft structure .nbt file with command blocks
 `)
 }
 
@@ -164,17 +147,11 @@ function parseArgs(args: string[]): {
   command?: string
   file?: string
   output?: string
-  outputNbt?: string
   namespace?: string
-  target?: string
-  stats?: boolean
   help?: boolean
   hotReload?: string
-  dce?: boolean
-  mangle?: boolean
-  scoreboardObjective?: string
 } {
-  const result: ReturnType<typeof parseArgs> = { dce: true, mangle: true }
+  const result: ReturnType<typeof parseArgs> = {}
   let i = 0
 
   while (i < args.length) {
@@ -186,26 +163,8 @@ function parseArgs(args: string[]): {
     } else if (arg === '-o' || arg === '--output') {
       result.output = args[++i]
       i++
-    } else if (arg === '--output-nbt') {
-      result.outputNbt = args[++i]
-      i++
     } else if (arg === '--namespace') {
       result.namespace = args[++i]
-      i++
-    } else if (arg === '--target') {
-      result.target = args[++i]
-      i++
-    } else if (arg === '--stats') {
-      result.stats = true
-      i++
-    } else if (arg === '--no-dce') {
-      result.dce = false
-      i++
-    } else if (arg === '--no-mangle') {
-      result.mangle = false
-      i++
-    } else if (arg === '--scoreboard') {
-      result.scoreboardObjective = args[++i]
       i++
     } else if (arg === '--hot-reload') {
       result.hotReload = args[++i]
@@ -230,48 +189,10 @@ function deriveNamespace(filePath: string): string {
   return basename.toLowerCase().replace(/[^a-z0-9]/g, '_')
 }
 
-function printWarnings(warnings: Array<{ code: string; message: string; line?: number; col?: number; filePath?: string }> | undefined): void {
-  if (!warnings || warnings.length === 0) {
-    return
-  }
-
-  for (const warning of warnings) {
-    const loc = warning.filePath
-      ? `${warning.filePath}:${warning.line ?? '?'}`
-      : warning.line != null
-        ? `line ${warning.line}`
-        : null
-    const locStr = loc ? ` (${loc})` : ''
-    console.error(`Warning [${warning.code}]: ${warning.message}${locStr}`)
-  }
-}
-
-function formatReduction(before: number, after: number): string {
-  if (before === 0) return '0%'
-  return `${Math.round(((before - after) / before) * 100)}%`
-}
-
-function printOptimizationStats(stats: OptimizationStats | undefined): void {
-  if (!stats) return
-
-  console.log('Optimizations applied:')
-  console.log(`  LICM: ${stats.licmHoists} reads hoisted from ${stats.licmLoopBodies} loop bodies`)
-  console.log(`  CSE:  ${stats.cseRedundantReads + stats.cseArithmetic} expressions eliminated`)
-  console.log(`  setblock batching: ${stats.setblockMergedCommands} setblocks -> ${stats.setblockFillCommands} fills (saved ${stats.setblockSavedCommands} commands)`)
-  console.log(`  dead code: ${stats.deadCodeRemoved} commands removed`)
-  console.log(`  constant folding: ${stats.constantFolds} constants folded`)
-  console.log(`  Total mcfunction commands: ${stats.totalCommandsBefore} -> ${stats.totalCommandsAfter} (${formatReduction(stats.totalCommandsBefore, stats.totalCommandsAfter)} reduction)`)
-}
-
 function compileCommand(
   file: string,
   output: string,
   namespace: string,
-  target: string = 'datapack',
-  showStats = false,
-  dce = true,
-  mangle = true,
-  scoreboardObjective: string | undefined = undefined
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -282,78 +203,26 @@ function compileCommand(
   const source = fs.readFileSync(file, 'utf-8')
 
   try {
-    if (target === 'cmdblock') {
-      const result = compileV1(source, { namespace, filePath: file, dce, mangle, scoreboardObjective })
-      printWarnings(result.warnings)
+    const result = compile(source, { namespace, filePath: file })
 
-      // Generate command block JSON
-      const hasTick = result.files.some(f => f.path.includes('__tick.mcfunction'))
-      const hasLoad = result.files.some(f => f.path.includes('__load.mcfunction'))
-      const cmdBlocks = generateCommandBlocks(namespace, hasTick, hasLoad)
-
-      // Write command block JSON
-      fs.mkdirSync(output, { recursive: true })
-      const outputFile = path.join(output, `${namespace}_cmdblocks.json`)
-      fs.writeFileSync(outputFile, JSON.stringify(cmdBlocks, null, 2))
-
-      console.log(`✓ Generated command blocks for ${file}`)
-      console.log(`  Output: ${outputFile}`)
-      console.log(`  Blocks: ${cmdBlocks.blocks.length}`)
-      if (showStats) {
-        printOptimizationStats(result.stats)
-      }
-    } else if (target === 'structure') {
-      const structure = compileToStructure(source, namespace, file, { dce, mangle })
-      fs.mkdirSync(path.dirname(output), { recursive: true })
-      fs.writeFileSync(output, structure.buffer)
-
-      console.log(`✓ Generated structure for ${file}`)
-      console.log(`  Output: ${output}`)
-      console.log(`  Blocks: ${structure.blockCount}`)
-      if (showStats) {
-        printOptimizationStats(structure.stats)
-      }
-    } else if (showStats) {
-      // --stats requires v1 optimizer (v2 doesn't have stats yet)
-      const result = compileV1(source, { namespace, filePath: file, dce, mangle, scoreboardObjective })
-      printWarnings(result.warnings)
-
-      fs.mkdirSync(output, { recursive: true })
-      for (const dataFile of result.files) {
-        const filePath = path.join(output, dataFile.path)
-        const dir = path.dirname(filePath)
-        fs.mkdirSync(dir, { recursive: true })
-        fs.writeFileSync(filePath, dataFile.content)
-      }
-
-      console.log(`✓ Compiled ${file} to ${output}/`)
-      console.log(`  Namespace: ${namespace}`)
-      console.log(`  Functions: ${result.ir.functions.length}`)
-      console.log(`  Files: ${result.files.length}`)
-      printOptimizationStats(result.stats)
-    } else {
-      // Default: v2 pipeline → datapack
-      const result = compileV2(source, { namespace, filePath: file })
-
-      for (const w of result.warnings) {
-        console.error(`Warning: ${w}`)
-      }
-
-      // Create output directory
-      fs.mkdirSync(output, { recursive: true })
-
-      // Write all files
-      for (const dataFile of result.files) {
-        const filePath = path.join(output, dataFile.path)
-        const dir = path.dirname(filePath)
-        fs.mkdirSync(dir, { recursive: true })
-        fs.writeFileSync(filePath, dataFile.content)
-      }
-
-      console.log(`✓ Compiled ${file} to ${output}/`)
-      console.log(`  Namespace: ${namespace}`)
-      console.log(`  Files: ${result.files.length}`)
+    for (const w of result.warnings) {
+      console.error(`Warning: ${w}`)
     }
+
+    // Create output directory
+    fs.mkdirSync(output, { recursive: true })
+
+    // Write all files
+    for (const dataFile of result.files) {
+      const filePath = path.join(output, dataFile.path)
+      const dir = path.dirname(filePath)
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(filePath, dataFile.content)
+    }
+
+    console.log(`✓ Compiled ${file} to ${output}/`)
+    console.log(`  Namespace: ${namespace}`)
+    console.log(`  Files: ${result.files.length}`)
   } catch (err) {
     console.error(formatError(err as Error, source))
     process.exit(1)
@@ -391,7 +260,7 @@ async function hotReload(url: string): Promise<void> {
   }
 }
 
-function watchCommand(dir: string, output: string, namespace?: string, hotReloadUrl?: string, dce = true): void {
+function watchCommand(dir: string, output: string, namespace?: string, hotReloadUrl?: string): void {
   // Check if directory exists
   if (!fs.existsSync(dir)) {
     console.error(`Error: Directory not found: ${dir}`)
@@ -426,7 +295,7 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
       try {
         source = fs.readFileSync(file, 'utf-8')
         const ns = namespace ?? deriveNamespace(file)
-        const result = compileV2(source, { namespace: ns, filePath: file })
+        const result = compile(source, { namespace: ns, filePath: file })
         for (const w of result.warnings) {
           console.error(`Warning: ${w}`)
         }
@@ -517,20 +386,12 @@ async function main(): Promise<void> {
       }
       {
         const namespace = parsed.namespace ?? deriveNamespace(parsed.file)
-        const target = parsed.target ?? 'datapack'
-        const output = target === 'structure'
-          ? (parsed.outputNbt ?? parsed.output ?? `./${namespace}.nbt`)
-          : (parsed.output ?? './dist')
+        const output = parsed.output ?? './dist'
 
       compileCommand(
         parsed.file,
         output,
         namespace,
-        target,
-        parsed.stats,
-        parsed.dce,
-        parsed.mangle,
-        parsed.scoreboardObjective  // undefined = derive from namespace in compile()
       )
       }
       break
@@ -546,7 +407,6 @@ async function main(): Promise<void> {
         parsed.output ?? './dist',
         parsed.namespace,
         parsed.hotReload,
-        parsed.dce
       )
       break
 

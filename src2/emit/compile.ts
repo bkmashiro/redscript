@@ -16,11 +16,15 @@ import { emit, type DatapackFile } from './index'
 export interface CompileOptions {
   namespace: string
   filePath?: string
+  /** v1 compat: inline library sources (treated as `module library;` imports) */
+  librarySources?: string[]
 }
 
 export interface CompileResult {
   files: DatapackFile[]
   warnings: string[]
+  /** Always true — v1 compat shim (compile() throws on error) */
+  readonly success: true
 }
 
 export function compile(source: string, options: CompileOptions): CompileResult {
@@ -51,6 +55,21 @@ export function compile(source: string, options: CompileOptions): CompileResult 
     ast.globals.push(...libAst.globals)
   }
 
+  // Merge librarySources (v1 compat: inline library strings) before HIR
+  if (options.librarySources) {
+    for (const libSrc of options.librarySources) {
+      const libTokens = new Lexer(libSrc).tokenize()
+      const libAst = new Parser(libTokens, libSrc).parse(namespace)
+      for (const fn of libAst.declarations) fn.isLibraryFn = true
+      ast.declarations.push(...libAst.declarations)
+      ast.structs.push(...libAst.structs)
+      ast.implBlocks.push(...libAst.implBlocks)
+      ast.enums.push(...libAst.enums)
+      ast.consts.push(...libAst.consts)
+      ast.globals.push(...libAst.globals)
+    }
+  }
+
   // Stage 2: AST → HIR
   const hir = lowerToHIR(ast)
 
@@ -76,5 +95,5 @@ export function compile(source: string, options: CompileOptions): CompileResult 
   // Stage 7: LIR → .mcfunction
   const files = emit(lir, { namespace, tickFunctions, loadFunctions })
 
-  return { files, warnings }
+  return { files, warnings, success: true as const }
 }

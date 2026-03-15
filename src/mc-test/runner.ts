@@ -54,9 +54,10 @@ export async function runMCTests(
     // Compile and install datapack
     const outDir = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-test')
     console.log(`Compiling ${sourceFile}...`)
-    const result = compile(fs.readFileSync(sourceFile, 'utf-8'))
-    if (!result.success || !result.files) {
-      throw result.error ?? new Error('Compilation failed')
+    const ns = path.basename(sourceFile, '.mcrs')
+    const result = compile(fs.readFileSync(sourceFile, 'utf-8'), { namespace: ns, filePath: sourceFile })
+    if (!result.files) {
+      throw new Error('Compilation failed')
     }
     // Write files
     fs.mkdirSync(outDir, { recursive: true })

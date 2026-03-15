@@ -15,7 +15,7 @@ function run(driver: string): MCRuntime {
     namespace: 'vectest',
     librarySources: [MATH_SRC, VEC_SRC],
   })
-  if (!result.success) throw new Error(result.error?.message ?? 'compile failed')
+  // v2: compile() throws on error; success is always true if we reach here
   const rt = new MCRuntime('vectest')
   for (const file of result.files ?? []) {
     if (!file.path.endsWith('.mcfunction')) continue

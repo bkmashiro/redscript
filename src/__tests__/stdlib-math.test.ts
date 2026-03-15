@@ -18,7 +18,7 @@ const MATH_SRC = fs.readFileSync(
 function run(driver: string): MCRuntime {
   // Use librarySources so math functions are only compiled when actually called
   const result = compile(driver, { namespace: 'mathtest', librarySources: [MATH_SRC] })
-  if (!result.success) throw new Error(result.error?.message ?? 'compile failed')
+  // v2: compile() throws on error; success is always true if we reach here
   const runtime = new MCRuntime('mathtest')
   for (const file of result.files ?? []) {
     if (!file.path.endsWith('.mcfunction')) continue
