@@ -11,6 +11,7 @@ import { lowerToHIR } from '../hir/lower'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
 import { lowerToLIR } from '../lir/lower'
+import { lirOptimizeModule } from '../optimizer/lir/pipeline'
 import { emit, type DatapackFile } from './index'
 
 export interface CompileOptions {
@@ -92,8 +93,11 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   // Stage 5: MIR → LIR
   const lir = lowerToLIR(mirOpt)
 
+  // Stage 6: LIR optimization
+  const lirOpt = lirOptimizeModule(lir)
+
   // Stage 7: LIR → .mcfunction
-  const files = emit(lir, { namespace, tickFunctions, loadFunctions })
+  const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions })
 
   return { files, warnings, success: true as const }
 }

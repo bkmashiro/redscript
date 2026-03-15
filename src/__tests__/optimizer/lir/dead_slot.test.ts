@@ -101,6 +101,17 @@ describe('dead slot elimination', () => {
     expect(result.instructions).toHaveLength(2)
   })
 
+  test('keeps score_set when slot is referenced in raw command', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$cond'), value: 0 },
+      { kind: 'raw', cmd: 'execute if score $a __test > $b __test run scoreboard players set $cond __test 1' },
+      { kind: 'call_if_matches', fn: 'test:branch', slot: mkSlot('$cond'), range: '1' },
+    ])
+    const result = deadSlotElim(fn)
+    // $cond is referenced in the raw command — must not be removed
+    expect(result.instructions).toHaveLength(3)
+  })
+
   test('handles call_if_score slot reads', () => {
     const fn = mkFn('test', [
       { kind: 'score_set', dst: mkSlot('$a'), value: 1 },

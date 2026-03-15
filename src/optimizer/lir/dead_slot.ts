@@ -17,6 +17,21 @@ function slotKey(s: Slot): string {
   return `${s.player}\0${s.obj}`
 }
 
+/**
+ * Extract slot references from a raw MC command string.
+ * Matches patterns like `$player_name objective_name` used in scoreboard commands.
+ */
+function extractSlotsFromRaw(cmd: string): Slot[] {
+  const slots: Slot[] = []
+  // Match $<player> <obj> patterns (scoreboard slot references)
+  const re = /(\$[\w.]+)\s+(\S+)/g
+  let m
+  while ((m = re.exec(cmd)) !== null) {
+    slots.push({ player: m[1], obj: m[2] })
+  }
+  return slots
+}
+
 /** Collect all slots that are *read* (used as source) by an instruction. */
 function getReadSlots(instr: LIRInstr): Slot[] {
   switch (instr.kind) {
@@ -34,6 +49,8 @@ function getReadSlots(instr: LIRInstr): Slot[] {
       return [instr.slot]
     case 'call_if_score': case 'call_unless_score':
       return [instr.a, instr.b]
+    case 'raw': return extractSlotsFromRaw(instr.cmd)
+    case 'macro_line': return extractSlotsFromRaw(instr.template)
     default: return []
   }
 }

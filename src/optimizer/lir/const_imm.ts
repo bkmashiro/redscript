@@ -26,6 +26,16 @@ function countSlotUses(instrs: LIRInstr[], target: string): number {
   return count
 }
 
+function extractSlotsFromRaw(cmd: string): Slot[] {
+  const slots: Slot[] = []
+  const re = /(\$[\w.]+)\s+(\S+)/g
+  let m
+  while ((m = re.exec(cmd)) !== null) {
+    slots.push({ player: m[1], obj: m[2] })
+  }
+  return slots
+}
+
 function getReadSlots(instr: LIRInstr): Slot[] {
   switch (instr.kind) {
     case 'score_copy': return [instr.src]
@@ -41,6 +51,8 @@ function getReadSlots(instr: LIRInstr): Slot[] {
       return [instr.slot]
     case 'call_if_score': case 'call_unless_score':
       return [instr.a, instr.b]
+    case 'raw': return extractSlotsFromRaw(instr.cmd)
+    case 'macro_line': return extractSlotsFromRaw(instr.template)
     default: return []
   }
 }
