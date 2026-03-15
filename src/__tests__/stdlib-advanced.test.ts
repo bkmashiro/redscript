@@ -15,9 +15,8 @@ function run(driver: string): MCRuntime {
     namespace: 'advtest',
     librarySources: [MATH_SRC, ADV_SRC],
   })
-  if (!result.success) throw new Error(result.error?.message ?? 'compile failed')
   const rt = new MCRuntime('advtest')
-  for (const file of result.files ?? []) {
+  for (const file of result.files) {
     if (!file.path.endsWith('.mcfunction')) continue
     const match = file.path.match(/data\/([^/]+)\/function\/(.+)\.mcfunction$/)
     if (!match) continue
@@ -267,9 +266,8 @@ function runAll(driver: string): MCRuntime {
     namespace: 'exptest',
     librarySources: [MATH_SRC, VEC_SRC, ADV_SRC],
   })
-  if (!result.success) throw new Error(result.error?.message ?? 'compile failed: ' + result.error?.message)
   const rt = new MCRuntime('exptest')
-  for (const file of result.files ?? []) {
+  for (const file of result.files) {
     if (!file.path.endsWith('.mcfunction')) continue
     const match = file.path.match(/data\/([^/]+)\/function\/(.+)\.mcfunction$/)
     if (!match) continue

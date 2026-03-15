@@ -18,9 +18,8 @@ function run(driver: string): MCRuntime {
     namespace: 'bitest',
     librarySources: [MATH_SRC, BIGINT_SRC],
   })
-  if (!result.success) throw new Error(result.error?.message ?? 'compile failed')
   const rt = new MCRuntime('bitest')
-  for (const file of result.files ?? []) {
+  for (const file of result.files) {
     if (!file.path.endsWith('.mcfunction')) continue
     const match = file.path.match(/data\/([^/]+)\/function\/(.+)\.mcfunction$/)
     if (!match) continue

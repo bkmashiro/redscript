@@ -36,9 +36,8 @@ function writeFixture(source: string, namespace: string): void {
   }
 
   const result = compile(source, { namespace })
-  if (result.error) throw new Error(`Compile error in ${namespace}: ${result.error}`)
 
-  for (const file of result.files ?? []) {
+  for (const file of result.files) {
     if (file.path === 'pack.mcmeta') continue
     const filePath = path.join(DATAPACK_DIR, file.path)
     fs.mkdirSync(path.dirname(filePath), { recursive: true })

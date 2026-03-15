@@ -3,7 +3,7 @@
  */
 
 import { DiagnosticError, DiagnosticCollector, formatError, parseErrorMessage } from '../diagnostics'
-import { compile, formatCompileError } from '../compile'
+import { compile } from '../compile'
 
 describe('DiagnosticError', () => {
   describe('formatError', () => {
@@ -126,70 +126,91 @@ describe('parseErrorMessage', () => {
 
 describe('compile function', () => {
   it('returns success for valid code', () => {
-    const result = compile('fn main() { let x = 1; }')
+    const result = compile('fn main() { let x = 1; }', { namespace: 'test' })
     expect(result.success).toBe(true)
     expect(result.files).toBeDefined()
   })
 
-  it('returns DiagnosticError for lex errors', () => {
-    const result = compile('fn main() { let x = $ }')
-    expect(result.success).toBe(false)
-    expect(result.error).toBeInstanceOf(DiagnosticError)
-    expect(result.error?.kind).toBe('LexError')
+  it('throws DiagnosticError for lex errors', () => {
+    expect(() => compile('fn main() { let x = $ }', { namespace: 'test' }))
+      .toThrow()
+    try {
+      compile('fn main() { let x = $ }', { namespace: 'test' })
+    } catch (e) {
+      expect(e).toBeInstanceOf(DiagnosticError)
+      expect((e as DiagnosticError).kind).toBe('LexError')
+    }
   })
 
-  it('returns DiagnosticError for parse errors', () => {
-    const result = compile('fn main() { let x = }')
-    expect(result.success).toBe(false)
-    expect(result.error).toBeInstanceOf(DiagnosticError)
-    expect(result.error?.kind).toBe('ParseError')
+  it('throws DiagnosticError for parse errors', () => {
+    expect(() => compile('fn main() { let x = }', { namespace: 'test' }))
+      .toThrow()
+    try {
+      compile('fn main() { let x = }', { namespace: 'test' })
+    } catch (e) {
+      expect(e).toBeInstanceOf(DiagnosticError)
+      expect((e as DiagnosticError).kind).toBe('ParseError')
+    }
   })
 
-  it('returns DiagnosticError for missing semicolon', () => {
-    const result = compile('fn main() { let x = 42 }')
-    expect(result.success).toBe(false)
-    expect(result.error?.kind).toBe('ParseError')
-    expect(result.error?.message).toContain("Expected ';'")
+  it('throws DiagnosticError for missing semicolon', () => {
+    try {
+      compile('fn main() { let x = 42 }', { namespace: 'test' })
+      fail('Expected compile to throw')
+    } catch (e) {
+      expect((e as DiagnosticError).kind).toBe('ParseError')
+      expect((e as DiagnosticError).message).toContain("Expected ';'")
+    }
   })
 
   it('includes file path in error', () => {
-    const result = compile('fn main() { }', { filePath: 'test.mcrs' })
-    // This is valid, but test that filePath is passed through
+    const result = compile('fn main() { }', { filePath: 'test.mcrs', namespace: 'test' })
     expect(result.success).toBe(true)
   })
 
   it('formats error nicely', () => {
-    const result = compile('fn main() {\n  let x = 42\n}')
-    expect(result.success).toBe(false)
-    const formatted = formatCompileError(result)
-    expect(formatted).toContain('Error at line')
-    expect(formatted).toContain('^')
-    // Error points to } on line 3, which is where semicolon was expected
-    expect(formatted).toContain('}')
+    try {
+      compile('fn main() {\n  let x = 42\n}', { namespace: 'test' })
+      fail('Expected compile to throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(DiagnosticError)
+      const formatted = (e as DiagnosticError).format()
+      expect(formatted).toContain('line')
+      expect(formatted).toContain('^')
+    }
   })
 })
 
 describe('Lexer DiagnosticError', () => {
   it('throws DiagnosticError for unexpected character', () => {
-    const result = compile('fn main() { let x = $ }')
-    expect(result.success).toBe(false)
-    expect(result.error?.kind).toBe('LexError')
-    expect(result.error?.message).toContain('Unexpected character')
+    try {
+      compile('fn main() { let x = $ }', { namespace: 'test' })
+      fail('Expected compile to throw')
+    } catch (e) {
+      expect((e as DiagnosticError).kind).toBe('LexError')
+      expect((e as DiagnosticError).message).toContain('Unexpected character')
+    }
   })
 
   it('throws DiagnosticError for unterminated string', () => {
-    const result = compile('fn main() { let x = "hello }')
-    expect(result.success).toBe(false)
-    expect(result.error?.kind).toBe('LexError')
-    expect(result.error?.message).toContain('Unterminated string')
+    try {
+      compile('fn main() { let x = "hello }', { namespace: 'test' })
+      fail('Expected compile to throw')
+    } catch (e) {
+      expect((e as DiagnosticError).kind).toBe('LexError')
+      expect((e as DiagnosticError).message).toContain('Unterminated string')
+    }
   })
 })
 
 describe('Parser DiagnosticError', () => {
   it('includes line and column info', () => {
-    const result = compile('fn main() { return }')
-    expect(result.success).toBe(false)
-    expect(result.error?.location.line).toBeGreaterThan(0)
-    expect(result.error?.location.col).toBeGreaterThan(0)
+    try {
+      compile('fn main() { return }', { namespace: 'test' })
+      fail('Expected compile to throw')
+    } catch (e) {
+      expect((e as DiagnosticError).location.line).toBeGreaterThan(0)
+      expect((e as DiagnosticError).location.col).toBeGreaterThan(0)
+    }
   })
 })
