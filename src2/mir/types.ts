@@ -1,0 +1,106 @@
+/**
+ * MIR (Mid-level IR) Types — Stage 3 of the RedScript compiler pipeline.
+ *
+ * MIR is a 3-address, explicit-CFG representation with versioned temporaries.
+ * Every instruction produces at most one result into a fresh temporary.
+ *
+ * Spec: docs/compiler-pipeline-redesign.md § "MIR Instruction Set"
+ */
+
+// A temporary variable — unique within a function, named t0, t1, t2...
+export type Temp = string
+
+// An operand: either a temp or an inline constant
+export type Operand =
+  | { kind: 'temp'; name: Temp }
+  | { kind: 'const'; value: number }
+
+// A basic block identifier
+export type BlockId = string
+
+// Comparison operators (for cmp instruction)
+export type CmpOp = 'eq' | 'ne' | 'lt' | 'le' | 'gt' | 'ge'
+
+// NBT value types (for nbt_write)
+export type NBTType = 'int' | 'double' | 'float' | 'long' | 'short' | 'byte'
+
+// ---------------------------------------------------------------------------
+// Execute subcommands (used in call_context)
+// ---------------------------------------------------------------------------
+
+export type ExecuteSubcmd =
+  | { kind: 'as'; selector: string }
+  | { kind: 'at'; selector: string }
+  | { kind: 'at_self' }
+  | { kind: 'positioned'; x: string; y: string; z: string }
+  | { kind: 'rotated'; yaw: string; pitch: string }
+  | { kind: 'in'; dimension: string }
+  | { kind: 'anchored'; anchor: 'eyes' | 'feet' }
+  | { kind: 'if_score'; a: string; op: CmpOp; b: string }
+  | { kind: 'unless_score'; a: string; op: CmpOp; b: string }
+  | { kind: 'if_matches'; score: string; range: string }
+  | { kind: 'unless_matches'; score: string; range: string }
+
+// ---------------------------------------------------------------------------
+// MIR Instructions
+// ---------------------------------------------------------------------------
+
+export type MIRInstr =
+  // ── Constants & copies ──────────────────────────────────────────────────
+  | { kind: 'const'; dst: Temp; value: number }
+  | { kind: 'copy'; dst: Temp; src: Operand }
+
+  // ── Integer arithmetic ──────────────────────────────────────────────────
+  | { kind: 'add'; dst: Temp; a: Operand; b: Operand }
+  | { kind: 'sub'; dst: Temp; a: Operand; b: Operand }
+  | { kind: 'mul'; dst: Temp; a: Operand; b: Operand }
+  | { kind: 'div'; dst: Temp; a: Operand; b: Operand }
+  | { kind: 'mod'; dst: Temp; a: Operand; b: Operand }
+  | { kind: 'neg'; dst: Temp; src: Operand }
+
+  // ── Comparison (result is 0 or 1) ────────────────────────────────────────
+  | { kind: 'cmp'; dst: Temp; op: CmpOp; a: Operand; b: Operand }
+
+  // ── Boolean logic ────────────────────────────────────────────────────────
+  | { kind: 'and'; dst: Temp; a: Operand; b: Operand }
+  | { kind: 'or'; dst: Temp; a: Operand; b: Operand }
+  | { kind: 'not'; dst: Temp; src: Operand }
+
+  // ── NBT storage ──────────────────────────────────────────────────────────
+  | { kind: 'nbt_read'; dst: Temp; ns: string; path: string; scale: number }
+  | { kind: 'nbt_write'; ns: string; path: string; type: NBTType; scale: number; src: Operand }
+
+  // ── Function calls ────────────────────────────────────────────────────────
+  | { kind: 'call'; dst: Temp | null; fn: string; args: Operand[] }
+  | { kind: 'call_macro'; dst: Temp | null; fn: string; args: { name: string; value: Operand; type: NBTType; scale: number }[] }
+  | { kind: 'call_context'; fn: string; subcommands: ExecuteSubcmd[] }
+
+  // ── Terminators (exactly one per basic block, must be last) ──────────────
+  | { kind: 'jump'; target: BlockId }
+  | { kind: 'branch'; cond: Operand; then: BlockId; else: BlockId }
+  | { kind: 'return'; value: Operand | null }
+
+// ---------------------------------------------------------------------------
+// Basic block and function structure
+// ---------------------------------------------------------------------------
+
+export interface MIRBlock {
+  id: BlockId
+  instrs: MIRInstr[]   // non-terminator instructions
+  term: MIRInstr        // must be jump | branch | return
+  preds: BlockId[]      // predecessor block ids (for dataflow)
+}
+
+export interface MIRFunction {
+  name: string
+  params: { name: Temp; isMacroParam: boolean }[]
+  blocks: MIRBlock[]
+  entry: BlockId         // entry block id (always 'entry')
+  isMacro: boolean       // true if any param is a macro param
+}
+
+export interface MIRModule {
+  functions: MIRFunction[]
+  namespace: string
+  objective: string      // scoreboard objective (default: __<namespace>)
+}
