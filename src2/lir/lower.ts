@@ -125,6 +125,13 @@ function lowerFunction(fn: MIRFunction, ctx: LoweringContext): void {
   const instrs: LIRInstr[] = []
   const visited = new Set<BlockId>()
 
+  // Copy parameter slots ($p0, $p1, ...) into the callee's temp slots
+  for (let i = 0; i < fn.params.length; i++) {
+    const paramSlot: Slot = { player: `$p${i}`, obj: ctx.objective }
+    const tempSlot = ctx.slot(fn.params[i].name)
+    instrs.push({ kind: 'score_copy', dst: tempSlot, src: paramSlot })
+  }
+
   lowerBlock(fn.entry, fn, ctx, instrs, visited)
 
   ctx.addFunction({
