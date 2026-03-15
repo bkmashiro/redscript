@@ -27,7 +27,8 @@ function getRawCommands(fn: IRFunction): string[] {
   return fn.blocks
     .flatMap(b => b.instrs)
     .filter((i): i is IRInstr & { op: 'raw' } => i.op === 'raw')
-    .map(i => i.cmd)
+    // \x01 is the sentinel for the MC macro line-start '$'; normalize for test assertions
+    .map(i => (i.cmd as string).replace(/^\x01/, '$'))
 }
 
 function getGeneratedContent(module: IRModule, fnName: string): string | undefined {

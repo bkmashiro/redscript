@@ -2836,7 +2836,9 @@ export class Lowering {
     const strArgs = argResults.map(r => r.str)
     const cmd = BUILTINS[name]?.(strArgs)
     if (cmd) {
-      this.builder.emitRaw(hasMacroArg ? `$${cmd}` : cmd)
+      // Use \x01 sentinel (not literal '$') so resolveRaw doesn't treat the
+      // MC macro prefix as a variable reference and allocate a fresh temp for it.
+      this.builder.emitRaw(hasMacroArg ? `\x01${cmd}` : cmd)
     }
 
     return { kind: 'const', value: 0 }
@@ -3458,10 +3460,10 @@ export class Lowering {
         argResults.forEach(r => { if (r.macroParam) this.currentFnMacroParams.add(r.macroParam) })
         const strs = argResults.map(r => r.str)
         if (args.length === 2) {
-          return { cmd: `$tp ${strs[0]} ${strs[1]}` }
+          return { cmd: `\x01tp ${strs[0]} ${strs[1]}` }
         }
         if (args.length === 4) {
-          return { cmd: `$tp ${strs[0]} ${strs[1]} ${strs[2]} ${strs[3]}` }
+          return { cmd: `\x01tp ${strs[0]} ${strs[1]} ${strs[2]} ${strs[3]}` }
         }
       }
     }
