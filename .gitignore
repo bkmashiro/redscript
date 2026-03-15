@@ -3,3 +3,4 @@ dist/
 *.js.map
 editors/vscode/*.vsix
 .claude/
+CLAUDE.md
