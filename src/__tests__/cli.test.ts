@@ -55,7 +55,7 @@ describe('CLI API', () => {
       const result = compile(source, { namespace: 'mygame', filePath: mainPath })
       const tickTimer = result.files.find(file => file.path.endsWith('/tick_timer.mcfunction'))
 
-      expect(tickTimer?.content).toContain('scoreboard players set #rs mygame.timer_ticks 1')
+      expect(tickTimer?.content).toContain('scoreboard players set #rs __mygame.timer_ticks 1')
     })
 
     it('adds a call-site hash for stdlib internal scoreboard objectives', () => {
@@ -113,8 +113,8 @@ describe('CLI API', () => {
 
       expect(result.typeErrors).toEqual([])
       const newFn = result.files.find(file => file.path.endsWith('/Timer_new.mcfunction'))
-      expect(newFn?.content).toContain('scoreboard players set timer_ticks timernew 0')
-      expect(newFn?.content).toContain('scoreboard players set timer_active timernew 0')
+      expect(newFn?.content).toContain('scoreboard players set timer_ticks __timernew 0')
+      expect(newFn?.content).toContain('scoreboard players set timer_active __timernew 0')
     })
 
     it('Timer.start/pause/reset', () => {
@@ -142,9 +142,9 @@ describe('CLI API', () => {
       const pauseFn = result.files.find(file => file.path.endsWith('/Timer_pause.mcfunction'))
       const resetFn = result.files.find(file => file.path.endsWith('/Timer_reset.mcfunction'))
 
-      expect(startFn?.content).toContain('scoreboard players set timer_active timerstate 1')
-      expect(pauseFn?.content).toContain('scoreboard players set timer_active timerstate 0')
-      expect(resetFn?.content).toContain('scoreboard players set timer_ticks timerstate 0')
+      expect(startFn?.content).toContain('scoreboard players set timer_active __timerstate 1')
+      expect(pauseFn?.content).toContain('scoreboard players set timer_active __timerstate 0')
+      expect(resetFn?.content).toContain('scoreboard players set timer_ticks __timerstate 0')
     })
 
     it('Timer.done returns bool', () => {
@@ -171,9 +171,9 @@ describe('CLI API', () => {
       expect(result.typeErrors).toEqual([])
       const doneFn = result.files.find(file => file.path.endsWith('/Timer_done.mcfunction'))
       const mainFn = result.files.find(file => file.path.endsWith('/main.mcfunction'))
-      expect(doneFn?.content).toContain('scoreboard players get timer_ticks timerdone')
+      expect(doneFn?.content).toContain('scoreboard players get timer_ticks __timerdone')
       expect(doneFn?.content).toContain('return run scoreboard players get')
-      expect(mainFn?.content).toContain('execute if score $main_finished timerdone matches 1..')
+      expect(mainFn?.content).toContain('execute if score $main_finished __timerdone matches 1..')
     })
 
     it('Timer.tick increments', () => {
@@ -201,10 +201,10 @@ describe('CLI API', () => {
         .map(file => file.content)
         .join('\n')
 
-      expect(tickOutput).toContain('scoreboard players get timer_active timertick')
-      expect(tickOutput).toContain('scoreboard players get timer_ticks timertick')
-      expect(tickOutput).toContain(' += $const_1 timertick')
-      expect(tickOutput).toContain('execute store result score timer_ticks timertick run scoreboard players get $_')
+      expect(tickOutput).toContain('scoreboard players get timer_active __timertick')
+      expect(tickOutput).toContain('scoreboard players get timer_ticks __timertick')
+      expect(tickOutput).toContain(' += $const_1 __timertick')
+      expect(tickOutput).toContain('execute store result score timer_ticks __timertick run scoreboard players get $_')
     })
   })
 

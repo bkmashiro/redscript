@@ -36,9 +36,10 @@ export interface CompileOptions {
   filePath?: string
   dce?: boolean
   mangle?: boolean
-  /** Scoreboard objective used for all variable slots (default: 'rs').
-   *  Set a unique value per datapack to avoid collisions when multiple
-   *  RedScript datapacks are loaded simultaneously. */
+  /** Scoreboard objective used for all variable slots.
+   *  Defaults to '__<namespace>' (e.g. '__mathshow') to avoid collisions when
+   *  multiple RedScript datapacks are loaded simultaneously, without occupying
+   *  the user's own namespace. Override only if you need a specific name. */
   scoreboardObjective?: string
 }
 
@@ -108,7 +109,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   // Configure scoreboard objective for this compilation.
   // Default: use the datapack namespace so each datapack gets its own objective
   // automatically, preventing variable collisions when multiple datapacks coexist.
-  const scoreboardObj = options.scoreboardObjective ?? namespace
+  const scoreboardObj = options.scoreboardObjective ?? `__${namespace}`
   setScoreboardObjective(scoreboardObj)
 
   // Lowering to IR
