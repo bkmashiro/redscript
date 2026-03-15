@@ -1,573 +1,1003 @@
-// readme-demo.mcrs — RedScript animated 2D sine wave
-// Real-time computation using sin_fixed() from the math stdlib.
-//
-// Strategy: 40 x-points cycled one per tick, each refreshed with count=5
-// end_rod particles (lifetime ~40 ticks) → full curve always visible.
-// phase advances 1°/tick → smooth scrolling animation.
+// readme-demo.mcrs — RedScript real-time 2D sine wave
+// Loop-unrolled: 4 points drawn per tick, count=10 end_rod particles each
+// 40 points × 21 height levels; end_rod ~40 tick lifetime
 //
 // Compile:
-//   node dist/cli.js compile examples/readme-demo.mcrs \
-//       -o <out> --namespace rsdemo
-// In-game:
-//   /function rsdemo:start   (face forward, stand 8+ blocks back)
-//   /function rsdemo:stop
+//   node dist/cli.js compile examples/readme-demo.mcrs -o <out> --namespace rsdemo
+// In-game:  /function rsdemo:start   (face forward, ~8 blocks back)
+//           /function rsdemo:stop
 
 import "../src/stdlib/math.mcrs"
 
 let phase:  int  = 0;
-let draw_x: int  = 0;
+let draw_x: int  = 0;   // batch start index, advances by 4 each tick
 let on:     bool = false;
 
-@load fn _init() {
-    phase  = 0;
-    draw_x = 0;
-}
+@load fn _init() { phase = 0; draw_x = 0; }
 
 @tick fn _wave_tick() {
     if (!on) { return; }
-
-    // Advance draw cursor and phase
-    draw_x = (draw_x + 1) % 40;
+    draw_x = (draw_x + 4) % 40;
     phase  = (phase  + 1) % 360;
 
-    // sin at current x-point with scrolling phase
-    // x * 9° = one full period over 40 steps; + phase for scroll
-    let deg:    int = (draw_x * 9 + phase) % 360;
-    let s:      int = sin_fixed(deg);
-
-    // Bucket sin(-1000..1000) → 0..10
-    let bucket: int = (s + 1050) / 200;
-
-    foreach (p in @a) at @s {
-        if (draw_x == 0) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-9.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-9.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-9.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-9.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-9.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-9.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-9.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-9.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-9.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-9.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-9.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 1) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-9.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-9.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-9.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-9.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-9.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-9.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-9.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-9.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-9.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-9.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-9.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 2) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-8.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-8.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-8.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-8.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-8.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-8.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-8.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-8.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-8.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-8.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-8.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 3) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-8.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-8.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-8.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-8.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-8.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-8.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-8.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-8.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-8.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-8.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-8.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 4) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-7.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-7.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-7.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-7.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-7.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-7.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-7.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-7.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-7.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-7.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-7.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 5) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-7.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-7.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-7.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-7.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-7.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-7.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-7.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-7.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-7.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-7.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-7.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 6) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-6.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-6.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-6.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-6.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-6.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-6.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-6.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-6.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-6.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-6.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-6.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 7) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-6.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-6.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-6.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-6.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-6.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-6.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-6.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-6.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-6.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-6.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-6.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 8) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-5.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-5.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-5.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-5.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-5.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-5.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-5.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-5.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-5.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-5.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-5.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 9) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-5.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-5.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-5.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-5.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-5.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-5.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-5.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-5.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-5.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-5.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-5.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 10) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-4.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-4.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-4.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-4.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-4.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-4.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-4.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-4.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-4.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-4.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-4.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 11) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-4.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-4.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-4.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-4.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-4.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-4.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-4.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-4.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-4.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-4.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-4.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 12) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-3.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-3.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-3.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-3.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-3.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-3.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-3.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-3.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-3.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-3.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-3.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 13) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-3.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-3.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-3.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-3.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-3.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-3.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-3.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-3.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-3.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-3.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-3.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 14) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-2.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-2.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-2.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-2.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-2.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-2.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-2.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-2.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-2.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-2.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-2.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 15) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-2.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-2.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-2.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-2.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-2.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-2.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-2.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-2.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-2.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-2.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-2.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 16) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-1.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-1.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-1.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-1.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-1.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-1.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-1.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-1.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-1.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-1.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-1.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 17) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-1.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-1.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-1.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-1.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-1.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-1.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-1.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-1.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-1.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-1.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-1.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 18) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-0.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-0.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-0.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-0.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-0.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-0.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-0.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-0.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-0.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-0.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-0.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 19) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^-0.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^-0.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^-0.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^-0.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^-0.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^-0.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^-0.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^-0.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^-0.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^-0.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^-0.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 20) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^0.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^0.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^0.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^0.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^0.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^0.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^0.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^0.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^0.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^0.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^0.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 21) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^0.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^0.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^0.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^0.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^0.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^0.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^0.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^0.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^0.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^0.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^0.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 22) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^1.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^1.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^1.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^1.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^1.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^1.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^1.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^1.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^1.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^1.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^1.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 23) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^1.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^1.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^1.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^1.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^1.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^1.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^1.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^1.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^1.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^1.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^1.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 24) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^2.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^2.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^2.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^2.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^2.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^2.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^2.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^2.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^2.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^2.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^2.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 25) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^2.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^2.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^2.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^2.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^2.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^2.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^2.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^2.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^2.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^2.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^2.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 26) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^3.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^3.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^3.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^3.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^3.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^3.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^3.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^3.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^3.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^3.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^3.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 27) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^3.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^3.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^3.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^3.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^3.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^3.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^3.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^3.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^3.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^3.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^3.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 28) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^4.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^4.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^4.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^4.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^4.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^4.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^4.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^4.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^4.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^4.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^4.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 29) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^4.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^4.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^4.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^4.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^4.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^4.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^4.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^4.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^4.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^4.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^4.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 30) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^5.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^5.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^5.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^5.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^5.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^5.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^5.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^5.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^5.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^5.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^5.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 31) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^5.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^5.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^5.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^5.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^5.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^5.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^5.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^5.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^5.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^5.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^5.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 32) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^6.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^6.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^6.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^6.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^6.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^6.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^6.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^6.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^6.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^6.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^6.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 33) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^6.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^6.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^6.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^6.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^6.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^6.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^6.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^6.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^6.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^6.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^6.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 34) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^7.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^7.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^7.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^7.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^7.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^7.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^7.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^7.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^7.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^7.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^7.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 35) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^7.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^7.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^7.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^7.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^7.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^7.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^7.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^7.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^7.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^7.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^7.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 36) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^8.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^8.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^8.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^8.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^8.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^8.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^8.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^8.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^8.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^8.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^8.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 37) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^8.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^8.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^8.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^8.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^8.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^8.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^8.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^8.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^8.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^8.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^8.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 38) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^9.25, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^9.25, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^9.25, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^9.25, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^9.25, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^9.25, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^9.25, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^9.25, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^9.25, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^9.25, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^9.25, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-        }
-        if (draw_x == 39) {
-            if (bucket == 0) { particle("minecraft:end_rod", ^9.75, ^-2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 1) { particle("minecraft:end_rod", ^9.75, ^-2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 2) { particle("minecraft:end_rod", ^9.75, ^-1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 3) { particle("minecraft:end_rod", ^9.75, ^-1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 4) { particle("minecraft:end_rod", ^9.75, ^-0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 5) { particle("minecraft:end_rod", ^9.75, ^0.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 6) { particle("minecraft:end_rod", ^9.75, ^0.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 7) { particle("minecraft:end_rod", ^9.75, ^1.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 8) { particle("minecraft:end_rod", ^9.75, ^1.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 9) { particle("minecraft:end_rod", ^9.75, ^2.0, ^5, 0.04,0.04,0.04, 0.0, 5); }
-            if (bucket == 10) { particle("minecraft:end_rod", ^9.75, ^2.5, ^5, 0.04,0.04,0.04, 0.0, 5); }
+    if (draw_x == 0) {
+        let s0: int = sin_fixed((phase + 0) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 9) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 18) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 27) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^-9.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^-9.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^-9.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^-9.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^-9.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^-9.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^-9.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^-9.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^-9.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^-9.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^-9.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^-9.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^-9.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^-9.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^-9.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^-9.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^-9.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^-9.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^-9.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^-9.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^-9.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^-9.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^-9.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^-9.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^-9.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^-9.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^-9.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^-9.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^-9.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^-9.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^-9.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^-9.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^-9.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^-9.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^-9.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^-9.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^-9.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^-9.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^-9.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^-9.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^-9.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^-9.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^-8.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^-8.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^-8.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^-8.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^-8.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^-8.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^-8.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^-8.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^-8.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^-8.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^-8.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^-8.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^-8.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^-8.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^-8.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^-8.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^-8.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^-8.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^-8.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^-8.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^-8.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^-8.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^-8.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^-8.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^-8.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^-8.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^-8.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^-8.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^-8.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^-8.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^-8.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^-8.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^-8.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^-8.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^-8.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^-8.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^-8.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^-8.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^-8.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^-8.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^-8.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^-8.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
         }
     }
+
+    if (draw_x == 4) {
+        let s0: int = sin_fixed((phase + 36) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 45) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 54) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 63) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^-7.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^-7.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^-7.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^-7.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^-7.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^-7.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^-7.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^-7.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^-7.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^-7.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^-7.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^-7.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^-7.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^-7.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^-7.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^-7.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^-7.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^-7.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^-7.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^-7.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^-7.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^-7.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^-7.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^-7.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^-7.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^-7.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^-7.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^-7.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^-7.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^-7.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^-7.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^-7.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^-7.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^-7.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^-7.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^-7.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^-7.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^-7.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^-7.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^-7.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^-7.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^-7.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^-6.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^-6.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^-6.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^-6.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^-6.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^-6.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^-6.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^-6.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^-6.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^-6.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^-6.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^-6.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^-6.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^-6.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^-6.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^-6.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^-6.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^-6.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^-6.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^-6.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^-6.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^-6.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^-6.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^-6.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^-6.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^-6.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^-6.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^-6.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^-6.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^-6.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^-6.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^-6.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^-6.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^-6.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^-6.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^-6.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^-6.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^-6.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^-6.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^-6.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^-6.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^-6.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+        }
+    }
+
+    if (draw_x == 8) {
+        let s0: int = sin_fixed((phase + 72) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 81) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 90) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 99) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^-5.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^-5.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^-5.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^-5.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^-5.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^-5.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^-5.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^-5.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^-5.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^-5.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^-5.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^-5.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^-5.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^-5.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^-5.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^-5.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^-5.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^-5.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^-5.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^-5.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^-5.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^-5.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^-5.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^-5.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^-5.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^-5.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^-5.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^-5.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^-5.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^-5.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^-5.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^-5.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^-5.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^-5.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^-5.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^-5.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^-5.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^-5.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^-5.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^-5.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^-5.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^-5.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^-4.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^-4.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^-4.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^-4.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^-4.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^-4.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^-4.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^-4.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^-4.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^-4.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^-4.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^-4.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^-4.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^-4.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^-4.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^-4.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^-4.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^-4.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^-4.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^-4.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^-4.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^-4.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^-4.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^-4.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^-4.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^-4.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^-4.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^-4.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^-4.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^-4.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^-4.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^-4.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^-4.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^-4.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^-4.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^-4.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^-4.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^-4.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^-4.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^-4.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^-4.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^-4.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+        }
+    }
+
+    if (draw_x == 12) {
+        let s0: int = sin_fixed((phase + 108) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 117) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 126) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 135) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^-3.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^-3.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^-3.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^-3.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^-3.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^-3.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^-3.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^-3.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^-3.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^-3.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^-3.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^-3.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^-3.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^-3.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^-3.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^-3.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^-3.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^-3.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^-3.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^-3.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^-3.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^-3.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^-3.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^-3.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^-3.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^-3.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^-3.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^-3.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^-3.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^-3.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^-3.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^-3.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^-3.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^-3.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^-3.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^-3.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^-3.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^-3.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^-3.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^-3.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^-3.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^-3.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^-2.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^-2.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^-2.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^-2.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^-2.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^-2.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^-2.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^-2.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^-2.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^-2.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^-2.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^-2.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^-2.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^-2.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^-2.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^-2.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^-2.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^-2.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^-2.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^-2.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^-2.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^-2.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^-2.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^-2.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^-2.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^-2.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^-2.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^-2.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^-2.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^-2.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^-2.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^-2.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^-2.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^-2.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^-2.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^-2.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^-2.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^-2.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^-2.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^-2.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^-2.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^-2.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+        }
+    }
+
+    if (draw_x == 16) {
+        let s0: int = sin_fixed((phase + 144) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 153) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 162) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 171) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^-1.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^-1.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^-1.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^-1.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^-1.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^-1.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^-1.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^-1.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^-1.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^-1.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^-1.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^-1.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^-1.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^-1.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^-1.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^-1.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^-1.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^-1.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^-1.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^-1.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^-1.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^-1.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^-1.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^-1.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^-1.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^-1.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^-1.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^-1.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^-1.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^-1.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^-1.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^-1.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^-1.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^-1.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^-1.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^-1.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^-1.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^-1.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^-1.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^-1.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^-1.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^-1.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^-0.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^-0.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^-0.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^-0.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^-0.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^-0.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^-0.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^-0.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^-0.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^-0.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^-0.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^-0.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^-0.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^-0.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^-0.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^-0.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^-0.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^-0.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^-0.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^-0.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^-0.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^-0.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^-0.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^-0.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^-0.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^-0.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^-0.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^-0.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^-0.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^-0.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^-0.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^-0.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^-0.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^-0.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^-0.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^-0.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^-0.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^-0.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^-0.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^-0.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^-0.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^-0.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+        }
+    }
+
+    if (draw_x == 20) {
+        let s0: int = sin_fixed((phase + 180) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 189) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 198) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 207) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^0.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^0.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^0.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^0.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^0.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^0.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^0.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^0.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^0.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^0.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^0.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^0.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^0.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^0.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^0.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^0.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^0.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^0.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^0.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^0.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^0.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^0.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^0.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^0.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^0.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^0.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^0.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^0.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^0.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^0.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^0.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^0.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^0.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^0.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^0.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^0.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^0.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^0.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^0.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^0.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^0.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^0.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^1.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^1.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^1.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^1.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^1.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^1.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^1.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^1.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^1.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^1.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^1.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^1.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^1.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^1.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^1.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^1.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^1.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^1.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^1.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^1.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^1.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^1.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^1.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^1.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^1.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^1.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^1.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^1.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^1.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^1.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^1.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^1.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^1.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^1.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^1.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^1.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^1.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^1.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^1.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^1.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^1.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^1.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+        }
+    }
+
+    if (draw_x == 24) {
+        let s0: int = sin_fixed((phase + 216) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 225) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 234) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 243) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^2.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^2.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^2.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^2.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^2.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^2.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^2.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^2.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^2.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^2.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^2.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^2.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^2.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^2.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^2.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^2.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^2.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^2.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^2.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^2.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^2.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^2.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^2.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^2.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^2.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^2.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^2.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^2.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^2.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^2.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^2.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^2.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^2.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^2.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^2.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^2.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^2.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^2.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^2.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^2.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^2.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^2.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^3.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^3.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^3.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^3.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^3.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^3.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^3.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^3.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^3.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^3.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^3.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^3.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^3.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^3.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^3.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^3.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^3.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^3.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^3.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^3.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^3.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^3.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^3.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^3.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^3.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^3.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^3.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^3.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^3.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^3.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^3.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^3.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^3.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^3.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^3.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^3.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^3.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^3.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^3.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^3.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^3.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^3.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+        }
+    }
+
+    if (draw_x == 28) {
+        let s0: int = sin_fixed((phase + 252) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 261) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 270) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 279) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^4.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^4.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^4.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^4.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^4.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^4.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^4.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^4.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^4.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^4.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^4.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^4.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^4.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^4.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^4.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^4.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^4.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^4.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^4.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^4.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^4.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^4.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^4.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^4.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^4.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^4.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^4.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^4.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^4.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^4.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^4.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^4.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^4.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^4.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^4.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^4.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^4.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^4.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^4.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^4.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^4.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^4.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^5.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^5.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^5.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^5.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^5.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^5.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^5.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^5.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^5.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^5.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^5.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^5.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^5.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^5.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^5.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^5.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^5.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^5.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^5.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^5.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^5.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^5.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^5.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^5.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^5.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^5.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^5.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^5.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^5.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^5.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^5.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^5.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^5.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^5.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^5.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^5.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^5.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^5.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^5.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^5.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^5.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^5.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+        }
+    }
+
+    if (draw_x == 32) {
+        let s0: int = sin_fixed((phase + 288) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 297) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 306) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 315) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^6.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^6.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^6.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^6.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^6.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^6.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^6.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^6.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^6.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^6.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^6.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^6.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^6.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^6.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^6.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^6.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^6.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^6.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^6.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^6.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^6.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^6.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^6.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^6.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^6.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^6.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^6.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^6.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^6.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^6.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^6.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^6.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^6.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^6.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^6.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^6.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^6.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^6.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^6.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^6.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^6.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^6.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^7.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^7.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^7.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^7.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^7.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^7.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^7.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^7.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^7.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^7.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^7.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^7.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^7.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^7.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^7.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^7.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^7.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^7.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^7.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^7.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^7.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^7.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^7.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^7.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^7.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^7.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^7.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^7.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^7.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^7.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^7.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^7.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^7.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^7.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^7.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^7.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^7.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^7.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^7.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^7.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^7.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^7.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+        }
+    }
+
+    if (draw_x == 36) {
+        let s0: int = sin_fixed((phase + 324) % 360);
+        let b0: int = (s0 + 1025) / 100;  // 0..20
+        let s1: int = sin_fixed((phase + 333) % 360);
+        let b1: int = (s1 + 1025) / 100;  // 0..20
+        let s2: int = sin_fixed((phase + 342) % 360);
+        let b2: int = (s2 + 1025) / 100;  // 0..20
+        let s3: int = sin_fixed((phase + 351) % 360);
+        let b3: int = (s3 + 1025) / 100;  // 0..20
+        foreach (p in @a) at @s {
+            if (b0 == 0) { particle("minecraft:end_rod", ^8.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 1) { particle("minecraft:end_rod", ^8.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 2) { particle("minecraft:end_rod", ^8.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 3) { particle("minecraft:end_rod", ^8.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 4) { particle("minecraft:end_rod", ^8.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 5) { particle("minecraft:end_rod", ^8.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 6) { particle("minecraft:end_rod", ^8.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 7) { particle("minecraft:end_rod", ^8.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 8) { particle("minecraft:end_rod", ^8.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 9) { particle("minecraft:end_rod", ^8.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 10) { particle("minecraft:end_rod", ^8.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 11) { particle("minecraft:end_rod", ^8.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 12) { particle("minecraft:end_rod", ^8.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 13) { particle("minecraft:end_rod", ^8.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 14) { particle("minecraft:end_rod", ^8.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 15) { particle("minecraft:end_rod", ^8.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 16) { particle("minecraft:end_rod", ^8.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 17) { particle("minecraft:end_rod", ^8.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 18) { particle("minecraft:end_rod", ^8.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 19) { particle("minecraft:end_rod", ^8.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b0 == 20) { particle("minecraft:end_rod", ^8.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 0) { particle("minecraft:end_rod", ^8.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 1) { particle("minecraft:end_rod", ^8.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 2) { particle("minecraft:end_rod", ^8.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 3) { particle("minecraft:end_rod", ^8.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 4) { particle("minecraft:end_rod", ^8.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 5) { particle("minecraft:end_rod", ^8.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 6) { particle("minecraft:end_rod", ^8.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 7) { particle("minecraft:end_rod", ^8.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 8) { particle("minecraft:end_rod", ^8.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 9) { particle("minecraft:end_rod", ^8.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 10) { particle("minecraft:end_rod", ^8.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 11) { particle("minecraft:end_rod", ^8.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 12) { particle("minecraft:end_rod", ^8.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 13) { particle("minecraft:end_rod", ^8.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 14) { particle("minecraft:end_rod", ^8.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 15) { particle("minecraft:end_rod", ^8.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 16) { particle("minecraft:end_rod", ^8.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 17) { particle("minecraft:end_rod", ^8.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 18) { particle("minecraft:end_rod", ^8.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 19) { particle("minecraft:end_rod", ^8.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b1 == 20) { particle("minecraft:end_rod", ^8.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 0) { particle("minecraft:end_rod", ^9.25, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 1) { particle("minecraft:end_rod", ^9.25, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 2) { particle("minecraft:end_rod", ^9.25, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 3) { particle("minecraft:end_rod", ^9.25, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 4) { particle("minecraft:end_rod", ^9.25, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 5) { particle("minecraft:end_rod", ^9.25, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 6) { particle("minecraft:end_rod", ^9.25, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 7) { particle("minecraft:end_rod", ^9.25, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 8) { particle("minecraft:end_rod", ^9.25, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 9) { particle("minecraft:end_rod", ^9.25, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 10) { particle("minecraft:end_rod", ^9.25, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 11) { particle("minecraft:end_rod", ^9.25, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 12) { particle("minecraft:end_rod", ^9.25, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 13) { particle("minecraft:end_rod", ^9.25, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 14) { particle("minecraft:end_rod", ^9.25, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 15) { particle("minecraft:end_rod", ^9.25, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 16) { particle("minecraft:end_rod", ^9.25, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 17) { particle("minecraft:end_rod", ^9.25, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 18) { particle("minecraft:end_rod", ^9.25, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 19) { particle("minecraft:end_rod", ^9.25, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b2 == 20) { particle("minecraft:end_rod", ^9.25, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 0) { particle("minecraft:end_rod", ^9.75, ^-2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 1) { particle("minecraft:end_rod", ^9.75, ^-2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 2) { particle("minecraft:end_rod", ^9.75, ^-2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 3) { particle("minecraft:end_rod", ^9.75, ^-1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 4) { particle("minecraft:end_rod", ^9.75, ^-1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 5) { particle("minecraft:end_rod", ^9.75, ^-1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 6) { particle("minecraft:end_rod", ^9.75, ^-1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 7) { particle("minecraft:end_rod", ^9.75, ^-0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 8) { particle("minecraft:end_rod", ^9.75, ^-0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 9) { particle("minecraft:end_rod", ^9.75, ^-0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 10) { particle("minecraft:end_rod", ^9.75, ^0, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 11) { particle("minecraft:end_rod", ^9.75, ^0.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 12) { particle("minecraft:end_rod", ^9.75, ^0.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 13) { particle("minecraft:end_rod", ^9.75, ^0.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 14) { particle("minecraft:end_rod", ^9.75, ^1, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 15) { particle("minecraft:end_rod", ^9.75, ^1.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 16) { particle("minecraft:end_rod", ^9.75, ^1.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 17) { particle("minecraft:end_rod", ^9.75, ^1.75, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 18) { particle("minecraft:end_rod", ^9.75, ^2, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 19) { particle("minecraft:end_rod", ^9.75, ^2.25, ^5, 0.02,0.02,0.02, 0.0, 10); }
+            if (b3 == 20) { particle("minecraft:end_rod", ^9.75, ^2.5, ^5, 0.02,0.02,0.02, 0.0, 10); }
+        }
+    }
+
 }
 
 fn start() {
     on     = true;
     phase  = 0;
     draw_x = 0;
-    title(@a, "§e y = sin(x + t)", "§7sin_fixed · 40 pts · particles");
-    say("§a▶ sine wave — face forward, stand back 8 blocks");
+    title(@a, "§e y = sin(x + t)", "§7sin_fixed · real-time · 40 pts");
+    say("§a▶ sine wave — face forward, stand back ~8 blocks");
 }
 
 fn stop() {
