@@ -27,7 +27,16 @@ npm run build && npm test   # always run together after changes
 - **Plain `git commit`** — GPG signing is passwordless, no flags needed
 - **`git pull --rebase` before every push**
 - **Remove Co-Authored-By** from commit messages before pushing
-- **Small, frequent commits** — one feature/fix per commit; do not batch
+- **Small, frequent commits** — one logical unit per commit; do not batch
+- **Never include Co-Authored-By** — strip it from every commit message before committing
+- **Good commit granularity examples:**
+  - ✅ `feat(mir): add MIRInstr type definitions`
+  - ✅ `feat(mir): implement HIR→MIR lowering for if/else → branch`
+  - ✅ `feat(mir): implement HIR→MIR lowering for while → loop CFG`
+  - ✅ `feat(mir): add MIR verifier`
+  - ✅ `test(mir): arithmetic lowering tests`
+  - ✅ `test(mir): control-flow CFG shape tests`
+  - ❌ `feat(stage3): implement Stage 3 MIR` (too big — splits into at least 4-6 commits)
 - **Lowercase MC function names** — MC rejects uppercase paths
 - **File extension:** `.mcrs`
 
