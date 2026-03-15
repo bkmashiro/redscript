@@ -266,8 +266,11 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const dceResult = shouldRunDce ? eliminateDeadCode(parsedAst) : { program: parsedAst, warnings: [] }
     const ast = dceResult.program
 
-    // Configure scoreboard objective for this compilation
-    setScoreboardObjective(options.scoreboardObjective ?? 'rs')
+    // Configure scoreboard objective for this compilation.
+    // Default: use the datapack namespace so each datapack gets its own objective
+    // automatically, preventing variable collisions when multiple datapacks coexist.
+    const scoreboardObj = options.scoreboardObjective ?? namespace
+    setScoreboardObjective(scoreboardObj)
 
     // Lowering
     const ir = new Lowering(namespace, preprocessed.ranges).lower(ast)
@@ -281,7 +284,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // scoreboard variable collisions in the global MC scoreboard namespace.
     const generated = generateDatapackWithStats(optimized, {
       mangle: options.mangle ?? true,
-      scoreboardObjective: options.scoreboardObjective ?? 'rs',
+      scoreboardObjective: scoreboardObj,
     })
 
     return {

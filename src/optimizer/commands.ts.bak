@@ -204,9 +204,9 @@ function applyLICMInternal(functions: CommandFunction[]): Partial<OptimizationSt
 
 function extractArithmeticExpression(commands: IRCommand[], index: number): { key: string; dst: string } | null {
   const assign =
-    commands[index]?.cmd.match(new RegExp(`^scoreboard players operation (\\$[A-Za-z0-9_]+) ${_OBJ_PATTERN} = (\\$[A-Za-z0-9_]+|\\$const_-?\\d+) ${_OBJ_PATTERN}$`)) ??
-    commands[index]?.cmd.match(new RegExp(`^scoreboard players set (\\$[A-Za-z0-9_]+) ${_OBJ_PATTERN} (-?\\d+)$`))
-  const op = commands[index + 1]?.cmd.match(new RegExp(`^scoreboard players operation (\\$[A-Za-z0-9_]+) ${_OBJ_PATTERN} ([+\\-*/%]=) (\\$[A-Za-z0-9_]+|\\$const_-?\\d+) ${_OBJ_PATTERN}$`))
+    commands[index]?.cmd.match(/^scoreboard players operation (\$[A-Za-z0-9_]+) rs = (\$[A-Za-z0-9_]+|\$const_-?\d+) rs$/) ??
+    commands[index]?.cmd.match(/^scoreboard players set (\$[A-Za-z0-9_]+) rs (-?\d+)$/)
+  const op = commands[index + 1]?.cmd.match(/^scoreboard players operation (\$[A-Za-z0-9_]+) rs ([+\-*/%]=) (\$[A-Za-z0-9_]+|\$const_-?\d+) rs$/)
   if (!assign || !op || assign[1] !== op[1]) {
     return null
   }

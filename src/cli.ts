@@ -54,9 +54,9 @@ Options:
   --target <target>      Output target: datapack (default), cmdblock, or structure
   --no-dce               Disable AST dead code elimination
   --no-mangle            Disable variable name mangling (use readable names)
-  --scoreboard <obj>     Scoreboard objective for variables (default: 'rs').
-                         Use a unique value per datapack when loading multiple
-                         RedScript datapacks simultaneously, e.g. --scoreboard mypack_rs
+  --scoreboard <obj>     Scoreboard objective for variables (default: namespace).
+                         Each datapack automatically uses its namespace as the objective
+                         so multiple datapacks can coexist without collisions.
   --stats                Print optimizer statistics
   --hot-reload <url>     After each successful compile, POST to <url>/reload
                          (use with redscript-testharness; e.g. http://localhost:25561)
@@ -270,7 +270,7 @@ function compileCommand(
   showStats = false,
   dce = true,
   mangle = true,
-  scoreboardObjective = 'rs'
+  scoreboardObjective: string | undefined = undefined
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -517,7 +517,7 @@ async function main(): Promise<void> {
         parsed.stats,
         parsed.dce,
         parsed.mangle,
-        parsed.scoreboardObjective ?? 'rs'
+        parsed.scoreboardObjective  // undefined = derive from namespace in compile()
       )
       }
       break

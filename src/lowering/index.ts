@@ -815,7 +815,7 @@ export class Lowering {
     const originalTerm = entry.term
 
     entry.instrs = [
-      { op: 'raw', cmd: `scoreboard players add ${counterVar} rs 1` },
+      { op: 'raw', cmd: `scoreboard players add ${counterVar} ${LOWERING_OBJ} 1` },
     ]
 
     // Create conditional jump
@@ -832,14 +832,14 @@ export class Lowering {
     // Add check instruction
     entry.instrs.push({
       op: 'raw',
-      cmd: `execute store success score ${counterVar}_check rs if score ${counterVar} rs matches ${rate}..`,
+      cmd: `execute store success score ${counterVar}_check ${LOWERING_OBJ} if score ${counterVar} ${LOWERING_OBJ} matches ${rate}..`,
     })
 
     // Body block (original logic + counter reset)
     fn.blocks.push({
       label: bodyLabel,
       instrs: [
-        { op: 'raw', cmd: `scoreboard players set ${counterVar} rs 0` },
+        { op: 'raw', cmd: `scoreboard players set ${counterVar} ${LOWERING_OBJ} 0` },
         ...originalInstrs,
       ],
       term: originalTerm,
@@ -1295,12 +1295,12 @@ export class Lowering {
     this.lowerBlock(stmt.body)
 
     // Increment
-    this.builder.emitRaw(`scoreboard players add ${loopVar} rs 1`)
+    this.builder.emitRaw(`scoreboard players add ${loopVar} ${LOWERING_OBJ} 1`)
 
     // Loop condition: execute if score matches ..<end-1> run function
     const endVal = this.lowerExpr(stmt.end)
     const endNum = endVal.kind === 'const' ? endVal.value - 1 : '?'
-    this.builder.emitRaw(`execute if score ${loopVar} rs matches ..${endNum} run function ${this.namespace}:${subFnName}`)
+    this.builder.emitRaw(`execute if score ${loopVar} ${LOWERING_OBJ} matches ..${endNum} run function ${this.namespace}:${subFnName}`)
 
     if (!this.builder.isBlockSealed()) {
       this.builder.emitReturn()
@@ -1405,13 +1405,13 @@ export class Lowering {
       }
 
       const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`
-      this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${matchCondition} run function ${this.namespace}:${subFnName}`)
+      this.builder.emitRaw(`execute if score ${matchedVar} ${LOWERING_OBJ} matches ..0 if score ${subject} ${LOWERING_OBJ} matches ${matchCondition} run function ${this.namespace}:${subFnName}`)
       this.emitMatchArmSubFunction(subFnName, matchedVar, arm.body, true)
     }
 
     if (defaultArm) {
       const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`
-      this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 run function ${this.namespace}:${subFnName}`)
+      this.builder.emitRaw(`execute if score ${matchedVar} ${LOWERING_OBJ} matches ..0 run function ${this.namespace}:${subFnName}`)
       this.emitMatchArmSubFunction(subFnName, matchedVar, defaultArm.body, false)
     }
   }
@@ -1429,7 +1429,7 @@ export class Lowering {
 
     this.builder.startBlock('entry')
     if (setMatched) {
-      this.builder.emitRaw(`scoreboard players set ${matchedVar} rs 1`)
+      this.builder.emitRaw(`scoreboard players set ${matchedVar} ${LOWERING_OBJ} 1`)
     }
     this.lowerBlock(body)
     if (!this.builder.isBlockSealed()) {
@@ -1468,7 +1468,7 @@ export class Lowering {
 
     this.builder.emitAssign(indexVar, { kind: 'const', value: 0 })
     this.builder.emitAssign(oneVar, { kind: 'const', value: 1 })
-    this.builder.emitRaw(`execute store result score ${lengthVar} rs run data get storage rs:heap ${arrayName}`)
+    this.builder.emitRaw(`execute store result score ${lengthVar} ${LOWERING_OBJ} run data get storage rs:heap ${arrayName}`)
 
     const checkLabel = this.builder.freshLabel('foreach_array_check')
     const bodyLabel = this.builder.freshLabel('foreach_array_body')
@@ -1873,14 +1873,14 @@ export class Lowering {
         const path = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`
         const dst = this.builder.freshTemp()
         // Read from NBT storage into scoreboard
-        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path}`)
+        this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run data get storage ${path}`)
         return { kind: 'var', name: dst }
       }
 
       // Array length property
       if (varType?.kind === 'array' && expr.field === 'len') {
         const dst = this.builder.freshTemp()
-        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${expr.obj.name}`)
+        this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run data get storage rs:heap ${expr.obj.name}`)
         return { kind: 'var', name: dst }
       }
     }
@@ -1932,7 +1932,7 @@ export class Lowering {
         } else {
           // Compound assignment: read, modify, write back
           const dst = this.builder.freshTemp()
-          this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path}`)
+          this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run data get storage ${path}`)
           const binOp = expr.op.slice(0, -1)
           this.builder.emitBinop(dst, { kind: 'var', name: dst }, binOp as any, value)
           this.builder.emitRaw(`execute store result storage ${path} int 1 run scoreboard players get ${dst} ${LOWERING_OBJ}`)
@@ -1968,13 +1968,13 @@ export class Lowering {
         this.builder.emitAssign(dst, left)
         const rightVar = this.operandToVar(right)
         // dst = dst && right → if dst != 0 then dst = right
-        this.builder.emitRaw(`execute if score ${dst} rs matches 1.. run scoreboard players operation ${dst} ${LOWERING_OBJ} = ${rightVar} ${LOWERING_OBJ}`)
+        this.builder.emitRaw(`execute if score ${dst} ${LOWERING_OBJ} matches 1.. run scoreboard players operation ${dst} ${LOWERING_OBJ} = ${rightVar} ${LOWERING_OBJ}`)
       } else {
         // Short-circuit OR
         this.builder.emitAssign(dst, left)
         const rightVar = this.operandToVar(right)
         // dst = dst || right → if dst == 0 then dst = right
-        this.builder.emitRaw(`execute if score ${dst} rs matches ..0 run scoreboard players operation ${dst} ${LOWERING_OBJ} = ${rightVar} ${LOWERING_OBJ}`)
+        this.builder.emitRaw(`execute if score ${dst} ${LOWERING_OBJ} matches ..0 run scoreboard players operation ${dst} ${LOWERING_OBJ} = ${rightVar} ${LOWERING_OBJ}`)
       }
       return { kind: 'var', name: dst }
     }
@@ -2080,7 +2080,7 @@ export class Lowering {
       const storagePath = this.getStringStoragePath(expr.args[0])
       if (storagePath) {
         const dst = this.builder.freshTemp()
-        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${storagePath}`)
+        this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run data get storage ${storagePath}`)
         return { kind: 'var', name: dst }
       }
 
@@ -2118,7 +2118,7 @@ export class Lowering {
       const entity = this.exprToString(expr.args[0])
       const tagName = this.exprToString(expr.args[1])
       const dst = this.builder.freshTemp()
-      this.builder.emitRaw(`execute store result score ${dst} rs if entity ${entity}[tag=${tagName}]`)
+      this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} if entity ${entity}[tag=${tagName}]`)
       return { kind: 'var', name: dst }
     }
 
@@ -2143,7 +2143,7 @@ export class Lowering {
       const arrName = this.getArrayStorageName(expr.args[0])
       const dst = this.builder.freshTemp()
       if (arrName) {
-        this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${arrName}[-1]`)
+        this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run data get storage rs:heap ${arrName}[-1]`)
         this.builder.emitRaw(`data remove storage rs:heap ${arrName}[-1]`)
       } else {
         this.builder.emitAssign(dst, { kind: 'const', value: 0 })
@@ -2452,7 +2452,7 @@ export class Lowering {
       const dst = this.builder.freshTemp()
       const min = args[0] ? this.exprToLiteral(args[0]) : '0'
       const max = args[1] ? this.exprToLiteral(args[1]) : '100'
-      this.builder.emitRaw(`execute store result score ${dst} rs run random value ${min} ${max}`)
+      this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run random value ${min} ${max}`)
       return { kind: 'var', name: dst }
     }
 
@@ -2469,7 +2469,7 @@ export class Lowering {
       const dst = this.builder.freshTemp()
       const player = this.exprToTargetString(args[0])
       const objective = this.resolveScoreboardObjective(args[0], args[1], callSpan)
-      this.builder.emitRaw(`execute store result score ${dst} rs run scoreboard players get ${player} ${objective}`)
+      this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run scoreboard players get ${player} ${objective}`)
       return { kind: 'var', name: dst }
     }
 
@@ -2559,7 +2559,7 @@ export class Lowering {
 
     if (name === 'bossbar_get_value') {
       const dst = this.builder.freshTemp()
-      this.builder.emitRaw(`execute store result score ${dst} rs run bossbar get ${this.exprToString(args[0])} value`)
+      this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run bossbar get ${this.exprToString(args[0])} value`)
       return { kind: 'var', name: dst }
     }
 
@@ -2606,7 +2606,7 @@ export class Lowering {
         : this.exprToString(args[1])
       const path = this.exprToString(args[2])
       const scale = args[3] ? this.exprToString(args[3]) : '1'
-      this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path} ${scale}`)
+      this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run data get ${targetType} ${target} ${path} ${scale}`)
       return { kind: 'var', name: dst }
     }
 
@@ -2616,7 +2616,7 @@ export class Lowering {
     //   array_key  : e.g. "sin"
     //   index      : integer index (const or runtime)
     //
-    // Const index: execute store result score $dst rs run data get storage math:tables sin[N] 1
+    // Const index: execute store result score $dst ${LOWERING_OBJ} run data get storage math:tables sin[N] 1
     // Runtime index: macro sub-function via rs:heap, mirrors readArrayElement.
     if (name === 'storage_get_int') {
       const storageNs  = this.exprToString(args[0])  // "math:tables"
@@ -2626,7 +2626,7 @@ export class Lowering {
 
       if (indexOperand.kind === 'const') {
         this.builder.emitRaw(
-          `execute store result score ${dst} rs run data get storage ${storageNs} ${arrayKey}[${indexOperand.value}] 1`
+          `execute store result score ${dst} ${LOWERING_OBJ} run data get storage ${storageNs} ${arrayKey}[${indexOperand.value}] 1`
         )
       } else {
         // Runtime index: store the index into rs:heap under a unique key,
@@ -2646,7 +2646,7 @@ export class Lowering {
         // Codegen replaces \x01 → '$' when emitting the mc function file.
         this.emitRawSubFunction(
           subFnName,
-          `\x01execute store result score ${dst} rs run data get storage ${storageNs} ${arrayKey}[$(${macroKey})] 1`
+          `\x01execute store result score ${dst} ${LOWERING_OBJ} run data get storage ${storageNs} ${arrayKey}[$(${macroKey})] 1`
         )
       }
       return { kind: 'var', name: dst }
@@ -2673,7 +2673,7 @@ export class Lowering {
     //   value      : integer value to write (const or runtime)
     //
     // Const index + const value:
-    //   execute store result storage <ns> <key>[N] int 1 run scoreboard players set $const_V rs V
+    //   execute store result storage <ns> <key>[N] int 1 run scoreboard players set $const_V ${LOWERING_OBJ} V
     // Runtime index or value: macro sub-function via rs:heap
     if (name === 'storage_set_int') {
       const storageNs    = this.exprToString(args[0])
@@ -2767,7 +2767,7 @@ export class Lowering {
       const dst = this.builder.freshTemp()
       const setId = this.exprToString(args[0])
       const value = this.exprToString(args[1])
-      this.builder.emitRaw(`execute store result score ${dst} rs if data storage rs:sets ${setId}[{value:${value}}]`)
+      this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} if data storage rs:sets ${setId}[{value:${value}}]`)
       return { kind: 'var', name: dst }
     }
 
@@ -3084,7 +3084,7 @@ export class Lowering {
       return
     }
 
-    components.push({ score: { name: this.operandToVar(operand), objective: 'rs' } })
+    components.push({ score: { name: this.operandToVar(operand), objective: LOWERING_OBJ } })
   }
 
   private exprToString(expr: Expr): string {
@@ -3250,12 +3250,20 @@ export class Lowering {
 
   private exprToScoreboardObjective(expr: Expr, span?: Span): string {
     if (expr.kind === 'mc_name') {
-      return expr.value
+      // 'rs' is the canonical token for the current RS scoreboard objective.
+      // Resolve to LOWERING_OBJ so it respects --scoreboard / namespace default.
+      return expr.value === 'rs' ? LOWERING_OBJ : expr.value
     }
 
     const objective = this.exprToString(expr)
     if (objective.startsWith('#') || objective.includes('.')) {
-      return objective.startsWith('#') ? objective.slice(1) : objective
+      if (objective.startsWith('#')) {
+        const name = objective.slice(1)
+        // '#rs' is the canonical way to reference the current RS scoreboard objective.
+        // Resolve to LOWERING_OBJ so it tracks the --scoreboard option.
+        return name === 'rs' ? LOWERING_OBJ : name
+      }
+      return objective
     }
 
     return `${this.getObjectiveNamespace(span)}.${objective}`
@@ -3275,7 +3283,7 @@ export class Lowering {
       return this.namespace
     }
 
-    return this.isStdlibFile(filePath) ? 'rs' : this.namespace
+    return this.isStdlibFile(filePath) ? LOWERING_OBJ : this.namespace
   }
 
   private tryGetStdlibInternalObjective(playerExpr: Expr | undefined, objectiveExpr: Expr, span?: Span): string | null {
@@ -3294,7 +3302,7 @@ export class Lowering {
     }
 
     const hash = this.shortHash(this.serializeCallSite(this.currentStdlibCallSite))
-    return `rs._${resourceBase}_${hash}`
+    return `${LOWERING_OBJ}._${resourceBase}_${hash}`
   }
 
   private getStdlibInternalResourceBase(playerExpr: Expr | undefined): string | null {
@@ -3616,7 +3624,7 @@ export class Lowering {
     const dst = this.builder.freshTemp()
 
     if (index.kind === 'const') {
-      this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[${index.value}]`)
+      this.builder.emitRaw(`execute store result score ${dst} ${LOWERING_OBJ} run data get storage rs:heap ${arrayName}[${index.value}]`)
       return { kind: 'var', name: dst }
     }
 
@@ -3627,7 +3635,7 @@ export class Lowering {
     this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`)
     this.emitRawSubFunction(
       subFnName,
-      `\x01execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[$(${macroKey})]`
+      `\x01execute store result score ${dst} ${LOWERING_OBJ} run data get storage rs:heap ${arrayName}[$(${macroKey})]`
     )
     return { kind: 'var', name: dst }
   }

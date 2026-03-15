@@ -17,7 +17,7 @@
  */
 
 import type { IRBlock, IRFunction, IRInstr, IRModule, Operand, Terminator } from '../../ir/types'
-import { optimizeCommandFunctions, type OptimizationStats, createEmptyOptimizationStats, mergeOptimizationStats } from '../../optimizer/commands'
+import { optimizeCommandFunctions, setOptimizerObjective, type OptimizationStats, createEmptyOptimizationStats, mergeOptimizationStats } from '../../optimizer/commands'
 import { EVENT_TYPES, isEventTypeName, type EventTypeName } from '../../events/types'
 import { VarAllocator } from '../var-allocator'
 
@@ -363,6 +363,7 @@ export function generateDatapackWithStats(
   // Set module-level OBJ so all helper functions in this module use the correct objective.
   // This is safe because compilation is synchronous.
   OBJ = scoreboardObjective
+  setOptimizerObjective(scoreboardObjective)
   const alloc = new VarAllocator(mangle)
   const files: DatapackFile[] = []
   const advancements: DatapackFile[] = []
@@ -410,9 +411,9 @@ export function generateDatapackWithStats(
   for (const eventType of eventTypes) {
     const detection = EVENT_TYPES[eventType].detection
     if (eventType === 'PlayerDeath') {
-      loadLines.push('scoreboard objectives add rs.deaths deathCount')
+      loadLines.push(`scoreboard objectives add ${OBJ}.deaths deathCount`)
     } else if (eventType === 'EntityKill') {
-      loadLines.push('scoreboard objectives add rs.kills totalKillCount')
+      loadLines.push(`scoreboard objectives add ${OBJ}.kills totalKillCount`)
     } else if (eventType === 'ItemUse') {
       loadLines.push('# ItemUse detection requires a project-specific objective/tag setup')
     } else if (detection === 'tag' || detection === 'advancement') {

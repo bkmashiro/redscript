@@ -105,15 +105,18 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     typeErrors = checker.check(ast)
   }
 
-  // Configure scoreboard objective for this compilation
-  setScoreboardObjective(options.scoreboardObjective ?? 'rs')
+  // Configure scoreboard objective for this compilation.
+  // Default: use the datapack namespace so each datapack gets its own objective
+  // automatically, preventing variable collisions when multiple datapacks coexist.
+  const scoreboardObj = options.scoreboardObjective ?? namespace
+  setScoreboardObjective(scoreboardObj)
 
   // Lowering to IR
   const lowering = new Lowering(namespace, preprocessed.ranges)
   const ir = lowering.lower(ast)
 
   let optimizedIR: IRModule = ir
-  let generated = generateDatapackWithStats(ir, { optimizeCommands: shouldOptimize, mangle, scoreboardObjective: options.scoreboardObjective ?? 'rs' })
+  let generated = generateDatapackWithStats(ir, { optimizeCommands: shouldOptimize, mangle, scoreboardObjective: scoreboardObj })
   let optimizationStats: OptimizationStats | undefined
 
   if (shouldOptimize) {
@@ -135,10 +138,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const copyPropagatedIR: IRModule = { ...ir, functions: copyPropagatedFunctions }
     optimizedIR = { ...ir, functions: deadCodeEliminatedFunctions }
 
-    const baselineGenerated = generateDatapackWithStats(ir, { optimizeCommands: false, mangle, scoreboardObjective: options.scoreboardObjective ?? 'rs' })
-    const beforeDceGenerated = generateDatapackWithStats(copyPropagatedIR, { optimizeCommands: false, mangle, scoreboardObjective: options.scoreboardObjective ?? 'rs' })
-    const afterDceGenerated = generateDatapackWithStats(optimizedIR, { optimizeCommands: false, mangle, scoreboardObjective: options.scoreboardObjective ?? 'rs' })
-    generated = generateDatapackWithStats(optimizedIR, { optimizeCommands: true, mangle, scoreboardObjective: options.scoreboardObjective ?? 'rs' })
+    const baselineGenerated = generateDatapackWithStats(ir, { optimizeCommands: false, mangle, scoreboardObjective: scoreboardObj })
+    const beforeDceGenerated = generateDatapackWithStats(copyPropagatedIR, { optimizeCommands: false, mangle, scoreboardObjective: scoreboardObj })
+    const afterDceGenerated = generateDatapackWithStats(optimizedIR, { optimizeCommands: false, mangle, scoreboardObjective: scoreboardObj })
+    generated = generateDatapackWithStats(optimizedIR, { optimizeCommands: true, mangle, scoreboardObjective: scoreboardObj })
 
     stats.deadCodeRemoved =
       countMcfunctionCommands(beforeDceGenerated.files) - countMcfunctionCommands(afterDceGenerated.files)
@@ -154,7 +157,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     optimizationStats = stats
   } else {
     optimizedIR = ir
-    generated = generateDatapackWithStats(ir, { optimizeCommands: false, mangle, scoreboardObjective: options.scoreboardObjective ?? 'rs' })
+    generated = generateDatapackWithStats(ir, { optimizeCommands: false, mangle, scoreboardObjective: scoreboardObj })
   }
 
   return {

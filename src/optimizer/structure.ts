@@ -1,7 +1,11 @@
 import type { IRBlock, IRCommand, IRFunction, IRInstr, Operand, Terminator } from '../ir/types'
-import { createEmptyOptimizationStats, mergeOptimizationStats, optimizeCommandFunctions, type OptimizationStats } from './commands'
+import { createEmptyOptimizationStats, mergeOptimizationStats, optimizeCommandFunctions, setOptimizerObjective, type OptimizationStats } from './commands'
 
-const OBJ = 'rs'
+let OBJ = 'rs'
+export function setStructureObjective(obj: string): void {
+  OBJ = obj
+  setOptimizerObjective(obj)
+}
 const INLINE_THRESHOLD = 8
 
 const BOP_OP: Record<string, string> = {

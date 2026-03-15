@@ -28,7 +28,7 @@ fn turret_tick() {
     const parent = getFileContent(result.files, 'data/test/function/turret_tick.mcfunction')
     const loopBody = getFileContent(result.files, 'data/test/function/turret_tick/foreach_0.mcfunction')
 
-    const hoistedRead = 'execute store result score $_0 rs run scoreboard players get config test.turret_range'
+    const hoistedRead = 'execute store result score $_0 test run scoreboard players get config test.turret_range'
     const executeCall = 'execute as @e[tag=turret] run function test:turret_tick/foreach_0'
 
     expect(parent).toContain(hoistedRead)
@@ -54,7 +54,7 @@ fn read_twice() {
     const readMatches = fn.match(/scoreboard players get @s test\.coins/g) ?? []
 
     expect(readMatches).toHaveLength(1)
-    expect(fn).toContain('scoreboard players operation $_1 rs = $_0 rs')
+    expect(fn).toContain('scoreboard players operation $_1 test = $_0 test')
   })
 
   test('reuses duplicate arithmetic sequences', () => {
@@ -71,10 +71,10 @@ fn math() {
 
     const result = compile(source, { namespace: 'test' })
     const fn = getFileContent(result.files, 'data/test/function/math.mcfunction')
-    const addMatches = fn.match(/\+= \$const_2 rs/g) ?? []
+    const addMatches = fn.match(/\+= \$const_2 test/g) ?? []
 
     expect(addMatches).toHaveLength(1)
-    expect(fn).toContain('scoreboard players operation $_1 rs = $_0 rs')
+    expect(fn).toContain('scoreboard players operation $_1 test = $_0 test')
   })
 })
 
