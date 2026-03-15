@@ -1187,3 +1187,154 @@ dependency DAG, recompile only the subgraph invalidated by a file change.
 Architecture note for the future: keep module loading separated from lowering
 so that a cached module's IR can be reused without re-parsing.
 
+
+---
+
+## MC Execution Budget & Coroutine Transform
+
+### The 65536 command budget
+
+`maxCommandChainLength` (gamerule, default 65536) limits the **total number of
+commands executed per game tick**, summed across all function calls triggered
+in that tick. It is a tick budget, not a per-function call depth limit.
+
+A separate limit (~512 levels) applies to nested function call depth (JVM stack).
+This rarely matters for compiled output, which is usually shallow chains of
+`execute if ... run function`.
+
+**Practical implications:**
+- A loop of 1000 iterations × 10 commands/iteration = 10,000 commands. Safe.
+- A loop of 1000 iterations × 100 commands/iteration = 100,000 commands. Exceeds budget — only ~655 iterations actually run; the rest are silently dropped.
+- The budget can be raised by a server admin: `gamerule maxCommandChainLength 1000000`. Cannot be changed from within a datapack.
+
+**Compiler response:** The redesigned compiler should statically estimate the
+command count of loops and emit a `warning` when the estimated count approaches
+the budget.
+
+---
+
+### Coroutine Transform: automatic tick-splitting
+
+For computations that genuinely require more commands than one tick allows,
+the compiler can automatically transform a long-running function into a
+tick-spread state machine. This is the same transformation JavaScript engines
+apply to `async/await`, Python applies to `yield`, and C# applies to
+`yield return` — just targeting the MC tick scheduler instead of an event loop.
+
+#### Usage (proposed syntax)
+
+```redscript
+@coroutine(batch=10) fn process_all() {
+    for (let i: int = 0; i < 1000; i++) {
+        do_work(i);   // heavy per-iteration work
+    }
+    finish();
+}
+```
+
+`@coroutine(batch=N)` tells the compiler: "split this function's loops so that
+each tick advances at most N iterations". If `batch` is omitted, the compiler
+estimates it from the loop body's command count.
+
+#### How the transform works
+
+**Step 1: Find yield points**
+
+In the MIR CFG, find all back edges (edges that jump to a dominator block —
+i.e., loop headers). A yield point is inserted at each back edge, triggered
+every `batch` iterations.
+
+**Step 2: Liveness analysis at yield points**
+
+Compute the set of variables live at each yield point. These variables must
+persist across ticks — they cannot stay in function-local temporary slots.
+They are promoted to persistent scoreboard slots (or NBT for arrays/structs).
+
+In the example above, `i` is the only live variable at the loop's yield point.
+
+**Step 3: Split the CFG into continuations**
+
+Each segment between yield points becomes a separate function. A `pc`
+(program counter) scoreboard slot tracks which continuation runs next.
+
+```
+coroutine_state:
+  i  → $coro_i  __ns     (promoted temp)
+  pc → $coro_pc __ns     (program counter)
+
+continuation_1  (loop body, batch iterations):
+  for (batch_count = 0; batch_count < BATCH && i < 1000; batch_count++) {
+    do_work(i)
+    i++
+  }
+  if i >= 1000: pc = 2   # advance to finish()
+  else:         pc = 1   # resume loop next tick
+  return                 # end this tick's work
+
+continuation_2:
+  finish()
+  pc = -1                # done
+```
+
+**Step 4: Generate the dispatcher**
+
+```redscript
+@tick fn _coro_process_all_tick() {
+    // generated — do not edit
+    execute if score $coro_pc __ns matches 1 run function ns:_coro_cont_1
+    execute if score $coro_pc __ns matches 2 run function ns:_coro_cont_2
+}
+```
+
+The original `process_all()` call site becomes:
+```
+scoreboard players set $coro_pc __ns 1   # start from continuation_1
+scoreboard players set $coro_i  __ns 0   # initialize i
+```
+
+#### Algorithm components
+
+| Component | Technique | Est. size |
+|---|---|---|
+| Find yield points | Dominator tree + back-edge detection | ~100 lines |
+| Live variable analysis | Standard dataflow (backwards liveness) | ~150 lines |
+| CFG splitting | Insert `pc = N; return` at yield points | ~200 lines |
+| Variable promotion | Assign persistent slots to live vars at yields | ~100 lines |
+| Dispatch generation | `execute if score pc matches N` chain | ~50 lines |
+| Batch size estimation | Static command-count estimate per loop body | ~100 lines |
+
+**Total:** ~700 lines. Approximately 3–4 weeks of focused implementation.
+Prerequisite: proper MIR CFG with dominator tree (Stage 3 of the new pipeline).
+
+#### Placement in the pipeline
+
+This transform runs in **Stage 4 (MIR optimization passes)** as an opt-in pass:
+
+```typescript
+const pipeline: Pass[] = [
+  constantFold,
+  copyProp,
+  dce,
+  ...(options.coroutine ? [coroutineTransform] : []),  // opt-in
+  destinationForwarding,
+  blockMerge,
+]
+```
+
+It is not run by default — only on functions annotated `@coroutine`. The
+compiler will warn if a non-annotated loop is estimated to exceed the tick
+budget, suggesting the user add `@coroutine`.
+
+#### What the transform does NOT do
+
+- Does not handle `return` with a value from inside a coroutine (complex; deferred).
+- Does not support nested coroutines (a `@coroutine` calling another `@coroutine`).
+- Does not handle exceptions (RedScript has none, so this is fine).
+- Does not parallelize — MC is single-threaded; `@tick` runs one coroutine step per tick.
+
+#### Relationship to Timer and manual state machines
+
+RedScript's `Timer` stdlib is a manually written version of this pattern.
+The coroutine transform automates what users currently write by hand
+when they need multi-tick computations.
+
