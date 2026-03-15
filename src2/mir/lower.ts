@@ -530,7 +530,11 @@ function lowerExpr(
 
     case 'assign': {
       const val = lowerExpr(expr.value, ctx, scope)
-      const t = ctx.freshTemp()
+      // Reuse the existing temp for this variable so that updates inside
+      // if/while bodies are visible to outer code (we target mutable
+      // scoreboard slots, not true SSA registers).
+      const existing = scope.get(expr.target)
+      const t = existing ?? ctx.freshTemp()
       ctx.emit({ kind: 'copy', dst: t, src: val })
       scope.set(expr.target, t)
       return val
