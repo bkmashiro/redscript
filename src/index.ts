@@ -6,9 +6,7 @@
 
 export const version = '2.0.0'
 
-import { Lexer } from './lexer'
-import { Parser } from './parser'
-import { preprocessSource } from './compile'
+import { compile } from './emit/compile'
 
 // Re-export v2 compile API
 export { compile, CompileOptions, CompileResult } from './emit/compile'
@@ -24,6 +22,8 @@ export type { DiagnosticError } from './diagnostics'
 
 /**
  * Check RedScript source code for errors without generating output.
+ * Runs the full compile pipeline (lex → parse → HIR → MIR → LIR → emit)
+ * to catch type-level and lowering errors, not just parse errors.
  *
  * @param source - The RedScript source code
  * @param namespace - Optional namespace
@@ -31,9 +31,7 @@ export type { DiagnosticError } from './diagnostics'
  */
 export function check(source: string, namespace = 'redscript', filePath?: string): Error | null {
   try {
-    const preprocessedSource = preprocessSource(source, { filePath })
-    const tokens = new Lexer(preprocessedSource, filePath).tokenize()
-    new Parser(tokens, preprocessedSource, filePath).parse(namespace)
+    compile(source, { namespace, filePath })
     return null
   } catch (err) {
     return err as Error

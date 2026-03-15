@@ -229,7 +229,7 @@ function compileCommand(
   }
 }
 
-function checkCommand(file: string): void {
+function checkCommand(file: string, namespace?: string): void {
   // Read source file
   if (!fs.existsSync(file)) {
     console.error(`Error: File not found: ${file}`)
@@ -238,7 +238,8 @@ function checkCommand(file: string): void {
 
   const source = fs.readFileSync(file, 'utf-8')
 
-  const error = check(source, 'redscript', file)
+  const ns = namespace ?? deriveNamespace(file)
+  const error = check(source, ns, file)
   if (error) {
     console.error(formatError(error, source, file))
     process.exit(1)
@@ -416,7 +417,7 @@ async function main(): Promise<void> {
         printUsage()
         process.exit(1)
       }
-      checkCommand(parsed.file)
+      checkCommand(parsed.file, parsed.namespace)
       break
 
     case 'fmt':
