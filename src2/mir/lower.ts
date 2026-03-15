@@ -727,5 +727,25 @@ function lowerExecuteSubcmd(sub: HIRExecuteSubcommand): ExecuteSubcmd {
 
 function selectorToString(sel: { kind: string; filters?: any }): string {
   // EntitySelector has kind like '@a', '@e', '@s', etc.
-  return sel.kind
+  // Filters are key=value pairs that become [key=value,key=value]
+  if (!sel.filters || Object.keys(sel.filters).length === 0) {
+    return sel.kind
+  }
+  const parts: string[] = []
+  for (const [key, value] of Object.entries(sel.filters)) {
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      // Range filter: { min, max } → key=min..max
+      const rangeObj = value as { min?: number; max?: number }
+      if (rangeObj.min !== undefined && rangeObj.max !== undefined) {
+        parts.push(`${key}=${rangeObj.min}..${rangeObj.max}`)
+      } else if (rangeObj.max !== undefined) {
+        parts.push(`${key}=..${rangeObj.max}`)
+      } else if (rangeObj.min !== undefined) {
+        parts.push(`${key}=${rangeObj.min}..`)
+      }
+    } else {
+      parts.push(`${key}=${value}`)
+    }
+  }
+  return `${sel.kind}[${parts.join(',')}]`
 }
