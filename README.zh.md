@@ -2,14 +2,14 @@
 
 <img src="./logo.png" alt="RedScript Logo" width="64" />
 
-<img src="https://img.shields.io/badge/RedScript-1.2.27-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+<img src="https://img.shields.io/badge/RedScript-1.2.29-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
 
 **一个编译到 Minecraft Datapack 的类型化脚本语言。**
 
 写干净的游戏逻辑，把记分板的面条代码交给 RedScript 处理。
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-918%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
+[![Tests](https://img.shields.io/badge/tests-920%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![VSCode](https://img.shields.io/badge/VSCode-插件-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
@@ -20,9 +20,11 @@
 
 ### 🚀 [在线试用 — 无需安装！](https://redscript-ide.pages.dev)
 
-<img src="./demo.gif" alt="RedScript Demo" width="400" />
+<img src="./demo.gif" alt="RedScript Demo — 用粒子在 Minecraft 中绘制数学曲线" width="520" />
 
-*↑ 每 tick 在玩家位置生成粒子 — 纯原版，无需 MOD！仅 30 行 RedScript，包含完整控制流：`if`、`foreach`、`@tick`、f-strings 等。*
+*↑ 五条数学函数图像实时粒子渲染 — 纯原版，无需 MOD！*
+*`y = x·sin(x)` · `y = sin(x) + ½sin(2x)` · `y = e⁻ˣsin(4x)` · `y = tanh(2x)` · 玫瑰曲线 `r = cos(2θ)`*
+*每条曲线由 RedScript 定点数学库逐 tick 计算，64 个采样点动态绘制。*
 
 </div>
 
@@ -32,34 +34,32 @@
 
 RedScript 是一门编译到原版 Minecraft 数据包的脚本语言。用变量、函数、循环、事件写代码，RedScript 帮你生成记分板命令和 `.mcfunction` 文件。
 
-**上面的演示？** 只有 30 行：
+**上面的演示？** 五条数学曲线，每条 64 个采样点，核心逻辑：
 
 ```rs
-let counter: int = 0;
-let running: bool = false;
+import "stdlib/math.mcrs"
 
-@tick fn demo_tick() {
-    if (!running) { return; }
-    counter = counter + 1;
-    
-    foreach (p in @a) at @s {
-        particle("minecraft:end_rod", ~0, ~1, ~0, 0.5, 0.5, 0.5, 0.1, 5);
-    }
-    
-    if (counter % 20 == 0) {
-        say(f"已运行 {counter} ticks");
-    }
-}
+let phase: int = 0;
+let frame: int = 0;
 
-@keep fn start() {
-    running = true;
-    counter = 0;
-    say(f"Demo 已启动！");
-}
+// 5 条曲线每 128 tick (~6.5 秒) 自动切换
+@tick fn _wave_tick() {
+    phase = (phase + 4) % 360;
+    frame = frame + 1;
 
-@keep fn stop() {
-    running = false;
-    say(f"Demo 已停止，共运行 {counter} ticks。");
+    let curve_id: int = (frame / 128) % 5;
+
+    // 计算 9 列的 sin 值（每列相差 40°，刚好覆盖完整周期）
+    let s0: int = sin_fixed((phase +   0) % 360);
+    let s1: int = sin_fixed((phase +  40) % 360);
+    // ... s2 到 s8 ...
+
+    // 绘制图像：每条曲线有 64 个固定坐标粒子，每 tick 全部重绘
+    if (curve_id == 0) { _draw_xsinx(); }
+    if (curve_id == 1) { _draw_harmonic(); }
+    // ...
+
+    actionbar(@a, f"§e  y = x·sin(x)   phase: {phase}°  center: {s0}‰");
 }
 ```
 

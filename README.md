@@ -2,14 +2,14 @@
 
 <img src="./logo.png" alt="RedScript Logo" width="64" />
 
-<img src="https://img.shields.io/badge/RedScript-1.2.27-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+<img src="https://img.shields.io/badge/RedScript-1.2.29-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
 
 **A typed scripting language that compiles to Minecraft datapacks.**
 
 Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-918%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
+[![Tests](https://img.shields.io/badge/tests-920%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
@@ -20,9 +20,11 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 ### 🚀 [Try it online — no install needed!](https://redscript-ide.pages.dev)
 
-<img src="./demo.gif" alt="RedScript Demo" width="400" />
+<img src="./demo.gif" alt="RedScript Demo — math curves drawn with particles in Minecraft" width="520" />
 
-*↑ Particles spawning at player position every tick — 100% vanilla, no mods! Just 30 lines of RedScript with full control flow: `if`, `foreach`, `@tick`, f-strings, and more.*
+*↑ Five mathematical curves rendered in real-time with particles — 100% vanilla, no mods!*
+*`y = x·sin(x)` · `y = sin(x) + ½sin(2x)` · `y = e⁻ˣsin(4x)` · `y = tanh(2x)` · `r = cos(2θ)` rose curve*
+*Each curve is computed tick-by-tick using RedScript's fixed-point math stdlib.*
 
 </div>
 
@@ -32,34 +34,33 @@ Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 RedScript is a typed scripting language that compiles to vanilla Minecraft datapacks. Write clean code with variables, functions, loops, and events — RedScript handles the scoreboard commands and `.mcfunction` files for you.
 
-**The demo above?** Just 30 lines:
+**The demo above?** Five math curves drawn with 64 sample points each. The core logic:
 
 ```rs
-let counter: int = 0;
-let running: bool = false;
+import "stdlib/math.mcrs"
 
-@tick fn demo_tick() {
-    if (!running) { return; }
-    counter = counter + 1;
-    
-    foreach (p in @a) at @s {
-        particle("minecraft:end_rod", ~0, ~1, ~0, 0.5, 0.5, 0.5, 0.1, 5);
-    }
-    
-    if (counter % 20 == 0) {
-        say(f"Running for {counter} ticks");
-    }
-}
+let phase: int = 0;
+let frame: int = 0;
 
-fn start() {
-    running = true;
-    counter = 0;
-    say(f"Demo started!");
-}
+// 5 curves cycle every 128 ticks (~6.5 s each)
+@tick fn _wave_tick() {
+    phase = (phase + 4) % 360;
+    frame = frame + 1;
 
-fn stop() {
-    running = false;
-    say(f"Demo stopped at {counter} ticks.");
+    let curve_id: int = (frame / 128) % 5;
+
+    // Compute sin at 9 column offsets (40° apart = full sine wave span)
+    let s0: int = sin_fixed((phase +   0) % 360);
+    let s1: int = sin_fixed((phase +  40) % 360);
+    // ... s2 through s8 ...
+
+    // Draw bar chart: each column height = sin value
+    // (64 fixed particle positions per curve, all respawned each tick)
+    if (curve_id == 0) { _draw_xsinx(); }
+    if (curve_id == 1) { _draw_harmonic(); }
+    // ...
+
+    actionbar(@a, f"§e  y = x·sin(x)   phase: {phase}°  center: {s0}‰");
 }
 ```
 
