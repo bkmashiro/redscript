@@ -313,9 +313,17 @@ export class Lexer {
       return
     }
 
-    // Local coordinate: ^ or ^5 or ^-3 or ^0.5
+    // Local coordinate: ^ or ^5 or ^-3 or ^0.5 or ^varname (macro variable)
     if (char === '^') {
       let value = '^'
+      // Check for identifier (variable name for macro substitution, e.g. ^px, ^height)
+      if (/[a-zA-Z_]/.test(this.peek())) {
+        while (/[a-zA-Z0-9_]/.test(this.peek())) {
+          value += this.advance()
+        }
+        this.addToken('local_coord', value, startLine, startCol)
+        return
+      }
       // Check for optional sign
       if (this.peek() === '-' || this.peek() === '+') {
         value += this.advance()

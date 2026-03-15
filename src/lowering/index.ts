@@ -515,17 +515,33 @@ export class Lowering {
     }
 
     // Set up NBT storage for each macro param
+    // float-typed params are stored as `double 0.01` so that an integer value N
+    // becomes N/100.0 in the command (e.g. scoreboard value 975 → NBT 9.75d → ^9.75)
     for (const macroParam of macroParamNames) {
       const paramIdx = params.findIndex(p => p.name === macroParam)
       if (paramIdx < 0 || paramIdx >= loweredArgs.length) continue
 
       const operand = loweredArgs[paramIdx]
+      const paramType = params[paramIdx]?.type
+      const isFloat = paramType?.kind === 'named' && (paramType as any).name === 'float'
+
       if (operand.kind === 'const') {
-        this.builder.emitRaw(`data modify storage rs:macro_args ${macroParam} set value ${operand.value}`)
+        if (isFloat) {
+          const floatVal = (operand.value / 100).toFixed(6)
+          this.builder.emitRaw(`data modify storage rs:macro_args ${macroParam} set value ${floatVal}d`)
+        } else {
+          this.builder.emitRaw(`data modify storage rs:macro_args ${macroParam} set value ${operand.value}`)
+        }
       } else if (operand.kind === 'var') {
-        this.builder.emitRaw(
-          `execute store result storage rs:macro_args ${macroParam} int 1 run scoreboard players get ${operand.name} ${LOWERING_OBJ}`
-        )
+        if (isFloat) {
+          this.builder.emitRaw(
+            `execute store result storage rs:macro_args ${macroParam} double 0.01 run scoreboard players get ${operand.name} ${LOWERING_OBJ}`
+          )
+        } else {
+          this.builder.emitRaw(
+            `execute store result storage rs:macro_args ${macroParam} int 1 run scoreboard players get ${operand.name} ${LOWERING_OBJ}`
+          )
+        }
       }
     }
 
