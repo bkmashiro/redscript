@@ -1679,20 +1679,26 @@ src2/         (new compiler — staged implementation)
   cli.ts       → wire up to existing CLI
 ```
 
-### Stage-by-stage test gates
+### Progressive test coverage: lights up as stages complete
 
-Each stage must pass a test gate before moving to the next:
+The 920 e2e tests only reach 920/920 when the full pipeline (all 7 stages) is
+complete. Do not expect them to be green mid-refactor. Each stage has its own
+appropriate test criterion:
 
-| Gate | Criterion |
-|---|---|
-| Stage 1 | Existing parser tests pass unchanged |
-| Stage 2 (HIR) | All source programs produce valid HIR (no crashes, no assertion failures) |
-| Stage 3 (MIR) | MIR verifier passes on all test programs; CFG is well-formed |
-| Stage 4 (optimizer) | Optimizer tests pass; 920 e2e tests pass against new pipeline |
-| Stage 5 (LIR) | LIR verifier passes; generated command count ≤ current compiler |
-| Stage 6 (LIR opt) | 920 e2e tests pass; command count same or better |
-| Stage 7 (emit) | `diff` of generated mcfunction output is empty or better for all test cases |
-| Final | 920/920 tests pass, `src/` deleted, `src2/` → `src/` |
+| Stage | What to test | 920 e2e? |
+|---|---|---|
+| Stage 1 (parser/lexer) | Existing parser unit tests | irrelevant (no codegen) |
+| Stage 2 (HIR) | HIR unit tests: check desugaring of for/ternary/+= etc. Verify HIR is well-formed. | ✗ |
+| Stage 3 (MIR) | MIR unit tests: known patterns produce expected 3-address sequences. MIR verifier passes. | ✗ |
+| Stage 4 (optimizer) | Optimizer unit tests: input MIR → expected output MIR for each pass. | ✗ |
+| Stage 5 (LIR) | LIR unit tests: MIR→LIR lowering of specific patterns. Simple programs start producing valid mcfunction. | partial |
+| Stage 6 (LIR opt) | More programs produce correct output. Count improves vs Stage 5 baseline. | growing |
+| Stage 7 (emit) | 920/920 e2e tests pass. ✅ | ✅ |
+
+**Rule:** write and pass the unit tests for a stage before moving to the next.
+Adapt as needed — the design is a guide, not a contract. If a stage boundary
+turns out to be wrong, merge stages or split them. The goal is green tests and
+maintainable code, not architectural purity.
 
 ### Test harness
 
