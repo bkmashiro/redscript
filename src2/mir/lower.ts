@@ -19,11 +19,37 @@ import type {
 // ---------------------------------------------------------------------------
 
 export function lowerToMIR(hir: HIRModule): MIRModule {
+  // Build struct definitions: name → field names
+  const structDefs = new Map<string, string[]>()
+  for (const s of hir.structs) {
+    structDefs.set(s.name, s.fields.map(f => f.name))
+  }
+
+  // Build impl method info: typeName → methodName → { hasSelf }
+  const implMethods = new Map<string, Map<string, { hasSelf: boolean }>>()
+  for (const ib of hir.implBlocks) {
+    const methods = new Map<string, { hasSelf: boolean }>()
+    for (const m of ib.methods) {
+      const hasSelf = m.params.length > 0 && m.params[0].name === 'self'
+      methods.set(m.name, { hasSelf })
+    }
+    implMethods.set(ib.typeName, methods)
+  }
+
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods)
     allFunctions.push(fn, ...helpers)
   }
+
+  // Lower impl block methods
+  for (const ib of hir.implBlocks) {
+    for (const m of ib.methods) {
+      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods)
+      allFunctions.push(fn, ...helpers)
+    }
+  }
+
   return {
     functions: allFunctions,
     namespace: hir.namespace,
@@ -46,10 +72,23 @@ class FnContext {
   readonly helperFunctions: MIRFunction[] = []
   private readonly namespace: string
   private readonly fnName: string
+  /** Struct definitions: struct name → field names */
+  readonly structDefs: Map<string, string[]>
+  /** Impl method info: typeName → methodName → { hasSelf } */
+  readonly implMethods: Map<string, Map<string, { hasSelf: boolean }>>
+  /** Struct variable tracking: varName → { typeName, fields: fieldName → temp } */
+  readonly structVars = new Map<string, { typeName: string; fields: Map<string, Temp> }>()
 
-  constructor(namespace: string, fnName: string) {
+  constructor(
+    namespace: string,
+    fnName: string,
+    structDefs: Map<string, string[]> = new Map(),
+    implMethods: Map<string, Map<string, { hasSelf: boolean }>> = new Map(),
+  ) {
     this.namespace = namespace
     this.fnName = fnName
+    this.structDefs = structDefs
+    this.implMethods = implMethods
     const entry = this.makeBlock('entry')
     this.currentBlock = entry
   }
@@ -114,8 +153,13 @@ class FnContext {
 // Function lowering
 // ---------------------------------------------------------------------------
 
-function lowerFunction(fn: HIRFunction, namespace: string): { fn: MIRFunction; helpers: MIRFunction[] } {
-  const ctx = new FnContext(namespace, fn.name)
+function lowerFunction(
+  fn: HIRFunction,
+  namespace: string,
+  structDefs: Map<string, string[]> = new Map(),
+  implMethods: Map<string, Map<string, { hasSelf: boolean }>> = new Map(),
+): { fn: MIRFunction; helpers: MIRFunction[] } {
+  const ctx = new FnContext(namespace, fn.name, structDefs, implMethods)
 
   // Create temps for parameters
   const params: { name: Temp; isMacroParam: boolean }[] = fn.params.map(p => {
@@ -146,6 +190,67 @@ function lowerFunction(fn: HIRFunction, namespace: string): { fn: MIRFunction; h
 
   const result: MIRFunction = {
     name: fn.name,
+    params,
+    blocks: liveBlocks,
+    entry: 'entry',
+    isMacro: false,
+  }
+
+  return { fn: result, helpers: ctx.helperFunctions }
+}
+
+function lowerImplMethod(
+  method: HIRFunction,
+  typeName: string,
+  namespace: string,
+  structDefs: Map<string, string[]>,
+  implMethods: Map<string, Map<string, { hasSelf: boolean }>>,
+): { fn: MIRFunction; helpers: MIRFunction[] } {
+  const fnName = `${typeName}::${method.name}`
+  const ctx = new FnContext(namespace, fnName, structDefs, implMethods)
+  const fields = structDefs.get(typeName) ?? []
+  const hasSelf = method.params.length > 0 && method.params[0].name === 'self'
+
+  const params: { name: Temp; isMacroParam: boolean }[] = []
+  const scope = new Map<string, Temp>()
+
+  if (hasSelf) {
+    // Self fields become the first N params (one per struct field)
+    const selfFields = new Map<string, Temp>()
+    for (const fieldName of fields) {
+      const t = ctx.freshTemp()
+      params.push({ name: t, isMacroParam: false })
+      selfFields.set(fieldName, t)
+    }
+    ctx.structVars.set('self', { typeName, fields: selfFields })
+    // Remaining params (after self)
+    for (let i = 1; i < method.params.length; i++) {
+      const t = ctx.freshTemp()
+      params.push({ name: t, isMacroParam: false })
+      scope.set(method.params[i].name, t)
+    }
+  } else {
+    // Static method — regular params
+    for (const p of method.params) {
+      const t = ctx.freshTemp()
+      params.push({ name: t, isMacroParam: false })
+      scope.set(p.name, t)
+    }
+  }
+
+  lowerBlock(method.body, ctx, scope)
+
+  const cur = ctx.current()
+  if (isPlaceholderTerm(cur.term)) {
+    ctx.terminate({ kind: 'return', value: null })
+  }
+
+  const reachable = computeReachable(ctx.blocks, 'entry')
+  const liveBlocks = ctx.blocks.filter(b => reachable.has(b.id))
+  computePreds(liveBlocks)
+
+  const result: MIRFunction = {
+    name: fnName,
     params,
     blocks: liveBlocks,
     entry: 'entry',
@@ -222,10 +327,42 @@ function lowerStmt(
 ): void {
   switch (stmt.kind) {
     case 'let': {
-      const valOp = lowerExpr(stmt.init, ctx, scope)
-      const t = ctx.freshTemp()
-      ctx.emit({ kind: 'copy', dst: t, src: valOp })
-      scope.set(stmt.name, t)
+      if (stmt.init.kind === 'struct_lit') {
+        // Struct literal: create per-field temps
+        const typeName = (stmt.type?.kind === 'struct') ? stmt.type.name : '__anon'
+        const fieldTemps = new Map<string, Temp>()
+        for (const field of stmt.init.fields) {
+          const val = lowerExpr(field.value, ctx, scope)
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'copy', dst: t, src: val })
+          fieldTemps.set(field.name, t)
+        }
+        ctx.structVars.set(stmt.name, { typeName, fields: fieldTemps })
+      } else if (stmt.type?.kind === 'struct') {
+        // Struct-typed let with non-literal init (e.g., call returning struct)
+        const fields = ctx.structDefs.get(stmt.type.name)
+        if (fields) {
+          lowerExpr(stmt.init, ctx, scope)
+          // Copy from return field slots into struct variable temps
+          const fieldTemps = new Map<string, Temp>()
+          for (const fieldName of fields) {
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'copy', dst: t, src: { kind: 'temp', name: `__rf_${fieldName}` } })
+            fieldTemps.set(fieldName, t)
+          }
+          ctx.structVars.set(stmt.name, { typeName: stmt.type.name, fields: fieldTemps })
+        } else {
+          const valOp = lowerExpr(stmt.init, ctx, scope)
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'copy', dst: t, src: valOp })
+          scope.set(stmt.name, t)
+        }
+      } else {
+        const valOp = lowerExpr(stmt.init, ctx, scope)
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'copy', dst: t, src: valOp })
+        scope.set(stmt.name, t)
+      }
       break
     }
 
@@ -235,8 +372,17 @@ function lowerStmt(
     }
 
     case 'return': {
-      const val = stmt.value ? lowerExpr(stmt.value, ctx, scope) : null
-      ctx.terminate({ kind: 'return', value: val })
+      if (stmt.value?.kind === 'struct_lit') {
+        // Struct return — copy each field to return field slots
+        for (const field of stmt.value.fields) {
+          const val = lowerExpr(field.value, ctx, scope)
+          ctx.emit({ kind: 'copy', dst: `__rf_${field.name}`, src: val })
+        }
+        ctx.terminate({ kind: 'return', value: null })
+      } else {
+        const val = stmt.value ? lowerExpr(stmt.value, ctx, scope) : null
+        ctx.terminate({ kind: 'return', value: val })
+      }
       // Create a dead block for any subsequent statements
       const dead = ctx.newBlock('post_ret')
       ctx.switchTo(dead)
@@ -348,7 +494,7 @@ function lowerStmt(
       }
 
       // Build helper function body as MIR
-      const helperCtx = new FnContext(ctx.getNamespace(), helperName)
+      const helperCtx = new FnContext(ctx.getNamespace(), helperName, ctx.structDefs, ctx.implMethods)
       const helperScope = new Map(scope)
       lowerBlock(stmt.body, helperCtx, helperScope)
       if (isPlaceholderTerm(helperCtx.current().term)) {
@@ -375,7 +521,7 @@ function lowerStmt(
       const helperName = `${ctx.getFnName()}__exec_${ctx.freshTemp()}`
       const subcommands = stmt.subcommands.map(lowerExecuteSubcmd)
 
-      const helperCtx = new FnContext(ctx.getNamespace(), helperName)
+      const helperCtx = new FnContext(ctx.getNamespace(), helperName, ctx.structDefs, ctx.implMethods)
       const helperScope = new Map(scope)
       lowerBlock(stmt.body, helperCtx, helperScope)
       if (isPlaceholderTerm(helperCtx.current().term)) {
@@ -479,10 +625,21 @@ function lowerExpr(
       return { kind: 'const', value: expr.value ? 1 : 0 }
     }
 
+    case 'struct_lit': {
+      // Struct literal in expression context (not let/return — those handle it directly).
+      // Lower each field value but return a placeholder since the struct
+      // is tracked via structVars at the statement level.
+      for (const field of expr.fields) {
+        lowerExpr(field.value, ctx, scope)
+      }
+      const t = ctx.freshTemp()
+      ctx.emit({ kind: 'const', dst: t, value: 0 })
+      return { kind: 'temp', name: t }
+    }
+
     case 'str_lit':
     case 'range_lit':
     case 'array_lit':
-    case 'struct_lit':
     case 'rel_coord':
     case 'local_coord':
     case 'mc_name':
@@ -564,13 +721,31 @@ function lowerExpr(
     }
 
     case 'member_assign': {
-      // Struct field assignment — opaque at MIR, handled in LIR
       const val = lowerExpr(expr.value, ctx, scope)
+      // Struct field assignment: v.x = val → copy val to v's x temp
+      if (expr.obj.kind === 'ident') {
+        const sv = ctx.structVars.get(expr.obj.name)
+        if (sv) {
+          const fieldTemp = sv.fields.get(expr.field)
+          if (fieldTemp) {
+            ctx.emit({ kind: 'copy', dst: fieldTemp, src: val })
+            return val
+          }
+        }
+      }
       return val
     }
 
     case 'member': {
-      // Struct field access — opaque at MIR
+      // Struct field access: v.x → return v's x temp
+      if (expr.obj.kind === 'ident') {
+        const sv = ctx.structVars.get(expr.obj.name)
+        if (sv) {
+          const fieldTemp = sv.fields.get(expr.field)
+          if (fieldTemp) return { kind: 'temp', name: fieldTemp }
+        }
+      }
+      // Fallback: opaque
       const obj = lowerExpr(expr.obj, ctx, scope)
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'copy', dst: t, src: obj })
@@ -586,6 +761,26 @@ function lowerExpr(
     }
 
     case 'call': {
+      // Check for struct instance method call: parser desugars v.method() → call('method', [v, ...])
+      if (expr.args.length > 0 && expr.args[0].kind === 'ident') {
+        const sv = ctx.structVars.get(expr.args[0].name)
+        if (sv) {
+          const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.fn)
+          if (methodInfo?.hasSelf) {
+            // Build args: self fields first, then remaining explicit args
+            const fields = ctx.structDefs.get(sv.typeName) ?? []
+            const selfArgs: Operand[] = fields.map(f => {
+              const temp = sv.fields.get(f)
+              return temp ? { kind: 'temp' as const, name: temp } : { kind: 'const' as const, value: 0 }
+            })
+            const explicitArgs = expr.args.slice(1).map(a => lowerExpr(a, ctx, scope))
+            const allArgs = [...selfArgs, ...explicitArgs]
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'call', dst: t, fn: `${sv.typeName}::${expr.fn}`, args: allArgs })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
       const args = expr.args.map(a => lowerExpr(a, ctx, scope))
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'call', dst: t, fn: expr.fn, args })
@@ -593,6 +788,27 @@ function lowerExpr(
     }
 
     case 'invoke': {
+      // Check for struct method call: v.method(args)
+      if (expr.callee.kind === 'member' && expr.callee.obj.kind === 'ident') {
+        const sv = ctx.structVars.get(expr.callee.obj.name)
+        if (sv) {
+          const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.callee.field)
+          if (methodInfo?.hasSelf) {
+            // Build args: self fields first, then explicit args
+            const fields = ctx.structDefs.get(sv.typeName) ?? []
+            const selfArgs: Operand[] = fields.map(f => {
+              const temp = sv.fields.get(f)
+              return temp ? { kind: 'temp' as const, name: temp } : { kind: 'const' as const, value: 0 }
+            })
+            const explicitArgs = expr.args.map(a => lowerExpr(a, ctx, scope))
+            const allArgs = [...selfArgs, ...explicitArgs]
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'call', dst: t, fn: `${sv.typeName}::${expr.callee.field}`, args: allArgs })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
+      // Fallback: generic invoke
       const calleeOp = lowerExpr(expr.callee, ctx, scope)
       const args = expr.args.map(a => lowerExpr(a, ctx, scope))
       const t = ctx.freshTemp()
