@@ -1,0 +1,348 @@
+/**
+ * End-to-end stdlib tests through the v2 pipeline.
+ *
+ * Tests pure-arithmetic stdlib functions (math.mcrs, vec.mcrs) by compiling
+ * with librarySources, loading into MCRuntime, and asserting return values.
+ *
+ * NOTE: sin_fixed/cos_fixed/atan2_fixed are skipped — they depend on
+ * storage_get_int/storage_set_array which are not available in MCRuntime.
+ */
+
+import * as fs from 'fs'
+import * as path from 'path'
+import { compile } from '../../emit/compile'
+import { MCRuntime } from '../../runtime'
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const NS = 'test'
+const OBJ = `__${NS}`
+
+const MATH_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/math.mcrs'),
+  'utf-8',
+)
+const VEC_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/vec.mcrs'),
+  'utf-8',
+)
+
+/** Compile source with math stdlib, load into MCRuntime, init objective */
+function makeRuntime(source: string, libs: string[] = [MATH_SRC]): MCRuntime {
+  const result = compile(source, { namespace: NS, librarySources: libs })
+  const rt = new MCRuntime(NS)
+  for (const file of result.files) {
+    if (!file.path.endsWith('.mcfunction')) continue
+    const m = file.path.match(/data\/([^/]+)\/function\/(.+)\.mcfunction$/)
+    if (!m) continue
+    rt.loadFunction(`${m[1]}:${m[2]}`, file.content.split('\n'))
+  }
+  rt.execFunction(`${NS}:load`)
+  return rt
+}
+
+/** Execute a function and return the $ret value */
+function callAndGetRet(rt: MCRuntime, fnName: string): number {
+  rt.execFunction(`${NS}:${fnName}`)
+  return rt.getScore('$ret', OBJ)
+}
+
+// ===========================================================================
+// math.mcrs — Phase 1: Basic integer helpers
+// ===========================================================================
+
+describe('stdlib e2e: abs', () => {
+  const rt = makeRuntime(`
+    fn test_abs_neg(): int { return abs(-5); }
+    fn test_abs_pos(): int { return abs(5); }
+    fn test_abs_zero(): int { return abs(0); }
+  `)
+
+  test('abs(-5) = 5', () => expect(callAndGetRet(rt, 'test_abs_neg')).toBe(5))
+  test('abs(5) = 5', () => expect(callAndGetRet(rt, 'test_abs_pos')).toBe(5))
+  test('abs(0) = 0', () => expect(callAndGetRet(rt, 'test_abs_zero')).toBe(0))
+})
+
+describe('stdlib e2e: sign', () => {
+  const rt = makeRuntime(`
+    fn test_sign_pos(): int { return sign(42); }
+    fn test_sign_neg(): int { return sign(-7); }
+    fn test_sign_zero(): int { return sign(0); }
+  `)
+
+  test('sign(42) = 1', () => expect(callAndGetRet(rt, 'test_sign_pos')).toBe(1))
+  test('sign(-7) = -1', () => expect(callAndGetRet(rt, 'test_sign_neg')).toBe(-1))
+  test('sign(0) = 0', () => expect(callAndGetRet(rt, 'test_sign_zero')).toBe(0))
+})
+
+describe('stdlib e2e: min/max', () => {
+  const rt = makeRuntime(`
+    fn test_min(): int { return min(3, 7); }
+    fn test_max(): int { return max(3, 7); }
+    fn test_min_eq(): int { return min(5, 5); }
+    fn test_max_neg(): int { return max(-10, -3); }
+  `)
+
+  test('min(3, 7) = 3', () => expect(callAndGetRet(rt, 'test_min')).toBe(3))
+  test('max(3, 7) = 7', () => expect(callAndGetRet(rt, 'test_max')).toBe(7))
+  test('min(5, 5) = 5', () => expect(callAndGetRet(rt, 'test_min_eq')).toBe(5))
+  test('max(-10, -3) = -3', () => expect(callAndGetRet(rt, 'test_max_neg')).toBe(-3))
+})
+
+describe('stdlib e2e: clamp', () => {
+  const rt = makeRuntime(`
+    fn test_clamp_above(): int { return clamp(10, 0, 5); }
+    fn test_clamp_below(): int { return clamp(-10, 0, 5); }
+    fn test_clamp_in(): int { return clamp(3, 0, 5); }
+    fn test_clamp_edge(): int { return clamp(0, 0, 5); }
+  `)
+
+  test('clamp(10, 0, 5) = 5', () => expect(callAndGetRet(rt, 'test_clamp_above')).toBe(5))
+  test('clamp(-10, 0, 5) = 0', () => expect(callAndGetRet(rt, 'test_clamp_below')).toBe(0))
+  test('clamp(3, 0, 5) = 3', () => expect(callAndGetRet(rt, 'test_clamp_in')).toBe(3))
+  test('clamp(0, 0, 5) = 0', () => expect(callAndGetRet(rt, 'test_clamp_edge')).toBe(0))
+})
+
+describe('stdlib e2e: lerp', () => {
+  const rt = makeRuntime(`
+    fn test_lerp_half(): int { return lerp(0, 1000, 500); }
+    fn test_lerp_quarter(): int { return lerp(100, 200, 750); }
+    fn test_lerp_zero(): int { return lerp(10, 20, 0); }
+    fn test_lerp_full(): int { return lerp(10, 20, 1000); }
+  `)
+
+  test('lerp(0, 1000, 500) = 500', () => expect(callAndGetRet(rt, 'test_lerp_half')).toBe(500))
+  test('lerp(100, 200, 750) = 175', () => expect(callAndGetRet(rt, 'test_lerp_quarter')).toBe(175))
+  test('lerp(10, 20, 0) = 10', () => expect(callAndGetRet(rt, 'test_lerp_zero')).toBe(10))
+  test('lerp(10, 20, 1000) = 20', () => expect(callAndGetRet(rt, 'test_lerp_full')).toBe(20))
+})
+
+// ===========================================================================
+// math.mcrs — Phase 2: Iterative algorithms
+// ===========================================================================
+
+describe('stdlib e2e: isqrt', () => {
+  const rt = makeRuntime(`
+    fn test_isqrt_9(): int { return isqrt(9); }
+    fn test_isqrt_10(): int { return isqrt(10); }
+    fn test_isqrt_0(): int { return isqrt(0); }
+    fn test_isqrt_1(): int { return isqrt(1); }
+    fn test_isqrt_100(): int { return isqrt(100); }
+  `)
+
+  test('isqrt(9) = 3', () => expect(callAndGetRet(rt, 'test_isqrt_9')).toBe(3))
+  test('isqrt(10) = 3', () => expect(callAndGetRet(rt, 'test_isqrt_10')).toBe(3))
+  test('isqrt(0) = 0', () => expect(callAndGetRet(rt, 'test_isqrt_0')).toBe(0))
+  test('isqrt(1) = 1', () => expect(callAndGetRet(rt, 'test_isqrt_1')).toBe(1))
+  test('isqrt(100) = 10', () => expect(callAndGetRet(rt, 'test_isqrt_100')).toBe(10))
+})
+
+describe('stdlib e2e: sqrt_fixed', () => {
+  const rt = makeRuntime(`
+    fn test_sqrt_1(): int { return sqrt_fixed(1000); }
+    fn test_sqrt_2(): int { return sqrt_fixed(2000); }
+    fn test_sqrt_4(): int { return sqrt_fixed(4000); }
+  `)
+
+  test('sqrt_fixed(1000) = 1000 (sqrt(1)*1000)', () =>
+    expect(callAndGetRet(rt, 'test_sqrt_1')).toBe(1000))
+  test('sqrt_fixed(2000) ≈ 1414', () => {
+    const val = callAndGetRet(rt, 'test_sqrt_2')
+    expect(val).toBeGreaterThanOrEqual(1413)
+    expect(val).toBeLessThanOrEqual(1415)
+  })
+  test('sqrt_fixed(4000) = 2000 (sqrt(4)*1000)', () =>
+    expect(callAndGetRet(rt, 'test_sqrt_4')).toBe(2000))
+})
+
+describe('stdlib e2e: pow_int', () => {
+  const rt = makeRuntime(`
+    fn test_pow_2_10(): int { return pow_int(2, 10); }
+    fn test_pow_3_0(): int { return pow_int(3, 0); }
+    fn test_pow_5_3(): int { return pow_int(5, 3); }
+  `)
+
+  test('pow_int(2, 10) = 1024', () => expect(callAndGetRet(rt, 'test_pow_2_10')).toBe(1024))
+  test('pow_int(3, 0) = 1', () => expect(callAndGetRet(rt, 'test_pow_3_0')).toBe(1))
+  test('pow_int(5, 3) = 125', () => expect(callAndGetRet(rt, 'test_pow_5_3')).toBe(125))
+})
+
+describe('stdlib e2e: gcd', () => {
+  const rt = makeRuntime(`
+    fn test_gcd_12_8(): int { return gcd(12, 8); }
+    fn test_gcd_0_5(): int { return gcd(0, 5); }
+    fn test_gcd_neg(): int { return gcd(-12, 8); }
+  `)
+
+  test('gcd(12, 8) = 4', () => expect(callAndGetRet(rt, 'test_gcd_12_8')).toBe(4))
+  test('gcd(0, 5) = 5', () => expect(callAndGetRet(rt, 'test_gcd_0_5')).toBe(5))
+  test('gcd(-12, 8) = 4', () => expect(callAndGetRet(rt, 'test_gcd_neg')).toBe(4))
+})
+
+// ===========================================================================
+// math.mcrs — Phase 4: Number theory & utilities
+// ===========================================================================
+
+describe('stdlib e2e: lcm', () => {
+  const rt = makeRuntime(`
+    fn test_lcm_4_6(): int { return lcm(4, 6); }
+    fn test_lcm_0_5(): int { return lcm(0, 5); }
+  `)
+
+  test('lcm(4, 6) = 12', () => expect(callAndGetRet(rt, 'test_lcm_4_6')).toBe(12))
+  test('lcm(0, 5) = 0', () => expect(callAndGetRet(rt, 'test_lcm_0_5')).toBe(0))
+})
+
+describe('stdlib e2e: map', () => {
+  const rt = makeRuntime(`
+    fn test_map_half(): int { return map(5, 0, 10, 0, 100); }
+    fn test_map_offset(): int { return map(1, 0, 10, 100, 200); }
+  `)
+
+  test('map(5, 0, 10, 0, 100) = 50', () => expect(callAndGetRet(rt, 'test_map_half')).toBe(50))
+  test('map(1, 0, 10, 100, 200) = 110', () => expect(callAndGetRet(rt, 'test_map_offset')).toBe(110))
+})
+
+describe('stdlib e2e: ceil_div', () => {
+  const rt = makeRuntime(`
+    fn test_ceil_7_3(): int { return ceil_div(7, 3); }
+    fn test_ceil_6_3(): int { return ceil_div(6, 3); }
+  `)
+
+  test('ceil_div(7, 3) = 3', () => expect(callAndGetRet(rt, 'test_ceil_7_3')).toBe(3))
+  test('ceil_div(6, 3) = 2', () => expect(callAndGetRet(rt, 'test_ceil_6_3')).toBe(2))
+})
+
+describe('stdlib e2e: log2_int', () => {
+  const rt = makeRuntime(`
+    fn test_log2_1(): int { return log2_int(1); }
+    fn test_log2_8(): int { return log2_int(8); }
+    fn test_log2_7(): int { return log2_int(7); }
+    fn test_log2_neg(): int { return log2_int(-1); }
+  `)
+
+  test('log2_int(1) = 0', () => expect(callAndGetRet(rt, 'test_log2_1')).toBe(0))
+  test('log2_int(8) = 3', () => expect(callAndGetRet(rt, 'test_log2_8')).toBe(3))
+  test('log2_int(7) = 2', () => expect(callAndGetRet(rt, 'test_log2_7')).toBe(2))
+  test('log2_int(-1) = -1', () => expect(callAndGetRet(rt, 'test_log2_neg')).toBe(-1))
+})
+
+// ===========================================================================
+// math.mcrs — Phase 5: Fixed-point arithmetic
+// ===========================================================================
+
+describe('stdlib e2e: mulfix/divfix', () => {
+  const rt = makeRuntime(`
+    fn test_mulfix(): int { return mulfix(500, 707); }
+    fn test_divfix(): int { return divfix(1, 3); }
+    fn test_divfix_zero(): int { return divfix(5, 0); }
+  `)
+
+  test('mulfix(500, 707) = 353', () => expect(callAndGetRet(rt, 'test_mulfix')).toBe(353))
+  test('divfix(1, 3) = 333', () => expect(callAndGetRet(rt, 'test_divfix')).toBe(333))
+  test('divfix(5, 0) = 0', () => expect(callAndGetRet(rt, 'test_divfix_zero')).toBe(0))
+})
+
+describe('stdlib e2e: smoothstep', () => {
+  const rt = makeRuntime(`
+    fn test_ss_zero(): int { return smoothstep(0, 100, 0); }
+    fn test_ss_half(): int { return smoothstep(0, 100, 50); }
+    fn test_ss_full(): int { return smoothstep(0, 100, 100); }
+  `)
+
+  test('smoothstep(0, 100, 0) = 0', () => expect(callAndGetRet(rt, 'test_ss_zero')).toBe(0))
+  test('smoothstep(0, 100, 50) = 500', () => expect(callAndGetRet(rt, 'test_ss_half')).toBe(500))
+  test('smoothstep(0, 100, 100) = 1000', () => expect(callAndGetRet(rt, 'test_ss_full')).toBe(1000))
+})
+
+// ===========================================================================
+// vec.mcrs — 2D geometry (pure arithmetic, no storage)
+// ===========================================================================
+
+describe('stdlib e2e: vec2d geometry', () => {
+  const rt = makeRuntime(`
+    fn test_dot2d(): int { return dot2d(3, 4, 3, 4); }
+    fn test_cross2d(): int { return cross2d(1, 0, 0, 1); }
+    fn test_manhattan(): int { return manhattan(0, 0, 3, 4); }
+    fn test_chebyshev(): int { return chebyshev(0, 0, 3, 4); }
+  `, [MATH_SRC, VEC_SRC])
+
+  test('dot2d(3,4,3,4) = 25', () => expect(callAndGetRet(rt, 'test_dot2d')).toBe(25))
+  test('cross2d(1,0,0,1) = 1', () => expect(callAndGetRet(rt, 'test_cross2d')).toBe(1))
+  test('manhattan(0,0,3,4) = 7', () => expect(callAndGetRet(rt, 'test_manhattan')).toBe(7))
+  test('chebyshev(0,0,3,4) = 4', () => expect(callAndGetRet(rt, 'test_chebyshev')).toBe(4))
+})
+
+describe('stdlib e2e: vec2d length & distance', () => {
+  const rt = makeRuntime(`
+    fn test_length2d(): int { return length2d_fixed(3, 4); }
+    fn test_distance2d(): int { return distance2d_fixed(0, 0, 3, 4); }
+  `, [MATH_SRC, VEC_SRC])
+
+  test('length2d_fixed(3, 4) = 5000', () => expect(callAndGetRet(rt, 'test_length2d')).toBe(5000))
+  test('distance2d_fixed(0,0,3,4) = 5000', () => expect(callAndGetRet(rt, 'test_distance2d')).toBe(5000))
+})
+
+describe('stdlib e2e: vec2d normalize', () => {
+  const rt = makeRuntime(`
+    fn test_norm_x(): int { return normalize2d_x(3, 4); }
+    fn test_norm_y(): int { return normalize2d_y(3, 4); }
+    fn test_norm_zero(): int { return normalize2d_x(0, 0); }
+  `, [MATH_SRC, VEC_SRC])
+
+  test('normalize2d_x(3, 4) = 600', () => expect(callAndGetRet(rt, 'test_norm_x')).toBe(600))
+  test('normalize2d_y(3, 4) = 800', () => expect(callAndGetRet(rt, 'test_norm_y')).toBe(800))
+  test('normalize2d_x(0, 0) = 0', () => expect(callAndGetRet(rt, 'test_norm_zero')).toBe(0))
+})
+
+describe('stdlib e2e: vec2d lerp', () => {
+  const rt = makeRuntime(`
+    fn test_lerp2d_x(): int { return lerp2d_x(0, 0, 100, 200, 500); }
+    fn test_lerp2d_y(): int { return lerp2d_y(0, 0, 100, 200, 500); }
+  `, [MATH_SRC, VEC_SRC])
+
+  test('lerp2d_x(0,0,100,200,500) = 50', () => expect(callAndGetRet(rt, 'test_lerp2d_x')).toBe(50))
+  test('lerp2d_y(0,0,100,200,500) = 100', () => expect(callAndGetRet(rt, 'test_lerp2d_y')).toBe(100))
+})
+
+// ===========================================================================
+// vec.mcrs — 3D geometry
+// ===========================================================================
+
+describe('stdlib e2e: vec3d geometry', () => {
+  const rt = makeRuntime(`
+    fn test_dot3d(): int { return dot3d(1, 2, 3, 4, 5, 6); }
+    fn test_cross3d_x(): int { return cross3d_x(1, 0, 0, 0, 1, 0); }
+    fn test_cross3d_y(): int { return cross3d_y(1, 0, 0, 0, 1, 0); }
+    fn test_cross3d_z(): int { return cross3d_z(1, 0, 0, 0, 1, 0); }
+    fn test_manhattan3d(): int { return manhattan3d(0, 0, 0, 1, 2, 3); }
+    fn test_chebyshev3d(): int { return chebyshev3d(0, 0, 0, 3, 1, 2); }
+  `, [MATH_SRC, VEC_SRC])
+
+  test('dot3d(1,2,3,4,5,6) = 32', () => expect(callAndGetRet(rt, 'test_dot3d')).toBe(32))
+  test('cross3d_x(1,0,0, 0,1,0) = 0', () => expect(callAndGetRet(rt, 'test_cross3d_x')).toBe(0))
+  test('cross3d_y(1,0,0, 0,1,0) = 0', () => expect(callAndGetRet(rt, 'test_cross3d_y')).toBe(0))
+  test('cross3d_z(1,0,0, 0,1,0) = 1', () => expect(callAndGetRet(rt, 'test_cross3d_z')).toBe(1))
+  test('manhattan3d(0,0,0, 1,2,3) = 6', () => expect(callAndGetRet(rt, 'test_manhattan3d')).toBe(6))
+  test('chebyshev3d(0,0,0, 3,1,2) = 3', () => expect(callAndGetRet(rt, 'test_chebyshev3d')).toBe(3))
+})
+
+describe('stdlib e2e: vec3d length & distance', () => {
+  const rt = makeRuntime(`
+    fn test_length3d(): int { return length3d_fixed(1, 1, 1); }
+    fn test_distance3d(): int { return distance3d_fixed(0, 0, 0, 1, 1, 1); }
+  `, [MATH_SRC, VEC_SRC])
+
+  test('length3d_fixed(1,1,1) ≈ 1732', () => {
+    const val = callAndGetRet(rt, 'test_length3d')
+    expect(val).toBeGreaterThanOrEqual(1731)
+    expect(val).toBeLessThanOrEqual(1733)
+  })
+  test('distance3d_fixed(0,0,0, 1,1,1) ≈ 1732', () => {
+    const val = callAndGetRet(rt, 'test_distance3d')
+    expect(val).toBeGreaterThanOrEqual(1731)
+    expect(val).toBeLessThanOrEqual(1733)
+  })
+})
