@@ -1338,3 +1338,382 @@ RedScript's `Timer` stdlib is a manually written version of this pattern.
 The coroutine transform automates what users currently write by hand
 when they need multi-tick computations.
 
+
+---
+
+## MIR Instruction Set (Specification)
+
+MIR is 3-address, versioned temporaries, explicit CFG.
+Every instruction produces at most one result into a fresh temporary.
+
+### Types
+
+```typescript
+// A temporary variable — unique within a function, named t0, t1, t2...
+type Temp = string
+
+// An operand: either a temp or an inline constant
+type Operand =
+  | { kind: 'temp',  name: Temp }
+  | { kind: 'const', value: number }
+
+// A basic block identifier
+type BlockId = string
+
+// Comparison operators (for cmp instruction)
+type CmpOp = 'eq' | 'ne' | 'lt' | 'le' | 'gt' | 'ge'
+
+// NBT value types (for nbt_write)
+type NBTType = 'int' | 'double' | 'float' | 'long' | 'short' | 'byte'
+```
+
+### Instructions
+
+```typescript
+type MIRInstr =
+  // ── Constants & copies ──────────────────────────────────────────────────
+  | { kind: 'const',   dst: Temp, value: number }
+  // dst = value
+
+  | { kind: 'copy',    dst: Temp, src: Operand }
+  // dst = src
+
+  // ── Integer arithmetic ──────────────────────────────────────────────────
+  | { kind: 'add',  dst: Temp, a: Operand, b: Operand }
+  | { kind: 'sub',  dst: Temp, a: Operand, b: Operand }
+  | { kind: 'mul',  dst: Temp, a: Operand, b: Operand }
+  | { kind: 'div',  dst: Temp, a: Operand, b: Operand }  // truncated toward zero
+  | { kind: 'mod',  dst: Temp, a: Operand, b: Operand }  // sign follows dividend
+  | { kind: 'neg',  dst: Temp, src: Operand }             // dst = -src
+
+  // ── Comparison (result is 0 or 1) ────────────────────────────────────────
+  | { kind: 'cmp',  dst: Temp, op: CmpOp, a: Operand, b: Operand }
+
+  // ── Boolean logic ────────────────────────────────────────────────────────
+  | { kind: 'and',  dst: Temp, a: Operand, b: Operand }
+  | { kind: 'or',   dst: Temp, a: Operand, b: Operand }
+  | { kind: 'not',  dst: Temp, src: Operand }
+
+  // ── NBT storage ──────────────────────────────────────────────────────────
+  | { kind: 'nbt_read',
+      dst: Temp,
+      ns: string, path: string,
+      scale: number }
+  // Compiles to: execute store result score $dst <obj> run data get storage ns path scale
+
+  | { kind: 'nbt_write',
+      ns: string, path: string,
+      type: NBTType, scale: number,
+      src: Operand }
+  // Compiles to: execute store result storage ns path type scale run scoreboard players get $src <obj>
+  // or: data modify storage ns path set value <literal>  (when src is const)
+
+  // ── Function calls ────────────────────────────────────────────────────────
+  | { kind: 'call',
+      dst: Temp | null,
+      fn: string,
+      args: Operand[] }
+  // Regular function call. args are passed via $p0..$pN scoreboard slots.
+
+  | { kind: 'call_macro',
+      dst: Temp | null,
+      fn: string,
+      args: { name: string, value: Operand, type: NBTType, scale: number }[] }
+  // Macro function call. args written to rs:macro_args storage.
+  // Compiles to: [store each arg] + function fn with storage rs:macro_args
+
+  | { kind: 'call_context',
+      fn: string,
+      subcommands: ExecuteSubcmd[] }
+  // execute [subcommands] run function fn
+  // No return value (execute context calls are void).
+
+  // ── Terminators (exactly one per basic block, must be last) ──────────────
+  | { kind: 'jump',    target: BlockId }
+  // Unconditional jump.
+
+  | { kind: 'branch',  cond: Operand, then: BlockId, else: BlockId }
+  // Conditional jump. cond must be 0 or 1.
+
+  | { kind: 'return',  value: Operand | null }
+  // Return from function (null = void return).
+```
+
+### Basic block and function structure
+
+```typescript
+interface MIRBlock {
+  id:     BlockId
+  instrs: MIRInstr[]        // non-terminator instructions
+  term:   MIRInstr          // must be jump | branch | return
+  preds:  BlockId[]         // predecessor block ids (for dataflow)
+}
+
+interface MIRFunction {
+  name:    string
+  params:  { name: Temp, isMacroParam: boolean }[]
+  blocks:  MIRBlock[]
+  entry:   BlockId          // entry block id (always 'entry')
+  isMacro: boolean          // true if any param is a macro param
+}
+
+interface MIRModule {
+  functions:  MIRFunction[]
+  namespace:  string
+  objective:  string        // scoreboard objective (default: __<namespace>)
+}
+```
+
+### Execute subcommands (used in `call_context`)
+
+```typescript
+type ExecuteSubcmd =
+  | { kind: 'as',         selector: string }        // as @e[tag=foo]
+  | { kind: 'at',         selector: string }        // at @e[tag=foo]
+  | { kind: 'at_self' }                             // at @s
+  | { kind: 'positioned', x: string, y: string, z: string }
+  | { kind: 'rotated',    yaw: string, pitch: string }
+  | { kind: 'in',         dimension: string }
+  | { kind: 'anchored',   anchor: 'eyes' | 'feet' }
+  | { kind: 'if_score',   a: string, op: CmpOp, b: string }
+  | { kind: 'unless_score', a: string, op: CmpOp, b: string }
+  | { kind: 'if_matches', score: string, range: string }
+  | { kind: 'unless_matches', score: string, range: string }
+```
+
+---
+
+## LIR Instruction Set (Specification)
+
+LIR is 2-address, MC-specific, typed nodes — no raw strings.
+Each LIR instruction maps 1:1 (or near) to one MC command.
+
+### Slot type
+
+```typescript
+// A scoreboard slot: fake-player name + objective
+interface Slot { player: string; obj: string }
+```
+
+### Instructions
+
+```typescript
+type LIRInstr =
+  // ── Scoreboard ───────────────────────────────────────────────────────────
+  | { kind: 'score_set',   dst: Slot, value: number }
+  // scoreboard players set <dst.player> <dst.obj> value
+
+  | { kind: 'score_copy',  dst: Slot, src: Slot }
+  // scoreboard players operation <dst> = <src>
+
+  | { kind: 'score_add',   dst: Slot, src: Slot }   // +=
+  | { kind: 'score_sub',   dst: Slot, src: Slot }   // -=
+  | { kind: 'score_mul',   dst: Slot, src: Slot }   // *=
+  | { kind: 'score_div',   dst: Slot, src: Slot }   // /=
+  | { kind: 'score_mod',   dst: Slot, src: Slot }   // %=
+  | { kind: 'score_min',   dst: Slot, src: Slot }   // < (min)
+  | { kind: 'score_max',   dst: Slot, src: Slot }   // > (max)
+  | { kind: 'score_swap',  a: Slot, b: Slot }       // ><
+
+  // ── Execute store ────────────────────────────────────────────────────────
+  | { kind: 'store_cmd_to_score', dst: Slot, cmd: LIRInstr }
+  // execute store result score <dst> run <cmd>
+
+  | { kind: 'store_score_to_nbt',
+      ns: string, path: string, type: NBTType, scale: number,
+      src: Slot }
+  // execute store result storage <ns> <path> <type> <scale> run scoreboard players get <src>
+
+  | { kind: 'store_nbt_to_score',
+      dst: Slot, ns: string, path: string, scale: number }
+  // execute store result score <dst> run data get storage <ns> <path> <scale>
+
+  // ── NBT ──────────────────────────────────────────────────────────────────
+  | { kind: 'nbt_set_literal', ns: string, path: string, value: string }
+  // data modify storage <ns> <path> set value <value>
+
+  | { kind: 'nbt_copy', srcNs: string, srcPath: string, dstNs: string, dstPath: string }
+  // data modify storage <dstNs> <dstPath> set from storage <srcNs> <srcPath>
+
+  // ── Control flow ─────────────────────────────────────────────────────────
+  | { kind: 'call',        fn: string }
+  // function <fn>
+
+  | { kind: 'call_macro',  fn: string, storage: string }
+  // function <fn> with storage <storage>
+
+  | { kind: 'call_if_matches',   fn: string, slot: Slot, range: string }
+  // execute if score <slot> matches <range> run function <fn>
+
+  | { kind: 'call_unless_matches', fn: string, slot: Slot, range: string }
+
+  | { kind: 'call_if_score',
+      fn: string, a: Slot, op: CmpOp, b: Slot }
+  // execute if score <a> <op> <b> run function <fn>
+
+  | { kind: 'call_unless_score', fn: string, a: Slot, op: CmpOp, b: Slot }
+
+  | { kind: 'call_context', fn: string, subcommands: ExecuteSubcmd[] }
+  // execute [subcommands] run function <fn>
+
+  | { kind: 'return_value', slot: Slot }
+  // scoreboard players operation $ret <obj> = <slot>  (then implicit return)
+
+  // ── Macro line ────────────────────────────────────────────────────────────
+  | { kind: 'macro_line', template: string }
+  // A line starting with $ in a macro function.
+  // template uses $(param) substitutions: e.g. "$particle end_rod ^$(px) ^$(py) ^5 ..."
+
+  // ── Arbitrary MC command (for builtins not covered above) ─────────────────
+  | { kind: 'raw', cmd: string }
+  // Emitted verbatim. Use sparingly — prefer typed instructions.
+```
+
+### LIR function structure
+
+```typescript
+interface LIRFunction {
+  name:         string
+  instructions: LIRInstr[]    // flat list (no blocks; control flow is via call_if_*)
+  isMacro:      boolean
+  macroParams:  string[]      // names of $(param) substitution keys
+}
+
+interface LIRModule {
+  functions:  LIRFunction[]
+  namespace:  string
+  objective:  string
+}
+```
+
+---
+
+## `execute` Context Blocks in the Pipeline
+
+`at @s {}`, `as @e[...] {}`, `positioned {}`, etc. are desugared in **Stage 2 (HIR)**.
+
+### HIR representation
+
+```typescript
+// In HIR, execute context blocks are a first-class statement:
+interface HIRExecuteBlock {
+  kind:         'execute_block'
+  subcommands:  ExecuteSubcmd[]
+  body:         HIRStmt[]
+}
+```
+
+### Stage 2 → Stage 3 lowering
+
+The execute block body is **extracted into a helper function** during HIR → MIR lowering.
+Variables captured from the enclosing scope are passed as parameters.
+
+```redscript
+// Source
+as @e[tag=foo] at @s {
+    let dx: int = target_x - my_x;
+    deal_damage(dx);
+}
+```
+
+HIR:
+```
+execute_block {
+  subcommands: [as @e[tag=foo], at_self],
+  body: [let dx = target_x - my_x, call deal_damage(dx)]
+}
+```
+
+MIR lowering produces:
+```
+// Capture free variables as args
+call_context '_exec_helper_0', [as @e[tag=foo], at_self]
+
+// New MIR function:
+fn _exec_helper_0(target_x: int, my_x: int):
+  t0 = sub target_x, my_x
+  call deal_damage [t0]
+  return void
+```
+
+In LIR:
+```
+call_context 'ns:_exec_helper_0' [as @e[tag=foo], at @s]
+```
+
+Emitted mcfunction:
+```
+execute as @e[tag=foo] at @s run function ns:_exec_helper_0
+```
+
+### Nested execute blocks
+
+Nested `as ... at ... { as ... { } }` blocks become nested helper functions.
+The compiler generates unique names (`_exec_0`, `_exec_1`, ...) in the order
+they appear in the source.
+
+---
+
+## Migration Strategy: Implementing the New Compiler
+
+### Approach: parallel implementation on a feature branch
+
+Do **not** refactor in-place. The current compiler is working and serving users.
+Implement the new pipeline in a separate branch (`refactor/pipeline-v2`) until
+it passes 920/920 tests, then merge and delete the old code.
+
+### Directory structure during migration
+
+```
+src/          (current compiler — untouched during refactor)
+src2/         (new compiler — staged implementation)
+  parser/     → copy of existing src/parser/ (Stage 1, keep as-is)
+  lexer/       → copy of existing src/lexer/ (Stage 1, keep as-is)
+  ast/         → copy of existing src/ast/ types
+  hir/         → Stage 2: HIR types + AST→HIR lowering
+  mir/         → Stage 3: MIR types + HIR→MIR lowering
+  optimizer/   → Stage 4: MIR passes (new, 3-address aware)
+  lir/         → Stage 5+6: LIR types + MIR→LIR + LIR passes
+  emit/        → Stage 7: LIR → .mcfunction
+  compile.ts   → top-level entry point
+  cli.ts       → wire up to existing CLI
+```
+
+### Stage-by-stage test gates
+
+Each stage must pass a test gate before moving to the next:
+
+| Gate | Criterion |
+|---|---|
+| Stage 1 | Existing parser tests pass unchanged |
+| Stage 2 (HIR) | All source programs produce valid HIR (no crashes, no assertion failures) |
+| Stage 3 (MIR) | MIR verifier passes on all test programs; CFG is well-formed |
+| Stage 4 (optimizer) | Optimizer tests pass; 920 e2e tests pass against new pipeline |
+| Stage 5 (LIR) | LIR verifier passes; generated command count ≤ current compiler |
+| Stage 6 (LIR opt) | 920 e2e tests pass; command count same or better |
+| Stage 7 (emit) | `diff` of generated mcfunction output is empty or better for all test cases |
+| Final | 920/920 tests pass, `src/` deleted, `src2/` → `src/` |
+
+### Test harness
+
+The existing 920 tests use `MCRuntime` and test final behavior, not IR internals.
+They are the primary regression suite and must pass at every stage gate.
+
+Add **IR-level unit tests** for stages 2–6 independently:
+- HIR tests: check AST→HIR desugaring (for→while, ternary expansion, etc.)
+- MIR tests: check instruction sequences for known patterns
+- Optimizer tests: input MIR → expected output MIR for each pass
+- LIR tests: check MIR→LIR lowering of specific instruction patterns
+
+These new tests live in `src2/__tests__/`.
+
+### What to tell Claude
+
+When handing this to Claude for implementation:
+1. Provide this document as context
+2. Implement one stage at a time, in order (1 → 2 → 3 → 4 → 5 → 6 → 7)
+3. Write the verifier for each stage before the next stage begins
+4. Keep `npm test` (920 tests) passing at every stage gate
+5. Commit after each stage gate passes
+6. Do not start Stage N+1 until Stage N gate is green
+
