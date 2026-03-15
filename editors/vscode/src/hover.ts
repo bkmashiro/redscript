@@ -1009,6 +1009,24 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
       provideHover(document, position) {
         const line = document.lineAt(position.line).text
 
+        // ── #rs — special compiler token ────────────────────────
+        const rsRange = document.getWordRangeAtPosition(position, /#rs\b/)
+        if (rsRange) {
+          const md = new vscode.MarkdownString('', true)
+          md.isTrusted = true
+          md.appendCodeblock('#rs', 'redscript')
+          md.appendMarkdown('**RS Internal Scoreboard Objective** *(compiler token)*\n\n')
+          md.appendMarkdown('Resolves to the current datapack\'s internal scoreboard objective at compile time.\n\n')
+          md.appendMarkdown('Default: `__<namespace>` (e.g. `__mygame` for namespace `mygame`).\n\n')
+          md.appendMarkdown('Use `#rs` in `scoreboard_get` / `scoreboard_set` when you need to read or write\n')
+          md.appendMarkdown('the compiler\'s own variable slots — such as in stdlib implementations.\n\n')
+          md.appendMarkdown('> ⚠️ Unlike other `#name` tokens, `#rs` does **not** compile to the literal string `rs`.\n')
+          md.appendMarkdown('> It tracks the `--scoreboard` flag or the `__<namespace>` default.\n\n')
+          md.appendMarkdown('**Example:**\n')
+          md.appendCodeblock('scoreboard_set("timer_ticks", #rs, 0);\n// compiles to: scoreboard players set timer_ticks __mygame 0', 'redscript')
+          return new vscode.Hover(md, rsRange)
+        }
+
         // ── #mc_name hover ──────────────────────────────────────
         const mcRange = document.getWordRangeAtPosition(position, /#[a-zA-Z_][a-zA-Z0-9_]*/)
         if (mcRange) {

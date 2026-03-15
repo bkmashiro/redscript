@@ -183,6 +183,7 @@ var require_lexer = __commonJS({
       enum: "enum",
       trigger: "trigger",
       namespace: "namespace",
+      module: "module",
       execute: "execute",
       run: "run",
       unless: "unless",
@@ -716,11 +717,21 @@ var require_parser = __commonJS({
       "Creeper",
       "Spider",
       "Enderman",
+      "Blaze",
+      "Witch",
+      "Slime",
+      "ZombieVillager",
+      "Husk",
+      "Drowned",
+      "Stray",
+      "WitherSkeleton",
+      "CaveSpider",
       "Pig",
       "Cow",
       "Sheep",
       "Chicken",
       "Villager",
+      "WanderingTrader",
       "ArmorStand",
       "Item",
       "Arrow"
@@ -735,6 +746,7 @@ var require_parser = __commonJS({
     var Parser = class _Parser {
       constructor(tokens, source, filePath) {
         this.pos = 0;
+        this.inLibraryMode = false;
         this.tokens = tokens;
         this.sourceLines = source?.split("\n") ?? [];
         this.filePath = filePath;
@@ -806,10 +818,20 @@ var require_parser = __commonJS({
         const implBlocks = [];
         const enums = [];
         const consts = [];
+        let isLibrary = false;
         if (this.check("namespace")) {
           this.advance();
           const name = this.expect("ident");
           namespace = name.value;
+          this.expect(";");
+        }
+        if (this.check("module")) {
+          this.advance();
+          const modKind = this.expect("ident");
+          if (modKind.value === "library") {
+            isLibrary = true;
+            this.inLibraryMode = true;
+          }
           this.expect(";");
         }
         while (!this.check("eof")) {
@@ -830,7 +852,7 @@ var require_parser = __commonJS({
             declarations.push(this.parseFnDecl());
           }
         }
-        return { namespace, globals, declarations, structs, implBlocks, enums, consts };
+        return { namespace, globals, declarations, structs, implBlocks, enums, consts, isLibrary };
       }
       // -------------------------------------------------------------------------
       // Struct Declaration
@@ -923,7 +945,8 @@ var require_parser = __commonJS({
           returnType = this.parseType();
         }
         const body = this.parseBlock();
-        return this.withLoc({ name, params, returnType, decorators, body }, fnToken);
+        const fn = this.withLoc({ name, params, returnType, decorators, body, isLibraryFn: this.inLibraryMode || void 0 }, fnToken);
+        return fn;
       }
       /** Parse a `declare fn name(params): returnType;` stub — no body, just discard. */
       parseDeclareStub() {
@@ -985,6 +1008,22 @@ var require_parser = __commonJS({
             return { name, args };
           }
         }
+        if (name === "require_on_load") {
+          const rawArgs = [];
+          for (const part of argsStr.split(",")) {
+            const trimmed = part.trim();
+            const identMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)$/);
+            if (identMatch) {
+              rawArgs.push({ kind: "string", value: identMatch[1] });
+            } else {
+              const strMatch = trimmed.match(/^"([^"]*)"$/);
+              if (strMatch) {
+                rawArgs.push({ kind: "string", value: strMatch[1] });
+              }
+            }
+          }
+          return { name, rawArgs };
+        }
         for (const part of argsStr.split(",")) {
           const [key, val] = part.split("=").map((s) => s.trim());
           if (key === "rate") {
@@ -1034,7 +1073,16 @@ var require_parser = __commonJS({
           type = { kind: "named", name: token.kind };
         } else if (token.kind === "ident") {
           this.advance();
-          type = { kind: "struct", name: token.value };
+          if (token.value === "selector" && this.check("<")) {
+            this.advance();
+            const entityType = this.expect("ident").value;
+            this.expect(">");
+            type = { kind: "selector", entityType };
+          } else if (token.value === "selector") {
+            type = { kind: "selector" };
+          } else {
+            type = { kind: "struct", name: token.value };
+          }
         } else {
           this.error(`Expected type, got '${token.kind}'`);
         }
@@ -2248,11 +2296,21 @@ var require_typechecker = __commonJS({
       "Creeper": "HostileMob",
       "Spider": "HostileMob",
       "Enderman": "HostileMob",
+      "Blaze": "HostileMob",
+      "Witch": "HostileMob",
+      "Slime": "HostileMob",
+      "ZombieVillager": "HostileMob",
+      "Husk": "HostileMob",
+      "Drowned": "HostileMob",
+      "Stray": "HostileMob",
+      "WitherSkeleton": "HostileMob",
+      "CaveSpider": "HostileMob",
       "Pig": "PassiveMob",
       "Cow": "PassiveMob",
       "Sheep": "PassiveMob",
       "Chicken": "PassiveMob",
       "Villager": "PassiveMob",
+      "WanderingTrader": "PassiveMob",
       "ArmorStand": "entity",
       "Item": "entity",
       "Arrow": "entity"
@@ -2268,6 +2326,24 @@ var require_typechecker = __commonJS({
       "minecraft:spider": "Spider",
       "enderman": "Enderman",
       "minecraft:enderman": "Enderman",
+      "blaze": "Blaze",
+      "minecraft:blaze": "Blaze",
+      "witch": "Witch",
+      "minecraft:witch": "Witch",
+      "slime": "Slime",
+      "minecraft:slime": "Slime",
+      "zombie_villager": "ZombieVillager",
+      "minecraft:zombie_villager": "ZombieVillager",
+      "husk": "Husk",
+      "minecraft:husk": "Husk",
+      "drowned": "Drowned",
+      "minecraft:drowned": "Drowned",
+      "stray": "Stray",
+      "minecraft:stray": "Stray",
+      "wither_skeleton": "WitherSkeleton",
+      "minecraft:wither_skeleton": "WitherSkeleton",
+      "cave_spider": "CaveSpider",
+      "minecraft:cave_spider": "CaveSpider",
       "pig": "Pig",
       "minecraft:pig": "Pig",
       "cow": "Cow",
@@ -2278,6 +2354,8 @@ var require_typechecker = __commonJS({
       "minecraft:chicken": "Chicken",
       "villager": "Villager",
       "minecraft:villager": "Villager",
+      "wandering_trader": "WanderingTrader",
+      "minecraft:wandering_trader": "WanderingTrader",
       "armor_stand": "ArmorStand",
       "minecraft:armor_stand": "ArmorStand",
       "item": "Item",
@@ -3275,6 +3353,99 @@ var require_builder = __commonJS({
   }
 });
 
+// ../../dist/types/entity-hierarchy.js
+var require_entity_hierarchy = __commonJS({
+  "../../dist/types/entity-hierarchy.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ENTITY_TYPE_BY_MCID = exports2.ENTITY_TYPE_MAP = exports2.ENTITY_TYPES = void 0;
+    exports2.isSubtype = isSubtype;
+    exports2.areCompatibleTypes = areCompatibleTypes;
+    exports2.getConcreteSubtypes = getConcreteSubtypes;
+    exports2.getSelectorEntityType = getSelectorEntityType;
+    exports2.getBaseSelectorType = getBaseSelectorType;
+    exports2.ENTITY_TYPES = [
+      // Root
+      { name: "Entity", mcId: null, abstract: true, parent: null },
+      // Direct children of Entity
+      { name: "Player", mcId: "minecraft:player", abstract: false, parent: "Entity" },
+      { name: "ArmorStand", mcId: "minecraft:armor_stand", abstract: false, parent: "Entity" },
+      { name: "Item", mcId: "minecraft:item", abstract: false, parent: "Entity" },
+      { name: "Arrow", mcId: "minecraft:arrow", abstract: false, parent: "Entity" },
+      // Mob hierarchy
+      { name: "Mob", mcId: null, abstract: true, parent: "Entity" },
+      // Hostile mobs
+      { name: "HostileMob", mcId: null, abstract: true, parent: "Mob" },
+      { name: "Zombie", mcId: "minecraft:zombie", abstract: false, parent: "HostileMob" },
+      { name: "Skeleton", mcId: "minecraft:skeleton", abstract: false, parent: "HostileMob" },
+      { name: "Creeper", mcId: "minecraft:creeper", abstract: false, parent: "HostileMob" },
+      { name: "Spider", mcId: "minecraft:spider", abstract: false, parent: "HostileMob" },
+      { name: "Enderman", mcId: "minecraft:enderman", abstract: false, parent: "HostileMob" },
+      { name: "Blaze", mcId: "minecraft:blaze", abstract: false, parent: "HostileMob" },
+      { name: "Witch", mcId: "minecraft:witch", abstract: false, parent: "HostileMob" },
+      { name: "Slime", mcId: "minecraft:slime", abstract: false, parent: "HostileMob" },
+      { name: "ZombieVillager", mcId: "minecraft:zombie_villager", abstract: false, parent: "HostileMob" },
+      { name: "Husk", mcId: "minecraft:husk", abstract: false, parent: "HostileMob" },
+      { name: "Drowned", mcId: "minecraft:drowned", abstract: false, parent: "HostileMob" },
+      { name: "Stray", mcId: "minecraft:stray", abstract: false, parent: "HostileMob" },
+      { name: "WitherSkeleton", mcId: "minecraft:wither_skeleton", abstract: false, parent: "HostileMob" },
+      { name: "CaveSpider", mcId: "minecraft:cave_spider", abstract: false, parent: "HostileMob" },
+      // Passive mobs
+      { name: "PassiveMob", mcId: null, abstract: true, parent: "Mob" },
+      { name: "Pig", mcId: "minecraft:pig", abstract: false, parent: "PassiveMob" },
+      { name: "Cow", mcId: "minecraft:cow", abstract: false, parent: "PassiveMob" },
+      { name: "Sheep", mcId: "minecraft:sheep", abstract: false, parent: "PassiveMob" },
+      { name: "Chicken", mcId: "minecraft:chicken", abstract: false, parent: "PassiveMob" },
+      { name: "Villager", mcId: "minecraft:villager", abstract: false, parent: "PassiveMob" },
+      { name: "WanderingTrader", mcId: "minecraft:wandering_trader", abstract: false, parent: "PassiveMob" }
+    ];
+    exports2.ENTITY_TYPE_MAP = new Map(exports2.ENTITY_TYPES.map((t) => [t.name.toLowerCase(), t]));
+    exports2.ENTITY_TYPE_BY_MCID = new Map(exports2.ENTITY_TYPES.filter((t) => t.mcId !== null).map((t) => [t.mcId.replace("minecraft:", ""), t]));
+    function isSubtype(typeA, typeB) {
+      if (typeA === typeB)
+        return true;
+      const node = exports2.ENTITY_TYPE_MAP.get(typeA.toLowerCase());
+      if (!node || !node.parent)
+        return false;
+      return isSubtype(node.parent, typeB);
+    }
+    function areCompatibleTypes(outerType, innerType) {
+      return isSubtype(outerType, innerType) || isSubtype(innerType, outerType);
+    }
+    function getConcreteSubtypes(typeName) {
+      const results = [];
+      for (const node of exports2.ENTITY_TYPES) {
+        if (!node.abstract && isSubtype(node.name, typeName)) {
+          results.push(node);
+        }
+      }
+      return results;
+    }
+    function getSelectorEntityType(selector) {
+      const match = selector.match(/type=(?:minecraft:)?([a-z_]+)/);
+      if (!match)
+        return null;
+      const mcId = match[1];
+      const node = exports2.ENTITY_TYPE_BY_MCID.get(mcId);
+      return node ? node.name : null;
+    }
+    function getBaseSelectorType(selector) {
+      const trimmed = selector.trim();
+      const typeFromFilter = getSelectorEntityType(trimmed);
+      if (trimmed.startsWith("@a") || trimmed.startsWith("@p") || trimmed.startsWith("@r")) {
+        return typeFromFilter ?? "Player";
+      }
+      if (trimmed.startsWith("@e")) {
+        return typeFromFilter ?? "Entity";
+      }
+      if (trimmed.startsWith("@s")) {
+        return typeFromFilter ?? null;
+      }
+      return null;
+    }
+  }
+});
+
 // ../../dist/lowering/index.js
 var require_lowering = __commonJS({
   "../../dist/lowering/index.js"(exports2) {
@@ -3317,11 +3488,17 @@ var require_lowering = __commonJS({
       };
     })();
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.Lowering = void 0;
+    exports2.Lowering = exports2.LOWERING_OBJ = void 0;
+    exports2.setScoreboardObjective = setScoreboardObjective;
     var builder_1 = require_builder();
     var diagnostics_1 = require_diagnostics();
     var path2 = __importStar(require("path"));
     var types_1 = require_types();
+    var entity_hierarchy_1 = require_entity_hierarchy();
+    exports2.LOWERING_OBJ = "rs";
+    function setScoreboardObjective(obj) {
+      exports2.LOWERING_OBJ = obj;
+    }
     var BUILTINS2 = {
       say: ([msg]) => `say ${msg}`,
       tell: ([sel, msg]) => `tellraw ${sel} {"text":"${msg}"}`,
@@ -3339,9 +3516,10 @@ var require_lowering = __commonJS({
         const pos = [x ?? "~", y ?? "~", z ?? "~"].join(" ");
         return nbt ? `summon ${type} ${pos} ${nbt}` : `summon ${type} ${pos}`;
       },
-      particle: ([name, x, y, z]) => {
+      particle: ([name, x, y, z, dx, dy, dz, speed, count]) => {
         const pos = [x ?? "~", y ?? "~", z ?? "~"].join(" ");
-        return `particle ${name} ${pos}`;
+        const extra = [dx, dy, dz, speed, count].filter((v) => v !== void 0 && v !== null);
+        return extra.length > 0 ? `particle ${name} ${pos} ${extra.join(" ")}` : `particle ${name} ${pos}`;
       },
       playsound: ([sound, source, sel, x, y, z, volume, pitch, minVolume]) => ["playsound", sound, source, sel, x, y, z, volume, pitch, minVolume].filter(Boolean).join(" "),
       tp: () => null,
@@ -3428,8 +3606,14 @@ var require_lowering = __commonJS({
       // Special handling
       setInterval: () => null,
       // Special handling
-      clearInterval: () => null
+      clearInterval: () => null,
       // Special handling
+      storage_get_int: () => null,
+      // Special handling (dynamic NBT array read via macro)
+      storage_set_array: () => null,
+      // Special handling (write literal NBT array to storage)
+      storage_set_int: () => null
+      // Special handling (dynamic NBT array write via macro)
     };
     function getSpan(node) {
       return node?.span;
@@ -3443,11 +3627,21 @@ var require_lowering = __commonJS({
       Creeper: "minecraft:creeper",
       Spider: "minecraft:spider",
       Enderman: "minecraft:enderman",
+      Blaze: "minecraft:blaze",
+      Witch: "minecraft:witch",
+      Slime: "minecraft:slime",
+      ZombieVillager: "minecraft:zombie_villager",
+      Husk: "minecraft:husk",
+      Drowned: "minecraft:drowned",
+      Stray: "minecraft:stray",
+      WitherSkeleton: "minecraft:wither_skeleton",
+      CaveSpider: "minecraft:cave_spider",
       Pig: "minecraft:pig",
       Cow: "minecraft:cow",
       Sheep: "minecraft:sheep",
       Chicken: "minecraft:chicken",
       Villager: "minecraft:villager",
+      WanderingTrader: "minecraft:wandering_trader",
       ArmorStand: "minecraft:armor_stand",
       Item: "minecraft:item",
       Arrow: "minecraft:arrow"
@@ -3485,6 +3679,16 @@ var require_lowering = __commonJS({
       return `${emitCoord(pos.x)} ${emitCoord(pos.y)} ${emitCoord(pos.z)}`;
     }
     var Lowering = class {
+      /** Unique IR variable name for a local variable, scoped to the current function.
+       *  Prevents cross-function scoreboard slot collisions: $fn_x ≠ $gn_x.
+       *  Only applies to user-defined locals/params; internal slots ($p0, $ret) are
+       *  intentionally global (calling convention). */
+      fnVar(name) {
+        return `$${this.currentFn}_${name}`;
+      }
+      currentEntityContext() {
+        return this.entityContextStack.length > 0 ? this.entityContextStack[this.entityContextStack.length - 1] : "Entity";
+      }
       constructor(namespace, sourceRanges = []) {
         this.functions = [];
         this.globals = [];
@@ -3498,6 +3702,7 @@ var require_lowering = __commonJS({
         this.timeoutCounter = 0;
         this.intervalCounter = 0;
         this.warnings = [];
+        this.entityContextStack = [];
         this.varMap = /* @__PURE__ */ new Map();
         this.lambdaBindings = /* @__PURE__ */ new Map();
         this.intervalBindings = /* @__PURE__ */ new Map();
@@ -3601,11 +3806,23 @@ var require_lowering = __commonJS({
       }
       preScanExpr(expr, paramNames, macroParams) {
         if (expr.kind === "call" && BUILTINS2[expr.fn] !== void 0) {
-          for (const arg of expr.args) {
-            if (arg.kind === "ident" && paramNames.has(arg.name)) {
-              macroParams.add(arg.name);
+          const handler = BUILTINS2[expr.fn];
+          const isSpecialHandled = (() => {
+            try {
+              return handler() === null;
+            } catch {
+              return false;
+            }
+          })();
+          if (!isSpecialHandled) {
+            for (const arg of expr.args) {
+              if (arg.kind === "ident" && paramNames.has(arg.name)) {
+                macroParams.add(arg.name);
+              }
             }
           }
+          for (const arg of expr.args)
+            this.preScanExpr(arg, paramNames, macroParams);
           return;
         }
         if (expr.kind === "call") {
@@ -3670,6 +3887,12 @@ var require_lowering = __commonJS({
         if (expr.kind === "struct_lit" || expr.kind === "array_lit") {
           return { str: this.exprToSnbt(expr) };
         }
+        if (expr.kind === "float_lit") {
+          return { str: expr.value.toString() };
+        }
+        if (expr.kind === "unary" && expr.op === "-" && expr.operand.kind === "float_lit") {
+          return { str: (-expr.operand.value).toString() };
+        }
         return { str: this.exprToString(expr) };
       }
       /**
@@ -3682,9 +3905,9 @@ var require_lowering = __commonJS({
         for (let i = 0; i < loweredArgs.length; i++) {
           const operand = loweredArgs[i];
           if (operand.kind === "const") {
-            this.builder.emitRaw(`scoreboard players set $p${i} rs ${operand.value}`);
+            this.builder.emitRaw(`scoreboard players set $p${i} ${exports2.LOWERING_OBJ} ${operand.value}`);
           } else if (operand.kind === "var") {
-            this.builder.emitRaw(`scoreboard players operation $p${i} rs = ${operand.name} rs`);
+            this.builder.emitRaw(`scoreboard players operation $p${i} ${exports2.LOWERING_OBJ} = ${operand.name} ${exports2.LOWERING_OBJ}`);
           }
         }
         for (const macroParam of macroParamNames) {
@@ -3695,12 +3918,12 @@ var require_lowering = __commonJS({
           if (operand.kind === "const") {
             this.builder.emitRaw(`data modify storage rs:macro_args ${macroParam} set value ${operand.value}`);
           } else if (operand.kind === "var") {
-            this.builder.emitRaw(`execute store result storage rs:macro_args ${macroParam} int 1 run scoreboard players get ${operand.name} rs`);
+            this.builder.emitRaw(`execute store result storage rs:macro_args ${macroParam} int 1 run scoreboard players get ${operand.name} ${exports2.LOWERING_OBJ}`);
           }
         }
         this.builder.emitRaw(`function ${this.namespace}:${fnName} with storage rs:macro_args`);
         const dst = this.builder.freshTemp();
-        this.builder.emitRaw(`scoreboard players operation ${dst} rs = $ret rs`);
+        this.builder.emitRaw(`scoreboard players operation ${dst} ${exports2.LOWERING_OBJ} = $ret ${exports2.LOWERING_OBJ}`);
         return { kind: "var", name: dst };
       }
       lower(program) {
@@ -3796,12 +4019,12 @@ var require_lowering = __commonJS({
               this.stringValues.set(param.name, "");
               continue;
             }
-            this.varMap.set(param.name, `$${param.name}`);
+            this.varMap.set(param.name, this.fnVar(param.name));
           }
         } else {
           for (const param of runtimeParams) {
             const paramName = param.name;
-            this.varMap.set(paramName, `$${paramName}`);
+            this.varMap.set(paramName, this.fnVar(paramName));
             this.varTypes.set(paramName, this.normalizeType(param.type));
           }
         }
@@ -3813,15 +4036,15 @@ var require_lowering = __commonJS({
         this.builder.startBlock("entry");
         for (let i = 0; i < runtimeParams.length; i++) {
           const paramName = runtimeParams[i].name;
-          const varName = `$${paramName}`;
-          this.builder.emitAssign(varName, { kind: "var", name: `$p${i}` });
+          const varName = this.fnVar(paramName);
+          this.builder.emitAssign(varName, { kind: "param", index: i });
         }
         if (staticEventDec) {
           for (let i = 0; i < fn.params.length; i++) {
             const param = fn.params[i];
             const expected = eventParamSpecs[i];
             if (expected?.type.kind === "named" && expected.type.name !== "string") {
-              this.builder.emitAssign(`$${param.name}`, { kind: "const", value: 0 });
+              this.builder.emitAssign(this.fnVar(param.name), { kind: "const", value: 0 });
             }
           }
         }
@@ -3868,6 +4091,19 @@ var require_lowering = __commonJS({
         if (fn.decorators.some((d) => d.name === "load")) {
           irFn.isLoadInit = true;
         }
+        const requiredLoads = [];
+        for (const d of fn.decorators) {
+          if (d.name === "require_on_load") {
+            for (const arg of d.rawArgs ?? []) {
+              if (arg.kind === "string") {
+                requiredLoads.push(arg.value);
+              }
+            }
+          }
+        }
+        if (requiredLoads.length > 0) {
+          irFn.requiredLoads = requiredLoads;
+        }
         if (tickRate && tickRate > 1) {
           this.wrapWithTickRate(irFn, tickRate);
         }
@@ -3889,7 +4125,7 @@ var require_lowering = __commonJS({
         const originalInstrs = [...entry.instrs];
         const originalTerm = entry.term;
         entry.instrs = [
-          { op: "raw", cmd: `scoreboard players add ${counterVar} rs 1` }
+          { op: "raw", cmd: `scoreboard players add ${counterVar} ${exports2.LOWERING_OBJ} 1` }
         ];
         const bodyLabel = "tick_body";
         const skipLabel = "tick_skip";
@@ -3901,12 +4137,12 @@ var require_lowering = __commonJS({
         };
         entry.instrs.push({
           op: "raw",
-          cmd: `execute store success score ${counterVar}_check rs if score ${counterVar} rs matches ${rate}..`
+          cmd: `execute store success score ${counterVar}_check ${exports2.LOWERING_OBJ} if score ${counterVar} ${exports2.LOWERING_OBJ} matches ${rate}..`
         });
         fn.blocks.push({
           label: bodyLabel,
           instrs: [
-            { op: "raw", cmd: `scoreboard players set ${counterVar} rs 0` },
+            { op: "raw", cmd: `scoreboard players set ${counterVar} ${exports2.LOWERING_OBJ} 0` },
             ...originalInstrs
           ],
           term: originalTerm
@@ -3982,7 +4218,7 @@ var require_lowering = __commonJS({
         if (this.currentContext.binding === stmt.name) {
           throw new diagnostics_1.DiagnosticError("LoweringError", `Cannot redeclare foreach binding '${stmt.name}'`, stmt.span ?? { line: 0, col: 0 });
         }
-        const varName = `$${stmt.name}`;
+        const varName = this.fnVar(stmt.name);
         this.varMap.set(stmt.name, varName);
         const declaredType = stmt.type ? this.normalizeType(stmt.type) : this.inferExprType(stmt.init);
         if (declaredType) {
@@ -4013,7 +4249,7 @@ var require_lowering = __commonJS({
             if (fieldValue.kind === "const") {
               this.builder.emitRaw(`data modify storage ${path3} set value ${fieldValue.value}`);
             } else if (fieldValue.kind === "var") {
-              this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${fieldValue.name} rs`);
+              this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${fieldValue.name} ${exports2.LOWERING_OBJ}`);
             }
           }
           return;
@@ -4039,7 +4275,7 @@ var require_lowering = __commonJS({
               this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value ${elemValue.value}`);
             } else if (elemValue.kind === "var") {
               this.builder.emitRaw(`data modify storage rs:heap ${stmt.name} append value 0`);
-              this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${elemValue.name} rs`);
+              this.builder.emitRaw(`execute store result storage rs:heap ${stmt.name}[-1] int 1 run scoreboard players get ${elemValue.name} ${exports2.LOWERING_OBJ}`);
             }
           }
           return;
@@ -4079,7 +4315,7 @@ var require_lowering = __commonJS({
               if (fieldValue.kind === "const") {
                 this.builder.emitRaw(`data modify storage ${path3} set value ${fieldValue.value}`);
               } else if (fieldValue.kind === "var") {
-                this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${fieldValue.name} rs`);
+                this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${fieldValue.name} ${exports2.LOWERING_OBJ}`);
               }
             }
             this.builder.emitReturn({ kind: "const", value: 0 });
@@ -4143,11 +4379,22 @@ var require_lowering = __commonJS({
           throw new diagnostics_1.DiagnosticError("LoweringError", "'is' checks require an entity selector or entity binding", cond.span ?? stmt.span ?? { line: 0, col: 0 });
         }
         const mcType = ENTITY_TO_MC_TYPE[cond.entityType];
-        if (!mcType) {
-          throw new diagnostics_1.DiagnosticError("LoweringError", `Cannot lower entity type check for '${cond.entityType}'`, cond.span ?? stmt.span ?? { line: 0, col: 0 });
-        }
         const thenFnName = `${this.currentFn}/then_${this.foreachCounter++}`;
-        this.builder.emitRaw(`execute if entity ${this.appendTypeFilter(selector, mcType)} run function ${this.namespace}:${thenFnName}`);
+        if (!mcType) {
+          const subtypes = (0, entity_hierarchy_1.getConcreteSubtypes)(cond.entityType);
+          if (subtypes.length === 0) {
+            throw new diagnostics_1.DiagnosticError("LoweringError", `Cannot lower entity type check for '${cond.entityType}'`, cond.span ?? stmt.span ?? { line: 0, col: 0 });
+          }
+          this.builder.emitRaw(`scoreboard players set __is_result rs:temp 0`);
+          for (const subtype of subtypes) {
+            if (subtype.mcId) {
+              this.builder.emitRaw(`execute if entity ${this.appendTypeFilter(selector, subtype.mcId)} run scoreboard players set __is_result rs:temp 1`);
+            }
+          }
+          this.builder.emitRaw(`execute if score __is_result rs:temp matches 1 run function ${this.namespace}:${thenFnName}`);
+        } else {
+          this.builder.emitRaw(`execute if entity ${this.appendTypeFilter(selector, mcType)} run function ${this.namespace}:${thenFnName}`);
+        }
         const savedBuilder = this.builder;
         const savedVarMap = new Map(this.varMap);
         const savedBlockPosVars = new Map(this.blockPosVars);
@@ -4208,14 +4455,14 @@ var require_lowering = __commonJS({
         this.builder.startBlock(exitLabel);
       }
       lowerForRangeStmt(stmt) {
-        const loopVar = `$${stmt.varName}`;
+        const loopVar = this.fnVar(stmt.varName);
         const subFnName = `${this.currentFn}/__for_${this.foreachCounter++}`;
         this.varMap.set(stmt.varName, loopVar);
         const startVal = this.lowerExpr(stmt.start);
         if (startVal.kind === "const") {
-          this.builder.emitRaw(`scoreboard players set ${loopVar} rs ${startVal.value}`);
+          this.builder.emitRaw(`scoreboard players set ${loopVar} ${exports2.LOWERING_OBJ} ${startVal.value}`);
         } else if (startVal.kind === "var") {
-          this.builder.emitRaw(`scoreboard players operation ${loopVar} rs = ${startVal.name} rs`);
+          this.builder.emitRaw(`scoreboard players operation ${loopVar} ${exports2.LOWERING_OBJ} = ${startVal.name} ${exports2.LOWERING_OBJ}`);
         }
         this.builder.emitRaw(`function ${this.namespace}:${subFnName}`);
         const savedBuilder = this.builder;
@@ -4228,10 +4475,10 @@ var require_lowering = __commonJS({
         this.blockPosVars = new Map(savedBlockPosVars);
         this.builder.startBlock("entry");
         this.lowerBlock(stmt.body);
-        this.builder.emitRaw(`scoreboard players add ${loopVar} rs 1`);
+        this.builder.emitRaw(`scoreboard players add ${loopVar} ${exports2.LOWERING_OBJ} 1`);
         const endVal = this.lowerExpr(stmt.end);
         const endNum = endVal.kind === "const" ? endVal.value - 1 : "?";
-        this.builder.emitRaw(`execute if score ${loopVar} rs matches ..${endNum} run function ${this.namespace}:${subFnName}`);
+        this.builder.emitRaw(`execute if score ${loopVar} ${exports2.LOWERING_OBJ} matches ..${endNum} run function ${this.namespace}:${subFnName}`);
         if (!this.builder.isBlockSealed()) {
           this.builder.emitReturn();
         }
@@ -4260,10 +4507,17 @@ var require_lowering = __commonJS({
         this.currentContext = { binding: stmt.binding };
         this.blockPosVars = new Map(savedBlockPosVars);
         this.varMap.set(stmt.binding, "@s");
+        const selectorEntityType = (0, entity_hierarchy_1.getBaseSelectorType)(selector);
+        if (selectorEntityType) {
+          this.entityContextStack.push(selectorEntityType);
+        }
         this.builder.startBlock("entry");
         this.lowerBlock(stmt.body);
         if (!this.builder.isBlockSealed()) {
           this.builder.emitReturn();
+        }
+        if (selectorEntityType) {
+          this.entityContextStack.pop();
         }
         const subFn = this.builder.build(subFnName, [], false);
         this.functions.push(subFn);
@@ -4302,12 +4556,12 @@ var require_lowering = __commonJS({
             matchCondition = String(patternValue.value);
           }
           const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`;
-          this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 if score ${subject} rs matches ${matchCondition} run function ${this.namespace}:${subFnName}`);
+          this.builder.emitRaw(`execute if score ${matchedVar} ${exports2.LOWERING_OBJ} matches ..0 if score ${subject} ${exports2.LOWERING_OBJ} matches ${matchCondition} run function ${this.namespace}:${subFnName}`);
           this.emitMatchArmSubFunction(subFnName, matchedVar, arm.body, true);
         }
         if (defaultArm) {
           const subFnName = `${this.currentFn}/match_${this.foreachCounter++}`;
-          this.builder.emitRaw(`execute if score ${matchedVar} rs matches ..0 run function ${this.namespace}:${subFnName}`);
+          this.builder.emitRaw(`execute if score ${matchedVar} ${exports2.LOWERING_OBJ} matches ..0 run function ${this.namespace}:${subFnName}`);
           this.emitMatchArmSubFunction(subFnName, matchedVar, defaultArm.body, false);
         }
       }
@@ -4322,7 +4576,7 @@ var require_lowering = __commonJS({
         this.blockPosVars = new Map(savedBlockPosVars);
         this.builder.startBlock("entry");
         if (setMatched) {
-          this.builder.emitRaw(`scoreboard players set ${matchedVar} rs 1`);
+          this.builder.emitRaw(`scoreboard players set ${matchedVar} ${exports2.LOWERING_OBJ} 1`);
         }
         this.lowerBlock(body);
         if (!this.builder.isBlockSealed()) {
@@ -4341,7 +4595,7 @@ var require_lowering = __commonJS({
           return;
         }
         const arrayType = this.inferExprType(stmt.iterable);
-        const bindingVar = `$${stmt.binding}`;
+        const bindingVar = this.fnVar(stmt.binding);
         const indexVar = this.builder.freshTemp();
         const lengthVar = this.builder.freshTemp();
         const condVar = this.builder.freshTemp();
@@ -4354,7 +4608,7 @@ var require_lowering = __commonJS({
         }
         this.builder.emitAssign(indexVar, { kind: "const", value: 0 });
         this.builder.emitAssign(oneVar, { kind: "const", value: 1 });
-        this.builder.emitRaw(`execute store result score ${lengthVar} rs run data get storage rs:heap ${arrayName}`);
+        this.builder.emitRaw(`execute store result score ${lengthVar} ${exports2.LOWERING_OBJ} run data get storage rs:heap ${arrayName}`);
         const checkLabel = this.builder.freshLabel("foreach_array_check");
         const bodyLabel = this.builder.freshLabel("foreach_array_body");
         const exitLabel = this.builder.freshLabel("foreach_array_exit");
@@ -4367,7 +4621,7 @@ var require_lowering = __commonJS({
         this.builder.emitAssign(bindingVar, element);
         this.lowerBlock(stmt.body);
         if (!this.builder.isBlockSealed()) {
-          this.builder.emitRaw(`scoreboard players operation ${indexVar} rs += ${oneVar} rs`);
+          this.builder.emitRaw(`scoreboard players operation ${indexVar} ${exports2.LOWERING_OBJ} += ${oneVar} ${exports2.LOWERING_OBJ}`);
           this.builder.emitJump(checkLabel);
         }
         this.builder.startBlock(exitLabel);
@@ -4385,6 +4639,16 @@ var require_lowering = __commonJS({
       lowerAsBlockStmt(stmt) {
         const selector = this.selectorToString(stmt.selector);
         const subFnName = `${this.currentFn}/as_${this.foreachCounter++}`;
+        const innerType = (0, entity_hierarchy_1.getBaseSelectorType)(selector);
+        const outerType = this.currentEntityContext();
+        if (innerType && outerType !== "Entity" && innerType !== "Entity" && !(0, entity_hierarchy_1.areCompatibleTypes)(outerType, innerType)) {
+          this.warnings.push({
+            message: `Impossible type assertion: @s is ${outerType} but as-block targets ${innerType}`,
+            code: "W_IMPOSSIBLE_AS",
+            line: stmt.span?.line,
+            col: stmt.span?.col
+          });
+        }
         this.builder.emitRaw(`execute as ${selector} run function ${this.namespace}:${subFnName}`);
         const savedBuilder = this.builder;
         const savedVarMap = new Map(this.varMap);
@@ -4392,10 +4656,16 @@ var require_lowering = __commonJS({
         this.builder = new LoweringBuilder();
         this.varMap = new Map(savedVarMap);
         this.blockPosVars = new Map(savedBlockPosVars);
+        if (innerType) {
+          this.entityContextStack.push(innerType);
+        }
         this.builder.startBlock("entry");
         this.lowerBlock(stmt.body);
         if (!this.builder.isBlockSealed()) {
           this.builder.emitReturn();
+        }
+        if (innerType) {
+          this.entityContextStack.pop();
         }
         const subFn = this.builder.build(subFnName, [], false);
         this.functions.push(subFn);
@@ -4644,19 +4914,19 @@ var require_lowering = __commonJS({
           const mapped = this.varMap.get(expr.obj.name);
           if (mapped && mapped.startsWith("@e[tag=__rs_obj_")) {
             const dst = this.builder.freshTemp();
-            this.builder.emitRaw(`scoreboard players operation ${dst} rs = ${mapped} rs`);
+            this.builder.emitRaw(`scoreboard players operation ${dst} ${exports2.LOWERING_OBJ} = ${mapped} ${exports2.LOWERING_OBJ}`);
             return { kind: "var", name: dst };
           }
           if (varType?.kind === "struct") {
             const structName = varType.name.toLowerCase();
             const path3 = `rs:heap ${structName}_${expr.obj.name}.${expr.field}`;
             const dst = this.builder.freshTemp();
-            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path3}`);
+            this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get storage ${path3}`);
             return { kind: "var", name: dst };
           }
           if (varType?.kind === "array" && expr.field === "len") {
             const dst = this.builder.freshTemp();
-            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${expr.obj.name}`);
+            this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get storage rs:heap ${expr.obj.name}`);
             return { kind: "var", name: dst };
           }
         }
@@ -4670,9 +4940,9 @@ var require_lowering = __commonJS({
             const value2 = this.lowerExpr(expr.value);
             if (expr.op === "=") {
               if (value2.kind === "const") {
-                this.builder.emitRaw(`scoreboard players set ${mapped} rs ${value2.value}`);
+                this.builder.emitRaw(`scoreboard players set ${mapped} ${exports2.LOWERING_OBJ} ${value2.value}`);
               } else if (value2.kind === "var") {
-                this.builder.emitRaw(`scoreboard players operation ${mapped} rs = ${value2.name} rs`);
+                this.builder.emitRaw(`scoreboard players operation ${mapped} ${exports2.LOWERING_OBJ} = ${value2.name} ${exports2.LOWERING_OBJ}`);
               }
             } else {
               const binOp = expr.op.slice(0, -1);
@@ -4680,9 +4950,9 @@ var require_lowering = __commonJS({
               if (value2.kind === "const") {
                 const constTemp = this.builder.freshTemp();
                 this.builder.emitAssign(constTemp, value2);
-                this.builder.emitRaw(`scoreboard players operation ${mapped} rs ${opMap[binOp]} ${constTemp} rs`);
+                this.builder.emitRaw(`scoreboard players operation ${mapped} ${exports2.LOWERING_OBJ} ${opMap[binOp]} ${constTemp} ${exports2.LOWERING_OBJ}`);
               } else if (value2.kind === "var") {
-                this.builder.emitRaw(`scoreboard players operation ${mapped} rs ${opMap[binOp]} ${value2.name} rs`);
+                this.builder.emitRaw(`scoreboard players operation ${mapped} ${exports2.LOWERING_OBJ} ${opMap[binOp]} ${value2.name} ${exports2.LOWERING_OBJ}`);
               }
             }
             return { kind: "const", value: 0 };
@@ -4695,14 +4965,14 @@ var require_lowering = __commonJS({
               if (value2.kind === "const") {
                 this.builder.emitRaw(`data modify storage ${path3} set value ${value2.value}`);
               } else if (value2.kind === "var") {
-                this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${value2.name} rs`);
+                this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${value2.name} ${exports2.LOWERING_OBJ}`);
               }
             } else {
               const dst = this.builder.freshTemp();
-              this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${path3}`);
+              this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get storage ${path3}`);
               const binOp = expr.op.slice(0, -1);
               this.builder.emitBinop(dst, { kind: "var", name: dst }, binOp, value2);
-              this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${dst} rs`);
+              this.builder.emitRaw(`execute store result storage ${path3} int 1 run scoreboard players get ${dst} ${exports2.LOWERING_OBJ}`);
             }
             return { kind: "const", value: 0 };
           }
@@ -4727,11 +4997,11 @@ var require_lowering = __commonJS({
           if (expr.op === "&&") {
             this.builder.emitAssign(dst, left);
             const rightVar = this.operandToVar(right);
-            this.builder.emitRaw(`execute if score ${dst} rs matches 1.. run scoreboard players operation ${dst} rs = ${rightVar} rs`);
+            this.builder.emitRaw(`execute if score ${dst} ${exports2.LOWERING_OBJ} matches 1.. run scoreboard players operation ${dst} ${exports2.LOWERING_OBJ} = ${rightVar} ${exports2.LOWERING_OBJ}`);
           } else {
             this.builder.emitAssign(dst, left);
             const rightVar = this.operandToVar(right);
-            this.builder.emitRaw(`execute if score ${dst} rs matches ..0 run scoreboard players operation ${dst} rs = ${rightVar} rs`);
+            this.builder.emitRaw(`execute if score ${dst} ${exports2.LOWERING_OBJ} matches ..0 run scoreboard players operation ${dst} ${exports2.LOWERING_OBJ} = ${rightVar} ${exports2.LOWERING_OBJ}`);
           }
           return { kind: "var", name: dst };
         }
@@ -4744,14 +5014,14 @@ var require_lowering = __commonJS({
               this.builder.emitBinop(dst, left, "*", right);
               const constDiv = this.builder.freshTemp();
               this.builder.emitAssign(constDiv, { kind: "const", value: 1e3 });
-              this.builder.emitRaw(`scoreboard players operation ${dst} rs /= ${constDiv} rs`);
+              this.builder.emitRaw(`scoreboard players operation ${dst} ${exports2.LOWERING_OBJ} /= ${constDiv} ${exports2.LOWERING_OBJ}`);
             } else {
               const constMul = this.builder.freshTemp();
               this.builder.emitAssign(constMul, { kind: "const", value: 1e3 });
               this.builder.emitAssign(dst, left);
-              this.builder.emitRaw(`scoreboard players operation ${dst} rs *= ${constMul} rs`);
+              this.builder.emitRaw(`scoreboard players operation ${dst} ${exports2.LOWERING_OBJ} *= ${constMul} ${exports2.LOWERING_OBJ}`);
               const rightVar = this.operandToVar(right);
-              this.builder.emitRaw(`scoreboard players operation ${dst} rs /= ${rightVar} rs`);
+              this.builder.emitRaw(`scoreboard players operation ${dst} ${exports2.LOWERING_OBJ} /= ${rightVar} ${exports2.LOWERING_OBJ}`);
             }
             return { kind: "var", name: dst };
           }
@@ -4815,7 +5085,7 @@ var require_lowering = __commonJS({
           const storagePath = this.getStringStoragePath(expr.args[0]);
           if (storagePath) {
             const dst = this.builder.freshTemp();
-            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage ${storagePath}`);
+            this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get storage ${storagePath}`);
             return { kind: "var", name: dst };
           }
           const staticString = this.resolveStaticString(expr.args[0]);
@@ -4846,7 +5116,7 @@ var require_lowering = __commonJS({
           const entity = this.exprToString(expr.args[0]);
           const tagName = this.exprToString(expr.args[1]);
           const dst = this.builder.freshTemp();
-          this.builder.emitRaw(`execute store result score ${dst} rs if entity ${entity}[tag=${tagName}]`);
+          this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} if entity ${entity}[tag=${tagName}]`);
           return { kind: "var", name: dst };
         }
         if (expr.fn === "__array_push") {
@@ -4859,7 +5129,7 @@ var require_lowering = __commonJS({
               this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value ${value.value}`);
             } else if (value.kind === "var") {
               this.builder.emitRaw(`data modify storage rs:heap ${arrName} append value 0`);
-              this.builder.emitRaw(`execute store result storage rs:heap ${arrName}[-1] int 1 run scoreboard players get ${value.name} rs`);
+              this.builder.emitRaw(`execute store result storage rs:heap ${arrName}[-1] int 1 run scoreboard players get ${value.name} ${exports2.LOWERING_OBJ}`);
             }
           }
           return { kind: "const", value: 0 };
@@ -4868,7 +5138,7 @@ var require_lowering = __commonJS({
           const arrName = this.getArrayStorageName(expr.args[0]);
           const dst = this.builder.freshTemp();
           if (arrName) {
-            this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${arrName}[-1]`);
+            this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get storage rs:heap ${arrName}[-1]`);
             this.builder.emitRaw(`data remove storage rs:heap ${arrName}[-1]`);
           } else {
             this.builder.emitAssign(dst, { kind: "const", value: 0 });
@@ -5117,14 +5387,14 @@ var require_lowering = __commonJS({
           const dst = this.builder.freshTemp();
           const min = args[0] ? this.exprToLiteral(args[0]) : "0";
           const max = args[1] ? this.exprToLiteral(args[1]) : "100";
-          this.builder.emitRaw(`scoreboard players random ${dst} rs ${min} ${max}`);
+          this.builder.emitRaw(`scoreboard players random ${dst} ${exports2.LOWERING_OBJ} ${min} ${max}`);
           return { kind: "var", name: dst };
         }
         if (name === "random_native") {
           const dst = this.builder.freshTemp();
           const min = args[0] ? this.exprToLiteral(args[0]) : "0";
           const max = args[1] ? this.exprToLiteral(args[1]) : "100";
-          this.builder.emitRaw(`execute store result score ${dst} rs run random value ${min} ${max}`);
+          this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run random value ${min} ${max}`);
           return { kind: "var", name: dst };
         }
         if (name === "random_sequence") {
@@ -5137,7 +5407,7 @@ var require_lowering = __commonJS({
           const dst = this.builder.freshTemp();
           const player = this.exprToTargetString(args[0]);
           const objective = this.resolveScoreboardObjective(args[0], args[1], callSpan);
-          this.builder.emitRaw(`execute store result score ${dst} rs run scoreboard players get ${player} ${objective}`);
+          this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run scoreboard players get ${player} ${objective}`);
           return { kind: "var", name: dst };
         }
         if (name === "scoreboard_set") {
@@ -5147,7 +5417,7 @@ var require_lowering = __commonJS({
           if (value.kind === "const") {
             this.builder.emitRaw(`scoreboard players set ${player} ${objective} ${value.value}`);
           } else if (value.kind === "var") {
-            this.builder.emitRaw(`execute store result score ${player} ${objective} run scoreboard players get ${value.name} rs`);
+            this.builder.emitRaw(`execute store result score ${player} ${objective} run scoreboard players get ${value.name} ${exports2.LOWERING_OBJ}`);
           }
           return { kind: "const", value: 0 };
         }
@@ -5210,7 +5480,7 @@ var require_lowering = __commonJS({
         }
         if (name === "bossbar_get_value") {
           const dst = this.builder.freshTemp();
-          this.builder.emitRaw(`execute store result score ${dst} rs run bossbar get ${this.exprToString(args[0])} value`);
+          this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run bossbar get ${this.exprToString(args[0])} value`);
           return { kind: "var", name: dst };
         }
         if (name === "team_add") {
@@ -5244,8 +5514,53 @@ var require_lowering = __commonJS({
           const target = targetType === "entity" ? this.exprToTargetString(args[1]) : this.exprToString(args[1]);
           const path3 = this.exprToString(args[2]);
           const scale = args[3] ? this.exprToString(args[3]) : "1";
-          this.builder.emitRaw(`execute store result score ${dst} rs run data get ${targetType} ${target} ${path3} ${scale}`);
+          this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get ${targetType} ${target} ${path3} ${scale}`);
           return { kind: "var", name: dst };
+        }
+        if (name === "storage_get_int") {
+          const storageNs = this.exprToString(args[0]);
+          const arrayKey = this.exprToString(args[1]);
+          const indexOperand = this.lowerExpr(args[2]);
+          const dst = this.builder.freshTemp();
+          if (indexOperand.kind === "const") {
+            this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get storage ${storageNs} ${arrayKey}[${indexOperand.value}] 1`);
+          } else {
+            const macroKey = `__sgi_${this.foreachCounter++}`;
+            const subFnName = `${this.currentFn}/__sgi_${this.foreachCounter++}`;
+            const indexVar = indexOperand.kind === "var" ? indexOperand.name : this.operandToVar(indexOperand);
+            this.builder.emitRaw(`execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} ${exports2.LOWERING_OBJ}`);
+            this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`);
+            this.emitRawSubFunction(subFnName, `execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get storage ${storageNs} ${arrayKey}[$(${macroKey})] 1`);
+          }
+          return { kind: "var", name: dst };
+        }
+        if (name === "storage_set_array") {
+          const storageNs = this.exprToString(args[0]);
+          const arrayKey = this.exprToString(args[1]);
+          const nbtLiteral = this.exprToString(args[2]);
+          this.builder.emitRaw(`data modify storage ${storageNs} ${arrayKey} set value ${nbtLiteral}`);
+          return { kind: "const", value: 0 };
+        }
+        if (name === "storage_set_int") {
+          const storageNs = this.exprToString(args[0]);
+          const arrayKey = this.exprToString(args[1]);
+          const indexOperand = this.lowerExpr(args[2]);
+          const valueOperand = this.lowerExpr(args[3]);
+          if (indexOperand.kind === "const") {
+            const valVar = valueOperand.kind === "var" ? valueOperand.name : this.operandToVar(valueOperand);
+            this.builder.emitRaw(`execute store result storage ${storageNs} ${arrayKey}[${indexOperand.value}] int 1 run scoreboard players get ${valVar} ${exports2.LOWERING_OBJ}`);
+          } else {
+            const macroIdxKey = `__ssi_i_${this.foreachCounter++}`;
+            const macroValKey = `__ssi_v_${this.foreachCounter++}`;
+            const subFnName = `${this.currentFn}/__ssi_${this.foreachCounter++}`;
+            const indexVar = indexOperand.kind === "var" ? indexOperand.name : this.operandToVar(indexOperand);
+            const valVar = valueOperand.kind === "var" ? valueOperand.name : this.operandToVar(valueOperand);
+            this.builder.emitRaw(`execute store result storage rs:heap ${macroIdxKey} int 1 run scoreboard players get ${indexVar} ${exports2.LOWERING_OBJ}`);
+            this.builder.emitRaw(`execute store result storage rs:heap ${macroValKey} int 1 run scoreboard players get ${valVar} ${exports2.LOWERING_OBJ}`);
+            this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`);
+            this.emitRawSubFunction(subFnName, `execute store result storage ${storageNs} ${arrayKey}[$(${macroIdxKey})] int 1 run scoreboard players get ${valVar} ${exports2.LOWERING_OBJ}`);
+          }
+          return { kind: "const", value: 0 };
         }
         if (name === "data_merge") {
           const target = args[0];
@@ -5279,7 +5594,7 @@ var require_lowering = __commonJS({
           const dst = this.builder.freshTemp();
           const setId = this.exprToString(args[0]);
           const value = this.exprToString(args[1]);
-          this.builder.emitRaw(`execute store result score ${dst} rs if data storage rs:sets ${setId}[{value:${value}}]`);
+          this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} if data storage rs:sets ${setId}[{value:${value}}]`);
           return { kind: "var", name: dst };
         }
         if (name === "set_remove") {
@@ -5543,7 +5858,7 @@ var require_lowering = __commonJS({
           components.push({ text: operand.value.toString() });
           return;
         }
-        components.push({ score: { name: this.operandToVar(operand), objective: "rs" } });
+        components.push({ score: { name: this.operandToVar(operand), objective: exports2.LOWERING_OBJ } });
       }
       exprToString(expr) {
         switch (expr.kind) {
@@ -5696,11 +6011,15 @@ var require_lowering = __commonJS({
       }
       exprToScoreboardObjective(expr, span) {
         if (expr.kind === "mc_name") {
-          return expr.value;
+          return expr.value === "rs" ? exports2.LOWERING_OBJ : expr.value;
         }
         const objective = this.exprToString(expr);
         if (objective.startsWith("#") || objective.includes(".")) {
-          return objective.startsWith("#") ? objective.slice(1) : objective;
+          if (objective.startsWith("#")) {
+            const name = objective.slice(1);
+            return name === "rs" ? exports2.LOWERING_OBJ : name;
+          }
+          return objective;
         }
         return `${this.getObjectiveNamespace(span)}.${objective}`;
       }
@@ -5716,7 +6035,7 @@ var require_lowering = __commonJS({
         if (!filePath) {
           return this.namespace;
         }
-        return this.isStdlibFile(filePath) ? "rs" : this.namespace;
+        return this.isStdlibFile(filePath) ? exports2.LOWERING_OBJ : this.namespace;
       }
       tryGetStdlibInternalObjective(playerExpr, objectiveExpr, span) {
         if (!span || !this.currentStdlibCallSite || objectiveExpr.kind !== "mc_name" || objectiveExpr.value !== "rs") {
@@ -5731,7 +6050,7 @@ var require_lowering = __commonJS({
           return null;
         }
         const hash = this.shortHash(this.serializeCallSite(this.currentStdlibCallSite));
-        return `rs._${resourceBase}_${hash}`;
+        return `${exports2.LOWERING_OBJ}._${resourceBase}_${hash}`;
       }
       getStdlibInternalResourceBase(playerExpr) {
         if (!playerExpr || playerExpr.kind !== "str_lit") {
@@ -6011,15 +6330,15 @@ var require_lowering = __commonJS({
       readArrayElement(arrayName, index) {
         const dst = this.builder.freshTemp();
         if (index.kind === "const") {
-          this.builder.emitRaw(`execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[${index.value}]`);
+          this.builder.emitRaw(`execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get storage rs:heap ${arrayName}[${index.value}]`);
           return { kind: "var", name: dst };
         }
         const macroKey = `__rs_index_${this.foreachCounter++}`;
         const subFnName = `${this.currentFn}/array_get_${this.foreachCounter++}`;
         const indexVar = index.kind === "var" ? index.name : this.operandToVar(index);
-        this.builder.emitRaw(`execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} rs`);
+        this.builder.emitRaw(`execute store result storage rs:heap ${macroKey} int 1 run scoreboard players get ${indexVar} ${exports2.LOWERING_OBJ}`);
         this.builder.emitRaw(`function ${this.namespace}:${subFnName} with storage rs:heap`);
-        this.emitRawSubFunction(subFnName, `$execute store result score ${dst} rs run data get storage rs:heap ${arrayName}[$(${macroKey})]`);
+        this.emitRawSubFunction(subFnName, `execute store result score ${dst} ${exports2.LOWERING_OBJ} run data get storage rs:heap ${arrayName}[$(${macroKey})]`);
         return { kind: "var", name: dst };
       }
       emitRawSubFunction(name, ...commands) {
@@ -6228,13 +6547,20 @@ var require_commands = __commonJS({
   "../../dist/optimizer/commands.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.setOptimizerObjective = setOptimizerObjective;
     exports2.createEmptyOptimizationStats = createEmptyOptimizationStats;
     exports2.mergeOptimizationStats = mergeOptimizationStats;
     exports2.applyLICM = applyLICM;
     exports2.applyCSE = applyCSE;
     exports2.batchSetblocks = batchSetblocks;
     exports2.optimizeCommandFunctions = optimizeCommandFunctions;
-    var SCOREBOARD_READ_RE = /^execute store result score (\$[A-Za-z0-9_]+) rs run scoreboard players get (\S+) (\S+)$/;
+    var _OBJ_PATTERN = "rs";
+    function setOptimizerObjective(obj) {
+      _OBJ_PATTERN = obj;
+    }
+    function scoreboardReadRe() {
+      return new RegExp(`^execute store result score (\\$[A-Za-z0-9_]+) ${_OBJ_PATTERN} run scoreboard players get (\\S+) (\\S+)$`);
+    }
     var SCOREBOARD_WRITE_RE = /^(?:scoreboard players (?:set|add|remove|reset)\s+(\S+)\s+(\S+)|scoreboard players operation\s+(\S+)\s+(\S+)\s+[+\-*/%]?= )/;
     var EXECUTE_STORE_SCORE_RE = /^execute store result score (\S+) (\S+) run /;
     var FUNCTION_CALL_RE = /^execute as (.+) run function ([^:]+):(.+)$/;
@@ -6319,7 +6645,7 @@ var require_commands = __commonJS({
           const readInfo = /* @__PURE__ */ new Map();
           const scoreboardWrites = /* @__PURE__ */ new Set();
           for (const inner of loopFn.commands) {
-            const readMatch = inner.cmd.match(SCOREBOARD_READ_RE);
+            const readMatch = inner.cmd.match(scoreboardReadRe());
             if (readMatch) {
               const [, temp, player, objective] = readMatch;
               const key = `${player} ${objective}`;
@@ -6334,7 +6660,7 @@ var require_commands = __commonJS({
             for (const info of readInfo.values()) {
               const matches = inner.cmd.match(TEMP_RE) ?? [];
               const usageCount = matches.filter((name) => name === info.temp).length;
-              const isDef = inner.cmd.startsWith(`execute store result score ${info.temp} rs run scoreboard players get `);
+              const isDef = inner.cmd.startsWith(`execute store result score ${info.temp} ${_OBJ_PATTERN} run scoreboard players get `);
               if (!isDef) {
                 info.uses += usageCount;
               }
@@ -6356,7 +6682,7 @@ var require_commands = __commonJS({
           const hoistedTemps = new Set(hoistable.map((item) => item.temp));
           const rewrittenLoopCommands = [];
           for (const inner of loopFn.commands) {
-            const readMatch = inner.cmd.match(SCOREBOARD_READ_RE);
+            const readMatch = inner.cmd.match(scoreboardReadRe());
             if (readMatch && hoistedTemps.has(readMatch[1])) {
               continue;
             }
@@ -6364,7 +6690,7 @@ var require_commands = __commonJS({
           }
           loopFn.commands = rewrittenLoopCommands;
           nextCommands.push(...hoistable.map((item) => ({
-            cmd: `execute store result score ${item.temp} rs run scoreboard players get ${item.player} ${item.objective}`
+            cmd: `execute store result score ${item.temp} ${_OBJ_PATTERN} run scoreboard players get ${item.player} ${item.objective}`
           })), command);
           stats.licmHoists = (stats.licmHoists ?? 0) + hoistable.length;
           stats.licmLoopBodies = (stats.licmLoopBodies ?? 0) + 1;
@@ -6374,8 +6700,8 @@ var require_commands = __commonJS({
       return stats;
     }
     function extractArithmeticExpression(commands, index) {
-      const assign = commands[index]?.cmd.match(/^scoreboard players operation (\$[A-Za-z0-9_]+) rs = (\$[A-Za-z0-9_]+|\$const_-?\d+) rs$/) ?? commands[index]?.cmd.match(/^scoreboard players set (\$[A-Za-z0-9_]+) rs (-?\d+)$/);
-      const op = commands[index + 1]?.cmd.match(/^scoreboard players operation (\$[A-Za-z0-9_]+) rs ([+\-*/%]=) (\$[A-Za-z0-9_]+|\$const_-?\d+) rs$/);
+      const assign = commands[index]?.cmd.match(new RegExp(`^scoreboard players operation (\\$[A-Za-z0-9_]+) ${_OBJ_PATTERN} = (\\$[A-Za-z0-9_]+|\\$const_-?\\d+) ${_OBJ_PATTERN}$`)) ?? commands[index]?.cmd.match(new RegExp(`^scoreboard players set (\\$[A-Za-z0-9_]+) ${_OBJ_PATTERN} (-?\\d+)$`));
+      const op = commands[index + 1]?.cmd.match(new RegExp(`^scoreboard players operation (\\$[A-Za-z0-9_]+) ${_OBJ_PATTERN} ([+\\-*/%]=) (\\$[A-Za-z0-9_]+|\\$const_-?\\d+) ${_OBJ_PATTERN}$`));
       if (!assign || !op || assign[1] !== op[1]) {
         return null;
       }
@@ -6405,14 +6731,14 @@ var require_commands = __commonJS({
         const rewritten = [];
         for (let i = 0; i < commands.length; i++) {
           const command = commands[i];
-          const readMatch = command.cmd.match(SCOREBOARD_READ_RE);
+          const readMatch = command.cmd.match(scoreboardReadRe());
           if (readMatch) {
             const [, dst, player, objective] = readMatch;
             const key = `${player} ${objective}`;
             const cached = readCache.get(key);
             if (cached) {
               stats.cseRedundantReads = (stats.cseRedundantReads ?? 0) + 1;
-              rewritten.push({ ...command, cmd: `scoreboard players operation ${dst} rs = ${cached} rs` });
+              rewritten.push({ ...command, cmd: `scoreboard players operation ${dst} ${_OBJ_PATTERN} = ${cached} ${_OBJ_PATTERN}` });
             } else {
               readCache.set(key, dst);
               rewritten.push(command);
@@ -6425,7 +6751,7 @@ var require_commands = __commonJS({
           if (expr) {
             const cached = exprCache.get(expr.key);
             if (cached) {
-              rewritten.push({ ...commands[i], cmd: `scoreboard players operation ${expr.dst} rs = ${cached} rs` });
+              rewritten.push({ ...commands[i], cmd: `scoreboard players operation ${expr.dst} ${_OBJ_PATTERN} = ${cached} ${_OBJ_PATTERN}` });
               stats.cseArithmetic = (stats.cseArithmetic ?? 0) + 1;
               i += 1;
             } else {
@@ -6725,30 +7051,36 @@ var require_passes = __commonJS({
             return op;
           return copies.get(op.name) ?? op;
         }
+        function invalidate(written) {
+          copies.delete(written);
+          for (const [k, v] of copies) {
+            if (v.kind === "var" && v.name === written)
+              copies.delete(k);
+          }
+        }
         const newInstrs = [];
         for (const instr of block.instrs) {
           switch (instr.op) {
             case "assign": {
               const src = resolve(instr.src);
+              invalidate(instr.dst);
               if (src.kind === "var" || src.kind === "const") {
                 copies.set(instr.dst, src);
-              } else {
-                copies.delete(instr.dst);
               }
               newInstrs.push({ ...instr, src });
               break;
             }
             case "binop":
-              copies.delete(instr.dst);
+              invalidate(instr.dst);
               newInstrs.push({ ...instr, lhs: resolve(instr.lhs), rhs: resolve(instr.rhs) });
               break;
             case "cmp":
-              copies.delete(instr.dst);
+              invalidate(instr.dst);
               newInstrs.push({ ...instr, lhs: resolve(instr.lhs), rhs: resolve(instr.rhs) });
               break;
             case "call":
               if (instr.dst)
-                copies.delete(instr.dst);
+                invalidate(instr.dst);
               newInstrs.push({ ...instr, args: instr.args.map(resolve) });
               break;
             default:
@@ -6846,6 +7178,819 @@ var require_passes = __commonJS({
         current = pass.run(current);
       }
       return { fn: current, stats };
+    }
+  }
+});
+
+// ../../dist/codegen/var-allocator.js
+var require_var_allocator = __commonJS({
+  "../../dist/codegen/var-allocator.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.VarAllocator = void 0;
+    var VarAllocator = class {
+      constructor(mangle = true) {
+        this.seq = 0;
+        this.varCache = /* @__PURE__ */ new Map();
+        this.constCache = /* @__PURE__ */ new Map();
+        this.internalCache = /* @__PURE__ */ new Map();
+        this.mangle = mangle;
+      }
+      /** Allocate a name for a user variable. Strips leading '$' if present. */
+      alloc(originalName) {
+        const clean = originalName.startsWith("$") ? originalName.slice(1) : originalName;
+        const cached = this.varCache.get(clean);
+        if (cached)
+          return cached;
+        const name = this.mangle ? `$${this.nextSeqName()}` : `$${clean}`;
+        this.varCache.set(clean, name);
+        return name;
+      }
+      /** Allocate a name for a constant value (content-addressed). */
+      constant(value) {
+        const cached = this.constCache.get(value);
+        if (cached)
+          return cached;
+        const name = this.mangle ? `$${this.nextSeqName()}` : `$const_${value}`;
+        this.constCache.set(value, name);
+        return name;
+      }
+      /**
+       * Look up the allocated name for a raw scoreboard fake-player name such as
+       * "$_2", "$x", "$p0", or "$ret".  Returns the mangled name when mangle=true,
+       * or the original name when mangle=false or the name is not yet known.
+       *
+       * Unlike alloc/internal/constant this does NOT create a new slot — it only
+       * resolves names that were already registered.  Used by the codegen to
+       * rewrite variable references inside `raw` IR instructions.
+       */
+      resolve(rawName) {
+        const clean = rawName.startsWith("$") ? rawName.slice(1) : rawName;
+        return this.varCache.get(clean) ?? this.internalCache.get(clean) ?? rawName;
+      }
+      /**
+       * Rewrite all $varname tokens in a raw mcfunction command string so that
+       * IR variable names are replaced by their allocated (possibly mangled) names.
+       * Tokens that are not registered in the allocator are left untouched (they
+       * are literal scoreboard fake-player names like "out" or "#rs").
+       */
+      resolveRaw(cmd) {
+        return cmd.replace(/\$[A-Za-z_][A-Za-z0-9_]*/g, (tok) => this.resolve(tok));
+      }
+      /** Allocate a name for a compiler internal (e.g. "ret", "p0"). */
+      internal(suffix) {
+        const cached = this.internalCache.get(suffix);
+        if (cached)
+          return cached;
+        const name = this.mangle ? `$${this.nextSeqName()}` : `$${suffix}`;
+        this.internalCache.set(suffix, name);
+        return name;
+      }
+      /** Generate the next sequential name: a, b, ..., z, aa, ab, ..., az, ba, ... */
+      nextSeqName() {
+        const n = this.seq++;
+        let result = "";
+        let remaining = n;
+        do {
+          result = String.fromCharCode(97 + remaining % 26) + result;
+          remaining = Math.floor(remaining / 26) - 1;
+        } while (remaining >= 0);
+        return result;
+      }
+      /**
+       * Returns a sourcemap object mapping allocated name → original name.
+       * Useful for debugging: write to <output>.map.json alongside the datapack.
+       * Only meaningful when mangle=true.
+       */
+      toSourceMap() {
+        const map = {};
+        for (const [orig, alloc] of this.varCache) {
+          if (/^_\d+$/.test(orig))
+            continue;
+          map[alloc] = orig;
+        }
+        for (const [val, alloc] of this.constCache)
+          map[alloc] = `const:${val}`;
+        for (const [suf, alloc] of this.internalCache)
+          map[alloc] = `internal:${suf}`;
+        return map;
+      }
+    };
+    exports2.VarAllocator = VarAllocator;
+  }
+});
+
+// ../../dist/codegen/mcfunction/index.js
+var require_mcfunction = __commonJS({
+  "../../dist/codegen/mcfunction/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.countMcfunctionCommands = countMcfunctionCommands;
+    exports2.generateDatapackWithStats = generateDatapackWithStats;
+    exports2.generateDatapack = generateDatapack;
+    var commands_1 = require_commands();
+    var types_1 = require_types();
+    var var_allocator_1 = require_var_allocator();
+    var OBJ = "rs";
+    function operandToScore(op, alloc) {
+      if (op.kind === "var")
+        return `${alloc.alloc(op.name)} ${OBJ}`;
+      if (op.kind === "const")
+        return `${alloc.constant(op.value)} ${OBJ}`;
+      if (op.kind === "param")
+        return `${alloc.internal(`p${op.index}`)} ${OBJ}`;
+      throw new Error(`Cannot convert storage operand to score: ${op.path}`);
+    }
+    function collectConsts(fn) {
+      const consts = /* @__PURE__ */ new Set();
+      for (const block of fn.blocks) {
+        for (const instr of block.instrs) {
+          if (instr.op === "assign" && instr.src.kind === "const")
+            consts.add(instr.src.value);
+          if (instr.op === "binop") {
+            if (instr.lhs.kind === "const")
+              consts.add(instr.lhs.value);
+            if (instr.rhs.kind === "const")
+              consts.add(instr.rhs.value);
+          }
+          if (instr.op === "cmp") {
+            if (instr.lhs.kind === "const")
+              consts.add(instr.lhs.value);
+            if (instr.rhs.kind === "const")
+              consts.add(instr.rhs.value);
+          }
+        }
+        const t = block.term;
+        if (t.op === "return" && t.value?.kind === "const")
+          consts.add(t.value.value);
+      }
+      return consts;
+    }
+    var BOP_OP = {
+      "+": "+=",
+      "-": "-=",
+      "*": "*=",
+      "/": "/=",
+      "%": "%="
+    };
+    function emitInstr(instr, ns, alloc) {
+      const lines = [];
+      switch (instr.op) {
+        case "assign": {
+          const dst = alloc.alloc(instr.dst);
+          const src = instr.src;
+          if (src.kind === "const") {
+            lines.push(`scoreboard players set ${dst} ${OBJ} ${src.value}`);
+          } else if (src.kind === "var") {
+            lines.push(`scoreboard players operation ${dst} ${OBJ} = ${alloc.alloc(src.name)} ${OBJ}`);
+          } else if (src.kind === "param") {
+            lines.push(`scoreboard players operation ${dst} ${OBJ} = ${alloc.internal(`p${src.index}`)} ${OBJ}`);
+          } else {
+            lines.push(`execute store result score ${dst} ${OBJ} run data get storage ${src.path}`);
+          }
+          break;
+        }
+        case "binop": {
+          const dst = alloc.alloc(instr.dst);
+          const bop = BOP_OP[instr.bop] ?? "+=";
+          lines.push(...emitInstr({ op: "assign", dst: instr.dst, src: instr.lhs }, ns, alloc));
+          lines.push(`scoreboard players operation ${dst} ${OBJ} ${bop} ${operandToScore(instr.rhs, alloc)}`);
+          break;
+        }
+        case "cmp": {
+          const dst = alloc.alloc(instr.dst);
+          const lhsScore = operandToScore(instr.lhs, alloc);
+          const rhsScore = operandToScore(instr.rhs, alloc);
+          lines.push(`scoreboard players set ${dst} ${OBJ} 0`);
+          switch (instr.cop) {
+            case "==":
+              lines.push(`execute if score ${lhsScore} = ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case "!=":
+              lines.push(`execute unless score ${lhsScore} = ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case "<":
+              lines.push(`execute if score ${lhsScore} < ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case "<=":
+              lines.push(`execute if score ${lhsScore} <= ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case ">":
+              lines.push(`execute if score ${lhsScore} > ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+            case ">=":
+              lines.push(`execute if score ${lhsScore} >= ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
+              break;
+          }
+          break;
+        }
+        case "call": {
+          for (let i = 0; i < instr.args.length; i++) {
+            const paramSlot = alloc.internal(`p${i}`);
+            const arg = instr.args[i];
+            if (arg.kind === "const") {
+              lines.push(`scoreboard players set ${paramSlot} ${OBJ} ${arg.value}`);
+            } else if (arg.kind === "var") {
+              lines.push(`scoreboard players operation ${paramSlot} ${OBJ} = ${alloc.alloc(arg.name)} ${OBJ}`);
+            } else if (arg.kind === "param") {
+              lines.push(`scoreboard players operation ${paramSlot} ${OBJ} = ${alloc.internal(`p${arg.index}`)} ${OBJ}`);
+            }
+          }
+          lines.push(`function ${ns}:${instr.fn}`);
+          if (instr.dst) {
+            const retSlot = alloc.internal("ret");
+            lines.push(`scoreboard players operation ${alloc.alloc(instr.dst)} ${OBJ} = ${retSlot} ${OBJ}`);
+          }
+          break;
+        }
+        case "raw": {
+          const rawResolved = alloc.resolveRaw(instr.cmd).replace(/^\x01/, "$");
+          lines.push(rawResolved);
+          break;
+        }
+      }
+      return lines;
+    }
+    function emitTerm(term, ns, fnName, alloc) {
+      const lines = [];
+      switch (term.op) {
+        case "jump":
+          lines.push(`function ${ns}:${fnName}/${term.target}`);
+          break;
+        case "jump_if":
+          lines.push(`execute if score ${alloc.alloc(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.then}`);
+          lines.push(`execute if score ${alloc.alloc(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.else_}`);
+          break;
+        case "jump_unless":
+          lines.push(`execute if score ${alloc.alloc(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.then}`);
+          lines.push(`execute if score ${alloc.alloc(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.else_}`);
+          break;
+        case "return": {
+          const retSlot = alloc.internal("ret");
+          if (term.value) {
+            if (term.value.kind === "const") {
+              lines.push(`scoreboard players set ${retSlot} ${OBJ} ${term.value.value}`);
+            } else if (term.value.kind === "var") {
+              lines.push(`scoreboard players operation ${retSlot} ${OBJ} = ${alloc.alloc(term.value.name)} ${OBJ}`);
+            } else if (term.value.kind === "param") {
+              lines.push(`scoreboard players operation ${retSlot} ${OBJ} = ${alloc.internal(`p${term.value.index}`)} ${OBJ}`);
+            }
+          }
+          if (term.value?.kind === "const") {
+            lines.push(`return ${term.value.value}`);
+          } else if (term.value?.kind === "var") {
+            lines.push(`return run scoreboard players get ${alloc.alloc(term.value.name)} ${OBJ}`);
+          } else if (term.value?.kind === "param") {
+            lines.push(`return run scoreboard players get ${alloc.internal(`p${term.value.index}`)} ${OBJ}`);
+          }
+          break;
+        }
+        case "tick_yield":
+          lines.push(`schedule function ${ns}:${fnName}/${term.continuation} 1t replace`);
+          break;
+      }
+      return lines;
+    }
+    function toFunctionName(file) {
+      const match = file.path.match(/^data\/[^/]+\/function\/(.+)\.mcfunction$/);
+      return match?.[1] ?? null;
+    }
+    function applyFunctionOptimization(files) {
+      const functionFiles = files.map((file) => {
+        const functionName = toFunctionName(file);
+        if (!functionName)
+          return null;
+        const commands = file.content.split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#")).map((cmd) => ({ cmd }));
+        return { file, functionName, commands };
+      }).filter((entry) => entry !== null);
+      const optimized = (0, commands_1.optimizeCommandFunctions)(functionFiles.map((entry) => ({
+        name: entry.functionName,
+        commands: entry.commands
+      })));
+      const commandMap = new Map(optimized.functions.map((fn) => [fn.name, fn.commands]));
+      const optimizedNames = new Set(optimized.functions.map((fn) => fn.name));
+      return {
+        files: files.filter((file) => {
+          const functionName = toFunctionName(file);
+          return !functionName || optimizedNames.has(functionName);
+        }).map((file) => {
+          const functionName = toFunctionName(file);
+          if (!functionName)
+            return file;
+          const commands = commandMap.get(functionName);
+          if (!commands)
+            return file;
+          const lines = file.content.split("\n");
+          const header = lines.filter((line) => line.trim().startsWith("#"));
+          return {
+            ...file,
+            content: [...header, ...commands.map((command) => command.cmd)].join("\n")
+          };
+        }),
+        stats: optimized.stats
+      };
+    }
+    function countMcfunctionCommands(files) {
+      return files.reduce((sum, file) => {
+        if (!toFunctionName(file)) {
+          return sum;
+        }
+        return sum + file.content.split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#")).length;
+      }, 0);
+    }
+    function preAllocInstr(instr, alloc) {
+      switch (instr.op) {
+        case "assign":
+          alloc.alloc(instr.dst);
+          if (instr.src.kind === "var")
+            alloc.alloc(instr.src.name);
+          break;
+        case "binop":
+          alloc.alloc(instr.dst);
+          if (instr.lhs.kind === "var")
+            alloc.alloc(instr.lhs.name);
+          if (instr.rhs.kind === "var")
+            alloc.alloc(instr.rhs.name);
+          break;
+        case "cmp":
+          alloc.alloc(instr.dst);
+          if (instr.lhs.kind === "var")
+            alloc.alloc(instr.lhs.name);
+          if (instr.rhs.kind === "var")
+            alloc.alloc(instr.rhs.name);
+          break;
+        case "call":
+          for (const arg of instr.args) {
+            if (arg.kind === "var")
+              alloc.alloc(arg.name);
+          }
+          if (instr.dst)
+            alloc.alloc(instr.dst);
+          break;
+        case "raw":
+          ;
+          instr.cmd.replace(/\$[A-Za-z_][A-Za-z0-9_]*/g, (tok) => {
+            alloc.alloc(tok);
+            return tok;
+          });
+          break;
+      }
+    }
+    function preAllocTerm(term, alloc) {
+      switch (term.op) {
+        case "jump_if":
+        case "jump_unless":
+          alloc.alloc(term.cond);
+          break;
+        case "return":
+          if (term.value?.kind === "var")
+            alloc.alloc(term.value.name);
+          break;
+      }
+    }
+    function generateDatapackWithStats(module3, options = {}) {
+      const { optimizeCommands = true, mangle = false, scoreboardObjective = "rs" } = options;
+      OBJ = scoreboardObjective;
+      (0, commands_1.setOptimizerObjective)(scoreboardObjective);
+      const alloc = new var_allocator_1.VarAllocator(mangle);
+      const files = [];
+      const advancements = [];
+      const ns = module3.namespace;
+      const triggerHandlers = module3.functions.filter((fn) => fn.isTriggerHandler && fn.triggerName);
+      const triggerNames = new Set(triggerHandlers.map((fn) => fn.triggerName));
+      const eventHandlers = module3.functions.filter((fn) => !!fn.eventHandler && (0, types_1.isEventTypeName)(fn.eventHandler.eventType));
+      const eventTypes = new Set(eventHandlers.map((fn) => fn.eventHandler.eventType));
+      const tickFunctionNames = [];
+      for (const fn of module3.functions) {
+        if (fn.isTickLoop) {
+          tickFunctionNames.push(fn.name);
+        }
+      }
+      files.push({
+        path: "pack.mcmeta",
+        content: JSON.stringify({
+          pack: { pack_format: 26, description: `${ns} datapack \u2014 compiled by redscript` }
+        }, null, 2)
+      });
+      const loadLines = [
+        `# RedScript runtime init`,
+        `scoreboard objectives add ${OBJ} dummy`
+      ];
+      for (const g of module3.globals) {
+        loadLines.push(`scoreboard players set ${alloc.alloc(g.name)} ${OBJ} ${g.init}`);
+      }
+      for (const triggerName of triggerNames) {
+        loadLines.push(`scoreboard objectives add ${triggerName} trigger`);
+        loadLines.push(`scoreboard players enable @a ${triggerName}`);
+      }
+      for (const eventType of eventTypes) {
+        const detection = types_1.EVENT_TYPES[eventType].detection;
+        if (eventType === "PlayerDeath") {
+          loadLines.push(`scoreboard objectives add ${OBJ}.deaths deathCount`);
+        } else if (eventType === "EntityKill") {
+          loadLines.push(`scoreboard objectives add ${OBJ}.kills totalKillCount`);
+        } else if (eventType === "ItemUse") {
+          loadLines.push("# ItemUse detection requires a project-specific objective/tag setup");
+        } else if (detection === "tag" || detection === "advancement") {
+          loadLines.push(`# ${eventType} detection expects tag ${types_1.EVENT_TYPES[eventType].tag} to be set externally`);
+        }
+      }
+      for (const triggerName of triggerNames) {
+        const handlers = triggerHandlers.filter((fn) => fn.triggerName === triggerName);
+        const dispatchLines = [
+          `# Trigger dispatch for ${triggerName}`
+        ];
+        for (const handler of handlers) {
+          dispatchLines.push(`function ${ns}:${handler.name}`);
+        }
+        dispatchLines.push(`scoreboard players set @s ${triggerName} 0`);
+        dispatchLines.push(`scoreboard players enable @s ${triggerName}`);
+        files.push({
+          path: `data/${ns}/function/__trigger_${triggerName}_dispatch.mcfunction`,
+          content: dispatchLines.join("\n")
+        });
+      }
+      const allConsts = /* @__PURE__ */ new Set();
+      for (const fn of module3.functions) {
+        for (const c of collectConsts(fn))
+          allConsts.add(c);
+      }
+      if (allConsts.size > 0) {
+        loadLines.push(...Array.from(allConsts).sort((a, b) => a - b).map((value) => `scoreboard players set ${alloc.constant(value)} ${OBJ} ${value}`));
+      }
+      if (mangle) {
+        for (const fn of module3.functions) {
+          for (let i = 0; i < fn.params.length; i++)
+            alloc.internal(`p${i}`);
+          alloc.internal("ret");
+          for (const block of fn.blocks) {
+            for (const instr of block.instrs) {
+              preAllocInstr(instr, alloc);
+            }
+            preAllocTerm(block.term, alloc);
+          }
+        }
+      }
+      for (const fn of module3.functions) {
+        for (let i = 0; i < fn.blocks.length; i++) {
+          const block = fn.blocks[i];
+          const lines = [`# block: ${block.label}`];
+          for (const instr of block.instrs) {
+            lines.push(...emitInstr(instr, ns, alloc));
+          }
+          lines.push(...emitTerm(block.term, ns, fn.name, alloc));
+          const filePath = i === 0 ? `data/${ns}/function/${fn.name}.mcfunction` : `data/${ns}/function/${fn.name}/${block.label}.mcfunction`;
+          const hasRealContent = lines.some((l) => !l.startsWith("#") && l.trim() !== "");
+          if (i !== 0 && !hasRealContent)
+            continue;
+          files.push({ path: filePath, content: lines.join("\n") });
+        }
+      }
+      const loadCalls = /* @__PURE__ */ new Set();
+      for (const fn of module3.functions) {
+        if (fn.isLoadInit) {
+          loadCalls.add(fn.name);
+        }
+        for (const dep of fn.requiredLoads ?? []) {
+          loadCalls.add(dep);
+        }
+      }
+      for (const name of loadCalls) {
+        loadLines.push(`function ${ns}:${name}`);
+      }
+      files.push({
+        path: `data/${ns}/function/__load.mcfunction`,
+        content: loadLines.join("\n")
+      });
+      files.push({
+        path: `data/minecraft/tags/function/load.json`,
+        content: JSON.stringify({ values: [`${ns}:__load`] }, null, 2)
+      });
+      const tickLines = ["# RedScript tick dispatcher"];
+      for (const fnName of tickFunctionNames) {
+        tickLines.push(`function ${ns}:${fnName}`);
+      }
+      if (triggerNames.size > 0) {
+        tickLines.push(`# Trigger checks`);
+        for (const triggerName of triggerNames) {
+          tickLines.push(`execute as @a[scores={${triggerName}=1..}] run function ${ns}:__trigger_${triggerName}_dispatch`);
+        }
+      }
+      if (eventHandlers.length > 0) {
+        tickLines.push("# Event checks");
+        for (const eventType of eventTypes) {
+          const tag = types_1.EVENT_TYPES[eventType].tag;
+          const handlers = eventHandlers.filter((fn) => fn.eventHandler?.eventType === eventType);
+          for (const handler of handlers) {
+            tickLines.push(`execute as @a[tag=${tag}] run function ${ns}:${handler.name}`);
+          }
+          tickLines.push(`tag @a[tag=${tag}] remove ${tag}`);
+        }
+      }
+      if (tickFunctionNames.length > 0 || triggerNames.size > 0 || eventHandlers.length > 0) {
+        files.push({
+          path: `data/${ns}/function/__tick.mcfunction`,
+          content: tickLines.join("\n")
+        });
+        files.push({
+          path: `data/minecraft/tags/function/tick.json`,
+          content: JSON.stringify({ values: [`${ns}:__tick`] }, null, 2)
+        });
+      }
+      for (const fn of module3.functions) {
+        const eventTrigger = fn.eventTrigger;
+        if (!eventTrigger) {
+          continue;
+        }
+        let path2 = "";
+        let criteria = {};
+        switch (eventTrigger.kind) {
+          case "advancement":
+            path2 = `data/${ns}/advancements/on_advancement_${fn.name}.json`;
+            criteria = {
+              trigger: {
+                trigger: `minecraft:${eventTrigger.value}`
+              }
+            };
+            break;
+          case "craft":
+            path2 = `data/${ns}/advancements/on_craft_${fn.name}.json`;
+            criteria = {
+              crafted: {
+                trigger: "minecraft:inventory_changed",
+                conditions: {
+                  items: [
+                    {
+                      items: [eventTrigger.value]
+                    }
+                  ]
+                }
+              }
+            };
+            break;
+          case "death":
+            path2 = `data/${ns}/advancements/on_death_${fn.name}.json`;
+            criteria = {
+              death: {
+                trigger: "minecraft:entity_killed_player"
+              }
+            };
+            break;
+          case "login":
+          case "join_team":
+            continue;
+        }
+        advancements.push({
+          path: path2,
+          content: JSON.stringify({
+            criteria,
+            rewards: {
+              function: `${ns}:${fn.name}`
+            }
+          }, null, 2)
+        });
+      }
+      const stats = (0, commands_1.createEmptyOptimizationStats)();
+      const sourceMap = mangle ? alloc.toSourceMap() : void 0;
+      if (!optimizeCommands) {
+        return { files, advancements, stats, sourceMap };
+      }
+      const optimized = applyFunctionOptimization(files);
+      (0, commands_1.mergeOptimizationStats)(stats, optimized.stats);
+      return { files: optimized.files, advancements, stats, sourceMap };
+    }
+    function generateDatapack(module3) {
+      const generated = generateDatapackWithStats(module3);
+      return [...generated.files, ...generated.advancements];
+    }
+  }
+});
+
+// ../../dist/compile.js
+var require_compile = __commonJS({
+  "../../dist/compile.js"(exports2) {
+    "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        }
+        __setModuleDefault(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.resolveSourceLine = resolveSourceLine;
+    exports2.preprocessSourceWithMetadata = preprocessSourceWithMetadata;
+    exports2.preprocessSource = preprocessSource;
+    exports2.compile = compile;
+    exports2.formatCompileError = formatCompileError;
+    var fs2 = __importStar(require("fs"));
+    var path2 = __importStar(require("path"));
+    var lexer_1 = require_lexer();
+    var parser_1 = require_parser();
+    var lowering_1 = require_lowering();
+    var passes_1 = require_passes();
+    var dce_1 = require_dce();
+    var mcfunction_1 = require_mcfunction();
+    var diagnostics_1 = require_diagnostics();
+    function resolveSourceLine(combinedLine, ranges, fallbackFile) {
+      for (const range of ranges) {
+        if (combinedLine >= range.startLine && combinedLine <= range.endLine) {
+          const localLine = combinedLine - range.startLine + 1;
+          return { filePath: range.filePath, line: localLine };
+        }
+      }
+      return { filePath: fallbackFile, line: combinedLine };
+    }
+    var IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/;
+    function isLibrarySource(source) {
+      for (const line of source.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("//"))
+          continue;
+        return /^module\s+library\s*;/.test(trimmed);
+      }
+      return false;
+    }
+    function countLines(source) {
+      return source === "" ? 0 : source.split("\n").length;
+    }
+    function offsetRanges(ranges, lineOffset) {
+      return ranges.map((range) => ({
+        startLine: range.startLine + lineOffset,
+        endLine: range.endLine + lineOffset,
+        filePath: range.filePath
+      }));
+    }
+    function preprocessSourceWithMetadata(source, options = {}) {
+      const { filePath } = options;
+      const seen = options.seen ?? /* @__PURE__ */ new Set();
+      if (filePath) {
+        seen.add(path2.resolve(filePath));
+      }
+      const lines = source.split("\n");
+      const imports = [];
+      const libraryImports = [];
+      const bodyLines = [];
+      let parsingHeader = true;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        const match = line.match(IMPORT_RE);
+        if (parsingHeader && match) {
+          if (!filePath) {
+            throw new diagnostics_1.DiagnosticError("ParseError", "Import statements require a file path", { line: i + 1, col: 1 }, lines);
+          }
+          const importPath = path2.resolve(path2.dirname(filePath), match[1]);
+          if (!seen.has(importPath)) {
+            seen.add(importPath);
+            let importedSource;
+            try {
+              importedSource = fs2.readFileSync(importPath, "utf-8");
+            } catch {
+              throw new diagnostics_1.DiagnosticError("ParseError", `Cannot import '${match[1]}'`, { file: filePath, line: i + 1, col: 1 }, lines);
+            }
+            if (isLibrarySource(importedSource)) {
+              const nested = preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen });
+              libraryImports.push({ source: importedSource, filePath: importPath });
+              if (nested.libraryImports)
+                libraryImports.push(...nested.libraryImports);
+            } else {
+              imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen }));
+            }
+          }
+          continue;
+        }
+        if (parsingHeader && (trimmed === "" || trimmed.startsWith("//"))) {
+          bodyLines.push(line);
+          continue;
+        }
+        parsingHeader = false;
+        bodyLines.push(line);
+      }
+      const body = bodyLines.join("\n");
+      const parts = [...imports.map((entry) => entry.source), body].filter(Boolean);
+      const combined = parts.join("\n");
+      const ranges = [];
+      let lineOffset = 0;
+      for (const entry of imports) {
+        ranges.push(...offsetRanges(entry.ranges, lineOffset));
+        lineOffset += countLines(entry.source);
+      }
+      if (filePath && body) {
+        ranges.push({
+          startLine: lineOffset + 1,
+          endLine: lineOffset + countLines(body),
+          filePath: path2.resolve(filePath)
+        });
+      }
+      return {
+        source: combined,
+        ranges,
+        libraryImports: libraryImports.length > 0 ? libraryImports : void 0
+      };
+    }
+    function preprocessSource(source, options = {}) {
+      return preprocessSourceWithMetadata(source, options).source;
+    }
+    function compile(source, options = {}) {
+      const { namespace = "redscript", filePath, optimize: shouldOptimize = true } = options;
+      const shouldRunDce = options.dce ?? shouldOptimize;
+      let sourceLines = source.split("\n");
+      try {
+        const preprocessed = preprocessSourceWithMetadata(source, { filePath });
+        const preprocessedSource = preprocessed.source;
+        sourceLines = preprocessedSource.split("\n");
+        const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
+        const parsedAst = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
+        const allLibrarySources = [];
+        for (const libSrc of options.librarySources ?? []) {
+          allLibrarySources.push({ src: libSrc });
+        }
+        for (const li of preprocessed.libraryImports ?? []) {
+          allLibrarySources.push({ src: li.source, fp: li.filePath });
+        }
+        for (const { src, fp } of allLibrarySources) {
+          const libPreprocessed = preprocessSourceWithMetadata(src, fp ? { filePath: fp } : {});
+          const libTokens = new lexer_1.Lexer(libPreprocessed.source, fp).tokenize();
+          const libAst = new parser_1.Parser(libTokens, libPreprocessed.source, fp).parse(namespace);
+          for (const fn of libAst.declarations)
+            fn.isLibraryFn = true;
+          parsedAst.declarations.push(...libAst.declarations);
+          parsedAst.structs.push(...libAst.structs);
+          parsedAst.implBlocks.push(...libAst.implBlocks);
+          parsedAst.enums.push(...libAst.enums);
+          parsedAst.consts.push(...libAst.consts);
+          parsedAst.globals.push(...libAst.globals);
+        }
+        const dceResult = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst) : { program: parsedAst, warnings: [] };
+        const ast = dceResult.program;
+        const scoreboardObj = options.scoreboardObjective ?? `__${namespace}`;
+        (0, lowering_1.setScoreboardObjective)(scoreboardObj);
+        const ir = new lowering_1.Lowering(namespace, preprocessed.ranges).lower(ast);
+        const optimized = shouldOptimize ? { ...ir, functions: ir.functions.map((fn) => (0, passes_1.optimize)(fn)) } : ir;
+        const generated = (0, mcfunction_1.generateDatapackWithStats)(optimized, {
+          mangle: options.mangle ?? true,
+          scoreboardObjective: scoreboardObj
+        });
+        return {
+          success: true,
+          files: [...generated.files, ...generated.advancements],
+          advancements: generated.advancements,
+          ast,
+          ir: optimized
+        };
+      } catch (err) {
+        if (err instanceof diagnostics_1.DiagnosticError) {
+          return { success: false, error: err };
+        }
+        if (err instanceof Error) {
+          const diagnostic = (0, diagnostics_1.parseErrorMessage)("ParseError", err.message, sourceLines, filePath);
+          return { success: false, error: diagnostic };
+        }
+        return {
+          success: false,
+          error: new diagnostics_1.DiagnosticError("ParseError", String(err), { file: filePath, line: 1, col: 1 }, sourceLines)
+        };
+      }
+    }
+    function formatCompileError(result) {
+      if (result.success) {
+        return "Compilation successful";
+      }
+      if (result.error) {
+        return (0, diagnostics_1.formatError)(result.error, result.error.sourceLines?.join("\n"));
+      }
+      return "Unknown error";
     }
   }
 });
@@ -6967,8 +8112,10 @@ var require_dce = __commonJS({
       findEntryPoints(program) {
         const entries = /* @__PURE__ */ new Set();
         for (const fn of program.declarations) {
-          if (!fn.name.startsWith("_")) {
-            entries.add(fn.name);
+          if (!fn.isLibraryFn) {
+            if (!fn.name.startsWith("_")) {
+              entries.add(fn.name);
+            }
           }
           if (fn.decorators.some((decorator) => [
             "tick",
@@ -6997,6 +8144,15 @@ var require_dce = __commonJS({
         }
         this.reachableFunctions.add(fnName);
         this.collectFunctionRefs(fn);
+        for (const decorator of fn.decorators) {
+          if (decorator.name === "require_on_load") {
+            for (const arg of decorator.rawArgs ?? []) {
+              if (arg.kind === "string") {
+                this.markReachable(arg.value);
+              }
+            }
+          }
+        }
       }
       collectFunctionRefs(fn) {
         const scope = [fn.params.map((param) => ({ id: `param:${fn.name}:${param.name}`, name: param.name }))];
@@ -7445,573 +8601,20 @@ var require_dce = __commonJS({
       }
     };
     exports2.DeadCodeEliminator = DeadCodeEliminator;
-    function eliminateDeadCode(program) {
+    function eliminateDeadCode(program, sourceRanges) {
       const eliminator = new DeadCodeEliminator();
       const result = eliminator.eliminate(program);
-      return { program: result, warnings: eliminator.warnings };
-    }
-  }
-});
-
-// ../../dist/codegen/mcfunction/index.js
-var require_mcfunction = __commonJS({
-  "../../dist/codegen/mcfunction/index.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.countMcfunctionCommands = countMcfunctionCommands;
-    exports2.generateDatapackWithStats = generateDatapackWithStats;
-    exports2.generateDatapack = generateDatapack;
-    var commands_1 = require_commands();
-    var types_1 = require_types();
-    var OBJ = "rs";
-    function varRef(name) {
-      return name.startsWith("$") ? name : `$${name}`;
-    }
-    function operandToScore(op) {
-      if (op.kind === "var")
-        return `${varRef(op.name)} ${OBJ}`;
-      if (op.kind === "const")
-        return `$const_${op.value} ${OBJ}`;
-      throw new Error(`Cannot convert storage operand to score: ${op.path}`);
-    }
-    function constSetup(value) {
-      return `scoreboard players set $const_${value} ${OBJ} ${value}`;
-    }
-    function collectConsts(fn) {
-      const consts = /* @__PURE__ */ new Set();
-      for (const block of fn.blocks) {
-        for (const instr of block.instrs) {
-          if (instr.op === "assign" && instr.src.kind === "const")
-            consts.add(instr.src.value);
-          if (instr.op === "binop") {
-            if (instr.lhs.kind === "const")
-              consts.add(instr.lhs.value);
-            if (instr.rhs.kind === "const")
-              consts.add(instr.rhs.value);
-          }
-          if (instr.op === "cmp") {
-            if (instr.lhs.kind === "const")
-              consts.add(instr.lhs.value);
-            if (instr.rhs.kind === "const")
-              consts.add(instr.rhs.value);
-          }
-        }
-        const t = block.term;
-        if (t.op === "return" && t.value?.kind === "const")
-          consts.add(t.value.value);
-      }
-      return consts;
-    }
-    var BOP_OP = {
-      "+": "+=",
-      "-": "-=",
-      "*": "*=",
-      "/": "/=",
-      "%": "%="
-    };
-    function emitInstr(instr, ns) {
-      const lines = [];
-      switch (instr.op) {
-        case "assign": {
-          const dst = varRef(instr.dst);
-          const src = instr.src;
-          if (src.kind === "const") {
-            lines.push(`scoreboard players set ${dst} ${OBJ} ${src.value}`);
-          } else if (src.kind === "var") {
-            lines.push(`scoreboard players operation ${dst} ${OBJ} = ${varRef(src.name)} ${OBJ}`);
-          } else {
-            lines.push(`execute store result score ${dst} ${OBJ} run data get storage ${src.path}`);
-          }
-          break;
-        }
-        case "binop": {
-          const dst = varRef(instr.dst);
-          const bop = BOP_OP[instr.bop] ?? "+=";
-          lines.push(...emitInstr({ op: "assign", dst: instr.dst, src: instr.lhs }, ns));
-          lines.push(`scoreboard players operation ${dst} ${OBJ} ${bop} ${operandToScore(instr.rhs)}`);
-          break;
-        }
-        case "cmp": {
-          const dst = varRef(instr.dst);
-          const lhsScore = operandToScore(instr.lhs);
-          const rhsScore = operandToScore(instr.rhs);
-          lines.push(`scoreboard players set ${dst} ${OBJ} 0`);
-          switch (instr.cop) {
-            case "==":
-              lines.push(`execute if score ${lhsScore} = ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
-              break;
-            case "!=":
-              lines.push(`execute unless score ${lhsScore} = ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
-              break;
-            case "<":
-              lines.push(`execute if score ${lhsScore} < ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
-              break;
-            case "<=":
-              lines.push(`execute if score ${lhsScore} <= ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
-              break;
-            case ">":
-              lines.push(`execute if score ${lhsScore} > ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
-              break;
-            case ">=":
-              lines.push(`execute if score ${lhsScore} >= ${rhsScore} run scoreboard players set ${dst} ${OBJ} 1`);
-              break;
-          }
-          break;
-        }
-        case "call": {
-          for (let i = 0; i < instr.args.length; i++) {
-            lines.push(...emitInstr({ op: "assign", dst: `$p${i}`, src: instr.args[i] }, ns));
-          }
-          lines.push(`function ${ns}:${instr.fn}`);
-          if (instr.dst) {
-            lines.push(`scoreboard players operation ${varRef(instr.dst)} ${OBJ} = $ret ${OBJ}`);
-          }
-          break;
-        }
-        case "raw":
-          lines.push(instr.cmd);
-          break;
-      }
-      return lines;
-    }
-    function emitTerm(term, ns, fnName) {
-      const lines = [];
-      switch (term.op) {
-        case "jump":
-          lines.push(`function ${ns}:${fnName}/${term.target}`);
-          break;
-        case "jump_if":
-          lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.then}`);
-          lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.else_}`);
-          break;
-        case "jump_unless":
-          lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches ..0 run function ${ns}:${fnName}/${term.then}`);
-          lines.push(`execute if score ${varRef(term.cond)} ${OBJ} matches 1.. run function ${ns}:${fnName}/${term.else_}`);
-          break;
-        case "return":
-          if (term.value) {
-            lines.push(...emitInstr({ op: "assign", dst: "$ret", src: term.value }, ns));
-          }
-          if (term.value?.kind === "const") {
-            lines.push(`return ${term.value.value}`);
-          } else if (term.value?.kind === "var") {
-            lines.push(`return run scoreboard players get ${varRef(term.value.name)} ${OBJ}`);
-          }
-          break;
-        case "tick_yield":
-          lines.push(`schedule function ${ns}:${fnName}/${term.continuation} 1t replace`);
-          break;
-      }
-      return lines;
-    }
-    function toFunctionName(file) {
-      const match = file.path.match(/^data\/[^/]+\/function\/(.+)\.mcfunction$/);
-      return match?.[1] ?? null;
-    }
-    function applyFunctionOptimization(files) {
-      const functionFiles = files.map((file) => {
-        const functionName = toFunctionName(file);
-        if (!functionName)
-          return null;
-        const commands = file.content.split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#")).map((cmd) => ({ cmd }));
-        return { file, functionName, commands };
-      }).filter((entry) => entry !== null);
-      const optimized = (0, commands_1.optimizeCommandFunctions)(functionFiles.map((entry) => ({
-        name: entry.functionName,
-        commands: entry.commands
-      })));
-      const commandMap = new Map(optimized.functions.map((fn) => [fn.name, fn.commands]));
-      const optimizedNames = new Set(optimized.functions.map((fn) => fn.name));
-      return {
-        files: files.filter((file) => {
-          const functionName = toFunctionName(file);
-          return !functionName || optimizedNames.has(functionName);
-        }).map((file) => {
-          const functionName = toFunctionName(file);
-          if (!functionName)
-            return file;
-          const commands = commandMap.get(functionName);
-          if (!commands)
-            return file;
-          const lines = file.content.split("\n");
-          const header = lines.filter((line) => line.trim().startsWith("#"));
-          return {
-            ...file,
-            content: [...header, ...commands.map((command) => command.cmd)].join("\n")
-          };
-        }),
-        stats: optimized.stats
-      };
-    }
-    function countMcfunctionCommands(files) {
-      return files.reduce((sum, file) => {
-        if (!toFunctionName(file)) {
-          return sum;
-        }
-        return sum + file.content.split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#")).length;
-      }, 0);
-    }
-    function generateDatapackWithStats(module3, options = {}) {
-      const { optimizeCommands = true } = options;
-      const files = [];
-      const advancements = [];
-      const ns = module3.namespace;
-      const triggerHandlers = module3.functions.filter((fn) => fn.isTriggerHandler && fn.triggerName);
-      const triggerNames = new Set(triggerHandlers.map((fn) => fn.triggerName));
-      const eventHandlers = module3.functions.filter((fn) => !!fn.eventHandler && (0, types_1.isEventTypeName)(fn.eventHandler.eventType));
-      const eventTypes = new Set(eventHandlers.map((fn) => fn.eventHandler.eventType));
-      const tickFunctionNames = [];
-      for (const fn of module3.functions) {
-        if (fn.isTickLoop) {
-          tickFunctionNames.push(fn.name);
-        }
-      }
-      files.push({
-        path: "pack.mcmeta",
-        content: JSON.stringify({
-          pack: { pack_format: 26, description: `${ns} datapack \u2014 compiled by redscript` }
-        }, null, 2)
-      });
-      const loadLines = [
-        `# RedScript runtime init`,
-        `scoreboard objectives add ${OBJ} dummy`
-      ];
-      for (const g of module3.globals) {
-        loadLines.push(`scoreboard players set ${varRef(g.name)} ${OBJ} ${g.init}`);
-      }
-      for (const triggerName of triggerNames) {
-        loadLines.push(`scoreboard objectives add ${triggerName} trigger`);
-        loadLines.push(`scoreboard players enable @a ${triggerName}`);
-      }
-      for (const eventType of eventTypes) {
-        const detection = types_1.EVENT_TYPES[eventType].detection;
-        if (eventType === "PlayerDeath") {
-          loadLines.push("scoreboard objectives add rs.deaths deathCount");
-        } else if (eventType === "EntityKill") {
-          loadLines.push("scoreboard objectives add rs.kills totalKillCount");
-        } else if (eventType === "ItemUse") {
-          loadLines.push("# ItemUse detection requires a project-specific objective/tag setup");
-        } else if (detection === "tag" || detection === "advancement") {
-          loadLines.push(`# ${eventType} detection expects tag ${types_1.EVENT_TYPES[eventType].tag} to be set externally`);
-        }
-      }
-      for (const triggerName of triggerNames) {
-        const handlers = triggerHandlers.filter((fn) => fn.triggerName === triggerName);
-        const dispatchLines = [
-          `# Trigger dispatch for ${triggerName}`
-        ];
-        for (const handler of handlers) {
-          dispatchLines.push(`function ${ns}:${handler.name}`);
-        }
-        dispatchLines.push(`scoreboard players set @s ${triggerName} 0`);
-        dispatchLines.push(`scoreboard players enable @s ${triggerName}`);
-        files.push({
-          path: `data/${ns}/function/__trigger_${triggerName}_dispatch.mcfunction`,
-          content: dispatchLines.join("\n")
+      let warnings = eliminator.warnings;
+      if (sourceRanges && sourceRanges.length > 0) {
+        const { resolveSourceLine } = require_compile();
+        warnings = warnings.map((w) => {
+          if (w.line == null)
+            return w;
+          const resolved = resolveSourceLine(w.line, sourceRanges);
+          return { ...w, line: resolved.line, filePath: resolved.filePath ?? w.filePath };
         });
       }
-      for (const fn of module3.functions) {
-        const consts = collectConsts(fn);
-        if (consts.size > 0) {
-          loadLines.push(...Array.from(consts).map(constSetup));
-        }
-        for (let i = 0; i < fn.blocks.length; i++) {
-          const block = fn.blocks[i];
-          const lines = [`# block: ${block.label}`];
-          if (i === 0) {
-            for (let j = 0; j < fn.params.length; j++) {
-              lines.push(`scoreboard players operation ${varRef(fn.params[j])} ${OBJ} = $p${j} ${OBJ}`);
-            }
-          }
-          for (const instr of block.instrs) {
-            lines.push(...emitInstr(instr, ns));
-          }
-          lines.push(...emitTerm(block.term, ns, fn.name));
-          const filePath = i === 0 ? `data/${ns}/function/${fn.name}.mcfunction` : `data/${ns}/function/${fn.name}/${block.label}.mcfunction`;
-          files.push({ path: filePath, content: lines.join("\n") });
-        }
-      }
-      for (const fn of module3.functions) {
-        if (fn.isLoadInit) {
-          loadLines.push(`function ${ns}:${fn.name}`);
-        }
-      }
-      files.push({
-        path: `data/${ns}/function/__load.mcfunction`,
-        content: loadLines.join("\n")
-      });
-      files.push({
-        path: `data/minecraft/tags/function/load.json`,
-        content: JSON.stringify({ values: [`${ns}:__load`] }, null, 2)
-      });
-      const tickLines = ["# RedScript tick dispatcher"];
-      for (const fnName of tickFunctionNames) {
-        tickLines.push(`function ${ns}:${fnName}`);
-      }
-      if (triggerNames.size > 0) {
-        tickLines.push(`# Trigger checks`);
-        for (const triggerName of triggerNames) {
-          tickLines.push(`execute as @a[scores={${triggerName}=1..}] run function ${ns}:__trigger_${triggerName}_dispatch`);
-        }
-      }
-      if (eventHandlers.length > 0) {
-        tickLines.push("# Event checks");
-        for (const eventType of eventTypes) {
-          const tag = types_1.EVENT_TYPES[eventType].tag;
-          const handlers = eventHandlers.filter((fn) => fn.eventHandler?.eventType === eventType);
-          for (const handler of handlers) {
-            tickLines.push(`execute as @a[tag=${tag}] run function ${ns}:${handler.name}`);
-          }
-          tickLines.push(`tag @a[tag=${tag}] remove ${tag}`);
-        }
-      }
-      if (tickFunctionNames.length > 0 || triggerNames.size > 0 || eventHandlers.length > 0) {
-        files.push({
-          path: `data/${ns}/function/__tick.mcfunction`,
-          content: tickLines.join("\n")
-        });
-        files.push({
-          path: `data/minecraft/tags/function/tick.json`,
-          content: JSON.stringify({ values: [`${ns}:__tick`] }, null, 2)
-        });
-      }
-      for (const fn of module3.functions) {
-        const eventTrigger = fn.eventTrigger;
-        if (!eventTrigger) {
-          continue;
-        }
-        let path2 = "";
-        let criteria = {};
-        switch (eventTrigger.kind) {
-          case "advancement":
-            path2 = `data/${ns}/advancements/on_advancement_${fn.name}.json`;
-            criteria = {
-              trigger: {
-                trigger: `minecraft:${eventTrigger.value}`
-              }
-            };
-            break;
-          case "craft":
-            path2 = `data/${ns}/advancements/on_craft_${fn.name}.json`;
-            criteria = {
-              crafted: {
-                trigger: "minecraft:inventory_changed",
-                conditions: {
-                  items: [
-                    {
-                      items: [eventTrigger.value]
-                    }
-                  ]
-                }
-              }
-            };
-            break;
-          case "death":
-            path2 = `data/${ns}/advancements/on_death_${fn.name}.json`;
-            criteria = {
-              death: {
-                trigger: "minecraft:entity_killed_player"
-              }
-            };
-            break;
-          case "login":
-          case "join_team":
-            continue;
-        }
-        advancements.push({
-          path: path2,
-          content: JSON.stringify({
-            criteria,
-            rewards: {
-              function: `${ns}:${fn.name}`
-            }
-          }, null, 2)
-        });
-      }
-      const stats = (0, commands_1.createEmptyOptimizationStats)();
-      if (!optimizeCommands) {
-        return { files, advancements, stats };
-      }
-      const optimized = applyFunctionOptimization(files);
-      (0, commands_1.mergeOptimizationStats)(stats, optimized.stats);
-      return { files: optimized.files, advancements, stats };
-    }
-    function generateDatapack(module3) {
-      const generated = generateDatapackWithStats(module3);
-      return [...generated.files, ...generated.advancements];
-    }
-  }
-});
-
-// ../../dist/compile.js
-var require_compile = __commonJS({
-  "../../dist/compile.js"(exports2) {
-    "use strict";
-    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
-      if (k2 === void 0) k2 = k;
-      var desc = Object.getOwnPropertyDescriptor(m, k);
-      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-        desc = { enumerable: true, get: function() {
-          return m[k];
-        } };
-      }
-      Object.defineProperty(o, k2, desc);
-    }) : (function(o, m, k, k2) {
-      if (k2 === void 0) k2 = k;
-      o[k2] = m[k];
-    }));
-    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
-      Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
-      o["default"] = v;
-    });
-    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
-      var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function(o2) {
-          var ar = [];
-          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
-          return ar;
-        };
-        return ownKeys(o);
-      };
-      return function(mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) {
-          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        }
-        __setModuleDefault(result, mod);
-        return result;
-      };
-    })();
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.preprocessSourceWithMetadata = preprocessSourceWithMetadata;
-    exports2.preprocessSource = preprocessSource;
-    exports2.compile = compile;
-    exports2.formatCompileError = formatCompileError;
-    var fs2 = __importStar(require("fs"));
-    var path2 = __importStar(require("path"));
-    var lexer_1 = require_lexer();
-    var parser_1 = require_parser();
-    var lowering_1 = require_lowering();
-    var passes_1 = require_passes();
-    var dce_1 = require_dce();
-    var mcfunction_1 = require_mcfunction();
-    var diagnostics_1 = require_diagnostics();
-    var IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/;
-    function countLines(source) {
-      return source === "" ? 0 : source.split("\n").length;
-    }
-    function offsetRanges(ranges, lineOffset) {
-      return ranges.map((range) => ({
-        startLine: range.startLine + lineOffset,
-        endLine: range.endLine + lineOffset,
-        filePath: range.filePath
-      }));
-    }
-    function preprocessSourceWithMetadata(source, options = {}) {
-      const { filePath } = options;
-      const seen = options.seen ?? /* @__PURE__ */ new Set();
-      if (filePath) {
-        seen.add(path2.resolve(filePath));
-      }
-      const lines = source.split("\n");
-      const imports = [];
-      const bodyLines = [];
-      let parsingHeader = true;
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmed = line.trim();
-        const match = line.match(IMPORT_RE);
-        if (parsingHeader && match) {
-          if (!filePath) {
-            throw new diagnostics_1.DiagnosticError("ParseError", "Import statements require a file path", { line: i + 1, col: 1 }, lines);
-          }
-          const importPath = path2.resolve(path2.dirname(filePath), match[1]);
-          if (!seen.has(importPath)) {
-            seen.add(importPath);
-            let importedSource;
-            try {
-              importedSource = fs2.readFileSync(importPath, "utf-8");
-            } catch {
-              throw new diagnostics_1.DiagnosticError("ParseError", `Cannot import '${match[1]}'`, { file: filePath, line: i + 1, col: 1 }, lines);
-            }
-            imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen }));
-          }
-          continue;
-        }
-        if (parsingHeader && (trimmed === "" || trimmed.startsWith("//"))) {
-          bodyLines.push(line);
-          continue;
-        }
-        parsingHeader = false;
-        bodyLines.push(line);
-      }
-      const body = bodyLines.join("\n");
-      const parts = [...imports.map((entry) => entry.source), body].filter(Boolean);
-      const combined = parts.join("\n");
-      const ranges = [];
-      let lineOffset = 0;
-      for (const entry of imports) {
-        ranges.push(...offsetRanges(entry.ranges, lineOffset));
-        lineOffset += countLines(entry.source);
-      }
-      if (filePath && body) {
-        ranges.push({
-          startLine: lineOffset + 1,
-          endLine: lineOffset + countLines(body),
-          filePath: path2.resolve(filePath)
-        });
-      }
-      return { source: combined, ranges };
-    }
-    function preprocessSource(source, options = {}) {
-      return preprocessSourceWithMetadata(source, options).source;
-    }
-    function compile(source, options = {}) {
-      const { namespace = "redscript", filePath, optimize: shouldOptimize = true } = options;
-      const shouldRunDce = options.dce ?? shouldOptimize;
-      let sourceLines = source.split("\n");
-      try {
-        const preprocessed = preprocessSourceWithMetadata(source, { filePath });
-        const preprocessedSource = preprocessed.source;
-        sourceLines = preprocessedSource.split("\n");
-        const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
-        const parsedAst = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
-        const dceResult = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst) : { program: parsedAst, warnings: [] };
-        const ast = dceResult.program;
-        const ir = new lowering_1.Lowering(namespace, preprocessed.ranges).lower(ast);
-        const optimized = shouldOptimize ? { ...ir, functions: ir.functions.map((fn) => (0, passes_1.optimize)(fn)) } : ir;
-        const generated = (0, mcfunction_1.generateDatapackWithStats)(optimized);
-        return {
-          success: true,
-          files: [...generated.files, ...generated.advancements],
-          advancements: generated.advancements,
-          ast,
-          ir: optimized
-        };
-      } catch (err) {
-        if (err instanceof diagnostics_1.DiagnosticError) {
-          return { success: false, error: err };
-        }
-        if (err instanceof Error) {
-          const diagnostic = (0, diagnostics_1.parseErrorMessage)("ParseError", err.message, sourceLines, filePath);
-          return { success: false, error: diagnostic };
-        }
-        return {
-          success: false,
-          error: new diagnostics_1.DiagnosticError("ParseError", String(err), { file: filePath, line: 1, col: 1 }, sourceLines)
-        };
-      }
-    }
-    function formatCompileError(result) {
-      if (result.success) {
-        return "Compilation successful";
-      }
-      if (result.error) {
-        return (0, diagnostics_1.formatError)(result.error, result.error.sourceLines?.join("\n"));
-      }
-      return "Unknown error";
+      return { program: result, warnings };
     }
   }
 });
@@ -8366,22 +8969,42 @@ var require_dist = __commonJS({
       const shouldOptimize = options.optimize ?? true;
       const shouldTypeCheck = options.typeCheck ?? true;
       const shouldRunDce = options.dce ?? shouldOptimize;
+      const mangle = options.mangle ?? false;
       const filePath = options.filePath;
       const preprocessed = (0, compile_1.preprocessSourceWithMetadata)(source, { filePath });
       const preprocessedSource = preprocessed.source;
       const tokens = new lexer_1.Lexer(preprocessedSource, filePath).tokenize();
       const parsedAst = new parser_1.Parser(tokens, preprocessedSource, filePath).parse(namespace);
-      const dceResult = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst) : { program: parsedAst, warnings: [] };
+      const allLibrarySources = [];
+      for (const li of preprocessed.libraryImports ?? []) {
+        allLibrarySources.push({ src: li.source, fp: li.filePath });
+      }
+      for (const { src, fp } of allLibrarySources) {
+        const libPreprocessed = (0, compile_1.preprocessSourceWithMetadata)(src, fp ? { filePath: fp } : {});
+        const libTokens = new lexer_1.Lexer(libPreprocessed.source, fp).tokenize();
+        const libAst = new parser_1.Parser(libTokens, libPreprocessed.source, fp).parse(namespace);
+        for (const fn of libAst.declarations)
+          fn.isLibraryFn = true;
+        parsedAst.declarations.push(...libAst.declarations);
+        parsedAst.structs.push(...libAst.structs);
+        parsedAst.implBlocks.push(...libAst.implBlocks);
+        parsedAst.enums.push(...libAst.enums);
+        parsedAst.consts.push(...libAst.consts);
+        parsedAst.globals.push(...libAst.globals);
+      }
+      const dceResult = shouldRunDce ? (0, dce_1.eliminateDeadCode)(parsedAst, preprocessed.ranges) : { program: parsedAst, warnings: [] };
       const ast = dceResult.program;
       let typeErrors;
       if (shouldTypeCheck) {
         const checker = new typechecker_1.TypeChecker(preprocessedSource, filePath);
         typeErrors = checker.check(ast);
       }
+      const scoreboardObj = options.scoreboardObjective ?? `__${namespace}`;
+      (0, lowering_1.setScoreboardObjective)(scoreboardObj);
       const lowering = new lowering_1.Lowering(namespace, preprocessed.ranges);
       const ir = lowering.lower(ast);
       let optimizedIR = ir;
-      let generated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: shouldOptimize });
+      let generated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: shouldOptimize, mangle, scoreboardObjective: scoreboardObj });
       let optimizationStats;
       if (shouldOptimize) {
         const stats = (0, commands_1.createEmptyOptimizationStats)();
@@ -8397,10 +9020,10 @@ var require_dist = __commonJS({
         }
         const copyPropagatedIR = { ...ir, functions: copyPropagatedFunctions };
         optimizedIR = { ...ir, functions: deadCodeEliminatedFunctions };
-        const baselineGenerated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: false });
-        const beforeDceGenerated = (0, mcfunction_1.generateDatapackWithStats)(copyPropagatedIR, { optimizeCommands: false });
-        const afterDceGenerated = (0, mcfunction_1.generateDatapackWithStats)(optimizedIR, { optimizeCommands: false });
-        generated = (0, mcfunction_1.generateDatapackWithStats)(optimizedIR, { optimizeCommands: true });
+        const baselineGenerated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: false, mangle, scoreboardObjective: scoreboardObj });
+        const beforeDceGenerated = (0, mcfunction_1.generateDatapackWithStats)(copyPropagatedIR, { optimizeCommands: false, mangle, scoreboardObjective: scoreboardObj });
+        const afterDceGenerated = (0, mcfunction_1.generateDatapackWithStats)(optimizedIR, { optimizeCommands: false, mangle, scoreboardObjective: scoreboardObj });
+        generated = (0, mcfunction_1.generateDatapackWithStats)(optimizedIR, { optimizeCommands: true, mangle, scoreboardObjective: scoreboardObj });
         stats.deadCodeRemoved = (0, mcfunction_1.countMcfunctionCommands)(beforeDceGenerated.files) - (0, mcfunction_1.countMcfunctionCommands)(afterDceGenerated.files);
         stats.licmHoists = generated.stats.licmHoists;
         stats.licmLoopBodies = generated.stats.licmLoopBodies;
@@ -8414,7 +9037,7 @@ var require_dist = __commonJS({
         optimizationStats = stats;
       } else {
         optimizedIR = ir;
-        generated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: false });
+        generated = (0, mcfunction_1.generateDatapackWithStats)(ir, { optimizeCommands: false, mangle, scoreboardObjective: scoreboardObj });
       }
       return {
         files: [...generated.files, ...generated.advancements],
@@ -8423,7 +9046,8 @@ var require_dist = __commonJS({
         ir: optimizedIR,
         typeErrors,
         warnings: [...dceResult.warnings, ...lowering.warnings],
-        stats: optimizationStats
+        stats: optimizationStats,
+        sourceMap: generated.sourceMap
       };
     }
     function check(source, namespace = "redscript", filePath) {
@@ -9343,6 +9967,22 @@ function registerHoverProvider(context) {
     vscode.languages.registerHoverProvider("redscript", {
       provideHover(document, position) {
         const line = document.lineAt(position.line).text;
+        const rsRange = document.getWordRangeAtPosition(position, /#rs\b/);
+        if (rsRange) {
+          const md = new vscode.MarkdownString("", true);
+          md.isTrusted = true;
+          md.appendCodeblock("#rs", "redscript");
+          md.appendMarkdown("**RS Internal Scoreboard Objective** *(compiler token)*\n\n");
+          md.appendMarkdown("Resolves to the current datapack's internal scoreboard objective at compile time.\n\n");
+          md.appendMarkdown("Default: `__<namespace>` (e.g. `__mygame` for namespace `mygame`).\n\n");
+          md.appendMarkdown("Use `#rs` in `scoreboard_get` / `scoreboard_set` when you need to read or write\n");
+          md.appendMarkdown("the compiler's own variable slots \u2014 such as in stdlib implementations.\n\n");
+          md.appendMarkdown("> \u26A0\uFE0F Unlike other `#name` tokens, `#rs` does **not** compile to the literal string `rs`.\n");
+          md.appendMarkdown("> It tracks the `--scoreboard` flag or the `__<namespace>` default.\n\n");
+          md.appendMarkdown("**Example:**\n");
+          md.appendCodeblock('scoreboard_set("timer_ticks", #rs, 0);\n// compiles to: scoreboard players set timer_ticks __mygame 0', "redscript");
+          return new vscode.Hover(md, rsRange);
+        }
         const mcRange = document.getWordRangeAtPosition(position, /#[a-zA-Z_][a-zA-Z0-9_]*/);
         if (mcRange) {
           const raw = document.getText(mcRange);

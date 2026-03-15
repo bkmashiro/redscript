@@ -307,9 +307,18 @@
     },
 
     "mc-name": {
-      "comment": "#objective, #tag, #team — unquoted MC identifier literal",
-      "name": "variable.other.mc-name.redscript",
-      "match": "#[a-zA-Z_][a-zA-Z0-9_]*"
+      "comment": "#objective, #tag, #team — unquoted MC identifier literal. #rs is the special RS-internal scoreboard objective token.",
+      "patterns": [
+        {
+          "comment": "#rs — special compiler token: resolves to the current datapack's internal scoreboard objective (__<namespace>)",
+          "name": "support.constant.rs-objective.redscript",
+          "match": "#rs\\b"
+        },
+        {
+          "name": "variable.other.mc-name.redscript",
+          "match": "#[a-zA-Z_][a-zA-Z0-9_]*"
+        }
+      ]
     },
 
     "operators": {
