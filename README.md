@@ -2,14 +2,14 @@
 
 <img src="./logo.png" alt="RedScript Logo" width="64" />
 
-<img src="https://img.shields.io/badge/RedScript-1.2.29-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+<img src="https://img.shields.io/badge/RedScript-2.0.0-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
 
 **A typed scripting language that compiles to Minecraft datapacks.**
 
 Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-920%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
+[![Tests](https://img.shields.io/badge/tests-857%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
@@ -77,20 +77,16 @@ let frame: int = 0;
 
 ---
 
-### What's New in v1.2.25
+### What's New in v2.0.0
 
-- `impl` blocks and methods for object-style APIs on structs
-- `is` type narrowing for safer entity checks
-- Static events with `@on(Event)`
-- Runtime f-strings for `say`, `title`, `actionbar`, and related output
-- Timer OOP API with `Timer::new(...)` and instance methods
-- `setTimeout(...)` and `setInterval(...)` scheduling helpers
-- `break` / `continue`, match range patterns, and full `execute` subcommands
-- `foreach` execute context modifiers like `at`, `positioned`, and `rotated`
-- Automatic MC 1.20.2+ function macro support for runtime variables
-- Builtins now accept macro parameters in any position
-- Dead code elimination that preserves public functions automatically
-- 313 Minecraft tag constants in the standard library
+- New compiler pipeline: **AST → HIR → MIR → LIR → emit**
+- New LIR optimizer passes (dead slot elimination + constant immediate folding)
+- CLI `compile` now runs on the v2 pipeline by default
+- `use "..."` import resolution fully supported in v2 (including library modules)
+- Macro calls (`^var`/`~var`) supported end-to-end in v2 emitter
+- Struct/impl lowering completed in v2 (field slots + method dispatch)
+- Unified source tree: old `src2/` merged back into `src/`
+- Published as **redscript-mc@2.0.0**
 
 ---
 

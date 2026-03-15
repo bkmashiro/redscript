@@ -158,6 +158,7 @@ export interface HIRFunction {
   decorators: Decorator[]
   body: HIRBlock
   isLibraryFn?: boolean
+  isExported?: boolean
   span?: Span
 }
 

@@ -321,10 +321,8 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
       }
     }
 
-    if (!hasErrors) {
-      if (hotReloadUrl) await hotReload(hotReloadUrl)
-      console.log('')
-    }
+    if (!hasErrors && hotReloadUrl) await hotReload(hotReloadUrl)
+    console.log('')
   }
 
   // Find all .mcrs files recursively

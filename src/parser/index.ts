@@ -214,6 +214,8 @@ export class Parser {
         // Declaration-only stub (e.g. from builtins.d.mcrs) — parse and discard
         this.advance() // consume 'declare'
         this.parseDeclareStub()
+      } else if (this.check('export')) {
+        declarations.push(this.parseExportedFnDecl())
       } else {
         declarations.push(this.parseFnDecl())
       }
@@ -326,8 +328,26 @@ export class Parser {
   // Function Declaration
   // -------------------------------------------------------------------------
 
+  /** Parse `export fn name(...)` — marks the function as exported (survives DCE). */
+  private parseExportedFnDecl(): FnDecl {
+    this.expect('export')
+    const fn = this.parseFnDecl()
+    fn.isExported = true
+    return fn
+  }
+
   private parseFnDecl(implTypeName?: string): FnDecl {
     const decorators = this.parseDecorators()
+
+    // Map @keep decorator to isExported flag (backward compat)
+    let isExported: boolean | undefined
+    const filteredDecorators = decorators.filter(d => {
+      if (d.name === 'keep') {
+        isExported = true
+        return false
+      }
+      return true
+    })
 
     const fnToken = this.expect('fn')
     const name = this.expect('ident').value
@@ -343,7 +363,8 @@ export class Parser {
     const body = this.parseBlock()
 
     const fn: import('../ast/types').FnDecl = this.withLoc(
-      { name, params, returnType, decorators, body, isLibraryFn: this.inLibraryMode || undefined },
+      { name, params, returnType, decorators: filteredDecorators, body,
+        isLibraryFn: this.inLibraryMode || undefined, isExported },
       fnToken,
     )
     return fn

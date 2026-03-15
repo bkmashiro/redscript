@@ -76,6 +76,7 @@ function lowerFunction(fn: FnDecl): HIRFunction {
     decorators: fn.decorators,
     body: lowerBlock(fn.body),
     isLibraryFn: fn.isLibraryFn,
+    isExported: fn.isExported,
     span: fn.span,
   }
 }

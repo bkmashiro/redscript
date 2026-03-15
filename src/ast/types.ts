@@ -268,6 +268,8 @@ export interface FnDecl {
    *  Library functions are NOT MC entry points — DCE only keeps them if they
    *  are reachable from a non-library (user) entry point. */
   isLibraryFn?: boolean
+  /** True when declared with `export fn` or `@keep fn` — survives DCE. */
+  isExported?: boolean
   name: string
   params: Param[]
   returnType: TypeNode

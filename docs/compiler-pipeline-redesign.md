@@ -1,7 +1,7 @@
 # RedScript Compiler Pipeline Redesign
 
-> Status: **planned** — target next major refactor cycle  
-> Written: 2026-03-15
+> Status: **implemented** in `redscript-mc@2.0.0`  
+> Written: 2026-03-15 · Updated: 2026-03-15
 
 ---
 
@@ -1666,7 +1666,7 @@ it passes 920/920 tests, then merge and delete the old code.
 
 ```
 src/          (current compiler — untouched during refactor)
-src2/         (new compiler — staged implementation)
+src/         (new compiler — staged implementation)
   parser/     → copy of existing src/parser/ (Stage 1, keep as-is)
   lexer/       → copy of existing src/lexer/ (Stage 1, keep as-is)
   ast/         → copy of existing src/ast/ types
@@ -1711,7 +1711,7 @@ Add **IR-level unit tests** for stages 2–6 independently:
 - Optimizer tests: input MIR → expected output MIR for each pass
 - LIR tests: check MIR→LIR lowering of specific instruction patterns
 
-These new tests live in `src2/__tests__/`.
+These new tests live in `src/__tests__/`.
 
 ### What to tell Claude
 
@@ -1975,10 +1975,10 @@ Known breaking changes:
 - Update test fixtures as part of Stage 7 (when the full pipeline is wired up and tests are being migrated)
 - The old compiler in `src/` still exists until the refactor is complete — old tests can still run against it at any time
 
-### Test structure for the new compiler (`src2/__tests__/`)
+### Test structure for the new compiler (`src/__tests__/`)
 
 ```
-src2/__tests__/
+src/__tests__/
   hir/
     desugar.test.ts       for → while transforms, ternary expansion, etc.
     execute-blocks.test.ts  execute context block lowering to helper fns
@@ -2110,10 +2110,10 @@ compute the safe batch, insert it.
 
 ### Placement
 
-Profiling mode lives in `src2/runtime/index.ts` (or `src/runtime/` now).
+Profiling mode lives in `src/runtime/index.ts` (or `src/runtime/` now).
 It is off by default and adds zero overhead to the 920 e2e tests.
 
-New test file: `src2/__tests__/profiler/stdlib-accuracy.test.ts`
+New test file: `src/__tests__/profiler/stdlib-accuracy.test.ts`
 Runs the error analysis for all math functions and asserts max error < threshold.
 This becomes a regression test: if a stdlib change degrades accuracy, the test fails.
 
