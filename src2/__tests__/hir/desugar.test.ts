@@ -15,9 +15,9 @@ function getBody(source: string): HIRStmt[] {
 }
 
 describe('HIR lowering — for loop desugaring', () => {
-  test('for(init;cond;step) → let + while with step appended', () => {
+  test('for(init;cond;step) → let + while with step in separate block', () => {
     const body = getBody('fn f() { for (let i: int = 0; i < 10; i = i + 1) { let x: int = i; } }')
-    // Should produce: let i = 0; while(i < 10) { let x = i; i = i + 1; }
+    // Should produce: let i = 0; while(i < 10) { body } step { i = i + 1 }
     expect(body).toHaveLength(2)
     expect(body[0].kind).toBe('let')
     const letStmt = body[0] as Extract<HIRStmt, { kind: 'let' }>
@@ -27,10 +27,14 @@ describe('HIR lowering — for loop desugaring', () => {
     const whileStmt = body[1] as Extract<HIRStmt, { kind: 'while' }>
     expect(whileStmt.cond.kind).toBe('binary')
 
-    // while body: original body + step
-    expect(whileStmt.body).toHaveLength(2)
+    // while body: only the original body (step is separate)
+    expect(whileStmt.body).toHaveLength(1)
     expect(whileStmt.body[0].kind).toBe('let') // let x = i
-    expect(whileStmt.body[1].kind).toBe('expr') // i = i + 1
+
+    // step block: i = i + 1 (separate so continue still increments)
+    expect(whileStmt.step).toBeDefined()
+    expect(whileStmt.step).toHaveLength(1)
+    expect(whileStmt.step![0].kind).toBe('expr') // i = i + 1
   })
 
   test('for loop without init', () => {
@@ -43,7 +47,7 @@ describe('HIR lowering — for loop desugaring', () => {
 })
 
 describe('HIR lowering — for_range desugaring', () => {
-  test('for i in 0..10 → let + while', () => {
+  test('for i in 0..10 → let + while with step block', () => {
     const body = getBody('fn f() { for i in 0..10 { let x: int = i; } }')
     expect(body).toHaveLength(2)
 
@@ -58,10 +62,13 @@ describe('HIR lowering — for_range desugaring', () => {
     expect(whileStmt.cond.kind).toBe('binary')
     const cond = whileStmt.cond as Extract<HIRExpr, { kind: 'binary' }>
     expect(cond.op).toBe('<')
-    // body: original body + increment
-    expect(whileStmt.body.length).toBeGreaterThanOrEqual(2)
-    const lastStmt = whileStmt.body[whileStmt.body.length - 1]
-    expect(lastStmt.kind).toBe('expr')
+    // body: only user body (step is separate)
+    expect(whileStmt.body).toHaveLength(1)
+    expect(whileStmt.body[0].kind).toBe('let')
+    // step: i = i + 1 (in separate block so continue still increments)
+    expect(whileStmt.step).toBeDefined()
+    expect(whileStmt.step).toHaveLength(1)
+    expect(whileStmt.step![0].kind).toBe('expr')
   })
 })
 

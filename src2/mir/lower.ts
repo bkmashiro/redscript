@@ -35,8 +35,8 @@ class FnContext {
   private blockCounter = 0
   readonly blocks: MIRBlock[] = []
   private currentBlock: MIRBlock
-  /** Stack of (loopHeader, loopExit) for break/continue */
-  private loopStack: { header: BlockId; exit: BlockId }[] = []
+  /** Stack of (loopHeader, loopExit, continueTo) for break/continue */
+  private loopStack: { header: BlockId; exit: BlockId; continueTo: BlockId }[] = []
   /** Extracted helper functions for execute blocks */
   readonly helperFunctions: MIRFunction[] = []
   private readonly namespace: string
@@ -84,15 +84,15 @@ class FnContext {
     return this.currentBlock
   }
 
-  pushLoop(header: BlockId, exit: BlockId): void {
-    this.loopStack.push({ header, exit })
+  pushLoop(header: BlockId, exit: BlockId, continueTo?: BlockId): void {
+    this.loopStack.push({ header, exit, continueTo: continueTo ?? header })
   }
 
   popLoop(): void {
     this.loopStack.pop()
   }
 
-  currentLoop(): { header: BlockId; exit: BlockId } | undefined {
+  currentLoop(): { header: BlockId; exit: BlockId; continueTo: BlockId } | undefined {
     return this.loopStack[this.loopStack.length - 1]
   }
 
@@ -250,7 +250,7 @@ function lowerStmt(
     case 'continue': {
       const loop = ctx.currentLoop()
       if (!loop) throw new Error('continue outside loop')
-      ctx.terminate({ kind: 'jump', target: loop.header })
+      ctx.terminate({ kind: 'jump', target: loop.continueTo })
       const dead = ctx.newBlock('post_continue')
       ctx.switchTo(dead)
       break
@@ -289,6 +289,15 @@ function lowerStmt(
       const bodyBlock = ctx.newBlock('loop_body')
       const exitBlock = ctx.newBlock('loop_exit')
 
+      // If there's a step block (for/for_range), create a latch block that
+      // executes the step and then jumps to the header. Continue targets the
+      // latch so the increment always runs.
+      let latchBlock: MIRBlock | null = null
+      if (stmt.step && stmt.step.length > 0) {
+        latchBlock = ctx.newBlock('loop_latch')
+      }
+      const continueTarget = latchBlock ? latchBlock.id : headerBlock.id
+
       // Jump from current block to header
       ctx.terminate({ kind: 'jump', target: headerBlock.id })
 
@@ -299,11 +308,20 @@ function lowerStmt(
 
       // Body
       ctx.switchTo(bodyBlock)
-      ctx.pushLoop(headerBlock.id, exitBlock.id)
+      ctx.pushLoop(headerBlock.id, exitBlock.id, continueTarget)
       lowerBlock(stmt.body, ctx, new Map(scope))
       ctx.popLoop()
       if (isPlaceholderTerm(ctx.current().term)) {
-        ctx.terminate({ kind: 'jump', target: headerBlock.id })
+        ctx.terminate({ kind: 'jump', target: continueTarget })
+      }
+
+      // Latch block (step): execute increment, then jump to header
+      if (latchBlock && stmt.step) {
+        ctx.switchTo(latchBlock)
+        lowerBlock(stmt.step, ctx, new Map(scope))
+        if (isPlaceholderTerm(ctx.current().term)) {
+          ctx.terminate({ kind: 'jump', target: headerBlock.id })
+        }
       }
 
       ctx.switchTo(exitBlock)

@@ -130,7 +130,7 @@ export type HIRStmt =
   | { kind: 'break'; span?: Span }
   | { kind: 'continue'; span?: Span }
   | { kind: 'if'; cond: HIRExpr; then: HIRBlock; else_?: HIRBlock; span?: Span }
-  | { kind: 'while'; cond: HIRExpr; body: HIRBlock; span?: Span }
+  | { kind: 'while'; cond: HIRExpr; body: HIRBlock; step?: HIRBlock; span?: Span }
   // foreach preserved (entity iteration is MC-specific, not just sugar)
   | { kind: 'foreach'; binding: string; iterable: HIRExpr; body: HIRBlock; executeContext?: string; span?: Span }
   // match preserved (not trivially desugarable)

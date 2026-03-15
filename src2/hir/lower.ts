@@ -144,14 +144,14 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
         if (Array.isArray(init)) stmts.push(...init)
         else stmts.push(init)
       }
-      // while(cond) { body; step }
+      // while(cond) { body } step { step_expr }
       const body = lowerBlock(stmt.body)
-      body.push({ kind: 'expr', expr: lowerExpr(stmt.step), span: stmt.span })
-      stmts.push({ kind: 'while', cond: lowerExpr(stmt.cond), body, span: stmt.span })
+      const step: HIRStmt[] = [{ kind: 'expr', expr: lowerExpr(stmt.step), span: stmt.span }]
+      stmts.push({ kind: 'while', cond: lowerExpr(stmt.cond), body, step, span: stmt.span })
       return stmts
     }
 
-    // --- Desugaring: for_range → let + while ---
+    // --- Desugaring: for_range → let + while(cond) { body } step { v++ } ---
     case 'for_range': {
       const varName = stmt.varName
       const initStmt: HIRStmt = {
@@ -162,8 +162,8 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
         span: stmt.span,
       }
       const body = lowerBlock(stmt.body)
-      // step: v = v + 1
-      body.push({
+      // step: v = v + 1 (in separate step block so continue still increments)
+      const step: HIRStmt[] = [{
         kind: 'expr',
         expr: {
           kind: 'assign',
@@ -175,7 +175,7 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
             right: { kind: 'int_lit', value: 1 },
           },
         },
-      })
+      }]
       const whileStmt: HIRStmt = {
         kind: 'while',
         cond: {
@@ -185,6 +185,7 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
           right: lowerExpr(stmt.end),
         },
         body,
+        step,
         span: stmt.span,
       }
       return [initStmt, whileStmt]
