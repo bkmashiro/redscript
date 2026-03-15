@@ -404,23 +404,18 @@ function lowerTerminator(
     case 'branch': {
       const condSlot = operandToSlot(term.cond, ctx, instrs)
 
-      // Then branch → call_if_matches ... 1
+      // Then branch: use `return run function` to atomically call and exit.
+      // This prevents fallthrough to the else-branch even when recursive calls
+      // (e.g. continue → loop header → loop body) clobber the condition slot.
       const thenFnName = emitBranchTarget(term.then, fn, ctx, visited)
       instrs.push({
-        kind: 'call_if_matches',
-        fn: ctx.qualifiedName(thenFnName),
-        slot: condSlot,
-        range: '1',
+        kind: 'raw',
+        cmd: `execute if score ${condSlot.player} ${condSlot.obj} matches 1 run return run function ${ctx.qualifiedName(thenFnName)}`,
       })
 
-      // Else branch → call_unless_matches ... 1
+      // Else branch: if we reach here, cond was not 1 (the then-path returned).
       const elseFnName = emitBranchTarget(term.else, fn, ctx, visited)
-      instrs.push({
-        kind: 'call_unless_matches',
-        fn: ctx.qualifiedName(elseFnName),
-        slot: condSlot,
-        range: '1',
-      })
+      instrs.push({ kind: 'call', fn: ctx.qualifiedName(elseFnName) })
       break
     }
   }

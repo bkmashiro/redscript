@@ -569,16 +569,17 @@ describe('MIR→LIR lowering — branch', () => {
     const lir = lowerToLIR(mod)
     const main = lir.functions.find(f => f.name === 'main')!
 
-    // Should have: score_set $cond 1, call_if_matches ..., call_unless_matches ...
-    const ifMatch = main.instructions.find(i => i.kind === 'call_if_matches') as any
-    expect(ifMatch).toBeDefined()
-    expect(ifMatch.slot).toEqual(slot('cond'))
-    expect(ifMatch.range).toBe('1')
+    // Then-branch uses `return run function` (raw instruction) to prevent
+    // fallthrough when recursive calls clobber the condition slot.
+    const rawReturn = main.instructions.find(
+      i => i.kind === 'raw' && (i as any).cmd.includes('return run function'),
+    ) as any
+    expect(rawReturn).toBeDefined()
+    expect(rawReturn.cmd).toContain('matches 1')
 
-    const unlessMatch = main.instructions.find(i => i.kind === 'call_unless_matches') as any
-    expect(unlessMatch).toBeDefined()
-    expect(unlessMatch.slot).toEqual(slot('cond'))
-    expect(unlessMatch.range).toBe('1')
+    // Else-branch is an unconditional call (fallthrough only reached when cond≠1)
+    const elseCall = main.instructions.find(i => i.kind === 'call') as any
+    expect(elseCall).toBeDefined()
 
     // The then/else blocks should be separate functions
     const yesFn = lir.functions.find(f => f.name.includes('yes'))
