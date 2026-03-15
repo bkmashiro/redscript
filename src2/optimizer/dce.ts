@@ -77,8 +77,12 @@ function recomputePreds(blocks: MIRBlock[]): MIRBlock[] {
 }
 
 function hasSideEffects(instr: MIRInstr): boolean {
-  return instr.kind === 'call' || instr.kind === 'call_macro' ||
-    instr.kind === 'call_context' || instr.kind === 'nbt_write'
+  if (instr.kind === 'call' || instr.kind === 'call_macro' ||
+    instr.kind === 'call_context' || instr.kind === 'nbt_write') return true
+  // Return field temps (__rf_) write to global return slots — not dead even if unused locally
+  const dst = getDst(instr)
+  if (dst && dst.startsWith('__rf_')) return true
+  return false
 }
 
 function getTermTargets(term: MIRInstr): BlockId[] {
