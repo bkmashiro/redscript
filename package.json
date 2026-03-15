@@ -2,17 +2,18 @@
   "name": "redscript-mc",
   "version": "1.2.30",
   "description": "A high-level programming language that compiles to Minecraft datapacks",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "bin": {
-    "redscript": "dist/cli.js",
-    "rsc": "dist/cli.js"
+    "redscript": "dist/src/cli.js",
+    "rsc": "dist/src/cli.js"
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
     "test": "jest",
     "cli": "ts-node src/cli.ts",
-    "validate-mc": "jest src/__tests__/mc-syntax.test.ts --verbose"
+    "validate-mc": "jest src/__tests__/mc-syntax.test.ts --verbose",
+    "postbuild": "cp dist/src/cli.js dist/cli.js && cp dist/src/index.js dist/index.js && cp dist/src/compile.js dist/compile.js 2>/dev/null || true"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
