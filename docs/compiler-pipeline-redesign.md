@@ -221,3 +221,267 @@ both at once is why the current IR is hard to extend.
 ---
 
 *This document was drafted to guide the next major refactor. Details may change during implementation.*
+
+---
+
+## Tech Stack & Infrastructure Decisions
+
+### Language: stay in TypeScript
+
+The MC target is too domain-specific for a general backend (LLVM, Cranelift, QBE)
+to add value. The compilation workload is also small enough (functions are
+typically < 100 MIR instructions) that performance is not a concern.
+TS gives good type safety for IR node types and is already the existing codebase.
+
+### SSA: no, use versioned temporaries
+
+| | SSA | Versioned temps |
+|---|---|---|
+| Constant prop | trivial one-pass | fixed-point iteration needed |
+| DCE | trivial | single backward sweep |
+| Copy prop | trivial | one extra level of indirection |
+| Construction | dominator tree + φ-insertion | trivial, just increment a counter |
+| Deconstruction | must run before LIR | N/A |
+
+For function bodies in the 20–200 instruction range with no complex loop
+induction variable analysis, versioned temps are sufficient. SSA complexity
+is not justified at this scale.
+
+### Pass framework: nanopass style
+
+Each optimization pass should be a pure function:
+
+```typescript
+type Pass = (module: MIRModule) => MIRModule
+```
+
+- No mutation of shared global state
+- Can be verified with `verifyMIR(module)` between passes
+- Pipeline is just an array of passes: `const pipeline: Pass[] = [constantFold, copyProp, dce, ...]`
+- Easy to toggle a pass for debugging
+- Easy to add `before/after` IR dumps per pass
+
+Current code mixes optimization and lowering in the same methods.
+The nanopass shape forces separation.
+
+### What to reuse from the current codebase
+
+| Module | Verdict | Notes |
+|---|---|---|
+| `src/parser/` | **keep as-is** | solid, already produces typed AST |
+| `src/lexer/` | **keep as-is** | —  |
+| `src/runtime/` | **keep as-is** | MC runtime simulator used in tests |
+| `src/__tests__/` | **keep e2e tests** | regression suite covering `.mcrs → .mcfunction` |
+| `src/optimizer/passes.ts` | **port logic, rewrite impl** | copy the *idea*, not the regex machinery |
+| `src/optimizer/commands.ts` | **discard** | regex-based command matching, replace with typed LIR |
+| `src/ir/` | **replace** | extend with 3-address form and explicit CFG |
+| `src/lowering/` | **split into Stage 2+3+5** | 3,500-line file doing too many things |
+| `src/codegen/` | **split into Stage 6+7** | keep emission logic, rebuild on new LIR |
+
+---
+
+## Current Architecture (as of v1.2.x)
+
+Knowing what we have makes migration planning concrete.
+
+```
+src/
+  lexer/index.ts         Tokenizer
+  parser/index.ts        Recursive-descent parser → AST
+  lowering/index.ts      AST → IR  (3,500 lines; Stages 2+3+5 merged)
+  ir/index.ts            IR types: IRModule, IRFunction, IRBlock, IRInstr
+  optimizer/
+    passes.ts            Optimization passes on 2-addr IR
+    commands.ts          Regex-based command analysis (OBJ pattern etc.)
+    structure.ts         Structural analysis helpers
+  codegen/
+    mcfunction/index.ts  IR → .mcfunction text files
+  compile.ts             Top-level compile() entry point
+  cli.ts                 CLI wrapper
+  runtime/index.ts       MCRuntime: scoreboard + storage simulator for tests
+  stdlib/
+    math.mcrs            sin/cos/sqrt tables + trig, 91-entry lookup
+    vec.mcrs             2D/3D vector ops using fixed-point
+    advanced.mcrs        smoothstep, smootherstep, clamp, etc.
+    bigint.mcrs          8-limb base-10000 BigInt
+    timer.mcrs           single-instance Timer (tick countdown)
+```
+
+The IR is 2-address:
+
+```
+x = a      (copy)
+x += b     (in-place add)
+x *= c     (in-place mul)
+```
+
+Arithmetic sequences are modeled as chains of in-place updates on a single
+destination, which obscures the value-dependency graph and complicates CSE.
+
+Optimization passes operate on `IRInstr` objects that contain raw MC command
+strings. Several passes (copy propagation, CSE, block merge) parse those strings
+with regular expressions to extract slot names and objective names, which is
+fragile and tightly coupled to the objective naming scheme.
+
+---
+
+## Lessons Learned / Design Pitfalls
+
+These are real bugs or design limitations that shaped the current codebase.
+The redesign should address all of them.
+
+### 1. Global mutable objective name state
+
+**Problem:** The scoreboard objective name (`rs`, then `__namespace`) is stored
+in a module-level mutable variable. To support multiple datapacks in one process,
+we had to add `setScoreboardObjective()`, `setOptimizerObjective()`,
+`setStructureObjective()` — three separate setters across three files.
+The optimizer's regex patterns also had to be regenerated dynamically.
+
+**Root cause:** objective name was a constant baked into every pass.
+
+**Fix in redesign:** Pass a `CompileContext` record through the entire pipeline.
+No global state.
+
+---
+
+### 2. Optimizer regex matching on command strings
+
+**Problem:** Copy propagation, CSE, and block merge all pattern-match on raw
+MC command text like `"scoreboard players operation $x rs = $y rs"`.
+When the objective name changed from `rs` to `__namespace`, every regex had
+to be updated. When the regex didn't account for a case (e.g. `$x rs 0`),
+the pass silently failed.
+
+**Root cause:** IR instructions are strings, not typed nodes.
+
+**Fix in redesign:** LIR instructions are typed (e.g. `ScoreCopy`, `ScoreAdd`).
+Passes pattern-match on structured nodes, not strings.
+
+---
+
+### 3. Lowering, desugaring, and macro detection all in one pass
+
+**Problem:** `src/lowering/index.ts` is 3,500 lines that simultaneously:
+- Desugar `for`/`+=`/ternary
+- Build basic blocks and terminators
+- Handle builtin dispatch (particle, setblock, tp, ...)
+- Detect macro parameters and rewrite coordinates as `$(param)`
+- Manage function specialization for stdlib callbacks
+- Track struct fields and impl method dispatch
+
+Adding any new feature requires understanding all of this at once.
+
+**Fix in redesign:** Each of these is a separate stage.
+
+---
+
+### 4. `\x01` sentinel for macro line prefix
+
+**Problem:** When a builtin command needed a `$` prefix for MC macro syntax
+(e.g. `$particle ... ^$(px) ...`), the lowering used a literal `$` prefix.
+The codegen's `resolveRaw()` then saw `$particle` and allocated a fresh
+temporary named `particle`, replacing the `$` prefix with `$v` (or whatever
+the temp was allocated as). The particle command silently became `$v minecraft:end_rod ...`
+which MC ignored.
+
+**Root cause:** The `$var` variable reference syntax and the MC macro `$` line
+prefix shared the same sigil in raw command strings.
+
+**Fix applied:** Use `\x01` as sentinel in IR; codegen converts `\x01` → `$`
+after variable resolution.
+
+**Fix in redesign:** Typed LIR instruction `MacroParticle { ... }` — no raw
+string parsing needed.
+
+---
+
+### 5. Cross-function variable name collision
+
+**Problem:** Two functions `foo` and `bar` could each declare a variable `x`,
+both getting lowered to scoreboard slot `$x`. If both were inlined or called
+in the same tick context, they shared the slot.
+
+**Fix applied:** IR variable names are scoped as `$fnname_varname`.
+
+**Fix in redesign:** 3-address MIR uses globally-unique temporaries (counter-based).
+Slot allocation is a separate explicit pass.
+
+---
+
+### 6. `mc_name` early-return bypassed `#rs` resolution
+
+**Problem:** In `exprToScoreboardObjective`, the handler for `mc_name` returned
+`expr.value` directly, bypassing the `#rs → LOWERING_OBJ` special case.
+All timer stdlib tests that used `#rs` as the objective were matching the
+literal string `"rs"` instead of the namespace-specific objective.
+
+**Root cause:** Early-return before the special-case check.
+
+**Fix applied:** Check `value === 'rs'` before the early return.
+
+**Fix in redesign:** Objective references should be a first-class IR type,
+not a string that might be the literal `"rs"` or the special token `"rs"`.
+
+---
+
+### 7. Timer is single-instance
+
+**Problem:** `timer.mcrs` stores tick count and active state on fake players
+`timer_ticks` and `timer_active`. All Timer instances share the same player,
+so only one Timer can be active at a time.
+
+**Root cause:** No per-instance storage mechanism. The `_id` field was stubbed
+but never implemented.
+
+**Path forward:** Per-instance state needs either:
+- Named fake player per instance: `timer_1_ticks`, `timer_2_ticks`, ...  (requires macro `$-prefixed scoreboard` commands)
+- NBT array slot per instance (same pattern as BigInt limbs)
+
+---
+
+### 8. `^varname` not supported in lexer until v1.2.x
+
+**Problem:** `^px` (local coordinate with variable offset) was lexed as two
+tokens: `^` (local_coord) + `px` (ident). The parser then failed with
+"Expected ')' but got 'ident'".
+
+Only `~varname` (relative coordinate) supported variable names.
+This made the macro-based dynamic particle positioning impossible to write.
+
+**Fix applied:** Lexer now reads `^identifier` as a single `local_coord` token.
+
+**Fix in redesign:** `^varname` and `~varname` should be unified as
+`LocalCoord(varname | number)` and `RelCoord(varname | number)` in the AST.
+
+---
+
+### 9. sin_fixed is a lookup table, and that is correct
+
+Not a pitfall — a deliberate constraint.
+
+MC scoreboards support only 32-bit integer arithmetic (add, sub, mul, div, mod).
+There is no trigonometric instruction. Taylor series (`sin x = x - x³/6 + ...`)
+overflows INT32 by the third term in fixed-point ×1000 representation.
+CORDIC requires ~20 integer iterations per call.
+
+A 91-entry table (0°–90° with quadrant symmetry) gives exact 1° resolution
+in O(1) and is the standard approach on integer-only platforms (GBA BIOS,
+early DSP chips, NDS).
+
+**Implication for redesign:** The `sin_fixed` table pattern (initialized at
+`@load`, read via storage array indexing + macros) is a first-class language
+pattern, not a hack. The stdlib should keep it.
+
+---
+
+### 10. Datapack objective collision (the `rs` problem)
+
+**Problem:** All compiled datapacks shared a single scoreboard objective named
+`rs`. Two datapacks in the same world had their mangle tables collide — the
+`$a rs` slot meant different things in each datapack's load function.
+
+**Fix applied:** Default objective is now `__<namespace>` (double-underscore
+prefix, following the `__load`/`__tick` convention).
+
+**Fix in redesign:** `CompileContext` carries the objective name. No global.
