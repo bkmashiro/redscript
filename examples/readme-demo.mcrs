@@ -38,94 +38,94 @@ let on:    bool = false;
     foreach (p in @a) at @s {
 
         // col 0  ^-8
-        if (s0 > -1000) { particle("minecraft:flame",   ^-8, ^0.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s0 > -750)  { particle("minecraft:flame",   ^-8, ^1.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s0 > -500)  { particle("minecraft:flame",   ^-8, ^1.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s0 > -250)  { particle("minecraft:flame",   ^-8, ^2.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s0 >  0)    { particle("minecraft:end_rod", ^-8, ^2.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s0 >  250)  { particle("minecraft:end_rod", ^-8, ^3.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s0 >  500)  { particle("minecraft:end_rod", ^-8, ^3.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s0 >  750)  { particle("minecraft:soul_fire_flame", ^-8, ^4.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
+        if (s0 > -1000) { particle("minecraft:flame",   ^-8, ^0.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s0 > -750)  { particle("minecraft:flame",   ^-8, ^1.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s0 > -500)  { particle("minecraft:flame",   ^-8, ^1.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s0 > -250)  { particle("minecraft:flame",   ^-8, ^2.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s0 >  0)    { particle("minecraft:end_rod", ^-8, ^2.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s0 >  250)  { particle("minecraft:end_rod", ^-8, ^3.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s0 >  500)  { particle("minecraft:end_rod", ^-8, ^3.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s0 >  750)  { particle("minecraft:soul_fire_flame", ^-8, ^4.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
 
         // col 1  ^-6
-        if (s1 > -1000) { particle("minecraft:flame",   ^-6, ^0.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s1 > -750)  { particle("minecraft:flame",   ^-6, ^1.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s1 > -500)  { particle("minecraft:flame",   ^-6, ^1.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s1 > -250)  { particle("minecraft:flame",   ^-6, ^2.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s1 >  0)    { particle("minecraft:end_rod", ^-6, ^2.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s1 >  250)  { particle("minecraft:end_rod", ^-6, ^3.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s1 >  500)  { particle("minecraft:end_rod", ^-6, ^3.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s1 >  750)  { particle("minecraft:soul_fire_flame", ^-6, ^4.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
+        if (s1 > -1000) { particle("minecraft:flame",   ^-6, ^0.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s1 > -750)  { particle("minecraft:flame",   ^-6, ^1.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s1 > -500)  { particle("minecraft:flame",   ^-6, ^1.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s1 > -250)  { particle("minecraft:flame",   ^-6, ^2.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s1 >  0)    { particle("minecraft:end_rod", ^-6, ^2.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s1 >  250)  { particle("minecraft:end_rod", ^-6, ^3.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s1 >  500)  { particle("minecraft:end_rod", ^-6, ^3.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s1 >  750)  { particle("minecraft:soul_fire_flame", ^-6, ^4.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
 
         // col 2  ^-4
-        if (s2 > -1000) { particle("minecraft:flame",   ^-4, ^0.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s2 > -750)  { particle("minecraft:flame",   ^-4, ^1.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s2 > -500)  { particle("minecraft:flame",   ^-4, ^1.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s2 > -250)  { particle("minecraft:flame",   ^-4, ^2.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s2 >  0)    { particle("minecraft:end_rod", ^-4, ^2.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s2 >  250)  { particle("minecraft:end_rod", ^-4, ^3.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s2 >  500)  { particle("minecraft:end_rod", ^-4, ^3.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s2 >  750)  { particle("minecraft:soul_fire_flame", ^-4, ^4.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
+        if (s2 > -1000) { particle("minecraft:flame",   ^-4, ^0.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s2 > -750)  { particle("minecraft:flame",   ^-4, ^1.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s2 > -500)  { particle("minecraft:flame",   ^-4, ^1.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s2 > -250)  { particle("minecraft:flame",   ^-4, ^2.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s2 >  0)    { particle("minecraft:end_rod", ^-4, ^2.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s2 >  250)  { particle("minecraft:end_rod", ^-4, ^3.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s2 >  500)  { particle("minecraft:end_rod", ^-4, ^3.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s2 >  750)  { particle("minecraft:soul_fire_flame", ^-4, ^4.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
 
         // col 3  ^-2
-        if (s3 > -1000) { particle("minecraft:flame",   ^-2, ^0.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s3 > -750)  { particle("minecraft:flame",   ^-2, ^1.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s3 > -500)  { particle("minecraft:flame",   ^-2, ^1.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s3 > -250)  { particle("minecraft:flame",   ^-2, ^2.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s3 >  0)    { particle("minecraft:end_rod", ^-2, ^2.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s3 >  250)  { particle("minecraft:end_rod", ^-2, ^3.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s3 >  500)  { particle("minecraft:end_rod", ^-2, ^3.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s3 >  750)  { particle("minecraft:soul_fire_flame", ^-2, ^4.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
+        if (s3 > -1000) { particle("minecraft:flame",   ^-2, ^0.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s3 > -750)  { particle("minecraft:flame",   ^-2, ^1.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s3 > -500)  { particle("minecraft:flame",   ^-2, ^1.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s3 > -250)  { particle("minecraft:flame",   ^-2, ^2.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s3 >  0)    { particle("minecraft:end_rod", ^-2, ^2.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s3 >  250)  { particle("minecraft:end_rod", ^-2, ^3.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s3 >  500)  { particle("minecraft:end_rod", ^-2, ^3.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s3 >  750)  { particle("minecraft:soul_fire_flame", ^-2, ^4.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
 
         // col 4  ^ 0  (center)
-        if (s4 > -1000) { particle("minecraft:flame",   ^0, ^0.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s4 > -750)  { particle("minecraft:flame",   ^0, ^1.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s4 > -500)  { particle("minecraft:flame",   ^0, ^1.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s4 > -250)  { particle("minecraft:flame",   ^0, ^2.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s4 >  0)    { particle("minecraft:end_rod", ^0, ^2.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s4 >  250)  { particle("minecraft:end_rod", ^0, ^3.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s4 >  500)  { particle("minecraft:end_rod", ^0, ^3.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s4 >  750)  { particle("minecraft:soul_fire_flame", ^0, ^4.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
+        if (s4 > -1000) { particle("minecraft:flame",   ^0, ^0.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s4 > -750)  { particle("minecraft:flame",   ^0, ^1.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s4 > -500)  { particle("minecraft:flame",   ^0, ^1.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s4 > -250)  { particle("minecraft:flame",   ^0, ^2.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s4 >  0)    { particle("minecraft:end_rod", ^0, ^2.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s4 >  250)  { particle("minecraft:end_rod", ^0, ^3.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s4 >  500)  { particle("minecraft:end_rod", ^0, ^3.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s4 >  750)  { particle("minecraft:soul_fire_flame", ^0, ^4.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
 
         // col 5  ^ 2
-        if (s5 > -1000) { particle("minecraft:flame",   ^2, ^0.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s5 > -750)  { particle("minecraft:flame",   ^2, ^1.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s5 > -500)  { particle("minecraft:flame",   ^2, ^1.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s5 > -250)  { particle("minecraft:flame",   ^2, ^2.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s5 >  0)    { particle("minecraft:end_rod", ^2, ^2.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s5 >  250)  { particle("minecraft:end_rod", ^2, ^3.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s5 >  500)  { particle("minecraft:end_rod", ^2, ^3.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s5 >  750)  { particle("minecraft:soul_fire_flame", ^2, ^4.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
+        if (s5 > -1000) { particle("minecraft:flame",   ^2, ^0.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s5 > -750)  { particle("minecraft:flame",   ^2, ^1.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s5 > -500)  { particle("minecraft:flame",   ^2, ^1.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s5 > -250)  { particle("minecraft:flame",   ^2, ^2.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s5 >  0)    { particle("minecraft:end_rod", ^2, ^2.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s5 >  250)  { particle("minecraft:end_rod", ^2, ^3.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s5 >  500)  { particle("minecraft:end_rod", ^2, ^3.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s5 >  750)  { particle("minecraft:soul_fire_flame", ^2, ^4.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
 
         // col 6  ^ 4
-        if (s6 > -1000) { particle("minecraft:flame",   ^4, ^0.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s6 > -750)  { particle("minecraft:flame",   ^4, ^1.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s6 > -500)  { particle("minecraft:flame",   ^4, ^1.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s6 > -250)  { particle("minecraft:flame",   ^4, ^2.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s6 >  0)    { particle("minecraft:end_rod", ^4, ^2.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s6 >  250)  { particle("minecraft:end_rod", ^4, ^3.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s6 >  500)  { particle("minecraft:end_rod", ^4, ^3.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s6 >  750)  { particle("minecraft:soul_fire_flame", ^4, ^4.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
+        if (s6 > -1000) { particle("minecraft:flame",   ^4, ^0.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s6 > -750)  { particle("minecraft:flame",   ^4, ^1.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s6 > -500)  { particle("minecraft:flame",   ^4, ^1.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s6 > -250)  { particle("minecraft:flame",   ^4, ^2.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s6 >  0)    { particle("minecraft:end_rod", ^4, ^2.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s6 >  250)  { particle("minecraft:end_rod", ^4, ^3.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s6 >  500)  { particle("minecraft:end_rod", ^4, ^3.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s6 >  750)  { particle("minecraft:soul_fire_flame", ^4, ^4.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
 
         // col 7  ^ 6
-        if (s7 > -1000) { particle("minecraft:flame",   ^6, ^0.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s7 > -750)  { particle("minecraft:flame",   ^6, ^1.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s7 > -500)  { particle("minecraft:flame",   ^6, ^1.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s7 > -250)  { particle("minecraft:flame",   ^6, ^2.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s7 >  0)    { particle("minecraft:end_rod", ^6, ^2.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s7 >  250)  { particle("minecraft:end_rod", ^6, ^3.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s7 >  500)  { particle("minecraft:end_rod", ^6, ^3.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s7 >  750)  { particle("minecraft:soul_fire_flame", ^6, ^4.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
+        if (s7 > -1000) { particle("minecraft:flame",   ^6, ^0.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s7 > -750)  { particle("minecraft:flame",   ^6, ^1.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s7 > -500)  { particle("minecraft:flame",   ^6, ^1.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s7 > -250)  { particle("minecraft:flame",   ^6, ^2.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s7 >  0)    { particle("minecraft:end_rod", ^6, ^2.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s7 >  250)  { particle("minecraft:end_rod", ^6, ^3.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s7 >  500)  { particle("minecraft:end_rod", ^6, ^3.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s7 >  750)  { particle("minecraft:soul_fire_flame", ^6, ^4.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
 
         // col 8  ^ 8
-        if (s8 > -1000) { particle("minecraft:flame",   ^8, ^0.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s8 > -750)  { particle("minecraft:flame",   ^8, ^1.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s8 > -500)  { particle("minecraft:flame",   ^8, ^1.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s8 > -250)  { particle("minecraft:flame",   ^8, ^2.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s8 >  0)    { particle("minecraft:end_rod", ^8, ^2.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s8 >  250)  { particle("minecraft:end_rod", ^8, ^3.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s8 >  500)  { particle("minecraft:end_rod", ^8, ^3.5, ^6, 0.06,0.04,0.06, 0.0, 2); }
-        if (s8 >  750)  { particle("minecraft:soul_fire_flame", ^8, ^4.0, ^6, 0.06,0.04,0.06, 0.0, 2); }
+        if (s8 > -1000) { particle("minecraft:flame",   ^8, ^0.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s8 > -750)  { particle("minecraft:flame",   ^8, ^1.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s8 > -500)  { particle("minecraft:flame",   ^8, ^1.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s8 > -250)  { particle("minecraft:flame",   ^8, ^2.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s8 >  0)    { particle("minecraft:end_rod", ^8, ^2.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s8 >  250)  { particle("minecraft:end_rod", ^8, ^3.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s8 >  500)  { particle("minecraft:end_rod", ^8, ^3.5, ^6, 0.06,0.04,0.06, 0.4, 1); }
+        if (s8 >  750)  { particle("minecraft:soul_fire_flame", ^8, ^4.0, ^6, 0.06,0.04,0.06, 0.4, 1); }
     }
 
     // ── Actionbar: formula + live center value ───────────────────────────────
