@@ -485,3 +485,94 @@ pattern, not a hack. The stdlib should keep it.
 prefix, following the `__load`/`__tick` convention).
 
 **Fix in redesign:** `CompileContext` carries the objective name. No global.
+
+---
+
+## Language Design: TypeScript Syntax, Custom Frontend
+
+### Should we reuse the TypeScript frontend (tsc / ts-morph)?
+
+**No.** The core RedScript syntax is not valid TypeScript:
+
+```redscript
+foreach (p in @a[tag=foo, limit=1]) at @s {
+    particle("end_rod", ^0, ^0, ^5, 0.02, 0.02, 0.02, 0, 10);
+}
+kill(@e[tag=screen]);
+```
+
+`@a[tag=foo]` is not a valid TS expression (confused with array-access on a
+decorator). `^5` / `~-3` are not valid TS expressions. `at @s {}` does not
+exist. Encoding these as valid TS trades the language for a verbose API:
+
+```typescript
+// not the goal
+forEach(selector('@a', { tag: 'foo', limit: 1 }), (p) =>
+  atSelf(p, () => particle('end_rod', localCoord(0, 0, 5), ...)));
+```
+
+If we have to write that, RedScript provides no value. Keep the custom parser.
+
+### Should we reuse TypeScript's type checker (tsc)?
+
+**No.** RedScript only needs a small subset of TypeScript's type system:
+
+| Feature | TypeScript | RedScript needs |
+|---|---|---|
+| Primitive types | `number`, `string`, `boolean`, `symbol`, `bigint`... | `int`, `bool`, `string`, `float` |
+| Compound | union, intersection, conditional, mapped, template literal | `struct`, `enum`, `T[]` |
+| MC-specific | — | `selector<T>`, `BlockPos`, `void` |
+| Generics | higher-kinded, infer, conditional | simple `T<U>` instantiation |
+| Complexity | Turing-complete type system | intentionally simple |
+
+Embedding tsc's type checker means inheriting `never`, `unknown`, conditional
+types, `infer`, mapped types — none of which are useful on the MC target. A
+lightweight structural type checker custom-built for the above set is smaller,
+faster, and easier to extend with MC-specific rules.
+
+### What to borrow from TypeScript (syntax conventions only)
+
+Keep the source syntax **familiar to TypeScript developers** without binding to tsc:
+
+```redscript
+// These match TypeScript conventions — keep them
+let x: int = 0;
+const MAX: int = 100;
+fn add(a: int, b: int): int { return a + b; }
+struct Vec2 { x: int; y: int; }
+impl Vec2 {
+    fn length(self): int { ... }
+}
+type Callback = (x: int) => void;  // function type syntax
+```
+
+```redscript
+// MC-specific extensions — keep them as-is, do not force into TS grammar
+@tick fn _update() { ... }              // decorator-style annotation
+foreach (p in @a[tag=foo]) at @s { }   // MC selector iteration
+let s: selector<entity> = @e[...];     // generic selector type
+kill(@e[tag=screen]);                   // MC command as builtin call
+particle("end_rod", ^px, ^py, ^5, ...) // caret/tilde coordinates
+```
+
+The rule: **syntax form follows TypeScript; semantics follow Minecraft.**
+
+### IDE support: implement LSP, not a tsc plugin
+
+For real IntelliSense (completions, hover types, go-to-definition), the correct
+path is a Language Server Protocol implementation:
+
+```
+redscript-lsp
+  ├── parse .mcrs → typed AST
+  ├── type inference + error diagnostics
+  ├── completions: builtin names, selector attributes, struct fields
+  ├── hover: type info, MC command documentation
+  └── go-to-definition: cross-file symbol resolution
+```
+
+LSP decouples the language server from the editor: VS Code, Neovim, Helix,
+Zed, and any LSP-capable editor get support from one implementation.
+A tsc plugin would be harder, VS Code-only, and still require all the same
+semantic analysis.
+
