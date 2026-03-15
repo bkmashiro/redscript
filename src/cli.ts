@@ -9,7 +9,8 @@
  *   redscript version
  */
 
-import { compile, check } from './index'
+import { compile as compileV1, check } from './index'
+import { compile as compileV2 } from '../src2/emit/compile'
 import { generateCommandBlocks } from './codegen/cmdblock'
 import { compileToStructure } from './codegen/structure'
 import { formatError } from './diagnostics'
@@ -282,7 +283,7 @@ function compileCommand(
 
   try {
     if (target === 'cmdblock') {
-      const result = compile(source, { namespace, filePath: file, dce, mangle, scoreboardObjective })
+      const result = compileV1(source, { namespace, filePath: file, dce, mangle, scoreboardObjective })
       printWarnings(result.warnings)
 
       // Generate command block JSON
@@ -312,11 +313,32 @@ function compileCommand(
       if (showStats) {
         printOptimizationStats(structure.stats)
       }
-    } else {
-      const result = compile(source, { namespace, filePath: file, dce, mangle, scoreboardObjective })
+    } else if (showStats) {
+      // --stats requires v1 optimizer (v2 doesn't have stats yet)
+      const result = compileV1(source, { namespace, filePath: file, dce, mangle, scoreboardObjective })
       printWarnings(result.warnings)
 
-      // Default: generate datapack
+      fs.mkdirSync(output, { recursive: true })
+      for (const dataFile of result.files) {
+        const filePath = path.join(output, dataFile.path)
+        const dir = path.dirname(filePath)
+        fs.mkdirSync(dir, { recursive: true })
+        fs.writeFileSync(filePath, dataFile.content)
+      }
+
+      console.log(`✓ Compiled ${file} to ${output}/`)
+      console.log(`  Namespace: ${namespace}`)
+      console.log(`  Functions: ${result.ir.functions.length}`)
+      console.log(`  Files: ${result.files.length}`)
+      printOptimizationStats(result.stats)
+    } else {
+      // Default: v2 pipeline → datapack
+      const result = compileV2(source, { namespace, filePath: file })
+
+      for (const w of result.warnings) {
+        console.error(`Warning: ${w}`)
+      }
+
       // Create output directory
       fs.mkdirSync(output, { recursive: true })
 
@@ -328,20 +350,9 @@ function compileCommand(
         fs.writeFileSync(filePath, dataFile.content)
       }
 
-      // Write sourcemap alongside datapack when mangle mode is active
-      if (mangle && result.sourceMap && Object.keys(result.sourceMap).length > 0) {
-        const mapPath = path.join(output, `${namespace}.map.json`)
-        fs.writeFileSync(mapPath, JSON.stringify(result.sourceMap, null, 2))
-        console.log(`  Sourcemap: ${mapPath}`)
-      }
-
       console.log(`✓ Compiled ${file} to ${output}/`)
       console.log(`  Namespace: ${namespace}`)
-      console.log(`  Functions: ${result.ir.functions.length}`)
       console.log(`  Files: ${result.files.length}`)
-      if (showStats) {
-        printOptimizationStats(result.stats)
-      }
     }
   } catch (err) {
     console.error(formatError(err as Error, source))
@@ -415,8 +426,10 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
       try {
         source = fs.readFileSync(file, 'utf-8')
         const ns = namespace ?? deriveNamespace(file)
-        const result = compile(source, { namespace: ns, filePath: file, dce })
-        printWarnings(result.warnings)
+        const result = compileV2(source, { namespace: ns, filePath: file })
+        for (const w of result.warnings) {
+          console.error(`Warning: ${w}`)
+        }
 
         // Create output directory
         fs.mkdirSync(output, { recursive: true })
