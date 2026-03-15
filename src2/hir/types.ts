@@ -24,7 +24,7 @@ import type {
   EntityTypeName,
   LambdaParam,
 } from '../../src/ast/types'
-import type { BinOp, CmpOp } from '../../src/ir/types'
+import type { BinOp, CmpOp } from '../../src/ast/types'
 
 // Re-export types that HIR shares with AST unchanged
 export type {

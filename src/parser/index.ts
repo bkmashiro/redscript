@@ -12,7 +12,7 @@ import type {
   StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr, ImplBlock,
   CoordComponent, LambdaParam, EntityTypeName
 } from '../ast/types'
-import type { BinOp, CmpOp } from '../ir/types'
+import type { BinOp, CmpOp } from '../ast/types'
 import { DiagnosticError } from '../diagnostics'
 
 // ---------------------------------------------------------------------------

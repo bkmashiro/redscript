@@ -5,7 +5,12 @@
  * The AST is produced by the parser and consumed by the lowering pass.
  */
 
-import type { BinOp, CmpOp } from '../ir/types'
+// ---------------------------------------------------------------------------
+// Binary / comparison operators (shared across AST, HIR, MIR)
+// ---------------------------------------------------------------------------
+
+export type BinOp = '+' | '-' | '*' | '/' | '%'
+export type CmpOp = '==' | '!=' | '<' | '<=' | '>' | '>='
 
 // ---------------------------------------------------------------------------
 // Source Span
