@@ -6,6 +6,7 @@
 
 import { Lexer } from '../../src/lexer'
 import { Parser } from '../../src/parser'
+import { preprocessSourceWithMetadata } from '../../src/compile'
 import { lowerToHIR } from '../hir/lower'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
@@ -26,11 +27,29 @@ export function compile(source: string, options: CompileOptions): CompileResult 
   const { namespace, filePath } = options
   const warnings: string[] = []
 
+  // Preprocess: resolve import directives, merge imported sources
+  const preprocessed = preprocessSourceWithMetadata(source, { filePath })
+  const processedSource = preprocessed.source
+
   // Stage 1: Lex + Parse → AST
-  const lexer = new Lexer(source)
+  const lexer = new Lexer(processedSource)
   const tokens = lexer.tokenize()
-  const parser = new Parser(tokens, source, filePath)
+  const parser = new Parser(tokens, processedSource, filePath)
   const ast = parser.parse(namespace)
+
+  // Merge library imports (files with `module library;`) into AST
+  for (const li of preprocessed.libraryImports ?? []) {
+    const libPreprocessed = preprocessSourceWithMetadata(li.source, { filePath: li.filePath })
+    const libTokens = new Lexer(libPreprocessed.source, li.filePath).tokenize()
+    const libAst = new Parser(libTokens, libPreprocessed.source, li.filePath).parse(namespace)
+    for (const fn of libAst.declarations) fn.isLibraryFn = true
+    ast.declarations.push(...libAst.declarations)
+    ast.structs.push(...libAst.structs)
+    ast.implBlocks.push(...libAst.implBlocks)
+    ast.enums.push(...libAst.enums)
+    ast.consts.push(...libAst.consts)
+    ast.globals.push(...libAst.globals)
+  }
 
   // Stage 2: AST → HIR
   const hir = lowerToHIR(ast)
