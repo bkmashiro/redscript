@@ -956,3 +956,234 @@ Server details:
 - Java: `/opt/homebrew/opt/openjdk@21/bin/java`
 - Accessible via Tailscale at `100.73.231.27:25561`
 
+
+---
+
+## Language Semantics Design (Redesign Decisions)
+
+### Visibility & DCE: `export` replaces `@keep`
+
+**Current:** `@keep` forces a function to survive DCE. Everything without `@keep`
+is potentially eliminated if unreachable.
+
+**Redesign:** Use `export` as the explicit public-API marker, matching TypeScript/JS conventions.
+
+```redscript
+export fn spawn_wave() { ... }    // public — never DCE'd
+fn _helper(x: int): int { ... }  // private — eliminated if unreachable
+
+@tick fn _tick() { ... }          // @tick implies export (referenced by tick.json)
+@load fn _load() { ... }          // @load implies export (referenced by load.json)
+```
+
+Rules:
+- `export` → never DCE'd; accessible from other datapacks / MC
+- no `export` → private; DCE applies
+- `@tick` / `@load` implicitly export the function and wire it into `tick.json` / `load.json`
+- `@require_on_load` (current stdlib pragma) → absorbed into `@load` or library `export` semantics
+
+`module library;` pragma stays: marks a file as a library (all exports are
+available for import; nothing auto-runs at load time).
+
+---
+
+### Struct: value type, no heap, no references
+
+`struct` is kept (not renamed to `class`) because the value-type semantics are
+immediately obvious from the name — same as C/C++/Rust structs.
+
+```redscript
+struct Vec2 {
+    x: int;
+    y: int;
+}
+
+impl Vec2 {
+    fn length_sq(self): int {
+        return self.x * self.x + self.y * self.y;
+    }
+}
+
+let v: Vec2 = Vec2 { x: 3, y: 4 };
+let d: int = v.length_sq();   // = 25
+```
+
+**Constraints (by MC target):**
+- No heap allocation. A `Vec2` is two scoreboard slots, not a pointer.
+- No references. `let a = v; a.x = 10` does **not** modify `v`.
+- No dynamic dispatch / vtables. Method calls are statically resolved at compile time.
+- No inheritance. Composition only.
+- Struct fields cannot be `string` (strings cannot live in scoreboard).
+
+**Why not `class`?** "Class" implies heap allocation and reference semantics in
+most languages. Using `struct` sets the correct expectation: this is a named
+group of scoreboard slots, not a Java-style object.
+
+---
+
+### Macro functions: transparent to users
+
+A **macro function** is one that uses a parameter as a dynamic MC coordinate or
+array index — positions where MC requires literal values but we want runtime
+substitution via the 1.20.2+ function macro mechanism.
+
+```redscript
+// User writes this — looks like a normal function:
+fn draw_pt(px: float, py: float) {
+    particle("minecraft:end_rod", ^px, ^py, ^5, 0.02, 0.02, 0.02, 0.0, 10);
+}
+```
+
+The compiler detects that `px`/`py` appear in `^`-coordinate positions and
+automatically emits:
+1. A macro function file (`$particle ... ^$(px) ^$(py) ...`)
+2. A call site that writes args to `rs:macro_args` storage and calls
+   `function ns:draw_pt with storage rs:macro_args`
+
+**Users never write `$` or `with storage`** — the compiler handles it.
+
+In the redesign, macro-function status can be auto-detected (current behavior)
+or explicitly annotated `@macro fn draw_pt(...)`. Auto-detection is simpler for
+users; explicit annotation makes it clearer in large codebases. Decision: keep
+auto-detection, but emit a diagnostic if a function is unexpectedly promoted to
+macro status (so users are aware).
+
+---
+
+### Error handling & diagnostics
+
+**Goal:** report all errors in a file before stopping, not just the first one.
+This is critical for IDE integration (the language server must not crash on the
+first typo).
+
+**Approach: panic-mode error recovery in the parser**
+
+When the parser encounters an unexpected token, it:
+1. Records the error with source span
+2. Skips tokens until it finds a synchronization point: `fn`, `}`, `;`, `@tick`, `@load`, EOF
+3. Resumes parsing from that point
+
+This collects multiple independent errors before stopping:
+
+```
+Error at line 5:  expected ':' but got '='
+Error at line 12: unknown type 'flot'
+Error at line 18: undefined variable 'phse'
+3 errors found.
+```
+
+**Not doing incremental parsing.** Incremental parsing (re-parse only changed
+sections) is a separate project requiring a tree-sitter-style persistent parse
+tree. The benefit for RedScript's typical file sizes (< 500 lines) is minimal,
+and the implementation cost is high. Panic-mode recovery is sufficient for
+a good developer experience.
+
+**Diagnostic severity levels:**
+
+| Level | Use |
+|---|---|
+| `error` | Compilation fails. Type mismatch, undefined symbol, syntax error. |
+| `warning` | Compilation succeeds but something is suspicious. Unused variable, unreachable code. |
+| `hint` | Informational. Style suggestions, implicit conversions. |
+
+**Current `TypeChecker` is in "warn mode"** (type errors do not block compilation).
+In the redesign, type errors are `error` level and do block compilation.
+
+---
+
+### Type system
+
+#### Primitive types
+
+| Type | Storage | Notes |
+|---|---|---|
+| `int` | scoreboard INT32 | All arithmetic. Range: −2³¹ to 2³¹−1 |
+| `float` | scoreboard INT32 (×1000) | Fixed-point. `1.5` stored as `1500`. Use `mulfix`/`divfix` for ×/÷ |
+| `bool` | scoreboard 0 or 1 | `true`=1, `false`=0 |
+| `string` | NBT string | Cannot do arithmetic. Only usable in command/NBT contexts |
+| `void` | — | Function returns nothing |
+
+#### MC-specific types
+
+| Type | Notes |
+|---|---|
+| `selector<entity>` | Not a runtime value. Only usable in `foreach` / command contexts |
+| `selector<player>` | Subtype of `selector<entity>` for player-only selectors |
+| `BlockPos` | Coordinate triple. Only usable in command contexts |
+
+#### Compound types
+
+| Type | Notes |
+|---|---|
+| `struct Foo { ... }` | Value type. Fields are independent scoreboard slots |
+| `int[]` | NBT integer array. Dynamic access requires macro |
+| `(a: int) => int` | Function type. Used for stdlib callbacks |
+
+#### Key design decisions
+
+**1. Nominal typing (not structural)**
+
+Two structs with identical fields are NOT compatible:
+
+```redscript
+struct Vec2  { x: int; y: int; }
+struct Point { x: int; y: int; }
+
+fn distance(a: Vec2, b: Vec2): int { ... }
+let p: Point = Point { x: 1, y: 2 };
+distance(p, p)  // ERROR: Point is not Vec2
+```
+
+Rationale: `Vec2` and `Point` use different scoreboard slot names. Structural
+compatibility would require a copy — which must be explicit.
+
+**2. No implicit type conversion**
+
+```redscript
+let x: int = 5;
+let y: float = x;          // ERROR: use 'x as float' (×1000 implicit conversion)
+let z: float = x as float; // OK: z = 5000 internally
+```
+
+Rationale: `int → float` is a ×1000 multiply. Making it implicit hides a
+potentially significant operation and makes arithmetic bugs hard to find.
+
+**3. No null**
+
+Scoreboard slots are always initialized to 0. There is no null/undefined/None
+in RedScript. No nullable types, no optional chaining.
+
+**4. No union types, no conditional types**
+
+These require runtime type tags, which cost scoreboard slots and add dispatch
+overhead. Not worth it at MC scale.
+
+**5. Simple generics only**
+
+`selector<entity>` and `selector<player>` are essentially two distinct concrete
+types, not a generic in the full sense. Generic functions (e.g. stdlib
+`foreach<T>`) are specialized at each call site by the compiler — no runtime
+polymorphism.
+
+#### Type inference
+
+Local variables: `let x = 5` → `int`, `let x = 5.0` → `float`, `let x = true` → `bool`.
+Function return types: inferred from `return` statements if not annotated.
+Struct fields: must be explicitly typed.
+
+**Implementation estimate:** ~800–1200 lines of TypeScript. Two weeks.
+
+---
+
+### Incremental compilation: explicitly deferred
+
+**Decision: do not implement.** `watch` mode already recompiles in < 1 second
+for typical project sizes. The complexity of tracking a file-level dependency
+graph and invalidating only affected functions outweighs the benefit.
+
+If project sizes grow to hundreds of files and compilation becomes noticeably
+slow, incremental compilation can be added as a separate pass: build a module
+dependency DAG, recompile only the subgraph invalidated by a file change.
+Architecture note for the future: keep module loading separated from lowering
+so that a cached module's IR can be reused without re-parsing.
+
