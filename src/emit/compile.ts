@@ -9,6 +9,7 @@ import { Parser } from '../parser'
 import { preprocessSourceWithMetadata } from '../compile'
 import { DiagnosticError, parseErrorMessage } from '../diagnostics'
 import { lowerToHIR } from '../hir/lower'
+import { monomorphize } from '../hir/monomorphize'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
 import { lowerToLIR } from '../lir/lower'
@@ -78,7 +79,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   // Wrap non-DiagnosticError from later stages so CLI always gets structured errors.
   try {
     // Stage 2: AST → HIR
-    const hir = lowerToHIR(ast)
+    const hirRaw = lowerToHIR(ast)
+
+    // Stage 2b: Monomorphize generic functions
+    const hir = monomorphize(hirRaw)
 
     // Extract @tick, @load, and @coroutine functions from HIR (before decorator info is lost)
     const tickFunctions: string[] = []
