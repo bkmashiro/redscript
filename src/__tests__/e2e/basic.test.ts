@@ -151,4 +151,31 @@ describe('e2e: basic compilation', () => {
     const tickJson = getFile(result.files, 'tick.json')
     expect(tickJson).toBeUndefined()
   })
+
+  test('array literal emits data modify storage command', () => {
+    const source = `
+      fn test_arrays(): void {
+        let nums: int[] = [10, 20, 30, 40, 50];
+      }
+    `
+    const result = compile(source, { namespace: 'array_test' })
+    const fn = getFile(result.files, 'test_arrays.mcfunction')
+    expect(fn).toBeDefined()
+    expect(fn).toContain('data modify storage array_test:arrays nums set value [10, 20, 30, 40, 50]')
+  })
+
+  test('array index access emits data get storage command', () => {
+    const source = `
+      fn test_arrays(): void {
+        let nums: int[] = [10, 20, 30, 40, 50];
+        scoreboard_set("#arr_0", #rs, nums[0]);
+      }
+    `
+    const result = compile(source, { namespace: 'array_test' })
+    const fn = getFile(result.files, 'test_arrays.mcfunction')
+    expect(fn).toBeDefined()
+    expect(fn).toContain('data modify storage array_test:arrays nums set value [10, 20, 30, 40, 50]')
+    expect(fn).toContain('data get storage array_test:arrays nums[0]')
+    expect(fn).toContain('#arr_0')
+  })
 })

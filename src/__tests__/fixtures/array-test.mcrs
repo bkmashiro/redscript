@@ -1,22 +1,18 @@
 // Array operations test
-// Note: array literal initialization uses NBT storage; individual element values
-// are written to scoreboard via scoreboard_set with rs objective.
+// Uses NBT-backed array literal for initialization.
 
 @load fn __load() {
     scoreboard_add("rs");
 }
 
 @keep fn test_array() {
-    // Simulate array elements as individual scoreboard values
-    // (Array literal → NBT-backed; direct scoreboard writes for test verification)
-    let a0: int = 10;
-    let a2: int = 30;
-    let a4: int = 50;
-    let arr_len: int = 5;
+    let nums: int[] = [10, 20, 30, 40, 50];
 
-    scoreboard_set("#arr_0", #rs, a0);
-    scoreboard_set("#arr_2", #rs, a2);
-    scoreboard_set("#arr_4", #rs, a4);
+    scoreboard_set("#arr_0", #rs, nums[0]);
+    scoreboard_set("#arr_2", #rs, nums[2]);
+    scoreboard_set("#arr_4", #rs, nums[4]);
+
+    let arr_len: int = 5;
     scoreboard_set("#arr_len", #rs, arr_len);
 
     // Sum: 10+20+30+40+50
