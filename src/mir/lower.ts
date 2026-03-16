@@ -61,7 +61,7 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
     }
   }
 
-  const timerCounter = { count: 0 }
+  const timerCounter = { count: 0, timerId: 0 }
 
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
@@ -121,8 +121,10 @@ class FnContext {
   currentSourceLoc: SourceLoc | undefined = undefined
   /** Source file path for the module being compiled */
   sourceFile: string | undefined = undefined
-  /** Shared counter for setTimeout/setInterval callback naming (module-wide) */
-  readonly timerCounter: { count: number }
+  /** Shared counter for setTimeout/setInterval callback naming and Timer static IDs (module-wide) */
+  readonly timerCounter: { count: number; timerId: number }
+  /** Tracks temps whose values are known compile-time constants (for Timer static ID propagation) */
+  readonly constTemps = new Map<Temp, number>()
 
   constructor(
     namespace: string,
@@ -132,7 +134,7 @@ class FnContext {
     macroInfo: Map<string, MacroFunctionInfo> = new Map(),
     fnParamInfo: Map<string, HIRParam[]> = new Map(),
     enumDefs: Map<string, Map<string, number>> = new Map(),
-    timerCounter: { count: number } = { count: 0 },
+    timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
   ) {
     this.namespace = namespace
     this.fnName = fnName
@@ -222,7 +224,7 @@ function lowerFunction(
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
   enumDefs: Map<string, Map<string, number>> = new Map(),
   sourceFile?: string,
-  timerCounter: { count: number } = { count: 0 },
+  timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const ctx = new FnContext(namespace, fn.name, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter)
   ctx.sourceFile = sourceFile
@@ -276,7 +278,7 @@ function lowerImplMethod(
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
   enumDefs: Map<string, Map<string, number>> = new Map(),
   sourceFile?: string,
-  timerCounter: { count: number } = { count: 0 },
+  timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
   const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter)
@@ -454,6 +456,12 @@ function lowerStmt(
             const t = ctx.freshTemp()
             ctx.emit({ kind: 'copy', dst: t, src: { kind: 'temp', name: `__rf_${fieldName}` } })
             fieldTemps.set(fieldName, t)
+            // Propagate compile-time constants from return slots (e.g. Timer._id from Timer::new)
+            const rfSlot = `__rf_${fieldName}`
+            const constVal = ctx.constTemps.get(rfSlot)
+            if (constVal !== undefined) {
+              ctx.constTemps.set(t, constVal)
+            }
           }
           ctx.structVars.set(stmt.name, { typeName: stmt.type.name, fields: fieldTemps })
         } else {
@@ -1190,6 +1198,14 @@ function lowerExpr(
       if (expr.args.length > 0 && expr.args[0].kind === 'ident') {
         const sv = ctx.structVars.get(expr.args[0].name)
         if (sv) {
+          // Intercept Timer method calls when _id is a known compile-time constant
+          if (sv.typeName === 'Timer') {
+            const idTemp = sv.fields.get('_id')
+            const timerId = idTemp !== undefined ? ctx.constTemps.get(idTemp) : undefined
+            if (timerId !== undefined) {
+              return lowerTimerMethod(expr.fn, timerId, sv, ctx, scope, expr.args.slice(1))
+            }
+          }
           const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.fn)
           if (methodInfo?.hasSelf) {
             // Build args: self fields first, then remaining explicit args
@@ -1242,6 +1258,14 @@ function lowerExpr(
       if (expr.callee.kind === 'member' && expr.callee.obj.kind === 'ident') {
         const sv = ctx.structVars.get(expr.callee.obj.name)
         if (sv) {
+          // Intercept Timer method calls when _id is a known compile-time constant
+          if (sv.typeName === 'Timer') {
+            const idTemp = sv.fields.get('_id')
+            const timerId = idTemp !== undefined ? ctx.constTemps.get(idTemp) : undefined
+            if (timerId !== undefined) {
+              return lowerTimerMethod(expr.callee.field, timerId, sv, ctx, scope, expr.args)
+            }
+          }
           const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.callee.field)
           if (methodInfo?.hasSelf) {
             // Build args: self fields first, then explicit args
@@ -1267,6 +1291,24 @@ function lowerExpr(
     }
 
     case 'static_call': {
+      // Intercept Timer::new() to statically allocate a unique ID
+      if (expr.type === 'Timer' && expr.method === 'new' && expr.args.length === 1) {
+        const id = ctx.timerCounter.timerId++
+        const ns = ctx.getNamespace()
+        const playerName = `__timer_${id}`
+        // Emit scoreboard initialization: ticks=0, active=0
+        ctx.emit({ kind: 'score_write', player: `${playerName}_ticks`, obj: ns, src: { kind: 'const', value: 0 } })
+        ctx.emit({ kind: 'score_write', player: `${playerName}_active`, obj: ns, src: { kind: 'const', value: 0 } })
+        // Lower the duration argument
+        const durationOp = lowerExpr(expr.args[0], ctx, scope)
+        // Return fields via __rf_ slots (Timer has fields: _id, _duration)
+        ctx.emit({ kind: 'const', dst: '__rf__id', value: id })
+        ctx.constTemps.set('__rf__id', id)
+        ctx.emit({ kind: 'copy', dst: '__rf__duration', src: durationOp })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
       const args = expr.args.map(a => lowerExpr(a, ctx, scope))
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'call', dst: t, fn: `${expr.type}::${expr.method}`, args })
@@ -1369,6 +1411,98 @@ function lowerShortCircuitOr(
 
   ctx.switchTo(merge)
   return { kind: 'temp', name: result }
+}
+
+// ---------------------------------------------------------------------------
+// Timer method inlining
+// ---------------------------------------------------------------------------
+
+/**
+ * Inline a Timer instance method call using the statically-assigned timer ID.
+ * Emits scoreboard operations directly, bypassing the Timer::* function calls.
+ */
+function lowerTimerMethod(
+  method: string,
+  timerId: number,
+  sv: { typeName: string; fields: Map<string, Temp> },
+  ctx: FnContext,
+  scope: Map<string, Temp>,
+  extraArgs: HIRExpr[],
+): Operand {
+  const ns = ctx.getNamespace()
+  const player = `__timer_${timerId}`
+  const t = ctx.freshTemp()
+
+  if (method === 'start') {
+    ctx.emit({ kind: 'score_write', player: `${player}_active`, obj: ns, src: { kind: 'const', value: 1 } })
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+  } else if (method === 'pause') {
+    ctx.emit({ kind: 'score_write', player: `${player}_active`, obj: ns, src: { kind: 'const', value: 0 } })
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+  } else if (method === 'reset') {
+    ctx.emit({ kind: 'score_write', player: `${player}_ticks`, obj: ns, src: { kind: 'const', value: 0 } })
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+  } else if (method === 'tick') {
+    const durationTemp = sv.fields.get('_duration')
+    const activeTemp = ctx.freshTemp()
+    const ticksTemp = ctx.freshTemp()
+    ctx.emit({ kind: 'score_read', dst: activeTemp, player: `${player}_active`, obj: ns })
+    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: ns })
+    const innerThen = ctx.newBlock('timer_tick_inner')
+    const innerMerge = ctx.newBlock('timer_tick_after_lt')
+    const outerMerge = ctx.newBlock('timer_tick_done')
+    const activeCheck = ctx.freshTemp()
+    ctx.emit({ kind: 'cmp', op: 'eq', dst: activeCheck, a: { kind: 'temp', name: activeTemp }, b: { kind: 'const', value: 1 } })
+    ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: activeCheck }, then: innerThen.id, else: outerMerge.id })
+    ctx.switchTo(innerThen)
+    const lessCheck = ctx.freshTemp()
+    if (durationTemp) {
+      ctx.emit({ kind: 'cmp', op: 'lt', dst: lessCheck, a: { kind: 'temp', name: ticksTemp }, b: { kind: 'temp', name: durationTemp } })
+    } else {
+      ctx.emit({ kind: 'const', dst: lessCheck, value: 0 })
+    }
+    const doIncBlock = ctx.newBlock('timer_tick_inc')
+    ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: lessCheck }, then: doIncBlock.id, else: innerMerge.id })
+    ctx.switchTo(doIncBlock)
+    const newTicks = ctx.freshTemp()
+    ctx.emit({ kind: 'add', dst: newTicks, a: { kind: 'temp', name: ticksTemp }, b: { kind: 'const', value: 1 } })
+    ctx.emit({ kind: 'score_write', player: `${player}_ticks`, obj: ns, src: { kind: 'temp', name: newTicks } })
+    ctx.terminate({ kind: 'jump', target: innerMerge.id })
+    ctx.switchTo(innerMerge)
+    ctx.terminate({ kind: 'jump', target: outerMerge.id })
+    ctx.switchTo(outerMerge)
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+  } else if (method === 'done') {
+    const durationTemp = sv.fields.get('_duration')
+    const ticksTemp = ctx.freshTemp()
+    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: ns })
+    if (durationTemp) {
+      ctx.emit({ kind: 'cmp', op: 'ge', dst: t, a: { kind: 'temp', name: ticksTemp }, b: { kind: 'temp', name: durationTemp } })
+    } else {
+      ctx.emit({ kind: 'const', dst: t, value: 0 })
+    }
+  } else if (method === 'elapsed') {
+    ctx.emit({ kind: 'score_read', dst: t, player: `${player}_ticks`, obj: ns })
+  } else if (method === 'remaining') {
+    const durationTemp = sv.fields.get('_duration')
+    const ticksTemp = ctx.freshTemp()
+    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: ns })
+    if (durationTemp) {
+      ctx.emit({ kind: 'sub', dst: t, a: { kind: 'temp', name: durationTemp }, b: { kind: 'temp', name: ticksTemp } })
+    } else {
+      ctx.emit({ kind: 'const', dst: t, value: 0 })
+    }
+  } else {
+    // Unknown Timer method — emit regular call
+    const fields = ['_id', '_duration']
+    const selfArgs: Operand[] = fields.map(f => {
+      const temp = sv.fields.get(f)
+      return temp ? { kind: 'temp' as const, name: temp } : { kind: 'const' as const, value: 0 }
+    })
+    const explicitArgs = extraArgs.map(a => lowerExpr(a, ctx, scope))
+    ctx.emit({ kind: 'call', dst: t, fn: `Timer::${method}`, args: [...selfArgs, ...explicitArgs] })
+  }
+  return { kind: 'temp', name: t }
 }
 
 // ---------------------------------------------------------------------------

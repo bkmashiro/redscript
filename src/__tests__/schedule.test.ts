@@ -151,3 +151,67 @@ describe('setTimeout / setInterval codegen', () => {
     expect(cb1).toContain('say b')
   })
 })
+
+const TIMER_STRUCT = `
+struct Timer {
+    _id: int,
+    _duration: int
+}
+impl Timer {
+    fn new(duration: int) -> Timer {
+        return { _id: 0, _duration: duration };
+    }
+    fn start(self) {}
+    fn pause(self) {}
+    fn reset(self) {}
+    fn tick(self) {}
+    fn done(self) -> bool { return false; }
+    fn elapsed(self) -> int { return 0; }
+}
+`
+
+describe('Timer static allocation codegen', () => {
+  test('Timer::new() initializes unique scoreboard slots', () => {
+    const source = TIMER_STRUCT + `
+fn init() {
+    let t: Timer = Timer::new(20);
+}
+`
+    const result = compile(source, { namespace: 'ns' })
+    const initFn = getFile(result.files, 'init.mcfunction')
+    expect(initFn).toContain('scoreboard players set __timer_0_ticks ns 0')
+    expect(initFn).toContain('scoreboard players set __timer_0_active ns 0')
+  })
+
+  test('Timer.start() inlines to scoreboard set active=1', () => {
+    const source = TIMER_STRUCT + `
+fn init() {
+    let t: Timer = Timer::new(20);
+    t.start();
+}
+`
+    const result = compile(source, { namespace: 'ns' })
+    const initFn = getFile(result.files, 'init.mcfunction')
+    expect(initFn).toContain('scoreboard players set __timer_0_active ns 1')
+    expect(initFn).not.toContain('function ns:timer/start')
+  })
+
+  test('two Timer::new() calls get distinct IDs', () => {
+    const source = TIMER_STRUCT + `
+fn init() {
+    let t0: Timer = Timer::new(10);
+    let t1: Timer = Timer::new(20);
+    t0.start();
+    t1.start();
+}
+`
+    const result = compile(source, { namespace: 'ns' })
+    const initFn = getFile(result.files, 'init.mcfunction')
+    // Both timers initialized
+    expect(initFn).toContain('__timer_0_ticks')
+    expect(initFn).toContain('__timer_1_ticks')
+    // Both started with unique slot names
+    expect(initFn).toContain('scoreboard players set __timer_0_active ns 1')
+    expect(initFn).toContain('scoreboard players set __timer_1_active ns 1')
+  })
+})

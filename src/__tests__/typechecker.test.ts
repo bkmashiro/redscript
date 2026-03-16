@@ -306,6 +306,38 @@ fn test() {
       expect(errors[0].message).toContain('cannot be called inside a loop')
     })
 
+    it('rejects Timer::new() inside a loop', () => {
+      const errors = typeCheck(`
+struct Timer { _id: int, _duration: int }
+impl Timer {
+    fn new(duration: int) -> Timer { return { _id: 0, _duration: duration }; }
+}
+fn test() {
+    while (true) {
+        let t: Timer = Timer::new(10);
+    }
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('Timer::new() cannot be called inside a loop')
+    })
+
+    it('rejects Timer::new() inside an if body', () => {
+      const errors = typeCheck(`
+struct Timer { _id: int, _duration: int }
+impl Timer {
+    fn new(duration: int) -> Timer { return { _id: 0, _duration: duration }; }
+}
+fn test() {
+    if (true) {
+        let t: Timer = Timer::new(10);
+    }
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('Timer::new() cannot be called inside an if/else body')
+    })
+
     it('allows impl instance methods with inferred self type', () => {
       const errors = typeCheck(`
 struct Timer { duration: int }
