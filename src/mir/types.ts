@@ -80,6 +80,10 @@ export type MIRInstr = MIRInstrBase & (
   | { kind: 'nbt_read'; dst: Temp; ns: string; path: string; scale: number }
   | { kind: 'nbt_write'; ns: string; path: string; type: NBTType; scale: number; src: Operand }
 
+  // ── Vanilla scoreboard interop ────────────────────────────────────────────
+  | { kind: 'score_read'; dst: Temp; player: string; obj: string }
+  | { kind: 'score_write'; player: string; obj: string; src: Operand }
+
   // ── Function calls ────────────────────────────────────────────────────────
   | { kind: 'call'; dst: Temp | null; fn: string; args: Operand[] }
   | { kind: 'call_macro'; dst: Temp | null; fn: string; args: { name: string; value: Operand; type: NBTType; scale: number }[] }

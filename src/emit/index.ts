@@ -208,7 +208,9 @@ function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersio
 
     case 'call_context': {
       const subcmds = instr.subcommands.map(emitSubcmd).join(' ')
-      return `execute ${subcmds} run function ${instr.fn}`
+      return subcmds
+        ? `execute ${subcmds} run function ${instr.fn}`
+        : `function ${instr.fn}`
     }
 
     case 'return_value':

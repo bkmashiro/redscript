@@ -334,6 +334,33 @@ function lowerInstrInner(
       break
     }
 
+    case 'score_read': {
+      // execute store result score $dst __obj run scoreboard players get <player> <obj>
+      const dst = ctx.slot(instr.dst)
+      instrs.push({
+        kind: 'store_cmd_to_score',
+        dst,
+        cmd: { kind: 'raw', cmd: `scoreboard players get ${instr.player} ${instr.obj}` },
+      })
+      break
+    }
+
+    case 'score_write': {
+      // Write a value to a vanilla MC scoreboard objective
+      if (instr.src.kind === 'const') {
+        instrs.push({ kind: 'raw', cmd: `scoreboard players set ${instr.player} ${instr.obj} ${instr.src.value}` })
+      } else {
+        // execute store result score <player> <obj> run scoreboard players get $src __ns
+        const srcSlot = operandToSlot(instr.src, ctx, instrs)
+        instrs.push({
+          kind: 'store_cmd_to_score',
+          dst: { player: instr.player, obj: instr.obj },
+          cmd: { kind: 'raw', cmd: `scoreboard players get ${srcSlot.player} ${srcSlot.obj}` },
+        })
+      }
+      break
+    }
+
     case 'call': {
       // Set parameter slots $p0, $p1, ...
       for (let i = 0; i < instr.args.length; i++) {

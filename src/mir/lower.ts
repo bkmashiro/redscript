@@ -1004,6 +1004,26 @@ function lowerExpr(
     }
 
     case 'call': {
+      // Handle scoreboard_get / score — read from vanilla MC scoreboard
+      if (expr.fn === 'scoreboard_get' || expr.fn === 'score') {
+        const player = hirExprToStringLiteral(expr.args[0])
+        const obj = hirExprToStringLiteral(expr.args[1])
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'score_read', dst: t, player, obj })
+        return { kind: 'temp', name: t }
+      }
+
+      // Handle scoreboard_set — write to vanilla MC scoreboard
+      if (expr.fn === 'scoreboard_set') {
+        const player = hirExprToStringLiteral(expr.args[0])
+        const obj = hirExprToStringLiteral(expr.args[1])
+        const src = lowerExpr(expr.args[2], ctx, scope)
+        ctx.emit({ kind: 'score_write', player, obj, src })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+
       // Handle builtin calls → raw MC commands
       if (BUILTIN_SET.has(expr.fn)) {
         const cmd = formatBuiltinCall(expr.fn, expr.args, ctx.currentMacroParams)
@@ -1310,13 +1330,32 @@ function formatBuiltinCall(
       break
     }
     case 'setblock': {
-      const [x, y, z, block] = strs
-      cmd = `setblock ${x} ${y} ${z} ${block}`
+      // args: blockpos, block — expand blockpos to x y z
+      const [posOrX, blockOrY] = args
+      if (posOrX?.kind === 'blockpos') {
+        const px = coordStr(posOrX.x)
+        const py = coordStr(posOrX.y)
+        const pz = coordStr(posOrX.z)
+        const blk = exprToCommandArg(blockOrY, macroParams).str
+        cmd = `setblock ${px} ${py} ${pz} ${blk}`
+      } else {
+        const [x, y, z, block] = strs
+        cmd = `setblock ${x} ${y} ${z} ${block}`
+      }
       break
     }
     case 'fill': {
-      const [x1, y1, z1, x2, y2, z2, block] = strs
-      cmd = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}`
+      // args: blockpos1, blockpos2, block — expand both blockpos
+      const [p1, p2, blkArg] = args
+      if (p1?.kind === 'blockpos' && p2?.kind === 'blockpos') {
+        const x1 = coordStr(p1.x); const y1 = coordStr(p1.y); const z1 = coordStr(p1.z)
+        const x2 = coordStr(p2.x); const y2 = coordStr(p2.y); const z2 = coordStr(p2.z)
+        const blk = exprToCommandArg(blkArg, macroParams).str
+        cmd = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${blk}`
+      } else {
+        const [x1, y1, z1, x2, y2, z2, block] = strs
+        cmd = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}`
+      }
       break
     }
     case 'say': cmd = `say ${strs[0] ?? ''}`; break
@@ -1355,6 +1394,15 @@ function formatBuiltinCall(
 }
 
 /** Convert an HIR expression to its MC command string representation */
+/** Convert a CoordComponent to a MC coordinate string */
+function coordStr(c: import('../ast/types').CoordComponent): string {
+  switch (c.kind) {
+    case 'absolute': return String(c.value)
+    case 'relative': return c.offset === 0 ? '~' : `~${c.offset}`
+    case 'local':    return c.offset === 0 ? '^' : `^${c.offset}`
+  }
+}
+
 function exprToCommandArg(
   expr: HIRExpr,
   macroParams: Set<string>,
@@ -1399,5 +1447,16 @@ function exprToCommandArg(
       return { str: '~', isMacro: false }
     default:
       return { str: '~', isMacro: false }
+  }
+}
+
+/** Extract a string literal from a HIR expression for use in MC commands */
+function hirExprToStringLiteral(expr: HIRExpr): string {
+  switch (expr.kind) {
+    case 'str_lit': return expr.value
+    case 'mc_name': return expr.value
+    case 'selector': return expr.raw
+    case 'int_lit': return String(expr.value)
+    default: return ''
   }
 }

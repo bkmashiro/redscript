@@ -82,13 +82,25 @@ beforeAll(async () => {
     return
   }
 
-  // ── Write fixtures + use safe reloadData (no /reload confirm) ───────
-  // counter.mcrs
-  if (fs.existsSync(path.join(__dirname, '../examples/counter.mcrs'))) {
-    writeFixture(fs.readFileSync(path.join(__dirname, '../examples/counter.mcrs'), 'utf-8'), 'counter')
+  // ── Clear stale minecraft tag files before writing fixtures ──────────
+  for (const tagFile of ['data/minecraft/tags/function/tick.json', 'data/minecraft/tags/function/load.json',
+                         'data/minecraft/tags/functions/tick.json', 'data/minecraft/tags/functions/load.json']) {
+    const p = path.join(DATAPACK_DIR, tagFile)
+    if (fs.existsSync(p)) fs.writeFileSync(p, JSON.stringify({ values: [] }, null, 2))
   }
-  if (fs.existsSync(path.join(__dirname, '../examples/world_manager.mcrs'))) {
-    writeFixture(fs.readFileSync(path.join(__dirname, '../examples/world_manager.mcrs'), 'utf-8'), 'world_manager')
+
+  // ── Write fixtures + use safe reloadData (no /reload confirm) ───────
+  // counter.mcrs (use fixtures if examples was removed)
+  const counterSrc = fs.existsSync(path.join(__dirname, '../examples/counter.mcrs'))
+    ? fs.readFileSync(path.join(__dirname, '../examples/counter.mcrs'), 'utf-8')
+    : fs.readFileSync(path.join(__dirname, 'fixtures/counter.mcrs'), 'utf-8')
+  writeFixture(counterSrc, 'counter')
+  // world_manager.mcrs
+  const wmPath = fs.existsSync(path.join(__dirname, '../examples/world_manager.mcrs'))
+    ? path.join(__dirname, '../examples/world_manager.mcrs')
+    : path.join(__dirname, '../src/examples/world_manager.mcrs')
+  if (fs.existsSync(wmPath)) {
+    writeFixture(fs.readFileSync(wmPath, 'utf-8'), 'world_manager')
   }
   writeFixture(`
     @tick
@@ -573,7 +585,7 @@ describe('E2E Scenario Tests', () => {
     await mc.command('/function match_test:__load')
 
     // Test match on value 2
-    await mc.command('/scoreboard players set $p0 rs 2')
+    await mc.command('/scoreboard players set $p0 __match_test 2')
     await mc.command('/function match_test:classify')
     await mc.ticks(5)
     let out = await mc.scoreboard('#match', 'out')
@@ -581,7 +593,7 @@ describe('E2E Scenario Tests', () => {
     console.log(`  match(2) → out=${out} (expect 20) ✓`)
 
     // Test match on value 3
-    await mc.command('/scoreboard players set $p0 rs 3')
+    await mc.command('/scoreboard players set $p0 __match_test 3')
     await mc.command('/function match_test:classify')
     await mc.ticks(5)
     out = await mc.scoreboard('#match', 'out')
@@ -589,7 +601,7 @@ describe('E2E Scenario Tests', () => {
     console.log(`  match(3) → out=${out} (expect 30) ✓`)
 
     // Test default branch (value 99)
-    await mc.command('/scoreboard players set $p0 rs 99')
+    await mc.command('/scoreboard players set $p0 __match_test 99')
     await mc.command('/function match_test:classify')
     await mc.ticks(5)
     out = await mc.scoreboard('#match', 'out')
