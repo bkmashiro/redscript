@@ -10,6 +10,7 @@ import { Parser } from '../parser'
 import { TypeChecker } from '../typechecker'
 import { DiagnosticError } from '../diagnostics'
 import type { Program, FnDecl, TypeNode } from '../ast/types'
+import { BUILTIN_METADATA } from '../builtins/metadata'
 
 // ---------------------------------------------------------------------------
 // Helpers mirrored from lsp/server.ts (tested independently)
@@ -252,6 +253,94 @@ fn anotherFn(x: int): int { return x; }
     const names = program!.declarations.map(f => f.name)
     expect(names).toContain('myCustomFn')
     expect(names).toContain('anotherFn')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Hover — builtin functions
+// ---------------------------------------------------------------------------
+
+const DECORATOR_DOCS: Record<string, string> = {
+  tick:         'Runs every MC game tick (~20 Hz). No arguments.',
+  load:         'Runs on `/reload`. Use for initialization logic.',
+  coroutine:    'Splits loops into tick-spread continuations. Arg: `batch=N` (steps per tick, default 1).',
+  schedule:     'Schedules the function to run after N ticks. Arg: `ticks=N`.',
+  on_trigger:   'Runs when a trigger scoreboard objective is set by a player. Arg: trigger name.',
+  keep:         'Prevents the compiler from dead-code-eliminating this function.',
+  on:           'Generic event handler decorator.',
+  on_advancement: 'Runs when a player earns an advancement. Arg: advancement id.',
+  on_craft:     'Runs when a player crafts an item. Arg: item id.',
+  on_death:     'Runs when a player dies.',
+  on_join_team: 'Runs when a player joins a team. Arg: team name.',
+  on_login:     'Runs when a player logs in.',
+}
+
+describe('LSP hover — builtin functions', () => {
+  it('has metadata for say', () => {
+    const b = BUILTIN_METADATA['say']
+    expect(b).toBeDefined()
+    expect(b.params.length).toBeGreaterThan(0)
+    expect(b.returns).toBe('void')
+    expect(b.doc).toBeTruthy()
+  })
+
+  it('has metadata for kill', () => {
+    const b = BUILTIN_METADATA['kill']
+    expect(b).toBeDefined()
+    expect(b.returns).toBe('void')
+  })
+
+  it('has metadata for tellraw', () => {
+    const b = BUILTIN_METADATA['tellraw']
+    expect(b).toBeDefined()
+    const paramStr = b.params.map(p => `${p.name}: ${p.type}${p.required ? '' : '?'}`).join(', ')
+    const sig = `fn ${b.name}(${paramStr}): ${b.returns}`
+    expect(sig).toMatch(/^fn tellraw/)
+    expect(sig).toContain('target')
+  })
+
+  it('formats builtin hover markdown', () => {
+    const b = BUILTIN_METADATA['particle']
+    expect(b).toBeDefined()
+    const paramStr = b.params.map(p => `${p.name}: ${p.type}${p.required ? '' : '?'}`).join(', ')
+    const sig = `fn ${b.name}(${paramStr}): ${b.returns}`
+    const markdown = `\`\`\`redscript\n${sig}\n\`\`\`\n${b.doc}`
+    expect(markdown).toContain('```redscript')
+    expect(markdown).toContain('fn particle')
+    expect(markdown).toContain(b.doc)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Hover — decorators
+// ---------------------------------------------------------------------------
+
+describe('LSP hover — decorators', () => {
+  it('has docs for @tick', () => {
+    expect(DECORATOR_DOCS['tick']).toContain('tick')
+  })
+
+  it('has docs for @load', () => {
+    expect(DECORATOR_DOCS['load']).toContain('reload')
+  })
+
+  it('has docs for @coroutine', () => {
+    expect(DECORATOR_DOCS['coroutine']).toContain('batch')
+  })
+
+  it('has docs for @schedule', () => {
+    expect(DECORATOR_DOCS['schedule']).toContain('ticks')
+  })
+
+  it('has docs for @on_trigger', () => {
+    expect(DECORATOR_DOCS['on_trigger']).toContain('trigger')
+  })
+
+  it('formats decorator hover markdown', () => {
+    const name = 'tick'
+    const doc = DECORATOR_DOCS[name]
+    const markdown = `**@${name}** — ${doc}`
+    expect(markdown).toBe(`**@tick** — ${DECORATOR_DOCS['tick']}`)
   })
 })
 

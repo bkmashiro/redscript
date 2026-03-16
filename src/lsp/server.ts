@@ -34,6 +34,7 @@ import { Parser } from '../parser'
 import { TypeChecker } from '../typechecker'
 import { DiagnosticError } from '../diagnostics'
 import type { Program, FnDecl, Span, TypeNode } from '../ast/types'
+import { BUILTIN_METADATA } from '../builtins/metadata'
 
 // ---------------------------------------------------------------------------
 // Connection and document manager
@@ -121,6 +122,25 @@ function toDiagnostic(err: DiagnosticError): Diagnostic {
     message: err.message,
     source: 'redscript',
   }
+}
+
+// ---------------------------------------------------------------------------
+// Decorator hover docs
+// ---------------------------------------------------------------------------
+
+const DECORATOR_DOCS: Record<string, string> = {
+  tick:         'Runs every MC game tick (~20 Hz). No arguments.',
+  load:         'Runs on `/reload`. Use for initialization logic.',
+  coroutine:    'Splits loops into tick-spread continuations. Arg: `batch=N` (steps per tick, default 1).',
+  schedule:     'Schedules the function to run after N ticks. Arg: `ticks=N`.',
+  on_trigger:   'Runs when a trigger scoreboard objective is set by a player. Arg: trigger name.',
+  keep:         'Prevents the compiler from dead-code-eliminating this function.',
+  on:           'Generic event handler decorator.',
+  on_advancement: 'Runs when a player earns an advancement. Arg: advancement id.',
+  on_craft:     'Runs when a player crafts an item. Arg: item id.',
+  on_death:     'Runs when a player dies.',
+  on_join_team: 'Runs when a player joins a team. Arg: team name.',
+  on_login:     'Runs when a player logs in.',
 }
 
 // ---------------------------------------------------------------------------
@@ -290,8 +310,43 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   const program = cached?.program ?? null
   if (!program) return null
 
+  // Check if cursor is on a decorator (@tick, @load, etc.)
+  const lines = source.split('\n')
+  const lineText = lines[params.position.line] ?? ''
+  const decoratorMatch = lineText.match(/@([a-zA-Z_][a-zA-Z0-9_]*)/)
+  if (decoratorMatch) {
+    const ch = params.position.character
+    const atIdx = lineText.indexOf('@')
+    const decoratorEnd = atIdx + 1 + decoratorMatch[1].length
+    if (ch >= atIdx && ch <= decoratorEnd) {
+      const decoratorName = decoratorMatch[1]
+      const decoratorDoc = DECORATOR_DOCS[decoratorName]
+      if (decoratorDoc) {
+        const content: MarkupContent = {
+          kind: MarkupKind.Markdown,
+          value: `**@${decoratorName}** — ${decoratorDoc}`,
+        }
+        return { contents: content }
+      }
+    }
+  }
+
   const word = wordAt(source, params.position)
   if (!word) return null
+
+  // Check builtins
+  const builtin = BUILTIN_METADATA[word]
+  if (builtin) {
+    const paramStr = builtin.params
+      .map(p => `${p.name}: ${p.type}${p.required ? '' : '?'}`)
+      .join(', ')
+    const sig = `fn ${builtin.name}(${paramStr}): ${builtin.returns}`
+    const content: MarkupContent = {
+      kind: MarkupKind.Markdown,
+      value: `\`\`\`redscript\n${sig}\n\`\`\`\n${builtin.doc}`,
+    }
+    return { contents: content }
+  }
 
   // Check if it's a known function
   const fn = findFunction(program, word)
