@@ -28,7 +28,7 @@ function countSlotUses(instrs: LIRInstr[], target: string): number {
 
 function extractSlotsFromRaw(cmd: string): Slot[] {
   const slots: Slot[] = []
-  const re = /(\$[\w.]+)\s+(\S+)/g
+  const re = /(\$[\w.:]+)\s+(\S+)/g
   let m
   while ((m = re.exec(cmd)) !== null) {
     slots.push({ player: m[1], obj: m[2] })

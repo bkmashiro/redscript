@@ -24,7 +24,7 @@ function slotKey(s: Slot): string {
 function extractSlotsFromRaw(cmd: string): Slot[] {
   const slots: Slot[] = []
   // Match $<player> <obj> patterns (scoreboard slot references)
-  const re = /(\$[\w.]+)\s+(\S+)/g
+  const re = /(\$[\w.:]+)\s+(\S+)/g
   let m
   while ((m = re.exec(cmd)) !== null) {
     slots.push({ player: m[1], obj: m[2] })

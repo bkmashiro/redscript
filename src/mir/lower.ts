@@ -730,6 +730,40 @@ function lowerStmt(
           if (isPlaceholderTerm(ctx.current().term)) {
             ctx.terminate({ kind: 'jump', target: mergeBlock.id })
           }
+        } else if (arm.pattern.kind === 'range_lit') {
+          // Range pattern: e.g. 0..59 => emit ge/le comparisons
+          const range = arm.pattern.range
+          const armBody = ctx.newBlock('match_arm')
+          const nextArm = ctx.newBlock('match_next')
+
+          // Chain checks: if min defined, check matchVal >= min; if max defined, check matchVal <= max
+          // Each failed check jumps to nextArm
+          const checks: Array<{ op: 'ge' | 'le'; bound: number }> = []
+          if (range.min !== undefined) checks.push({ op: 'ge', bound: range.min })
+          if (range.max !== undefined) checks.push({ op: 'le', bound: range.max })
+
+          if (checks.length === 0) {
+            // Open range — always matches
+            ctx.terminate({ kind: 'jump', target: armBody.id })
+          } else {
+            // Emit checks sequentially; each check passes → continue to next or armBody
+            for (let ci = 0; ci < checks.length; ci++) {
+              const { op, bound } = checks[ci]
+              const cmpTemp = ctx.freshTemp()
+              ctx.emit({ kind: 'cmp', dst: cmpTemp, op, a: matchVal, b: { kind: 'const', value: bound } })
+              const passBlock = ci === checks.length - 1 ? armBody : ctx.newBlock('match_range_check')
+              ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: cmpTemp }, then: passBlock.id, else: nextArm.id })
+              if (ci < checks.length - 1) ctx.switchTo(passBlock)
+            }
+          }
+
+          ctx.switchTo(armBody)
+          lowerBlock(arm.body, ctx, new Map(scope))
+          if (isPlaceholderTerm(ctx.current().term)) {
+            ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+          }
+
+          ctx.switchTo(nextArm)
         } else {
           const patOp = lowerExpr(arm.pattern, ctx, scope)
           const cmpTemp = ctx.freshTemp()
