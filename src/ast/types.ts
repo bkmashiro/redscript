@@ -54,6 +54,7 @@ export type TypeNode =
   | { kind: 'entity'; entityType: EntityTypeName }  // Entity types
   | { kind: 'selector'; entityType?: string }  // Selector type, optionally parameterized: selector<Player>
   | { kind: 'tuple'; elements: TypeNode[] }  // Tuple type: (int, int, bool)
+  | { kind: 'option'; inner: TypeNode }  // Option<T> — null safety wrapper
 
 export interface LambdaParam {
   name: string
@@ -175,6 +176,8 @@ export type Expr =
   | { kind: 'path_expr'; enumName: string; variant: string; span?: Span }
   | (LambdaExpr & { span?: Span })
   | { kind: 'tuple_lit'; elements: Expr[]; span?: Span }
+  | { kind: 'some_lit'; value: Expr; span?: Span }  // Some(expr)
+  | { kind: 'none_lit'; span?: Span }               // None
 
 export type LiteralExpr =
   | Extract<Expr, { kind: 'int_lit' }>
@@ -231,6 +234,7 @@ export type Stmt =
   | { kind: 'foreach';    binding: string; iterable: Expr; body: Block; executeContext?: string; span?: Span }
   | { kind: 'for_range';  varName: string; start: Expr; end: Expr; body: Block; span?: Span }
   | { kind: 'match';      expr: Expr; arms: { pattern: Expr | null; body: Block }[]; span?: Span }
+  | { kind: 'if_let_some'; binding: string; init: Expr; then: Block; else_?: Block; span?: Span }
   | { kind: 'as_block';   selector: EntitySelector; body: Block; span?: Span }
   | { kind: 'at_block';   selector: EntitySelector; body: Block; span?: Span }
   | { kind: 'as_at';      as_sel: EntitySelector; at_sel: EntitySelector; body: Block; span?: Span }

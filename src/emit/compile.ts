@@ -1,7 +1,7 @@
 /**
  * Top-level compile function for the v2 pipeline.
  *
- * Pipeline: source → Lexer → Parser → HIR → MIR → optimize → LIR → emit
+ * Pipeline: source → Lexer → Parser → TypeCheck → HIR → MIR → optimize → LIR → emit
  */
 
 import { Lexer } from '../lexer'
@@ -18,6 +18,7 @@ import { emit, type DatapackFile } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import { analyzeBudget } from '../lir/budget'
 import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
+import { TypeChecker } from '../typechecker'
 
 export interface CompileOptions {
   namespace?: string
@@ -28,6 +29,11 @@ export interface CompileOptions {
   generateSourceMap?: boolean
   /** Target Minecraft version (default: 1.21). Affects which MC features are used. */
   mcVersion?: McVersion
+  /**
+   * When true, type errors are reported as warnings instead of blocking compilation.
+   * Use for gradual migration or testing with existing codebases that have type errors.
+   */
+  lenient?: boolean
 }
 
 export interface CompileResult {
@@ -38,7 +44,7 @@ export interface CompileResult {
 }
 
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
-  const { namespace = 'redscript', filePath, generateSourceMap = false, mcVersion = DEFAULT_MC_VERSION } = options
+  const { namespace = 'redscript', filePath, generateSourceMap = false, mcVersion = DEFAULT_MC_VERSION, lenient = false } = options
   const warnings: string[] = []
 
   // Preprocess: resolve import directives, merge imported sources
@@ -77,6 +83,23 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       ast.enums.push(...libAst.enums)
       ast.consts.push(...libAst.consts)
       ast.globals.push(...libAst.globals)
+    }
+  }
+
+  // Stage 1b: Type checking
+  // Run TypeChecker on the merged AST. In error-mode (default), throw on first type error.
+  // In lenient mode, demote type errors to warnings.
+  {
+    const checker = new TypeChecker(processedSource, filePath)
+    const typeErrors = checker.check(ast)
+    if (typeErrors.length > 0) {
+      if (lenient) {
+        for (const e of typeErrors) {
+          warnings.push(`[TypeError] line ${e.location.line}, col ${e.location.col}: ${e.message}`)
+        }
+      } else {
+        throw typeErrors[0]
+      }
     }
   }
 

@@ -56,6 +56,7 @@ Options:
   --source-map           Generate .sourcemap.json files alongside .mcfunction output
   --mc-version <ver>     Target Minecraft version (default: 1.21). Affects codegen features.
                          e.g. --mc-version 1.20.2, --mc-version 1.19
+  --lenient              Treat type errors as warnings instead of blocking compilation
   -h, --help             Show this help message
 `)
 }
@@ -159,6 +160,7 @@ function parseArgs(args: string[]): {
   hotReload?: string
   sourceMap?: boolean
   mcVersionStr?: string
+  lenient?: boolean
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -183,6 +185,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--mc-version') {
       result.mcVersionStr = args[++i]
+      i++
+    } else if (arg === '--lenient') {
+      result.lenient = true
       i++
     } else if (!result.command) {
       result.command = arg
@@ -210,6 +215,7 @@ function compileCommand(
   namespace: string,
   sourceMap = false,
   mcVersionStr?: string,
+  lenient = false,
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -230,7 +236,7 @@ function compileCommand(
   const source = fs.readFileSync(file, 'utf-8')
 
   try {
-    const result = compile(source, { namespace, filePath: file, generateSourceMap: sourceMap, mcVersion })
+    const result = compile(source, { namespace, filePath: file, generateSourceMap: sourceMap, mcVersion, lenient })
 
     for (const w of result.warnings) {
       console.error(`Warning: ${w}`)
@@ -428,6 +434,7 @@ async function main(): Promise<void> {
         namespace,
         parsed.sourceMap,
         parsed.mcVersionStr,
+        parsed.lenient,
       )
       }
       break

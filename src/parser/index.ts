@@ -584,6 +584,11 @@ export class Parser {
         type = { kind: 'selector', entityType }
       } else if (token.value === 'selector') {
         type = { kind: 'selector' }
+      } else if (token.value === 'Option' && this.check('<')) {
+        this.advance() // consume <
+        const inner = this.parseType()
+        this.expect('>')
+        type = { kind: 'option', inner }
       } else {
         type = { kind: 'struct', name: token.value }
       }
@@ -756,6 +761,30 @@ export class Parser {
 
   private parseIfStmt(): Stmt {
     const ifToken = this.expect('if')
+
+    // if let Some(x) = expr { ... }
+    if (this.check('let') && this.peek(1).kind === 'ident' && this.peek(1).value === 'Some') {
+      this.advance() // consume 'let'
+      this.advance() // consume 'Some'
+      this.expect('(')
+      const binding = this.expect('ident').value
+      this.expect(')')
+      this.expect('=')
+      const init = this.parseExpr()
+      const then = this.parseBlock()
+
+      let else_: Block | undefined
+      if (this.match('else')) {
+        if (this.check('if')) {
+          else_ = [this.parseIfStmt()]
+        } else {
+          else_ = this.parseBlock()
+        }
+      }
+
+      return this.withLoc({ kind: 'if_let_some', binding, init, then, else_ }, ifToken)
+    }
+
     this.expect('(')
     const cond = this.parseExpr()
     this.expect(')')
@@ -1442,6 +1471,21 @@ export class Parser {
         isSingle: computeIsSingle(token.value),
         sel: this.parseSelectorValue(token.value),
       }, token)
+    }
+
+    // Some(expr) — Option constructor
+    if (token.kind === 'ident' && token.value === 'Some' && this.peek(1).kind === '(') {
+      this.advance() // consume 'Some'
+      this.advance() // consume '('
+      const value = this.parseExpr()
+      this.expect(')')
+      return this.withLoc({ kind: 'some_lit', value }, token)
+    }
+
+    // None — Option empty constructor
+    if (token.kind === 'ident' && token.value === 'None') {
+      this.advance()
+      return this.withLoc({ kind: 'none_lit' }, token)
     }
 
     // Identifier

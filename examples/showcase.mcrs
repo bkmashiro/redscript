@@ -293,9 +293,9 @@ fn _dump_advanced_phase() {
     say("§eHash (splitmix32) & 1D Noise:");
     say(f"  hash_int(0)   = {hash_int(0)}");
     say(f"  hash_int(1)   = {hash_int(1)}");
-    say(f"  noise1d(0,42) = {noise1d(0, 42)}");
-    say(f"  noise1d(1,42) = {noise1d(1, 42)}");
-    say(f"  noise1d(2,42) = {noise1d(2, 42)}");
+    say(f"  noise1d(0,42) = {noise1d(0)}");
+    say(f"  noise1d(1,42) = {noise1d(1)}");
+    say(f"  noise1d(2,42) = {noise1d(2)}");
 
     // Modular exponentiation
     say("§eModular Exponentiation:");

@@ -258,6 +258,16 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
     case 'raw':
       return { kind: 'raw', cmd: stmt.cmd, span: stmt.span }
 
+    case 'if_let_some':
+      return {
+        kind: 'if_let_some',
+        binding: stmt.binding,
+        init: lowerExpr(stmt.init),
+        then: lowerBlock(stmt.then),
+        else_: stmt.else_ ? lowerBlock(stmt.else_) : undefined,
+        span: stmt.span,
+      }
+
     default: {
       const _exhaustive: never = stmt
       throw new Error(`Unknown statement kind: ${(_exhaustive as any).kind}`)
@@ -419,6 +429,12 @@ function lowerExpr(expr: Expr): HIRExpr {
 
     case 'tuple_lit':
       return { kind: 'tuple_lit', elements: expr.elements.map(lowerExpr), span: expr.span }
+
+    case 'some_lit':
+      return { kind: 'some_lit', value: lowerExpr(expr.value), span: expr.span }
+
+    case 'none_lit':
+      return { kind: 'none_lit', span: expr.span }
 
     case 'lambda': {
       const body = Array.isArray(expr.body) ? lowerBlock(expr.body) : lowerExpr(expr.body)

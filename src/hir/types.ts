@@ -90,6 +90,9 @@ export type HIRExpr =
   | { kind: 'lambda'; params: LambdaParam[]; returnType?: TypeNode; body: HIRExpr | HIRBlock; span?: Span }
   // Tuple literal
   | { kind: 'tuple_lit'; elements: HIRExpr[]; span?: Span }
+  // Option literals
+  | { kind: 'some_lit'; value: HIRExpr; span?: Span }
+  | { kind: 'none_lit'; span?: Span }
 
 // ---------------------------------------------------------------------------
 // Execute Subcommands (unified — absorbs as_block, at_block, as_at)
@@ -143,6 +146,7 @@ export type HIRStmt =
   // Unified execute block (absorbs as_block, at_block, as_at, execute)
   | { kind: 'execute'; subcommands: HIRExecuteSubcommand[]; body: HIRBlock; span?: Span }
   | { kind: 'raw'; cmd: string; span?: Span }
+  | { kind: 'if_let_some'; binding: string; init: HIRExpr; then: HIRBlock; else_?: HIRBlock; span?: Span }
 
 export type HIRBlock = HIRStmt[]
 

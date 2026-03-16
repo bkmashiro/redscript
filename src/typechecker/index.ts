@@ -503,16 +503,16 @@ export class TypeChecker {
       expectedType &&
       stmt.init.kind !== 'struct_lit' &&
       stmt.init.kind !== 'array_lit' &&
-      !(actualType.kind === 'named' && actualType.name === 'void') &&
-      !this.typesMatch(expectedType, actualType)
+      !(actualType.kind === 'named' && actualType.name === 'void')
     ) {
       if (this.isNumericMismatch(expectedType, actualType)) {
+        // Explicit numeric conversion required for let assignments
         this.report(
           `Type mismatch: cannot implicitly convert ${this.typeToString(actualType)} to ${this.typeToString(expectedType)}` +
           ` (use an explicit cast: 'as ${this.typeToString(expectedType)}')`,
           stmt
         )
-      } else {
+      } else if (!this.typesMatch(expectedType, actualType)) {
         this.report(
           `Type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`,
           stmt
@@ -530,19 +530,18 @@ export class TypeChecker {
       const actualType = this.inferType(stmt.value, expectedType)
       this.checkExpr(stmt.value, expectedType)
       
-      if (!this.typesMatch(expectedType, actualType)) {
-        if (this.isNumericMismatch(expectedType, actualType)) {
-          this.report(
-            `Return type mismatch: cannot implicitly convert ${this.typeToString(actualType)} to ${this.typeToString(expectedType)}` +
-            ` (use an explicit cast: 'as ${this.typeToString(expectedType)}')`,
-            stmt
-          )
-        } else {
-          this.report(
-            `Return type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`,
-            stmt
-          )
-        }
+      if (this.isNumericMismatch(expectedType, actualType)) {
+        // Explicit numeric conversion required for return statements
+        this.report(
+          `Return type mismatch: cannot implicitly convert ${this.typeToString(actualType)} to ${this.typeToString(expectedType)}` +
+          ` (use an explicit cast: 'as ${this.typeToString(expectedType)}')`,
+          stmt
+        )
+      } else if (!this.typesMatch(expectedType, actualType)) {
+        this.report(
+          `Return type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`,
+          stmt
+        )
       }
     } else {
       // No return value
@@ -637,7 +636,10 @@ export class TypeChecker {
           }
           this.checkExpr(part.expr)
           const partType = this.inferType(part.expr)
+          // Skip check if type is unknown (void) — struct field access not yet fully inferred
+          const isUnknown = partType.kind === 'named' && partType.name === 'void'
           if (
+            !isUnknown &&
             !(partType.kind === 'named' && (partType.name === 'int' || partType.name === 'string' || partType.name === 'format_string'))
           ) {
             this.report(
@@ -1130,6 +1132,11 @@ export class TypeChecker {
       case 'unary':
         if (expr.op === '!') return { kind: 'named', name: 'bool' }
         return this.inferType(expr.operand)
+      case 'selector': {
+        // Infer entity type from the selector
+        const entityType = this.inferEntityTypeFromSelector(expr.sel)
+        return { kind: 'selector', entityType: entityType ?? undefined }
+      }
       case 'array_lit':
         if (expr.elements.length > 0) {
           return { kind: 'array', elem: this.inferType(expr.elements[0]) }
@@ -1310,7 +1317,14 @@ export class TypeChecker {
     if (expected.kind === 'named' && actual.kind === 'named') {
       // void matches anything (for inferred types)
       if (actual.name === 'void') return true
-      return expected.name === actual.name
+      if (expected.name === actual.name) return true
+      // int→float/double implicit promotion in function calls (not for let/return — handled separately)
+      const numericPromotion = [
+        ['int', 'float'], ['int', 'double'], ['float', 'double'],
+        ['float', 'int'], ['double', 'int'], ['double', 'float'],
+      ]
+      if (numericPromotion.some(([e, a]) => expected.name === e && actual.name === a)) return true
+      return false
     }
 
     if (expected.kind === 'array' && actual.kind === 'array') {

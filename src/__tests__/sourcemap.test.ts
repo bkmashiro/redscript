@@ -148,7 +148,7 @@ fn multi() {
   let a = 1;
   let b = 2;
   let c = a + b;
-  say(c);
+  say("hello");
 }
 `
     const result = compile(source, {
@@ -201,7 +201,7 @@ fn helper(x: int): int {
 
 fn caller() {
   let r = helper(5);
-  say(r);
+  say("done");
 }
 `
     const result = compile(source, {

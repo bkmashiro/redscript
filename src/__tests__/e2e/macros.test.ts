@@ -152,7 +152,7 @@ describe('e2e: float macro params with local coords', () => {
       }
 
       fn caller() {
-        draw_pt(100, 200);
+        draw_pt(100.0, 200.0);
       }
     `
     const result = compile(source, { namespace: 'test' })

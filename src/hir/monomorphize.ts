@@ -45,6 +45,7 @@ function typeSuffix(t: TypeNode): string {
     case 'enum':   return t.name
     case 'array':  return `arr_${typeSuffix(t.elem)}`
     case 'tuple':  return `tup_${t.elements.map(typeSuffix).join('_')}`
+    case 'option': return `opt_${typeSuffix(t.inner)}`
     default:       return 'unknown'
   }
 }
@@ -76,6 +77,8 @@ function substType(t: TypeNode, subst: Map<string, TypeNode>): TypeNode {
       return { kind: 'array', elem: substType(t.elem, subst) }
     case 'tuple':
       return { kind: 'tuple', elements: t.elements.map(e => substType(e, subst)) }
+    case 'option':
+      return { kind: 'option', inner: substType(t.inner, subst) }
     case 'function_type':
       return { kind: 'function_type', params: t.params.map(p => substType(p, subst)), return: substType(t.return, subst) }
     default:
@@ -262,6 +265,13 @@ class Monomorphizer {
         }
       case 'execute':
         return { ...stmt, body: this.rewriteBlock(stmt.body, ctx) }
+      case 'if_let_some':
+        return {
+          ...stmt,
+          init: this.rewriteExpr(stmt.init, ctx),
+          then: this.rewriteBlock(stmt.then, ctx),
+          else_: stmt.else_ ? this.rewriteBlock(stmt.else_, ctx) : undefined,
+        }
       case 'break':
       case 'continue':
       case 'raw':
@@ -322,6 +332,10 @@ class Monomorphizer {
         return { ...expr, parts: expr.parts.map(p => typeof p === 'string' ? p : this.rewriteExpr(p, ctx)) }
       case 'f_string':
         // FStringPart uses AST Expr (not HIRExpr) — pass through without rewriting
+        return expr
+      case 'some_lit':
+        return { ...expr, value: this.rewriteExpr(expr.value, ctx) }
+      case 'none_lit':
         return expr
       // Literals / terminals — pass through unchanged
       default:

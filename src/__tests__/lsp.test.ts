@@ -26,6 +26,8 @@ function typeToString(t: TypeNode): string {
     case 'tuple': return `(${t.elements.map(typeToString).join(', ')})`
     case 'function_type':
       return `(${t.params.map(typeToString).join(', ')}) => ${typeToString(t.return)}`
+    default:
+      return 'unknown'
   }
 }
 
