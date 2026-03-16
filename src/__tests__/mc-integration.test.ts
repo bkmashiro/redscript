@@ -409,7 +409,7 @@ describe('MC Integration Tests', () => {
   })
 
   // ─── Test 8: Entity counting ──────────────────────────────────────────
-  test.retries(2)('entity query: armor_stands survive peaceful mode', async () => {
+  test('entity query: armor_stands survive peaceful mode', async () => {
     if (!serverOnline) return
     
     await mc.fullReset({ clearArea: false, killEntities: true, resetScoreboards: false })
@@ -627,7 +627,7 @@ describe('E2E Scenario Tests', () => {
 
   // Scenario I: nested if/else boundary classification
   // Verifies: correct branch taken at boundaries (0, 50, 100)
-  test.retries(2)('I: nested if/else boundary classification', async () => {
+  test('I: nested if/else boundary classification', async () => {
     if (!serverOnline) return
 
     await mc.command('/function boundary_test:__load')
