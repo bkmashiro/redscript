@@ -138,6 +138,9 @@ export class TypeChecker {
   private scope: Map<string, ScopeSymbol> = new Map()
   // Stack for tracking @s type in different contexts
   private selfTypeStack: EntityTypeName[] = ['entity']
+  // Depth of loop/conditional nesting (for static-allocation enforcement)
+  private loopDepth = 0
+  private condDepth = 0
 
   private readonly richTextBuiltins = new Map<string, { messageIndex: number }>([
     ['say', { messageIndex: 0 }],
@@ -352,17 +355,23 @@ export class TypeChecker {
         break
       case 'if':
         this.checkExpr(stmt.cond)
+        this.condDepth++
         this.checkIfBranches(stmt)
+        this.condDepth--
         break
       case 'while':
         this.checkExpr(stmt.cond)
+        this.loopDepth++
         this.checkBlock(stmt.body)
+        this.loopDepth--
         break
       case 'for':
         if (stmt.init) this.checkStmt(stmt.init)
         this.checkExpr(stmt.cond)
         this.checkExpr(stmt.step)
+        this.loopDepth++
         this.checkBlock(stmt.body)
+        this.loopDepth--
         break
       case 'foreach':
         this.checkExpr(stmt.iterable)
@@ -375,7 +384,9 @@ export class TypeChecker {
           })
           // Push self type context for @s inside the loop
           this.pushSelfType(entityType)
+          this.loopDepth++
           this.checkBlock(stmt.body)
+          this.loopDepth--
           this.popSelfType()
         } else {
           const iterableType = this.inferType(stmt.iterable)
@@ -384,7 +395,9 @@ export class TypeChecker {
           } else {
             this.scope.set(stmt.binding, { type: { kind: 'named', name: 'void' }, mutable: true })
           }
+          this.loopDepth++
           this.checkBlock(stmt.body)
+          this.loopDepth--
         }
         break
       case 'match':
@@ -712,6 +725,19 @@ export class TypeChecker {
 
     const builtin = BUILTIN_SIGNATURES[expr.fn]
     if (builtin) {
+      if (expr.fn === 'setTimeout' || expr.fn === 'setInterval') {
+        if (this.loopDepth > 0) {
+          this.report(
+            `${expr.fn}() cannot be called inside a loop. Declare timers at the top level.`,
+            expr
+          )
+        } else if (this.condDepth > 0) {
+          this.report(
+            `${expr.fn}() cannot be called inside an if/else body. Declare timers at the top level.`,
+            expr
+          )
+        }
+      }
       this.checkFunctionCallArgs(expr.args, builtin.params, expr.fn, expr)
       return
     }
@@ -907,6 +933,19 @@ export class TypeChecker {
   }
 
   private checkStaticCallExpr(expr: Extract<Expr, { kind: 'static_call' }>): void {
+    if (expr.type === 'Timer' && expr.method === 'new') {
+      if (this.loopDepth > 0) {
+        this.report(
+          `Timer::new() cannot be called inside a loop. Declare timers at the top level.`,
+          expr
+        )
+      } else if (this.condDepth > 0) {
+        this.report(
+          `Timer::new() cannot be called inside an if/else body. Declare timers at the top level.`,
+          expr
+        )
+      }
+    }
     const method = this.implMethods.get(expr.type)?.get(expr.method)
     if (!method) {
       this.report(`Type '${expr.type}' has no static method '${expr.method}'`, expr)

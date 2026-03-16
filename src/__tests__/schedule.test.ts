@@ -103,3 +103,51 @@ describe('@schedule decorator', () => {
     expect(startFn).toContain('function test:_schedule_after_one_second')
   })
 })
+
+describe('setTimeout / setInterval codegen', () => {
+  test('setTimeout lifts lambda to __timeout_callback_0 and schedules it', () => {
+    const source = `
+      fn start() {
+        setTimeout(20, () => {
+          say("later");
+        });
+      }
+    `
+    const result = compile(source, { namespace: 'ns' })
+    const startFn = getFile(result.files, 'start.mcfunction')
+    const cbFn = getFile(result.files, '__timeout_callback_0.mcfunction')
+    expect(startFn).toContain('schedule function ns:__timeout_callback_0 20t')
+    expect(cbFn).toBeDefined()
+    expect(cbFn).toContain('say later')
+  })
+
+  test('setInterval lambda reschedules itself at the end', () => {
+    const source = `
+      fn start() {
+        setInterval(10, () => {
+          say("tick");
+        });
+      }
+    `
+    const result = compile(source, { namespace: 'ns' })
+    const cbFn = getFile(result.files, '__timeout_callback_0.mcfunction')
+    expect(cbFn).toBeDefined()
+    expect(cbFn).toContain('schedule function ns:__timeout_callback_0 10t')
+  })
+
+  test('multiple setTimeout calls get unique callback names', () => {
+    const source = `
+      fn start() {
+        setTimeout(10, () => { say("a"); });
+        setTimeout(20, () => { say("b"); });
+      }
+    `
+    const result = compile(source, { namespace: 'ns' })
+    const cb0 = getFile(result.files, '__timeout_callback_0.mcfunction')
+    const cb1 = getFile(result.files, '__timeout_callback_1.mcfunction')
+    expect(cb0).toBeDefined()
+    expect(cb1).toBeDefined()
+    expect(cb0).toContain('say a')
+    expect(cb1).toContain('say b')
+  })
+})

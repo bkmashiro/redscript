@@ -270,6 +270,42 @@ fn test() {
       expect(errors[0].message).toContain('Return type mismatch: expected void, got int')
     })
 
+    it('rejects setTimeout inside a loop', () => {
+      const errors = typeCheck(`
+fn test() {
+    while (true) {
+        setTimeout(20, () => { say("x"); });
+    }
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('cannot be called inside a loop')
+    })
+
+    it('rejects setTimeout inside an if body', () => {
+      const errors = typeCheck(`
+fn test() {
+    if (true) {
+        setTimeout(20, () => { say("x"); });
+    }
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('cannot be called inside an if/else body')
+    })
+
+    it('rejects setInterval inside a loop', () => {
+      const errors = typeCheck(`
+fn test() {
+    while (true) {
+        setInterval(20, () => { say("x"); });
+    }
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('cannot be called inside a loop')
+    })
+
     it('allows impl instance methods with inferred self type', () => {
       const errors = typeCheck(`
 struct Timer { duration: int }

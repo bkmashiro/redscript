@@ -61,16 +61,18 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
     }
   }
 
+  const timerCounter = { count: 0 }
+
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter)
     allFunctions.push(fn, ...helpers)
   }
 
   // Lower impl block methods
   for (const ib of hir.implBlocks) {
     for (const m of ib.methods) {
-      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile)
+      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter)
       allFunctions.push(fn, ...helpers)
     }
   }
@@ -119,6 +121,8 @@ class FnContext {
   currentSourceLoc: SourceLoc | undefined = undefined
   /** Source file path for the module being compiled */
   sourceFile: string | undefined = undefined
+  /** Shared counter for setTimeout/setInterval callback naming (module-wide) */
+  readonly timerCounter: { count: number }
 
   constructor(
     namespace: string,
@@ -128,6 +132,7 @@ class FnContext {
     macroInfo: Map<string, MacroFunctionInfo> = new Map(),
     fnParamInfo: Map<string, HIRParam[]> = new Map(),
     enumDefs: Map<string, Map<string, number>> = new Map(),
+    timerCounter: { count: number } = { count: 0 },
   ) {
     this.namespace = namespace
     this.fnName = fnName
@@ -137,6 +142,7 @@ class FnContext {
     this.fnParamInfo = fnParamInfo
     this.currentMacroParams = macroInfo.get(fnName)?.macroParams ?? new Set()
     this.enumDefs = enumDefs
+    this.timerCounter = timerCounter
     const entry = this.makeBlock('entry')
     this.currentBlock = entry
   }
@@ -216,8 +222,9 @@ function lowerFunction(
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
   enumDefs: Map<string, Map<string, number>> = new Map(),
   sourceFile?: string,
+  timerCounter: { count: number } = { count: 0 },
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
-  const ctx = new FnContext(namespace, fn.name, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
+  const ctx = new FnContext(namespace, fn.name, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter)
   ctx.sourceFile = sourceFile
   const fnMacroInfo = macroInfo.get(fn.name)
 
@@ -269,9 +276,10 @@ function lowerImplMethod(
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
   enumDefs: Map<string, Map<string, number>> = new Map(),
   sourceFile?: string,
+  timerCounter: { count: number } = { count: 0 },
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
-  const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
+  const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter)
   ctx.sourceFile = sourceFile
   const fields = structDefs.get(typeName) ?? []
   const hasSelf = method.params.length > 0 && method.params[0].name === 'self'
@@ -1091,6 +1099,79 @@ function lowerExpr(
         const obj = hirExprToStringLiteral(expr.args[1])
         const src = lowerExpr(expr.args[2], ctx, scope)
         ctx.emit({ kind: 'score_write', player, obj, src })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+
+      // Handle setTimeout/setInterval: lift lambda arg to a named helper function
+      if ((expr.fn === 'setTimeout' || expr.fn === 'setInterval') && expr.args.length === 2) {
+        const ticksArg = expr.args[0]
+        const callbackArg = expr.args[1]
+        const ns = ctx.getNamespace()
+        const id = ctx.timerCounter.count++
+        const callbackName = `__timeout_callback_${id}`
+
+        // Extract ticks value for the schedule command
+        let ticksLiteral: number | null = null
+        if (ticksArg.kind === 'int_lit') {
+          ticksLiteral = ticksArg.value
+        }
+
+        // Build the callback MIRFunction from the lambda body
+        if (callbackArg.kind === 'lambda') {
+          const cbCtx = new FnContext(
+            ns,
+            callbackName,
+            ctx.structDefs,
+            ctx.implMethods,
+            ctx.macroInfo,
+            ctx.fnParamInfo,
+            ctx.enumDefs,
+            ctx.timerCounter,
+          )
+          cbCtx.sourceFile = ctx.sourceFile
+
+          const cbBody = Array.isArray(callbackArg.body) ? callbackArg.body : [{ kind: 'expr' as const, expr: callbackArg.body }]
+
+          // For setInterval: reschedule at end of body
+          const bodyStmts: typeof cbBody = [...cbBody]
+          if (expr.fn === 'setInterval' && ticksLiteral !== null) {
+            // Append: raw `schedule function ns:callbackName ticksT`
+            bodyStmts.push({
+              kind: 'raw' as const,
+              cmd: `schedule function ${ns}:${callbackName} ${ticksLiteral}t`,
+            } as any)
+          }
+
+          lowerBlock(bodyStmts, cbCtx, new Map())
+          const cbCur = cbCtx.current()
+          if (isPlaceholderTerm(cbCur.term)) {
+            cbCtx.terminate({ kind: 'return', value: null })
+          }
+          const cbReachable = computeReachable(cbCtx.blocks, 'entry')
+          const cbLiveBlocks = cbCtx.blocks.filter(b => cbReachable.has(b.id))
+          computePreds(cbLiveBlocks)
+          const cbFn: MIRFunction = {
+            name: callbackName,
+            params: [],
+            blocks: cbLiveBlocks,
+            entry: 'entry',
+            isMacro: false,
+          }
+          ctx.helperFunctions.push(cbFn, ...cbCtx.helperFunctions)
+        }
+
+        // Emit: schedule function ns:callbackName ticksT
+        if (ticksLiteral !== null) {
+          ctx.emit({ kind: 'call', dst: null, fn: `__raw:schedule function ${ns}:${callbackName} ${ticksLiteral}t`, args: [] })
+        } else {
+          // Dynamic ticks: lower ticks operand and emit a raw schedule (best-effort)
+          const ticksOp = lowerExpr(ticksArg, ctx, scope)
+          ctx.emit({ kind: 'call', dst: null, fn: `__raw:schedule function ${ns}:${callbackName} 1t`, args: [ticksOp] })
+        }
+
+        // setTimeout returns void (0), setInterval returns an int ID (0 for now)
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'const', dst: t, value: 0 })
         return { kind: 'temp', name: t }
