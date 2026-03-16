@@ -146,6 +146,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const coroResult = coroutineTransform(mirOpt, coroutineInfos)
     const mirFinal = coroResult.module
     tickFunctions.push(...coroResult.generatedTickFunctions)
+    warnings.push(...coroResult.warnings)
 
     // Stage 5: MIR → LIR
     const lir = lowerToLIR(mirFinal)

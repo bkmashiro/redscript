@@ -40,6 +40,8 @@ export interface CoroutineResult {
   module: MIRModule
   /** Names of generated @tick dispatcher functions (caller must add to tick list). */
   generatedTickFunctions: string[]
+  /** Warning messages for skipped transforms. */
+  warnings: string[]
 }
 
 /**
@@ -51,15 +53,27 @@ export function coroutineTransform(
   mod: MIRModule,
   infos: CoroutineInfo[],
 ): CoroutineResult {
-  if (infos.length === 0) return { module: mod, generatedTickFunctions: [] }
+  if (infos.length === 0) return { module: mod, generatedTickFunctions: [], warnings: [] }
 
   const infoMap = new Map(infos.map(i => [i.fnName, i]))
   const newFunctions: MIRFunction[] = []
   const tickFns: string[] = []
+  const warnings: string[] = []
 
   for (const fn of mod.functions) {
     const info = infoMap.get(fn.name)
     if (!info) {
+      newFunctions.push(fn)
+      continue
+    }
+
+    // Skip transform if function contains macro calls — continuations are called
+    // directly (not via `function ... with storage`) so macro variables like
+    // ${px} would not be substituted, causing MC parse errors.
+    if (fnContainsMacroCalls(fn)) {
+      warnings.push(
+        `@coroutine cannot be applied to functions containing macro calls (skipped: ${fn.name})`,
+      )
       newFunctions.push(fn)
       continue
     }
@@ -74,7 +88,29 @@ export function coroutineTransform(
   return {
     module: { ...mod, functions: newFunctions },
     generatedTickFunctions: tickFns,
+    warnings,
   }
+}
+
+/**
+ * Returns true if any instruction in the function requires macro processing.
+ * This includes:
+ *   - call_macro: explicit macro function invocations
+ *   - call with fn = '__raw:\x01...': builtin calls (particle, summon, etc.) with macro params
+ *   - call with fn = '__raw:<cmd>' where cmd contains '${': raw() commands with variable interpolation
+ */
+function fnContainsMacroCalls(fn: MIRFunction): boolean {
+  for (const block of fn.blocks) {
+    for (const instr of [...block.instrs, block.term]) {
+      if (instr.kind === 'call_macro') return true
+      if (instr.kind === 'call' && instr.fn.startsWith('__raw:')) {
+        const cmd = instr.fn.slice(6)
+        // \x01 sentinel: builtin with macro params; '${': raw() with variable interpolation
+        if (cmd.startsWith('\x01') || cmd.includes('${')) return true
+      }
+    }
+  }
+  return false
 }
 
 // ---------------------------------------------------------------------------

@@ -120,6 +120,29 @@ describe('e2e: @coroutine', () => {
     expect(helperFn).toBeDefined()
   })
 
+  test('@coroutine with macro call_macro is skipped with warning', () => {
+    // call_macro: a function that has isMacro params will be called via call_macro
+    // We simulate this with raw() containing ${var} which generates __raw:\x01 in MIR
+    const source = `
+      @coroutine(batch=10)
+      fn with_macro_raw(): void {
+        let i: int = 0;
+        while (i < 100) {
+          let x: int = i;
+          raw("particle minecraft:end_rod ^$\{x} ^0 ^0 0 0 0 0 1 force @a");
+          i = i + 1;
+        }
+      }
+    `
+    const result = compile(source, { namespace: 'corotest' })
+    // Should emit a warning about skipping
+    expect(result.warnings.some(w => w.includes('@coroutine cannot be applied') && w.includes('with_macro_raw'))).toBe(true)
+    // Should NOT generate continuation files — function kept as-is
+    const paths = getFileNames(result.files)
+    const contFiles = paths.filter(p => p.includes('_coro_'))
+    expect(contFiles.length).toBe(0)
+  })
+
   test('default batch value is 10 when not specified', () => {
     // @coroutine without batch should default to batch=10
     // We test by ensuring compilation succeeds
