@@ -15,6 +15,7 @@ import { lowerToLIR } from '../lir/lower'
 import { lirOptimizeModule } from '../optimizer/lir/pipeline'
 import { emit, type DatapackFile } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
+import { analyzeBudget } from '../lir/budget'
 
 export interface CompileOptions {
   namespace?: string
@@ -113,6 +114,20 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     // Stage 6: LIR optimization
     const lirOpt = lirOptimizeModule(lir)
+
+    // Static tick budget analysis
+    const coroutineNames = new Set(coroutineInfos.map(c => c.fnName))
+    const budgetDiags = analyzeBudget(lirOpt, coroutineNames)
+    for (const diag of budgetDiags) {
+      if (diag.level === 'error') {
+        throw new DiagnosticError(
+          'LoweringError',
+          diag.message,
+          { line: 1, col: 1, file: filePath },
+        )
+      }
+      warnings.push(diag.message)
+    }
 
     // Stage 7: LIR → .mcfunction
     const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions })
