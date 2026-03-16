@@ -85,6 +85,8 @@ function rewriteUses(instr: MIRInstr, copies: Map<Temp, Operand>): MIRInstr {
       return { ...instr, cond: resolve(instr.cond, copies) }
     case 'return':
       return { ...instr, value: instr.value ? resolve(instr.value, copies) : null }
+    case 'score_write':
+      return { ...instr, src: resolve(instr.src, copies) }
     default:
       return instr
   }
@@ -99,6 +101,8 @@ function getDst(instr: MIRInstr): Temp | null {
     case 'nbt_read':
       return instr.dst
     case 'call': case 'call_macro':
+      return instr.dst
+    case 'score_read':
       return instr.dst
     default:
       return null
