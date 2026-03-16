@@ -1,0 +1,21 @@
+# Build artifacts
+dist/
+*.js.map
+
+# Dependencies
+node_modules/
+
+# Lock files
+package-lock.json
+
+# Generated / large data
+docs/mc-reference/
+
+# Test snapshots (not useful for context)
+**/__snapshots__/
+
+# Editor
+.vscode/
+editors/vscode/node_modules/
+editors/vscode/dist/
+*.vsix
