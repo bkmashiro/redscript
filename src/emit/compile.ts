@@ -34,6 +34,8 @@ export interface CompileOptions {
    * Use for gradual migration or testing with existing codebases that have type errors.
    */
   lenient?: boolean
+  /** Extra directories to search when resolving imports (in addition to relative and stdlib). */
+  includeDirs?: string[]
 }
 
 export interface CompileResult {
@@ -44,11 +46,11 @@ export interface CompileResult {
 }
 
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
-  const { namespace = 'redscript', filePath, generateSourceMap = false, mcVersion = DEFAULT_MC_VERSION, lenient = false } = options
+  const { namespace = 'redscript', filePath, generateSourceMap = false, mcVersion = DEFAULT_MC_VERSION, lenient = false, includeDirs } = options
   const warnings: string[] = []
 
   // Preprocess: resolve import directives, merge imported sources
-  const preprocessed = preprocessSourceWithMetadata(source, { filePath })
+  const preprocessed = preprocessSourceWithMetadata(source, { filePath, includeDirs })
   const processedSource = preprocessed.source
 
   // Stage 1: Lex + Parse → AST

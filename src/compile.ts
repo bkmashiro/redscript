@@ -69,6 +69,37 @@ function isLibrarySource(source: string): boolean {
 interface PreprocessOptions {
   filePath?: string
   seen?: Set<string>
+  includeDirs?: string[]
+}
+
+/** Resolve an import specifier to an absolute file path, trying multiple locations. */
+function resolveImportPath(
+  spec: string,
+  fromFile: string,
+  includeDirs: string[]
+): string | null {
+  const candidates = spec.endsWith('.mcrs') ? [spec] : [spec, spec + '.mcrs']
+
+  for (const candidate of candidates) {
+    // 1. Relative to the importing file
+    const rel = path.resolve(path.dirname(fromFile), candidate)
+    if (fs.existsSync(rel)) return rel
+
+    // 2. stdlib directory (package root / src / stdlib)
+    //    Strip leading 'stdlib/' prefix so `import "stdlib/math"` resolves to
+    //    <stdlibDir>/math.mcrs rather than <stdlibDir>/stdlib/math.mcrs.
+    const stdlibDir = path.resolve(__dirname, '..', 'src', 'stdlib')
+    const stdlibCandidate = candidate.replace(/^stdlib\//, '')
+    const stdlib = path.resolve(stdlibDir, stdlibCandidate)
+    if (fs.existsSync(stdlib)) return stdlib
+
+    // 3. Extra include dirs
+    for (const dir of includeDirs) {
+      const extra = path.resolve(dir, candidate)
+      if (fs.existsSync(extra)) return extra
+    }
+  }
+  return null
 }
 
 function countLines(source: string): number {
@@ -86,6 +117,7 @@ function offsetRanges(ranges: SourceRange[], lineOffset: number): SourceRange[] 
 export function preprocessSourceWithMetadata(source: string, options: PreprocessOptions = {}): PreprocessedSource {
   const { filePath } = options
   const seen = options.seen ?? new Set<string>()
+  const includeDirs = options.includeDirs ?? []
 
   if (filePath) {
     seen.add(path.resolve(filePath))
@@ -113,31 +145,28 @@ export function preprocessSourceWithMetadata(source: string, options: Preprocess
         )
       }
 
-      const importPath = path.resolve(path.dirname(filePath), match[1])
+      const importPath = resolveImportPath(match[1], filePath, includeDirs)
+      if (!importPath) {
+        throw new DiagnosticError(
+          'ParseError',
+          `Cannot import '${match[1]}'`,
+          { file: filePath, line: i + 1, col: 1 },
+          lines
+        )
+      }
       if (!seen.has(importPath)) {
         seen.add(importPath)
-        let importedSource: string
-
-        try {
-          importedSource = fs.readFileSync(importPath, 'utf-8')
-        } catch {
-          throw new DiagnosticError(
-            'ParseError',
-            `Cannot import '${match[1]}'`,
-            { file: filePath, line: i + 1, col: 1 },
-            lines
-          )
-        }
+        const importedSource = fs.readFileSync(importPath, 'utf-8')
 
         if (isLibrarySource(importedSource)) {
           // Library file: parse separately so its functions are DCE-eligible.
           // Also collect any transitive library imports inside it.
-          const nested = preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen })
+          const nested = preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen, includeDirs })
           libraryImports.push({ source: importedSource, filePath: importPath })
           // Propagate transitive library imports (e.g. math.mcrs imports vec.mcrs)
           if (nested.libraryImports) libraryImports.push(...nested.libraryImports)
         } else {
-          imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen }))
+          imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen, includeDirs }))
         }
       }
       continue
