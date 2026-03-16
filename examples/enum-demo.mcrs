@@ -1,0 +1,95 @@
+// enum-demo.mcrs — NPC AI state machine using enums and match
+//
+// An NPC cycles through Idle → Moving → Attacking states.
+// Each state has its own behaviour, driven by @tick.
+//
+// Usage:
+//   /function demo:npc_start    activate the NPC AI
+//   /function demo:npc_stop     deactivate the NPC AI
+
+enum Phase {
+    Idle,       // 0 — waiting for a player nearby
+    Moving,     // 1 — closing the distance
+    Attacking,  // 2 — striking the nearest player
+}
+
+struct NpcState {
+    phase:    int,    // current Phase value
+    ticks:    int,    // ticks in the current phase
+    active:   bool
+}
+
+let npc: NpcState = {
+    phase:  0,
+    ticks:  0,
+    active: false
+};
+
+@load
+fn npc_load() {
+    npc.phase  = Phase.Idle;
+    npc.ticks  = 0;
+    npc.active = false;
+}
+
+fn npc_start() {
+    npc.active = true;
+    npc.phase  = Phase.Idle;
+    npc.ticks  = 0;
+    actionbar(@a, "[NPC] AI activated");
+}
+
+fn npc_stop() {
+    npc.active = false;
+    actionbar(@a, "[NPC] AI deactivated");
+}
+
+// ── Phase handlers ────────────────────────────────────────────────────────
+
+fn phase_idle() {
+    actionbar(@a, "[NPC] Idle — scanning for targets...");
+    // After 40 ticks (2 seconds) transition to Moving
+    if (npc.ticks >= 40) {
+        npc.phase = Phase.Moving;
+        npc.ticks = 0;
+        title(@a, "NPC begins moving");
+    }
+}
+
+fn phase_moving() {
+    actionbar(@a, "[NPC] Moving — closing distance");
+    // Simulate movement toward nearest player
+    raw("execute as @e[type=minecraft:zombie,tag=npc_ai] at @s run tp @s @p[limit=1] 0 0 0");
+    if (npc.ticks >= 60) {
+        npc.phase = Phase.Attacking;
+        npc.ticks = 0;
+        title(@a, "NPC attacks!");
+    }
+}
+
+fn phase_attacking() {
+    actionbar(@a, "[NPC] Attacking!");
+    raw("execute as @e[type=minecraft:zombie,tag=npc_ai] at @s run effect give @p[limit=1,distance=..3] minecraft:slowness 1 1 true");
+    if (npc.ticks >= 30) {
+        npc.phase = Phase.Idle;
+        npc.ticks = 0;
+        title(@a, "NPC backs off");
+    }
+}
+
+// ── Main tick ─────────────────────────────────────────────────────────────
+
+@tick
+fn npc_tick() {
+    if (!npc.active) {
+        return;
+    }
+
+    npc.ticks = npc.ticks + 1;
+
+    match (npc.phase) {
+        Phase.Idle      => { phase_idle(); }
+        Phase.Moving    => { phase_moving(); }
+        Phase.Attacking => { phase_attacking(); }
+    }
+}

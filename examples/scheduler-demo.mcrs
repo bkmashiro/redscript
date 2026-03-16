@@ -1,0 +1,59 @@
+// scheduler-demo.mcrs — Delayed event triggering with @schedule
+//
+// @schedule(ticks=N) generates a _schedule_xxx wrapper that emits
+// `schedule function ns:xxx Nt`, deferring execution by N ticks.
+//
+// 20 ticks = 1 second in Minecraft.
+//
+// Usage:
+//   /function demo:begin_countdown   trigger the 1-second delayed reward
+//   /function demo:announce_morning  schedule a sunrise announcement
+
+// ── 1-second delayed reward ───────────────────────────────────────────────
+
+fn begin_countdown() {
+    title(@a, "Get ready...");
+    raw("function demo:_schedule_reward_players");
+}
+
+// Called automatically 1 second (20t) after _schedule_reward_players fires
+@schedule(ticks=20)
+fn reward_players(): void {
+    title(@a, "Go!");
+    raw("effect give @a minecraft:speed 5 1 true");
+    raw("effect give @a minecraft:jump_boost 5 1 true");
+    tell(@a, "Speed and Jump Boost applied for 5 seconds.");
+}
+
+// ── 5-second delayed announcement ────────────────────────────────────────
+
+fn announce_morning() {
+    tell(@a, "Sunrise in 5 seconds...");
+    raw("function demo:_schedule_sunrise_event");
+}
+
+@schedule(ticks=100)
+fn sunrise_event(): void {
+    raw("time set day");
+    raw("weather clear");
+    title(@a, "Good morning!");
+    subtitle(@a, "A new day begins");
+}
+
+// ── Chain: schedule a follow-up from inside a scheduled function ──────────
+
+fn start_chain() {
+    tell(@a, "Chain started — phase 1 runs in 1s, phase 2 in 3s total.");
+    raw("function demo:_schedule_chain_phase1");
+}
+
+@schedule(ticks=20)
+fn chain_phase1(): void {
+    actionbar(@a, "Phase 1 complete");
+    raw("function demo:_schedule_chain_phase2");
+}
+
+@schedule(ticks=40)
+fn chain_phase2(): void {
+    actionbar(@a, "Phase 2 complete — chain done!");
+}

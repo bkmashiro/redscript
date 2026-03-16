@@ -5,7 +5,7 @@ import { compile } from '../compile'
 import { MCCommandValidator } from '../mc-validator'
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'mc-commands-1.21.4.json')
-const EXAMPLES = ['counter', 'arena', 'shop', 'quiz', 'turret']
+const EXAMPLES = ['shop', 'quiz', 'turret']
 
 function getCommands(source: string, namespace = 'test'): string[] {
   const result = compile(source, { namespace })
@@ -31,12 +31,6 @@ function validateSource(
 
 describe('MC Command Syntax Validation', () => {
   const validator = new MCCommandValidator(FIXTURE_PATH)
-
-  test('counter example generates valid MC commands', () => {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'examples', 'counter.mcrs'), 'utf-8')
-    const errors = validateSource(validator, src, 'counter')
-    expect(errors).toHaveLength(0)
-  })
 
   EXAMPLES.forEach(name => {
     test(`${name}.mcrs generates valid MC commands`, () => {

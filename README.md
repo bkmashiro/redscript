@@ -192,6 +192,22 @@ fn on_diamond() {
 fn on_death() {
     scoreboard_add(@s, #deaths, 1);
 }
+
+// Delay execution by N ticks (20t = 1 second)
+@schedule(ticks=20)
+fn after_one_second(): void {
+    title(@a, "One second later!");
+}
+
+// Spread a heavy loop across multiple ticks (batch=N iterations/tick)
+@coroutine(batch=50, onDone=all_done)
+fn process_all(): void {
+    let i: int = 0;
+    while (i < 1000) {
+        // work spread over ~20 ticks instead of lagging one tick
+        i = i + 1;
+    }
+}
 ```
 
 #### Control Flow
@@ -312,6 +328,26 @@ fn show_fib() {
     let l2: int = bigint_get_a(2);  // 125
     say(f"F(50) limbs: {l2} {l1} {l0}");
 }
+```
+
+---
+
+### Examples
+
+The `examples/` directory contains ready-to-compile demos:
+
+| File | What it shows |
+|---|---|
+| `readme-demo.mcrs` | Real-time sine wave particles — `@tick`, `foreach`, f-strings, math stdlib |
+| `math-showcase.mcrs` | All stdlib math modules: trig, vectors, BigInt, fractals |
+| `showcase.mcrs` | Full feature tour: structs, enums, `match`, lambdas, `@tick`/`@load` |
+| `coroutine-demo.mcrs` | `@coroutine(batch=50)` — spread 1000 iterations across ~20 ticks |
+| `enum-demo.mcrs` | Enum state machine: NPC AI cycling Idle → Moving → Attacking with `match` |
+| `scheduler-demo.mcrs` | `@schedule(ticks=20)` — delayed events, chained schedules |
+
+Compile any example:
+```bash
+node dist/cli.js compile examples/coroutine-demo.mcrs -o ~/mc-server/datapacks/demo --namespace demo
 ```
 
 ---

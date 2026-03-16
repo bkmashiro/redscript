@@ -1,0 +1,50 @@
+// coroutine-demo.mcrs — Spread particle generation across multiple ticks
+//
+// @coroutine(batch=50) processes 50 iterations per tick, so 1000 total
+// iterations take ~20 ticks instead of lagging one tick.
+//
+// Usage:
+//   /function demo:start_particle_wave   begin the wave
+//   /function demo:stop_particle_wave    cancel the wave
+
+import "../src/stdlib/math.mcrs"
+
+let wave_running: bool = false;
+
+@load
+fn init() {
+    wave_running = false;
+}
+
+// Spread 1000 iterations across ~20 ticks (50 per tick)
+@coroutine(batch=50, onDone=wave_done)
+fn generate_wave(): void {
+    let i: int = 0;
+    while (i < 1000) {
+        let angle: int = (i * 360) / 1000;
+        let px: int = sin_fixed(angle);
+        let py: int = cos_fixed(angle);
+        raw("particle minecraft:end_rod ^${px} ^100 ^${py} 0 0 0 0 1 force @a");
+        i = i + 1;
+    }
+}
+
+fn wave_done(): void {
+    wave_running = false;
+    title(@a, "Wave complete!");
+}
+
+fn start_particle_wave(): void {
+    if (wave_running) {
+        tell(@a, "Wave already running.");
+        return;
+    }
+    wave_running = true;
+    title(@a, "Starting particle wave...");
+    generate_wave();
+}
+
+fn stop_particle_wave(): void {
+    wave_running = false;
+    title(@a, "Wave stopped.");
+}
