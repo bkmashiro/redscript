@@ -9,7 +9,7 @@ RedScript compiles to Minecraft Java Edition datapacks (`.mcfunction`).
 npm run build && npm test   # always run together; tests must be green before commit
 ```
 
-Current baseline: **877/877 tests**.
+Current baseline: **1020/1020 tests**.
 
 ## Rules
 
