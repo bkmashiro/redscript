@@ -112,6 +112,9 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
     case 'let':
       return { kind: 'let', name: stmt.name, type: stmt.type, init: lowerExpr(stmt.init), span: stmt.span }
 
+    case 'let_destruct':
+      return { kind: 'let_destruct', names: stmt.names, type: stmt.type, init: lowerExpr(stmt.init), span: stmt.span }
+
     case 'expr':
       return { kind: 'expr', expr: lowerExpr(stmt.expr), span: stmt.span }
 
@@ -412,6 +415,9 @@ function lowerExpr(expr: Expr): HIRExpr {
 
     case 'path_expr':
       return { kind: 'path_expr', enumName: expr.enumName, variant: expr.variant, span: expr.span }
+
+    case 'tuple_lit':
+      return { kind: 'tuple_lit', elements: expr.elements.map(lowerExpr), span: expr.span }
 
     case 'lambda': {
       const body = Array.isArray(expr.body) ? lowerBlock(expr.body) : lowerExpr(expr.body)

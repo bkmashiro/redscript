@@ -516,7 +516,24 @@ export class Parser {
     let type: TypeNode
 
     if (token.kind === '(') {
-      return this.parseFunctionType()
+      // Disambiguate: tuple type `(T, T)` vs function type `(T) -> R`
+      // Look ahead: parse elements, then check if '->' follows.
+      const saved = this.pos
+      this.advance() // consume '('
+      const elements: TypeNode[] = []
+      if (!this.check(')')) {
+        do {
+          elements.push(this.parseType())
+        } while (this.match(','))
+      }
+      this.expect(')')
+      if (this.check('->')) {
+        // It's a function type — restore and use existing parseFunctionType
+        this.pos = saved
+        return this.parseFunctionType()
+      }
+      // It's a tuple type
+      return { kind: 'tuple', elements }
     }
 
     if (token.kind === 'int' || token.kind === 'bool' ||
@@ -658,6 +675,25 @@ export class Parser {
 
   private parseLetStmt(): Stmt {
     const letToken = this.expect('let')
+
+    // Destructuring: let (a, b, c) = expr;
+    if (this.check('(')) {
+      this.advance() // consume '('
+      const names: string[] = []
+      do {
+        names.push(this.expect('ident').value)
+      } while (this.match(','))
+      this.expect(')')
+      let type: TypeNode | undefined
+      if (this.match(':')) {
+        type = this.parseType()
+      }
+      this.expect('=')
+      const init = this.parseExpr()
+      this.expect(';')
+      return this.withLoc({ kind: 'let_destruct', names, type, init }, letToken)
+    }
+
     const name = this.expect('ident').value
 
     let type: TypeNode | undefined
@@ -1338,7 +1374,7 @@ export class Parser {
       return this.withLoc({ kind: 'ident', name: token.value }, token)
     }
 
-    // Grouped expression
+    // Grouped expression or tuple literal
     if (token.kind === '(') {
       if (this.isBlockPosLiteral()) {
         return this.parseBlockPos()
@@ -1347,9 +1383,20 @@ export class Parser {
         return this.parseLambdaExpr()
       }
       this.advance()
-      const expr = this.parseExpr()
+      const first = this.parseExpr()
+      // If followed by a comma, it's a tuple literal
+      if (this.match(',')) {
+        const elements: Expr[] = [first]
+        if (!this.check(')')) {
+          do {
+            elements.push(this.parseExpr())
+          } while (this.match(','))
+        }
+        this.expect(')')
+        return this.withLoc({ kind: 'tuple_lit', elements }, token)
+      }
       this.expect(')')
-      return expr
+      return first
     }
 
     // Struct literal or block: { x: 10, y: 20 }

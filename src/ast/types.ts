@@ -53,6 +53,7 @@ export type TypeNode =
   | { kind: 'function_type'; params: TypeNode[]; return: TypeNode }
   | { kind: 'entity'; entityType: EntityTypeName }  // Entity types
   | { kind: 'selector'; entityType?: string }  // Selector type, optionally parameterized: selector<Player>
+  | { kind: 'tuple'; elements: TypeNode[] }  // Tuple type: (int, int, bool)
 
 export interface LambdaParam {
   name: string
@@ -173,6 +174,7 @@ export type Expr =
   | { kind: 'static_call'; type: string; method: string; args: Expr[]; span?: Span }
   | { kind: 'path_expr'; enumName: string; variant: string; span?: Span }
   | (LambdaExpr & { span?: Span })
+  | { kind: 'tuple_lit'; elements: Expr[]; span?: Span }
 
 export type LiteralExpr =
   | Extract<Expr, { kind: 'int_lit' }>
@@ -218,6 +220,7 @@ export type ExecuteSubcommand =
 
 export type Stmt =
   | { kind: 'let';        name: string; type?: TypeNode; init: Expr; span?: Span }
+  | { kind: 'let_destruct'; names: string[]; type?: TypeNode; init: Expr; span?: Span }
   | { kind: 'expr';       expr: Expr; span?: Span }
   | { kind: 'return';     value?: Expr; span?: Span }
   | { kind: 'break';      span?: Span }

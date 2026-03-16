@@ -330,6 +330,9 @@ export class TypeChecker {
       case 'let':
         this.checkLetStmt(stmt)
         break
+      case 'let_destruct':
+        this.checkLetDestructStmt(stmt)
+        break
       case 'return':
         this.checkReturnStmt(stmt)
         break
@@ -424,6 +427,46 @@ export class TypeChecker {
       case 'raw':
         // Raw commands are not type checked
         break
+    }
+  }
+
+  private checkLetDestructStmt(stmt: Extract<Stmt, { kind: 'let_destruct' }>): void {
+    this.checkExpr(stmt.init)
+    const initType = this.inferType(stmt.init)
+    if (stmt.type) {
+      // Type annotation must be a tuple
+      const normalized = this.normalizeType(stmt.type)
+      if (normalized.kind !== 'tuple') {
+        this.report(`Destructuring type annotation must be a tuple type`, stmt)
+        return
+      }
+      if (normalized.elements.length !== stmt.names.length) {
+        this.report(
+          `Destructuring pattern has ${stmt.names.length} bindings but type has ${normalized.elements.length} elements`,
+          stmt
+        )
+      }
+      for (let i = 0; i < stmt.names.length; i++) {
+        const elemType = normalized.elements[i] ?? { kind: 'named', name: 'int' } as TypeNode
+        this.scope.set(stmt.names[i], { type: elemType, mutable: true })
+      }
+    } else if (initType.kind === 'tuple') {
+      // Infer element types from tuple literal type
+      if (initType.elements.length !== stmt.names.length) {
+        this.report(
+          `Destructuring pattern has ${stmt.names.length} bindings but tuple has ${initType.elements.length} elements`,
+          stmt
+        )
+      }
+      for (let i = 0; i < stmt.names.length; i++) {
+        const elemType = initType.elements[i] ?? { kind: 'named', name: 'int' } as TypeNode
+        this.scope.set(stmt.names[i], { type: elemType, mutable: true })
+      }
+    } else {
+      // Can't infer element types — use int as fallback (tuple returns inferred as int from scoreboard)
+      for (const name of stmt.names) {
+        this.scope.set(name, { type: INT_TYPE, mutable: true })
+      }
     }
   }
 
@@ -571,6 +614,15 @@ export class TypeChecker {
         break
 
       case 'array_lit':
+        for (const elem of expr.elements) {
+          this.checkExpr(elem)
+        }
+        break
+
+      case 'tuple_lit':
+        if (expr.elements.length < 2 || expr.elements.length > 8) {
+          this.report(`Tuple must have 2-8 elements, got ${expr.elements.length}`, expr)
+        }
         for (const elem of expr.elements) {
           this.checkExpr(elem)
         }
@@ -1036,6 +1088,11 @@ export class TypeChecker {
           }
         }
         return { kind: 'named', name: 'void' }
+      case 'tuple_lit':
+        return {
+          kind: 'tuple',
+          elements: expr.elements.map(e => this.inferType(e)),
+        }
       case 'lambda':
         return this.inferLambdaType(
           expr,
@@ -1175,6 +1232,11 @@ export class TypeChecker {
         this.typesMatch(expected.return, actual.return)
     }
 
+    if (expected.kind === 'tuple' && actual.kind === 'tuple') {
+      return expected.elements.length === actual.elements.length &&
+        expected.elements.every((elem, i) => this.typesMatch(elem, actual.elements[i]))
+    }
+
     // Entity type matching with subtype support
     if (expected.kind === 'entity' && actual.kind === 'entity') {
       return this.isEntitySubtype(actual.entityType, expected.entityType)
@@ -1204,6 +1266,8 @@ export class TypeChecker {
         return type.entityType
       case 'selector':
         return 'selector'
+      case 'tuple':
+        return `(${type.elements.map(e => this.typeToString(e)).join(', ')})`
       default:
         return 'unknown'
     }
@@ -1212,6 +1276,9 @@ export class TypeChecker {
   private normalizeType(type: TypeNode): TypeNode {
     if (type.kind === 'array') {
       return { kind: 'array', elem: this.normalizeType(type.elem) }
+    }
+    if (type.kind === 'tuple') {
+      return { kind: 'tuple', elements: type.elements.map(e => this.normalizeType(e)) }
     }
     if (type.kind === 'function_type') {
       return {

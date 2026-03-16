@@ -88,6 +88,8 @@ export type HIRExpr =
   | { kind: 'path_expr'; enumName: string; variant: string; span?: Span }
   // Lambda
   | { kind: 'lambda'; params: LambdaParam[]; returnType?: TypeNode; body: HIRExpr | HIRBlock; span?: Span }
+  // Tuple literal
+  | { kind: 'tuple_lit'; elements: HIRExpr[]; span?: Span }
 
 // ---------------------------------------------------------------------------
 // Execute Subcommands (unified — absorbs as_block, at_block, as_at)
@@ -127,6 +129,7 @@ export type HIRExecuteSubcommand =
 
 export type HIRStmt =
   | { kind: 'let'; name: string; type?: TypeNode; init: HIRExpr; span?: Span }
+  | { kind: 'let_destruct'; names: string[]; type?: TypeNode; init: HIRExpr; span?: Span }
   | { kind: 'expr'; expr: HIRExpr; span?: Span }
   | { kind: 'return'; value?: HIRExpr; span?: Span }
   | { kind: 'break'; span?: Span }

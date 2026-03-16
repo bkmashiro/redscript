@@ -103,6 +103,8 @@ class FnContext {
   readonly implMethods: Map<string, Map<string, { hasSelf: boolean }>>
   /** Struct variable tracking: varName → { typeName, fields: fieldName → temp } */
   readonly structVars = new Map<string, { typeName: string; fields: Map<string, Temp> }>()
+  /** Tuple variable tracking: varName → array of element temps (index = slot) */
+  readonly tupleVars = new Map<string, Temp[]>()
   /** Macro function info for all functions in the module */
   readonly macroInfo: Map<string, MacroFunctionInfo>
   /** Function parameter info for call_macro generation */
@@ -413,6 +415,54 @@ function lowerStmt(
       break
     }
 
+    case 'let_destruct': {
+      // Tuple destructuring: let (a, b, c) = expr
+      const n = stmt.names.length
+      if (stmt.init.kind === 'tuple_lit') {
+        // Direct tuple literal: evaluate each element into its own temp
+        const elemTemps: Temp[] = []
+        for (let i = 0; i < stmt.init.elements.length && i < n; i++) {
+          const val = lowerExpr(stmt.init.elements[i], ctx, scope)
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'copy', dst: t, src: val })
+          elemTemps.push(t)
+          scope.set(stmt.names[i], t)
+        }
+      } else if (stmt.init.kind === 'ident') {
+        // Could be referencing a known tuple var
+        const tv = ctx.tupleVars.get(stmt.init.name)
+        if (tv) {
+          for (let i = 0; i < n && i < tv.length; i++) {
+            scope.set(stmt.names[i], tv[i])
+          }
+          break
+        }
+        // Otherwise treat as a call result stored in __rf_ slots
+        lowerExpr(stmt.init, ctx, scope)
+        const elemTemps: Temp[] = []
+        for (let i = 0; i < n; i++) {
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'copy', dst: t, src: { kind: 'temp', name: `__rf_${i}` } })
+          elemTemps.push(t)
+          scope.set(stmt.names[i], t)
+        }
+        // Register as tuple var so it can be passed around
+        const varName = stmt.names.join('_') + '_tup'
+        ctx.tupleVars.set(varName, elemTemps)
+      } else {
+        // General expression (e.g. function call) — evaluate, read __rf_ slots
+        lowerExpr(stmt.init, ctx, scope)
+        const elemTemps: Temp[] = []
+        for (let i = 0; i < n; i++) {
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'copy', dst: t, src: { kind: 'temp', name: `__rf_${i}` } })
+          elemTemps.push(t)
+          scope.set(stmt.names[i], t)
+        }
+      }
+      break
+    }
+
     case 'expr': {
       lowerExpr(stmt.expr, ctx, scope)
       break
@@ -424,6 +474,13 @@ function lowerStmt(
         for (const field of stmt.value.fields) {
           const val = lowerExpr(field.value, ctx, scope)
           ctx.emit({ kind: 'copy', dst: `__rf_${field.name}`, src: val })
+        }
+        ctx.terminate({ kind: 'return', value: null })
+      } else if (stmt.value?.kind === 'tuple_lit') {
+        // Tuple return — copy each element to __rf_0, __rf_1, ...
+        for (let i = 0; i < stmt.value.elements.length; i++) {
+          const val = lowerExpr(stmt.value.elements[i], ctx, scope)
+          ctx.emit({ kind: 'copy', dst: `__rf_${i}`, src: val })
         }
         ctx.terminate({ kind: 'return', value: null })
       } else {
@@ -915,6 +972,18 @@ function lowerExpr(
       const args = expr.args.map(a => lowerExpr(a, ctx, scope))
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'call', dst: t, fn: `${expr.type}::${expr.method}`, args })
+      return { kind: 'temp', name: t }
+    }
+
+    case 'tuple_lit': {
+      // Inline tuple literal as expression: store elements into __rf_ slots and return a dummy temp
+      // This happens when a tuple literal appears as an expression (e.g., passed to a function)
+      for (let i = 0; i < expr.elements.length; i++) {
+        const val = lowerExpr(expr.elements[i], ctx, scope)
+        ctx.emit({ kind: 'copy', dst: `__rf_${i}`, src: val })
+      }
+      const t = ctx.freshTemp()
+      ctx.emit({ kind: 'const', dst: t, value: 0 })
       return { kind: 'temp', name: t }
     }
 
