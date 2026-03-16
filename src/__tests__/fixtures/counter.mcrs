@@ -1,0 +1,17 @@
+// Minimal counter for integration tests
+// Uses raw scoreboard to match test expectations
+
+@load
+fn counter_load() {
+    scoreboard_add_objective("counter");
+}
+
+@tick
+fn counter_tick() {
+    let t: int = scoreboard_get("counter", #ticks);
+    t = t + 1;
+    scoreboard_set("counter", #ticks, t);
+    if (t % 100 == 0) {
+        say("Counter reached another 100 ticks");
+    }
+}
