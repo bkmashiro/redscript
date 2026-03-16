@@ -20,6 +20,12 @@ export { MCCommandValidator } from './mc-validator'
 export type { Program, FnDecl, Expr, Stmt, Span } from './ast/types'
 export type { DiagnosticError } from './diagnostics'
 
+// Incremental compilation
+export { FileCache, hashFile } from './cache/index'
+export { DependencyGraph, parseImports } from './cache/deps'
+export { compileIncremental, resetCompileCache } from './cache/incremental'
+export type { IncrementalOptions, IncrementalResult } from './cache/incremental'
+
 export interface CheckResult {
   error: Error | null
   warnings: string[]

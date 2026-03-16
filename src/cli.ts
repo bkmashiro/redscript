@@ -13,6 +13,9 @@ import { compile, checkWithWarnings } from './index'
 import { formatError } from './diagnostics'
 import { startRepl } from './repl'
 import { generateDts } from './builtins/metadata'
+import { FileCache } from './cache/index'
+import { DependencyGraph } from './cache/deps'
+import { compileIncremental } from './cache/incremental'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as https from 'https'
@@ -282,51 +285,54 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
   console.log(`👁  Watching ${dir} for .mcrs file changes...`)
   console.log(`   Output: ${output}`)
   if (hotReloadUrl) console.log(`   Hot reload: ${hotReloadUrl}`)
+  console.log(`   Incremental compilation enabled`)
   console.log(`   Press Ctrl+C to stop\n`)
+
+  // Set up incremental compilation infrastructure
+  const cacheDir = path.join(dir, '.redscript-cache')
+  const cache = new FileCache(cacheDir)
+  cache.load()
+  const depGraph = new DependencyGraph()
 
   // Debounce timer
   let debounceTimer: NodeJS.Timeout | null = null
 
-  // Compile all .mcrs files in directory
-  async function compileAll(): Promise<void> {
+  // Compile all .mcrs files in directory (incrementally)
+  async function compileAllIncremental(): Promise<void> {
     const files = findRsFiles(dir)
     if (files.length === 0) {
       console.log(`⚠  No .mcrs files found in ${dir}`)
       return
     }
 
-    let hasErrors = false
-    for (const file of files) {
-      let source = ''
-      try {
-        source = fs.readFileSync(file, 'utf-8')
-        const ns = namespace ?? deriveNamespace(file)
-        const result = compile(source, { namespace: ns, filePath: file })
-        for (const w of result.warnings) {
-          console.error(`Warning: ${w}`)
-        }
+    const incResult = compileIncremental(files, cache, depGraph, {
+      namespace,
+      output,
+    })
 
-        // Create output directory
-        fs.mkdirSync(output, { recursive: true })
+    const timestamp = new Date().toLocaleTimeString()
 
-        // Write all files
-        for (const dataFile of result.files) {
-          const filePath = path.join(output, dataFile.path)
-          const fileDir = path.dirname(filePath)
-          fs.mkdirSync(fileDir, { recursive: true })
-          fs.writeFileSync(filePath, dataFile.content)
-        }
-
-        const timestamp = new Date().toLocaleTimeString()
-        console.log(`✓ [${timestamp}] Compiled ${file} (${result.files.length} files)`)
-      } catch (err) {
-        hasErrors = true
-        const timestamp = new Date().toLocaleTimeString()
-        console.error(`✗ [${timestamp}] ${formatError(err as Error, source, file)}`)
+    // Print warnings from recompiled files
+    for (const [file, compileResult] of incResult.results) {
+      for (const w of compileResult.warnings) {
+        console.error(`Warning: ${w}`)
       }
+      console.log(`✓ [${timestamp}] Compiled ${path.relative(dir, file)} (${compileResult.files.length} files)`)
     }
 
-    if (!hasErrors && hotReloadUrl) await hotReload(hotReloadUrl)
+    if (incResult.cached > 0) {
+      console.log(`  [${timestamp}] ${incResult.cached} file(s) unchanged (cached)`)
+    }
+
+    // Print errors
+    for (const [file, errMsg] of incResult.errors) {
+      console.error(`✗ [${timestamp}] ${path.relative(dir, file)}: ${errMsg}`)
+    }
+
+    // Persist cache
+    cache.save()
+
+    if (incResult.errors.size === 0 && hotReloadUrl) await hotReload(hotReloadUrl)
     console.log('')
   }
 
@@ -337,7 +343,7 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
 
     for (const entry of entries) {
       const fullPath = path.join(directory, entry.name)
-      if (entry.isDirectory()) {
+      if (entry.isDirectory() && entry.name !== '.redscript-cache') {
         results.push(...findRsFiles(fullPath))
       } else if (entry.isFile() && entry.name.endsWith('.mcrs')) {
         results.push(fullPath)
@@ -348,7 +354,7 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
   }
 
   // Initial compile
-  void compileAll()
+  void compileAllIncremental()
 
   // Watch for changes
   fs.watch(dir, { recursive: true }, (eventType, filename) => {
@@ -359,7 +365,7 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
       }
       debounceTimer = setTimeout(() => {
         console.log(`📝 Change detected: ${filename}`)
-        void compileAll()
+        void compileAllIncremental()
       }, 100)
     }
   })
