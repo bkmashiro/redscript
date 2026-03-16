@@ -791,7 +791,7 @@ describe('MC Integration - New Features', () => {
     expect(items).toBe(1)        // 1 item matched
 
     await mc.command('/function is_check_test:cleanup').catch(() => {})
-  })
+  }, 30000)  // extended timeout: entity spawn + reload can take >5 s
 
   test('event-test.mcrs: @on(PlayerDeath) compiles and loads', async () => {
     if (!serverOnline) return
