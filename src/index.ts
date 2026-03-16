@@ -20,6 +20,11 @@ export { MCCommandValidator } from './mc-validator'
 export type { Program, FnDecl, Expr, Stmt, Span } from './ast/types'
 export type { DiagnosticError } from './diagnostics'
 
+export interface CheckResult {
+  error: Error | null
+  warnings: string[]
+}
+
 /**
  * Check RedScript source code for errors without generating output.
  * Runs the full compile pipeline (lex → parse → HIR → MIR → LIR → emit)
@@ -30,10 +35,17 @@ export type { DiagnosticError } from './diagnostics'
  * @returns null if no errors, or an error object
  */
 export function check(source: string, namespace = 'redscript', filePath?: string): Error | null {
+  return checkWithWarnings(source, namespace, filePath).error
+}
+
+/**
+ * Like check(), but also returns warnings (e.g., tick budget analysis).
+ */
+export function checkWithWarnings(source: string, namespace = 'redscript', filePath?: string): CheckResult {
   try {
-    compile(source, { namespace, filePath })
-    return null
+    const result = compile(source, { namespace, filePath })
+    return { error: null, warnings: result.warnings }
   } catch (err) {
-    return err as Error
+    return { error: err as Error, warnings: [] }
   }
 }

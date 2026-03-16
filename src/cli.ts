@@ -9,7 +9,7 @@
  *   redscript version
  */
 
-import { compile, check } from './index'
+import { compile, checkWithWarnings } from './index'
 import { formatError } from './diagnostics'
 import { startRepl } from './repl'
 import { generateDts } from './builtins/metadata'
@@ -239,9 +239,14 @@ function checkCommand(file: string, namespace?: string): void {
   const source = fs.readFileSync(file, 'utf-8')
 
   const ns = namespace ?? deriveNamespace(file)
-  const error = check(source, ns, file)
-  if (error) {
-    console.error(formatError(error, source, file))
+  const result = checkWithWarnings(source, ns, file)
+
+  for (const w of result.warnings) {
+    console.error(`Warning: ${w}`)
+  }
+
+  if (result.error) {
+    console.error(formatError(result.error, source, file))
     process.exit(1)
   }
 
