@@ -105,6 +105,8 @@ class FnContext {
   readonly structVars = new Map<string, { typeName: string; fields: Map<string, Temp> }>()
   /** Tuple variable tracking: varName → array of element temps (index = slot) */
   readonly tupleVars = new Map<string, Temp[]>()
+  /** Array variable tracking: varName → { ns, pathPrefix } for NBT-backed int[] */
+  readonly arrayVars = new Map<string, { ns: string; pathPrefix: string }>()
   /** Macro function info for all functions in the module */
   readonly macroInfo: Map<string, MacroFunctionInfo>
   /** Function parameter info for call_macro generation */
@@ -452,6 +454,33 @@ function lowerStmt(
           ctx.emit({ kind: 'copy', dst: t, src: valOp })
           scope.set(stmt.name, t)
         }
+      } else if (stmt.init.kind === 'array_lit') {
+        // Array literal: write to NBT storage, track the var for index access
+        const ns = `${ctx.getNamespace()}:arrays`
+        const pathPrefix = stmt.name
+        ctx.arrayVars.set(stmt.name, { ns, pathPrefix })
+        const elems = stmt.init.elements
+        // Check if all elements are pure integer literals (no side-effects)
+        const allConst = elems.every(e => e.kind === 'int_lit')
+        if (allConst) {
+          // Emit a single raw 'data modify ... set value [...]' to initialize the whole list
+          const vals = elems.map(e => (e as { kind: 'int_lit'; value: number }).value).join(', ')
+          ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${vals}]`, args: [] })
+        } else {
+          // Initialize with zeros, then overwrite dynamic elements
+          const zeros = elems.map(() => '0').join(', ')
+          ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${zeros}]`, args: [] })
+          for (let i = 0; i < elems.length; i++) {
+            const elemOp = lowerExpr(elems[i], ctx, scope)
+            if (elemOp.kind !== 'const' || (elems[i].kind !== 'int_lit')) {
+              ctx.emit({ kind: 'nbt_write', ns, path: `${pathPrefix}[${i}]`, type: 'int', scale: 1, src: elemOp })
+            }
+          }
+        }
+        // Store array length as a temp in scope (for .len access)
+        const lenTemp = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: lenTemp, value: elems.length })
+        scope.set(stmt.name, lenTemp)
       } else {
         const valOp = lowerExpr(stmt.init, ctx, scope)
         const t = ctx.freshTemp()
@@ -1030,8 +1059,17 @@ function lowerExpr(
     }
 
     case 'index': {
+      // Check if obj is a tracked array variable with a constant index
+      if (expr.obj.kind === 'ident') {
+        const arrInfo = ctx.arrayVars.get(expr.obj.name)
+        if (arrInfo && expr.index.kind === 'int_lit') {
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'nbt_read', dst: t, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[${expr.index.value}]`, scale: 1 })
+          return { kind: 'temp', name: t }
+        }
+      }
       const obj = lowerExpr(expr.obj, ctx, scope)
-      const idx = lowerExpr(expr.index, ctx, scope)
+      lowerExpr(expr.index, ctx, scope)
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'copy', dst: t, src: obj })
       return { kind: 'temp', name: t }
