@@ -2,14 +2,14 @@
 
 <img src="./logo.png" alt="RedScript Logo" width="64" />
 
-<img src="https://img.shields.io/badge/RedScript-2.0.0-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+<img src="https://img.shields.io/badge/RedScript-2.1.1-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
 
 **A typed scripting language that compiles to Minecraft datapacks.**
 
 Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-857%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
+[![Tests](https://img.shields.io/badge/tests-1123%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
@@ -37,7 +37,7 @@ RedScript is a typed scripting language that compiles to vanilla Minecraft datap
 **The demo above?** Five math curves drawn with 64 sample points each. The core logic:
 
 ```rs
-import "stdlib/math.mcrs"
+import "stdlib/math"
 
 let phase: int = 0;
 let frame: int = 0;
@@ -73,20 +73,32 @@ let frame: int = 0;
 - ✅ Builtins accept runtime macro variables in any argument position
 - ✅ f-strings like `f"Score: {points}"` for dynamic output
 - ✅ Public functions are preserved automatically; `_privateFn()` stays private
+- ✅ `enum` types with `match` dispatch (zero-runtime overhead)
+- ✅ Multi-return values: `fn divmod(a: int, b: int): (int, int)`
+- ✅ Generics: `fn max<T>(a: T, b: T): T` (monomorphized)
+- ✅ `Option<T>` null safety: `Some(x)` / `None` / `if let Some(x) = opt`
+- ✅ `@coroutine(batch=N)` for tick-spread loops (no more maxCommandChain hits)
+- ✅ `@schedule(ticks=N)` to delay function execution
+- ✅ Module system: `module math; import math::sin;`
+- ✅ Multi-version targets: `--mc-version 1.20.2`
+- ✅ Source maps: `--source-map` for debugging
+- ✅ Language Server Protocol: diagnostics, hover, go-to-def, completion
 - ✅ One file -> ready-to-use datapack
 
 ---
 
-### What's New in v2.0.0
+### What's New in v2.1.x
 
-- New compiler pipeline: **AST → HIR → MIR → LIR → emit**
-- New LIR optimizer passes (dead slot elimination + constant immediate folding)
-- CLI `compile` now runs on the v2 pipeline by default
-- `use "..."` import resolution fully supported in v2 (including library modules)
-- Macro calls (`^var`/`~var`) supported end-to-end in v2 emitter
-- Struct/impl lowering completed in v2 (field slots + method dispatch)
-- Unified source tree: old `src2/` merged back into `src/`
-- Published as **redscript-mc@2.0.0**
+- **`enum` + `match` dispatch** — zero-runtime-overhead state machines; the compiler folds enum variants to integer constants and uses `execute if score` dispatch with no heap allocation
+- **Multi-return values** — `fn divmod(a: int, b: int): (int, int)` unpacks to separate scoreboard slots; no struct wrapper needed
+- **Generics** — `fn max<T>(a: T, b: T): T` is fully monomorphized at compile time; no boxing, no indirection
+- **`Option<T>` null safety** — `Some(x)` / `None` with `if let Some(x) = opt` pattern binding; safe access to optional values without sentinel integers
+- **`@coroutine(batch=N)`** — spreads a heavy loop across multiple ticks (`batch=50` means 50 iterations/tick), avoiding `maxCommandChainLength` hits on large workloads
+- **`@schedule(ticks=N)`** — delays a function call by N game ticks; compiles to `schedule function` with automatic namespace scoping
+- **Module system** — `module math;` declares a named module; consumers `import math::sin` to tree-shake individual symbols
+- **Multi-version targets** — `--mc-version 1.20.2` switches emit strategy (macro sub-functions vs. legacy scoreboards) for the target server version
+- **Source maps** — `--source-map` emits a `.mcrs.map` sidecar that maps each `.mcfunction` line back to the original source; enables in-editor debugging
+- **LSP: hover + completion for builtins & decorators** — 50+ builtin functions and all decorators (`@tick`/`@load`/`@coroutine`/`@schedule`/`@on_trigger`) now show inline docs on hover
 
 ---
 
@@ -277,6 +289,9 @@ redscript compile <file>       Compile to datapack (default) or structure
   -o, --output <dir>           Output directory         [default: ./out]
   --target datapack|structure  Output format            [default: datapack]
   --namespace <ns>             Datapack namespace       [default: filename]
+  --mc-version <ver>           Target MC version        [default: 1.21]
+  --include <dir>              Extra library search path (repeatable)
+  --source-map                 Emit .mcrs.map source map for debugging
   --no-optimize                Skip optimizer passes
   --stats                      Print optimizer statistics
 
@@ -286,39 +301,53 @@ redscript validate <file>      Validate MC commands
 
 ---
 
+### Stdlib
+
+RedScript ships a built-in standard library. Use the short form — no path needed:
+
+```rs
+import "stdlib/math"      // fixed-point math
+import "stdlib/vec"       // 2D/3D vector geometry
+import "stdlib/combat"    // damage, kill-check helpers
+import "stdlib/player"    // health, alive check, range
+import "stdlib/cooldown"  // per-player cooldown tracking
+```
+
+Custom library paths can be added with `--include <dir>` so your own modules work the same way.
+
 ### Standard Library
 
 All stdlib files use `module library;` — only the functions you actually call are compiled in.
 
 ```rs
-import "stdlib/math.mcrs"       // abs, sign, min, max, clamp, lerp, isqrt, sqrt_fixed,
+import "stdlib/math"            // abs, sign, min, max, clamp, lerp, isqrt, sqrt_fixed,
                                 // pow_int, gcd, lcm, sin_fixed, cos_fixed, map, ceil_div,
                                 // log2_int, mulfix, divfix, smoothstep, smootherstep
 
-import "stdlib/vec.mcrs"        // dot2d, cross2d, length2d_fixed, distance2d_fixed,
+import "stdlib/vec"             // dot2d, cross2d, length2d_fixed, distance2d_fixed,
                                 // manhattan, chebyshev, atan2_fixed, normalize2d_x/y,
                                 // rotate2d_x/y, lerp2d_x/y, dot3d, cross3d_x/y/z,
                                 // length3d_fixed
 
-import "stdlib/advanced.mcrs"   // fib, is_prime, collatz_steps, digit_sum, reverse_int,
+import "stdlib/advanced"        // fib, is_prime, collatz_steps, digit_sum, reverse_int,
                                 // mod_pow, hash_int, noise1d, bezier_quad,
                                 // mandelbrot_iter, julia_iter, angle_between,
                                 // clamp_circle_x/y, newton_sqrt, digital_root
 
-import "stdlib/bigint.mcrs"     // bigint_init, bigint_from_int_a/b, bigint_add/sub/mul,
+import "stdlib/bigint"          // bigint_init, bigint_from_int_a/b, bigint_add/sub/mul,
                                 // bigint_compare, bigint_mul_small, bigint_fib
                                 // — up to 32 decimal digits, runs on MC scoreboard
 
-import "stdlib/player.mcrs"     // is_alive, in_range, get_health
-import "stdlib/timer.mcrs"      // start_timer, tick_timer, has_elapsed
-import "stdlib/cooldown.mcrs"   // set_cooldown, check_cooldown
-import "stdlib/mobs.mcrs"       // ZOMBIE, SKELETON, CREEPER, ... (60+ constants)
+import "stdlib/player"          // is_alive, in_range, get_health
+import "stdlib/timer"           // start_timer, tick_timer, has_elapsed
+import "stdlib/cooldown"        // set_cooldown, check_cooldown
+import "stdlib/mobs"            // ZOMBIE, SKELETON, CREEPER, ... (60+ constants)
 ```
 
 **Example — computing Fibonacci(50) in-game:**
 
 ```rs
-import "stdlib/bigint.mcrs"
+import "stdlib/bigint"
 
 fn show_fib() {
     bigint_fib(50);

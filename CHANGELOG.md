@@ -2,6 +2,17 @@
 
 All notable changes to RedScript will be documented in this file.
 
+## [2.1.1] - 2026-03-16
+
+### Added
+- stdlib include path: `import "stdlib/math"` without specifying full path
+- `--include <dir>` CLI flag for custom library paths
+- LSP hover for 50+ builtin functions and all decorators (@tick/@load/@coroutine/@schedule/@on_trigger)
+- f-string syntax highlighting in VSCode extension
+
+### Changed
+- Example files cleaned up: removed stale/redundant examples, added coroutine/enum/scheduler demos
+
 ## [1.2.15] - 2026-03-13
 
 ### Changed
