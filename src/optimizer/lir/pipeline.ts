@@ -9,10 +9,12 @@
 import type { LIRFunction, LIRModule } from '../../lir/types'
 import { deadSlotElimModule } from './dead_slot'
 import { constImmFold } from './const_imm'
+import { execStorePeephole } from './peephole'
 
 export type LIRPass = (fn: LIRFunction) => LIRFunction
 
 const perFunctionPasses: LIRPass[] = [
+  execStorePeephole,
   constImmFold,
 ]
 

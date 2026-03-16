@@ -11,10 +11,12 @@ import { copyProp } from './copy_prop'
 import { dce } from './dce'
 import { blockMerge } from './block_merge'
 import { branchSimplify } from './branch_simplify'
+import { loopUnroll } from './unroll'
 
 export type Pass = (fn: MIRFunction) => MIRFunction
 
 const defaultPasses: Pass[] = [
+  loopUnroll,
   constantFold,
   copyProp,
   branchSimplify,
