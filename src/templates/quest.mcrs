@@ -14,7 +14,7 @@ fn quest_target(questId: int) -> int {
     return 5;
 }
 
-fn load_quest(player: string, questId: int) -> Quest {
+fn load_quest(player: selector, questId: int) -> Quest {
     let progress: int = scoreboard_get(player, "quest_progress");
     let completed: int = scoreboard_get(player, "quest_completed");
     let target: int = quest_target(questId);
@@ -22,7 +22,7 @@ fn load_quest(player: string, questId: int) -> Quest {
     return quest;
 }
 
-fn quest_start(player: string, questId: int) {
+fn quest_start(player: selector, questId: int) {
     let quest: Quest = { id: questId, progress: 0, target: quest_target(questId), completed: 0 };
     scoreboard_set(player, "quest_id", quest.id);
     scoreboard_set(player, "quest_progress", quest.progress);
@@ -32,7 +32,7 @@ fn quest_start(player: string, questId: int) {
     actionbar(player, "Objective accepted");
 }
 
-fn quest_progress(player: string, questId: int, amount: int) {
+fn quest_progress(player: selector, questId: int, amount: int) {
     let activeQuest: int = scoreboard_get(player, "quest_id");
     let quest: Quest = load_quest(player, questId);
 
@@ -57,7 +57,7 @@ fn quest_progress(player: string, questId: int, amount: int) {
     }
 }
 
-fn quest_complete(player: string, questId: int) {
+fn quest_complete(player: selector, questId: int) {
     let activeQuest: int = scoreboard_get(player, "quest_id");
 
     if (activeQuest == questId) {
