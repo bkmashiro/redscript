@@ -510,10 +510,17 @@ function buildLoopContinuation(
   // Build a new function that:
   // 1. Initializes batch_count = 0
   // 2. Runs the loop body up to `batch` iterations
-  // 3. At back edge: if batch_count >= batch, yield (set pc, return)
-  // 4. On loop exit: set pc to next continuation (or -1 if done)
+  // 3. At back edge: if batch_count >= batch, yield (return)
+  // 4. On loop exit: return (dispatcher handles next continuation via pc)
+  //
+  // IMPORTANT: The LIR lowerer handles multi-pred blocks via `jump` terminators
+  // correctly (emits a function call) but `branch → multi-pred` can cause infinite
+  // recursion. So we ensure back edges use `jump` via a trampoline block, and
+  // batch-done checks use `branch → yield_block | continue_block` where both
+  // targets have single predecessors.
 
   const blocks: MIRBlock[] = []
+  const batchCmpTemp = `${batchCountTemp}_cmp`
 
   // Entry: set batch_count = 0, then jump to loop header
   const entryBlock: MIRBlock = {
@@ -529,52 +536,60 @@ function buildLoopContinuation(
   // Clone and rewrite the loop blocks with promoted variable names
   for (const block of cont.blocks) {
     const rewritten = rewriteBlock(block, promoted)
-
-    // If this block has a back edge (jumps to loop header), insert batch check
     const succs = getSuccessors(rewritten.term)
     const isBackEdgeBlock = cont.loopHeaderId && succs.includes(cont.loopHeaderId)
 
     if (isBackEdgeBlock) {
-      // Before the back edge:
-      // batch_count++; if batch_count >= batch: set pc=contId, return
-      const batchCheckBlock: MIRBlock = {
-        id: `${block.id}_batch_check`,
-        instrs: [
-          { kind: 'add', dst: batchCountTemp, a: { kind: 'temp', name: batchCountTemp }, b: { kind: 'const', value: 1 } },
-          { kind: 'cmp', dst: `${batchCountTemp}_cmp`, op: 'ge', a: { kind: 'temp', name: batchCountTemp }, b: { kind: 'const', value: batch } },
-        ],
+      // This block has a back edge to the loop header.
+      // Append batch counting to the body, then branch:
+      //   batch_done → yield (return), !batch_done → continue (jump → header)
+      //
+      // body_block → branch(batch_done) → yield_block | continue_block
+      // continue_block → jump → loop_header  (uses 'jump', safe for multi-pred)
+      // yield_block → return
+
+      const continueBlockId = `${block.id}_continue`
+      const yieldBlockId = `${block.id}_yield`
+
+      // Append batch check instructions to the body block
+      const bodyInstrs = [
+        ...rewritten.instrs,
+        { kind: 'add' as const, dst: batchCountTemp, a: { kind: 'temp' as const, name: batchCountTemp }, b: { kind: 'const' as const, value: 1 } },
+        { kind: 'cmp' as const, dst: batchCmpTemp, op: 'ge' as const, a: { kind: 'temp' as const, name: batchCountTemp }, b: { kind: 'const' as const, value: batch } },
+      ]
+
+      blocks.push({
+        ...rewritten,
+        instrs: bodyInstrs,
+        // Rewrite terminator: instead of jumping to header, branch on batch check
         term: {
           kind: 'branch',
-          cond: { kind: 'temp', name: `${batchCountTemp}_cmp` },
-          then: `${block.id}_yield`,
-          else: cont.loopHeaderId!,
+          cond: { kind: 'temp', name: batchCmpTemp },
+          then: yieldBlockId,
+          else: continueBlockId,
         },
-        preds: [block.id],
-      }
+      })
 
-      // Yield block: set pc = contId (resume this continuation next tick), return
-      const yieldBlock: MIRBlock = {
-        id: `${block.id}_yield`,
+      // Continue block: jump back to loop header (uses jump → multi-pred = call)
+      blocks.push({
+        id: continueBlockId,
+        instrs: [],
+        term: { kind: 'jump', target: cont.loopHeaderId! },
+        preds: [block.id],
+      })
+
+      // Yield block: return (resume next tick)
+      blocks.push({
+        id: yieldBlockId,
         instrs: [],
         term: { kind: 'return', value: null },
-        preds: [`${block.id}_batch_check`],
-      }
-
-      // Rewrite the original block's terminator to go to batch_check instead of header
-      const newTerm = rewriteTerminator(rewritten.term, cont.loopHeaderId!, `${block.id}_batch_check`)
-      blocks.push({ ...rewritten, term: newTerm })
-      blocks.push(batchCheckBlock)
-      blocks.push(yieldBlock)
+        preds: [block.id],
+      })
     } else {
       // Check if this block exits the loop
       const exitSuccs = succs.filter(s => !cont.blocks.some(b => b.id === s))
       if (exitSuccs.length > 0) {
-        // On loop exit: set pc to next continuation or -1 (done)
-        const nextPc = contId < totalConts ? contId + 1 : -1
-        const exitInstrs = [...rewritten.instrs]
-
-        // Rewrite branch to exit: if the exit branch leads outside the loop,
-        // redirect to an exit block that sets pc and returns
+        // Redirect exit branch to an exit block that returns
         const exitBlockId = `${block.id}_exit`
         const exitBlock: MIRBlock = {
           id: exitBlockId,
@@ -583,20 +598,17 @@ function buildLoopContinuation(
           preds: [block.id],
         }
 
-        // If this is a branch where one path exits and other stays in loop
         if (rewritten.term.kind === 'branch') {
           const branchTerm = rewritten.term
           const thenInLoop = cont.blocks.some(b => b.id === branchTerm.then)
           const elseInLoop = cont.blocks.some(b => b.id === branchTerm.else)
 
           if (!thenInLoop && elseInLoop) {
-            // "then" exits the loop
             blocks.push({
               ...rewritten,
               term: { ...branchTerm, then: exitBlockId },
             })
           } else if (thenInLoop && !elseInLoop) {
-            // "else" exits the loop
             blocks.push({
               ...rewritten,
               term: { ...branchTerm, else: exitBlockId },
@@ -614,7 +626,7 @@ function buildLoopContinuation(
     }
   }
 
-  // Ensure entry is in the list and deduplicated
+  // Deduplicate blocks by ID
   const seenIds = new Set<BlockId>()
   const dedupBlocks: MIRBlock[] = []
   for (const b of blocks) {
