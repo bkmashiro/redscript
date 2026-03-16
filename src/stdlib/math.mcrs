@@ -17,7 +17,7 @@ module library;
 
 // ─── Phase 1: Basic integer helpers ──────────────────────────────────────────
 
-fn abs(x: int) -> int {
+fn abs<T>(x: T) -> T {
     if (x < 0) {
         return 0 - x;
     }
@@ -34,21 +34,21 @@ fn sign(x: int) -> int {
     return 0;
 }
 
-fn min(a: int, b: int) -> int {
+fn min<T>(a: T, b: T) -> T {
     if (a < b) {
         return a;
     }
     return b;
 }
 
-fn max(a: int, b: int) -> int {
+fn max<T>(a: T, b: T) -> T {
     if (a > b) {
         return a;
     }
     return b;
 }
 
-fn clamp(x: int, lo: int, hi: int) -> int {
+fn clamp<T>(x: T, lo: T, hi: T) -> T {
     if (x < lo) {
         return lo;
     }
