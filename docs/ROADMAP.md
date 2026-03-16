@@ -393,3 +393,27 @@ if let Some(player) = p {
 ---
 
 *此文档由奇尔沙治生成 · 2026-03-16*
+
+---
+
+## 遗留 Known Issues（未来修复）
+
+### Timer stdlib 重构
+**问题：** Timer 用硬编码 player 名存状态，只能有一个实例
+**解法：** 全局自增 ID + macro 函数（`$scoreboard players set $(player) ...`），让每个实例有唯一的 player 名
+**依赖：** lambda codegen（见下）
+**工作量：** 2-3天
+
+### lambda / closure codegen
+**问题：** `setTimeout(20, () => { ... })` 的 lambda 在 MIR 层被丢弃（`const 0` 占位符），没有真正编译
+**解法：** lambda body → 独立命名函数（`__timeout_callback_N`），在 HIR/MIR 层 lift
+**工作量：** 3-5天
+
+### Array literal 初始化
+**已修复：** `nums[0]` 的读取修好了（NBT storage codegen）
+**待完善：** `let nums = [10, 20, 30]` 的初始化写入目前走 fixture workaround
+**工作量：** 1-2天
+
+### mc-integration flaky tests
+- `entity query: armor_stands survive peaceful mode` — 依赖服务器 peaceful mode 设置
+- `E2E I: nested if/else boundary` — 偶发，服务器状态依赖
