@@ -8,6 +8,7 @@
       "patterns": [
         { "include": "#comments" },
         { "include": "#decorators" },
+        { "include": "#fstring" },
         { "include": "#string-interpolation" },
         { "include": "#strings" },
         { "include": "#keywords" },
@@ -88,6 +89,39 @@
           "name": "entity.name.function.decorator.redscript",
           "match": "@(?:tick|load|keep|on|on_advancement|on_craft|on_death|on_trigger|on_join_team|on_login)\\b"
         }
+      ]
+    },
+
+    "fstring": {
+      "comment": "f-string: f\"Hello {name}\" — f prefix gets special color, {expr} highlighted",
+      "begin": "(f)(\")",
+      "beginCaptures": {
+        "1": { "name": "storage.type.string.redscript" },
+        "2": { "name": "punctuation.definition.string.begin.redscript" }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.redscript" }
+      },
+      "name": "string.interpolated.redscript",
+      "patterns": [
+        {
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.definition.interpolation.begin.redscript" } },
+          "endCaptures":   { "0": { "name": "punctuation.definition.interpolation.end.redscript" } },
+          "contentName": "meta.interpolation.redscript",
+          "patterns": [
+            { "include": "#selectors" },
+            { "include": "#numbers" },
+            { "include": "#fn-call" },
+            {
+              "name": "variable.other.redscript",
+              "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+            }
+          ]
+        },
+        { "name": "constant.character.escape.redscript", "match": "\\\\." }
       ]
     },
 
