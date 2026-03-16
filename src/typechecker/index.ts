@@ -239,6 +239,10 @@ export class TypeChecker {
   }
 
   private checkFunction(fn: FnDecl): void {
+    // Generic functions (with type params like <T>) are checked after monomorphization.
+    // Skip body checking here to avoid false errors for unresolved type params.
+    if (fn.typeParams && fn.typeParams.length > 0) return
+
     this.currentFn = fn
     this.currentReturnType = this.normalizeType(fn.returnType)
     this.scope = new Map()
@@ -682,6 +686,18 @@ export class TypeChecker {
     // Check if function exists and arg count matches
     const fn = this.functions.get(expr.fn)
     if (fn) {
+      // Generic functions: skip param-type checking (monomorphizer handles it)
+      if (fn.typeParams && fn.typeParams.length > 0) {
+        const requiredParams = fn.params.filter(param => !param.default).length
+        if (expr.args.length < requiredParams || expr.args.length > fn.params.length) {
+          this.report(
+            `Function '${expr.fn}' expects ${requiredParams}-${fn.params.length} arguments, got ${expr.args.length}`,
+            expr
+          )
+        }
+        for (const arg of expr.args) this.checkExpr(arg)
+        return
+      }
       const requiredParams = fn.params.filter(param => !param.default).length
       if (expr.args.length < requiredParams || expr.args.length > fn.params.length) {
         const expectedRange = requiredParams === fn.params.length
