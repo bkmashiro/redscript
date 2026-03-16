@@ -414,9 +414,9 @@ describe('MC Integration Tests', () => {
     
     await mc.fullReset({ clearArea: false, killEntities: true, resetScoreboards: false })
     
-    await mc.command('/summon minecraft:armor_stand 0 65 0')
-    await mc.command('/summon minecraft:armor_stand 2 65 0')
-    await mc.command('/summon minecraft:armor_stand 4 65 0')
+    await mc.command('/summon minecraft:armor_stand 0 65 0 {NoGravity:1b}')
+    await mc.command('/summon minecraft:armor_stand 2 65 0 {NoGravity:1b}')
+    await mc.command('/summon minecraft:armor_stand 4 65 0 {NoGravity:1b}')
     await mc.ticks(5)
     
     const stands = await mc.entities('@e[type=minecraft:armor_stand]')
