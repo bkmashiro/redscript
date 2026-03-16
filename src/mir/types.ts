@@ -10,6 +10,13 @@
 // A temporary variable — unique within a function, named t0, t1, t2...
 export type Temp = string
 
+// Source location from the original .mcrs file
+export interface SourceLoc {
+  file: string
+  line: number
+  col: number
+}
+
 // An operand: either a temp or an inline constant
 export type Operand =
   | { kind: 'temp'; name: Temp }
@@ -45,7 +52,10 @@ export type ExecuteSubcmd =
 // MIR Instructions
 // ---------------------------------------------------------------------------
 
-export type MIRInstr =
+// Base type for all MIR instructions — carries optional source location
+export type MIRInstrBase = { sourceLoc?: SourceLoc }
+
+export type MIRInstr = MIRInstrBase & (
   // ── Constants & copies ──────────────────────────────────────────────────
   | { kind: 'const'; dst: Temp; value: number }
   | { kind: 'copy'; dst: Temp; src: Operand }
@@ -79,6 +89,7 @@ export type MIRInstr =
   | { kind: 'jump'; target: BlockId }
   | { kind: 'branch'; cond: Operand; then: BlockId; else: BlockId }
   | { kind: 'return'; value: Operand | null }
+)
 
 // ---------------------------------------------------------------------------
 // Basic block and function structure

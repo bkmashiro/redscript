@@ -7,7 +7,7 @@
  * Spec: docs/compiler-pipeline-redesign.md § "LIR Instruction Set"
  */
 
-import type { CmpOp, NBTType, ExecuteSubcmd } from '../mir/types'
+import type { CmpOp, NBTType, ExecuteSubcmd, SourceLoc } from '../mir/types'
 
 // A scoreboard slot: fake-player name + objective
 export interface Slot {
@@ -16,13 +16,16 @@ export interface Slot {
 }
 
 // Re-export types used in LIR from MIR
-export type { CmpOp, NBTType, ExecuteSubcmd }
+export type { CmpOp, NBTType, ExecuteSubcmd, SourceLoc }
 
 // ---------------------------------------------------------------------------
 // LIR Instructions
 // ---------------------------------------------------------------------------
 
-export type LIRInstr =
+// Base type for all LIR instructions — carries optional source location
+export type LIRInstrBase = { sourceLoc?: SourceLoc }
+
+export type LIRInstr = LIRInstrBase & (
   // ── Scoreboard ───────────────────────────────────────────────────────────
   | { kind: 'score_set'; dst: Slot; value: number }
   // scoreboard players set <dst.player> <dst.obj> value
@@ -90,6 +93,7 @@ export type LIRInstr =
   // ── Arbitrary MC command ─────────────────────────────────────────────────
   | { kind: 'raw'; cmd: string }
   // Emitted verbatim. Use sparingly — prefer typed instructions.
+)
 
 // ---------------------------------------------------------------------------
 // LIR function and module structure

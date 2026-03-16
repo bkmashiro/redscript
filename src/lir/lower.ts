@@ -15,7 +15,7 @@ import type {
   MIRModule, MIRFunction, MIRBlock, MIRInstr, Operand, Temp, BlockId,
 } from '../mir/types'
 import type {
-  LIRModule, LIRFunction, LIRInstr, Slot,
+  LIRModule, LIRFunction, LIRInstr, Slot, SourceLoc,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -75,6 +75,14 @@ class LoweringContext {
 
   addFunction(fn: LIRFunction): void {
     this.functions.push(fn)
+  }
+
+  /** Attach sourceLoc to newly added instructions (from the given start index onward) */
+  tagSourceLoc(instrs: LIRInstr[], fromIndex: number, sourceLoc: SourceLoc | undefined): void {
+    if (!sourceLoc) return
+    for (let i = fromIndex; i < instrs.length; i++) {
+      if (!instrs[i].sourceLoc) instrs[i].sourceLoc = sourceLoc
+    }
   }
 
   analyzeBlocks(fn: MIRFunction): void {
@@ -193,6 +201,17 @@ function lowerBlock(
 // ---------------------------------------------------------------------------
 
 function lowerInstr(
+  instr: MIRInstr,
+  fn: MIRFunction,
+  ctx: LoweringContext,
+  instrs: LIRInstr[],
+): void {
+  const beforeLen = instrs.length
+  lowerInstrInner(instr, fn, ctx, instrs)
+  ctx.tagSourceLoc(instrs, beforeLen, instr.sourceLoc)
+}
+
+function lowerInstrInner(
   instr: MIRInstr,
   fn: MIRFunction,
   ctx: LoweringContext,
@@ -386,6 +405,18 @@ function lowerInstr(
 // ---------------------------------------------------------------------------
 
 function lowerTerminator(
+  term: MIRInstr,
+  fn: MIRFunction,
+  ctx: LoweringContext,
+  instrs: LIRInstr[],
+  visited: Set<BlockId>,
+): void {
+  const beforeLen = instrs.length
+  lowerTerminatorInner(term, fn, ctx, instrs, visited)
+  ctx.tagSourceLoc(instrs, beforeLen, term.sourceLoc)
+}
+
+function lowerTerminatorInner(
   term: MIRInstr,
   fn: MIRFunction,
   ctx: LoweringContext,

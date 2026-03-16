@@ -6,6 +6,7 @@
  */
 
 import type { LIRModule, LIRFunction, LIRInstr, Slot, CmpOp, ExecuteSubcmd } from '../lir/types'
+import { SourceMapBuilder, serializeSourceMap, sourceMapPath } from './sourcemap'
 
 export interface DatapackFile {
   path: string
@@ -16,6 +17,8 @@ export interface EmitOptions {
   namespace: string
   tickFunctions?: string[]
   loadFunctions?: string[]
+  /** When true, generate a .sourcemap.json sidecar file for each .mcfunction */
+  generateSourceMap?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -27,6 +30,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const tickFns = options.tickFunctions ?? []
   const loadFns = options.loadFunctions ?? []
   const objective = module.objective
+  const genSourceMap = options.generateSourceMap ?? false
   const files: DatapackFile[] = []
 
   // pack.mcmeta
@@ -46,9 +50,19 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
 
   // Each LIR function → .mcfunction file
   for (const fn of module.functions) {
-    const lines = emitFunction(fn, namespace, objective)
     const fnPath = fnNameToPath(fn.name, namespace)
-    files.push({ path: fnPath, content: lines.join('\n') + '\n' })
+    if (genSourceMap) {
+      const builder = new SourceMapBuilder(fnPath)
+      const lines = emitFunctionWithSourceMap(fn, namespace, objective, builder)
+      files.push({ path: fnPath, content: lines.join('\n') + '\n' })
+      const map = builder.build()
+      if (map) {
+        files.push({ path: sourceMapPath(fnPath), content: serializeSourceMap(map) })
+      }
+    } else {
+      const lines = emitFunction(fn, namespace, objective)
+      files.push({ path: fnPath, content: lines.join('\n') + '\n' })
+    }
   }
 
   // Tag files for tick/load
@@ -80,6 +94,20 @@ function emitFunction(fn: LIRFunction, namespace: string, objective: string): st
   const lines: string[] = []
   for (const instr of fn.instructions) {
     lines.push(emitInstr(instr, namespace, objective))
+  }
+  return lines
+}
+
+function emitFunctionWithSourceMap(
+  fn: LIRFunction,
+  namespace: string,
+  objective: string,
+  builder: SourceMapBuilder,
+): string[] {
+  const lines: string[] = []
+  for (const instr of fn.instructions) {
+    lines.push(emitInstr(instr, namespace, objective))
+    builder.addLine(instr.sourceLoc)
   }
   return lines
 }

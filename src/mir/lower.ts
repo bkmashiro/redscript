@@ -11,7 +11,7 @@ import type {
 } from '../hir/types'
 import type {
   MIRModule, MIRFunction, MIRBlock, MIRInstr, BlockId,
-  Operand, Temp, CmpOp, ExecuteSubcmd, NBTType,
+  Operand, Temp, CmpOp, ExecuteSubcmd, NBTType, SourceLoc,
 } from './types'
 import { detectMacroFunctions, BUILTIN_SET, type MacroFunctionInfo } from './macro'
 
@@ -19,7 +19,7 @@ import { detectMacroFunctions, BUILTIN_SET, type MacroFunctionInfo } from './mac
 // Public API
 // ---------------------------------------------------------------------------
 
-export function lowerToMIR(hir: HIRModule): MIRModule {
+export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
   // Build struct definitions: name → field names
   const structDefs = new Map<string, string[]>()
   for (const s of hir.structs) {
@@ -63,14 +63,14 @@ export function lowerToMIR(hir: HIRModule): MIRModule {
 
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile)
     allFunctions.push(fn, ...helpers)
   }
 
   // Lower impl block methods
   for (const ib of hir.implBlocks) {
     for (const m of ib.methods) {
-      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
+      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile)
       allFunctions.push(fn, ...helpers)
     }
   }
@@ -113,6 +113,10 @@ class FnContext {
   readonly currentMacroParams: Set<string>
   /** Enum definitions: enumName → variantName → integer value */
   readonly enumDefs: Map<string, Map<string, number>>
+  /** Current source location (set during statement lowering) */
+  currentSourceLoc: SourceLoc | undefined = undefined
+  /** Source file path for the module being compiled */
+  sourceFile: string | undefined = undefined
 
   constructor(
     namespace: string,
@@ -155,10 +159,16 @@ class FnContext {
   }
 
   emit(instr: MIRInstr): void {
+    if (this.currentSourceLoc && !instr.sourceLoc) {
+      instr.sourceLoc = this.currentSourceLoc
+    }
     this.currentBlock.instrs.push(instr)
   }
 
   terminate(term: MIRInstr): void {
+    if (this.currentSourceLoc && !term.sourceLoc) {
+      term.sourceLoc = this.currentSourceLoc
+    }
     this.currentBlock.term = term
   }
 
@@ -203,8 +213,10 @@ function lowerFunction(
   macroInfo: Map<string, MacroFunctionInfo> = new Map(),
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
   enumDefs: Map<string, Map<string, number>> = new Map(),
+  sourceFile?: string,
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const ctx = new FnContext(namespace, fn.name, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
+  ctx.sourceFile = sourceFile
   const fnMacroInfo = macroInfo.get(fn.name)
 
   // Create temps for parameters
@@ -254,9 +266,11 @@ function lowerImplMethod(
   macroInfo: Map<string, MacroFunctionInfo> = new Map(),
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
   enumDefs: Map<string, Map<string, number>> = new Map(),
+  sourceFile?: string,
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
   const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
+  ctx.sourceFile = sourceFile
   const fields = structDefs.get(typeName) ?? []
   const hasSelf = method.params.length > 0 && method.params[0].name === 'self'
 
@@ -374,6 +388,11 @@ function lowerStmt(
   ctx: FnContext,
   scope: Map<string, Temp>,
 ): void {
+  // Propagate source location from HIR statement span
+  if (stmt.span && ctx.sourceFile) {
+    ctx.currentSourceLoc = { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col }
+  }
+
   switch (stmt.kind) {
     case 'let': {
       if (stmt.init.kind === 'struct_lit') {

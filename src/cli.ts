@@ -52,6 +52,7 @@ Options:
   --namespace <ns>       Datapack namespace (default: derived from filename)
   --hot-reload <url>     After each successful compile, POST to <url>/reload
                          (use with redscript-testharness; e.g. http://localhost:25561)
+  --source-map           Generate .sourcemap.json files alongside .mcfunction output
   -h, --help             Show this help message
 `)
 }
@@ -153,6 +154,7 @@ function parseArgs(args: string[]): {
   namespace?: string
   help?: boolean
   hotReload?: string
+  sourceMap?: boolean
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -171,6 +173,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--hot-reload') {
       result.hotReload = args[++i]
+      i++
+    } else if (arg === '--source-map') {
+      result.sourceMap = true
       i++
     } else if (!result.command) {
       result.command = arg
@@ -196,6 +201,7 @@ function compileCommand(
   file: string,
   output: string,
   namespace: string,
+  sourceMap = false,
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -206,7 +212,7 @@ function compileCommand(
   const source = fs.readFileSync(file, 'utf-8')
 
   try {
-    const result = compile(source, { namespace, filePath: file })
+    const result = compile(source, { namespace, filePath: file, generateSourceMap: sourceMap })
 
     for (const w of result.warnings) {
       console.error(`Warning: ${w}`)
@@ -402,6 +408,7 @@ async function main(): Promise<void> {
         parsed.file,
         output,
         namespace,
+        parsed.sourceMap,
       )
       }
       break

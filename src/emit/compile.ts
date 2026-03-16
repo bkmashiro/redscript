@@ -23,6 +23,8 @@ export interface CompileOptions {
   filePath?: string
   /** v1 compat: inline library sources (treated as `module library;` imports) */
   librarySources?: string[]
+  /** When true, generate .sourcemap.json files alongside .mcfunction output */
+  generateSourceMap?: boolean
 }
 
 export interface CompileResult {
@@ -33,7 +35,7 @@ export interface CompileResult {
 }
 
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
-  const { namespace = 'redscript', filePath } = options
+  const { namespace = 'redscript', filePath, generateSourceMap = false } = options
   const warnings: string[] = []
 
   // Preprocess: resolve import directives, merge imported sources
@@ -103,7 +105,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     // Stage 3: HIR → MIR
-    const mir = lowerToMIR(hir)
+    const mir = lowerToMIR(hir, filePath)
 
     // Stage 4: MIR optimization
     const mirOpt = optimizeModule(mir)
@@ -134,7 +136,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     // Stage 7: LIR → .mcfunction
-    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions })
+    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, generateSourceMap })
 
     return { files, warnings, success: true as const }
   } catch (err) {
