@@ -11,6 +11,7 @@
 
 import { compile, checkWithWarnings } from './index'
 import { formatError } from './diagnostics'
+import { parseMcVersion, DEFAULT_MC_VERSION } from './types/mc-version'
 import { startRepl } from './repl'
 import { generateDts } from './builtins/metadata'
 import { FileCache } from './cache/index'
@@ -53,6 +54,8 @@ Options:
   --hot-reload <url>     After each successful compile, POST to <url>/reload
                          (use with redscript-testharness; e.g. http://localhost:25561)
   --source-map           Generate .sourcemap.json files alongside .mcfunction output
+  --mc-version <ver>     Target Minecraft version (default: 1.21). Affects codegen features.
+                         e.g. --mc-version 1.20.2, --mc-version 1.19
   -h, --help             Show this help message
 `)
 }
@@ -155,6 +158,7 @@ function parseArgs(args: string[]): {
   help?: boolean
   hotReload?: string
   sourceMap?: boolean
+  mcVersionStr?: string
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -176,6 +180,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--source-map') {
       result.sourceMap = true
+      i++
+    } else if (arg === '--mc-version') {
+      result.mcVersionStr = args[++i]
       i++
     } else if (!result.command) {
       result.command = arg
@@ -202,6 +209,7 @@ function compileCommand(
   output: string,
   namespace: string,
   sourceMap = false,
+  mcVersionStr?: string,
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -209,10 +217,20 @@ function compileCommand(
     process.exit(1)
   }
 
+  let mcVersion = DEFAULT_MC_VERSION
+  if (mcVersionStr) {
+    try {
+      mcVersion = parseMcVersion(mcVersionStr)
+    } catch (e) {
+      console.error(`Error: ${(e as Error).message}`)
+      process.exit(1)
+    }
+  }
+
   const source = fs.readFileSync(file, 'utf-8')
 
   try {
-    const result = compile(source, { namespace, filePath: file, generateSourceMap: sourceMap })
+    const result = compile(source, { namespace, filePath: file, generateSourceMap: sourceMap, mcVersion })
 
     for (const w of result.warnings) {
       console.error(`Warning: ${w}`)
@@ -409,6 +427,7 @@ async function main(): Promise<void> {
         output,
         namespace,
         parsed.sourceMap,
+        parsed.mcVersionStr,
       )
       }
       break

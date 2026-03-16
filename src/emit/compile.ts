@@ -17,6 +17,7 @@ import { lirOptimizeModule } from '../optimizer/lir/pipeline'
 import { emit, type DatapackFile } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import { analyzeBudget } from '../lir/budget'
+import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 
 export interface CompileOptions {
   namespace?: string
@@ -25,6 +26,8 @@ export interface CompileOptions {
   librarySources?: string[]
   /** When true, generate .sourcemap.json files alongside .mcfunction output */
   generateSourceMap?: boolean
+  /** Target Minecraft version (default: 1.21). Affects which MC features are used. */
+  mcVersion?: McVersion
 }
 
 export interface CompileResult {
@@ -35,7 +38,7 @@ export interface CompileResult {
 }
 
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
-  const { namespace = 'redscript', filePath, generateSourceMap = false } = options
+  const { namespace = 'redscript', filePath, generateSourceMap = false, mcVersion = DEFAULT_MC_VERSION } = options
   const warnings: string[] = []
 
   // Preprocess: resolve import directives, merge imported sources
@@ -140,7 +143,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     // Stage 7: LIR → .mcfunction
-    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions, generateSourceMap })
+    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions, generateSourceMap, mcVersion })
 
     return { files, warnings, success: true as const }
   } catch (err) {
