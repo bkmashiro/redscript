@@ -67,7 +67,11 @@ function getPureWriteDst(instr: LIRInstr): Slot | null {
 /** True if a slot should never be eliminated (externally visible). */
 function isProtectedSlot(s: Slot): boolean {
   const p = s.player
-  return p === '$ret' || p.startsWith('$ret_') || /^\$p\d+$/.test(p)
+  if (p === '$ret' || p.startsWith('$ret_') || /^\$p\d+$/.test(p)) return true
+  // Option slots: __opt_ prefix ensures they're always written to scoreboard
+  // even when the variable appears unused locally
+  if (p.includes('__opt_')) return true
+  return false
 }
 
 export function deadSlotElim(fn: LIRFunction): LIRFunction {

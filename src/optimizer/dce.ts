@@ -80,8 +80,9 @@ function hasSideEffects(instr: MIRInstr): boolean {
   if (instr.kind === 'call' || instr.kind === 'call_macro' ||
     instr.kind === 'call_context' || instr.kind === 'nbt_write') return true
   // Return field temps (__rf_) write to global return slots — not dead even if unused locally
+  // Option slot temps (__opt_) write observable scoreboard state — preserve even if var unused
   const dst = getDst(instr)
-  if (dst && dst.startsWith('__rf_')) return true
+  if (dst && (dst.startsWith('__rf_') || dst.startsWith('__opt_'))) return true
   return false
 }
 

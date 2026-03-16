@@ -395,7 +395,25 @@ function lowerStmt(
 
   switch (stmt.kind) {
     case 'let': {
-      if (stmt.init.kind === 'struct_lit') {
+      if (stmt.init.kind === 'some_lit') {
+        // Some(expr) — create option struct vars: has=1, val=expr
+        // Use __opt_ prefix so DCE treats these as side-effectful scoreboard writes
+        const hasTemp: Temp = `__opt_${stmt.name}_has`
+        const valTemp: Temp = `__opt_${stmt.name}_val`
+        ctx.emit({ kind: 'const', dst: hasTemp, value: 1 })
+        const valOp = lowerExpr(stmt.init.value, ctx, scope)
+        ctx.emit({ kind: 'copy', dst: valTemp, src: valOp })
+        const fieldTemps = new Map<string, Temp>([['has', hasTemp], ['val', valTemp]])
+        ctx.structVars.set(stmt.name, { typeName: '__option', fields: fieldTemps })
+      } else if (stmt.init.kind === 'none_lit') {
+        // None — create option struct vars: has=0, val=0
+        const hasTemp: Temp = `__opt_${stmt.name}_has`
+        const valTemp: Temp = `__opt_${stmt.name}_val`
+        ctx.emit({ kind: 'const', dst: hasTemp, value: 0 })
+        ctx.emit({ kind: 'const', dst: valTemp, value: 0 })
+        const fieldTemps = new Map<string, Temp>([['has', hasTemp], ['val', valTemp]])
+        ctx.structVars.set(stmt.name, { typeName: '__option', fields: fieldTemps })
+      } else if (stmt.init.kind === 'struct_lit') {
         // Struct literal: create per-field temps
         const typeName = (stmt.type?.kind === 'struct') ? stmt.type.name : '__anon'
         const fieldTemps = new Map<string, Temp>()
@@ -406,6 +424,15 @@ function lowerStmt(
           fieldTemps.set(field.name, t)
         }
         ctx.structVars.set(stmt.name, { typeName, fields: fieldTemps })
+      } else if (stmt.type?.kind === 'option') {
+        // Option<T>-typed let with function call result — use __rf_has/__rf_val convention
+        lowerExpr(stmt.init, ctx, scope)
+        const hasTemp: Temp = `__opt_${stmt.name}_has`
+        const valTemp: Temp = `__opt_${stmt.name}_val`
+        ctx.emit({ kind: 'copy', dst: hasTemp, src: { kind: 'temp', name: '__rf_has' } })
+        ctx.emit({ kind: 'copy', dst: valTemp, src: { kind: 'temp', name: '__rf_val' } })
+        const fieldTemps = new Map<string, Temp>([['has', hasTemp], ['val', valTemp]])
+        ctx.structVars.set(stmt.name, { typeName: '__option', fields: fieldTemps })
       } else if (stmt.type?.kind === 'struct') {
         // Struct-typed let with non-literal init (e.g., call returning struct)
         const fields = ctx.structDefs.get(stmt.type.name)
@@ -488,7 +515,18 @@ function lowerStmt(
     }
 
     case 'return': {
-      if (stmt.value?.kind === 'struct_lit') {
+      if (stmt.value?.kind === 'some_lit') {
+        // Option return: Some(expr) → set __rf_has=1, __rf_val=expr
+        const valOp = lowerExpr(stmt.value.value, ctx, scope)
+        ctx.emit({ kind: 'copy', dst: '__rf_has', src: { kind: 'const', value: 1 } })
+        ctx.emit({ kind: 'copy', dst: '__rf_val', src: valOp })
+        ctx.terminate({ kind: 'return', value: null })
+      } else if (stmt.value?.kind === 'none_lit') {
+        // Option return: None → set __rf_has=0, __rf_val=0
+        ctx.emit({ kind: 'copy', dst: '__rf_has', src: { kind: 'const', value: 0 } })
+        ctx.emit({ kind: 'copy', dst: '__rf_val', src: { kind: 'const', value: 0 } })
+        ctx.terminate({ kind: 'return', value: null })
+      } else if (stmt.value?.kind === 'struct_lit') {
         // Struct return — copy each field to return field slots
         for (const field of stmt.value.fields) {
           const val = lowerExpr(field.value, ctx, scope)
@@ -502,6 +540,19 @@ function lowerStmt(
           ctx.emit({ kind: 'copy', dst: `__rf_${i}`, src: val })
         }
         ctx.terminate({ kind: 'return', value: null })
+      } else if (stmt.value?.kind === 'ident') {
+        // Check if returning an option struct var
+        const sv = ctx.structVars.get(stmt.value.name)
+        if (sv && sv.typeName === '__option') {
+          const hasT = sv.fields.get('has')!
+          const valT = sv.fields.get('val')!
+          ctx.emit({ kind: 'copy', dst: '__rf_has', src: { kind: 'temp', name: hasT } })
+          ctx.emit({ kind: 'copy', dst: '__rf_val', src: { kind: 'temp', name: valT } })
+          ctx.terminate({ kind: 'return', value: null })
+        } else {
+          const val = lowerExpr(stmt.value, ctx, scope)
+          ctx.terminate({ kind: 'return', value: val })
+        }
       } else {
         const val = stmt.value ? lowerExpr(stmt.value, ctx, scope) : null
         ctx.terminate({ kind: 'return', value: val })
@@ -711,6 +762,61 @@ function lowerStmt(
       // Raw commands are opaque at MIR level — emit as a call to a synthetic raw function
       // For now, pass through as a call with no args (will be handled in LIR)
       ctx.emit({ kind: 'call', dst: null, fn: `__raw:${stmt.cmd}`, args: [] })
+      break
+    }
+
+    case 'if_let_some': {
+      // if let Some(x) = opt { ... }
+      // Lower: check opt.has, if 1 then bind x = opt.val and run then-block
+      const sv = (() => {
+        if (stmt.init.kind === 'ident') return ctx.structVars.get(stmt.init.name)
+        return undefined
+      })()
+
+      let hasOp: Operand
+      let valTemp: Temp | undefined
+
+      if (sv && sv.typeName === '__option') {
+        const hasT = sv.fields.get('has')!
+        const valT = sv.fields.get('val')!
+        hasOp = { kind: 'temp', name: hasT }
+        valTemp = valT
+      } else {
+        // General: evaluate init (e.g. function call returning option via __rf_has/__rf_val)
+        lowerExpr(stmt.init, ctx, scope)
+        const hasT = ctx.freshTemp()
+        const valT = ctx.freshTemp()
+        ctx.emit({ kind: 'copy', dst: hasT, src: { kind: 'temp', name: '__rf_has' } })
+        ctx.emit({ kind: 'copy', dst: valT, src: { kind: 'temp', name: '__rf_val' } })
+        hasOp = { kind: 'temp', name: hasT }
+        valTemp = valT
+      }
+
+      const thenBlock = ctx.newBlock('ifl_then')
+      const mergeBlock = ctx.newBlock('ifl_merge')
+      const elseBlock = stmt.else_ ? ctx.newBlock('ifl_else') : mergeBlock
+
+      ctx.terminate({ kind: 'branch', cond: hasOp, then: thenBlock.id, else: elseBlock.id })
+
+      // Then branch: bind x = val temp
+      ctx.switchTo(thenBlock)
+      const thenScope = new Map(scope)
+      if (valTemp) thenScope.set(stmt.binding, valTemp)
+      lowerBlock(stmt.then, ctx, thenScope)
+      if (isPlaceholderTerm(ctx.current().term)) {
+        ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+      }
+
+      // Else branch
+      if (stmt.else_) {
+        ctx.switchTo(elseBlock)
+        lowerBlock(stmt.else_, ctx, new Map(scope))
+        if (isPlaceholderTerm(ctx.current().term)) {
+          ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+        }
+      }
+
+      ctx.switchTo(mergeBlock)
       break
     }
 
@@ -1001,6 +1107,25 @@ function lowerExpr(
         const val = lowerExpr(expr.elements[i], ctx, scope)
         ctx.emit({ kind: 'copy', dst: `__rf_${i}`, src: val })
       }
+      const t = ctx.freshTemp()
+      ctx.emit({ kind: 'const', dst: t, value: 0 })
+      return { kind: 'temp', name: t }
+    }
+
+    case 'some_lit': {
+      // Some(expr) in expression context: store has=1,val into __rf_has/__rf_val slots
+      const valOp = lowerExpr(expr.value, ctx, scope)
+      ctx.emit({ kind: 'copy', dst: '__rf_has', src: { kind: 'const', value: 1 } })
+      ctx.emit({ kind: 'copy', dst: '__rf_val', src: valOp })
+      const t = ctx.freshTemp()
+      ctx.emit({ kind: 'const', dst: t, value: 1 })
+      return { kind: 'temp', name: t }
+    }
+
+    case 'none_lit': {
+      // None in expression context: store has=0,val=0 into __rf_has/__rf_val slots
+      ctx.emit({ kind: 'copy', dst: '__rf_has', src: { kind: 'const', value: 0 } })
+      ctx.emit({ kind: 'copy', dst: '__rf_val', src: { kind: 'const', value: 0 } })
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'const', dst: t, value: 0 })
       return { kind: 'temp', name: t }

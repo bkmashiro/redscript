@@ -132,6 +132,7 @@ export class TypeChecker {
   private structs: Map<string, Map<string, TypeNode>> = new Map()
   private enums: Map<string, Map<string, number>> = new Map()
   private consts: Map<string, TypeNode> = new Map()
+  private globals: Map<string, TypeNode> = new Map()
   private currentFn: FnDecl | null = null
   private currentReturnType: TypeNode | null = null
   private scope: Map<string, ScopeSymbol> = new Map()
@@ -172,6 +173,11 @@ export class TypeChecker {
     // First pass: collect function and struct declarations
     for (const fn of program.declarations) {
       this.functions.set(fn.name, fn)
+    }
+
+    // Register global variables (mutable) so functions can reference and assign them
+    for (const global of program.globals ?? []) {
+      this.globals.set(global.name, this.normalizeType(global.type))
     }
 
     for (const implBlock of program.implBlocks ?? []) {
@@ -252,6 +258,10 @@ export class TypeChecker {
 
     for (const [name, type] of this.consts.entries()) {
       this.scope.set(name, { type, mutable: false })
+    }
+
+    for (const [name, type] of this.globals.entries()) {
+      this.scope.set(name, { type, mutable: true })
     }
 
     // Add parameters to scope
@@ -382,7 +392,12 @@ export class TypeChecker {
         for (const arm of stmt.arms) {
           if (arm.pattern) {
             this.checkExpr(arm.pattern)
-            if (!this.typesMatch(this.inferType(stmt.expr), this.inferType(arm.pattern))) {
+            const subjectType = this.inferType(stmt.expr)
+            const patternType = this.inferType(arm.pattern)
+            // Skip check if either type is unknown (void) — struct field access not yet inferred
+            const isUnknown = (t: TypeNode) => t.kind === 'named' && t.name === 'void'
+            if (!isUnknown(subjectType) && !isUnknown(patternType) &&
+                !this.typesMatch(subjectType, patternType)) {
               this.report('Match arm pattern type must match subject type', arm.pattern)
             }
           }
@@ -491,10 +506,18 @@ export class TypeChecker {
       !(actualType.kind === 'named' && actualType.name === 'void') &&
       !this.typesMatch(expectedType, actualType)
     ) {
-      this.report(
-        `Type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`,
-        stmt
-      )
+      if (this.isNumericMismatch(expectedType, actualType)) {
+        this.report(
+          `Type mismatch: cannot implicitly convert ${this.typeToString(actualType)} to ${this.typeToString(expectedType)}` +
+          ` (use an explicit cast: 'as ${this.typeToString(expectedType)}')`,
+          stmt
+        )
+      } else {
+        this.report(
+          `Type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`,
+          stmt
+        )
+      }
     }
   }
 
@@ -508,10 +531,18 @@ export class TypeChecker {
       this.checkExpr(stmt.value, expectedType)
       
       if (!this.typesMatch(expectedType, actualType)) {
-        this.report(
-          `Return type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`,
-          stmt
-        )
+        if (this.isNumericMismatch(expectedType, actualType)) {
+          this.report(
+            `Return type mismatch: cannot implicitly convert ${this.typeToString(actualType)} to ${this.typeToString(expectedType)}` +
+            ` (use an explicit cast: 'as ${this.typeToString(expectedType)}')`,
+            stmt
+          )
+        } else {
+          this.report(
+            `Return type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`,
+            stmt
+          )
+        }
       }
     } else {
       // No return value
@@ -1047,7 +1078,15 @@ export class TypeChecker {
           return this.normalizeType(implMethod.returnType)
         }
         const fn = this.functions.get(expr.fn)
-        return fn ? this.normalizeType(fn.returnType) : INT_TYPE
+        if (fn) {
+          // For generic functions, the return type may be a type param (e.g. T).
+          // If we have an expected type from context, trust it; otherwise return int as default.
+          if (fn.typeParams && fn.typeParams.length > 0) {
+            return expectedType ?? INT_TYPE
+          }
+          return this.normalizeType(fn.returnType)
+        }
+        return INT_TYPE
       }
       case 'static_call': {
         const method = this.implMethods.get(expr.type)?.get(expr.method)
@@ -1109,6 +1148,17 @@ export class TypeChecker {
           kind: 'tuple',
           elements: expr.elements.map(e => this.inferType(e)),
         }
+      case 'some_lit': {
+        // Some(expr) → Option<T> where T is inferred from inner value
+        const innerType = this.inferType(expr.value,
+          expectedType?.kind === 'option' ? expectedType.inner : undefined)
+        return { kind: 'option', inner: innerType }
+      }
+      case 'none_lit': {
+        // None → Option<T>, use expected type if available
+        if (expectedType?.kind === 'option') return expectedType
+        return { kind: 'option', inner: { kind: 'named', name: 'void' } }
+      }
       case 'lambda':
         return this.inferLambdaType(
           expr,
@@ -1221,7 +1271,40 @@ export class TypeChecker {
     return this.selfTypeStack[this.selfTypeStack.length - 1]
   }
 
+  /** Returns true if expected/actual are a numeric type mismatch (int vs float). */
+  private isNumericMismatch(expected: TypeNode, actual: TypeNode): boolean {
+    if (expected.kind !== 'named' || actual.kind !== 'named') return false
+    const numericPairs = [
+      ['int', 'float'], ['float', 'int'],
+      ['int', 'double'], ['double', 'int'],
+      ['float', 'double'], ['double', 'float'],
+    ]
+    return numericPairs.some(([e, a]) => expected.name === e && actual.name === a)
+  }
+
   private typesMatch(expected: TypeNode, actual: TypeNode): boolean {
+    // Enum values are backed by int — allow enum where int is expected and vice versa
+    if (expected.kind === 'named' && expected.name === 'int' && actual.kind === 'enum') {
+      return true
+    }
+    if (expected.kind === 'enum' && actual.kind === 'named' && actual.name === 'int') {
+      return true
+    }
+
+    // Selector/entity cross-kind compatibility (must come before kind guard)
+    if (expected.kind === 'selector' && actual.kind === 'entity') {
+      return true  // entity is a valid selector
+    }
+    if (expected.kind === 'entity' && actual.kind === 'selector') {
+      return true  // selector is a valid entity context
+    }
+    if (expected.kind === 'entity' && actual.kind === 'entity') {
+      return this.isEntitySubtype(actual.entityType, expected.entityType)
+    }
+    if (expected.kind === 'selector' && actual.kind === 'selector') {
+      return true  // any entity subtype is compatible
+    }
+
     if (expected.kind !== actual.kind) return false
 
     if (expected.kind === 'named' && actual.kind === 'named') {
@@ -1253,13 +1336,12 @@ export class TypeChecker {
         expected.elements.every((elem, i) => this.typesMatch(elem, actual.elements[i]))
     }
 
-    // Entity type matching with subtype support
-    if (expected.kind === 'entity' && actual.kind === 'entity') {
-      return this.isEntitySubtype(actual.entityType, expected.entityType)
+    if (expected.kind === 'option' && actual.kind === 'option') {
+      return this.typesMatch(expected.inner, actual.inner)
     }
 
-    // Selector matches any entity type
-    if (expected.kind === 'selector' && actual.kind === 'entity') {
+    // Option<T> is compatible with None (void inner) or partially inferred types
+    if (expected.kind === 'option' && actual.kind === 'named' && actual.name === 'void') {
       return true
     }
 
@@ -1284,6 +1366,8 @@ export class TypeChecker {
         return 'selector'
       case 'tuple':
         return `(${type.elements.map(e => this.typeToString(e)).join(', ')})`
+      case 'option':
+        return `Option<${this.typeToString(type.inner)}>`
       default:
         return 'unknown'
     }
@@ -1292,6 +1376,9 @@ export class TypeChecker {
   private normalizeType(type: TypeNode): TypeNode {
     if (type.kind === 'array') {
       return { kind: 'array', elem: this.normalizeType(type.elem) }
+    }
+    if (type.kind === 'option') {
+      return { kind: 'option', inner: this.normalizeType(type.inner) }
     }
     if (type.kind === 'tuple') {
       return { kind: 'tuple', elements: type.elements.map(e => this.normalizeType(e)) }
