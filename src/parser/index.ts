@@ -463,11 +463,15 @@ export class Parser {
       return { name, rawArgs }
     }
 
-    // Handle key=value format (e.g., rate=20)
+    // Handle key=value format (e.g., rate=20, batch=10, onDone=fn_name)
     for (const part of argsStr.split(',')) {
       const [key, val] = part.split('=').map(s => s.trim())
       if (key === 'rate') {
         args.rate = parseInt(val, 10)
+      } else if (key === 'batch') {
+        args.batch = parseInt(val, 10)
+      } else if (key === 'onDone') {
+        args.onDone = val
       } else if (key === 'trigger') {
         args.trigger = val
       } else if (key === 'advancement') {
