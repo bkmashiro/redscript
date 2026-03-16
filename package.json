@@ -5,13 +5,15 @@
   "main": "dist/src/index.js",
   "bin": {
     "redscript": "dist/src/cli.js",
-    "rsc": "dist/src/cli.js"
+    "rsc": "dist/src/cli.js",
+    "redscript-lsp": "dist/src/lsp/main.js"
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
     "test": "jest",
     "cli": "ts-node src/cli.ts",
+    "lsp": "node dist/src/lsp/main.js",
     "validate-mc": "jest src/__tests__/mc-syntax.test.ts --verbose",
     "postbuild": "node scripts/postbuild.js"
   },
@@ -35,5 +37,9 @@
     "type": "git",
     "url": "https://github.com/bkmashiro/redscript.git"
   },
-  "author": "bkmashiro"
+  "author": "bkmashiro",
+  "dependencies": {
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  }
 }
