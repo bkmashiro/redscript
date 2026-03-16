@@ -139,6 +139,7 @@
     "typescript": "^5.3.0"
   },
   "dependencies": {
-    "redscript": "file:../../"
+    "redscript": "file:../../",
+    "vscode-languageclient": "^9.0.1"
   }
 }

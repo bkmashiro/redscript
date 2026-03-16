@@ -1,8 +1,16 @@
 import * as vscode from 'vscode'
+import * as path from 'path'
+import {
+  LanguageClient,
+  LanguageClientOptions,
+  ServerOptions,
+  TransportKind,
+} from 'vscode-languageclient/node'
 import { registerHoverProvider } from './hover'
 import { registerCodeActions } from './codeactions'
 import { registerCompletionProvider } from './completion'
 import { registerSymbolProviders } from './symbols'
+
 // The compiler is bundled directly into this extension by esbuild.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { compile: _compile } = require('redscript') as {
@@ -18,11 +26,97 @@ function getCompile() {
 
 const DEBOUNCE_MS = 600
 
+let lspClient: LanguageClient | undefined
+
+/**
+ * Try to resolve the redscript-lsp binary.
+ * Returns the path if found (as installed alongside the redscript npm package),
+ * or null if not available.
+ */
+function resolveLspServerPath(): string | null {
+  // When the extension bundles redscript, the LSP server is at
+  // node_modules/redscript/dist/src/lsp/main.js relative to the extension dir.
+  try {
+    // __dirname is the extension's out/ directory when bundled by esbuild.
+    const candidate = path.join(__dirname, '..', 'node_modules', 'redscript', 'dist', 'src', 'lsp', 'main.js')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('fs').accessSync(candidate)
+    return candidate
+  } catch {
+    // Not found via local node_modules; try the global bin
+    return null
+  }
+}
+
 export function activate(context: vscode.ExtensionContext): void {
+  // -------------------------------------------------------------------------
+  // LSP client (primary path)
+  // -------------------------------------------------------------------------
+  const serverModule = resolveLspServerPath()
+  if (serverModule) {
+    const serverOptions: ServerOptions = {
+      run:   { module: serverModule, transport: TransportKind.stdio },
+      debug: { module: serverModule, transport: TransportKind.stdio },
+    }
+
+    const clientOptions: LanguageClientOptions = {
+      documentSelector: [{ scheme: 'file', language: 'redscript' }],
+      synchronize: {
+        fileEvents: vscode.workspace.createFileSystemWatcher('**/*.mcrs'),
+      },
+      outputChannelName: 'RedScript LSP',
+    }
+
+    lspClient = new LanguageClient(
+      'redscript-lsp',
+      'RedScript Language Server',
+      serverOptions,
+      clientOptions,
+    )
+
+    lspClient.start()
+    context.subscriptions.push({ dispose: () => lspClient?.stop() })
+  } else {
+    // -----------------------------------------------------------------------
+    // Fallback: bundled compiler diagnostics (no redscript-lsp available)
+    // -----------------------------------------------------------------------
+    activateFallbackDiagnostics(context)
+  }
+
+  // -------------------------------------------------------------------------
+  // Providers that always run regardless of LSP availability
+  // -------------------------------------------------------------------------
+  registerHoverProvider(context)
+  registerCompletionProvider(context)
+  registerCodeActions(context)
+  registerSymbolProviders(context)
+
+  // Status bar
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10)
+  statusBar.text = serverModule ? '$(pass) RedScript LSP' : '$(pass) RedScript'
+  statusBar.tooltip = serverModule ? 'RedScript Language Server active' : 'RedScript compiler'
+  statusBar.show()
+  context.subscriptions.push(statusBar)
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(editor => {
+      if (editor?.document.languageId === 'redscript') {
+        statusBar.show()
+      } else {
+        statusBar.hide()
+      }
+    })
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Fallback: bundled-compiler diagnostics (used when redscript-lsp is absent)
+// ---------------------------------------------------------------------------
+
+function activateFallbackDiagnostics(context: vscode.ExtensionContext): void {
   const diagnostics = vscode.languages.createDiagnosticCollection('redscript')
   context.subscriptions.push(diagnostics)
 
-  // Debounce timer per document URI
   const timers = new Map<string, NodeJS.Timeout>()
 
   function scheduleValidation(doc: vscode.TextDocument) {
@@ -36,17 +130,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }, DEBOUNCE_MS))
   }
 
-  // Validate on open
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument(doc => scheduleValidation(doc))
   )
-
-  // Validate on change
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument(e => scheduleValidation(e.document))
   )
-
-  // Clear diagnostics on close
   context.subscriptions.push(
     vscode.workspace.onDidCloseTextDocument(doc => {
       diagnostics.delete(doc.uri)
@@ -56,40 +145,9 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   )
 
-  // Validate all already-open .rs files
   vscode.workspace.textDocuments
     .filter(d => d.languageId === 'redscript')
     .forEach(d => scheduleValidation(d))
-
-  // Register hover documentation
-  registerHoverProvider(context)
-
-  // Register completions
-  registerCompletionProvider(context)
-
-  // Register code actions (quick fixes)
-  registerCodeActions(context)
-
-  // Register Go-to-Definition and Find-References
-  registerSymbolProviders(context)
-
-  // Status bar item to show compilation state
-  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10)
-  statusBar.text = '$(pass) RedScript'
-  statusBar.tooltip = 'RedScript compiler'
-  statusBar.show()
-  context.subscriptions.push(statusBar)
-
-  // Track the active editor's compile state
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(editor => {
-      if (editor?.document.languageId === 'redscript') {
-        statusBar.show()
-      } else {
-        statusBar.hide()
-      }
-    })
-  )
 }
 
 function validateDocument(
@@ -98,7 +156,6 @@ function validateDocument(
 ): void {
   const compile = getCompile()
   if (!compile) {
-    // Compiler not available — show a one-time info message
     collection.set(doc.uri, [{
       message: 'RedScript compiler not found. Run `npm install -g redscript` to enable diagnostics.',
       range: new vscode.Range(0, 0, 0, 0),
@@ -114,9 +171,7 @@ function validateDocument(
   try {
     const result = compile(source, { filePath: doc.uri.fsPath })
 
-    // Convert warnings to VS Code diagnostics
     for (const w of result.warnings ?? []) {
-      // Use real line/col from AST span when available, fall back to text search
       const range = (w.line && w.col)
         ? new vscode.Range(w.line - 1, w.col - 1, w.line - 1, w.col - 1 + 20)
         : findWarningRange(w.message, w.code, source, doc)
@@ -131,7 +186,6 @@ function validateDocument(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
 
-    // Try to get location from DiagnosticError.location first
     let range: vscode.Range
     const loc = (err as { location?: { line?: number; col?: number } }).location
     if (loc?.line && loc?.col) {
@@ -139,7 +193,6 @@ function validateDocument(
       const c = Math.max(0, loc.col - 1)
       range = new vscode.Range(l, c, l, c + 20)
     } else {
-      // Fallback: parse the error message for line/column info
       range = extractRange(msg, doc)
     }
 
@@ -154,40 +207,27 @@ function validateDocument(
   collection.set(doc.uri, docDiagnostics)
 }
 
-/**
- * For warnings without position info, search the source for the relevant token
- * mentioned in the warning message.
- */
 function findWarningRange(
   message: string,
   code: string | undefined,
   source: string,
   doc: vscode.TextDocument
 ): vscode.Range {
-  // W_UNNAMESPACED_TYPE: message contains the unqualified type name in quotes
-  // e.g. 'Unnamespaced entity type "zombie"'
   if (code === 'W_UNNAMESPACED_TYPE') {
     const m = message.match(/"([^"]+)"/)
     if (m) return searchToken(source, doc, `type=${m[1]}`) ?? searchToken(source, doc, m[1]) ?? topLine(doc)
   }
-
-  // W_QUOTED_SELECTOR: message contains the quoted selector
-  // e.g. 'Quoted selector "@a" is deprecated'
   if (code === 'W_QUOTED_SELECTOR') {
     const m = message.match(/"(@[^"]+)"/)
     if (m) return searchToken(source, doc, `"${m[1]}"`) ?? topLine(doc)
   }
-
-  // W_DEPRECATED: usually about tp_to
   if (code === 'W_DEPRECATED') {
     const m = message.match(/^(\w+) is deprecated/)
     if (m) return searchToken(source, doc, m[1]) ?? topLine(doc)
   }
-
   return topLine(doc)
 }
 
-/** Search source for a literal string, return range of first match. */
 function searchToken(
   source: string,
   doc: vscode.TextDocument,
@@ -203,37 +243,27 @@ function topLine(doc: vscode.TextDocument): vscode.Range {
   return new vscode.Range(0, 0, 0, doc.lineAt(0).text.length)
 }
 
-/**
- * Try to extract line/column from common error formats:
- *   "Error at line 5, column 12: ..."
- *   "5:12: ..."
- *   "[line 5] ..."
- */
 function extractRange(msg: string, doc: vscode.TextDocument): vscode.Range {
-  // "line N, column M"
   let m = msg.match(/line[: ]+(\d+)[,\s]+col(?:umn)?[: ]+(\d+)/i)
   if (m) {
     const l = Math.max(0, parseInt(m[1]) - 1)
     const c = Math.max(0, parseInt(m[2]) - 1)
     return new vscode.Range(l, c, l, c + 80)
   }
-  // "N:M"
   m = msg.match(/^(\d+):(\d+)/)
   if (m) {
     const l = Math.max(0, parseInt(m[1]) - 1)
     const c = Math.max(0, parseInt(m[2]) - 1)
     return new vscode.Range(l, c, l, c + 80)
   }
-  // "[line N]"
   m = msg.match(/\[line (\d+)\]/i)
   if (m) {
     const l = Math.max(0, parseInt(m[1]) - 1)
     return new vscode.Range(l, 0, l, 200)
   }
-  // Fallback: highlight first line
   return new vscode.Range(0, 0, 0, doc.lineAt(0).text.length)
 }
 
-export function deactivate(): void {
-  // nothing
+export function deactivate(): Promise<void> | undefined {
+  return lspClient?.stop()
 }
