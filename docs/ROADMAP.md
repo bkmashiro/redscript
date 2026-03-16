@@ -417,3 +417,14 @@ if let Some(player) = p {
 ### mc-integration flaky tests
 - `entity query: armor_stands survive peaceful mode` — 依赖服务器 peaceful mode 设置
 - `E2E I: nested if/else boundary` — 偶发，服务器状态依赖
+
+### 设计决策：Timer 实例化策略
+
+**选定方案：编译期静态分配 + 禁止动态创建**
+
+- `Timer::new()` 只能在函数顶层/模块级别调用，不能在循环/条件分支里调用
+- 编译器给每个 `Timer::new()` 静态分配一个唯一 ID（`__timer_0`、`__timer_1`...）
+- 在循环体内调用 `Timer::new()` → 编译错误，提示使用预分配的 Timer 变量
+- 同理适用于 `setTimeout` / `setInterval`
+
+好处：零运行时开销，行为完全可预测，符合 MC 的数据包执行模型。
