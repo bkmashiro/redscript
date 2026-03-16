@@ -17,6 +17,7 @@ export interface EmitOptions {
   namespace: string
   tickFunctions?: string[]
   loadFunctions?: string[]
+  scheduleFunctions?: Array<{ name: string; ticks: number }>
   /** When true, generate a .sourcemap.json sidecar file for each .mcfunction */
   generateSourceMap?: boolean
 }
@@ -29,6 +30,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const { namespace } = options
   const tickFns = options.tickFunctions ?? []
   const loadFns = options.loadFunctions ?? []
+  const scheduleFns = options.scheduleFunctions ?? []
   const objective = module.objective
   const genSourceMap = options.generateSourceMap ?? false
   const files: DatapackFile[] = []
@@ -63,6 +65,14 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
       const lines = emitFunction(fn, namespace, objective)
       files.push({ path: fnPath, content: lines.join('\n') + '\n' })
     }
+  }
+
+  // @schedule wrapper functions: _schedule_xxx → schedule function ns:xxx Nt
+  for (const { name, ticks } of scheduleFns) {
+    files.push({
+      path: `data/${namespace}/function/_schedule_${name}.mcfunction`,
+      content: `schedule function ${namespace}:${name} ${ticks}t\n`,
+    })
   }
 
   // Tag files for tick/load

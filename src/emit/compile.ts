@@ -86,10 +86,11 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Stage 2b: Monomorphize generic functions
     const hir = monomorphize(hirRaw)
 
-    // Extract @tick, @load, and @coroutine functions from HIR (before decorator info is lost)
+    // Extract @tick, @load, @coroutine, and @schedule functions from HIR (before decorator info is lost)
     const tickFunctions: string[] = []
     const loadFunctions: string[] = []
     const coroutineInfos: CoroutineInfo[] = []
+    const scheduleFunctions: Array<{ name: string; ticks: number }> = []
     for (const fn of hir.functions) {
       for (const dec of fn.decorators) {
         if (dec.name === 'tick') tickFunctions.push(fn.name)
@@ -100,6 +101,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
             batch: dec.args?.batch ?? 10,
             onDone: dec.args?.onDone,
           })
+        }
+        if (dec.name === 'schedule') {
+          scheduleFunctions.push({ name: fn.name, ticks: dec.args?.ticks ?? 1 })
         }
       }
     }
@@ -136,7 +140,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     // Stage 7: LIR → .mcfunction
-    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, generateSourceMap })
+    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions, generateSourceMap })
 
     return { files, warnings, success: true as const }
   } catch (err) {

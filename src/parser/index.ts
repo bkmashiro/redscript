@@ -480,6 +480,8 @@ export class Parser {
       const [key, val] = part.split('=').map(s => s.trim())
       if (key === 'rate') {
         args.rate = parseInt(val, 10)
+      } else if (key === 'ticks') {
+        args.ticks = parseInt(val, 10)
       } else if (key === 'batch') {
         args.batch = parseInt(val, 10)
       } else if (key === 'onDone') {

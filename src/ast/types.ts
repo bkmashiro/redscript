@@ -244,7 +244,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'load' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine'
+  name: 'tick' | 'load' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule'
   args?: {
     rate?: number
     eventType?: string
@@ -254,6 +254,7 @@ export interface Decorator {
     team?: string
     batch?: number
     onDone?: string
+    ticks?: number
   }
   /** Raw positional arguments (used by @requires and future generic decorators). */
   rawArgs?: Array<{ kind: 'string'; value: string } | { kind: 'number'; value: number }>
