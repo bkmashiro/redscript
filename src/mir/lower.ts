@@ -26,6 +26,16 @@ export function lowerToMIR(hir: HIRModule): MIRModule {
     structDefs.set(s.name, s.fields.map(f => f.name))
   }
 
+  // Build enum definitions: enumName → variantName → integer value
+  const enumDefs = new Map<string, Map<string, number>>()
+  for (const e of hir.enums) {
+    const variants = new Map<string, number>()
+    for (const v of e.variants) {
+      variants.set(v.name, v.value ?? 0)
+    }
+    enumDefs.set(e.name, variants)
+  }
+
   // Build impl method info: typeName → methodName → { hasSelf }
   const implMethods = new Map<string, Map<string, { hasSelf: boolean }>>()
   for (const ib of hir.implBlocks) {
@@ -53,14 +63,14 @@ export function lowerToMIR(hir: HIRModule): MIRModule {
 
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
     allFunctions.push(fn, ...helpers)
   }
 
   // Lower impl block methods
   for (const ib of hir.implBlocks) {
     for (const m of ib.methods) {
-      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo)
+      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
       allFunctions.push(fn, ...helpers)
     }
   }
@@ -99,6 +109,8 @@ class FnContext {
   readonly fnParamInfo: Map<string, HIRParam[]>
   /** Macro params for the current function being lowered */
   readonly currentMacroParams: Set<string>
+  /** Enum definitions: enumName → variantName → integer value */
+  readonly enumDefs: Map<string, Map<string, number>>
 
   constructor(
     namespace: string,
@@ -107,6 +119,7 @@ class FnContext {
     implMethods: Map<string, Map<string, { hasSelf: boolean }>> = new Map(),
     macroInfo: Map<string, MacroFunctionInfo> = new Map(),
     fnParamInfo: Map<string, HIRParam[]> = new Map(),
+    enumDefs: Map<string, Map<string, number>> = new Map(),
   ) {
     this.namespace = namespace
     this.fnName = fnName
@@ -115,6 +128,7 @@ class FnContext {
     this.macroInfo = macroInfo
     this.fnParamInfo = fnParamInfo
     this.currentMacroParams = macroInfo.get(fnName)?.macroParams ?? new Set()
+    this.enumDefs = enumDefs
     const entry = this.makeBlock('entry')
     this.currentBlock = entry
   }
@@ -186,8 +200,9 @@ function lowerFunction(
   implMethods: Map<string, Map<string, { hasSelf: boolean }>> = new Map(),
   macroInfo: Map<string, MacroFunctionInfo> = new Map(),
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
+  enumDefs: Map<string, Map<string, number>> = new Map(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
-  const ctx = new FnContext(namespace, fn.name, structDefs, implMethods, macroInfo, fnParamInfo)
+  const ctx = new FnContext(namespace, fn.name, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
   const fnMacroInfo = macroInfo.get(fn.name)
 
   // Create temps for parameters
@@ -236,9 +251,10 @@ function lowerImplMethod(
   implMethods: Map<string, Map<string, { hasSelf: boolean }>>,
   macroInfo: Map<string, MacroFunctionInfo> = new Map(),
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
+  enumDefs: Map<string, Map<string, number>> = new Map(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
-  const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo)
+  const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs)
   const fields = structDefs.get(typeName) ?? []
   const hasSelf = method.params.length > 0 && method.params[0].name === 'self'
 
@@ -767,7 +783,21 @@ function lowerExpr(
       return val
     }
 
+    case 'path_expr': {
+      // Enum variant access: Phase::Idle → integer constant
+      const variants = ctx.enumDefs.get(expr.enumName)
+      const value = variants?.get(expr.variant) ?? 0
+      return { kind: 'const', value }
+    }
+
     case 'member': {
+      // Enum variant access via dot syntax: Phase.Idle → integer constant
+      if (expr.obj.kind === 'ident') {
+        const enumVariants = ctx.enumDefs.get(expr.obj.name)
+        if (enumVariants && enumVariants.has(expr.field)) {
+          return { kind: 'const', value: enumVariants.get(expr.field)! }
+        }
+      }
       // Struct field access: v.x → return v's x temp
       if (expr.obj.kind === 'ident') {
         const sv = ctx.structVars.get(expr.obj.name)

@@ -1230,11 +1230,16 @@ export class Parser {
     if (token.kind === 'ident' && this.peek(1).kind === '::') {
       const typeToken = this.advance()
       this.expect('::')
-      const methodToken = this.expect('ident')
-      this.expect('(')
-      const args = this.parseArgs()
-      this.expect(')')
-      return this.withLoc({ kind: 'static_call', type: typeToken.value, method: methodToken.value, args }, typeToken)
+      const memberToken = this.expect('ident')
+      if (this.check('(')) {
+        // Static method call: Type::method(args)
+        this.advance() // consume '('
+        const args = this.parseArgs()
+        this.expect(')')
+        return this.withLoc({ kind: 'static_call', type: typeToken.value, method: memberToken.value, args }, typeToken)
+      }
+      // Enum variant access: Enum::Variant
+      return this.withLoc({ kind: 'path_expr', enumName: typeToken.value, variant: memberToken.value }, typeToken)
     }
 
     if (token.kind === 'ident' && this.peek(1).kind === '=>') {

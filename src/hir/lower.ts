@@ -410,6 +410,9 @@ function lowerExpr(expr: Expr): HIRExpr {
         span: expr.span,
       }
 
+    case 'path_expr':
+      return { kind: 'path_expr', enumName: expr.enumName, variant: expr.variant, span: expr.span }
+
     case 'lambda': {
       const body = Array.isArray(expr.body) ? lowerBlock(expr.body) : lowerExpr(expr.body)
       return {

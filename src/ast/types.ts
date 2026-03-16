@@ -171,6 +171,7 @@ export type Expr =
   | { kind: 'index';      obj: Expr; index: Expr; span?: Span }
   | { kind: 'array_lit';  elements: Expr[]; span?: Span }
   | { kind: 'static_call'; type: string; method: string; args: Expr[]; span?: Span }
+  | { kind: 'path_expr'; enumName: string; variant: string; span?: Span }
   | (LambdaExpr & { span?: Span })
 
 export type LiteralExpr =

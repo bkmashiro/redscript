@@ -84,6 +84,8 @@ export type HIRExpr =
   | { kind: 'call'; fn: string; args: HIRExpr[]; span?: Span }
   | { kind: 'invoke'; callee: HIRExpr; args: HIRExpr[]; span?: Span }
   | { kind: 'static_call'; type: string; method: string; args: HIRExpr[]; span?: Span }
+  // Enum variant path
+  | { kind: 'path_expr'; enumName: string; variant: string; span?: Span }
   // Lambda
   | { kind: 'lambda'; params: LambdaParam[]; returnType?: TypeNode; body: HIRExpr | HIRBlock; span?: Span }
 

@@ -580,6 +580,17 @@ export class TypeChecker {
         this.checkLambdaExpr(expr, expectedType)
         break
 
+      case 'path_expr':
+        if (!this.enums.has(expr.enumName)) {
+          this.report(`Unknown enum '${expr.enumName}'`, expr)
+        } else {
+          const variants = this.enums.get(expr.enumName)!
+          if (!variants.has(expr.variant)) {
+            this.report(`Enum '${expr.enumName}' has no variant '${expr.variant}'`, expr)
+          }
+        }
+        break
+
       case 'blockpos':
         break
 
@@ -968,7 +979,7 @@ export class TypeChecker {
           return this.normalizeType(implMethod.returnType)
         }
         const fn = this.functions.get(expr.fn)
-        return fn?.returnType ?? INT_TYPE
+        return fn ? this.normalizeType(fn.returnType) : INT_TYPE
       }
       case 'static_call': {
         const method = this.implMethods.get(expr.type)?.get(expr.method)
@@ -981,6 +992,11 @@ export class TypeChecker {
         }
         return { kind: 'named', name: 'void' }
       }
+      case 'path_expr':
+        if (this.enums.has(expr.enumName)) {
+          return { kind: 'enum', name: expr.enumName }
+        }
+        return { kind: 'named', name: 'void' }
       case 'member':
         if (expr.obj.kind === 'ident' && this.enums.has(expr.obj.name)) {
           return { kind: 'enum', name: expr.obj.name }
