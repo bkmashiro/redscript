@@ -337,17 +337,33 @@ export interface GlobalDecl {
 }
 
 // ---------------------------------------------------------------------------
+// Import Declarations (Phase 5b module system)
+// ---------------------------------------------------------------------------
+
+export interface ImportDecl {
+  /** The module being imported from, e.g. "math" in `import math::sin` */
+  moduleName: string
+  /** The symbol being imported, or '*' for wildcard */
+  symbol: string   // '*' | identifier
+  span?: Span
+}
+
+// ---------------------------------------------------------------------------
 // Program (Top-Level)
 // ---------------------------------------------------------------------------
 
 export interface Program {
   namespace: string    // Inferred from filename or `namespace mypack;`
+  /** Module name declared with `module <name>;` (undefined if no module decl) */
+  moduleName?: string
   globals: GlobalDecl[]
   declarations: FnDecl[]
   structs: StructDecl[]
   implBlocks: ImplBlock[]
   enums: EnumDecl[]
   consts: ConstDecl[]
+  /** Phase 5b: module imports (`import math::sin;`) */
+  imports: ImportDecl[]
   /** True when the source file declares `module library;`.
    *  Library-mode: all functions are DCE-eligible by default — none are treated
    *  as MC entry points unless they carry @tick / @load / @on / @keep etc. */

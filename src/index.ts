@@ -10,6 +10,8 @@ import { compile } from './emit/compile'
 
 // Re-export v2 compile API
 export { compile, CompileOptions, CompileResult } from './emit/compile'
+export { compileModules } from './emit/modules'
+export type { ModuleInput, CompileModulesOptions, CompileModulesResult } from './emit/modules'
 export { McVersion, parseMcVersion, compareMcVersion, DEFAULT_MC_VERSION } from './types/mc-version'
 export type { DatapackFile } from './emit/index'
 

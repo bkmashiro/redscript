@@ -10,7 +10,7 @@ import type {
   Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, GlobalDecl, LiteralExpr, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Span, Stmt, TypeNode, AssignOp,
   StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr, ImplBlock,
-  CoordComponent, LambdaParam, EntityTypeName
+  CoordComponent, LambdaParam, EntityTypeName, ImportDecl
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ast/types'
 import { DiagnosticError } from '../diagnostics'
@@ -174,7 +174,9 @@ export class Parser {
     const implBlocks: ImplBlock[] = []
     const enums: EnumDecl[] = []
     const consts: ConstDecl[] = []
+    const imports: ImportDecl[] = []
     let isLibrary = false
+    let moduleName: string | undefined
 
     // Check for namespace declaration
     if (this.check('namespace')) {
@@ -184,7 +186,7 @@ export class Parser {
       this.expect(';')
     }
 
-    // Check for module declaration: `module library;`
+    // Check for module declaration: `module library;` or `module <name>;`
     // Library-mode: all functions parsed from this point are marked isLibraryFn=true.
     // When using the `librarySources` compile option, each library source is parsed
     // by its own fresh Parser — so this flag never bleeds into user code.
@@ -194,11 +196,14 @@ export class Parser {
       if (modKind.value === 'library') {
         isLibrary = true
         this.inLibraryMode = true
+      } else {
+        // Named module declaration: `module math;`
+        moduleName = modKind.value
       }
       this.expect(';')
     }
 
-    // Parse struct and function declarations
+    // Parse struct, function, and import declarations
     while (!this.check('eof')) {
       if (this.check('let')) {
         globals.push(this.parseGlobalDecl(true))
@@ -216,12 +221,27 @@ export class Parser {
         this.parseDeclareStub()
       } else if (this.check('export')) {
         declarations.push(this.parseExportedFnDecl())
+      } else if (this.check('ident') && this.peek().value === 'import') {
+        // `import math::sin;` or `import math::*;`
+        this.advance() // consume 'import'
+        const importToken = this.peek()
+        const modName = this.expect('ident').value
+        this.expect('::')
+        let symbol: string
+        if (this.check('*')) {
+          this.advance()
+          symbol = '*'
+        } else {
+          symbol = this.expect('ident').value
+        }
+        this.expect(';')
+        imports.push(this.withLoc({ moduleName: modName, symbol }, importToken))
       } else {
         declarations.push(this.parseFnDecl())
       }
     }
 
-    return { namespace, globals, declarations, structs, implBlocks, enums, consts, isLibrary }
+    return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, isLibrary }
   }
 
   // -------------------------------------------------------------------------
