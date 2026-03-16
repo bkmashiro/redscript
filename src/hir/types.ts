@@ -81,7 +81,7 @@ export type HIRExpr =
   | { kind: 'member'; obj: HIRExpr; field: string; span?: Span }
   | { kind: 'index'; obj: HIRExpr; index: HIRExpr; span?: Span }
   // Calls
-  | { kind: 'call'; fn: string; args: HIRExpr[]; span?: Span }
+  | { kind: 'call'; fn: string; args: HIRExpr[]; typeArgs?: TypeNode[]; span?: Span }
   | { kind: 'invoke'; callee: HIRExpr; args: HIRExpr[]; span?: Span }
   | { kind: 'static_call'; type: string; method: string; args: HIRExpr[]; span?: Span }
   // Enum variant path
@@ -158,6 +158,8 @@ export interface HIRParam {
 
 export interface HIRFunction {
   name: string
+  /** Generic type parameter names, e.g. ['T'] for fn foo<T>(...) */
+  typeParams?: string[]
   params: HIRParam[]
   returnType: TypeNode
   decorators: Decorator[]

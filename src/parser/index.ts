@@ -351,6 +351,18 @@ export class Parser {
 
     const fnToken = this.expect('fn')
     const name = this.expect('ident').value
+
+    // Parse optional generic type parameters: fn max<T>(...)
+    let typeParams: string[] | undefined
+    if (this.check('<')) {
+      this.advance() // consume '<'
+      typeParams = []
+      do {
+        typeParams.push(this.expect('ident').value)
+      } while (this.match(','))
+      this.expect('>')
+    }
+
     this.expect('(')
     const params = this.parseParams(implTypeName)
     this.expect(')')
@@ -363,7 +375,7 @@ export class Parser {
     const body = this.parseBlock()
 
     const fn: import('../ast/types').FnDecl = this.withLoc(
-      { name, params, returnType, decorators: filteredDecorators, body,
+      { name, typeParams, params, returnType, decorators: filteredDecorators, body,
         isLibraryFn: this.inLibraryMode || undefined, isExported },
       fnToken,
     )
@@ -1166,10 +1178,52 @@ export class Parser {
     return ['int_lit', 'float_lit', 'ident', ')', ']'].includes(prev.kind)
   }
 
+  /**
+   * Try to parse `<Type, ...>` as explicit generic type arguments.
+   * Returns the parsed type list if successful, null if this looks like a comparison.
+   * Does NOT consume any tokens if it returns null.
+   */
+  private tryParseTypeArgs(): import('../ast/types').TypeNode[] | null {
+    const saved = this.pos
+    this.advance() // consume '<'
+    const typeArgs: import('../ast/types').TypeNode[] = []
+    try {
+      do {
+        typeArgs.push(this.parseType())
+      } while (this.match(','))
+      if (!this.check('>')) {
+        this.pos = saved
+        return null
+      }
+      this.advance() // consume '>'
+      return typeArgs
+    } catch {
+      this.pos = saved
+      return null
+    }
+  }
+
   private parsePostfixExpr(): Expr {
     let expr = this.parsePrimaryExpr()
 
     while (true) {
+      // Generic call: ident<Type>(args) — check before regular '(' handling
+      if (expr.kind === 'ident' && this.check('<')) {
+        const typeArgs = this.tryParseTypeArgs()
+        if (typeArgs !== null && this.check('(')) {
+          const openParenToken = this.peek()
+          this.advance() // consume '('
+          const args = this.parseArgs()
+          this.expect(')')
+          expr = this.withLoc(
+            { kind: 'call', fn: expr.name, args, typeArgs },
+            this.getLocToken(expr) ?? openParenToken
+          )
+          continue
+        }
+        // Not a generic call — fall through to normal expression handling
+      }
+
       // Function call
       if (this.match('(')) {
         const openParenToken = this.tokens[this.pos - 1]

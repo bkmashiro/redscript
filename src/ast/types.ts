@@ -164,7 +164,7 @@ export type Expr =
   | { kind: 'is_check';   expr: Expr; entityType: EntityTypeName; span?: Span }
   | { kind: 'unary';      op: '!' | '-'; operand: Expr; span?: Span }
   | { kind: 'assign';     target: string; op: AssignOp; value: Expr; span?: Span }
-  | { kind: 'call';       fn: string; args: Expr[]; span?: Span }
+  | { kind: 'call';       fn: string; args: Expr[]; typeArgs?: TypeNode[]; span?: Span }
   | { kind: 'invoke';     callee: Expr; args: Expr[]; span?: Span }
   | { kind: 'member';     obj: Expr; field: string; span?: Span }
   | { kind: 'struct_lit'; fields: { name: string; value: Expr }[]; span?: Span }
@@ -277,6 +277,8 @@ export interface FnDecl {
   /** True when declared with `export fn` or `@keep fn` — survives DCE. */
   isExported?: boolean
   name: string
+  /** Generic type parameter names, e.g. ['T'] for fn foo<T>(...) */
+  typeParams?: string[]
   params: Param[]
   returnType: TypeNode
   decorators: Decorator[]
