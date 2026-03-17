@@ -316,6 +316,8 @@ import "stdlib/list"      // sort3, min/max/avg, weighted utilities
 import "stdlib/geometry"  // AABB/sphere contains, parabola physics, angle helpers
 import "stdlib/signal"    // normal/exponential distributions, bernoulli, weighted choice
 import "stdlib/bigint"    // 96-bit base-10000 arithmetic (add/sub/mul/div/cmp)
+import "stdlib/easing"    // 12 easing functions: quad/cubic/sine/bounce/back/smooth
+import "stdlib/noise"     // value noise, fractal Brownian motion, terrain height
 import "stdlib/combat"    // damage, kill-check helpers
 import "stdlib/player"    // health, alive check, range
 import "stdlib/cooldown"  // per-player cooldown tracking
