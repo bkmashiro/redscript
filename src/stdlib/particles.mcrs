@@ -50,3 +50,72 @@ fn totem_at(x: int, y: int, z: int) {
 fn end_sparkles_at(x: int, y: int, z: int) {
     particle("end_rod", x, y, z);
 }
+
+// ─── Particle graph drawing ───────────────────────────────────────────────────
+//
+// Draw 2D/3D function graphs using particles.
+// All positions: block coordinates × 100 (e.g. 100 = 1 block)
+//
+// Usage pattern (loop over samples and draw each point):
+//   let step: int = 5000;  // 0.5 block step
+//   let t: int = -100000;  // from x = -10.0
+//   while (t <= 100000) {
+//       let y: int = sin_fixed(t / 1000);  // y = sin(x) in degrees
+//       particle_at_fx(t, y, 0, "minecraft:flame");
+//       t = t + step;
+//   }
+
+// particle_at_fx(x_fx, y_fx, z_fx, particle): spawn particle at fixed-point position
+// Coordinates: ×100 (1 block = 100 units)
+fn particle_at_fx(x_fx: int, y_fx: int, z_fx: int, particle: string) {
+    let bx: int = x_fx / 100;
+    let by: int = y_fx / 100;
+    let bz: int = z_fx / 100;
+    raw("particle {particle} {bx}.{x_fx%100} {by}.{y_fx%100} {bz}.{z_fx%100} 0 0 0 0 1 force");
+}
+
+// draw_line_2d(x0, y0, x1, y1, steps, z, particle):
+// Draw a straight line from (x0,y0) to (x1,y1) with given number of steps
+// All coords ×100
+fn draw_line_2d(x0: int, y0: int, x1: int, y1: int, steps: int, z: int, particle: string) {
+    let i: int = 0;
+    while (i <= steps) {
+        let x: int = x0 + (x1 - x0) * i / steps;
+        let y: int = y0 + (y1 - y0) * i / steps;
+        particle_dot(x / 100, y / 100, z / 100, particle);
+        i = i + 1;
+    }
+}
+
+// draw_circle(cx, cy, cz, r, steps, particle):
+// Draw a circle in the XZ plane
+// cx,cy,cz: center in blocks, r: radius ×100, steps: number of particles
+fn draw_circle(cx: int, cy: int, cz: int, r: int, steps: int, particle: string) {
+    let i: int = 0;
+    while (i < steps) {
+        let angle: int = i * 360 / steps;
+        let x: int = cx + cos_fixed(angle) * r / 1000;
+        let z: int = cz + sin_fixed(angle) * r / 1000;
+        particle_dot(x, cy, z, particle);
+        i = i + 1;
+    }
+}
+
+// draw_helix(cx, cy_start, cz, r, height, rotations, steps, particle):
+// Draw a helix spiral
+fn draw_helix(cx: int, cy_start: int, cz: int, r: int, height: int, rotations: int, steps: int, particle: string) {
+    let i: int = 0;
+    while (i < steps) {
+        let angle: int = i * 360 * rotations / steps;
+        let x: int = cx + cos_fixed(angle) * r / 1000;
+        let z: int = cz + sin_fixed(angle) * r / 1000;
+        let y: int = cy_start + height * i / steps;
+        particle_dot(x, y, z, particle);
+        i = i + 1;
+    }
+}
+
+// particle_dot(x, y, z, particle): helper — single particle at integer block coords
+fn particle_dot(x: int, y: int, z: int, particle: string) {
+    raw("particle {particle} {x} {y} {z} 0 0 0 0 1 force");
+}

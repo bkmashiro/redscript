@@ -318,6 +318,8 @@ import "stdlib/signal"    // normal/exponential distributions, bernoulli, weight
 import "stdlib/bigint"    // 96-bit base-10000 arithmetic (add/sub/mul/div/cmp)
 import "stdlib/easing"    // 12 easing functions: quad/cubic/sine/bounce/back/smooth
 import "stdlib/noise"     // value noise, fractal Brownian motion, terrain height
+import "stdlib/calculus"  // numerical differentiation, trapezoid/Simpson integration, curve length, online statistics
+import "stdlib/matrix"    // 2D/3D rotation, Display Entity quaternion helpers
 import "stdlib/combat"    // damage, kill-check helpers
 import "stdlib/player"    // health, alive check, range
 import "stdlib/cooldown"  // per-player cooldown tracking
