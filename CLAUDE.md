@@ -6,10 +6,16 @@ RedScript compiles to Minecraft Java Edition datapacks (`.mcfunction`).
 ## Build & Test
 
 ```bash
-npm run build && npm test   # always run together; tests must be green before commit
+rtk npm run build && rtk test npm test   # always run together; tests must be green before commit
 ```
 
-Current baseline: **1020/1020 tests**.
+Use `rtk` prefix for all shell commands to minimize token usage:
+- `rtk npm run build` — compact build output
+- `rtk test npm test` — only show failing tests
+- `rtk git log` / `rtk git diff` — compact git output
+- `rtk tsc` — grouped TypeScript errors
+
+Current baseline: **1152/1152 tests**.
 
 ## Rules
 
