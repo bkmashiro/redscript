@@ -18,7 +18,7 @@ export type TokenKind =
   | 'return' | 'break' | 'continue' | 'as' | 'at' | 'in' | 'is' | 'struct' | 'impl' | 'enum' | 'trigger' | 'namespace' | 'module'
   | 'execute' | 'run' | 'unless' | 'declare' | 'export'
   // Types
-  | 'int' | 'bool' | 'float' | 'string' | 'void'
+  | 'int' | 'bool' | 'float' | 'fixed' | 'string' | 'void'
   | 'BlockPos'
   // Boolean literals
   | 'true' | 'false'
@@ -95,6 +95,7 @@ const KEYWORDS: Record<string, TokenKind> = {
   int: 'int',
   bool: 'bool',
   float: 'float',
+  fixed: 'fixed',
   string: 'string',
   void: 'void',
   BlockPos: 'BlockPos',

@@ -102,22 +102,22 @@ fn test() {
     })
   })
 
-  describe('int/float implicit conversion checks', () => {
-    it('detects int assigned to float variable', () => {
-      // int literal assigned to float — different types
+  describe('int/fixed implicit conversion checks', () => {
+    it('detects int assigned to fixed variable', () => {
+      // int literal assigned to fixed — different types
       const errors = typeCheck(`
 fn test() {
-    let x: float = 5;
+    let x: fixed = 5;
 }
 `)
       expect(errors.length).toBeGreaterThan(0)
-      expect(errors[0].message).toContain('cannot implicitly convert int to float')
-      expect(errors[0].message).toContain('as float')
+      expect(errors[0].message).toContain('cannot implicitly convert int to fixed')
+      expect(errors[0].message).toContain('as fixed')
     })
 
-    it('detects float assigned to int variable', () => {
+    it('detects fixed assigned to int variable', () => {
       const errors = typeCheck(`
-fn get_f() -> float {
+fn get_f() -> fixed {
     return 3.14;
 }
 fn test() {
@@ -128,25 +128,25 @@ fn test() {
       expect(errors[0].message).toContain('cannot implicitly convert')
     })
 
-    it('detects int/float return type mismatch', () => {
+    it('detects int/fixed return type mismatch', () => {
       const errors = typeCheck(`
-fn get_float() -> float {
+fn get_fixed() -> fixed {
     return 5;
 }
 `)
       expect(errors.length).toBeGreaterThan(0)
-      expect(errors[0].message).toContain('cannot implicitly convert int to float')
-      expect(errors[0].message).toContain('as float')
+      expect(errors[0].message).toContain('cannot implicitly convert int to fixed')
+      expect(errors[0].message).toContain('as fixed')
     })
 
-    it('detects float/int return type mismatch', () => {
+    it('detects fixed/int return type mismatch', () => {
       const errors = typeCheck(`
 fn get_int() -> int {
     return 3.14;
 }
 `)
       expect(errors.length).toBeGreaterThan(0)
-      expect(errors[0].message).toContain('cannot implicitly convert float to int')
+      expect(errors[0].message).toContain('cannot implicitly convert fixed to int')
       expect(errors[0].message).toContain('as int')
     })
 
@@ -159,29 +159,29 @@ fn test() {
       expect(errors).toHaveLength(0)
     })
 
-    it('allows float assigned to float variable', () => {
+    it('allows fixed assigned to fixed variable', () => {
       const errors = typeCheck(`
-fn get_f() -> float {
+fn get_f() -> fixed {
     return 3.14;
 }
 fn test() {
-    let x: float = get_f();
+    let x: fixed = get_f();
 }
 `)
       expect(errors).toHaveLength(0)
     })
 
-    it('blocks compilation on int→float mismatch', () => {
+    it('blocks compilation on int→fixed mismatch', () => {
       expect(() => compileStrict(`
-fn get_float() -> float {
+fn get_fixed() -> fixed {
     return 5;
 }
 `)).toThrow()
     })
 
-    it('int→float mismatch demoted to warning in lenient mode', () => {
+    it('int→fixed mismatch demoted to warning in lenient mode', () => {
       const result = compileLenient(`
-fn get_float() -> float {
+fn get_fixed() -> fixed {
     return 5;
 }
 `)

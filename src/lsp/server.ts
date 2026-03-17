@@ -227,7 +227,7 @@ const KEYWORD_COMPLETIONS: CompletionItem[] = [
 }))
 
 const TYPE_COMPLETIONS: CompletionItem[] = [
-  'int', 'bool', 'float', 'string', 'void', 'BlockPos', 'byte', 'short', 'long', 'double',
+  'int', 'bool', 'fixed', 'float', 'string', 'void', 'BlockPos', 'byte', 'short', 'long', 'double',
   'entity', 'Player', 'Mob', 'HostileMob', 'PassiveMob',
   'Zombie', 'Skeleton', 'Creeper', 'Spider', 'Enderman',
 ].map(t => ({

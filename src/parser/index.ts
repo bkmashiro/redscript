@@ -81,6 +81,8 @@ export class Parser {
    *  `librarySources` compile option, each source is parsed by its own fresh
    *  Parser instance, so this flag never bleeds into user code. */
   private inLibraryMode: boolean = false
+  /** Warnings accumulated during parsing (e.g. deprecated keyword usage). */
+  readonly warnings: string[] = []
 
   constructor(tokens: Token[], source?: string, filePath?: string) {
     this.tokens = tokens
@@ -327,7 +329,7 @@ export class Parser {
     const inferredType: TypeNode = type ?? (
       value.kind === 'str_lit' ? { kind: 'named', name: 'string' } :
       value.kind === 'bool_lit' ? { kind: 'named', name: 'bool' } :
-      value.kind === 'float_lit' ? { kind: 'named', name: 'float' } :
+      value.kind === 'float_lit' ? { kind: 'named', name: 'fixed' } :
       { kind: 'named', name: 'int' }
     )
     return this.withLoc({ name, type: inferredType, value }, constToken)
@@ -570,8 +572,15 @@ export class Parser {
       return { kind: 'tuple', elements }
     }
 
-    if (token.kind === 'int' || token.kind === 'bool' ||
-        token.kind === 'float' || token.kind === 'string' || token.kind === 'void' ||
+    if (token.kind === 'float') {
+      this.advance()
+      const filePart = this.filePath ? `${this.filePath}:` : ''
+      this.warnings.push(
+        `[DeprecatedType] ${filePart}line ${token.line}, col ${token.col}: 'float' is deprecated, use 'fixed' instead (×10000 fixed-point)`
+      )
+      type = { kind: 'named', name: 'fixed' }
+    } else if (token.kind === 'int' || token.kind === 'bool' ||
+        token.kind === 'fixed' || token.kind === 'string' || token.kind === 'void' ||
         token.kind === 'BlockPos') {
       this.advance()
       type = { kind: 'named', name: token.kind }
@@ -1873,6 +1882,7 @@ export class Parser {
       token.kind === 'int' ||
       token.kind === 'bool' ||
       token.kind === 'float' ||
+      token.kind === 'fixed' ||
       token.kind === 'string' ||
       token.kind === 'void' ||
       token.kind === 'BlockPos' ||

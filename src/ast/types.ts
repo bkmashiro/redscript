@@ -27,7 +27,7 @@ export interface Span {
 // Type Nodes
 // ---------------------------------------------------------------------------
 
-export type PrimitiveType = 'int' | 'bool' | 'float' | 'string' | 'void' | 'BlockPos' | 'byte' | 'short' | 'long' | 'double' | 'format_string'
+export type PrimitiveType = 'int' | 'bool' | 'float' | 'fixed' | 'string' | 'void' | 'BlockPos' | 'byte' | 'short' | 'long' | 'double' | 'format_string'
 
 // Entity type hierarchy
 export type EntityTypeName =

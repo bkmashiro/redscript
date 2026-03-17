@@ -131,10 +131,10 @@ describe('e2e: macro call site generation', () => {
 // Float macro params (local coords)
 // ---------------------------------------------------------------------------
 
-describe('e2e: float macro params with local coords', () => {
-  test('float params in ^coord positions produce macro function', () => {
+describe('e2e: fixed macro params with local coords', () => {
+  test('fixed params in ^coord positions produce macro function', () => {
     const source = `
-      fn draw_pt(px: float, py: float) {
+      fn draw_pt(px: fixed, py: fixed) {
         particle("minecraft:end_rod", ^px, ^py, ^5, 0.02, 0.02, 0.02, 0.0, 10);
       }
     `
@@ -145,9 +145,9 @@ describe('e2e: float macro params with local coords', () => {
     expect(fn).toContain('$particle minecraft:end_rod ^$(px) ^$(py) ^5')
   })
 
-  test('float macro call site uses double 0.01 scale for NBT storage', () => {
+  test('fixed macro call site uses double 0.0001 scale for NBT storage', () => {
     const source = `
-      fn draw_pt(px: float, py: float) {
+      fn draw_pt(px: fixed, py: fixed) {
         particle("minecraft:end_rod", ^px, ^py, ^5, 0.02, 0.02, 0.02, 0.0, 10);
       }
 
@@ -159,9 +159,9 @@ describe('e2e: float macro params with local coords', () => {
     const callerFn = getFile(result.files, 'caller.mcfunction')
     expect(callerFn).toBeDefined()
 
-    // Should store to NBT with double type and 0.01 scale
+    // Should store to NBT with double type and 0.0001 scale
     expect(callerFn).toContain('rs:macro_args')
-    expect(callerFn).toContain('double 0.01')
+    expect(callerFn).toContain('double 0.0001')
     expect(callerFn).toContain('with storage rs:macro_args')
   })
 })

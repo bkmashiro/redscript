@@ -138,7 +138,7 @@ class FnContext {
   readonly timerCounter: { count: number; timerId: number }
   /** Tracks temps whose values are known compile-time constants (for Timer static ID propagation) */
   readonly constTemps = new Map<Temp, number>()
-  /** Tracks temps that hold float (×1000 fixed-point) values — for mul/div scale correction */
+  /** Tracks temps that hold fixed (×10000 fixed-point) values — for mul/div scale correction */
   readonly floatTemps = new Set<Temp>()
   /** HIR function definitions for array-arg monomorphization */
   hirFunctions: Map<string, HIRFunction> = new Map()
@@ -540,8 +540,8 @@ function lowerStmt(
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'copy', dst: t, src: valOp })
         scope.set(stmt.name, t)
-        // Track float-typed temps for mul/div scale correction
-        if (stmt.type?.kind === 'named' && stmt.type.name === 'float') {
+        // Track fixed-typed temps for mul/div scale correction
+        if (stmt.type?.kind === 'named' && (stmt.type.name === 'fixed' || stmt.type.name === 'float')) {
           ctx.floatTemps.add(t)
         }
       }
@@ -962,8 +962,8 @@ function lowerExpr(
       return { kind: 'const', value: expr.value }
 
     case 'float_lit':
-      // float is ×1000 fixed-point in RedScript
-      return { kind: 'const', value: Math.round(expr.value * 1000) }
+      // fixed is ×10000 fixed-point in RedScript
+      return { kind: 'const', value: Math.round(expr.value * 10000) }
 
     case 'byte_lit':
     case 'short_lit':
@@ -1041,18 +1041,18 @@ function lowerExpr(
         const isFloatLeft = left.kind === 'temp' && ctx.floatTemps.has(left.name)
         const isFloatRight = right.kind === 'temp' && ctx.floatTemps.has(right.name)
         if (expr.op === '*' && isFloatLeft && isFloatRight) {
-          // float * float: result is ×1000000, divide by 1000 to restore ×1000 scale
+          // fixed * fixed: result is ×100000000, divide by 10000 to restore ×10000 scale
           ctx.emit({ kind: 'mul', dst: t, a: left, b: right })
           const scaleTemp = ctx.freshTemp()
-          ctx.emit({ kind: 'const', dst: scaleTemp, value: 1000 })
+          ctx.emit({ kind: 'const', dst: scaleTemp, value: 10000 })
           const corrected = ctx.freshTemp()
           ctx.emit({ kind: 'div', dst: corrected, a: { kind: 'temp', name: t }, b: { kind: 'temp', name: scaleTemp } })
           ctx.floatTemps.add(corrected)
           return { kind: 'temp', name: corrected }
         } else if (expr.op === '/' && isFloatLeft && isFloatRight) {
-          // float / float: pre-multiply dividend by 1000 to restore ×1000 scale
+          // fixed / fixed: pre-multiply dividend by 10000 to restore ×10000 scale
           const scaleTemp = ctx.freshTemp()
-          ctx.emit({ kind: 'const', dst: scaleTemp, value: 1000 })
+          ctx.emit({ kind: 'const', dst: scaleTemp, value: 10000 })
           const scaled = ctx.freshTemp()
           ctx.emit({ kind: 'mul', dst: scaled, a: left, b: { kind: 'temp', name: scaleTemp } })
           ctx.emit({ kind: 'div', dst: t, a: { kind: 'temp', name: scaled }, b: right })
@@ -1372,11 +1372,12 @@ function lowerExpr(
           if (targetMacro.macroParams.has(paramName)) {
             const paramTypeName = targetMacro.paramTypes.get(paramName) ?? 'int'
             const isFloat = paramTypeName === 'float'
+            const isFixed = paramTypeName === 'fixed'
             macroArgs.push({
               name: paramName,
               value: args[i],
-              type: isFloat ? 'double' : 'int',
-              scale: isFloat ? 0.01 : 1,
+              type: (isFloat || isFixed) ? 'double' : 'int',
+              scale: isFloat ? 0.01 : isFixed ? 0.0001 : 1,
             })
           }
         }

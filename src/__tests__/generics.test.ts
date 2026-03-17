@@ -127,13 +127,13 @@ describe('Generics: Monomorphization', () => {
         return b;
       }
       fn use_int(): int { return max<int>(3, 5); }
-      fn use_float(): float { return max<float>(1.0, 2.0); }
+      fn use_fixed(): fixed { return max<fixed>(1.0, 2.0); }
     `
     const hir2 = hirOf(source2)
     const mono2 = monomorphize(hir2)
     const names2 = mono2.functions.map(f => f.name)
     expect(names2).toContain('max_int')
-    expect(names2).toContain('max_float')
+    expect(names2).toContain('max_fixed')
   })
 
   it('does not duplicate specializations (caching works)', () => {
@@ -258,11 +258,11 @@ describe('Generics: E2E compilation', () => {
         return b;
       }
       fn use_int(): int { return max<int>(3, 5); }
-      fn use_float(): float { return max<float>(1.0, 2.0); }
+      fn use_fixed(): fixed { return max<fixed>(1.0, 2.0); }
     `
     const result = compile(source, { namespace: 'test' })
     expect(getFile(result.files, 'max_int.mcfunction')).toBeDefined()
-    expect(getFile(result.files, 'max_float.mcfunction')).toBeDefined()
+    expect(getFile(result.files, 'max_fixed.mcfunction')).toBeDefined()
   })
 
   test('type inference: max(3, 5) infers T=int and generates max_int', () => {

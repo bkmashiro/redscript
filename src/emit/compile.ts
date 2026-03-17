@@ -58,12 +58,15 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const tokens = lexer.tokenize()
   const parser = new Parser(tokens, processedSource, filePath)
   const ast = parser.parse(namespace)
+  warnings.push(...parser.warnings)
 
   // Merge library imports (files with `module library;`) into AST
   for (const li of preprocessed.libraryImports ?? []) {
     const libPreprocessed = preprocessSourceWithMetadata(li.source, { filePath: li.filePath })
     const libTokens = new Lexer(libPreprocessed.source, li.filePath).tokenize()
-    const libAst = new Parser(libTokens, libPreprocessed.source, li.filePath).parse(namespace)
+    const libParser = new Parser(libTokens, libPreprocessed.source, li.filePath)
+    const libAst = libParser.parse(namespace)
+    warnings.push(...libParser.warnings)
     for (const fn of libAst.declarations) fn.isLibraryFn = true
     ast.declarations.push(...libAst.declarations)
     ast.structs.push(...libAst.structs)

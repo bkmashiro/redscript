@@ -395,7 +395,7 @@ class Monomorphizer {
   private inferExprType(expr: HIRExpr, ctx: RewriteCtx): TypeNode | null {
     switch (expr.kind) {
       case 'int_lit':    return { kind: 'named', name: 'int' }
-      case 'float_lit':  return { kind: 'named', name: 'float' }
+      case 'float_lit':  return { kind: 'named', name: 'fixed' }
       case 'bool_lit':   return { kind: 'named', name: 'bool' }
       case 'str_lit':    return { kind: 'named', name: 'string' }
       case 'byte_lit':   return { kind: 'named', name: 'byte' }

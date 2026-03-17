@@ -61,7 +61,7 @@ function toTypeNode(typeName: string): TypeNode {
     return { kind: 'entity', entityType: 'Player' }
   }
 
-  if (typeName === 'string' || typeName === 'int' || typeName === 'bool' || typeName === 'float' || typeName === 'void' || typeName === 'BlockPos' || typeName === 'byte' || typeName === 'short' || typeName === 'long' || typeName === 'double') {
+  if (typeName === 'string' || typeName === 'int' || typeName === 'bool' || typeName === 'float' || typeName === 'fixed' || typeName === 'void' || typeName === 'BlockPos' || typeName === 'byte' || typeName === 'short' || typeName === 'long' || typeName === 'double') {
     return { kind: 'named', name: typeName }
   }
 

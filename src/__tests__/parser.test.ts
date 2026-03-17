@@ -114,12 +114,12 @@ describe('Parser', () => {
 
   describe('types', () => {
     it('parses primitive types', () => {
-      const program = parse('fn f(a: int, b: bool, c: float, d: string) {}')
+      const program = parse('fn f(a: int, b: bool, c: fixed, d: string) {}')
       const params = program.declarations[0].params
       expect(params.map(p => p.type)).toEqual([
         { kind: 'named', name: 'int' },
         { kind: 'named', name: 'bool' },
-        { kind: 'named', name: 'float' },
+        { kind: 'named', name: 'fixed' },
         { kind: 'named', name: 'string' },
       ])
     })

@@ -926,7 +926,7 @@ export class TypeChecker {
           // Entity marker (void) - allow all members
           if (varType.name !== 'void') {
             // Only warn for primitive types
-            if (['int', 'bool', 'float', 'string', 'byte', 'short', 'long', 'double'].includes(varType.name)) {
+            if (['int', 'bool', 'float', 'fixed', 'string', 'byte', 'short', 'long', 'double'].includes(varType.name)) {
               this.report(
                 `Cannot access member '${expr.field}' on ${this.typeToString(varType)}`,
                 expr
@@ -1062,7 +1062,7 @@ export class TypeChecker {
       case 'int_lit':
         return { kind: 'named', name: 'int' }
       case 'float_lit':
-        return { kind: 'named', name: 'float' }
+        return { kind: 'named', name: 'fixed' }
       case 'byte_lit':
         return { kind: 'named', name: 'byte' }
       case 'short_lit':
@@ -1328,8 +1328,11 @@ export class TypeChecker {
     if (expected.kind !== 'named' || actual.kind !== 'named') return false
     const numericPairs = [
       ['int', 'float'], ['float', 'int'],
+      ['int', 'fixed'], ['fixed', 'int'],
       ['int', 'double'], ['double', 'int'],
       ['float', 'double'], ['double', 'float'],
+      ['fixed', 'double'], ['double', 'fixed'],
+      ['float', 'fixed'], ['fixed', 'float'],
     ]
     return numericPairs.some(([e, a]) => expected.name === e && actual.name === a)
   }
@@ -1363,10 +1366,13 @@ export class TypeChecker {
       // void matches anything (for inferred types)
       if (actual.name === 'void') return true
       if (expected.name === actual.name) return true
-      // int→float/double implicit promotion in function calls (not for let/return — handled separately)
+      // int→float/double/fixed implicit promotion in function calls (not for let/return — handled separately)
       const numericPromotion = [
         ['int', 'float'], ['int', 'double'], ['float', 'double'],
         ['float', 'int'], ['double', 'int'], ['double', 'float'],
+        ['int', 'fixed'], ['fixed', 'int'],
+        ['float', 'fixed'], ['fixed', 'float'],
+        ['fixed', 'double'], ['double', 'fixed'],
       ]
       if (numericPromotion.some(([e, a]) => expected.name === e && actual.name === a)) return true
       return false
