@@ -60,50 +60,37 @@ Last updated: 2026-03-17
 ## Up Next 📋
 
 ### P1 — Docs
-- [ ] **docs 网站更新** — v2.2.0 之后没更新，v2.5.0 的新 stdlib 模块全没有文档
-  - easing / noise / physics / matrix / signal / advanced / bigint (new API)
-  - 编译器新特性：coroutine、module system、tuner
+- [ ] **docs 网站更新** `status: todo` `priority: p1`
+  - easing / noise / physics / matrix / signal / advanced / bigint / parabola / quaternion / bezier_n
+  - 编译器新特性：coroutine、module system、double 类型
   - 每个 stdlib 函数加 usage example
 
 ### P2 — Stdlib 扩充
-- [ ] **bigint 全乘法** — `bigint_mul(a, b, result, len)` 任意位数组乘法
-  - 目前只有 `bigint_mul_small`（乘小整数）
-  - kaer 有无限位数组乘法，是 RedScript 最大的 bigint 缺口
-- [ ] **抛物线弹道** (`parabola.mcrs`)
-  - `parabola_v0_x/y/z(dx, dy, dz, ticks)` — 根据目标位移和时间算初速度
-  - `parabola_pos_x/y/z(v0x, v0y, ticks)` — 给定时间算位置
-  - kaer 有完整实现，MC 游戏开发高频需求
-- [ ] **N 阶贝塞尔** (`advanced.mcrs` 扩展)
-  - 目前只有 bezier_quad (2次) 和 bezier_cubic (3次)
-  - 加 bezier_quartic (4次) + 通用 N 阶（De Casteljau 递归，有命令数限制）
-- [ ] **统计分布扩充** (`signal.mcrs`)
-  - Gamma 分布 / 负二项分布 / 超几何分布
-  - kaer 全有，RedScript 差这几个
+- [x] **bigint 全乘法** `status: done` — `bigint_mul` / `bigint_sq` 已实现
+- [x] **抛物线弹道** `status: done` — `parabola.mcrs` 14个测试通过
+- [x] **N 阶贝塞尔** `status: done` — `bezier_quartic` / `bezier_n` / `bezier_n_safe` 已实现
+- [ ] **统计分布扩充** `status: todo` `priority: p2`
+  - Gamma 分布 / 负二项分布 / 超几何分布（signal.mcrs 扩展）
 
-### P3 — 编译器扩展
-- [ ] **NBT double 运算支持**
-  - `execute store result storage xxx double <scale>` codegen
-  - 解锁高精度浮点（突破 int32 上限）
-  - 需要新的 HIR/MIR 类型系统扩展（`double` 类型）
-  - 工作量大，但是高精度 ln/exp/sin/cos 的前提
-- [ ] **高精度 ln (`ln_hp`)**
-  - 依赖 NBT double 支持
-  - 用 Remez 7-系数多项式（L1~L7），误差可达 2^-58.45 级别
-  - kaer 的差距最大的一块
+### P3 — 编译器 / Double 运算
+- [x] **double 类型基础** `status: done` — NBT storage rs:d，`as` cast，参数传递 NBT 直拷
+- [x] **float arithmetic lint** `status: done` — `[FloatArithmetic]` warning
+- [ ] **double_mul_fixed 真正 double 精度** `status: in-progress` `priority: p3`
+  - 函数宏 trick：execute store + $(scale) 动态注入
+- [ ] **double_add / double_sub** `status: todo` `priority: p3`
+  - loot spawn 无限坐标 trick
+- [ ] **compiler intrinsic: double + double → double_add** `status: todo` `priority: p3`
+  - lower.ts BinaryExpr(double, +, double) 自动降级
+- [ ] **高精度 ln_hp** `status: todo` `priority: p3`
+  - 依赖 double 运算链路打通
+  - Remez 7-系数多项式，误差 2^-58 级别
 
 ### P4 — 游戏工具
-- [ ] **几何选区** — 圆锥/扇形/圆柱 entity selector helper
-- [ ] **RGB ↔ HSL 转换** (`color.mcrs` 扩展)
-- [ ] **太阳角度** (`world.mcrs` 扩展) — 根据 daytime 计算太阳方位
-- [ ] **math_hp.mcrs MC integration 测试** — 需要 MC server，有 marker entity
+- [ ] **几何选区** `status: todo` `priority: p4` — 圆锥/扇形/圆柱 entity selector helper
+- [ ] **RGB ↔ HSL 转换** `status: todo` `priority: p4` — color.mcrs 扩展
+- [ ] **太阳角度** `status: todo` `priority: p4` — world.mcrs 扩展
+- [ ] **math_hp MC integration 测试** `status: todo` `priority: p4` — 需要 MC server
 
-### Type System Design Decisions
-
-### Fixed-point vs Float
-- `fixed` = ×10000 scoreboard integer (renamed from `float`; `float` is deprecated alias)
-- `double` = NBT IEEE 754 (future, P3)
-- No "fake float" — names are honest
-- All stdlib functions converge to ×10000 scale (v3.0 migration)
 
 ---
 
