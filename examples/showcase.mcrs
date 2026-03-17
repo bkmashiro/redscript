@@ -195,69 +195,47 @@ fn _tick_math() {
 // ── Phase 2: BigInt ───────────────────────────────────────────────────────
 
 fn _dump_bigint_phase() {
-    _section("BigInt — 32-Digit Arbitrary Precision");
+    _section("BigInt — Arbitrary Precision (base-10000 arrays)");
 
-    say("§eFibonacci sequence (BigInt, base-10000 limbs):");
+    say("§eBigInt add: [9999,9999] + [0,1] = [1,0,0]");
+    // 9999_9999 + 1 = 1_0000_0000 (overflow into next chunk)
+    let a: int[] = [9999, 9999];
+    let b: int[] = [0, 1];
+    let r: int[] = [0, 0];
+    let carry: int = bigint_add(a, b, r, 2);
+    say(f"  carry={carry} result=[{r[0]},{r[1]}]  [expect carry=1 result=[0,0]]");
 
-    // Small Fibonacci — fits in single limb
-    let i: int = 0;
-    while (i <= 20) {
-        bigint_fib(i);
-        let v: int = bigint_get_a(0);
-        say(f"  F({i}) = {v}");
-        i = i + 5;
-    }
+    say("§eBigInt sub: [1,0] - [0,1] = [0,9999]");
+    // 1_0000 - 1 = 9999
+    let c: int[] = [1, 0];
+    let d: int[] = [0, 1];
+    let s: int[] = [0, 0];
+    bigint_sub(c, d, s, 2);
+    say(f"  result=[{s[0]},{s[1]}]  [expect [0,9999]]");
 
-    // F(50) = 12,586,269,025 (3 limbs)
-    bigint_fib(50);
-    let f50_2: int = bigint_get_a(2);
-    let f50_1: int = bigint_get_a(1);
-    let f50_0: int = bigint_get_a(0);
-    say(f"  F(50) = {f50_2}_{f50_1}_{f50_0}  [= 12,586,269,025]");
+    say("§eBigInt mul_small: [1,2345] × 3");
+    // 1_2345 × 3 = 3_7035
+    let e: int[] = [1, 2345];
+    let f: int[] = [0, 0];
+    bigint_mul_small(e, 3, f, 2);
+    say(f"  result=[{f[0]},{f[1]}]  [expect [3,7035]]");
 
-    // F(100) = 354,224,848,179,261,915,075 (6 limbs)
-    bigint_fib(100);
-    let f100_5: int = bigint_get_a(5);
-    let f100_4: int = bigint_get_a(4);
-    let f100_3: int = bigint_get_a(3);
-    let f100_2: int = bigint_get_a(2);
-    let f100_1: int = bigint_get_a(1);
-    let f100_0: int = bigint_get_a(0);
-    say(f"  F(100)= {f100_5}_{f100_4}_{f100_3}_{f100_2}_{f100_1}_{f100_0}");
-    say(f"  [= 354,224,848,179,261,915,075]");
-
-    // BigInt multiplication: 999999999 × 999999999
-    say("§eBigInt Multiply:");
-    bigint_init();
-    bigint_from_int_a(999999999);
-    bigint_from_int_b(999999999);
-    bigint_mul();
-    let m2: int = bigint_get_c(2);
-    let m1: int = bigint_get_c(1);
-    let m0: int = bigint_get_c(0);
-    say(f"  999999999² = {m2}_{m1}_{m0}");
-    say(f"  [= 999999998_000000001]");
-
-    // BigInt subtract
-    say("§eBigInt Subtract:");
-    bigint_init();
-    bigint_from_int_a(1000000000);
-    bigint_from_int_b(1);
-    bigint_sub();
-    let s0: int = bigint_get_c(0);
-    let s1: int = bigint_get_c(1);
-    say(f"  1,000,000,000 - 1 = {s1}_{s0}  [= 999999999]");
+    say("§eBigInt cmp: [1,0] > [0,9999]");
+    let g: int[] = [1, 0];
+    let h: int[] = [0, 9999];
+    let cmp_result: int = bigint_cmp(g, h, 2);
+    say(f"  cmp={cmp_result}  [expect 1 (greater)]");
 }
 
 fn _tick_bigint_live() {
-    // Show incremental Fibonacci on actionbar
-    if (state.tick % 10 == 0) {
-        let n: int = (state.tick / 10) % 30;
-        bigint_fib(n);
-        let v0: int = bigint_get_a(0);
-        let v1: int = bigint_get_a(1);
+    // Show counter with bigint add on actionbar
+    if (state.tick % 20 == 0) {
+        let counter: int[] = [0, state.tick / 20];
+        let one: int[] = [0, 1];
+        let r: int[] = [0, 0];
+        let carry: int = bigint_add(counter, one, r, 2);
         foreach (p in @a[limit=1]) {
-            actionbar(p, f"§dF({n}) limb[1]={v1} limb[0]={v0}");
+            actionbar(p, f"§dBigInt tick: [{r[0]},{r[1]}] carry={carry}");
         }
     }
 }
@@ -436,56 +414,33 @@ fn dump_advanced() {
 // ── BigInt step-by-step debug ─────────────────────────────────────────────
 // /function showcase:debug_bigint
 fn debug_bigint() {
-    say("§e=== BigInt Debug ===");
+    say("§e=== BigInt Debug (v2.4+ array-by-ref API) ===");
 
-    // Step 0: check scoreboard objective 'rs' exists (set by __load)
-    // If this reads 0, __load hasn't run — do /reload first!
-    scoreboard_set("__dbgcheck", #rs, 9999);
-    let rs_check: int = scoreboard_get("__dbgcheck", #rs);
-    say(f"§7[0] rs-objective check={rs_check}  (expect 9999; if 0 → run /reload first!)");
+    // Test 1: add with carry
+    let a: int[] = [9999, 9999];
+    let b: int[] = [0, 1];
+    let r: int[] = [0, 0];
+    let carry: int = bigint_add(a, b, r, 2);
+    say(f"§7[1] 9999_9999 + 1: carry={carry} r=[{r[0]},{r[1]}]  (expect carry=1 r=[0,0])");
 
-    // Step 1: init
-    bigint_init();
-    say("§7[1] bigint_init() done");
+    // Test 2: subtract
+    let c: int[] = [1, 0];
+    let d: int[] = [0, 1];
+    let s: int[] = [0, 0];
+    bigint_sub(c, d, s, 2);
+    say(f"§7[2] 1_0000 - 1: s=[{s[0]},{s[1]}]  (expect [0,9999])");
 
-    // Step 2: from_int_a (STATIC index writes, no macro)
-    bigint_from_int_a(12345);
-    // 2a: static read (data get storage rs:bigint a[0] — NO macro)
-    let direct0: int = storage_get_int("rs:bigint", "a", 0);
-    let direct1: int = storage_get_int("rs:bigint", "a", 1);
-    say(f"§7[2a] static-read a[0]={direct0}  a[1]={direct1}  (expect 2345,1)");
-    // 2b: macro read (bigint_get_a uses macro sub-function)
-    let a0: int = bigint_get_a(0);
-    let a1: int = bigint_get_a(1);
-    say(f"§7[2b] macro-read  a[0]={a0}  a[1]={a1}  (expect 2345,1)");
+    // Test 3: mul_small
+    let e: int[] = [1, 2345];
+    let f: int[] = [0, 0];
+    bigint_mul_small(e, 3, f, 2);
+    say(f"§7[3] 1_2345 × 3: f=[{f[0]},{f[1]}]  (expect [3,7035])");
 
-    // Step 3: fib(1) = 1  (no carry, simplest case)
-    bigint_fib(1);
-    let f1: int = bigint_get_a(0);
-    say(f"§7[3] fib(1) → get_a(0)={f1}  (expect 1)");
-
-    // Step 4: fib(5) = 5
-    bigint_fib(5);
-    let f5: int = bigint_get_a(0);
-    say(f"§7[4] fib(5) → get_a(0)={f5}  (expect 5)");
-
-    // Step 5: fib(10) = 55
-    bigint_fib(10);
-    let f10: int = bigint_get_a(0);
-    say(f"§7[5] fib(10) → get_a(0)={f10}  (expect 55)");
-
-    // Step 6: fib(20) = 6765
-    bigint_fib(20);
-    let f20: int = bigint_get_a(0);
-    say(f"§7[6] fib(20) → get_a(0)={f20}  (expect 6765)");
-
-    // Step 7: manual add — bigint_add() writes via __ssi macro
-    bigint_init();
-    bigint_from_int_a(1);
-    bigint_from_int_b(1);
-    bigint_add();
-    let c0: int = bigint_get_c(0);
-    say(f"§7[7] 1+1=? get_c(0)={c0}  (expect 2)");
+    // Test 4: compare
+    let g: int[] = [1, 0];
+    let h: int[] = [0, 9999];
+    let cmp: int = bigint_cmp(g, h, 2);
+    say(f"§7[4] [1,0] vs [0,9999]: cmp={cmp}  (expect 1 = greater)");
 
     say("§a=== Done ===");
 }

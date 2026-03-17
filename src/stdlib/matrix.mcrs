@@ -1,0 +1,108 @@
+// matrix.mcrs — 2D/3D transformation matrices for Display Entities.
+//
+// MC Display Entities use a 4×4 transformation matrix (left_rotation × scale × right_rotation).
+// This module provides helpers for common transforms.
+//
+// Fixed-point: all values ×10000 unless noted.
+// Angle: degrees ×10000 (e.g. 450000 = 45°)
+//
+// Note: Actual matrix application to entities requires raw() commands.
+// These functions compute the values; use raw() to apply them.
+//
+// Requires: import "stdlib/math" (for sin_fixed, cos_fixed, abs)
+
+module library;
+
+// ─── 2D transform helpers ────────────────────────────────────────────────────
+
+// rotate2d_x: x component after 2D rotation by angle_deg×10000
+// rotate2d_x(x, y, 450000) ≈ x*cos45 - y*sin45
+fn rotate2d_x(x: int, y: int, angle_deg: int): int {
+    let c: int = cos_fixed(angle_deg / 10000);
+    let s: int = sin_fixed(angle_deg / 10000);
+    return x * c / 1000 - y * s / 1000;
+}
+
+fn rotate2d_y(x: int, y: int, angle_deg: int): int {
+    let c: int = cos_fixed(angle_deg / 10000);
+    let s: int = sin_fixed(angle_deg / 10000);
+    return x * s / 1000 + y * c / 1000;
+}
+
+// ─── Scale helpers ────────────────────────────────────────────────────────────
+
+// scale_x(x, sx_fx): scale x by sx_fx (sx_fx ×10000, e.g. 20000 = 2×)
+fn scale_x(x: int, sx_fx: int): int { return x * sx_fx / 10000; }
+fn scale_y(y: int, sy_fx: int): int { return y * sy_fx / 10000; }
+fn scale_z(z: int, sz_fx: int): int { return z * sz_fx / 10000; }
+
+// uniform_scale(v, s_fx): apply uniform scale
+fn uniform_scale(v: int, s_fx: int): int { return v * s_fx / 10000; }
+
+// ─── 3D rotation (Euler angles, Y-up) ────────────────────────────────────────
+
+// rotate_y_x: X component after rotation around Y axis
+fn rotate_y_x(x: int, z: int, angle_deg: int): int {
+    let c: int = cos_fixed(angle_deg / 10000);
+    let s: int = sin_fixed(angle_deg / 10000);
+    return x * c / 1000 + z * s / 1000;
+}
+
+fn rotate_y_z(x: int, z: int, angle_deg: int): int {
+    let c: int = cos_fixed(angle_deg / 10000);
+    let s: int = sin_fixed(angle_deg / 10000);
+    return 0 - x * s / 1000 + z * c / 1000;
+}
+
+// rotate_x_y: Y component after rotation around X axis
+fn rotate_x_y(y: int, z: int, angle_deg: int): int {
+    let c: int = cos_fixed(angle_deg / 10000);
+    let s: int = sin_fixed(angle_deg / 10000);
+    return y * c / 1000 - z * s / 1000;
+}
+
+fn rotate_x_z(y: int, z: int, angle_deg: int): int {
+    let c: int = cos_fixed(angle_deg / 10000);
+    let s: int = sin_fixed(angle_deg / 10000);
+    return y * s / 1000 + z * c / 1000;
+}
+
+// ─── Display Entity transformation ───────────────────────────────────────────
+// MC Display Entity transformation format:
+//   transformation: {left_rotation:[0f,0f,0f,1f], scale:[1f,1f,1f],
+//                    right_rotation:[0f,0f,0f,1f], translation:[0f,0f,0f]}
+//
+// Quaternion for Y-axis rotation by angle θ:
+//   [0, sin(θ/2), 0, cos(θ/2)]
+//
+// These helpers compute quaternion components (×10000)
+
+// quat_sin_half(angle_deg_fx): sin(angle/2) ×1000
+// angle_deg_fx: degrees ×10000
+fn quat_sin_half(angle_deg_fx: int): int {
+    return sin_fixed(angle_deg_fx / 20000);  // angle/2 in degrees, then /10000 for sin_fixed
+}
+
+fn quat_cos_half(angle_deg_fx: int): int {
+    return cos_fixed(angle_deg_fx / 20000);
+}
+
+// ─── Billboard helpers ────────────────────────────────────────────────────────
+
+// billboard_rotation_y(player_yaw_fx): get Y rotation for a billboard facing player
+// player_yaw_fx: player yaw ×10000 (from entity NBT Rotation[0])
+fn billboard_y(player_yaw_fx: int): int {
+    // Billboard should face opposite direction
+    return (player_yaw_fx + 1800000) % 3600000;
+}
+
+// ─── Interpolation for smooth animation ──────────────────────────────────────
+
+// lerp_angle(a_fx, b_fx, t): lerp between two angles ×10000, taking shortest path
+fn lerp_angle(a_fx: int, b_fx: int, t: int): int {
+    let diff: int = b_fx - a_fx;
+    // Normalize to [-1800000, 1800000]
+    while (diff > 1800000) { diff = diff - 3600000; }
+    while (diff < -1800000) { diff = diff + 3600000; }
+    return a_fx + diff * t / 10000;
+}

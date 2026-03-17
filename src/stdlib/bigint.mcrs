@@ -1,124 +1,65 @@
 // bigint.mcrs — Multi-precision integer arithmetic for RedScript.
 //
-// Representation: "万进制" (base-10000) int array stored in NBT storage.
-//   [1, 2345, 6789] represents 1_0002345_6789 = 100,023,456,789
-//   Each element is 0-9999 (4 decimal digits).
-//   First element is the most significant (big-endian).
-//   Leading zeros in non-first elements must be preserved conceptually.
+// Representation: base-10000 (万进制) int array stored in NBT storage.
+//   arr[0] = most significant chunk (big-endian)
+//   Each element: 0-9999 (4 decimal digits)
+//   Example: [1, 2345, 6789] = 1_0002345_6789 = 100,023,456,789
 //
-// NBT path: storage rs:bigint <varname>
+// Functions for 96-bit (3-chunk) operations:
+//   bigint3_add, bigint3_sub, bigint3_mul1, bigint3_cmp, bigint3_div_by_small
 //
-// Operations use raw() to emit NBT commands. All operations are on stored values.
-// This module provides:
-//   1. Helper functions for single-chunk arithmetic (within int32)
-//   2. raw()-based macros for NBT-backed multi-chunk operations
-//   3. Conversion utilities
-//
-// NOTE: Full arbitrary-precision ops (like kaer's library) require
-// complex NBT recursion not yet expressible in RedScript.
-// This module provides a 96-bit (3 × 4-digit) max precision layer,
-// which covers values up to ~10^12 (1 trillion).
+// Functions for arbitrary-length arrays (requires array by-ref, RedScript ≥ 2.4.0):
+//   bigint_add(a, b, result, len) — add two n-chunk bigints
+//   bigint_cmp(a, b, len)        — compare two n-chunk bigints
+//   bigint_mul_small(a, n, result, len) — multiply n-chunk bigint by small int
+//   bigint_zero(arr, len)        — set array to zero
+//   bigint_copy(src, dst, len)   — copy bigint
 
 module library;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-// BIGINT_BASE: base for 万进制 representation
 fn bigint_base(): int { return 10000; }
 
-// ─── Single-precision helpers ────────────────────────────────────────────────
-// These work on individual 4-digit chunks.
+// ─── Single-chunk helpers ────────────────────────────────────────────────────
 
-// chunk_hi(n): upper 4 digits of an 8-digit product (n must fit in int32)
-// chunk_hi(12345678) = 1234
-fn chunk_hi(n: int): int {
-    return n / 10000;
-}
+fn chunk_hi(n: int): int { return n / 10000; }
+fn chunk_lo(n: int): int { return n % 10000; }
 
-// chunk_lo(n): lower 4 digits
-// chunk_lo(12345678) = 5678
-fn chunk_lo(n: int): int {
-    return n % 10000;
-}
+// ─── 3-chunk (96-bit) arithmetic ─────────────────────────────────────────────
 
-// ─── 96-bit (3-chunk) addition ────────────────────────────────────────────────
-// Represents number as (hi, mid, lo) where value = hi*10^8 + mid*10^4 + lo
-
-// bigint3_add_lo(alo, blo): low chunk sum (carry handled by mid)
-fn bigint3_add_lo(alo: int, blo: int): int {
-    return (alo + blo) % 10000;
-}
-
-// bigint3_carry_lo(alo, blo): carry from low to mid chunk (0 or 1)
-fn bigint3_carry_lo(alo: int, blo: int): int {
-    return (alo + blo) / 10000;
-}
-
-// bigint3_add_mid(amid, bmid, carry): mid chunk sum
-fn bigint3_add_mid(amid: int, bmid: int, carry: int): int {
-    return (amid + bmid + carry) % 10000;
-}
-
-fn bigint3_carry_mid(amid: int, bmid: int, carry: int): int {
-    return (amid + bmid + carry) / 10000;
-}
-
-fn bigint3_add_hi(ahi: int, bhi: int, carry: int): int {
-    return (ahi + bhi + carry) % 10000;
-}
-
-// ─── 96-bit subtraction (a >= b assumed) ─────────────────────────────────────
+fn bigint3_add_lo(alo: int, blo: int): int { return (alo + blo) % 10000; }
+fn bigint3_carry_lo(alo: int, blo: int): int { return (alo + blo) / 10000; }
+fn bigint3_add_mid(amid: int, bmid: int, carry: int): int { return (amid + bmid + carry) % 10000; }
+fn bigint3_carry_mid(amid: int, bmid: int, carry: int): int { return (amid + bmid + carry) / 10000; }
+fn bigint3_add_hi(ahi: int, bhi: int, carry: int): int { return (ahi + bhi + carry) % 10000; }
 
 fn bigint3_sub_lo(alo: int, blo: int): int {
     if (alo >= blo) { return alo - blo; }
     return alo + 10000 - blo;
 }
-
 fn bigint3_borrow_lo(alo: int, blo: int): int {
     if (alo >= blo) { return 0; }
     return 1;
 }
-
 fn bigint3_sub_mid(amid: int, bmid: int, borrow: int): int {
     let v: int = amid - bmid - borrow;
     if (v < 0) { v = v + 10000; }
     return v;
 }
-
 fn bigint3_borrow_mid(amid: int, bmid: int, borrow: int): int {
     if (amid - borrow >= bmid) { return 0; }
     return 1;
 }
-
 fn bigint3_sub_hi(ahi: int, bhi: int, borrow: int): int {
     return ahi - bhi - borrow;
 }
 
-// ─── Multiplication (int × int → 96-bit) ─────────────────────────────────────
+fn bigint3_mul1_lo(a: int, b: int): int { return (a * b) % 10000; }
+fn bigint3_mul1_hi(a: int, b: int): int { return (a * b) / 10000; }
 
-// bigint3_mul_lo(a, b): low chunk of a × b (a, b each up to 10^12 / 10^8)
-// For a, b ≤ 9999 (one chunk each):
-fn bigint3_mul1_lo(a: int, b: int): int {
-    return (a * b) % 10000;
-}
-
-fn bigint3_mul1_hi(a: int, b: int): int {
-    return (a * b) / 10000;
-}
-
-// int32 × int32 → 96-bit: a*b where both ≤ 9999
-// Result fits in 8 decimal digits (max 9999*9999 = 99,980,001)
-fn bigint3_mul1_mid(a: int, b: int): int {
-    // No mid chunk needed for 1×1; return 0
-    return 0;
-}
-
-// ─── Comparison ──────────────────────────────────────────────────────────────
-
-// bigint3_cmp(ahi, amid, alo, bhi, bmid, blo):
-// Returns 1 if a > b, -1 if a < b, 0 if equal
-fn bigint3_cmp(ahi: int, amid: int, alo: int,
-               bhi: int, bmid: int, blo: int): int {
+// Compare: returns 1 if a>b, -1 if a<b, 0 if equal
+fn bigint3_cmp(ahi: int, amid: int, alo: int, bhi: int, bmid: int, blo: int): int {
     if (ahi > bhi) { return 1; }
     if (ahi < bhi) { return -1; }
     if (amid > bmid) { return 1; }
@@ -128,41 +69,128 @@ fn bigint3_cmp(ahi: int, amid: int, alo: int,
     return 0;
 }
 
-// ─── Conversion helpers ───────────────────────────────────────────────────────
-
-// int32_to_bigint3_lo(n): low chunk of n (4 digits)
+// int32 → 3 chunks
 fn int32_to_bigint3_lo(n: int): int {
     if (n < 0) { n = 0 - n; }
     return n % 10000;
 }
-
-// int32_to_bigint3_mid(n): mid chunk (digits 5-8)
 fn int32_to_bigint3_mid(n: int): int {
     if (n < 0) { n = 0 - n; }
     return (n / 10000) % 10000;
 }
-
-// int32_to_bigint3_hi(n): high chunk (digits 9+, usually 0 for int32)
 fn int32_to_bigint3_hi(n: int): int {
     if (n < 0) { n = 0 - n; }
     return n / 100000000;
 }
-
-// bigint3_to_int32(hi, mid, lo): convert back to int32 (truncates if > 2^31)
 fn bigint3_to_int32(hi: int, mid: int, lo: int): int {
     return hi * 100000000 + mid * 10000 + lo;
 }
 
-// ─── Division (96-bit / 16-bit) ──────────────────────────────────────────────
-// Divide 3-chunk bigint by a single small integer (≤ 9999).
-// Algorithm: long division, chunk by chunk.
-
-// bigint3_div_chunk(chunk, rem, divisor): quotient of (rem*10000 + chunk) / divisor
+// Division helpers (array ÷ small int ≤ 9999)
 fn bigint3_div_chunk(chunk: int, rem: int, divisor: int): int {
     return (rem * 10000 + chunk) / divisor;
 }
-
-// bigint3_rem_chunk(chunk, rem, divisor): new remainder after dividing (rem*10000+chunk)
 fn bigint3_rem_chunk(chunk: int, rem: int, divisor: int): int {
     return (rem * 10000 + chunk) % divisor;
+}
+
+// ─── Arbitrary-length operations (array by-ref, RedScript ≥ 2.4.0) ──────────
+
+// bigint_zero(arr, len): set all chunks to 0
+fn bigint_zero(arr: int[], len: int) {
+    let i: int = 0;
+    while (i < len) { arr[i] = 0; i = i + 1; }
+}
+
+// bigint_copy(src, dst, len): copy src into dst
+fn bigint_copy(src: int[], dst: int[], len: int) {
+    let i: int = 0;
+    while (i < len) { dst[i] = src[i]; i = i + 1; }
+}
+
+// bigint_cmp(a, b, len): compare a and b, returns 1 if a>b, -1 if a<b, 0 if equal
+// Most significant chunk is at index 0 (big-endian)
+fn bigint_cmp(a: int[], b: int[], len: int): int {
+    let i: int = 0;
+    while (i < len) {
+        if (a[i] > b[i]) { return 1; }
+        if (a[i] < b[i]) { return -1; }
+        i = i + 1;
+    }
+    return 0;
+}
+
+// bigint_add(a, b, result, len): result = a + b (in-place into result array)
+// Returns carry out (0 or 1) — caller should handle overflow
+fn bigint_add(a: int[], b: int[], result: int[], len: int): int {
+    let carry: int = 0;
+    let i: int = len - 1;  // start from least significant (rightmost)
+    while (i >= 0) {
+        let sum: int = a[i] + b[i] + carry;
+        result[i] = sum % 10000;
+        carry = sum / 10000;
+        i = i - 1;
+    }
+    return carry;
+}
+
+// bigint_sub(a, b, result, len): result = a - b (assumes a >= b)
+fn bigint_sub(a: int[], b: int[], result: int[], len: int) {
+    let borrow: int = 0;
+    let i: int = len - 1;
+    while (i >= 0) {
+        let diff: int = a[i] - b[i] - borrow;
+        if (diff < 0) {
+            diff = diff + 10000;
+            borrow = 1;
+        }
+        if (diff >= 0) { borrow = 0; }
+        result[i] = diff;
+        i = i - 1;
+    }
+}
+
+// bigint_mul_small(a, n, result, len): result = a × n, where n ≤ 9999
+fn bigint_mul_small(a: int[], n: int, result: int[], len: int) {
+    let carry: int = 0;
+    let i: int = len - 1;
+    while (i >= 0) {
+        let prod: int = a[i] * n + carry;
+        result[i] = prod % 10000;
+        carry = prod / 10000;
+        i = i - 1;
+    }
+}
+
+// bigint_shift_left(arr, len): multiply by 10000 (shift left one chunk)
+// Loses most significant chunk if non-zero
+fn bigint_shift_left(arr: int[], len: int) {
+    let i: int = 0;
+    while (i < len - 1) {
+        arr[i] = arr[i + 1];
+        i = i + 1;
+    }
+    arr[len - 1] = 0;
+}
+
+// bigint_is_zero(arr, len): returns 1 if all chunks are 0
+fn bigint_is_zero(arr: int[], len: int): int {
+    let i: int = 0;
+    while (i < len) {
+        if (arr[i] != 0) { return 0; }
+        i = i + 1;
+    }
+    return 1;
+}
+
+// bigint_leading_zeros(arr, len): count leading zero chunks
+fn bigint_leading_zeros(arr: int[], len: int): int {
+    let count: int = 0;
+    let i: int = 0;
+    while (i < len) {
+        if (arr[i] != 0) { return count; }
+        count = count + 1;
+        i = i + 1;
+    }
+    return count;
 }
