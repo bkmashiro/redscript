@@ -231,3 +231,90 @@ fn bigint_mod_small(a: int[], divisor: int, len: int): int {
 fn bigint_chunk(a: int[], i: int): int {
     return a[i];
 }
+
+// ─── Full bigint × bigint multiplication ─────────────────────────────────────
+//
+// bigint_mul(a, b, result, la, lb):
+//   Multiply two bigints: result = a * b
+//   a has la chunks, b has lb chunks, result must have la+lb chunks (pre-zeroed)
+//   Uses schoolbook O(n²) algorithm.
+//   Maximum safe chunk product: 9999 * 9999 = 99,980,001 < INT32_MAX ✓
+//   After accumulation each chunk can exceed 10000 — carry_pass normalizes.
+//
+// Usage:
+//   import "stdlib/bigint"
+//   let a: int[] = [0, 0, 1234, 5678];   // 4-chunk
+//   let b: int[] = [0, 0, 9999];          // 3-chunk
+//   let result: int[] = [0, 0, 0, 0, 0, 0, 0]; // la+lb = 7 chunks, pre-zeroed
+//   bigint_mul(a, b, result, 4, 3);
+//
+fn bigint_mul(a: int[], b: int[], result: int[], la: int, lb: int) {
+    // Phase 1: accumulate partial products (big-endian, MSB at index 0)
+    // a[i] is the (la-1-i)-th digit from LSB, similarly for b[j]
+    // result has la+lb chunks; result[la+lb-1] is the LSB chunk
+    let i: int = 0;
+    while (i < la) {
+        let j: int = 0;
+        while (j < lb) {
+            // Position in result: MSB-aligned
+            // a[i] * b[j] contributes to result[i + j + 1] (1-indexed from MSB, 0 = overflow slot)
+            let pos: int = i + j + 1;
+            result[pos] = result[pos] + a[i] * b[j];
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+
+    // Phase 2: carry propagation from LSB to MSB
+    let total: int = la + lb;
+    let k: int = total - 1;
+    while (k > 0) {
+        let carry: int = result[k] / 10000;
+        result[k] = result[k] % 10000;
+        result[k - 1] = result[k - 1] + carry;
+        k = k - 1;
+    }
+}
+
+// bigint_mul_result_len(la, lb): required result array length for bigint_mul
+fn bigint_mul_result_len(la: int, lb: int): int {
+    return la + lb;
+}
+
+// bigint_sq(a, result, len):
+//   Square a bigint: result = a * a
+//   result must have len*2 chunks (pre-zeroed).
+//   Optimized: only compute upper triangle and double (avoids redundant multiplications).
+//
+fn bigint_sq(a: int[], result: int[], len: int) {
+    // Diagonal terms (i == j)
+    let i: int = 0;
+    while (i < len) {
+        let pos: int = i + i + 1;
+        result[pos] = result[pos] + a[i] * a[i];
+        i = i + 1;
+    }
+
+    // Off-diagonal terms (i < j), doubled
+    i = 0;
+    while (i < len) {
+        let j: int = i + 1;
+        while (j < len) {
+            let pos: int = i + j + 1;
+            // a[i]*a[j] * 2 — safe: 9999*9999*2 = 199,960,002 < INT32_MAX
+            result[pos] = result[pos] + a[i] * a[j] * 2;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+
+    // Carry propagation
+    let total: int = len * 2;
+    let k: int = total - 1;
+    while (k > 0) {
+        let carry: int = result[k] / 10000;
+        result[k] = result[k] % 10000;
+        result[k - 1] = result[k - 1] + carry;
+        k = k - 1;
+    }
+}

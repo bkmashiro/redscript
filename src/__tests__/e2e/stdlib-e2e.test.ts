@@ -873,3 +873,93 @@ describe('advanced.mcrs — curves & fractals', () => {
   // noise1d
   test('noise1d(500) in [0, 1000)', () => expect(callAndGetRet(rt, 'test_noise1d_range')).toBe(1))
 })
+
+// ===========================================================================
+// bigint.mcrs — full multiplication (bigint_mul / bigint_sq)
+// ===========================================================================
+
+describe('bigint.mcrs — bigint_mul / bigint_sq', () => {
+  const rt = makeRuntime(`
+    // bigint_mul: [0, 0, 3] * [0, 0, 4] = [0, 0, 0, 0, 12]
+    fn test_mul_simple_lo(): int {
+        let a: int[] = [0, 0, 3];
+        let b: int[] = [0, 0, 4];
+        let r: int[] = [0, 0, 0, 0, 0, 0];
+        bigint_mul(a, b, r, 3, 3);
+        return r[5];     // LSB: 3*4=12
+    }
+    fn test_mul_simple_hi(): int {
+        let a: int[] = [0, 0, 3];
+        let b: int[] = [0, 0, 4];
+        let r: int[] = [0, 0, 0, 0, 0, 0];
+        bigint_mul(a, b, r, 3, 3);
+        return r[4];     // should be 0
+    }
+
+    // bigint_mul: [0, 1, 0] * [0, 0, 5000] = [0, 0, 0, 5000, 0, 0]
+    // = 10000 * 5000 = 50,000,000 = [0, 0, 5000, 0] in base 10000
+    // With 3+3=6 chunks: [0, 0, 0, 5000, 0, 0]
+    fn test_mul_carry_chunk(): int {
+        let a: int[] = [0, 1, 0];     // value = 10000
+        let b: int[] = [0, 0, 5000]; // value = 5000
+        // product = 50,000,000 = [0,0,0,5000,0,0] in 6 chunks
+        // a[1]*b[2] -> pos = 1+2+1 = 4, so r[4]=5000
+        let r: int[] = [0, 0, 0, 0, 0, 0];
+        bigint_mul(a, b, r, 3, 3);
+        return r[4];   // 5000
+    }
+
+    // bigint_mul: 9999 * 9999 = 99,980,001
+    // bigint3: [0, 0, 9999] * [0, 0, 9999] = 99,980,001
+    // = [0, 0, 0, 9998, 1] in base 10000
+    fn test_mul_max_chunk_lo(): int {
+        let a: int[] = [0, 0, 9999];
+        let b: int[] = [0, 0, 9999];
+        let r: int[] = [0, 0, 0, 0, 0, 0];
+        bigint_mul(a, b, r, 3, 3);
+        return r[5];   // 99980001 % 10000 = 1 (wait: 99980001 = 9998*10000 + 1)... = 1
+    }
+    fn test_mul_max_chunk_hi(): int {
+        let a: int[] = [0, 0, 9999];
+        let b: int[] = [0, 0, 9999];
+        let r: int[] = [0, 0, 0, 0, 0, 0];
+        bigint_mul(a, b, r, 3, 3);
+        return r[4];   // 9998
+    }
+
+    // bigint_sq: [0, 0, 3]^2 = [0, 0, 0, 0, 0, 9]
+    fn test_sq_simple(): int {
+        let a: int[] = [0, 0, 3];
+        let r: int[] = [0, 0, 0, 0, 0, 0];
+        bigint_sq(a, r, 3);
+        return r[5];  // 9
+    }
+
+    // bigint_sq: [0, 0, 100]^2 = [0, 0, 0, 0, 1, 0]   (10000)
+    fn test_sq_100_hi(): int {
+        let a: int[] = [0, 0, 100];
+        let r: int[] = [0, 0, 0, 0, 0, 0];
+        bigint_sq(a, r, 3);
+        return r[4];   // 10000/10000 = 1
+    }
+    fn test_sq_100_lo(): int {
+        let a: int[] = [0, 0, 100];
+        let r: int[] = [0, 0, 0, 0, 0, 0];
+        bigint_sq(a, r, 3);
+        return r[5];   // 10000 % 10000 = 0
+    }
+
+    // bigint_mul_result_len
+    fn test_result_len(): int { return bigint_mul_result_len(3, 4); }
+  `, [MATH_SRC, BIGINT_SRC])
+
+  test('bigint_mul([0,0,3], [0,0,4]) lo == 12', () => expect(callAndGetRet(rt, 'test_mul_simple_lo')).toBe(12))
+  test('bigint_mul([0,0,3], [0,0,4]) hi == 0 (no overflow)', () => expect(callAndGetRet(rt, 'test_mul_simple_hi')).toBe(0))
+  test('bigint_mul([0,1,0], [0,0,5000]) chunk[4] == 5000 (carry)', () => expect(callAndGetRet(rt, 'test_mul_carry_chunk')).toBe(5000))
+  test('bigint_mul(9999, 9999) lo == 1', () => expect(callAndGetRet(rt, 'test_mul_max_chunk_lo')).toBe(1))
+  test('bigint_mul(9999, 9999) hi chunk == 9998', () => expect(callAndGetRet(rt, 'test_mul_max_chunk_hi')).toBe(9998))
+  test('bigint_sq([0,0,3]) lo == 9', () => expect(callAndGetRet(rt, 'test_sq_simple')).toBe(9))
+  test('bigint_sq([0,0,100]) chunk[4] == 1 (10000 carry)', () => expect(callAndGetRet(rt, 'test_sq_100_hi')).toBe(1))
+  test('bigint_sq([0,0,100]) chunk[5] == 0', () => expect(callAndGetRet(rt, 'test_sq_100_lo')).toBe(0))
+  test('bigint_mul_result_len(3, 4) == 7', () => expect(callAndGetRet(rt, 'test_result_len')).toBe(7))
+})
