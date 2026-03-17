@@ -244,3 +244,30 @@ fn chebyshev3d(x1: int, y1: int, z1: int, x2: int, y2: int, z2: int) -> int {
     if (dz > m) { m = dz; }
     return m;
 }
+
+// ─── 2D vector arithmetic ─────────────────────────────────────────────────────
+
+// add2d / sub2d / scale2d: component-wise ops. Return x or y component.
+fn add2d_x(ax: int, bx: int): int { return ax + bx; }
+fn add2d_y(ay: int, by: int): int { return ay + by; }
+fn sub2d_x(ax: int, bx: int): int { return ax - bx; }
+fn sub2d_y(ay: int, by: int): int { return ay - by; }
+fn scale2d_x(x: int, s: int): int { return x * s / 1000; }
+fn scale2d_y(y: int, s: int): int { return y * s / 1000; }
+fn neg2d_x(x: int): int { return 0 - x; }
+fn neg2d_y(y: int): int { return 0 - y; }
+
+// ─── 3D vector arithmetic ─────────────────────────────────────────────────────
+
+fn add3d_x(ax: int, bx: int): int { return ax + bx; }
+fn add3d_y(ay: int, by: int): int { return ay + by; }
+fn add3d_z(az: int, bz: int): int { return az + bz; }
+fn sub3d_x(ax: int, bx: int): int { return ax - bx; }
+fn sub3d_y(ay: int, by: int): int { return ay - by; }
+fn sub3d_z(az: int, bz: int): int { return az - bz; }
+fn scale3d_x(x: int, s: int): int { return x * s / 1000; }
+fn scale3d_y(y: int, s: int): int { return y * s / 1000; }
+fn scale3d_z(z: int, s: int): int { return z * s / 1000; }
+fn neg3d_x(x: int): int { return 0 - x; }
+fn neg3d_y(y: int): int { return 0 - y; }
+fn neg3d_z(z: int): int { return 0 - z; }
