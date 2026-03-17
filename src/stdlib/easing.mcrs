@@ -1,0 +1,182 @@
+// easing.mcrs — Easing functions for animations and transitions.
+//
+// All functions take t ∈ [0, 10000] (fixed-point ×10000)
+// and return a value in [0, 10000] (or slightly outside for elastic/bounce).
+//
+// Common use: smooth particle movement, UI transitions, projectile arcs
+//
+// Requires: import "stdlib/math" (for abs, clamp, mul_fixed)
+
+module library;
+
+// ─── Linear ──────────────────────────────────────────────────────────────────
+
+fn ease_linear(t: int): int { return t; }
+
+// ─── Quadratic ───────────────────────────────────────────────────────────────
+
+// ease_in_quad: slow start, fast end
+fn ease_in_quad(t: int): int {
+    return t * t / 10000;
+}
+
+// ease_out_quad: fast start, slow end
+fn ease_out_quad(t: int): int {
+    let inv: int = 10000 - t;
+    return 10000 - inv * inv / 10000;
+}
+
+// ease_in_out_quad: slow start and end, fast middle
+fn ease_in_out_quad(t: int): int {
+    if (t < 5000) {
+        return 2 * t * t / 10000;
+    }
+    let inv: int = 10000 - t;
+    return 10000 - 2 * inv * inv / 10000;
+}
+
+// ─── Cubic ───────────────────────────────────────────────────────────────────
+
+fn ease_in_cubic(t: int): int {
+    return t * t / 10000 * t / 10000;
+}
+
+fn ease_out_cubic(t: int): int {
+    let inv: int = 10000 - t;
+    return 10000 - inv * inv / 10000 * inv / 10000;
+}
+
+fn ease_in_out_cubic(t: int): int {
+    if (t < 5000) {
+        return 4 * t * t / 10000 * t / 10000;
+    }
+    let inv: int = 10000 - t;
+    return 10000 - 4 * inv * inv / 10000 * inv / 10000;
+}
+
+// ─── Quartic ──────────────────────────────────────────────────────────────────
+
+fn ease_in_quart(t: int): int {
+    let t2: int = t * t / 10000;
+    return t2 * t2 / 10000;
+}
+
+fn ease_out_quart(t: int): int {
+    let inv: int = 10000 - t;
+    let inv2: int = inv * inv / 10000;
+    return 10000 - inv2 * inv2 / 10000;
+}
+
+// ─── Sine approximation ───────────────────────────────────────────────────────
+// Approximated using polynomial — no actual trig needed for easing
+
+// ease_in_sine: t ∈ [0,10000] → starts slow, accelerates
+fn ease_in_sine(t: int): int {
+    // ≈ 1 - cos(t*π/2) using polynomial: 1 - (1 - t²/2 + t⁴/24)
+    let t2: int = t * t / 10000;
+    let t4: int = t2 * t2 / 10000;
+    let cos_approx: int = 10000 - t2 * 4934 / 10000 + t4 * 405 / 10000;
+    return 10000 - cos_approx;
+}
+
+fn ease_out_sine(t: int): int {
+    return 10000 - ease_in_sine(10000 - t);
+}
+
+fn ease_in_out_sine(t: int): int {
+    if (t < 5000) {
+        return ease_in_sine(t * 2) / 2;
+    }
+    return 5000 + ease_out_sine((t - 5000) * 2) / 2;
+}
+
+// ─── Exponential ─────────────────────────────────────────────────────────────
+
+// ease_in_expo: very slow start, explosive end
+fn ease_in_expo(t: int): int {
+    if (t <= 0) { return 0; }
+    // Approximate 2^(10t-10) ≈ exp_fx((10*t-100000)*693/10000)
+    // Simplified: use cubic as proxy for games
+    let t3: int = t * t / 10000 * t / 10000;
+    return t3;
+}
+
+fn ease_out_expo(t: int): int {
+    if (t >= 10000) { return 10000; }
+    return 10000 - ease_in_expo(10000 - t);
+}
+
+// ─── Back (overshoot) ─────────────────────────────────────────────────────────
+
+// ease_in_back: slight pullback before moving forward
+// c1 = 1.70158 × 10000 = 17015
+fn ease_in_back(t: int): int {
+    let c1: int = 17015;   // 1.70158
+    let c3: int = c1 + 10000;  // c1 + 1
+    // t³ * c3 - t² * c1
+    let t2: int = t * t / 10000;
+    let t3: int = t2 * t / 10000;
+    return t3 * c3 / 10000 - t2 * c1 / 10000;
+}
+
+fn ease_out_back(t: int): int {
+    return 10000 - ease_in_back(10000 - t);
+}
+
+fn ease_in_out_back(t: int): int {
+    if (t < 5000) {
+        return ease_in_back(t * 2) / 2;
+    }
+    return 5000 + ease_out_back((t - 5000) * 2) / 2;
+}
+
+// ─── Bounce ───────────────────────────────────────────────────────────────────
+
+// ease_out_bounce: bounces at the end (ball dropping)
+fn ease_out_bounce(t: int): int {
+    let n1: int = 75625;  // 7.5625 × 10000
+    let d1: int = 27500;  // 2.75 × 10000
+    // Piecewise: 4 bounce segments
+    if (t < 3636) {  // t < 1/2.75
+        return n1 * t / 10000 * t / 10000;
+    }
+    if (t < 7272) {  // t < 2/2.75
+        let t2: int = t - 5454;  // t - 1.5/2.75
+        return n1 * t2 / 10000 * t2 / 10000 + 7500;
+    }
+    if (t < 9090) {  // t < 2.5/2.75
+        let t2: int = t - 8181;  // t - 2.25/2.75
+        return n1 * t2 / 10000 * t2 / 10000 + 9375;
+    }
+    let t2: int = t - 9545;  // t - 2.625/2.75
+    return n1 * t2 / 10000 * t2 / 10000 + 9844;
+}
+
+fn ease_in_bounce(t: int): int {
+    return 10000 - ease_out_bounce(10000 - t);
+}
+
+fn ease_in_out_bounce(t: int): int {
+    if (t < 5000) {
+        return ease_in_bounce(t * 2) / 2;
+    }
+    return 5000 + ease_out_bounce((t - 5000) * 2) / 2;
+}
+
+// ─── Smoothstep family ────────────────────────────────────────────────────────
+
+// smoothstep already in math.mcrs — re-exported here for convenience
+// smoothstep(t) = 3t² - 2t³
+fn ease_smooth(t: int): int {
+    return 3 * t * t / 10000 - 2 * t * t / 10000 * t / 10000;
+}
+
+// smootherstep: even smoother (Ken Perlin)
+// 6t⁵ - 15t⁴ + 10t³
+fn ease_smoother(t: int): int {
+    let t2: int = t * t / 10000;
+    let t3: int = t2 * t / 10000;
+    let t4: int = t3 * t / 10000;
+    let t5: int = t4 * t / 10000;
+    return 6 * t5 / 10000 - 15 * t4 / 10000 + 10 * t3 / 10000;
+}
