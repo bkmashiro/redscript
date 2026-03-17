@@ -77,6 +77,8 @@ function rewriteUses(instr: MIRInstr, copies: Map<Temp, Operand>): MIRInstr {
       return { ...instr, a: resolve(instr.a, copies), b: resolve(instr.b, copies) }
     case 'nbt_write':
       return { ...instr, src: resolve(instr.src, copies) }
+    case 'nbt_read_dynamic':
+      return { ...instr, indexSrc: resolve(instr.indexSrc, copies) }
     case 'call':
       return { ...instr, args: instr.args.map(a => resolve(a, copies)) }
     case 'call_macro':
@@ -99,6 +101,7 @@ function getDst(instr: MIRInstr): Temp | null {
     case 'neg': case 'cmp':
     case 'and': case 'or': case 'not':
     case 'nbt_read':
+    case 'nbt_read_dynamic':
       return instr.dst
     case 'call': case 'call_macro':
       return instr.dst

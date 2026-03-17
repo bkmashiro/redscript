@@ -164,6 +164,7 @@ function getDst(instr: MIRInstr): Temp | null {
     case 'cmp':
     case 'and': case 'or': case 'not':
     case 'nbt_read':
+    case 'nbt_read_dynamic':
       return instr.dst
     case 'call':
     case 'call_macro':
@@ -193,6 +194,9 @@ function getUsedTemps(instr: MIRInstr): Temp[] {
       temps.push(...getOperandTemps(instr.a), ...getOperandTemps(instr.b))
       break
     case 'nbt_read':
+      break
+    case 'nbt_read_dynamic':
+      temps.push(...getOperandTemps(instr.indexSrc))
       break
     case 'nbt_write':
       temps.push(...getOperandTemps(instr.src))

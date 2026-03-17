@@ -357,6 +357,7 @@ function getInstrDst(instr: MIRInstr): Temp | null {
     case 'add': case 'sub': case 'mul': case 'div': case 'mod':
     case 'neg': case 'cmp': case 'and': case 'or': case 'not':
     case 'nbt_read':
+    case 'nbt_read_dynamic':
       return instr.dst
     case 'call': case 'call_macro':
       return instr.dst
