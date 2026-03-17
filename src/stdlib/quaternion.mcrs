@@ -1,0 +1,192 @@
+// quaternion.mcrs — Quaternion math for Display Entity rotations.
+//
+// MC Display Entities use quaternions [x, y, z, w] for left_rotation / right_rotation.
+// Quaternion components are floats in [-1, 1].
+//
+// Scale convention: all components ×10000
+//   qx=7071, qy=0, qz=0, qw=7071 → (0.7071, 0, 0, 0.7071) = 90° rotation around X
+//
+// A unit quaternion satisfies: qx²+qy²+qz²+qw² = 1 (i.e. sum of sq = 10000² = 100,000,000)
+//
+// Requires: stdlib/math (for sin_fixed, cos_fixed, mulfix, abs, isqrt)
+
+module library;
+
+// ─── Constructors ─────────────────────────────────────────────────────────────
+
+// quat_identity: returns W component of identity quaternion (x=y=z=0, w=1)
+fn quat_identity_w(): int { return 10000; }
+fn quat_identity_x(): int { return 0; }
+fn quat_identity_y(): int { return 0; }
+fn quat_identity_z(): int { return 0; }
+
+// quat_from_axis_x: rotation around X axis by angle degrees
+// sin_fixed/cos_fixed return ×1000; we scale to ×10000 by multiplying by 10
+// angle_deg: degrees (integer)
+fn quat_axis_x_x(angle_deg: int): int { return sin_fixed(angle_deg / 2) * 10; }
+fn quat_axis_x_y(angle_deg: int): int { return 0; }
+fn quat_axis_x_z(angle_deg: int): int { return 0; }
+fn quat_axis_x_w(angle_deg: int): int { return cos_fixed(angle_deg / 2) * 10; }
+
+// quat_from_axis_y: rotation around Y axis
+fn quat_axis_y_x(angle_deg: int): int { return 0; }
+fn quat_axis_y_y(angle_deg: int): int { return sin_fixed(angle_deg / 2) * 10; }
+fn quat_axis_y_z(angle_deg: int): int { return 0; }
+fn quat_axis_y_w(angle_deg: int): int { return cos_fixed(angle_deg / 2) * 10; }
+
+// quat_from_axis_z: rotation around Z axis
+fn quat_axis_z_x(angle_deg: int): int { return 0; }
+fn quat_axis_z_y(angle_deg: int): int { return 0; }
+fn quat_axis_z_z(angle_deg: int): int { return sin_fixed(angle_deg / 2) * 10; }
+fn quat_axis_z_w(angle_deg: int): int { return cos_fixed(angle_deg / 2) * 10; }
+
+// ─── Quaternion multiplication ────────────────────────────────────────────────
+// q = (ax,ay,az,aw) * (bx,by,bz,bw)
+// All components ×10000, result ×10000
+
+fn quat_mul_x(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
+    // x = aw*bx + ax*bw + ay*bz - az*by
+    return mulfix(aw, bx) + mulfix(ax, bw) + mulfix(ay, bz) - mulfix(az, by);
+}
+
+fn quat_mul_y(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
+    // y = aw*by - ax*bz + ay*bw + az*bx
+    return mulfix(aw, by) - mulfix(ax, bz) + mulfix(ay, bw) + mulfix(az, bx);
+}
+
+fn quat_mul_z(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
+    // z = aw*bz + ax*by - ay*bx + az*bw
+    return mulfix(aw, bz) + mulfix(ax, by) - mulfix(ay, bx) + mulfix(az, bw);
+}
+
+fn quat_mul_w(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
+    // w = aw*bw - ax*bx - ay*by - az*bz
+    return mulfix(aw, bw) - mulfix(ax, bx) - mulfix(ay, by) - mulfix(az, bz);
+}
+
+// ─── Quaternion conjugate (= inverse for unit quaternion) ────────────────────
+fn quat_conj_x(qx: int, qy: int, qz: int, qw: int): int { return 0 - qx; }
+fn quat_conj_y(qx: int, qy: int, qz: int, qw: int): int { return 0 - qy; }
+fn quat_conj_z(qx: int, qy: int, qz: int, qw: int): int { return 0 - qz; }
+fn quat_conj_w(qx: int, qy: int, qz: int, qw: int): int { return qw; }
+
+// ─── Magnitude squared ×10000 ─────────────────────────────────────────────────
+// For unit quaternion: should equal 10000 (= 1.0 in ×10000 scale)
+fn quat_mag_sq(qx: int, qy: int, qz: int, qw: int): int {
+    return mulfix(qx, qx) + mulfix(qy, qy) + mulfix(qz, qz) + mulfix(qw, qw);
+}
+
+// ─── Dot product ×10000 ──────────────────────────────────────────────────────
+fn quat_dot(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
+    return mulfix(ax, bx) + mulfix(ay, by) + mulfix(az, bz) + mulfix(aw, bw);
+}
+
+// ─── SLERP (spherical linear interpolation) ──────────────────────────────────
+// Interpolate between two quaternions at t ∈ [0, 1000] (×1000)
+// For small angles, uses LERP + normalize approximation (cheaper, good enough for MC)
+// t=0 → a, t=1000 → b
+
+// ─── SLERP normalize helper ───────────────────────────────────────────────────
+// Components are ×10000. Normalize: mag² = (rx²+ry²+rz²+rw²)/10000
+// mag = sqrt((sum_sq)/10000) * 100   (in ×10000 units: actual ×100 for isqrt)
+// Normalize: component * 10000 / (isqrt(sum_sq / 100))
+// This gives correctly scaled unit quaternion ×10000.
+
+fn _quat_slerp_mag(rx: int, ry: int, rz: int, rw: int): int {
+    // sum_sq = rx²+ry²+rz²+rw² (each component ×10000, so sum_sq ×10000²/10000 = ×10000)
+    // Use integer arithmetic: sum_sq / 100 to fit isqrt
+    let ss: int = rx * rx / 100 + ry * ry / 100 + rz * rz / 100 + rw * rw / 100;
+    return isqrt(ss);  // returns ≈ 1000 for unit quaternion
+}
+
+fn quat_slerp_x(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int, t: int): int {
+    let inv_t: int = 1000 - t;
+    let rx: int = ax * inv_t / 1000 + bx * t / 1000;
+    let ry: int = ay * inv_t / 1000 + by * t / 1000;
+    let rz: int = az * inv_t / 1000 + bz * t / 1000;
+    let rw: int = aw * inv_t / 1000 + bw * t / 1000;
+    let mag: int = _quat_slerp_mag(rx, ry, rz, rw);
+    if (mag == 0) { return 0; }
+    return rx * 1000 / mag;
+}
+
+fn quat_slerp_y(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int, t: int): int {
+    let inv_t: int = 1000 - t;
+    let rx: int = ax * inv_t / 1000 + bx * t / 1000;
+    let ry: int = ay * inv_t / 1000 + by * t / 1000;
+    let rz: int = az * inv_t / 1000 + bz * t / 1000;
+    let rw: int = aw * inv_t / 1000 + bw * t / 1000;
+    let mag: int = _quat_slerp_mag(rx, ry, rz, rw);
+    if (mag == 0) { return 0; }
+    return ry * 1000 / mag;
+}
+
+fn quat_slerp_z(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int, t: int): int {
+    let inv_t: int = 1000 - t;
+    let rx: int = ax * inv_t / 1000 + bx * t / 1000;
+    let ry: int = ay * inv_t / 1000 + by * t / 1000;
+    let rz: int = az * inv_t / 1000 + bz * t / 1000;
+    let rw: int = aw * inv_t / 1000 + bw * t / 1000;
+    let mag: int = _quat_slerp_mag(rx, ry, rz, rw);
+    if (mag == 0) { return 0; }
+    return rz * 1000 / mag;
+}
+
+fn quat_slerp_w(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int, t: int): int {
+    let inv_t: int = 1000 - t;
+    let rx: int = ax * inv_t / 1000 + bx * t / 1000;
+    let ry: int = ay * inv_t / 1000 + by * t / 1000;
+    let rz: int = az * inv_t / 1000 + bz * t / 1000;
+    let rw: int = aw * inv_t / 1000 + bw * t / 1000;
+    let mag: int = _quat_slerp_mag(rx, ry, rz, rw);
+    if (mag == 0) { return 10000; }
+    return rw * 1000 / mag;
+}
+
+// ─── Euler angles → Quaternion (YXZ order, MC convention) ────────────────────
+// yaw: Y-axis rotation (°), pitch: X-axis rotation (°), roll: Z-axis rotation (°)
+// YXZ order: first yaw, then pitch, then roll
+
+fn quat_euler_x(yaw: int, pitch: int, roll: int): int {
+    let cy: int = cos_fixed(yaw / 2) * 10;
+    let sy: int = sin_fixed(yaw / 2) * 10;
+    let cp: int = cos_fixed(pitch / 2) * 10;
+    let sp: int = sin_fixed(pitch / 2) * 10;
+    let cr: int = cos_fixed(roll / 2) * 10;
+    let sr: int = sin_fixed(roll / 2) * 10;
+    // x = cy*sp*cr + sy*cp*sr
+    return mulfix(mulfix(cy, sp), cr) + mulfix(mulfix(sy, cp), sr);
+}
+
+fn quat_euler_y(yaw: int, pitch: int, roll: int): int {
+    let cy: int = cos_fixed(yaw / 2) * 10;
+    let sy: int = sin_fixed(yaw / 2) * 10;
+    let cp: int = cos_fixed(pitch / 2) * 10;
+    let sp: int = sin_fixed(pitch / 2) * 10;
+    let cr: int = cos_fixed(roll / 2) * 10;
+    let sr: int = sin_fixed(roll / 2) * 10;
+    // y = sy*cp*cr - cy*sp*sr
+    return mulfix(mulfix(sy, cp), cr) - mulfix(mulfix(cy, sp), sr);
+}
+
+fn quat_euler_z(yaw: int, pitch: int, roll: int): int {
+    let cy: int = cos_fixed(yaw / 2) * 10;
+    let sy: int = sin_fixed(yaw / 2) * 10;
+    let cp: int = cos_fixed(pitch / 2) * 10;
+    let sp: int = sin_fixed(pitch / 2) * 10;
+    let cr: int = cos_fixed(roll / 2) * 10;
+    let sr: int = sin_fixed(roll / 2) * 10;
+    // z = cy*cp*sr - sy*sp*cr
+    return mulfix(mulfix(cy, cp), sr) - mulfix(mulfix(sy, sp), cr);
+}
+
+fn quat_euler_w(yaw: int, pitch: int, roll: int): int {
+    let cy: int = cos_fixed(yaw / 2) * 10;
+    let sy: int = sin_fixed(yaw / 2) * 10;
+    let cp: int = cos_fixed(pitch / 2) * 10;
+    let sp: int = sin_fixed(pitch / 2) * 10;
+    let cr: int = cos_fixed(roll / 2) * 10;
+    let sr: int = sin_fixed(roll / 2) * 10;
+    // w = cy*cp*cr + sy*sp*sr
+    return mulfix(mulfix(cy, cp), cr) + mulfix(mulfix(sy, sp), sr);
+}

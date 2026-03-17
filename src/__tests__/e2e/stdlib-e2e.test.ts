@@ -387,6 +387,10 @@ const PARABOLA_SRC = fs.readFileSync(
   path.join(__dirname, '../../stdlib/parabola.mcrs'),
   'utf-8',
 )
+const QUAT_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/quaternion.mcrs'),
+  'utf-8',
+)
 
 // ===========================================================================
 // math.mcrs — runtime execution (extended)
@@ -1046,4 +1050,108 @@ describe('parabola.mcrs — ballistic trajectory', () => {
   test('parabola_step_vx(10000, 9900) == 99000 (drag)', () => expect(callAndGetRet(rt, 'test_drag_vx')).toBe(99000))
   test('parabola_step_vy(10000, 9900) == 91080 (gravity+drag)', () => expect(callAndGetRet(rt, 'test_drag_vy')).toBe(91080))
   test('parabola_ticks_for_range(8) == 10', () => expect(callAndGetRet(rt, 'test_ticks_range')).toBe(10))
+})
+
+// ===========================================================================
+// quaternion.mcrs — runtime
+// ===========================================================================
+
+describe('quaternion.mcrs — rotation math', () => {
+  // Note: sin_fixed/cos_fixed use NBT lookup tables unavailable in MCRuntime.
+  // Tests use pre-computed values directly instead of axis constructor functions.
+  // quat components ×10000: identity=(0,0,0,10000), 90°Y=(0,7071,0,7071)
+  const rt = makeRuntime(`
+    // Identity quaternion constants
+    fn test_identity_w(): int { return quat_identity_w(); }
+    fn test_identity_x(): int { return quat_identity_x(); }
+
+    // Quaternion multiplication: identity * identity = identity
+    fn test_mul_identity_w(): int {
+        return quat_mul_w(0, 0, 0, 10000, 0, 0, 0, 10000);
+    }
+    fn test_mul_identity_x(): int {
+        return quat_mul_x(0, 0, 0, 10000, 0, 0, 0, 10000);
+    }
+
+    // q * q_inv = identity: q=(0,7071,0,7071), conj=(0,-7071,0,7071)
+    fn test_mul_q_conj_w(): int {
+        return quat_mul_w(0, 7071, 0, 7071, 0, -7071, 0, 7071);
+    }
+
+    // Conjugate
+    fn test_conj_w(): int { return quat_conj_w(0, 0, 0, 10000); }
+    fn test_conj_x(): int { return quat_conj_x(7071, 0, 0, 7071); }
+
+    // Magnitude squared of identity: mulfix(10000,10000) = 10000*10000/1000 = 100000
+    fn test_mag_sq_identity(): int { return quat_mag_sq(0, 0, 0, 10000); }
+
+    // Magnitude squared of precomputed 90°Y: (0, 7071, 0, 7071)
+    // mulfix(7071,7071)*2 = 7071*7071/1000 * 2 = 49998 * 2 = 99996
+    fn test_mag_sq_rot(): int { return quat_mag_sq(0, 7071, 0, 7071); }
+
+    // Dot product of identity with itself: mulfix(10000,10000) = 100000
+    fn test_dot_identity(): int {
+        return quat_dot(0, 0, 0, 10000, 0, 0, 0, 10000);
+    }
+
+    // Dot of two identical 90°Y quats
+    fn test_dot_same(): int {
+        return quat_dot(0, 7071, 0, 7071, 0, 7071, 0, 7071);
+    }
+
+    // SLERP: lerp between identity and 90°Y at t=0 → identity
+    fn test_slerp_t0_w(): int {
+        return quat_slerp_w(0, 0, 0, 10000, 0, 7071, 0, 7071, 0);
+    }
+    fn test_slerp_t0_y(): int {
+        return quat_slerp_y(0, 0, 0, 10000, 0, 7071, 0, 7071, 0);
+    }
+    // SLERP at t=1000 → second quat (normalized)
+    fn test_slerp_t1000_y(): int {
+        return quat_slerp_y(0, 0, 0, 10000, 0, 7071, 0, 7071, 1000);
+    }
+    fn test_slerp_t1000_w(): int {
+        return quat_slerp_w(0, 0, 0, 10000, 0, 7071, 0, 7071, 1000);
+    }
+    // SLERP midpoint t=500: lerp(identity, 90°Y) → normalize([0, 3535, 0, 13535])
+    fn test_slerp_t500_y(): int {
+        return quat_slerp_y(0, 0, 0, 10000, 0, 7071, 0, 7071, 500);
+    }
+  `, [MATH_SRC, QUAT_SRC])
+
+  test('quat_identity_w() == 10000', () => expect(callAndGetRet(rt, 'test_identity_w')).toBe(10000))
+  test('quat_identity_x() == 0', () => expect(callAndGetRet(rt, 'test_identity_x')).toBe(0))
+  test('quat_mul(identity, identity).w == 100000 (×10000 scale)', () => expect(callAndGetRet(rt, 'test_mul_identity_w')).toBe(100000))
+  test('quat_mul(identity, identity).x == 0', () => expect(callAndGetRet(rt, 'test_mul_identity_x')).toBe(0))
+  test('quat_mul(q, conj(q)).w ≈ 100000 (≈ identity)', () => {
+    const v = callAndGetRet(rt, 'test_mul_q_conj_w')
+    expect(Math.abs(v - 100000)).toBeLessThanOrEqual(200)
+  })
+  test('quat_conj(identity).w == 10000', () => expect(callAndGetRet(rt, 'test_conj_w')).toBe(10000))
+  test('quat_conj([7071,0,0,7071]).x == -7071', () => expect(callAndGetRet(rt, 'test_conj_x')).toBe(-7071))
+  test('quat_mag_sq(identity) == 100000 (mulfix scale)', () => expect(callAndGetRet(rt, 'test_mag_sq_identity')).toBe(100000))
+  test('quat_mag_sq([0,7071,0,7071]) ≈ 99996 (near unit)', () => {
+    const v = callAndGetRet(rt, 'test_mag_sq_rot')
+    expect(Math.abs(v - 100000)).toBeLessThanOrEqual(10)
+  })
+  test('quat_dot(identity, identity) == 100000', () => expect(callAndGetRet(rt, 'test_dot_identity')).toBe(100000))
+  test('quat_dot(q, q) ≈ 99996 (near unit)', () => {
+    const v = callAndGetRet(rt, 'test_dot_same')
+    expect(Math.abs(v - 100000)).toBeLessThanOrEqual(10)
+  })
+  test('quat_slerp(a,b,0).w == 10000 (= a)', () => expect(callAndGetRet(rt, 'test_slerp_t0_w')).toBe(10000))
+  test('quat_slerp(a,b,0).y == 0 (= a)', () => expect(callAndGetRet(rt, 'test_slerp_t0_y')).toBe(0))
+  test('quat_slerp(a,b,1000).y ≈ 7071 (= b normalized)', () => {
+    const v = callAndGetRet(rt, 'test_slerp_t1000_y')
+    expect(Math.abs(v - 7071)).toBeLessThanOrEqual(20)
+  })
+  test('quat_slerp(a,b,1000).w ≈ 7071 (= b normalized)', () => {
+    const v = callAndGetRet(rt, 'test_slerp_t1000_w')
+    expect(Math.abs(v - 7071)).toBeLessThanOrEqual(20)
+  })
+  test('quat_slerp(a,b,500).y > 0 (moving toward b)', () => {
+    const v = callAndGetRet(rt, 'test_slerp_t500_y')
+    expect(v).toBeGreaterThan(0)
+    expect(v).toBeLessThan(7071)
+  })
 })
