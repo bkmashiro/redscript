@@ -18,16 +18,24 @@
 
 ### `stdlib/math.mcrs` 补充
 - [x] `abs`, `sign`, `clamp`, `lerp`, `pow2`
-- [ ] `ln(x: int): int` — atanh 级数，固定点 ×10000（tuner 生成系数）
-- [ ] `sqrt(x: int): int` — 牛顿迭代法，固定点 ×10000
-- [ ] `exp(x: int): int` — e^x，查表 + 泰勒，固定点 ×10000
-- [ ] `sin(x: int): int` — 实体旋转矩阵法，`@load` 自动初始化辅助实体
-- [ ] `cos(x: int): int` — 同上
+- [x] `ln(x: int): int` — SA-tuned atanh 级数，max_error 0.000557
+- [x] `sqrt_fx(x: int): int` — 基于 isqrt，固定点 ×10000
+- [x] `exp_fx(x: int): int` — Horner-form Taylor + 2^k 缩放，固定点 ×10000
 
-### `stdlib/random.mcrs`（新建）
-- [x] `next_lcg(seed: int): int` — LCG 伪随机
-- [x] `random_range(seed, lo, hi)` — 范围随机
-- [ ] `random_bool(seed: int): int` — 0 或 1
+### `stdlib/math_hp.mcrs`（新建，框架就绪）
+- [x] `init_trig()` — 初始化 Marker 实体（用户在 `@load` 里调用）
+- [x] `sin_hp`, `cos_hp` — 框架 + `@require_on_load(init_trig)` 就绪
+- [ ] 真正实现 — 需要 `@raw` / `@builtin` 语言特性（emit 层内嵌 mcfunction）
+
+### `stdlib/random.mcrs`
+- [x] `next_lcg(seed: int): int`
+- [x] `random_range(seed, lo, hi)`
+- [x] `random_bool(seed: int): int`
+
+### `stdlib/random.mcrs`（已完成）
+- [x] `next_lcg(seed: int): int`
+- [x] `random_range(seed, lo, hi)`
+- [x] `random_bool(seed: int): int`
 
 ### `stdlib/vec.mcrs` 补充
 - [x] `Vec2`, `Vec3`, `dot2`, `dot3`, `dist2_sq`, `dist3_sq`
@@ -110,6 +118,7 @@
 
 | 特性 | 依赖的 stdlib | 难度 | 状态 |
 |------|-------------|------|------|
+| `@raw` / `@builtin` 内嵌 mcfunction | `sin_hp`/`cos_hp` 实现 | 中 | ❌ TODO |
 | 位运算 `^>><< ` | random PCG, bits | 中 | ❌ TODO |
 | 数组 literal 初始化 | list, bigint | 中 | ❌ TODO（读取已修，写入待做） |
 | 元组返回值 | color（hsl_to_rgb）| 中 | ❌ TODO |

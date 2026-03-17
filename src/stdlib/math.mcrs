@@ -354,3 +354,39 @@ fn ln(x: int): int {
 fn sqrt_fx(x: int) -> int {
     return isqrt(x * 100) * 100;
 }
+
+// exp_fx(x): e^(x/10000) × 10000, fixed-point ×10000
+// exp_fx(0)     == 10000  (e^0 = 1.0)
+// exp_fx(10000) ≈ 27183   (e^1 ≈ 2.7183)
+// exp_fx(6931)  ≈ 20000   (e^ln2 = 2.0)
+// exp_fx(-10000) ≈ 3679   (e^-1 ≈ 0.3679)
+// Valid range: x ∈ [-100000, 100000] (real: -10.0 to 10.0)
+fn exp_fx(x: int): int {
+    // Range reduction: x = k*ln2 + r, r in [0, 6931]
+    let ln2: int = 6931;
+    let k: int = x / ln2;
+    let r: int = x - k * ln2;
+    if (r < 0) { r = r + ln2; k = k - 1; }
+
+    // 6-term Horner-form Taylor: e^r ≈ 1 + r + r²/2! + r³/3! + ...
+    // Coefficients scaled ×10000, nested for numerical stability
+    let t: int = 14;
+    t = 83   + t * r / 10000;
+    t = 417  + t * r / 10000;
+    t = 1667 + t * r / 10000;
+    t = 5000 + t * r / 10000;
+    t = 10000 + t * r / 10000;
+    let er: int = 10000 + t * r / 10000;
+
+    // Scale by 2^k
+    if (k >= 0) {
+        let i: int = 0;
+        while (i < k) { er = er * 2; i = i + 1; }
+    }
+    if (k < 0) {
+        let i: int = 0;
+        let nk: int = 0 - k;
+        while (i < nk) { er = er / 2; i = i + 1; }
+    }
+    return er;
+}
