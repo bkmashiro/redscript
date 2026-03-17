@@ -168,6 +168,21 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       warnings.push(diag.message)
     }
 
+    // Stage 6.5: Validate LIR score_set values are in MC int32 range
+    const INT32_MAX = 2147483647
+    const INT32_MIN = -2147483648
+    for (const fn of lirOpt.functions) {
+      for (const instr of fn.instructions) {
+        if (instr.kind === 'score_set' && (instr.value > INT32_MAX || instr.value < INT32_MIN)) {
+          warnings.push(
+            `[ConstantOverflow] function '${fn.name}': ` +
+            `scoreboard immediate ${instr.value} is outside MC int32 range [${INT32_MIN}, ${INT32_MAX}]. ` +
+            `This indicates a constant-folding overflow bug — please report this.`
+          )
+        }
+      }
+    }
+
     // Stage 7: LIR → .mcfunction
     const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions, generateSourceMap, mcVersion })
 
