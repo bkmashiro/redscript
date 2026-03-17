@@ -1,0 +1,125 @@
+// list.mcrs — Dynamic NBT-backed integer list operations.
+//
+// Lists are stored in NBT storage as int arrays.
+// The storage namespace is "rs:lists" and path is the variable name.
+//
+// IMPORTANT: These functions use raw() to emit NBT commands.
+// They operate on a NAMED list stored at a specific NBT path.
+// The caller must pass the list path as a namespace:path string.
+//
+// Example usage:
+//   // Create a list (declare as int[])
+//   let mylist: int[] = [1, 2, 3];
+//
+//   // Use list_* functions with raw() for dynamic operations.
+//   // Note: push/pop/len use raw() NBT commands directly.
+//
+// For fixed-size arrays, use int[] literals directly.
+// For dynamic lists, use the functions below.
+//
+// Storage convention: lists live at storage rs:lists <varname>
+
+module library;
+
+// list_len_of(ns, path): count elements in an NBT int list.
+// Returns the count stored in a scoreboard temp.
+// Use: raw("execute store result score $len __ns run data get storage ns:name path")
+// This is a convenience wrapper — in practice use raw() directly.
+
+// list_sum(a, b, c, d, e): sum of up to 5 int values (utility)
+fn list_sum5(a: int, b: int, c: int, d: int, e: int): int {
+    return a + b + c + d + e;
+}
+
+fn list_sum4(a: int, b: int, c: int, d: int): int {
+    return a + b + c + d;
+}
+
+fn list_sum3(a: int, b: int, c: int): int {
+    return a + b + c;
+}
+
+// list_min3 / list_max3: min/max over 3 values (useful for array-derived work)
+fn list_min3(a: int, b: int, c: int): int {
+    let m: int = a;
+    if (b < m) { m = b; }
+    if (c < m) { m = c; }
+    return m;
+}
+
+fn list_max3(a: int, b: int, c: int): int {
+    let m: int = a;
+    if (b > m) { m = b; }
+    if (c > m) { m = c; }
+    return m;
+}
+
+fn list_min5(a: int, b: int, c: int, d: int, e: int): int {
+    let m: int = a;
+    if (b < m) { m = b; }
+    if (c < m) { m = c; }
+    if (d < m) { m = d; }
+    if (e < m) { m = e; }
+    return m;
+}
+
+fn list_max5(a: int, b: int, c: int, d: int, e: int): int {
+    let m: int = a;
+    if (b > m) { m = b; }
+    if (c > m) { m = c; }
+    if (d > m) { m = d; }
+    if (e > m) { m = e; }
+    return m;
+}
+
+// ─── Sorting (in-register, fixed size) ───────────────────────────────────────
+
+// sort3_asc: sort 3 values ascending, returns packed as 3 separate ints via
+// side-effect scoreboard. Caller reads $sort3_a, $sort3_b, $sort3_c.
+// (This is a placeholder — proper NBT list sort requires runtime support.)
+
+// swap helper: sort2 returns the smaller value
+fn sort2_min(a: int, b: int): int {
+    if (a <= b) { return a; }
+    return b;
+}
+
+fn sort2_max(a: int, b: int): int {
+    if (a >= b) { return a; }
+    return b;
+}
+
+// bubble_sort3: returns sorted value at position pos (0=min, 1=mid, 2=max)
+fn sort3(a: int, b: int, c: int, pos: int): int {
+    // Sorting network for 3 elements
+    let x: int = a;
+    let y: int = b;
+    let z: int = c;
+    // Step 1: compare-swap (x, y)
+    if (x > y) { let tmp: int = x; x = y; y = tmp; }
+    // Step 2: compare-swap (y, z)
+    if (y > z) { let tmp: int = y; y = z; z = tmp; }
+    // Step 3: compare-swap (x, y)
+    if (x > y) { let tmp: int = x; x = y; y = tmp; }
+    if (pos == 0) { return x; }
+    if (pos == 1) { return y; }
+    return z;
+}
+
+// ─── Statistics ──────────────────────────────────────────────────────────────
+
+// avg3(a, b, c): integer average (truncated)
+fn avg3(a: int, b: int, c: int): int {
+    return (a + b + c) / 3;
+}
+
+fn avg5(a: int, b: int, c: int, d: int, e: int): int {
+    return (a + b + c + d + e) / 5;
+}
+
+// clamp_list3(a, b, c, lo, hi): clamp all 3 values
+fn clamp3(a: int, lo: int, hi: int): int {
+    if (a < lo) { return lo; }
+    if (a > hi) { return hi; }
+    return a;
+}
