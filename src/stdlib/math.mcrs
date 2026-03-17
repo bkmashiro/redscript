@@ -390,3 +390,85 @@ fn exp_fx(x: int): int {
     }
     return er;
 }
+
+// ─── Cubic root ──────────────────────────────────────────────────────────────
+
+// cbrt_fx(x): integer cube root, returns floor(cbrt(x)).
+// Uses Newton's method: g_next = (2*g + x/g²) / 3
+// cbrt_fx(1000) = 10 (∛1000=10), cbrt_fx(27) = 3, cbrt_fx(8) = 2
+fn cbrt_fx(x: int): int {
+    if (x <= 0) { return 0; }
+    let g: int = x / 3;
+    if (g <= 0) { g = 1; }
+    let i: int = 0;
+    while (i < 20) {
+        let g2: int = g * g;
+        if (g2 <= 0) { g2 = 1; }
+        let next: int = (2 * g + x / g2) / 3;
+        if (next == g) { i = 20; }
+        g = next;
+        if (g <= 0) { g = 1; }
+        i = i + 1;
+    }
+    return g;
+}
+
+// ─── Combinatorics ───────────────────────────────────────────────────────────
+
+// factorial(n): n! for n ∈ [0, 12] (13! exceeds int32)
+fn factorial(n: int): int {
+    if (n <= 1) { return 1; }
+    let r: int = 1;
+    let i: int = 2;
+    while (i <= n) { r = r * i; i = i + 1; }
+    return r;
+}
+
+// combinations(n, k): C(n,k) = n! / (k! * (n-k)!) for n ≤ 20, k ≤ n
+// Uses multiplicative formula to avoid overflow: C(n,k) = ∏ (n-i)/(i+1) for i=0..k-1
+fn combinations(n: int, k: int): int {
+    if (k <= 0) { return 1; }
+    if (k > n) { return 0; }
+    // Use smaller k for efficiency: C(n,k) == C(n, n-k)
+    let kk: int = k;
+    if (n - k < kk) { kk = n - k; }
+    let r: int = 1;
+    let i: int = 0;
+    while (i < kk) {
+        r = r * (n - i) / (i + 1);
+        i = i + 1;
+    }
+    return r;
+}
+
+// ─── Logarithm ───────────────────────────────────────────────────────────────
+
+// log10_fx(x): log base 10, fixed-point ×10000
+// log10(x) = ln(x) / ln(10) ≈ ln(x) / 23026
+fn log10_fx(x: int): int {
+    return ln(x) * 10000 / 23026;
+}
+
+// log2_fx(x): log base 2, fixed-point ×10000
+// log2(x) = ln(x) / ln(2) ≈ ln(x) / 6931
+fn log2_fx(x: int): int {
+    return ln(x) * 10000 / 6931;
+}
+
+// loga_fx(base_fx, x): log_base(x), fixed-point ×10000
+// base_fx and x are both ×10000
+// loga_fx(20000, 40000) ≈ 10000 (log_2(4) = 2, but ×10000 → 20000... wait)
+// Actually: log_b(x) = ln(x) / ln(b), both ×10000, so result = ln(x)/ln(b) × 10000
+fn loga_fx(base_fx: int, x: int): int {
+    let lb: int = ln(base_fx);
+    if (lb == 0) { return 0; }
+    return ln(x) * 10000 / lb;
+}
+
+// ─── Gamma function approximation ────────────────────────────────────────────
+
+// gamma_int(n): Gamma(n) = (n-1)! for positive integers
+fn gamma_int(n: int): int {
+    if (n <= 1) { return 1; }
+    return factorial(n - 1);
+}
