@@ -2,6 +2,17 @@
 
 All notable changes to RedScript will be documented in this file.
 
+## [2.4.0] - 2026-03-17
+
+### Added
+- Dynamic array index read: `arr[i]` where `i` is a variable (MC Function Macro, MC 1.20.2+)
+- Dynamic array index write: `arr[i] = val`, `arr[i] += val` compound assignment
+- `list_push(arr, val)` / `list_pop(arr)` / `list_len(arr)` builtins for NBT array manipulation
+
+### Known Limitations
+- Array parameters in function calls do not pass the array by reference yet; use `while` loops with dynamic index directly in the calling scope
+- `for` loops with dynamic array access may incorrectly inline when loop bounds are constants; use `while` loops instead
+
 ## [2.3.0] - 2026-03-17
 
 ### Added
