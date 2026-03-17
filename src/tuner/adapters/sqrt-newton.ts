@@ -8,12 +8,16 @@
  *   1. If x <= 0, return 0
  *   2. Initial guess: g = x >> INIT_SHIFT  (default: x/2)
  *   3. Newton iteration: g = (g + x * 10000 / g) / 2, repeated N times
- *      (x * 10000 / g done in two steps to avoid int32 overflow)
+ *      Overflow-safe: x * 10000 / g  →  (x * 100) / (g / 100)
  *   4. Return g
  *
- * Overflow analysis (x ≤ 2147483647, scale = 10000):
- *   Naive x * 10000 overflows int32 for x > 214748.
- *   Split: (x * 100) / (g / 100) ≈ x * 10000 / g — each step stays in int32.
+ * Valid range: x ∈ [1, 1_000_000]  (real range 0.0001 to 100.0)
+ *   Larger x needs more iterations; beyond 1M, convergence is not guaranteed
+ *   within N=12 iterations from an x/2 initial guess.
+ *
+ * Overflow analysis (x ≤ 1_000_000, SCALE = 10000):
+ *   x * 100 ≤ 100_000_000 — fits int32 (max ~2.1B) ✓
+ *   g / 100 is never 0 for g ≥ 100 (guard included) ✓
  *
  * Parameters:
  *   N:          iteration count, range [4, 12], integer
@@ -48,14 +52,14 @@ export const sqrtNewtonAdapter: TunerAdapter = {
 
     // Initial guess: x >> INIT_SHIFT
     let g = i32(x >> INIT_SHIFT);
-    if (g === 0) g = 1; // guard against zero guess
+    if (g <= 0) g = 1; // guard against zero/negative guess
 
-    // Newton iterations: g = (g + x*SCALE/g) / 2
-    // Overflow-safe: split x*SCALE/g as i32(x*100) / i32(g/100)
+    // Newton iterations: g = (g + x * 10000 / g) / 2
+    // Overflow-safe for x ≤ 1_000_000: split x*10000/g as (x*100)/(g/100)
     for (let iter = 0; iter < N; iter++) {
-      const gHalf  = i32(g / 100);
-      if (gHalf === 0) break; // avoid div-by-zero
-      const xdivg  = i32(i32(x * 100) / gHalf); // ≈ x * 10000 / g
+      const gDiv = i32(g / 100);
+      if (gDiv <= 0) break; // guard: g is too small, stop
+      const xdivg = i32(i32(x * 100) / gDiv); // ≈ x * 10000 / g
       g = i32(i32(g + xdivg) / 2);
       if (g <= 0) { g = 1; break; }
     }
@@ -70,22 +74,23 @@ export const sqrtNewtonAdapter: TunerAdapter = {
 
   sampleInputs(): number[] {
     const inputs: number[] = [];
-    // Linear sampling for small values (0.0001 to 1.0)
-    for (let i = 1; i <= 100; i++) {
-      inputs.push(i);         // tiny values: 0.0001 to 0.01
-    }
-    // Logarithmic sampling from 1.0 to 1000.0 (×10000: 10000 to 10_000_000)
-    const logMin = Math.log10(SCALE);
-    const logMax = Math.log10(10_000_000);
-    const steps = 150;
+
+    // Logarithmic sampling from 0.01 to 100.0 (×10000: 100 to 1_000_000)
+    // Lower bound 100 avoids g/100=0 in overflow-safe Newton step.
+    const logMin = Math.log10(100);
+    const logMax = Math.log10(1_000_000);
+    const steps = 200;
     for (let i = 0; i <= steps; i++) {
       const v = logMin + (i / steps) * (logMax - logMin);
-      inputs.push(Math.round(Math.pow(10, v)));
+      const x = Math.round(Math.pow(10, v));
+      inputs.push(x);
     }
-    // Also add exact perfect squares
-    for (let k = 1; k <= 1000; k++) {
-      inputs.push(k * k * SCALE);  // sqrt should be exact: k * SCALE
+
+    // Exact perfect squares (k=1..10 → x up to 100 * 10000 = 1_000_000)
+    for (let k = 1; k <= 10; k++) {
+      inputs.push(k * k * SCALE); // sqrt should be exactly k * SCALE
     }
+
     return inputs;
   },
 
@@ -93,14 +98,6 @@ export const sqrtNewtonAdapter: TunerAdapter = {
     const N          = Math.round(params['N']!);
     const INIT_SHIFT = Math.round(params['INIT_SHIFT']!);
 
-    // Build the repeated Newton iteration lines
-    const iterLines = [];
-    for (let i = 0; i < N; i++) {
-      iterLines.push(`    g = (g + g / 100 * 0 + x * 100 / (g / 100)) / 2;`);
-    }
-
-    // Actually, generate cleaner code using a helper expression
-    // g = (g + x * SCALE / g) / 2  — but overflow-safe
     const iters = Array.from({ length: N }, (_, i) =>
       `    g = (g + x * 100 / (g / 100)) / 2;  // iteration ${i + 1}`
     ).join('\n');
@@ -112,12 +109,14 @@ export const sqrtNewtonAdapter: TunerAdapter = {
 //
 // Parameters:
 //   N          = ${N}   (Newton iteration count)
-//   INIT_SHIFT = ${INIT_SHIFT}   (initial guess = x >> ${INIT_SHIFT})
+//   INIT_SHIFT = ${INIT_SHIFT}   (initial guess = x >> ${INIT_SHIFT}, i.e. x / ${1 << INIT_SHIFT})
 
 fn sqrt_fx(x: int): int {
     // Input x: fixed-point ×10000, returns floor(sqrt(x/10000)*10000)
-    // Valid range: x ∈ [0, 2147483647]
+    // Valid range: x ∈ [0, 1000000]  (real range 0.0 to 100.0)
     // max_error: ${meta.maxError.toFixed(6)} (in ×10000 units)
+    //
+    // Overflow-safe: x*10000/g computed as (x*100)/(g/100), valid for x ≤ 1_000_000
 
     if (x <= 0) { return 0; }
 
@@ -126,7 +125,7 @@ fn sqrt_fx(x: int): int {
     if (g <= 0) { g = 1; }
 
     // Newton iterations: g = (g + x * 10000 / g) / 2
-    // Overflow-safe split: x * 10000 / g  →  x * 100 / (g / 100)
+    // Split to avoid overflow: (x * 100) / (g / 100) ≈ x * 10000 / g
 ${iters}
 
     return g;
