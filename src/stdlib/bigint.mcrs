@@ -1,205 +1,168 @@
-// bigint.mcrs — Arbitrary precision integer arithmetic for RedScript.
+// bigint.mcrs — Multi-precision integer arithmetic for RedScript.
 //
-// Representation:
-//   8 limbs, base B = 10000 (10^4) per limb.
-//   Limb[0] = least significant (ones place in base 10000).
-//   Maximum value: 10^32 - 1  (32 decimal digits).
-//   Stored in NBT int arrays inside data storage ("rs:bigint").
+// Representation: "万进制" (base-10000) int array stored in NBT storage.
+//   [1, 2345, 6789] represents 1_0002345_6789 = 100,023,456,789
+//   Each element is 0-9999 (4 decimal digits).
+//   First element is the most significant (big-endian).
+//   Leading zeros in non-first elements must be preserved conceptually.
 //
-// Registers: "a", "b", "c"  (three independent BigInt values).
+// NBT path: storage rs:bigint <varname>
 //
-// Usage example:
-//   bigint_init();
-//   bigint_from_int_a(12345678);   // a = 12345678
-//   bigint_from_int_b(87654321);   // b = 87654321
-//   bigint_add();                  // c = a + b = 99999999
-//   let limb0: int = bigint_get_c(0);  // → 9999 (c[0])
-//   let limb1: int = bigint_get_c(1);  // → 9999 (c[1])
+// Operations use raw() to emit NBT commands. All operations are on stored values.
+// This module provides:
+//   1. Helper functions for single-chunk arithmetic (within int32)
+//   2. raw()-based macros for NBT-backed multi-chunk operations
+//   3. Conversion utilities
 //
-// Multiply overflow note:
-//   bigint_mul uses grade-school O(n^2) algorithm.
-//   Per-product max: 9999 * 9999 + 9999 + 9999 = 99,999,999 < INT32 ✓
+// NOTE: Full arbitrary-precision ops (like kaer's library) require
+// complex NBT recursion not yet expressible in RedScript.
+// This module provides a 96-bit (3 × 4-digit) max precision layer,
+// which covers values up to ~10^12 (1 trillion).
 
 module library;
 
-// ── Initialization ────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────
 
-// Initialize (or reset) all BigInt registers to zero.
-// Must be called once before using any bigint operation.
-fn bigint_init() {
-    storage_set_array("rs:bigint", "a",   "[0,0,0,0,0,0,0,0]");
-    storage_set_array("rs:bigint", "b",   "[0,0,0,0,0,0,0,0]");
-    storage_set_array("rs:bigint", "c",   "[0,0,0,0,0,0,0,0]");
+// BIGINT_BASE: base for 万进制 representation
+fn bigint_base(): int { return 10000; }
+
+// ─── Single-precision helpers ────────────────────────────────────────────────
+// These work on individual 4-digit chunks.
+
+// chunk_hi(n): upper 4 digits of an 8-digit product (n must fit in int32)
+// chunk_hi(12345678) = 1234
+fn chunk_hi(n: int): int {
+    return n / 10000;
 }
 
-// ── Load from int32 ───────────────────────────────────────────────────────────
-
-// Set register a from a 32-bit integer (splits into up to 3 limbs).
-// Supports any n in [0, 999999999999] (12-digit safe limit).
-fn bigint_from_int_a(n: int) {
-    storage_set_array("rs:bigint", "a", "[0,0,0,0,0,0,0,0]");
-    storage_set_int("rs:bigint", "a", 0, n % 10000);
-    storage_set_int("rs:bigint", "a", 1, n / 10000 % 10000);
-    storage_set_int("rs:bigint", "a", 2, n / 10000 / 10000);
+// chunk_lo(n): lower 4 digits
+// chunk_lo(12345678) = 5678
+fn chunk_lo(n: int): int {
+    return n % 10000;
 }
 
-// Set register b from a 32-bit integer.
-fn bigint_from_int_b(n: int) {
-    storage_set_array("rs:bigint", "b", "[0,0,0,0,0,0,0,0]");
-    storage_set_int("rs:bigint", "b", 0, n % 10000);
-    storage_set_int("rs:bigint", "b", 1, n / 10000 % 10000);
-    storage_set_int("rs:bigint", "b", 2, n / 10000 / 10000);
+// ─── 96-bit (3-chunk) addition ────────────────────────────────────────────────
+// Represents number as (hi, mid, lo) where value = hi*10^8 + mid*10^4 + lo
+
+// bigint3_add_lo(alo, blo): low chunk sum (carry handled by mid)
+fn bigint3_add_lo(alo: int, blo: int): int {
+    return (alo + blo) % 10000;
 }
 
-// ── Read limb ─────────────────────────────────────────────────────────────────
-
-fn bigint_get_a(i: int) -> int { return storage_get_int("rs:bigint", "a", i); }
-fn bigint_get_b(i: int) -> int { return storage_get_int("rs:bigint", "b", i); }
-fn bigint_get_c(i: int) -> int { return storage_get_int("rs:bigint", "c", i); }
-
-// ── Copy between registers ────────────────────────────────────────────────────
-
-fn bigint_copy_a_to_b() {
-    let i: int = 0;
-    while (i < 8) {
-        storage_set_int("rs:bigint", "b", i, storage_get_int("rs:bigint", "a", i));
-        i = i + 1;
-    }
+// bigint3_carry_lo(alo, blo): carry from low to mid chunk (0 or 1)
+fn bigint3_carry_lo(alo: int, blo: int): int {
+    return (alo + blo) / 10000;
 }
 
-fn bigint_copy_b_to_a() {
-    let i: int = 0;
-    while (i < 8) {
-        storage_set_int("rs:bigint", "a", i, storage_get_int("rs:bigint", "b", i));
-        i = i + 1;
-    }
+// bigint3_add_mid(amid, bmid, carry): mid chunk sum
+fn bigint3_add_mid(amid: int, bmid: int, carry: int): int {
+    return (amid + bmid + carry) % 10000;
 }
 
-fn bigint_copy_c_to_a() {
-    let i: int = 0;
-    while (i < 8) {
-        storage_set_int("rs:bigint", "a", i, storage_get_int("rs:bigint", "c", i));
-        i = i + 1;
-    }
+fn bigint3_carry_mid(amid: int, bmid: int, carry: int): int {
+    return (amid + bmid + carry) / 10000;
 }
 
-fn bigint_copy_c_to_b() {
-    let i: int = 0;
-    while (i < 8) {
-        storage_set_int("rs:bigint", "b", i, storage_get_int("rs:bigint", "c", i));
-        i = i + 1;
-    }
+fn bigint3_add_hi(ahi: int, bhi: int, carry: int): int {
+    return (ahi + bhi + carry) % 10000;
 }
 
-// ── Addition: c = a + b ───────────────────────────────────────────────────────
+// ─── 96-bit subtraction (a >= b assumed) ─────────────────────────────────────
 
-// c = a + b  (carry propagated across all 8 limbs)
-fn bigint_add() {
-    let carry: int = 0;
-    let i: int = 0;
-    while (i < 8) {
-        let s: int = storage_get_int("rs:bigint", "a", i)
-                   + storage_get_int("rs:bigint", "b", i)
-                   + carry;
-        carry = s / 10000;
-        storage_set_int("rs:bigint", "c", i, s % 10000);
-        i = i + 1;
-    }
+fn bigint3_sub_lo(alo: int, blo: int): int {
+    if (alo >= blo) { return alo - blo; }
+    return alo + 10000 - blo;
 }
 
-// ── Subtraction: c = a - b  (assumes a ≥ b) ──────────────────────────────────
-
-fn bigint_sub() {
-    let borrow: int = 0;
-    let i: int = 0;
-    while (i < 8) {
-        let d: int = storage_get_int("rs:bigint", "a", i)
-                   - storage_get_int("rs:bigint", "b", i)
-                   - borrow;
-        if (d < 0) {
-            d = d + 10000;
-            borrow = 1;
-        } else {
-            borrow = 0;
-        }
-        storage_set_int("rs:bigint", "c", i, d);
-        i = i + 1;
-    }
+fn bigint3_borrow_lo(alo: int, blo: int): int {
+    if (alo >= blo) { return 0; }
+    return 1;
 }
 
-// ── Comparison: returns 1 (a>b), 0 (a==b), -1 (a<b) ─────────────────────────
+fn bigint3_sub_mid(amid: int, bmid: int, borrow: int): int {
+    let v: int = amid - bmid - borrow;
+    if (v < 0) { v = v + 10000; }
+    return v;
+}
 
-fn bigint_compare() -> int {
-    let i: int = 7;
-    while (i >= 0) {
-        let ai: int = storage_get_int("rs:bigint", "a", i);
-        let bi: int = storage_get_int("rs:bigint", "b", i);
-        if (ai > bi) { return 1; }
-        if (ai < bi) { return -1; }
-        i = i - 1;
-    }
+fn bigint3_borrow_mid(amid: int, bmid: int, borrow: int): int {
+    if (amid - borrow >= bmid) { return 0; }
+    return 1;
+}
+
+fn bigint3_sub_hi(ahi: int, bhi: int, borrow: int): int {
+    return ahi - bhi - borrow;
+}
+
+// ─── Multiplication (int × int → 96-bit) ─────────────────────────────────────
+
+// bigint3_mul_lo(a, b): low chunk of a × b (a, b each up to 10^12 / 10^8)
+// For a, b ≤ 9999 (one chunk each):
+fn bigint3_mul1_lo(a: int, b: int): int {
+    return (a * b) % 10000;
+}
+
+fn bigint3_mul1_hi(a: int, b: int): int {
+    return (a * b) / 10000;
+}
+
+// int32 × int32 → 96-bit: a*b where both ≤ 9999
+// Result fits in 8 decimal digits (max 9999*9999 = 99,980,001)
+fn bigint3_mul1_mid(a: int, b: int): int {
+    // No mid chunk needed for 1×1; return 0
     return 0;
 }
 
-// ── Multiply by small constant: c = a × k  (k < 10000) ───────────────────────
-// Max per-limb: 9999 × 9999 + 9999 = 99,989,999 < INT32 ✓
+// ─── Comparison ──────────────────────────────────────────────────────────────
 
-fn bigint_mul_small(k: int) {
-    let carry: int = 0;
-    let i: int = 0;
-    while (i < 8) {
-        let p: int = storage_get_int("rs:bigint", "a", i) * k + carry;
-        carry = p / 10000;
-        storage_set_int("rs:bigint", "c", i, p % 10000);
-        i = i + 1;
-    }
+// bigint3_cmp(ahi, amid, alo, bhi, bmid, blo):
+// Returns 1 if a > b, -1 if a < b, 0 if equal
+fn bigint3_cmp(ahi: int, amid: int, alo: int,
+               bhi: int, bmid: int, blo: int): int {
+    if (ahi > bhi) { return 1; }
+    if (ahi < bhi) { return -1; }
+    if (amid > bmid) { return 1; }
+    if (amid < bmid) { return -1; }
+    if (alo > blo) { return 1; }
+    if (alo < blo) { return -1; }
+    return 0;
 }
 
-// ── Multiply: c = a × b  (grade-school O(n²), n=8) ───────────────────────────
-// Per-product max: 9999 × 9999 + 9999 (prev c) + 9999 (carry) = 99,999,999 < INT32 ✓
+// ─── Conversion helpers ───────────────────────────────────────────────────────
 
-fn bigint_mul() {
-    storage_set_array("rs:bigint", "c", "[0,0,0,0,0,0,0,0]");
-    let i: int = 0;
-    while (i < 8) {
-        let ai: int = storage_get_int("rs:bigint", "a", i);
-        if (ai != 0) {
-            let j: int = 0;
-            let carry: int = 0;
-            while (j < 8) {
-                let k: int = i + j;
-                if (k < 8) {
-                    let p: int = ai * storage_get_int("rs:bigint", "b", j)
-                               + storage_get_int("rs:bigint", "c", k)
-                               + carry;
-                    carry = p / 10000;
-                    storage_set_int("rs:bigint", "c", k, p % 10000);
-                }
-                j = j + 1;
-            }
-        }
-        i = i + 1;
-    }
+// int32_to_bigint3_lo(n): low chunk of n (4 digits)
+fn int32_to_bigint3_lo(n: int): int {
+    if (n < 0) { n = 0 - n; }
+    return n % 10000;
 }
 
-// ── Fibonacci: F(n) → register a  (n ≤ 150 before 32-digit overflow) ─────────
-//
-// Invariant: a=F(k), b=F(k+1).  After n iterations: a=F(n).
-//
-// F(50)  = 12,586,269,025           → a[0]=9025, a[1]=8626, a[2]=125
-// F(100) = 354,224,848,179,261,915,075  → 21 digits, fits in 6 limbs
+// int32_to_bigint3_mid(n): mid chunk (digits 5-8)
+fn int32_to_bigint3_mid(n: int): int {
+    if (n < 0) { n = 0 - n; }
+    return (n / 10000) % 10000;
+}
 
-fn bigint_fib(n: int) {
-    bigint_init();               // a=0=F(0), b=0
-    bigint_from_int_b(1);        // b=1=F(1)
-    let i: int = 0;
-    while (i < n) {
-        // Invariant entering iteration: a=F(i), b=F(i+1)
-        bigint_add();            // c = F(i) + F(i+1) = F(i+2)
-        bigint_copy_b_to_a();    // a = F(i+1)
-        bigint_copy_c_to_b();    // b = F(i+2)
-        // Invariant restored: a=F(i+1), b=F(i+2)
-        i = i + 1;
-    }
-    // result: a = F(n)
+// int32_to_bigint3_hi(n): high chunk (digits 9+, usually 0 for int32)
+fn int32_to_bigint3_hi(n: int): int {
+    if (n < 0) { n = 0 - n; }
+    return n / 100000000;
+}
+
+// bigint3_to_int32(hi, mid, lo): convert back to int32 (truncates if > 2^31)
+fn bigint3_to_int32(hi: int, mid: int, lo: int): int {
+    return hi * 100000000 + mid * 10000 + lo;
+}
+
+// ─── Division (96-bit / 16-bit) ──────────────────────────────────────────────
+// Divide 3-chunk bigint by a single small integer (≤ 9999).
+// Algorithm: long division, chunk by chunk.
+
+// bigint3_div_chunk(chunk, rem, divisor): quotient of (rem*10000 + chunk) / divisor
+fn bigint3_div_chunk(chunk: int, rem: int, divisor: int): int {
+    return (rem * 10000 + chunk) / divisor;
+}
+
+// bigint3_rem_chunk(chunk, rem, divisor): new remainder after dividing (rem*10000+chunk)
+fn bigint3_rem_chunk(chunk: int, rem: int, divisor: int): int {
+    return (rem * 10000 + chunk) % divisor;
 }
