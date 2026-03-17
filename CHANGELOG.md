@@ -2,6 +2,26 @@
 
 All notable changes to RedScript will be documented in this file.
 
+## [2.3.0] - 2026-03-17
+
+### Added
+- `stdlib/math.mcrs`: `ln` (SA-tuned atanh series, max_error < 0.0006), `sqrt_fx` (×10000 scale), `exp_fx` (Horner Taylor + 2^k scaling)
+- `stdlib/math_hp.mcrs`: `sin_hp`/`cos_hp` using MC entity rotation trick (double precision), `init_trig()` bootstrap
+- `stdlib/random.mcrs`: LCG (`next_lcg`, `random_range`, `random_bool`) + PCG (`pcg_next_lo/hi`, `pcg_output`)
+- `stdlib/color.mcrs`: RGB packing/unpacking, `rgb_lerp`, HSL↔RGB conversion (`hsl_to_r/g/b`, `rgb_to_h/s/l`)
+- `stdlib/bits.mcrs`: bitwise AND/OR/XOR/NOT, left/right shift, bit get/set/clear/toggle, popcount (all integer-simulated)
+- `stdlib/list.mcrs`: `sort3`, min/max/avg for 3 and 5 values, weighted choice utilities
+- `stdlib/geometry.mcrs`: AABB/sphere/cylinder contains checks, parabola physics, grid/tile helpers, angle normalization, MC sun angle
+- `stdlib/signal.mcrs`: uniform, normal (12-sample approximation), exponential distribution, bernoulli trial, weighted2/3 choice
+- `stdlib/bigint.mcrs`: 96-bit base-10000 arithmetic (add, sub, mul, div, cmp, int32↔bigint3 conversion)
+- `src/tuner/`: hyperparameter search framework (Nelder-Mead + Simulated Annealing) for stdlib coefficient optimization
+  - `adapters/ln-polynomial.ts`: atanh series adapter
+  - `adapters/sqrt-newton.ts`: Newton iteration adapter
+  - CLI: `redscript tune --adapter <name> [--strategy nm|sa] [--budget N] [--out path]`
+
+### Changed
+- `stdlib/vec.mcrs`: added 2D/3D add/sub/scale/neg component helpers
+
 ## [2.1.1] - 2026-03-16
 
 ### Added

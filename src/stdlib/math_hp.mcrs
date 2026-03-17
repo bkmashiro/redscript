@@ -38,15 +38,16 @@ fn init_trig() {
 // Example: sin_hp(900000) == 10000, sin_hp(0) == 0, sin_hp(450000) ≈ 7071
 @require_on_load(init_trig)
 fn sin_hp(angle: int): int {
-    // Step 1: store angle (÷10000 to get float degrees) into Marker Rotation[0]
+    // Step 1: store angle into scoreboard, then use execute store to set Rotation[0]
+    scoreboard_set("$sin_hp_in", "__rs_math_hp", angle);
     raw("execute store result entity @e[tag=rs_trig,limit=1] Rotation[0] float 0.0001 run scoreboard players get $sin_hp_in __rs_math_hp");
     // Step 2: teleport Marker 1 block forward along its facing direction
     raw("execute as @e[tag=rs_trig,limit=1] rotated as @s positioned 0.0 0.0 0.0 run tp @s ^ ^ ^1 ~ ~");
     // Step 3: read Pos[2] (= sin θ), scale ×10000
     raw("execute store result score $sin_hp_out __rs_math_hp run data get entity @e[tag=rs_trig,limit=1] Pos[2] 10000.0");
-    // Step 4: reset Marker position back to origin
+    // Step 4: reset Marker position
     raw("tp @e[tag=rs_trig,limit=1] 0 0 0");
-    return 0;  // result is in $sin_hp_out — compiler returns it via scoreboard
+    return scoreboard_get("$sin_hp_out", "__rs_math_hp");
 }
 
 // cos_hp(angle): high-precision cosine.
@@ -54,10 +55,11 @@ fn sin_hp(angle: int): int {
 // returns: cos(angle/10000°) × 10000
 @require_on_load(init_trig)
 fn cos_hp(angle: int): int {
+    scoreboard_set("$cos_hp_in", "__rs_math_hp", angle);
     raw("execute store result entity @e[tag=rs_trig,limit=1] Rotation[0] float 0.0001 run scoreboard players get $cos_hp_in __rs_math_hp");
     raw("execute as @e[tag=rs_trig,limit=1] rotated as @s positioned 0.0 0.0 0.0 run tp @s ^ ^ ^1 ~ ~");
     // Pos[0] = cos θ
     raw("execute store result score $cos_hp_out __rs_math_hp run data get entity @e[tag=rs_trig,limit=1] Pos[0] 10000.0");
     raw("tp @e[tag=rs_trig,limit=1] 0 0 0");
-    return 0;
+    return scoreboard_get("$cos_hp_out", "__rs_math_hp");
 }
