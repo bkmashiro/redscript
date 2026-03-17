@@ -60,7 +60,7 @@ Last updated: 2026-03-17
 ## Up Next 📋
 
 ### P1 — Docs
-- [ ] **docs 网站更新** `status: todo` `priority: p1`
+- [ ] **docs 网站更新** `status: todo` `priority: p4`
   - easing / noise / physics / matrix / signal / advanced / bigint / parabola / quaternion / bezier_n
   - 编译器新特性：coroutine、module system、double 类型
   - 每个 stdlib 函数加 usage example
