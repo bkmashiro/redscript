@@ -1075,12 +1075,19 @@ function lowerExpr(
     }
 
     case 'index': {
-      // Check if obj is a tracked array variable with a constant index
+      // Check if obj is a tracked array variable
       if (expr.obj.kind === 'ident') {
         const arrInfo = ctx.arrayVars.get(expr.obj.name)
-        if (arrInfo && expr.index.kind === 'int_lit') {
+        if (arrInfo) {
           const t = ctx.freshTemp()
-          ctx.emit({ kind: 'nbt_read', dst: t, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[${expr.index.value}]`, scale: 1 })
+          if (expr.index.kind === 'int_lit') {
+            // Constant index: direct NBT read
+            ctx.emit({ kind: 'nbt_read', dst: t, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[${expr.index.value}]`, scale: 1 })
+          } else {
+            // Dynamic index: emit nbt_read_dynamic
+            const idxOp = lowerExpr(expr.index, ctx, scope)
+            ctx.emit({ kind: 'nbt_read_dynamic', dst: t, ns: arrInfo.ns, pathPrefix: arrInfo.pathPrefix, indexSrc: idxOp })
+          }
           return { kind: 'temp', name: t }
         }
       }

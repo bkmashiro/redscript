@@ -78,6 +78,7 @@ export type MIRInstr = MIRInstrBase & (
 
   // ── NBT storage ──────────────────────────────────────────────────────────
   | { kind: 'nbt_read'; dst: Temp; ns: string; path: string; scale: number }
+  | { kind: 'nbt_read_dynamic'; dst: Temp; ns: string; pathPrefix: string; indexSrc: Operand }
   | { kind: 'nbt_write'; ns: string; path: string; type: NBTType; scale: number; src: Operand }
 
   // ── Vanilla scoreboard interop ────────────────────────────────────────────
