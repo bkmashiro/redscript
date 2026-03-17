@@ -346,3 +346,183 @@ describe('stdlib e2e: vec3d length & distance', () => {
     expect(val).toBeLessThanOrEqual(1733)
   })
 })
+
+// ===========================================================================
+// Additional stdlib: load sources
+// ===========================================================================
+
+const RANDOM_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/random.mcrs'),
+  'utf-8',
+)
+const LIST_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/list.mcrs'),
+  'utf-8',
+)
+const BIGINT_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/bigint.mcrs'),
+  'utf-8',
+)
+const EASING_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/easing.mcrs'),
+  'utf-8',
+)
+
+// ===========================================================================
+// math.mcrs — runtime execution (extended)
+// ===========================================================================
+
+describe('math.mcrs — runtime execution', () => {
+  const rt = makeRuntime(`
+    fn test_abs_neg42(): int { return abs(-42); }
+    fn test_min_3_7(): int { return min(3, 7); }
+    fn test_max_3_7(): int { return max(3, 7); }
+    fn test_clamp_15(): int { return clamp(15, 0, 10); }
+    fn test_clamp_neg5(): int { return clamp(-5, 0, 10); }
+    fn test_isqrt_144(): int { return isqrt(144); }
+    fn test_isqrt_2(): int { return isqrt(2); }
+    fn test_gcd_12_8(): int { return gcd(12, 8); }
+    fn test_lcm_4_6(): int { return lcm(4, 6); }
+    fn test_pow_2_10(): int { return pow_int(2, 10); }
+    fn test_comb_5_2(): int { return combinations(5, 2); }
+    fn test_comb_10_3(): int { return combinations(10, 3); }
+    fn test_factorial_5(): int { return factorial(5); }
+    fn test_log2_8(): int { return log2_int(8); }
+    fn test_log2_1024(): int { return log2_int(1024); }
+    fn test_sqrt_fx_40000(): int { return sqrt_fx(40000); }
+    fn test_cbrt_fx_27(): int { return cbrt_fx(27); }
+    fn test_cbrt_fx_1000(): int { return cbrt_fx(1000); }
+    fn test_approx_eq_1(): int { return approx_eq(100, 103, 5); }
+    fn test_approx_eq_0(): int { return approx_eq(100, 110, 5); }
+  `)
+
+  test('abs(-42) == 42', () => expect(callAndGetRet(rt, 'test_abs_neg42')).toBe(42))
+  test('min(3,7) == 3', () => expect(callAndGetRet(rt, 'test_min_3_7')).toBe(3))
+  test('max(3,7) == 7', () => expect(callAndGetRet(rt, 'test_max_3_7')).toBe(7))
+  test('clamp(15,0,10) == 10', () => expect(callAndGetRet(rt, 'test_clamp_15')).toBe(10))
+  test('clamp(-5,0,10) == 0', () => expect(callAndGetRet(rt, 'test_clamp_neg5')).toBe(0))
+  test('isqrt(144) == 12', () => expect(callAndGetRet(rt, 'test_isqrt_144')).toBe(12))
+  test('isqrt(2) == 1', () => expect(callAndGetRet(rt, 'test_isqrt_2')).toBe(1))
+  test('gcd(12,8) == 4', () => expect(callAndGetRet(rt, 'test_gcd_12_8')).toBe(4))
+  test('lcm(4,6) == 12', () => expect(callAndGetRet(rt, 'test_lcm_4_6')).toBe(12))
+  test('pow_int(2,10) == 1024', () => expect(callAndGetRet(rt, 'test_pow_2_10')).toBe(1024))
+  test('combinations(5,2) == 10', () => expect(callAndGetRet(rt, 'test_comb_5_2')).toBe(10))
+  test('combinations(10,3) == 120', () => expect(callAndGetRet(rt, 'test_comb_10_3')).toBe(120))
+  test('factorial(5) == 120', () => expect(callAndGetRet(rt, 'test_factorial_5')).toBe(120))
+  test('log2_int(8) == 3', () => expect(callAndGetRet(rt, 'test_log2_8')).toBe(3))
+  test('log2_int(1024) == 10', () => expect(callAndGetRet(rt, 'test_log2_1024')).toBe(10))
+  test('sqrt_fx(40000) == 200000 (√4 × 10000² scale)', () => {
+    // sqrt_fx uses isqrt(x*100)*100: isqrt(4000000)*100 = 2000*100 = 200000
+    const val = callAndGetRet(rt, 'test_sqrt_fx_40000')
+    expect(val).toBe(200000)
+  })
+  test('cbrt_fx(27) == 3', () => expect(callAndGetRet(rt, 'test_cbrt_fx_27')).toBe(3))
+  test('cbrt_fx(1000) == 10', () => expect(callAndGetRet(rt, 'test_cbrt_fx_1000')).toBe(10))
+  test('approx_eq(100, 103, 5) == 1', () => expect(callAndGetRet(rt, 'test_approx_eq_1')).toBe(1))
+  test('approx_eq(100, 110, 5) == 0', () => expect(callAndGetRet(rt, 'test_approx_eq_0')).toBe(0))
+})
+
+// ===========================================================================
+// random.mcrs — runtime
+// ===========================================================================
+
+describe('random.mcrs — runtime', () => {
+  const rt = makeRuntime(`
+    fn test_lcg_a(): int { return next_lcg(12345); }
+    fn test_lcg_b(): int { return next_lcg(next_lcg(12345)); }
+    fn test_rrange(): int { return random_range(next_lcg(99999), 0, 100); }
+    fn test_rbool(): int { return random_bool(next_lcg(42)); }
+  `, [MATH_SRC, RANDOM_SRC])
+
+  test('next_lcg produces different values each call', () => {
+    const a = callAndGetRet(rt, 'test_lcg_a')
+    const b = callAndGetRet(rt, 'test_lcg_b')
+    expect(a).not.toBe(b)
+  })
+  test('random_range stays in bounds [0,100)', () => {
+    const val = callAndGetRet(rt, 'test_rrange')
+    expect(val).toBeGreaterThanOrEqual(0)
+    expect(val).toBeLessThan(100)
+  })
+  test('random_bool returns 0 or 1', () => {
+    const val = callAndGetRet(rt, 'test_rbool')
+    expect([0, 1]).toContain(val)
+  })
+})
+
+// ===========================================================================
+// list.mcrs — runtime
+// ===========================================================================
+
+describe('list.mcrs — runtime', () => {
+  const rt = makeRuntime(`
+    fn test_sort3_min(): int { return sort3(30, 10, 20, 0); }
+    fn test_sort3_max(): int { return sort3(30, 10, 20, 2); }
+    fn test_sort4_min(): int { return sort4(40, 10, 30, 20, 0); }
+    fn test_list_min3(): int { return list_min3(5, 3, 8); }
+    fn test_list_max3(): int { return list_max3(5, 3, 8); }
+    fn test_avg3(): int { return avg3(10, 20, 30); }
+    fn test_weighted2(): int { return weighted2(12345, 1, 1); }
+  `, [MATH_SRC, LIST_SRC])
+
+  test('sort3(30,10,20, 0) == 10 (min)', () => expect(callAndGetRet(rt, 'test_sort3_min')).toBe(10))
+  test('sort3(30,10,20, 2) == 30 (max)', () => expect(callAndGetRet(rt, 'test_sort3_max')).toBe(30))
+  test('sort4(40,10,30,20, 0) == 10', () => expect(callAndGetRet(rt, 'test_sort4_min')).toBe(10))
+  test('list_min3(5,3,8) == 3', () => expect(callAndGetRet(rt, 'test_list_min3')).toBe(3))
+  test('list_max3(5,3,8) == 8', () => expect(callAndGetRet(rt, 'test_list_max3')).toBe(8))
+  test('avg3(10,20,30) == 20', () => expect(callAndGetRet(rt, 'test_avg3')).toBe(20))
+  test('weighted2 returns 0 or 1', () => {
+    const val = callAndGetRet(rt, 'test_weighted2')
+    expect([0, 1]).toContain(val)
+  })
+})
+
+// ===========================================================================
+// bigint.mcrs — runtime
+// ===========================================================================
+
+describe('bigint.mcrs — runtime', () => {
+  // bigint3_add: [0, 9999, 1] + [0, 0, 9999] = [0, 1, 0, 0] overflow mid → [1, 0, 0]
+  // Use simpler: add_lo / carry
+  const rt = makeRuntime(`
+    fn test_bigint3_add_lo(): int { return bigint3_add_lo(9999, 1); }
+    fn test_bigint3_carry_lo(): int { return bigint3_carry_lo(9999, 1); }
+    fn test_bigint3_add_mid_carry(): int {
+        let carry: int = bigint3_carry_lo(9999, 1);
+        return bigint3_add_mid(9999, 0, carry);
+    }
+    fn test_bigint3_carry_mid(): int {
+        let carry: int = bigint3_carry_lo(9999, 1);
+        return bigint3_carry_mid(9999, 0, carry);
+    }
+    fn test_bigint3_cmp_gt(): int {
+        return bigint3_cmp(1, 0, 0, 0, 9999, 9999);
+    }
+    fn test_bigint3_cmp_eq(): int {
+        return bigint3_cmp(0, 100, 5000, 0, 100, 5000);
+    }
+    fn test_int32_bigint3_lo(): int { return int32_to_bigint3_lo(1023456789); }
+    fn test_int32_bigint3_mid(): int { return int32_to_bigint3_mid(1023456789); }
+    fn test_int32_bigint3_hi(): int { return int32_to_bigint3_hi(1023456789); }
+  `, [MATH_SRC, BIGINT_SRC])
+
+  test('bigint3_add_lo(9999,1) == 0 (overflow)', () =>
+    expect(callAndGetRet(rt, 'test_bigint3_add_lo')).toBe(0))
+  test('bigint3_carry_lo(9999,1) == 1', () =>
+    expect(callAndGetRet(rt, 'test_bigint3_carry_lo')).toBe(1))
+  test('bigint3_add_mid with carry propagates: (9999+0+1)%10000 == 0', () =>
+    expect(callAndGetRet(rt, 'test_bigint3_add_mid_carry')).toBe(0))
+  test('bigint3_carry_mid(9999,0,1) == 1 (cascade carry)', () =>
+    expect(callAndGetRet(rt, 'test_bigint3_carry_mid')).toBe(1))
+  test('bigint3_cmp: [1,0,0] > [0,9999,9999] returns 1', () =>
+    expect(callAndGetRet(rt, 'test_bigint3_cmp_gt')).toBe(1))
+  test('bigint3_cmp: equal returns 0', () =>
+    expect(callAndGetRet(rt, 'test_bigint3_cmp_eq')).toBe(0))
+  // 1023456789 = 10 * 10000^2 + 2345 * 10000 + 6789
+  test('int32_to_bigint3_lo(1023456789) == 6789', () =>
+    expect(callAndGetRet(rt, 'test_int32_bigint3_lo')).toBe(6789))
+  test('int32_to_bigint3_mid(1023456789) == 2345', () =>
+    expect(callAndGetRet(rt, 'test_int32_bigint3_mid')).toBe(2345))
+  test('int32_to_bigint3_hi(1023456789) == 10', () =>
+    expect(callAndGetRet(rt, 'test_int32_bigint3_hi')).toBe(10))
+})
