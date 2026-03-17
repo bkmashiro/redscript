@@ -1,0 +1,150 @@
+// calculus.mcrs — Numerical calculus for RedScript datapacks.
+//
+// All values fixed-point ×10000 unless noted.
+//
+// Methods:
+//   - Numerical differentiation (finite difference)
+//   - Numerical integration (trapezoid, Simpson's rule over fixed arrays)
+//   - Riemann sum helpers
+//   - Curve length approximation
+
+module library;
+
+// ─── Differentiation ─────────────────────────────────────────────────────────
+
+// deriv_forward(f1, f0, h_fx): forward difference derivative
+// f1 = f(x+h), f0 = f(x), h_fx = step size ×10000
+// Returns df/dx ×10000
+fn deriv_forward(f1: int, f0: int, h_fx: int): int {
+    if (h_fx == 0) { return 0; }
+    return (f1 - f0) * 10000 / h_fx;
+}
+
+// deriv_central(f_plus, f_minus, h_fx): central difference (more accurate)
+// f_plus = f(x+h), f_minus = f(x-h)
+// Returns df/dx ×10000
+fn deriv_central(f_plus: int, f_minus: int, h_fx: int): int {
+    if (h_fx == 0) { return 0; }
+    return (f_plus - f_minus) * 10000 / (2 * h_fx);
+}
+
+// second_deriv(f_plus, f0, f_minus, h_fx): second derivative
+// Returns d²f/dx² ×10000
+fn second_deriv(f_plus: int, f0: int, f_minus: int, h_fx: int): int {
+    if (h_fx == 0) { return 0; }
+    return (f_plus - 2 * f0 + f_minus) * 100000000 / h_fx / h_fx;
+}
+
+// ─── Integration over arrays ──────────────────────────────────────────────────
+//
+// For integration, the user provides an array of function values at equally
+// spaced points, and the step size.
+
+// integrate_trapezoid(vals, n, h_fx): trapezoidal rule integration
+// vals: array of n function values ×10000, equally spaced by h_fx
+// h_fx: step width ×10000
+// Returns integral ×10000 (area under curve)
+fn integrate_trapezoid(vals: int[], n: int, h_fx: int): int {
+    if (n < 2) { return 0; }
+    // Sum = (vals[0] + vals[n-1]) / 2 + vals[1] + vals[2] + ... + vals[n-2]
+    let sum: int = vals[0] / 2 + vals[n - 1] / 2;
+    let i: int = 1;
+    while (i < n - 1) {
+        sum = sum + vals[i];
+        i = i + 1;
+    }
+    return sum * h_fx / 10000;
+}
+
+// integrate_simpson(vals, n, h_fx): Simpson's 1/3 rule (n must be odd, n ≥ 3)
+// More accurate than trapezoid for smooth functions
+fn integrate_simpson(vals: int[], n: int, h_fx: int): int {
+    if (n < 3) { return integrate_trapezoid(vals, n, h_fx); }
+    // Ensure n is odd by using n-1 if even
+    let m: int = n;
+    if (m % 2 == 0) { m = m - 1; }
+    // Coefficients: 1, 4, 2, 4, 2, ..., 4, 1 (times h/3)
+    let sum: int = vals[0] + vals[m - 1];
+    let i: int = 1;
+    while (i < m - 1) {
+        if (i % 2 == 1) {
+            sum = sum + 4 * vals[i];
+        }
+        if (i % 2 == 0) {
+            sum = sum + 2 * vals[i];
+        }
+        i = i + 1;
+    }
+    return sum * h_fx / 30000;  // × h/3 = h_fx / (3 × 10000)
+}
+
+// ─── Riemann sums ─────────────────────────────────────────────────────────────
+
+// riemann_left(vals, n, h_fx): left Riemann sum
+fn riemann_left(vals: int[], n: int, h_fx: int): int {
+    let sum: int = 0;
+    let i: int = 0;
+    while (i < n - 1) { sum = sum + vals[i]; i = i + 1; }
+    return sum * h_fx / 10000;
+}
+
+// riemann_right(vals, n, h_fx): right Riemann sum
+fn riemann_right(vals: int[], n: int, h_fx: int): int {
+    let sum: int = 0;
+    let i: int = 1;
+    while (i < n) { sum = sum + vals[i]; i = i + 1; }
+    return sum * h_fx / 10000;
+}
+
+// riemann_mid(vals, n, h_fx): midpoint Riemann sum
+// vals: midpoint values (n-1 midpoints for n-1 intervals)
+fn riemann_mid(vals: int[], n: int, h_fx: int): int {
+    let sum: int = 0;
+    let i: int = 0;
+    while (i < n) { sum = sum + vals[i]; i = i + 1; }
+    return sum * h_fx / 10000;
+}
+
+// ─── Curve length ────────────────────────────────────────────────────────────
+
+// curve_length_2d(xs, ys, n): approximate arc length of a 2D polyline
+// xs, ys: x and y coordinates ×10000 of n points
+fn curve_length_2d(xs: int[], ys: int[], n: int): int {
+    let total: int = 0;
+    let i: int = 0;
+    while (i < n - 1) {
+        let dx: int = xs[i + 1] - xs[i];
+        let dy: int = ys[i + 1] - ys[i];
+        let seg_sq: int = dx * dx / 10000 + dy * dy / 10000;
+        total = total + isqrt(seg_sq * 100) * 100;
+        i = i + 1;
+    }
+    return total;
+}
+
+// ─── Running statistics ───────────────────────────────────────────────────────
+
+// running_mean(prev_mean, new_val, n): Welford's online mean update
+// prev_mean ×10000, new_val ×10000, n: count after adding new_val (n ≥ 1)
+fn running_mean(prev_mean: int, new_val: int, n: int): int {
+    if (n <= 1) { return new_val; }
+    return prev_mean + (new_val - prev_mean) * 10000 / (n * 10000);
+}
+
+// running_m2(prev_m2, prev_mean, new_mean, new_val): Welford's M2 update
+// Used to compute variance: variance = m2 / (n-1)
+fn running_m2(prev_m2: int, prev_mean: int, new_mean: int, new_val: int): int {
+    return prev_m2 + (new_val - prev_mean) * (new_val - new_mean) / 10000;
+}
+
+// variance_from_m2(m2, n): get variance from Welford's M2, n = number of samples
+fn variance_from_m2(m2: int, n: int): int {
+    if (n <= 1) { return 0; }
+    return m2 / (n - 1);
+}
+
+// std_dev_approx(variance_fx): approximate std dev = √variance
+fn std_dev_approx(variance_fx: int): int {
+    if (variance_fx <= 0) { return 0; }
+    return isqrt(variance_fx * 100) * 100 / 10000;
+}

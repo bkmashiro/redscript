@@ -194,3 +194,40 @@ fn bigint_leading_zeros(arr: int[], len: int): int {
     }
     return count;
 }
+
+// ─── Division: bigint ÷ small integer ────────────────────────────────────────
+// Divides n-chunk bigint by a small integer (1 ≤ divisor ≤ 9999)
+// Algorithm: long division chunk by chunk (most-significant first)
+// result[i] = (rem*10000 + a[i]) / divisor
+// rem = (rem*10000 + a[i]) % divisor
+
+// bigint_div_small(a, divisor, result, len): result = a / divisor
+// Returns remainder.
+fn bigint_div_small(a: int[], divisor: int, result: int[], len: int): int {
+    let rem: int = 0;
+    let i: int = 0;
+    while (i < len) {
+        let cur: int = rem * 10000 + a[i];
+        result[i] = cur / divisor;
+        rem = cur % divisor;
+        i = i + 1;
+    }
+    return rem;
+}
+
+// bigint_mod_small(a, divisor, len): return a % divisor (0..divisor-1)
+fn bigint_mod_small(a: int[], divisor: int, len: int): int {
+    let rem: int = 0;
+    let i: int = 0;
+    while (i < len) {
+        rem = (rem * 10000 + a[i]) % divisor;
+        i = i + 1;
+    }
+    return rem;
+}
+
+// bigint_print_chunks(a, len): get the value of chunk at index i
+// Helper to read specific chunk for display purposes
+fn bigint_chunk(a: int[], i: int): int {
+    return a[i];
+}

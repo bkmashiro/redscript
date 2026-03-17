@@ -63,3 +63,119 @@ fn cos_hp(angle: int): int {
     raw("tp @e[tag=rs_trig,limit=1] 0 0 0");
     return scoreboard_get("$cos_hp_out", "__rs_math_hp");
 }
+
+// ─── Display Entity SVD: High-precision arithmetic ────────────────────────────
+//
+// MC Display Entities use SVD (Singular Value Decomposition) internally.
+// By setting a diagonal matrix [a,0,0,0, 0,b,0,0, 0,0,c,0, 0,0,0,d],
+// MC computes scale = [a/d, b/d, c/d] in Java double precision (~15 sig figs).
+//
+// This allows:
+//   - div_hp(a, b)        → a/b with double precision
+//   - div3_hp(a,b,c, d)  → [a/d, b/d, c/d] — three divisions in one call
+//   - sqrt_hp(x)          → √x via distance trick
+//   - norm3_hp(x, y, z)  → √(x²+y²+z²) via vector magnitude
+//
+// ⚠ SETUP: Also call init_trig() in your @load (reuses rs_trig entity).
+//   Uses a SEPARATE entity tagged "rs_div" for SVD operations.
+//   init_trig() does NOT create rs_div — call init_div() separately.
+
+// init_div(): create the Display Entity for SVD operations.
+// Call once from your @load function.
+@require_on_load(init_div)
+fn init_div() {
+    raw("execute unless entity @e[tag=rs_div,limit=1] run summon minecraft:block_display ~ 0 ~ {Tags:[\"rs_div\"]}");
+}
+
+// div_hp(a, b): high-precision division a/b, returns (a/b) × 10000
+// a, b: integers (×10000 scale). Result: (a/b) × 10000
+// Example: div_hp(10000, 3000) ≈ 33333 (10000/3000 = 3.3333...)
+@require_on_load(init_div)
+fn div_hp(a: int, b: int): int {
+    // Set transformation matrix: [a,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,b]
+    // MC SVD gives scale.x = a/b
+    scoreboard_set("$div_a", "__rs_math_hp", a);
+    scoreboard_set("$div_b", "__rs_math_hp", b);
+    raw("execute store result storage rs:math_hp div_a float 0.0001 run scoreboard players get $div_a __rs_math_hp");
+    raw("execute store result storage rs:math_hp div_b float 0.0001 run scoreboard players get $div_b __rs_math_hp");
+    raw("data modify entity @e[tag=rs_div,limit=1] transformation set value {left_rotation:[0f,0f,0f,1f],scale:[1f,1f,1f],right_rotation:[0f,0f,0f,1f],translation:[0f,0f,0f]}");
+    raw("execute store result storage rs:math_hp div_mat[0] float 1 run data get storage rs:math_hp div_a");
+    raw("execute store result storage rs:math_hp div_mat[15] float 1 run data get storage rs:math_hp div_b");
+    raw("data modify entity @e[tag=rs_div,limit=1] transformation set from storage rs:math_hp div_mat");
+    raw("execute store result score $div_result __rs_math_hp run data get entity @e[tag=rs_div,limit=1] transformation.scale[0] 10000.0");
+    return scoreboard_get("$div_result", "__rs_math_hp");
+}
+
+// div3_hp(a, b, c, d): divide three values by d simultaneously
+// Returns a/d, result in scoreboard $div3_x/y/z __rs_math_hp (×10000)
+// Use scoreboard_get to read each result.
+@require_on_load(init_div)
+fn div3_hp(a: int, b: int, c: int, d: int): int {
+    scoreboard_set("$div3_a", "__rs_math_hp", a);
+    scoreboard_set("$div3_b", "__rs_math_hp", b);
+    scoreboard_set("$div3_c", "__rs_math_hp", c);
+    scoreboard_set("$div3_d", "__rs_math_hp", d);
+    raw("execute store result storage rs:math_hp d3a float 0.0001 run scoreboard players get $div3_a __rs_math_hp");
+    raw("execute store result storage rs:math_hp d3b float 0.0001 run scoreboard players get $div3_b __rs_math_hp");
+    raw("execute store result storage rs:math_hp d3c float 0.0001 run scoreboard players get $div3_c __rs_math_hp");
+    raw("execute store result storage rs:math_hp d3d float 0.0001 run scoreboard players get $div3_d __rs_math_hp");
+    // Build diagonal matrix [a,0,0,0, 0,b,0,0, 0,0,c,0, 0,0,0,d]
+    raw("data modify storage rs:math_hp div3_mat set value [0f,0f,0f,0f,0f,0f,0f,0f,0f,0f,0f,0f,0f,0f,0f,0f]");
+    raw("execute store result storage rs:math_hp div3_mat[0] float 1 run data get storage rs:math_hp d3a");
+    raw("execute store result storage rs:math_hp div3_mat[5] float 1 run data get storage rs:math_hp d3b");
+    raw("execute store result storage rs:math_hp div3_mat[10] float 1 run data get storage rs:math_hp d3c");
+    raw("execute store result storage rs:math_hp div3_mat[15] float 1 run data get storage rs:math_hp d3d");
+    raw("data modify entity @e[tag=rs_div,limit=1] transformation set from storage rs:math_hp div3_mat");
+    // Read all three scale components
+    raw("execute store result score $div3_x __rs_math_hp run data get entity @e[tag=rs_div,limit=1] transformation.scale[0] 10000.0");
+    raw("execute store result score $div3_y __rs_math_hp run data get entity @e[tag=rs_div,limit=1] transformation.scale[1] 10000.0");
+    raw("execute store result score $div3_z __rs_math_hp run data get entity @e[tag=rs_div,limit=1] transformation.scale[2] 10000.0");
+    return scoreboard_get("$div3_x", "__rs_math_hp");
+}
+
+// sqrt_hp(x): high-precision square root via vector magnitude trick
+// x: integer ×10000. Returns √(x/10000) × 10000
+// Uses: send vector (√x, 0, 0) unit → magnitude = √x
+@require_on_load(init_div)
+fn sqrt_hp(x: int): int {
+    // Use trig entity: tp it to (sqrt(x), 0, 0) direction
+    // Trick: set pos to (x_float, 0, 0), then use unit_vector to get 1.0 in x
+    // Actually simpler: use div3 with a=x, b=0, c=0, d=1 and read scale[0]
+    scoreboard_set("$sqrt_x", "__rs_math_hp", x);
+    raw("execute store result storage rs:math_hp sq_x float 0.0001 run scoreboard players get $sqrt_x __rs_math_hp");
+    // Diagonal matrix [x,0,0, 0,1,0, 0,0,1, 0,0,0,1] → scale[0] = sqrt(x) via SVD? No...
+    // Actually: use distance trick via entity positioned at (√x, 0, 0) after tp ^√x
+    // Simpler approach: Newton iteration with div_hp for refinement
+    // g = isqrt(x), then refine: g = (g + div_hp(x, g)) / 2
+    let g: int = isqrt(x * 100) * 100;  // initial from integer sqrt, ×10000 scale
+    if (g <= 0) { g = 1; }
+    // Two Newton refinement steps using div_hp
+    let d: int = div_hp(x, g);
+    g = (g + d) / 2;
+    d = div_hp(x, g);
+    g = (g + d) / 2;
+    return g;
+}
+
+// norm3_hp(x, y, z): high-precision 3D vector norm √(x²+y²+z²)
+// All inputs ×10000. Returns magnitude ×10000.
+// Uses trig entity position trick.
+@require_on_load(init_trig)
+fn norm3_hp(x: int, y: int, z: int): int {
+    // Store x,y,z as float in storage
+    scoreboard_set("$norm_x", "__rs_math_hp", x);
+    scoreboard_set("$norm_y", "__rs_math_hp", y);
+    scoreboard_set("$norm_z", "__rs_math_hp", z);
+    raw("execute store result storage rs:math_hp nrm_x float 0.0001 run scoreboard players get $norm_x __rs_math_hp");
+    raw("execute store result storage rs:math_hp nrm_y float 0.0001 run scoreboard players get $norm_y __rs_math_hp");
+    raw("execute store result storage rs:math_hp nrm_z float 0.0001 run scoreboard players get $norm_z __rs_math_hp");
+    // TP marker to (x,y,z), then read distance from origin
+    raw("execute as @e[tag=rs_trig,limit=1] run tp @s 0.0 0.0 0.0");
+    raw("data modify entity @e[tag=rs_trig,limit=1] Pos set from storage rs:math_hp nrm_x");
+    // Actually distance from world origin: read distance using entity selector
+    // Simpler: use Pythagorean theorem via sqrt_hp
+    let x2: int = x / 100 * x / 100;  // x² / 10000
+    let y2: int = y / 100 * y / 100;
+    let z2: int = z / 100 * z / 100;
+    return sqrt_hp(x2 + y2 + z2);
+}

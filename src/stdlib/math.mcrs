@@ -527,3 +527,111 @@ fn approx_eq(a: int, b: int, eps: int): int {
     if (d <= eps) { return 1; }
     return 0;
 }
+
+// ─── Cubic root via Cardano / Newton ─────────────────────────────────────────
+
+// cbrt_newton(x): cube root using Newton-Raphson, more iterations than cbrt_fx
+// Returns floor(cbrt(x)) with better convergence for large values
+fn cbrt_newton(x: int): int {
+    if (x <= 0) { return 0; }
+    let g: int = cbrt_fx(x);  // start from cbrt_fx estimate
+    // Two Newton refinement steps: g = (2*g + x/g²) / 3
+    let g2: int = g * g;
+    if (g2 > 0) {
+        let next: int = (2 * g + x / g2) / 3;
+        let n2: int = next * next;
+        if (n2 > 0) { g = (2 * next + x / n2) / 3; } else { g = next; }
+    }
+    return g;
+}
+
+// ─── Cubic equation x³ + px + q = 0 (depressed cubic) ───────────────────────
+// Cardano's method, integer fixed-point ×10000
+// Returns the real root × 10000
+// Only works for depressed cubic (no x² term)
+// For ax³+bx²+cx+d=0, first substitute x = t - b/(3a) to depress
+
+// cubic_one_root_fx(p_fx, q_fx): real root of t³ + p*t + q = 0
+// p_fx, q_fx: coefficients ×10000
+// Returns t ×10000
+fn cubic_disc_fx(p_fx: int, q_fx: int): int {
+    // Discriminant: D = (q/2)² + (p/3)³
+    // ×10000 scale: q_fx/2 in units, cube of p_fx/3 tricky
+    let half_q: int = q_fx / 2;
+    let third_p: int = p_fx / 3;
+    // D = half_q² + third_p³ (×10000 each → result ×10000)
+    let d: int = half_q * half_q / 10000 + third_p * third_p / 10000 * third_p / 10000;
+    return d;
+}
+
+// Newton iteration for general cubic: ax³ + bx² + cx + d = 0
+// Returns approximate root ×10000, starting from x0_fx
+fn cubic_newton(a_fx: int, b_fx: int, c_fx: int, d_fx: int, x0_fx: int): int {
+    let x: int = x0_fx;
+    let step: int = 0;
+    while (step < 20) {
+        // f(x) = ax³ + bx² + cx + d  (all ×10000)
+        let x2: int = x * x / 10000;
+        let x3: int = x2 * x / 10000;
+        let fx: int = a_fx * x3 / 10000 + b_fx * x2 / 10000 + c_fx * x / 10000 + d_fx;
+        // f'(x) = 3ax² + 2bx + c
+        let dfx: int = 3 * a_fx * x2 / 10000 + 2 * b_fx * x / 10000 + c_fx;
+        if (dfx == 0) { step = 20; }
+        if (dfx != 0) {
+            let dx: int = fx * 10000 / dfx;
+            x = x - dx;
+            if (dx < 0) { dx = 0 - dx; }
+            if (dx < 5) { step = 20; }  // converged
+        }
+        step = step + 1;
+    }
+    return x;
+}
+
+// ─── Numerical integration ────────────────────────────────────────────────────
+
+// trapezoid_step(fa, fb, h): one trapezoid integration step
+// fa, fb: function values ×10000, h: step width ×10000
+// Returns area ×10000
+fn trapezoid_step(fa: int, fb: int, h: int): int {
+    return (fa + fb) * h / 20000;  // (fa+fb)/2 * h
+}
+
+// simpson_step(fa, fm, fb, h): one Simpson's rule step
+// fa, fm, fb: function at left/mid/right, h: half-width
+// Returns area ×10000 (over 2h width)
+fn simpson_step(fa: int, fm: int, fb: int, h: int): int {
+    return (fa + 4 * fm + fb) * h / 30000;  // (fa+4fm+fb) * h/3, factor 2h total
+}
+
+// ─── Newton's method (general scalar) ────────────────────────────────────────
+
+// newton_refine(x_fx, fx, dfx): one Newton step
+// x_fx: current x ×10000, fx: f(x) ×10000, dfx: f'(x) ×10000
+// Returns new x ×10000
+fn newton_step(x_fx: int, fx: int, dfx: int): int {
+    if (dfx == 0) { return x_fx; }
+    return x_fx - fx * 10000 / dfx;
+}
+
+// ─── Arc trigonometry ─────────────────────────────────────────────────────────
+
+// asin_approx(x_fx): arcsin approximation, x_fx ×10000 in [-10000, 10000]
+// Returns degrees ×10000
+// Uses: arcsin(x) = arctan(x / √(1-x²))
+fn asin_approx(x_fx: int): int {
+    if (x_fx >= 10000) { return 900000; }
+    if (x_fx <= -10000) { return -900000; }
+    let x2: int = x_fx * x_fx / 10000;
+    let denom_sq: int = 10000 - x2;  // (1 - x²) ×10000
+    if (denom_sq <= 0) { return 900000; }
+    let denom: int = isqrt(denom_sq * 100) * 100;  // √(1-x²) ×10000
+    if (denom == 0) { return 900000; }
+    return atan2_fixed(x_fx, denom);
+}
+
+// acos_approx(x_fx): arccos approximation
+// Returns degrees ×10000
+fn acos_approx(x_fx: int): int {
+    return 900000 - asin_approx(x_fx);  // acos = 90° - asin
+}
