@@ -200,3 +200,73 @@ export function search(
     budgetUsed: iteration,
   };
 }
+
+/**
+ * Simulated Annealing search strategy.
+ * More robust than Nelder-Mead for integer parameters and multimodal objectives.
+ * Uses 3 independent restarts, taking the global best.
+ */
+export function searchSA(
+  adapter: TunerAdapter,
+  budget: number,
+  onProgress?: ProgressCallback,
+): SearchResult {
+  const RESTARTS = 3;
+  const budgetPerRun = Math.floor(budget / RESTARTS);
+  let globalBest: { params: Record<string, number>; error: number } | null = null;
+
+  for (let r = 0; r < RESTARTS; r++) {
+    // Random initialisation within param ranges
+    let current: Record<string, number> = {};
+    for (const p of adapter.params) {
+      current[p.name] = p.range[0] + Math.random() * (p.range[1] - p.range[0]);
+      if (p.integer) current[p.name] = Math.round(current[p.name]);
+    }
+
+    // T: 1.0 → 1e-4 over budgetPerRun iterations
+    let T = 1.0;
+    const cooling = Math.pow(1e-4, 1 / budgetPerRun);
+    let currentError = evaluate(adapter, current).maxError;
+    let bestLocal = { params: { ...current }, error: currentError };
+
+    for (let i = 0; i < budgetPerRun; i++) {
+      T *= cooling;
+      // Perturb one random param by ±10% of its range
+      const neighbor = { ...current };
+      const spec = adapter.params[Math.floor(Math.random() * adapter.params.length)];
+      const step = (spec.range[1] - spec.range[0]) * 0.1 * (Math.random() * 2 - 1);
+      neighbor[spec.name] = Math.max(
+        spec.range[0],
+        Math.min(spec.range[1], neighbor[spec.name] + step),
+      );
+      if (spec.integer) neighbor[spec.name] = Math.round(neighbor[spec.name]);
+
+      const neighborError = evaluate(adapter, neighbor).maxError;
+      const delta = neighborError - currentError;
+      if (delta < 0 || Math.random() < Math.exp(-delta / T)) {
+        current = neighbor;
+        currentError = neighborError;
+      }
+      if (currentError < bestLocal.error) {
+        bestLocal = { params: { ...current }, error: currentError };
+      }
+      const globalIter = r * budgetPerRun + i;
+      if (onProgress && globalIter % 100 === 0) {
+        onProgress(globalIter, globalBest?.error ?? bestLocal.error);
+      }
+    }
+
+    if (!globalBest || bestLocal.error < globalBest.error) {
+      globalBest = bestLocal;
+    }
+  }
+
+  const finalMetrics = evaluate(adapter, globalBest!.params);
+  return {
+    params: globalBest!.params,
+    maxError: finalMetrics.maxError,
+    mae: finalMetrics.mae,
+    rmse: finalMetrics.rmse,
+    budgetUsed: budget,
+  };
+}

@@ -1,0 +1,34 @@
+// random.mcrs — Pseudo-random number generators for RedScript datapacks.
+//
+// LCG (Linear Congruential Generator):
+//   Simple, fast, sufficient for most game use-cases.
+//   Parameters: a=1664525, c=1013904223 (Numerical Recipes)
+//   Modulus: 2^32 via int32 overflow (free in MC scoreboard arithmetic).
+//
+// Usage:
+//   let seed: int = 12345;  // any non-zero starting value
+//   seed = next_lcg(seed);  // advance state
+//   let roll: int = random_range(seed, 0, 100);
+
+module library;
+
+// next_lcg(seed): advance LCG state, return next pseudo-random int32.
+// The returned value is also the new seed for the next call.
+fn next_lcg(seed: int): int {
+    return seed * 1664525 + 1013904223;
+}
+
+// random_range(seed, lo, hi): return integer in [lo, hi).
+// seed should already be the output of next_lcg.
+fn random_range(seed: int, lo: int, hi: int): int {
+    let r: int = seed;
+    if (r < 0) { r = 0 - r; }
+    return lo + r % (hi - lo);
+}
+
+// random_bool(seed): return 0 or 1 with equal probability.
+fn random_bool(seed: int): int {
+    let r: int = seed;
+    if (r < 0) { r = 0 - r; }
+    return r % 2;
+}

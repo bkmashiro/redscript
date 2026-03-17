@@ -5,7 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { search } from './engine';
+import { search, searchSA } from './engine';
 import { lnPolynomialAdapter } from './adapters/ln-polynomial';
 import { TunerAdapter, ResultMeta } from './types';
 
@@ -32,16 +32,20 @@ function parseArgs(args: string[]): {
   adapter?: string;
   budget: number;
   out?: string;
+  strategy: 'nm' | 'sa';
 } {
-  const result = { budget: 10000 } as { adapter?: string; budget: number; out?: string };
+  const result: { adapter?: string; budget: number; out?: string; strategy: 'nm' | 'sa' } = { budget: 10000, strategy: 'nm' };
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--adapter' && args[i + 1]) {
-      result.adapter = args[++i];
+      result.adapter = args[++i] as string;
     } else if (args[i] === '--budget' && args[i + 1]) {
-      result.budget = parseInt(args[++i], 10);
+      result.budget = parseInt(args[++i]!, 10);
     } else if (args[i] === '--out' && args[i + 1]) {
-      result.out = args[++i];
+      result.out = args[++i] as string;
+    } else if (args[i] === '--strategy' && args[i + 1]) {
+      const s = args[++i];
+      if (s === 'nm' || s === 'sa') result.strategy = s;
     }
   }
 
@@ -66,7 +70,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const { adapter: adapterName, budget, out } = parseArgs(args);
+  const { adapter: adapterName, budget, out, strategy } = parseArgs(args);
 
   if (!adapterName) {
     console.error('Error: --adapter is required');
@@ -83,13 +87,15 @@ async function main(): Promise<void> {
 
   console.log(`\nredscript tune — ${adapter.name}`);
   console.log(`Description: ${adapter.description}`);
+  console.log(`Strategy: ${strategy === 'sa' ? 'Simulated Annealing' : 'Nelder-Mead'}`);
   console.log(`Budget: ${budget} iterations`);
   console.log(`Parameters: ${adapter.params.map(p => p.name).join(', ')}\n`);
 
   let lastProgress = 0;
   const startTime = Date.now();
 
-  const result = search(adapter, budget, (iteration, bestError) => {
+  const searchFn = strategy === 'sa' ? searchSA : search;
+  const result = searchFn(adapter, budget, (iteration, bestError) => {
     const fraction = iteration / budget;
     const bar = renderProgressBar(fraction);
     const errorStr = isFinite(bestError) ? bestError.toFixed(6) : 'Inf';
