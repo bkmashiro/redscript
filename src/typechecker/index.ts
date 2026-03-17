@@ -554,10 +554,23 @@ export class TypeChecker {
     if (!this.currentReturnType) return
 
     const expectedType = this.currentReturnType
-    
+
     if (stmt.value) {
       const actualType = this.inferType(stmt.value, expectedType)
       this.checkExpr(stmt.value, expectedType)
+
+      // Warn when returning a float-typed result of arithmetic — the arithmetic
+      // itself is the problem, not just the type annotation.
+      const returnIsFloat = expectedType.kind === 'named' && expectedType.name === 'float'
+      if (returnIsFloat && stmt.value.kind === 'binary') {
+        const arithmeticOps = ['+', '-', '*', '/', '%']
+        if (arithmeticOps.includes(stmt.value.op)) {
+          this.warnLint(
+            `[FloatArithmetic] 'float' is a system boundary type (MC NBT float); use 'fixed' for arithmetic instead.`,
+            stmt.value
+          )
+        }
+      }
       
       if (this.isNumericMismatch(expectedType, actualType)) {
         // Explicit numeric conversion required for return statements

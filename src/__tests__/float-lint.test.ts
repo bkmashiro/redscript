@@ -16,8 +16,8 @@ describe('[FloatArithmetic] lint warnings', () => {
   test('float arithmetic emits [FloatArithmetic] warning', () => {
     const source = `
 fn test(): void {
-  let a: float = 1.5;
-  let b: float = 2.5;
+  let a: float = 1.5f;
+  let b: float = 2.5f;
   let c: float = a + b;
 }
 `
@@ -41,8 +41,8 @@ fn foo(volume: float): void {
   test('fixed arithmetic — no [FloatArithmetic] warning', () => {
     const source = `
 fn test(): void {
-  let x: fixed = 1.5;
-  let y: fixed = x + 2.0;
+  let x: fixed = 15000 as fixed;
+  let y: fixed = x + 5000;
 }
 `
     const warnings = compileAndGetWarnings(source)
@@ -53,7 +53,7 @@ fn test(): void {
   test('float literal assigned directly — no [FloatArithmetic] warning (only [DeprecatedType])', () => {
     const source = `
 fn test(): void {
-  let v: float = 1.5;
+  let v: float = 1.5f;
 }
 `
     const warnings = compileAndGetWarnings(source)
@@ -67,12 +67,36 @@ fn test(): void {
   test('compilation still succeeds when float arithmetic is used (warning only, no error)', () => {
     const source = `
 fn test(): void {
-  let a: float = 1.5;
-  let b: float = 2.5;
+  let a: float = 1.5f;
+  let b: float = 2.5f;
   let c: float = a + b;
 }
 `
     // Should not throw
     expect(() => compile(source, { namespace: 'floatlinttest' })).not.toThrow()
+  })
+
+  test('float return type with arithmetic binary expression — emits [FloatArithmetic] warning', () => {
+    const source = `
+fn compute(a: float, b: float): float {
+  return a + b;
+}
+`
+    const warnings = compileAndGetWarnings(source)
+    const floatArithWarnings = warnings.filter(w => w.includes('[FloatArithmetic]'))
+    expect(floatArithWarnings.length).toBeGreaterThan(0)
+  })
+
+  test('float return type with literal — no extra [FloatArithmetic] warning beyond operand check', () => {
+    const source = `
+fn get_volume(): float {
+  return 1.5f;
+}
+`
+    const warnings = compileAndGetWarnings(source)
+    // The literal itself is not arithmetic, so no FloatArithmetic warning from return check
+    // (There may be a [DeprecatedType] warning but not [FloatArithmetic])
+    const floatArithWarnings = warnings.filter(w => w.includes('[FloatArithmetic]'))
+    expect(floatArithWarnings).toHaveLength(0)
   })
 })
