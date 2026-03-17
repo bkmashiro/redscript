@@ -309,6 +309,53 @@ fn newton_sqrt(n: int) -> int {
     return x;
 }
 
+// ─── Category 3 (cont.): Higher-order Bezier curves ─────────────────────────
+
+// Quartic Bezier: 5-point curve using De Casteljau's algorithm.
+// t in [0, 1000].
+// bezier_quartic(0, 250, 500, 750, 1000, 0)    == 0    (t=0: start)
+// bezier_quartic(0, 250, 500, 750, 1000, 1000) == 1000 (t=1: end)
+// bezier_quartic(0, 250, 500, 750, 1000, 500)  == 500  (midpoint, uniform pts)
+fn bezier_quartic(p0: int, p1: int, p2: int, p3: int, p4: int, t: int) -> int {
+    let m0: int = lerp(p0, p1, t);
+    let m1: int = lerp(p1, p2, t);
+    let m2: int = lerp(p2, p3, t);
+    let m3: int = lerp(p3, p4, t);
+    let n0: int = lerp(m0, m1, t);
+    let n1: int = lerp(m1, m2, t);
+    let n2: int = lerp(m2, m3, t);
+    let o0: int = lerp(n0, n1, t);
+    let o1: int = lerp(n1, n2, t);
+    return lerp(o0, o1, t);
+}
+
+// bezier_n(pts, n, t): N-order Bezier curve via De Casteljau's algorithm.
+// pts: array of n control points (int[], will be modified in-place).
+// t in [0, 1000].
+// WARNING: modifies pts in-place. Call bezier_n_safe if you need to preserve pts.
+// bezier_n([0,333,667,1000], 4, 0)    == 0    (t=0: returns pts[0])
+// bezier_n([0,333,667,1000], 4, 1000) == 1000 (t=1: returns pts[n-1])
+fn bezier_n(pts: int[], n: int, t: int) -> int {
+    let r: int = 0;
+    while (r < n - 1) {
+        let i: int = 0;
+        while (i < n - 1 - r) {
+            pts[i] = lerp(pts[i], pts[i + 1], t);
+            i = i + 1;
+        }
+        r = r + 1;
+    }
+    return pts[0];
+}
+
+// bezier_n_safe(pts, work, n, t): N-order Bezier, non-destructive.
+// Copies pts into work (length >= n) then runs bezier_n on work.
+// pts is not modified.
+fn bezier_n_safe(pts: int[], work: int[], n: int, t: int) -> int {
+    bigint_copy(pts, work, n);
+    return bezier_n(work, n, t);
+}
+
 // Digital root: repeatedly sum digits until single digit.
 // digital_root(493) == 7  (4+9+3=16 → 1+6=7)
 // digital_root(9) == 9

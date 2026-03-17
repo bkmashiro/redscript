@@ -1155,3 +1155,30 @@ describe('quaternion.mcrs — rotation math', () => {
     expect(v).toBeLessThan(7071)
   })
 })
+
+// bezier_quartic and bezier_n — N-order Bezier curves
+describe('advanced.mcrs — bezier_quartic & bezier_n', () => {
+  const rt = makeRuntime(`
+    fn test_quartic_start(): int { return bezier_quartic(0, 250, 500, 750, 1000, 0); }
+    fn test_quartic_end(): int { return bezier_quartic(0, 250, 500, 750, 1000, 1000); }
+    fn test_quartic_mid(): int { return bezier_quartic(0, 250, 500, 750, 1000, 500); }
+
+    fn test_bezier_n_start(): int {
+        let pts: int[] = [0, 333, 667, 1000];
+        return bezier_n(pts, 4, 0);
+    }
+    fn test_bezier_n_end(): int {
+        let pts: int[] = [0, 333, 667, 1000];
+        return bezier_n(pts, 4, 1000);
+    }
+  `, [MATH_SRC, ADVANCED_SRC, BIGINT_SRC])
+
+  // bezier_quartic
+  test('bezier_quartic(0,250,500,750,1000, t=0) == 0 (start)', () => expect(callAndGetRet(rt, 'test_quartic_start')).toBe(0))
+  test('bezier_quartic(0,250,500,750,1000, t=1000) == 1000 (end)', () => expect(callAndGetRet(rt, 'test_quartic_end')).toBe(1000))
+  test('bezier_quartic(0,250,500,750,1000, t=500) == 500 (uniform midpoint)', () => expect(callAndGetRet(rt, 'test_quartic_mid')).toBe(500))
+
+  // bezier_n
+  test('bezier_n([0,333,667,1000], 4, t=0) == 0 (start = pts[0])', () => expect(callAndGetRet(rt, 'test_bezier_n_start')).toBe(0))
+  test('bezier_n([0,333,667,1000], 4, t=1000) == 1000 (end = pts[n-1])', () => expect(callAndGetRet(rt, 'test_bezier_n_end')).toBe(1000))
+})
