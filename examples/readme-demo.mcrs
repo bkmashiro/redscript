@@ -40,19 +40,19 @@ fn _draw(px: float, py: float) {
 
         let i0: int = t;
         let s0: int = sin_fixed((i0 * 9 + phase) % 360);
-        _draw(i0 * 50 - 975, s0 / 4);
+        _draw((i0 * 50 - 975) as float, (s0 / 4) as float);
 
         let i1: int = (t + 1) % 40;
         let s1: int = sin_fixed((i1 * 9 + phase) % 360);
-        _draw(i1 * 50 - 975, s1 / 4);
+        _draw((i1 * 50 - 975) as float, (s1 / 4) as float);
 
         let i2: int = (t + 2) % 40;
         let s2: int = sin_fixed((i2 * 9 + phase) % 360);
-        _draw(i2 * 50 - 975, s2 / 4);
+        _draw((i2 * 50 - 975) as float, (s2 / 4) as float);
 
         let i3: int = (t + 3) % 40;
         let s3: int = sin_fixed((i3 * 9 + phase) % 360);
-        _draw(i3 * 50 - 975, s3 / 4);
+        _draw((i3 * 50 - 975) as float, (s3 / 4) as float);
     }
 }
 
