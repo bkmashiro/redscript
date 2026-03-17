@@ -5,12 +5,25 @@
 
 ---
 
-## 现有 stdlib（已实现）
+## 当前 stdlib 状态（2026-03-17）
 
-| 文件 | 内容 |
-|------|------|
-| `stdlib/math.mcrs` | min/max/clamp/abs，基础固定点运算，sin/cos（近似） |
-| `stdlib/vec.mcrs` | Vec2/Vec3 struct，基础运算 |
+| 文件 | 内容 | 状态 |
+|------|------|------|
+| `math.mcrs` | abs/sign/clamp/lerp/ln/sqrt_fx/exp_fx/sin_fixed/cos_fixed/isqrt/gcd/lcm... | ✅ |
+| `math_hp.mcrs` | sin_hp/cos_hp（实体旋转，高精度），init_trig | ✅框架/⚠️return值待修 |
+| `random.mcrs` | LCG: next_lcg/random_range/random_bool; PCG: pcg_next/pcg_output | ✅ |
+| `vec.mcrs` | 2D/3D dot/cross/length/distance/normalize/lerp/atan2/rotate/add/sub/scale | ✅ |
+| `color.mcrs` | rgb_pack/unpack, rgb_lerp, hsl_to_r/g/b, rgb_to_h/s/l | ✅ |
+| `bits.mcrs` | bit_and/or/xor/not, bit_shl/shr, bit_get/set/clear/toggle, popcount | ✅ |
+| `list.mcrs` | sort3, min/max/avg (3/5), weighted utilities | ✅ |
+| `geometry.mcrs` | AABB/sphere/cylinder contains, parabola, angle helpers, MC sun angle | ✅ |
+| `signal.mcrs` | uniform, normal_approx12, exp_dist, bernoulli, weighted2/3 | ✅ |
+| `bigint.mcrs` | 96-bit base-10000: add/sub/mul/div/cmp, int32↔bigint3 conversion | ✅ |
+| `combat.mcrs` | damage/kill-check | ✅（原有） |
+| `player.mcrs` | health/alive/range | ✅（原有） |
+| `cooldown.mcrs` | per-player cooldown tracking | ✅（原有） |
+| `timer.mcrs` | Timer static allocation | ✅（原有） |
+| `strings.mcrs` | string utilities | ✅（原有） |
 
 ---
 

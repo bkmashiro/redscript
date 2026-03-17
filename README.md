@@ -306,8 +306,16 @@ redscript validate <file>      Validate MC commands
 RedScript ships a built-in standard library. Use the short form — no path needed:
 
 ```rs
-import "stdlib/math"      // fixed-point math
-import "stdlib/vec"       // 2D/3D vector geometry
+import "stdlib/math"      // fixed-point math: ln, sqrt_fx, exp_fx, sin_fixed, cos_fixed...
+import "stdlib/math_hp"   // high-precision trig via entity rotation (init_trig required)
+import "stdlib/vec"       // 2D/3D vector: dot, cross, length, distance, atan2, rotate...
+import "stdlib/random"    // LCG & PCG random number generators
+import "stdlib/color"     // RGB/HSL color packing, blending, conversion
+import "stdlib/bits"      // bitwise AND/OR/XOR/NOT/shift/popcount (integer-simulated)
+import "stdlib/list"      // sort3, min/max/avg, weighted utilities
+import "stdlib/geometry"  // AABB/sphere contains, parabola physics, angle helpers
+import "stdlib/signal"    // normal/exponential distributions, bernoulli, weighted choice
+import "stdlib/bigint"    // 96-bit base-10000 arithmetic (add/sub/mul/div/cmp)
 import "stdlib/combat"    // damage, kill-check helpers
 import "stdlib/player"    // health, alive check, range
 import "stdlib/cooldown"  // per-player cooldown tracking
