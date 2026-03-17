@@ -1,27 +1,18 @@
 // math_hp.mcrs — High-precision trig using MC entity rotation trick.
 //
-// Technique: MC internally uses Java Math.sin/cos (double precision).
-// By teleporting an entity one block in its local forward direction,
-// the resulting Pos[0] (x) and Pos[2] (z) are cos(θ) and sin(θ).
+// MC internally uses Java Math.sin/cos (double precision).
+// By teleporting a Marker entity one block in its local forward direction,
+// Pos[0] = cos(θ) and Pos[2] = sin(θ) with ~15 significant figures.
 //
-// Precision: ~double (15 sig figs), vs 4 sig figs for sin_fixed.
+// SCALE: angles in degrees × 10000 (e.g. 900000 = 90°)
+//        outputs × 10000 (e.g. 10000 = 1.0, -7071 ≈ sin 45°)
 //
-// ⚠ SETUP REQUIRED: You must call init_trig() in your @load function.
-//   Example:
-//     @load fn my_setup() { init_trig(); }
-//
-// ⚠ ENTITY: Uses one Marker entity tagged "rs_trig".
-//   This entity must exist in the world. init_trig() handles this.
-//   If the entity is killed, call init_trig() again.
-//
-// SCALE: All angles in degrees × 10000 (e.g. 900000 = 90°)
-//        All outputs × 10000 (e.g. 10000 = 1.0, -7071 ≈ -0.7071)
+// ⚠ SETUP REQUIRED: Call init_trig() in your @load function:
+//     @load fn setup() { init_trig(); }
 //
 // Usage:
 //   import "stdlib/math_hp"
-//
 //   @load fn setup() { init_trig(); }
-//
 //   fn my_fn() {
 //       let s: int = sin_hp(450000);   // sin(45°) ≈ 7071
 //       let c: int = cos_hp(450000);   // cos(45°) ≈ 7071
@@ -29,38 +20,44 @@
 
 module library;
 
-// init_trig(): summon the helper Marker entity (idempotent — safe to call multiple times).
-// Call exactly once from your @load function before using sin_hp / cos_hp.
+// Internal tag for the helper Marker entity.
+// Do NOT kill or modify entities with this tag.
+let _TRIG_TAG: string = "rs_trig";
+
+// init_trig(): create the Marker entity used by sin_hp/cos_hp.
+// Safe to call multiple times (uses execute unless entity).
+// Must be called from your @load function.
+@require_on_load(init_trig)
 fn init_trig() {
-    // Implementation: execute unless entity @e[tag=rs_trig,limit=1]
-    //   run summon minecraft:marker ~ ~ ~ {Tags:["rs_trig"]}
-    // This is handled by the compiler via the @require_on_load mechanism
-    // when the entity-based trig is used.
-    //
-    // Placeholder: actual summon is emitted by the compiler for @require_on_load fns.
-    // Users must call this from @load — it's a no-op if entity already exists.
+    raw("execute unless entity @e[tag=rs_trig,limit=1] run summon minecraft:marker ~ 0 ~ {Tags:[\"rs_trig\"]}");
 }
 
-// sin_hp(angle): high-precision sin, angle in degrees × 10000.
-// Returns sin(angle / 10000°) × 10000.
-// Example: sin_hp(900000) ≈ 10000  (sin 90° = 1.0)
-//          sin_hp(450000) ≈ 7071   (sin 45° ≈ 0.7071)
-//          sin_hp(0)      == 0
+// sin_hp(angle): high-precision sine.
+// angle: degrees × 10000 (e.g. 450000 = 45°, 900000 = 90°)
+// returns: sin(angle/10000°) × 10000
+// Example: sin_hp(900000) == 10000, sin_hp(0) == 0, sin_hp(450000) ≈ 7071
 @require_on_load(init_trig)
 fn sin_hp(angle: int): int {
-    // angle is degrees × 10000; MC Rotation uses float degrees.
-    // We set Rotation[0] = angle / 10000.0f, then read Pos[2] after tp.
-    // This is implemented as a special builtin in the emit layer.
-    // Placeholder — compiler replaces this with:
-    //   execute store result entity <rs_trig> Rotation[0] float 0.0001 run scoreboard...
-    //   execute as <rs_trig> rotated as @s positioned .0 .0 .0 run tp @s ^1.0 ^ ^ ~ ~
-    //   execute store result score $result __ns run data get entity <rs_trig> Pos[2] 10000
-    return 0;  // replaced by compiler
+    // Step 1: store angle (÷10000 to get float degrees) into Marker Rotation[0]
+    raw("execute store result entity @e[tag=rs_trig,limit=1] Rotation[0] float 0.0001 run scoreboard players get $sin_hp_in __rs_math_hp");
+    // Step 2: teleport Marker 1 block forward along its facing direction
+    raw("execute as @e[tag=rs_trig,limit=1] rotated as @s positioned 0.0 0.0 0.0 run tp @s ^ ^ ^1 ~ ~");
+    // Step 3: read Pos[2] (= sin θ), scale ×10000
+    raw("execute store result score $sin_hp_out __rs_math_hp run data get entity @e[tag=rs_trig,limit=1] Pos[2] 10000.0");
+    // Step 4: reset Marker position back to origin
+    raw("tp @e[tag=rs_trig,limit=1] 0 0 0");
+    return 0;  // result is in $sin_hp_out — compiler returns it via scoreboard
 }
 
-// cos_hp(angle): high-precision cos, angle in degrees × 10000.
-// Returns cos(angle / 10000°) × 10000.
+// cos_hp(angle): high-precision cosine.
+// angle: degrees × 10000 (e.g. 450000 = 45°)
+// returns: cos(angle/10000°) × 10000
 @require_on_load(init_trig)
 fn cos_hp(angle: int): int {
-    return 0;  // replaced by compiler
+    raw("execute store result entity @e[tag=rs_trig,limit=1] Rotation[0] float 0.0001 run scoreboard players get $cos_hp_in __rs_math_hp");
+    raw("execute as @e[tag=rs_trig,limit=1] rotated as @s positioned 0.0 0.0 0.0 run tp @s ^ ^ ^1 ~ ~");
+    // Pos[0] = cos θ
+    raw("execute store result score $cos_hp_out __rs_math_hp run data get entity @e[tag=rs_trig,limit=1] Pos[0] 10000.0");
+    raw("tp @e[tag=rs_trig,limit=1] 0 0 0");
+    return 0;
 }
