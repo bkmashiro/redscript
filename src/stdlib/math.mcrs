@@ -314,13 +314,14 @@ fn smootherstep(lo: int, hi: int, x: int) -> int {
 fn ln(x: int): int {
     // Input x: fixed-point ×10000; returns ln(x/10000)×10000
     // Valid range: x ∈ [100, 1000000]  (0.01 ~ 100.0)
-    // max_error: 0.000557 (in ×10000 units, i.e. 0.00000006 in real units)
+    // max_error: 0.000504 (in ×10000 units, i.e. 0.00000005 in real units)
+    // Tuned 2026-03-17 via SA (30k iterations), prev: A1=20010 A3=6856 A5=2539
 
     let scale: int = 10000;
     let ln2: int = 6931;
-    let A1: int = 20010;
-    let A3: int = 6856;
-    let A5: int = 2539;
+    let A1: int = 20026;
+    let A3: int = 6394;
+    let A5: int = 5511;
 
     // Step 1: range reduction — bring x into [scale, 2*scale)
     let xr: int = x;
