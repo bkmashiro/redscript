@@ -1,0 +1,160 @@
+// color.mcrs — Color utilities for RedScript datapacks.
+//
+// All RGB values: 0-255
+// All HSL values: H 0-360, S 0-100, L 0-100
+// Packed int format: 0xRRGGBB (R in bits 16-23, G in bits 8-15, B in bits 0-7)
+//   packed = R*65536 + G*256 + B
+//
+// Note: No native bitwise ops in MC scoreboard — packing/unpacking uses multiply/divide.
+
+module library;
+
+// ─── Pack / Unpack ────────────────────────────────────────────────────────────
+
+// rgb_pack(r, g, b): pack RGB into a single int (0xRRGGBB)
+fn rgb_pack(r: int, g: int, b: int): int {
+    return r * 65536 + g * 256 + b;
+}
+
+// rgb_r(packed): extract red component
+fn rgb_r(packed: int): int {
+    return packed / 65536 % 256;
+}
+
+// rgb_g(packed): extract green component
+fn rgb_g(packed: int): int {
+    return packed / 256 % 256;
+}
+
+// rgb_b(packed): extract blue component
+fn rgb_b(packed: int): int {
+    return packed % 256;
+}
+
+// ─── Blending ─────────────────────────────────────────────────────────────────
+
+// rgb_lerp(a, b, t): linear blend between two packed colors, t ∈ [0, 1000]
+// t=0 → a, t=1000 → b
+fn rgb_lerp(a: int, b: int, t: int): int {
+    let ra: int = a / 65536 % 256;
+    let ga: int = a / 256 % 256;
+    let ba_: int = a % 256;
+    let rb: int = b / 65536 % 256;
+    let gb: int = b / 256 % 256;
+    let bb_: int = b % 256;
+    let r: int = ra + (rb - ra) * t / 1000;
+    let g: int = ga + (gb - ga) * t / 1000;
+    let bv: int = ba_ + (bb_ - ba_) * t / 1000;
+    return r * 65536 + g * 256 + bv;
+}
+
+// ─── HSL ↔ RGB ────────────────────────────────────────────────────────────────
+
+// hsl_to_rgb_r/g/b: convert HSL to individual RGB components
+// H: 0-360, S: 0-100, L: 0-100, returns 0-255
+fn _hsl_chroma_x(h: int, c: int): int {
+    // X = C * (1 - |H/60 mod 2 - 1|)
+    let sector: int = h / 60;
+    let rem: int = h % 120;
+    if (rem > 60) { rem = 120 - rem; }
+    return c * rem / 60;
+}
+
+fn hsl_to_r(h: int, s: int, l: int): int {
+    let c: int = s * (1000 - (2 * l * 10 - 1000)) / 1000;
+    if (c < 0) { c = 0 - c; }
+    c = c / 10;
+    let x: int = _hsl_chroma_x(h, c);
+    let m: int = l * 255 / 100 - c / 2;
+    let sector: int = h / 60;
+    if (sector == 0) { return (c + m); }
+    if (sector == 1) { return (x + m); }
+    if (sector == 2) { return m; }
+    if (sector == 3) { return m; }
+    if (sector == 4) { return (x + m); }
+    return (c + m);
+}
+
+fn hsl_to_g(h: int, s: int, l: int): int {
+    let c: int = s * (1000 - (2 * l * 10 - 1000)) / 1000;
+    if (c < 0) { c = 0 - c; }
+    c = c / 10;
+    let x: int = _hsl_chroma_x(h, c);
+    let m: int = l * 255 / 100 - c / 2;
+    let sector: int = h / 60;
+    if (sector == 0) { return (x + m); }
+    if (sector == 1) { return (c + m); }
+    if (sector == 2) { return (c + m); }
+    if (sector == 3) { return (x + m); }
+    if (sector == 4) { return m; }
+    return m;
+}
+
+fn hsl_to_b(h: int, s: int, l: int): int {
+    let c: int = s * (1000 - (2 * l * 10 - 1000)) / 1000;
+    if (c < 0) { c = 0 - c; }
+    c = c / 10;
+    let x: int = _hsl_chroma_x(h, c);
+    let m: int = l * 255 / 100 - c / 2;
+    let sector: int = h / 60;
+    if (sector == 0) { return m; }
+    if (sector == 1) { return m; }
+    if (sector == 2) { return (x + m); }
+    if (sector == 3) { return (c + m); }
+    if (sector == 4) { return (c + m); }
+    return (x + m);
+}
+
+// hsl_to_packed(h, s, l): HSL → packed RGB int
+fn hsl_to_packed(h: int, s: int, l: int): int {
+    return rgb_pack(hsl_to_r(h, s, l), hsl_to_g(h, s, l), hsl_to_b(h, s, l));
+}
+
+// ─── RGB → HSL ────────────────────────────────────────────────────────────────
+
+// rgb_to_l(r, g, b): lightness 0-100
+fn rgb_to_l(r: int, g: int, b: int): int {
+    let mx: int = r;
+    if (g > mx) { mx = g; }
+    if (b > mx) { mx = b; }
+    let mn: int = r;
+    if (g < mn) { mn = g; }
+    if (b < mn) { mn = b; }
+    return (mx + mn) * 100 / 510;
+}
+
+// rgb_to_s(r, g, b): saturation 0-100
+fn rgb_to_s(r: int, g: int, b: int): int {
+    let mx: int = r;
+    if (g > mx) { mx = g; }
+    if (b > mx) { mx = b; }
+    let mn: int = r;
+    if (g < mn) { mn = g; }
+    if (b < mn) { mn = b; }
+    let c: int = mx - mn;
+    if (c == 0) { return 0; }
+    let l: int = (mx + mn) * 100 / 510;
+    if (l <= 50) { return c * 100 / (mx + mn); }
+    return c * 100 / (510 - mx - mn);
+}
+
+// rgb_to_h(r, g, b): hue 0-360
+fn rgb_to_h(r: int, g: int, b: int): int {
+    let mx: int = r;
+    if (g > mx) { mx = g; }
+    if (b > mx) { mx = b; }
+    let mn: int = r;
+    if (g < mn) { mn = g; }
+    if (b < mn) { mn = b; }
+    let c: int = mx - mn;
+    if (c == 0) { return 0; }
+    if (mx == r) {
+        let h: int = 60 * (g - b) / c;
+        if (h < 0) { h = h + 360; }
+        return h;
+    }
+    if (mx == g) {
+        return 60 * (b - r) / c + 120;
+    }
+    return 60 * (r - g) / c + 240;
+}

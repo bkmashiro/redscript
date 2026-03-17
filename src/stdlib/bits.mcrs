@@ -1,0 +1,158 @@
+// bits.mcrs — Bitwise operations simulated with integer arithmetic.
+//
+// MC scoreboard has no native bitwise ops. These are implemented using
+// multiply/divide/modulo. Performance is O(32) per operation.
+//
+// For most game logic, these are fast enough. For hot paths (>1000 calls/tick),
+// consider lookup tables or restructuring the algorithm.
+//
+// Supported operations:
+//   bit_and, bit_or, bit_xor, bit_not
+//   bit_shl (left shift), bit_shr (logical right shift)
+//   bit_get (test a single bit), bit_set, bit_clear, bit_toggle
+//   popcount (count set bits)
+
+module library;
+
+// ─── Core: single-bit operations ─────────────────────────────────────────────
+
+// bit_get(x, n): return 1 if bit n is set, 0 otherwise. n ∈ [0, 30]
+fn bit_get(x: int, n: int): int {
+    let mask: int = 1;
+    let i: int = 0;
+    while (i < n) { mask = mask * 2; i = i + 1; }
+    return (x / mask) % 2;
+}
+
+// bit_set(x, n): set bit n to 1. n ∈ [0, 30]
+fn bit_set(x: int, n: int): int {
+    let mask: int = 1;
+    let i: int = 0;
+    while (i < n) { mask = mask * 2; i = i + 1; }
+    if ((x / mask) % 2 == 0) { return x + mask; }
+    return x;
+}
+
+// bit_clear(x, n): clear bit n to 0. n ∈ [0, 30]
+fn bit_clear(x: int, n: int): int {
+    let mask: int = 1;
+    let i: int = 0;
+    while (i < n) { mask = mask * 2; i = i + 1; }
+    if ((x / mask) % 2 == 1) { return x - mask; }
+    return x;
+}
+
+// bit_toggle(x, n): toggle bit n. n ∈ [0, 30]
+fn bit_toggle(x: int, n: int): int {
+    let mask: int = 1;
+    let i: int = 0;
+    while (i < n) { mask = mask * 2; i = i + 1; }
+    if ((x / mask) % 2 == 0) { return x + mask; }
+    return x - mask;
+}
+
+// ─── Shift operations ────────────────────────────────────────────────────────
+
+// bit_shl(x, n): left shift x by n bits (x << n). n ∈ [0, 30]
+fn bit_shl(x: int, n: int): int {
+    let result: int = x;
+    let i: int = 0;
+    while (i < n) { result = result * 2; i = i + 1; }
+    return result;
+}
+
+// bit_shr(x, n): logical right shift x by n bits (x >> n). n ∈ [0, 30]
+// Note: divides by 2^n, truncating toward zero.
+fn bit_shr(x: int, n: int): int {
+    let result: int = x;
+    let i: int = 0;
+    while (i < n) { result = result / 2; i = i + 1; }
+    return result;
+}
+
+// ─── Bitwise AND / OR / XOR ──────────────────────────────────────────────────
+// These iterate over 31 bits (signed int32, bit 31 is sign).
+
+// bit_and(a, b): bitwise AND
+fn bit_and(a: int, b: int): int {
+    let result: int = 0;
+    let mask: int = 1;
+    let i: int = 0;
+    while (i < 31) {
+        if ((a / mask) % 2 == 1) {
+            if ((b / mask) % 2 == 1) {
+                result = result + mask;
+            }
+        }
+        mask = mask * 2;
+        i = i + 1;
+    }
+    return result;
+}
+
+// bit_or(a, b): bitwise OR
+fn bit_or(a: int, b: int): int {
+    let result: int = 0;
+    let mask: int = 1;
+    let i: int = 0;
+    while (i < 31) {
+        if ((a / mask) % 2 == 1) {
+            result = result + mask;
+        }
+        if ((b / mask) % 2 == 1) {
+            if ((a / mask) % 2 == 0) {
+                result = result + mask;
+            }
+        }
+        mask = mask * 2;
+        i = i + 1;
+    }
+    return result;
+}
+
+// bit_xor(a, b): bitwise XOR
+fn bit_xor(a: int, b: int): int {
+    let result: int = 0;
+    let mask: int = 1;
+    let i: int = 0;
+    while (i < 31) {
+        let ba: int = (a / mask) % 2;
+        let bb: int = (b / mask) % 2;
+        if (ba != bb) {
+            result = result + mask;
+        }
+        mask = mask * 2;
+        i = i + 1;
+    }
+    return result;
+}
+
+// bit_not(x): bitwise NOT (inverts all 31 bits, sign bit excluded)
+fn bit_not(x: int): int {
+    let result: int = 0;
+    let mask: int = 1;
+    let i: int = 0;
+    while (i < 31) {
+        if ((x / mask) % 2 == 0) {
+            result = result + mask;
+        }
+        mask = mask * 2;
+        i = i + 1;
+    }
+    return result;
+}
+
+// ─── Popcount ────────────────────────────────────────────────────────────────
+
+// popcount(x): count number of set bits (0-31)
+fn popcount(x: int): int {
+    let count: int = 0;
+    let v: int = x;
+    let i: int = 0;
+    while (i < 31) {
+        if (v % 2 == 1) { count = count + 1; }
+        v = v / 2;
+        i = i + 1;
+    }
+    return count;
+}
