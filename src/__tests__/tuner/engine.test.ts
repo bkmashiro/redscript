@@ -2,7 +2,7 @@
  * Tests for the redscript tuner engine, simulator, and ln-polynomial adapter.
  */
 
-import { search } from '../../tuner/engine';
+import { search, searchSA } from '../../tuner/engine';
 import { i32, fixedMul, isOverflow } from '../../tuner/simulator';
 import { evaluate } from '../../tuner/metrics';
 import { lnPolynomialAdapter, defaultParams as lnDefaultParams } from '../../tuner/adapters/ln-polynomial';
@@ -195,4 +195,9 @@ describe('ln-polynomial adapter', () => {
     expect(code).toContain('A5');
     expect(code).toContain('2026-03-17');
   });
+
+  test('searchSA achieves max_error < 0.001 on ln-polynomial', () => {
+    const result = searchSA(lnPolynomialAdapter, 3000);
+    expect(result.maxError).toBeLessThan(0.001);
+  }, 30000);
 });
