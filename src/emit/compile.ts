@@ -97,6 +97,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   {
     const checker = new TypeChecker(processedSource, filePath)
     const typeErrors = checker.check(ast)
+    // Collect lint warnings (non-blocking — always added regardless of error mode)
+    warnings.push(...checker.getWarnings())
     if (typeErrors.length > 0) {
       if (lenient) {
         for (const e of typeErrors) {

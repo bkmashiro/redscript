@@ -127,6 +127,8 @@ const BUILTIN_SIGNATURES: Record<string, BuiltinSignature> = {
 
 export class TypeChecker {
   private collector: DiagnosticCollector
+  private filePath?: string
+  private lintWarnings: string[] = []
   private functions: Map<string, FnDecl> = new Map()
   private implMethods: Map<string, Map<string, FnDecl>> = new Map()
   private structs: Map<string, Map<string, TypeNode>> = new Map()
@@ -154,6 +156,7 @@ export class TypeChecker {
 
   constructor(source?: string, filePath?: string) {
     this.collector = new DiagnosticCollector(source, filePath)
+    this.filePath = filePath
   }
 
   private getNodeLocation(node: unknown): { line: number; col: number } {
@@ -167,6 +170,19 @@ export class TypeChecker {
   private report(message: string, node?: unknown): void {
     const { line, col } = this.getNodeLocation(node)
     this.collector.error('TypeError', message, line, col)
+  }
+
+  private warnLint(message: string, node?: unknown): void {
+    const { line, col } = this.getNodeLocation(node)
+    const filePart = this.filePath ? `${this.filePath}:` : ''
+    this.lintWarnings.push(
+      `${filePart}line ${line}, col ${col}: ${message}`
+    )
+  }
+
+  /** Returns lint warnings (non-blocking). */
+  getWarnings(): string[] {
+    return this.lintWarnings
   }
 
   /**
@@ -587,10 +603,26 @@ export class TypeChecker {
         this.checkStaticCallExpr(expr)
         break
 
-      case 'binary':
+      case 'binary': {
         this.checkExpr(expr.left)
         this.checkExpr(expr.right)
+        // Warn when float is used in arithmetic — float is a MC NBT system boundary type,
+        // not suitable for computation. Use fixed (×10000) instead.
+        const arithmeticOps = ['+', '-', '*', '/', '%']
+        if (arithmeticOps.includes(expr.op)) {
+          const leftType = this.inferType(expr.left)
+          const rightType = this.inferType(expr.right)
+          const leftIsFloat = leftType.kind === 'named' && leftType.name === 'float'
+          const rightIsFloat = rightType.kind === 'named' && rightType.name === 'float'
+          if (leftIsFloat || rightIsFloat) {
+            this.warnLint(
+              `[FloatArithmetic] 'float' is a system boundary type (MC NBT); use 'fixed' for arithmetic. Float arithmetic results are undefined.`,
+              expr
+            )
+          }
+        }
         break
+      }
 
       case 'is_check': {
         this.checkExpr(expr.expr)
@@ -1340,7 +1372,7 @@ export class TypeChecker {
       ['int', 'double'], ['double', 'int'],
       ['float', 'double'], ['double', 'float'],
       ['fixed', 'double'], ['double', 'fixed'],
-      ['float', 'fixed'], ['fixed', 'float'],
+      // float and fixed are compatible (float is deprecated alias for fixed)
     ]
     return numericPairs.some(([e, a]) => expected.name === e && actual.name === a)
   }
@@ -1374,6 +1406,10 @@ export class TypeChecker {
       // void matches anything (for inferred types)
       if (actual.name === 'void') return true
       if (expected.name === actual.name) return true
+      // float is a deprecated alias for fixed — they are interchangeable
+      const floatFixed = (expected.name === 'float' || expected.name === 'fixed') &&
+        (actual.name === 'float' || actual.name === 'fixed')
+      if (floatFixed) return true
       // No implicit numeric promotions between int/fixed/double/float.
       // Users must use explicit `as` casts: x as fixed, x as double, etc.
       // Only byte/short/long ↔ int remain implicitly compatible (MC NBT type narrowing).

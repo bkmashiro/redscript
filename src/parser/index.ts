@@ -578,7 +578,7 @@ export class Parser {
       this.warnings.push(
         `[DeprecatedType] ${filePart}line ${token.line}, col ${token.col}: 'float' is deprecated, use 'fixed' instead (×10000 fixed-point)`
       )
-      type = { kind: 'named', name: 'fixed' }
+      type = { kind: 'named', name: 'float' }
     } else if (token.kind === 'int' || token.kind === 'bool' ||
         token.kind === 'fixed' || token.kind === 'string' || token.kind === 'void' ||
         token.kind === 'BlockPos') {
