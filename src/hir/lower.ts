@@ -196,6 +196,58 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
       return [initStmt, whileStmt]
     }
 
+    // --- Desugaring: for_in_array → let idx = 0; while(idx < len) { let v = arr[idx]; body; idx = idx + 1 } ---
+    case 'for_in_array': {
+      const idxName = `__forin_idx_${stmt.binding}`
+      const initStmt: HIRStmt = {
+        kind: 'let',
+        name: idxName,
+        type: { kind: 'named', name: 'int' },
+        init: { kind: 'int_lit', value: 0 },
+        span: stmt.span,
+      }
+      const bindingInit: HIRStmt = {
+        kind: 'let',
+        name: stmt.binding,
+        type: undefined,
+        init: {
+          kind: 'index',
+          obj: { kind: 'ident', name: stmt.arrayName },
+          index: { kind: 'ident', name: idxName },
+        },
+        span: stmt.span,
+      }
+      const stepStmt: HIRStmt = {
+        kind: 'expr',
+        expr: {
+          kind: 'assign',
+          target: idxName,
+          value: {
+            kind: 'binary',
+            op: '+',
+            left: { kind: 'ident', name: idxName },
+            right: { kind: 'int_lit', value: 1 },
+          },
+        },
+        span: stmt.span,
+      }
+      const body = [bindingInit, ...lowerBlock(stmt.body)]
+      const step: HIRStmt[] = [stepStmt]
+      const whileStmt: HIRStmt = {
+        kind: 'while',
+        cond: {
+          kind: 'binary',
+          op: '<',
+          left: { kind: 'ident', name: idxName },
+          right: lowerExpr(stmt.lenExpr),
+        },
+        body,
+        step,
+        span: stmt.span,
+      }
+      return [initStmt, whileStmt]
+    }
+
     case 'foreach':
       return {
         kind: 'foreach',

@@ -2,6 +2,22 @@
 
 All notable changes to RedScript will be documented in this file.
 
+## [2.5.0] - 2026-03-17
+
+### Added
+- `stdlib/easing.mcrs`: 12 easing functions (quad/cubic/quartic/sine/expo/back/bounce/smooth)
+- `stdlib/noise.mcrs`: value noise 1D/2D, fractal Brownian motion, terrain height helper
+- `stdlib/physics.mcrs`: projectile motion, drag, spring, friction, circular motion, bounce
+- `stdlib/matrix.mcrs`: 2D/3D rotation helpers, Display Entity quaternion helpers, lerp_angle
+- `stdlib/bigint.mcrs`: upgraded to arbitrary-precision array API (`bigint_add/sub/mul_small/cmp/zero/copy`)
+- `execute store success` peephole optimization: each `if` condition now generates 1 command instead of 2
+- `examples/math-demo.mcrs`: demonstrates math/easing/noise/physics stdlib
+- `stdlib/list.mcrs`: `sort4` / `sort5` optimal sorting networks; `list_sort_asc/desc` (arbitrary length)
+
+### Changed
+- `stdlib/bigint.mcrs`: old global-state API removed, replaced with array-by-reference API
+- `examples/showcase.mcrs`: updated to use new bigint API
+
 ## [2.4.0] - 2026-03-17
 
 ### Added

@@ -823,6 +823,19 @@ export class Parser {
 
     this.expect('(')
 
+    // Detect for-in-array syntax: for ( let ident in ident , lenExpr ) { ... }
+    if (this.check('let') && this.peek(1).kind === 'ident' && this.peek(2).kind === 'in' && this.peek(3).kind === 'ident' && this.peek(4).kind === ',') {
+      this.advance() // consume 'let'
+      const binding = this.expect('ident').value
+      this.expect('in')
+      const arrayName = this.expect('ident').value
+      this.expect(',')
+      const lenExpr = this.parseExpr()
+      this.expect(')')
+      const body = this.parseBlock()
+      return this.withLoc({ kind: 'for_in_array', binding, arrayName, lenExpr, body }, forToken)
+    }
+
     // Init: either let statement (without semicolon) or empty
     let init: Stmt | undefined
     if (this.check('let')) {
