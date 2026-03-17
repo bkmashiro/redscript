@@ -319,6 +319,8 @@ Custom library paths can be added with `--include <dir>` so your own modules wor
 
 All stdlib files use `module library;` — only the functions you actually call are compiled in.
 
+> Parts of the standard library are inspired by [kaer-3058/large_number](https://github.com/kaer-3058/large_number), a comprehensive math library for Minecraft datapacks.
+
 ```rs
 import "stdlib/math"            // abs, sign, min, max, clamp, lerp, isqrt, sqrt_fixed,
                                 // pow_int, gcd, lcm, sin_fixed, cos_fixed, map, ceil_div,
