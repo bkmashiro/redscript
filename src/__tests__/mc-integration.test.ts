@@ -1035,3 +1035,192 @@ describe('MC Integration - stdlib math', () => {
     expect(await mc.scoreboard('#apeq_no', 'rs')).toBe(0)
   })
 })
+
+// ─── stdlib extra (random, bits, list_sort, bigint) ───────────────────────────
+
+const RANDOM_SRC = fs.readFileSync(path.join(__dirname, '../stdlib/random.mcrs'), 'utf-8')
+const BITS_SRC   = fs.readFileSync(path.join(__dirname, '../stdlib/bits.mcrs'),   'utf-8')
+const LIST_SRC   = fs.readFileSync(path.join(__dirname, '../stdlib/list.mcrs'),   'utf-8')
+const BIGINT_SRC = fs.readFileSync(path.join(__dirname, '../stdlib/bigint.mcrs'), 'utf-8')
+
+describe('MC Integration - stdlib extra (random/bits/list/bigint)', () => {
+  beforeAll(async () => {
+    if (!serverOnline) return
+    writeFixtureWithLibs('stdlib-extra-test.mcrs', 'stdextra',
+      [MATH_SRC, RANDOM_SRC, BITS_SRC, LIST_SRC, BIGINT_SRC])
+    await mc.command('/reload')
+    await mc.ticks(20)
+    await mc.command('/function stdextra:__load').catch(() => {})
+    await mc.ticks(5)
+  })
+
+  test('next_lcg(12345) is deterministic and non-zero', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_random')
+    await mc.ticks(5)
+    const v = await mc.scoreboard('#lcg_12345', 'rsex')
+    expect(typeof v).toBe('number')
+    expect(v).not.toBe(0)
+  })
+
+  test('two consecutive lcg calls produce different values', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_random')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#lcg_different', 'rsex')).toBe(1)
+  })
+
+  test('random_range stays in [0, 10)', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_random')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#rand_in_range', 'rsex')).toBe(1)
+  })
+
+  test('random_bool returns 0 or 1', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_random')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#rand_bool_valid', 'rsex')).toBe(1)
+  })
+
+  test('bit_get(5, 0) == 1', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bits')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bit_get_5_0', 'rsex')).toBe(1)
+  })
+
+  test('bit_get(5, 1) == 0', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bits')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bit_get_5_1', 'rsex')).toBe(0)
+  })
+
+  test('bit_shl(1, 3) == 8', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bits')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bit_shl_1_3', 'rsex')).toBe(8)
+  })
+
+  test('bit_shr(8, 2) == 2', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bits')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bit_shr_8_2', 'rsex')).toBe(2)
+  })
+
+  test('popcount(7) == 3', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bits')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#popcount_7', 'rsex')).toBe(3)
+  })
+
+  test('popcount(0) == 0', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bits')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#popcount_0', 'rsex')).toBe(0)
+  })
+
+  test('sort3(30,10,20, 0) == 10 (min)', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_list_sort')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#sort3_min', 'rsex')).toBe(10)
+  })
+
+  test('sort3(30,10,20, 2) == 30 (max)', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_list_sort')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#sort3_max', 'rsex')).toBe(30)
+  })
+
+  test('sort4(40,10,30,20, 0) == 10 (min)', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_list_sort')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#sort4_min', 'rsex')).toBe(10)
+  })
+
+  test('sort4(40,10,30,20, 3) == 40 (max)', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_list_sort')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#sort4_max', 'rsex')).toBe(40)
+  })
+
+  test('list_min3(5,3,8) == 3', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_list_sort')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#list_min3', 'rsex')).toBe(3)
+  })
+
+  test('list_max3(5,3,8) == 8', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_list_sort')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#list_max3', 'rsex')).toBe(8)
+  })
+
+  test('avg3(10,20,30) == 20', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_list_sort')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#avg3', 'rsex')).toBe(20)
+  })
+
+  test('bigint3_add_lo(9999, 1) == 0', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bigint')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bi3_add_lo', 'rsex')).toBe(0)
+  })
+
+  test('bigint3_carry_lo(9999, 1) == 1', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bigint')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bi3_carry_lo', 'rsex')).toBe(1)
+  })
+
+  test('bigint3_cmp([1,0,0] vs [0,9999,9999]) == 1', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bigint')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bi3_cmp_gt', 'rsex')).toBe(1)
+  })
+
+  test('bigint3_cmp([0,9999,9999] vs [1,0,0]) == -1', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bigint')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bi3_cmp_lt', 'rsex')).toBe(-1)
+  })
+
+  test('int32_to_bigint3_hi(1023456789) == 10', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bigint')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bi3_hi', 'rsex')).toBe(10)
+  })
+
+  test('int32_to_bigint3_mid(1023456789) == 2345', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bigint')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bi3_mid', 'rsex')).toBe(2345)
+  })
+
+  test('int32_to_bigint3_lo(1023456789) == 6789', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_bigint')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#bi3_lo', 'rsex')).toBe(6789)
+  })
+})
