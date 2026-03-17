@@ -94,3 +94,79 @@ fn weighted3(seed: int, w0: int, w1: int, w2: int): int {
     if (v < w0 + w1) { return 1; }
     return 2;
 }
+
+// ─── Sorting networks (fixed-size, optimal compare-swap count) ────────────────
+
+// sort4(a,b,c,d, pos): sort 4 values, return value at position pos (0=min)
+// Uses 5-comparison optimal sorting network
+fn sort4(a: int, b: int, c: int, d: int, pos: int): int {
+    let w: int = a; let x: int = b; let y: int = c; let z: int = d;
+    // Sorting network for 4 elements
+    if (w > x) { let t: int = w; w = x; x = t; }
+    if (y > z) { let t: int = y; y = z; z = t; }
+    if (w > y) { let t: int = w; w = y; y = t; }
+    if (x > z) { let t: int = x; x = z; z = t; }
+    if (x > y) { let t: int = x; x = y; y = t; }
+    if (pos == 0) { return w; }
+    if (pos == 1) { return x; }
+    if (pos == 2) { return y; }
+    return z;
+}
+
+// sort5(a,b,c,d,e, pos): sort 5 values, return value at position pos
+// Uses 9-comparison sorting network
+fn sort5(a: int, b: int, c: int, d: int, e: int, pos: int): int {
+    let v0: int = a; let v1: int = b; let v2: int = c; let v3: int = d; let v4: int = e;
+    // 9-comparison sorting network (Batcher odd-even merge sort)
+    if (v0 > v1) { let t: int = v0; v0 = v1; v1 = t; }
+    if (v2 > v3) { let t: int = v2; v2 = v3; v3 = t; }
+    if (v0 > v2) { let t: int = v0; v0 = v2; v2 = t; }
+    if (v1 > v4) { let t: int = v1; v1 = v4; v4 = t; }
+    if (v0 > v1) { let t: int = v0; v0 = v1; v1 = t; }
+    if (v2 > v3) { let t: int = v2; v2 = v3; v3 = t; }
+    if (v1 > v2) { let t: int = v1; v1 = v2; v2 = t; }
+    if (v3 > v4) { let t: int = v3; v3 = v4; v4 = t; }
+    if (v2 > v3) { let t: int = v2; v2 = v3; v3 = t; }
+    if (pos == 0) { return v0; }
+    if (pos == 1) { return v1; }
+    if (pos == 2) { return v2; }
+    if (pos == 3) { return v3; }
+    return v4;
+}
+
+// ─── Dynamic sort (arbitrary-length, uses array reference passing) ─────────────
+
+// list_sort_asc(arr, len): in-place ascending bubble sort
+// Requires RedScript ≥ 2.4.0 (array parameter by reference)
+fn list_sort_asc(arr: int[], len: int) {
+    let i: int = 0;
+    while (i < len - 1) {
+        let j: int = 0;
+        while (j < len - 1 - i) {
+            if (arr[j] > arr[j + 1]) {
+                let tmp: int = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = tmp;
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
+
+// list_sort_desc(arr, len): in-place descending bubble sort
+fn list_sort_desc(arr: int[], len: int) {
+    let i: int = 0;
+    while (i < len - 1) {
+        let j: int = 0;
+        while (j < len - 1 - i) {
+            if (arr[j] < arr[j + 1]) {
+                let tmp: int = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = tmp;
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
