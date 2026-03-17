@@ -9,6 +9,11 @@
 
 import type { MIRFunction, MIRBlock, MIRInstr, Operand } from '../mir/types'
 
+/** Wrap a JS number to Java signed int32 (MC scoreboard semantics). */
+function int32(n: number): number {
+  return (n | 0)
+}
+
 export function constantFold(fn: MIRFunction): MIRFunction {
   return {
     ...fn,
@@ -33,27 +38,27 @@ function tryFold(instr: MIRInstr): MIRInstr | null {
   switch (instr.kind) {
     case 'add':
       if (isConst(instr.a) && isConst(instr.b))
-        return { kind: 'const', dst: instr.dst, value: instr.a.value + instr.b.value }
+        return { kind: 'const', dst: instr.dst, value: int32(instr.a.value + instr.b.value) }
       break
     case 'sub':
       if (isConst(instr.a) && isConst(instr.b))
-        return { kind: 'const', dst: instr.dst, value: instr.a.value - instr.b.value }
+        return { kind: 'const', dst: instr.dst, value: int32(instr.a.value - instr.b.value) }
       break
     case 'mul':
       if (isConst(instr.a) && isConst(instr.b))
-        return { kind: 'const', dst: instr.dst, value: instr.a.value * instr.b.value }
+        return { kind: 'const', dst: instr.dst, value: int32(instr.a.value * instr.b.value) }
       break
     case 'div':
       if (isConst(instr.a) && isConst(instr.b) && instr.b.value !== 0)
-        return { kind: 'const', dst: instr.dst, value: Math.trunc(instr.a.value / instr.b.value) }
+        return { kind: 'const', dst: instr.dst, value: int32(Math.trunc(instr.a.value / instr.b.value)) }
       break
     case 'mod':
       if (isConst(instr.a) && isConst(instr.b) && instr.b.value !== 0)
-        return { kind: 'const', dst: instr.dst, value: instr.a.value % instr.b.value }
+        return { kind: 'const', dst: instr.dst, value: int32(instr.a.value % instr.b.value) }
       break
     case 'neg':
       if (isConst(instr.src))
-        return { kind: 'const', dst: instr.dst, value: -instr.src.value }
+        return { kind: 'const', dst: instr.dst, value: int32(-instr.src.value) }
       break
     case 'not':
       if (isConst(instr.src))

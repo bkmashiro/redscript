@@ -1048,8 +1048,8 @@ describe('MC Integration - stdlib extra (random/bits/list/bigint)', () => {
     if (!serverOnline) return
     writeFixtureWithLibs('stdlib-extra-test.mcrs', 'stdextra',
       [MATH_SRC, RANDOM_SRC, BITS_SRC, LIST_SRC, BIGINT_SRC])
-    await mc.command('/reload')
-    await mc.ticks(20)
+    await mc.reload()
+    await mc.ticks(10)
     await mc.command('/function stdextra:__load').catch(() => {})
     await mc.ticks(5)
   })
