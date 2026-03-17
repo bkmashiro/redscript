@@ -906,3 +906,132 @@ describe('MC Integration - Extended Coverage', () => {
     expect(await mc.scoreboard('#foreach_at_count', 'rs')).toBe(3)
   })
 })
+
+// ─── stdlib math integration ──────────────────────────────────────────────────
+
+const MATH_SRC = fs.readFileSync(
+  path.join(__dirname, '../stdlib/math.mcrs'),
+  'utf-8',
+)
+
+function writeFixtureWithLibs(fileName: string, namespace: string, librarySources: string[]): void {
+  const source = fs.readFileSync(path.join(FIXTURE_DIR, fileName), 'utf-8')
+  fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+  if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
+    fs.writeFileSync(path.join(DATAPACK_DIR, 'pack.mcmeta'), JSON.stringify({
+      pack: { pack_format: 48, description: 'RedScript integration tests' }
+    }))
+  }
+
+  const result = compile(source, { namespace, librarySources })
+
+  for (const file of result.files) {
+    if (file.path === 'pack.mcmeta') continue
+    const filePath = path.join(DATAPACK_DIR, file.path)
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+
+    if (file.path.includes('data/minecraft/tags/') && fs.existsSync(filePath)) {
+      const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      const incoming = JSON.parse(file.content)
+      const merged = { values: [...new Set([...(existing.values ?? []), ...(incoming.values ?? [])])] }
+      fs.writeFileSync(filePath, JSON.stringify(merged, null, 2))
+    } else {
+      fs.writeFileSync(filePath, file.content)
+    }
+  }
+}
+
+describe('MC Integration - stdlib math', () => {
+  beforeAll(async () => {
+    if (!serverOnline) return
+
+    writeFixtureWithLibs('stdlib-math-integration.mcrs', 'stdmath', [MATH_SRC])
+    await mc.reload()
+    await mc.command('/function stdmath:__load').catch(() => {})
+    await mc.ticks(5)
+  })
+
+  test('factorial(5) == 120', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_basic')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#factorial_5', 'rs')).toBe(120)
+  })
+
+  test('combinations(5,2) == 10', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_basic')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#combinations_5_2', 'rs')).toBe(10)
+  })
+
+  test('gcd(12,8) == 4', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_basic')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#gcd_12_8', 'rs')).toBe(4)
+  })
+
+  test('isqrt(144) == 12', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_basic')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#isqrt_144', 'rs')).toBe(12)
+  })
+
+  test('log2_int(1024) == 10', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_basic')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#log2_1024', 'rs')).toBe(10)
+  })
+
+  test('pow_int(2,10) == 1024', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_basic')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#pow_2_10', 'rs')).toBe(1024)
+  })
+
+  test('abs(-42) == 42', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_basic')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#abs_neg42', 'rs')).toBe(42)
+  })
+
+  test('clamp(15,0,10) == 10', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_basic')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#clamp_hi', 'rs')).toBe(10)
+  })
+
+  test('sqrt_fx(40000) == 20000', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_sqrt')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#sqrt_fx_40000', 'rs')).toBe(20000)
+  })
+
+  test('cbrt_fx(27) == 3', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_sqrt')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#cbrt_27', 'rs')).toBe(3)
+  })
+
+  test('approx_eq(100,103,5) == 1', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_approx')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#apeq_yes', 'rs')).toBe(1)
+  })
+
+  test('approx_eq(100,110,5) == 0', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_approx')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#apeq_no', 'rs')).toBe(0)
+  })
+})

@@ -1,0 +1,53 @@
+// stdlib-math-test.mcrs — MC integration test for math stdlib functions
+// Tests actual in-game execution of math.mcrs functions
+
+import "../../../src/stdlib/math.mcrs"
+
+@load fn __load() {
+    scoreboard_add("rs");
+}
+
+// Run all stdlib math tests, store results to scoreboards
+@keep fn test_stdlib_math() {
+    // ln(2.0) ≈ 6931  (input 20000 = 2.0 ×10000)
+    scoreboard_set("#ln_2", "rs", ln(20000));
+
+    // sqrt_fx(4.0) = 20000  (input 40000 = 4.0 ×10000)
+    scoreboard_set("#sqrt_4", "rs", sqrt_fx(40000));
+
+    // exp_fx(1.0) ≈ 27183  (input 10000 = 1.0 ×10000)
+    scoreboard_set("#exp_1", "rs", exp_fx(10000));
+
+    // cbrt(27) = 3
+    scoreboard_set("#cbrt_27", "rs", cbrt_fx(27));
+
+    // factorial(5) = 120
+    scoreboard_set("#fac5", "rs", factorial(5));
+
+    // combinations(5,2) = 10
+    scoreboard_set("#c52", "rs", combinations(5, 2));
+
+    // gcd(12, 8) = 4
+    scoreboard_set("#gcd128", "rs", gcd(12, 8));
+
+    // isqrt(144) = 12
+    scoreboard_set("#isqrt144", "rs", isqrt(144));
+
+    // log2_int(1024) = 10
+    scoreboard_set("#log2_1024", "rs", log2_int(1024));
+
+    // pow_int(2, 10) = 1024
+    scoreboard_set("#pow2_10", "rs", pow_int(2, 10));
+
+    // abs(-42) = 42
+    scoreboard_set("#abs_neg42", "rs", abs(-42));
+
+    // clamp(15, 0, 10) = 10
+    scoreboard_set("#clamp_15", "rs", clamp(15, 0, 10));
+
+    // approx_eq(100, 103, 5) = 1
+    scoreboard_set("#apeq_1", "rs", approx_eq(100, 103, 5));
+
+    // approx_eq(100, 110, 5) = 0
+    scoreboard_set("#apeq_0", "rs", approx_eq(100, 110, 5));
+}

@@ -1,0 +1,28 @@
+// stdlib math integration test
+// Uses librarySources so no import needed
+
+@load fn __load() {
+    scoreboard_add("rs");
+}
+
+@keep fn test_math_basic() {
+    scoreboard_set("#factorial_5", "rs", factorial(5));
+    scoreboard_set("#combinations_5_2", "rs", combinations(5, 2));
+    scoreboard_set("#gcd_12_8", "rs", gcd(12, 8));
+    scoreboard_set("#isqrt_144", "rs", isqrt(144));
+    scoreboard_set("#log2_1024", "rs", log2_int(1024));
+    scoreboard_set("#pow_2_10", "rs", pow_int(2, 10));
+    scoreboard_set("#abs_neg42", "rs", abs(-42));
+    scoreboard_set("#clamp_hi", "rs", clamp(15, 0, 10));
+}
+
+@keep fn test_math_sqrt() {
+    scoreboard_set("#sqrt_fx_40000", "rs", sqrt_fx(40000));
+    scoreboard_set("#cbrt_27", "rs", cbrt_fx(27));
+    scoreboard_set("#cbrt_1000", "rs", cbrt_fx(1000));
+}
+
+@keep fn test_math_approx() {
+    scoreboard_set("#apeq_yes", "rs", approx_eq(100, 103, 5));
+    scoreboard_set("#apeq_no", "rs", approx_eq(100, 110, 5));
+}
