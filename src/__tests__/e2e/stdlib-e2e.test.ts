@@ -375,6 +375,14 @@ const SIGNAL_SRC = fs.readFileSync(
   path.join(__dirname, '../../stdlib/signal.mcrs'),
   'utf-8',
 )
+const ADVANCED_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/advanced.mcrs'),
+  'utf-8',
+)
+const VEC_SRC_FULL = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/vec.mcrs'),
+  'utf-8',
+)
 
 // ===========================================================================
 // math.mcrs — runtime execution (extended)
@@ -730,4 +738,138 @@ describe('signal.mcrs — runtime', () => {
   test('weighted3(seed,1,0,0) == 0 (all weight on 0)', () => expect(callAndGetRet(rt, 'test_weighted3_all_on_0')).toBe(0))
   test('exp_dist_approx in [0,100000]', () => expect(callAndGetRet(rt, 'test_exp_range')).toBe(1))
   test('exp_dist_approx is deterministic', () => expect(callAndGetRet(rt, 'test_exp_det')).toBe(1))
+})
+
+// ===========================================================================
+// advanced.mcrs — runtime
+// ===========================================================================
+
+describe('advanced.mcrs — number theory', () => {
+  const rt = makeRuntime(`
+    fn test_fib_0(): int { return fib(0); }
+    fn test_fib_1(): int { return fib(1); }
+    fn test_fib_10(): int { return fib(10); }
+    fn test_fib_20(): int { return fib(20); }
+    fn test_is_prime_2(): int { return is_prime(2); }
+    fn test_is_prime_4(): int { return is_prime(4); }
+    fn test_is_prime_97(): int { return is_prime(97); }
+    fn test_is_prime_1(): int { return is_prime(1); }
+    fn test_collatz_1(): int { return collatz_steps(1); }
+    fn test_collatz_6(): int { return collatz_steps(6); }
+    fn test_collatz_27(): int { return collatz_steps(27); }
+    fn test_digit_sum_123(): int { return digit_sum(123); }
+    fn test_digit_sum_0(): int { return digit_sum(0); }
+    fn test_count_digits_0(): int { return count_digits(0); }
+    fn test_count_digits_100(): int { return count_digits(100); }
+    fn test_reverse_12345(): int { return reverse_int(12345); }
+    fn test_reverse_neg42(): int { return reverse_int(-42); }
+    fn test_mod_pow(): int { return mod_pow(2, 10, 1000); }
+    fn test_mod_pow_base(): int { return mod_pow(3, 0, 7); }
+    fn test_digital_root_493(): int { return digital_root(493); }
+    fn test_digital_root_9(): int { return digital_root(9); }
+    fn test_digital_root_0(): int { return digital_root(0); }
+    fn test_newton_sqrt_25(): int { return newton_sqrt(25); }
+    fn test_newton_sqrt_100(): int { return newton_sqrt(100); }
+    fn test_newton_sqrt_2(): int { return newton_sqrt(2); }
+    fn test_spiral_ring_1(): int { return spiral_ring(1); }
+    fn test_spiral_ring_9(): int { return spiral_ring(9); }
+    fn test_spiral_ring_25(): int { return spiral_ring(25); }
+  `, [MATH_SRC, ADVANCED_SRC])
+
+  // fib
+  test('fib(0) == 0', () => expect(callAndGetRet(rt, 'test_fib_0')).toBe(0))
+  test('fib(1) == 1', () => expect(callAndGetRet(rt, 'test_fib_1')).toBe(1))
+  test('fib(10) == 55', () => expect(callAndGetRet(rt, 'test_fib_10')).toBe(55))
+  test('fib(20) == 6765', () => expect(callAndGetRet(rt, 'test_fib_20')).toBe(6765))
+
+  // is_prime
+  test('is_prime(2) == 1', () => expect(callAndGetRet(rt, 'test_is_prime_2')).toBe(1))
+  test('is_prime(4) == 0', () => expect(callAndGetRet(rt, 'test_is_prime_4')).toBe(0))
+  test('is_prime(97) == 1', () => expect(callAndGetRet(rt, 'test_is_prime_97')).toBe(1))
+  test('is_prime(1) == 0', () => expect(callAndGetRet(rt, 'test_is_prime_1')).toBe(0))
+
+  // collatz
+  test('collatz_steps(1) == 0', () => expect(callAndGetRet(rt, 'test_collatz_1')).toBe(0))
+  test('collatz_steps(6) == 8', () => expect(callAndGetRet(rt, 'test_collatz_6')).toBe(8))
+  test('collatz_steps(27) == 111', () => expect(callAndGetRet(rt, 'test_collatz_27')).toBe(111))
+
+  // digit_sum / count_digits
+  test('digit_sum(123) == 6', () => expect(callAndGetRet(rt, 'test_digit_sum_123')).toBe(6))
+  test('digit_sum(0) == 0', () => expect(callAndGetRet(rt, 'test_digit_sum_0')).toBe(0))
+  test('count_digits(0) == 1', () => expect(callAndGetRet(rt, 'test_count_digits_0')).toBe(1))
+  test('count_digits(100) == 3', () => expect(callAndGetRet(rt, 'test_count_digits_100')).toBe(3))
+
+  // reverse_int
+  test('reverse_int(12345) == 54321', () => expect(callAndGetRet(rt, 'test_reverse_12345')).toBe(54321))
+  test('reverse_int(-42) == -24', () => expect(callAndGetRet(rt, 'test_reverse_neg42')).toBe(-24))
+
+  // mod_pow
+  test('mod_pow(2, 10, 1000) == 24', () => expect(callAndGetRet(rt, 'test_mod_pow')).toBe(24))
+  test('mod_pow(3, 0, 7) == 1 (anything^0 = 1)', () => expect(callAndGetRet(rt, 'test_mod_pow_base')).toBe(1))
+
+  // digital_root
+  test('digital_root(493) == 7', () => expect(callAndGetRet(rt, 'test_digital_root_493')).toBe(7))
+  test('digital_root(9) == 9', () => expect(callAndGetRet(rt, 'test_digital_root_9')).toBe(9))
+  test('digital_root(0) == 0', () => expect(callAndGetRet(rt, 'test_digital_root_0')).toBe(0))
+
+  // newton_sqrt
+  test('newton_sqrt(25) == 5', () => expect(callAndGetRet(rt, 'test_newton_sqrt_25')).toBe(5))
+  test('newton_sqrt(100) == 10', () => expect(callAndGetRet(rt, 'test_newton_sqrt_100')).toBe(10))
+  test('newton_sqrt(2) == 1 (floor)', () => expect(callAndGetRet(rt, 'test_newton_sqrt_2')).toBe(1))
+
+  // spiral_ring
+  test('spiral_ring(1) == 0', () => expect(callAndGetRet(rt, 'test_spiral_ring_1')).toBe(0))
+  test('spiral_ring(9) == 1', () => expect(callAndGetRet(rt, 'test_spiral_ring_9')).toBe(1))
+  test('spiral_ring(25) == 2', () => expect(callAndGetRet(rt, 'test_spiral_ring_25')).toBe(2))
+})
+
+describe('advanced.mcrs — curves & fractals', () => {
+  const rt = makeRuntime(`
+    fn test_bezier_quad_start(): int { return bezier_quad(0, 500, 1000, 0); }
+    fn test_bezier_quad_end(): int { return bezier_quad(0, 500, 1000, 1000); }
+    fn test_bezier_quad_mid(): int { return bezier_quad(0, 500, 1000, 500); }
+    fn test_bezier_quad_arch(): int { return bezier_quad(0, 1000, 0, 500); }
+    fn test_bezier_cubic_start(): int { return bezier_cubic(0, 333, 667, 1000, 0); }
+    fn test_bezier_cubic_end(): int { return bezier_cubic(0, 333, 667, 1000, 1000); }
+    fn test_mandelbrot_in_set(): int { return mandelbrot_iter(-1000, 0, 100); }
+    fn test_mandelbrot_outside(): int { return mandelbrot_iter(1000, 0, 100); }
+    fn test_hash_int_det(): int {
+      let a: int = hash_int(42);
+      let b: int = hash_int(42);
+      if (a == b) { return 1; }
+      return 0;
+    }
+    fn test_hash_int_diff(): int {
+      let a: int = hash_int(0);
+      let b: int = hash_int(1);
+      if (a != b) { return 1; }
+      return 0;
+    }
+    fn test_noise1d_range(): int {
+      let v: int = noise1d(500);
+      if (v >= 0) { if (v < 1000) { return 1; } }
+      return 0;
+    }
+  `, [MATH_SRC, ADVANCED_SRC])
+
+  // bezier_quad
+  test('bezier_quad(0,500,1000, t=0) == 0 (start)', () => expect(callAndGetRet(rt, 'test_bezier_quad_start')).toBe(0))
+  test('bezier_quad(0,500,1000, t=1000) == 1000 (end)', () => expect(callAndGetRet(rt, 'test_bezier_quad_end')).toBe(1000))
+  test('bezier_quad(0,500,1000, t=500) == 500 (midpoint)', () => expect(callAndGetRet(rt, 'test_bezier_quad_mid')).toBe(500))
+  test('bezier_quad(0,1000,0, t=500) == 500 (arch)', () => expect(callAndGetRet(rt, 'test_bezier_quad_arch')).toBe(500))
+
+  // bezier_cubic
+  test('bezier_cubic(0,333,667,1000, t=0) == 0 (start)', () => expect(callAndGetRet(rt, 'test_bezier_cubic_start')).toBe(0))
+  test('bezier_cubic(0,333,667,1000, t=1000) == 1000 (end)', () => expect(callAndGetRet(rt, 'test_bezier_cubic_end')).toBe(1000))
+
+  // mandelbrot
+  test('mandelbrot_iter(-1000,0,100) == 100 (in set, c=-1+0i)', () => expect(callAndGetRet(rt, 'test_mandelbrot_in_set')).toBe(100))
+  test('mandelbrot_iter(1000,0,100) < 100 (outside, escapes quickly)', () => expect(callAndGetRet(rt, 'test_mandelbrot_outside')).toBeLessThan(100))
+
+  // hash_int
+  test('hash_int is deterministic', () => expect(callAndGetRet(rt, 'test_hash_int_det')).toBe(1))
+  test('hash_int(0) != hash_int(1)', () => expect(callAndGetRet(rt, 'test_hash_int_diff')).toBe(1))
+
+  // noise1d
+  test('noise1d(500) in [0, 1000)', () => expect(callAndGetRet(rt, 'test_noise1d_range')).toBe(1))
 })
