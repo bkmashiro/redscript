@@ -1329,7 +1329,9 @@ export class TypeChecker {
     return this.selfTypeStack[this.selfTypeStack.length - 1]
   }
 
-  /** Returns true if expected/actual are a numeric type mismatch (int vs float). */
+  /** Returns true if expected/actual are a numeric type mismatch (int vs float/fixed/double).
+   * These pairs are NOT implicitly compatible — require explicit `as` cast.
+   * Only int↔byte/short/long remain implicitly compatible (MC NBT narrowing). */
   private isNumericMismatch(expected: TypeNode, actual: TypeNode): boolean {
     if (expected.kind !== 'named' || actual.kind !== 'named') return false
     const numericPairs = [
@@ -1372,15 +1374,15 @@ export class TypeChecker {
       // void matches anything (for inferred types)
       if (actual.name === 'void') return true
       if (expected.name === actual.name) return true
-      // int→float/double/fixed implicit promotion in function calls (not for let/return — handled separately)
-      const numericPromotion = [
-        ['int', 'float'], ['int', 'double'], ['float', 'double'],
-        ['float', 'int'], ['double', 'int'], ['double', 'float'],
-        ['int', 'fixed'], ['fixed', 'int'],
-        ['float', 'fixed'], ['fixed', 'float'],
-        ['fixed', 'double'], ['double', 'fixed'],
+      // No implicit numeric promotions between int/fixed/double/float.
+      // Users must use explicit `as` casts: x as fixed, x as double, etc.
+      // Only byte/short/long ↔ int remain implicitly compatible (MC NBT type narrowing).
+      const nbtNarrowing = [
+        ['int', 'byte'], ['byte', 'int'],
+        ['int', 'short'], ['short', 'int'],
+        ['int', 'long'], ['long', 'int'],
       ]
-      if (numericPromotion.some(([e, a]) => expected.name === e && actual.name === a)) return true
+      if (nbtNarrowing.some(([e, a]) => expected.name === e && actual.name === a)) return true
       return false
     }
 
