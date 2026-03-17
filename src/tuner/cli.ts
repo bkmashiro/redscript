@@ -7,10 +7,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { search, searchSA } from './engine';
 import { lnPolynomialAdapter } from './adapters/ln-polynomial';
+import { sqrtNewtonAdapter } from './adapters/sqrt-newton';
 import { TunerAdapter, ResultMeta } from './types';
 
 const ADAPTERS: Record<string, TunerAdapter> = {
   'ln-polynomial': lnPolynomialAdapter,
+  'sqrt-newton':   sqrtNewtonAdapter,
 };
 
 function printUsage(): void {

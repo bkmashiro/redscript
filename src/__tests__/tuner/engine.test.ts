@@ -6,6 +6,7 @@ import { search, searchSA } from '../../tuner/engine';
 import { i32, fixedMul, isOverflow } from '../../tuner/simulator';
 import { evaluate } from '../../tuner/metrics';
 import { lnPolynomialAdapter, defaultParams as lnDefaultParams } from '../../tuner/adapters/ln-polynomial';
+import { sqrtNewtonAdapter, defaultParams as sqrtDefaultParams } from '../../tuner/adapters/sqrt-newton';
 import { TunerAdapter, ParamSpec } from '../../tuner/types';
 
 // ─── simulator tests ──────────────────────────────────────────────────────────
@@ -200,4 +201,60 @@ describe('ln-polynomial adapter', () => {
     const result = searchSA(lnPolynomialAdapter, 3000);
     expect(result.maxError).toBeLessThan(0.001);
   }, 30000);
+});
+
+// ─── sqrt-newton adapter tests ────────────────────────────────────────────────
+
+describe('sqrt-newton adapter', () => {
+  test('simulate(10000, defaultParams) ≈ 10000 (sqrt(1.0)=1.0)', () => {
+    const result = sqrtNewtonAdapter.simulate(10000, sqrtDefaultParams);
+    // sqrt(1.0) * 10000 = 10000
+    expect(Math.abs(result - 10000)).toBeLessThan(10);
+  });
+
+  test('simulate(40000, defaultParams) ≈ 20000 (sqrt(4.0)=2.0)', () => {
+    const result = sqrtNewtonAdapter.simulate(40000, sqrtDefaultParams);
+    // sqrt(4.0) * 10000 = 20000
+    expect(Math.abs(result - 20000)).toBeLessThan(10);
+  });
+
+  test('simulate(0) returns 0', () => {
+    expect(sqrtNewtonAdapter.simulate(0, sqrtDefaultParams)).toBe(0);
+    expect(sqrtNewtonAdapter.simulate(-1, sqrtDefaultParams)).toBe(0);
+  });
+
+  test('simulate(250000, defaultParams) ≈ 50000 (sqrt(25.0)=5.0)', () => {
+    const result = sqrtNewtonAdapter.simulate(250000, sqrtDefaultParams);
+    expect(Math.abs(result - 50000)).toBeLessThan(10);
+  });
+
+  test('sample inputs are all positive', () => {
+    const inputs = sqrtNewtonAdapter.sampleInputs();
+    expect(inputs.length).toBeGreaterThan(50);
+    expect(inputs.every(x => x > 0)).toBe(true);
+  });
+
+  test('reference matches Math.sqrt', () => {
+    const SCALE = 10000;
+    expect(sqrtNewtonAdapter.reference(SCALE)).toBe(SCALE);          // sqrt(1.0)
+    expect(sqrtNewtonAdapter.reference(4 * SCALE)).toBe(2 * SCALE);  // sqrt(4.0)
+    expect(sqrtNewtonAdapter.reference(9 * SCALE)).toBe(3 * SCALE);  // sqrt(9.0)
+    expect(sqrtNewtonAdapter.reference(0)).toBe(0);
+  });
+
+  test('generateCode contains fn sqrt_fx', () => {
+    const meta = {
+      maxError: 1.5,
+      mae: 0.5,
+      rmse: 0.8,
+      estimatedCmds: 30,
+      tuneDate: '2026-03-17',
+      budgetUsed: 3000,
+    };
+    const code = sqrtNewtonAdapter.generateCode(sqrtDefaultParams, meta);
+    expect(code).toContain('AUTO-GENERATED');
+    expect(code).toContain('sqrt-newton');
+    expect(code).toContain('fn sqrt_fx');
+    expect(code).toContain('2026-03-17');
+  });
 });
