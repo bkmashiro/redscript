@@ -97,7 +97,17 @@ Last updated: 2026-03-17
 - [ ] **太阳角度** (`world.mcrs` 扩展) — 根据 daytime 计算太阳方位
 - [ ] **math_hp.mcrs MC integration 测试** — 需要 MC server，有 marker entity
 
-### Long-term 🌱
+### Type System Design Decisions
+
+### Fixed-point vs Float
+- `fixed` = ×10000 scoreboard integer (renamed from `float`; `float` is deprecated alias)
+- `double` = NBT IEEE 754 (future, P3)
+- No "fake float" — names are honest
+- All stdlib functions converge to ×10000 scale (v3.0 migration)
+
+---
+
+## Long-term 🌱
 - [ ] **Fourier 分析** — DFT/FFT，kaer 有，RedScript 最复杂的缺口
 - [ ] **表达式解析器** — 运行时解析 `"2*x+sin(x)"` 字符串，kaer 有逆波兰算法
 - [ ] **更多 Tuner adapter** — exp_fx / sin_fixed 系数优化
