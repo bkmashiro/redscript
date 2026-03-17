@@ -367,6 +367,14 @@ const EASING_SRC = fs.readFileSync(
   path.join(__dirname, '../../stdlib/easing.mcrs'),
   'utf-8',
 )
+const NOISE_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/noise.mcrs'),
+  'utf-8',
+)
+const SIGNAL_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/signal.mcrs'),
+  'utf-8',
+)
 
 // ===========================================================================
 // math.mcrs — runtime execution (extended)
@@ -526,4 +534,200 @@ describe('bigint.mcrs — runtime', () => {
     expect(callAndGetRet(rt, 'test_int32_bigint3_mid')).toBe(2345))
   test('int32_to_bigint3_hi(1023456789) == 10', () =>
     expect(callAndGetRet(rt, 'test_int32_bigint3_hi')).toBe(10))
+})
+
+// ===========================================================================
+// noise.mcrs — runtime
+// ===========================================================================
+
+describe('noise.mcrs — runtime', () => {
+  const rt = makeRuntime(`
+    fn test_hash_det(): int {
+      let a: int = hash_1d(42);
+      let b: int = hash_1d(42);
+      if (a == b) { return 1; }
+      return 0;
+    }
+    fn test_hash_diff(): int {
+      let a: int = hash_1d(0);
+      let b: int = hash_1d(1);
+      if (a != b) { return 1; }
+      return 0;
+    }
+    fn test_hash_1d_pos_in_range(): int {
+      let h: int = hash_1d_pos(99);
+      if (h >= 0) {
+        if (h <= 10000) { return 1; }
+      }
+      return 0;
+    }
+    fn test_hash_2d_det(): int {
+      let a: int = hash_2d(3, 7);
+      let b: int = hash_2d(3, 7);
+      if (a == b) { return 1; }
+      return 0;
+    }
+    fn test_vn1d_in_range(): int {
+      let v: int = value_noise_1d(15000);
+      if (v >= 0) {
+        if (v <= 10000) { return 1; }
+      }
+      return 0;
+    }
+    fn test_vn1d_det(): int {
+      let a: int = value_noise_1d(25000);
+      let b: int = value_noise_1d(25000);
+      if (a == b) { return 1; }
+      return 0;
+    }
+    fn test_vn1d_at_integer(): int {
+      let vn: int = value_noise_1d(20000);
+      let h: int = hash_1d_pos(2);
+      if (vn == h) { return 1; }
+      return 0;
+    }
+    fn test_vn2d_in_range(): int {
+      let v: int = value_noise_2d(15000, 25000);
+      if (v >= 0) {
+        if (v <= 10000) { return 1; }
+      }
+      return 0;
+    }
+    fn test_fbm1d_1oct(): int {
+      let f: int = fbm_1d(20000, 1, 5000);
+      let v: int = value_noise_1d(20000);
+      if (f == v) { return 1; }
+      return 0;
+    }
+    fn test_fbm1d_in_range(): int {
+      let v: int = fbm_1d(30000, 3, 5000);
+      if (v >= 0) {
+        if (v <= 10000) { return 1; }
+      }
+      return 0;
+    }
+    fn test_fbm2d_in_range(): int {
+      let v: int = fbm_2d(10000, 20000, 2, 6000);
+      if (v >= 0) {
+        if (v <= 10000) { return 1; }
+      }
+      return 0;
+    }
+    fn test_terrain_in_range(): int {
+      let h: int = terrain_height(0, 0, 64, 20);
+      if (h >= 64) {
+        if (h <= 84) { return 1; }
+      }
+      return 0;
+    }
+    fn test_terrain_spatial(): int {
+      let a: int = terrain_height(0, 0, 64, 20);
+      let b: int = terrain_height(7, 13, 64, 20);
+      if (a != b) { return 1; }
+      return 0;
+    }
+  `, [MATH_SRC, NOISE_SRC])
+
+  test('hash_1d is deterministic', () => expect(callAndGetRet(rt, 'test_hash_det')).toBe(1))
+  test('hash_1d(0) != hash_1d(1)', () => expect(callAndGetRet(rt, 'test_hash_diff')).toBe(1))
+  test('hash_1d_pos returns [0, 10000]', () => expect(callAndGetRet(rt, 'test_hash_1d_pos_in_range')).toBe(1))
+  test('hash_2d is deterministic', () => expect(callAndGetRet(rt, 'test_hash_2d_det')).toBe(1))
+  test('value_noise_1d returns [0, 10000]', () => expect(callAndGetRet(rt, 'test_vn1d_in_range')).toBe(1))
+  test('value_noise_1d is deterministic', () => expect(callAndGetRet(rt, 'test_vn1d_det')).toBe(1))
+  test('value_noise_1d at integer boundary == hash_1d_pos', () => expect(callAndGetRet(rt, 'test_vn1d_at_integer')).toBe(1))
+  test('value_noise_2d returns [0, 10000]', () => expect(callAndGetRet(rt, 'test_vn2d_in_range')).toBe(1))
+  test('fbm_1d(x,1,p) == value_noise_1d(x) (1 octave)', () => expect(callAndGetRet(rt, 'test_fbm1d_1oct')).toBe(1))
+  test('fbm_1d returns [0, 10000]', () => expect(callAndGetRet(rt, 'test_fbm1d_in_range')).toBe(1))
+  test('fbm_2d returns [0, 10000]', () => expect(callAndGetRet(rt, 'test_fbm2d_in_range')).toBe(1))
+  test('terrain_height(0,0,64,20) in [64,84]', () => expect(callAndGetRet(rt, 'test_terrain_in_range')).toBe(1))
+  test('terrain_height varies spatially', () => expect(callAndGetRet(rt, 'test_terrain_spatial')).toBe(1))
+})
+
+// ===========================================================================
+// signal.mcrs — runtime
+// ===========================================================================
+
+describe('signal.mcrs — runtime', () => {
+  const rt = makeRuntime(`
+    fn test_uniform_int_range(): int {
+      let v: int = uniform_int(12345, 0, 10);
+      if (v >= 0) { if (v <= 10) { return 1; } }
+      return 0;
+    }
+    fn test_uniform_int_det(): int {
+      let a: int = uniform_int(99999, 0, 100);
+      let b: int = uniform_int(99999, 0, 100);
+      if (a == b) { return 1; }
+      return 0;
+    }
+    fn test_uniform_int_single(): int {
+      return uniform_int(42, 5, 5);
+    }
+    fn test_uniform_frac_range(): int {
+      let v: int = uniform_frac(12345);
+      if (v >= 0) { if (v <= 10000) { return 1; } }
+      return 0;
+    }
+    fn test_bernoulli_range(): int {
+      let v: int = bernoulli(42, 5000);
+      if (v >= 0) { if (v <= 1) { return 1; } }
+      return 0;
+    }
+    fn test_bernoulli_always(): int { return bernoulli(42, 10000); }
+    fn test_bernoulli_never(): int { return bernoulli(42, 0); }
+    fn test_normal_range(): int {
+      let v: int = normal_approx12(42);
+      if (v >= -60000) { if (v <= 60000) { return 1; } }
+      return 0;
+    }
+    fn test_normal_det(): int {
+      let a: int = normal_approx12(100);
+      let b: int = normal_approx12(100);
+      if (a == b) { return 1; }
+      return 0;
+    }
+    fn test_weighted2_range(): int {
+      let v: int = weighted2(12345, 3, 7);
+      if (v >= 0) { if (v <= 1) { return 1; } }
+      return 0;
+    }
+    fn test_weighted2_all_on_1(): int { return weighted2(42, 0, 1); }
+    fn test_weighted2_all_on_0(): int { return weighted2(42, 1, 0); }
+    fn test_weighted3_range(): int {
+      let v: int = weighted3(99999, 2, 3, 5);
+      if (v >= 0) { if (v <= 2) { return 1; } }
+      return 0;
+    }
+    fn test_weighted3_all_on_2(): int { return weighted3(42, 0, 0, 1); }
+    fn test_weighted3_all_on_0(): int { return weighted3(42, 1, 0, 0); }
+    fn test_exp_range(): int {
+      let v: int = exp_dist_approx(42, 10000);
+      if (v >= 0) { if (v <= 100000) { return 1; } }
+      return 0;
+    }
+    fn test_exp_det(): int {
+      let a: int = exp_dist_approx(12345, 10000);
+      let b: int = exp_dist_approx(12345, 10000);
+      if (a == b) { return 1; }
+      return 0;
+    }
+  `, [MATH_SRC, RANDOM_SRC, SIGNAL_SRC])
+
+  test('uniform_int(seed,0,10) in [0,10]', () => expect(callAndGetRet(rt, 'test_uniform_int_range')).toBe(1))
+  test('uniform_int is deterministic', () => expect(callAndGetRet(rt, 'test_uniform_int_det')).toBe(1))
+  test('uniform_int(seed,5,5) == 5', () => expect(callAndGetRet(rt, 'test_uniform_int_single')).toBe(5))
+  test('uniform_frac returns [0,10000]', () => expect(callAndGetRet(rt, 'test_uniform_frac_range')).toBe(1))
+  test('bernoulli returns 0 or 1', () => expect(callAndGetRet(rt, 'test_bernoulli_range')).toBe(1))
+  test('bernoulli(seed,10000) == 1 (always)', () => expect(callAndGetRet(rt, 'test_bernoulli_always')).toBe(1))
+  test('bernoulli(seed,0) == 0 (never)', () => expect(callAndGetRet(rt, 'test_bernoulli_never')).toBe(0))
+  test('normal_approx12 in [-60000,60000]', () => expect(callAndGetRet(rt, 'test_normal_range')).toBe(1))
+  test('normal_approx12 is deterministic', () => expect(callAndGetRet(rt, 'test_normal_det')).toBe(1))
+  test('weighted2 returns 0 or 1', () => expect(callAndGetRet(rt, 'test_weighted2_range')).toBe(1))
+  test('weighted2(seed,0,1) == 1 (all weight on 1)', () => expect(callAndGetRet(rt, 'test_weighted2_all_on_1')).toBe(1))
+  test('weighted2(seed,1,0) == 0 (all weight on 0)', () => expect(callAndGetRet(rt, 'test_weighted2_all_on_0')).toBe(0))
+  test('weighted3 returns 0,1,2', () => expect(callAndGetRet(rt, 'test_weighted3_range')).toBe(1))
+  test('weighted3(seed,0,0,1) == 2 (all weight on 2)', () => expect(callAndGetRet(rt, 'test_weighted3_all_on_2')).toBe(2))
+  test('weighted3(seed,1,0,0) == 0 (all weight on 0)', () => expect(callAndGetRet(rt, 'test_weighted3_all_on_0')).toBe(0))
+  test('exp_dist_approx in [0,100000]', () => expect(callAndGetRet(rt, 'test_exp_range')).toBe(1))
+  test('exp_dist_approx is deterministic', () => expect(callAndGetRet(rt, 'test_exp_det')).toBe(1))
 })
