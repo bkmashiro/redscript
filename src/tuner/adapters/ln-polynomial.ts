@@ -121,11 +121,11 @@ fn ln(x: int): int {
     // Step 1: range reduction — bring x into [scale, 2*scale)
     let xr: int = x;
     let k: int = 0;
-    while xr < scale {
+    while (xr < scale) {
         xr = xr * 2;
         k = k - 1;
     }
-    while xr >= scale * 2 {
+    while (xr >= scale * 2) {
         xr = xr / 2;
         k = k + 1;
     }
