@@ -348,11 +348,18 @@ fn ln(x: int): int {
 }
 
 // sqrt_fx(x): fixed-point sqrt, scale ×10000
+// Input x ×10000 (e.g. 40000 = 4.0)
+// Returns √(x/10000) × 10000
 // sqrt_fx(10000) == 10000  (√1.0 = 1.0)
 // sqrt_fx(20000) ≈ 14142   (√2.0 ≈ 1.4142)
 // sqrt_fx(40000) == 20000  (√4.0 = 2.0)
 fn sqrt_fx(x: int) -> int {
-    return isqrt(x * 100) * 100;
+    // √(x/10000) × 10000 = √x × 100
+    // isqrt(x) returns ⌊√x⌋, so isqrt(x) × 100 ≈ ⌊√x⌋ × 100
+    // For x=40000: isqrt(40000)=200, ×100=20000 ✓
+    // For x=10000: isqrt(10000)=100, ×100=10000 ✓
+    // For x=20000: isqrt(20000)=141, ×100=14100 (vs exact 14142, ≈0.3% error)
+    return isqrt(x) * 100;
 }
 
 // exp_fx(x): e^(x/10000) × 10000, fixed-point ×10000

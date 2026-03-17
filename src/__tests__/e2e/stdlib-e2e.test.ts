@@ -411,10 +411,11 @@ describe('math.mcrs — runtime execution', () => {
   test('factorial(5) == 120', () => expect(callAndGetRet(rt, 'test_factorial_5')).toBe(120))
   test('log2_int(8) == 3', () => expect(callAndGetRet(rt, 'test_log2_8')).toBe(3))
   test('log2_int(1024) == 10', () => expect(callAndGetRet(rt, 'test_log2_1024')).toBe(10))
-  test('sqrt_fx(40000) == 200000 (√4 × 10000² scale)', () => {
-    // sqrt_fx uses isqrt(x*100)*100: isqrt(4000000)*100 = 2000*100 = 200000
+  test('sqrt_fx(40000) == 20000 (√4.0 × 10000 scale, fixed)', () => {
+    // sqrt_fx(40000) = √(40000/10000) × 10000 = √4 × 10000 = 20000
+    // Implementation: isqrt(40000) * 100 = 200 * 100 = 20000
     const val = callAndGetRet(rt, 'test_sqrt_fx_40000')
-    expect(val).toBe(200000)
+    expect(val).toBe(20000)
   })
   test('cbrt_fx(27) == 3', () => expect(callAndGetRet(rt, 'test_cbrt_fx_27')).toBe(3))
   test('cbrt_fx(1000) == 10', () => expect(callAndGetRet(rt, 'test_cbrt_fx_1000')).toBe(10))
