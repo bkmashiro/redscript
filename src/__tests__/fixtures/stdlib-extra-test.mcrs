@@ -1,0 +1,110 @@
+// stdlib-extra-test.mcrs — MC integration tests for random, bits, list_sort, bigint
+
+@load fn __load() {
+    raw("scoreboard objectives add rsex dummy");
+}
+
+// ─── random.mcrs ─────────────────────────────────────────────────────────────
+
+@keep fn test_random() {
+    // LCG: next_lcg(12345) should produce deterministic result
+    scoreboard_set("#lcg_12345", "rsex", next_lcg(12345));
+
+    // Two consecutive calls should differ
+    let s1: int = next_lcg(99999);
+    let s2: int = next_lcg(s1);
+    // s1 != s2 → set 1 if different
+    let diff: int = s1 - s2;
+    if (diff < 0) { diff = 0 - diff; }
+    if (diff > 0) {
+        scoreboard_set("#lcg_different", "rsex", 1);
+    }
+
+    // random_range should stay in [0, 10)
+    let seed: int = next_lcg(42);
+    let r: int = random_range(seed, 0, 10);
+    if (r >= 0) {
+        if (r < 10) {
+            scoreboard_set("#rand_in_range", "rsex", 1);
+        }
+    }
+
+    // random_bool returns 0 or 1
+    let b: int = random_bool(seed);
+    if (b >= 0) {
+        if (b <= 1) {
+            scoreboard_set("#rand_bool_valid", "rsex", 1);
+        }
+    }
+}
+
+// ─── bits.mcrs ───────────────────────────────────────────────────────────────
+
+@keep fn test_bits() {
+    // bit_get(5, 0) = 1  (5 = 101 binary, bit 0 = 1)
+    scoreboard_set("#bit_get_5_0", "rsex", bit_get(5, 0));
+
+    // bit_get(5, 1) = 0  (bit 1 = 0)
+    scoreboard_set("#bit_get_5_1", "rsex", bit_get(5, 1));
+
+    // bit_get(5, 2) = 1  (bit 2 = 1)
+    scoreboard_set("#bit_get_5_2", "rsex", bit_get(5, 2));
+
+    // bit_shl(1, 3) = 8  (1 << 3)
+    scoreboard_set("#bit_shl_1_3", "rsex", bit_shl(1, 3));
+
+    // bit_shr(8, 2) = 2  (8 >> 2)
+    scoreboard_set("#bit_shr_8_2", "rsex", bit_shr(8, 2));
+
+    // popcount(7) = 3  (7 = 111, 3 bits set)
+    scoreboard_set("#popcount_7", "rsex", popcount(7));
+
+    // popcount(0) = 0
+    scoreboard_set("#popcount_0", "rsex", popcount(0));
+}
+
+// ─── list.mcrs (sort) ────────────────────────────────────────────────────────
+
+@keep fn test_list_sort() {
+    // sort3(30, 10, 20) → min=10, mid=20, max=30
+    scoreboard_set("#sort3_min", "rsex", sort3(30, 10, 20, 0));
+    scoreboard_set("#sort3_mid", "rsex", sort3(30, 10, 20, 1));
+    scoreboard_set("#sort3_max", "rsex", sort3(30, 10, 20, 2));
+
+    // sort4(40, 10, 30, 20) → sorted: 10, 20, 30, 40
+    scoreboard_set("#sort4_min", "rsex", sort4(40, 10, 30, 20, 0));
+    scoreboard_set("#sort4_max", "rsex", sort4(40, 10, 30, 20, 3));
+
+    // list_min3(5, 3, 8) = 3
+    scoreboard_set("#list_min3", "rsex", list_min3(5, 3, 8));
+
+    // list_max3(5, 3, 8) = 8
+    scoreboard_set("#list_max3", "rsex", list_max3(5, 3, 8));
+
+    // avg3(10, 20, 30) = 20
+    scoreboard_set("#avg3", "rsex", avg3(10, 20, 30));
+}
+
+// ─── bigint.mcrs ─────────────────────────────────────────────────────────────
+
+@keep fn test_bigint() {
+    // bigint3_add: chunks [9999, 9999] + [0, 1] = carry=1, result=[0, 0]
+    scoreboard_set("#bi3_add_lo", "rsex",    bigint3_add_lo(9999, 1));     // (9999+1) % 10000 = 0
+    scoreboard_set("#bi3_carry_lo", "rsex",  bigint3_carry_lo(9999, 1));   // (9999+1) / 10000 = 1
+    scoreboard_set("#bi3_add_mid", "rsex",   bigint3_add_mid(9999, 0, 1)); // (9999+0+1) % 10000 = 0
+    scoreboard_set("#bi3_carry_mid", "rsex", bigint3_carry_mid(9999, 0, 1)); // (9999+0+1) / 10000 = 1
+
+    // bigint3_cmp: [1,0,0] vs [0,9999,9999] → 1 (greater)
+    scoreboard_set("#bi3_cmp_gt", "rsex", bigint3_cmp(1, 0, 0, 0, 9999, 9999));
+
+    // bigint3_cmp: [0,9999,9999] vs [1,0,0] → -1 (less)
+    scoreboard_set("#bi3_cmp_lt", "rsex", bigint3_cmp(0, 9999, 9999, 1, 0, 0));
+
+    // int32_to_bigint3 decomposition: 1023456789
+    // = 1*100000000 + 234*10000 + 5678... wait let me calc:
+    // 1023456789 / 100000000 = 10 (hi) → but int32 max is 2.1B so 10_2345_6789
+    // hi = 10, mid = 2345, lo = 6789
+    scoreboard_set("#bi3_hi", "rsex",  int32_to_bigint3_hi(1023456789));   // 10
+    scoreboard_set("#bi3_mid", "rsex", int32_to_bigint3_mid(1023456789));  // 2345
+    scoreboard_set("#bi3_lo", "rsex",  int32_to_bigint3_lo(1023456789));   // 6789
+}
