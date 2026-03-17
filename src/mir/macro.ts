@@ -140,6 +140,11 @@ function scanExpr(expr: HIRExpr, paramNames: Set<string>, macroParams: Set<strin
       scanExpr(expr.obj, paramNames, macroParams)
       scanExpr(expr.value, paramNames, macroParams)
       break
+    case 'index_assign':
+      scanExpr(expr.obj, paramNames, macroParams)
+      scanExpr(expr.index, paramNames, macroParams)
+      scanExpr(expr.value, paramNames, macroParams)
+      break
     case 'member':
       scanExpr(expr.obj, paramNames, macroParams)
       break
