@@ -75,8 +75,7 @@ Last updated: 2026-03-17
 ### P3 — 编译器 / Double 运算
 - [x] **double 类型基础** `status: done` — NBT storage rs:d，`as` cast，参数传递 NBT 直拷
 - [x] **float arithmetic lint** `status: done` — `[FloatArithmetic]` warning
-- [ ] **double_mul_fixed 真正 double 精度** `status: in-progress` `priority: p3`
-  - 函数宏 trick：execute store + $(scale) 动态注入
+- [x] **double_mul_fixed 真正 double 精度** `status: done` — 函数宏 trick，\_\_NS\_\_ 占位符，真正 IEEE 754 double 精度
 - [ ] **double_add / double_sub** `status: todo` `priority: p3`
   - loot spawn 无限坐标 trick
 - [ ] **compiler intrinsic: double + double → double_add** `status: todo` `priority: p3`
