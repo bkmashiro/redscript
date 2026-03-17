@@ -5,13 +5,17 @@ All notable changes to RedScript will be documented in this file.
 ## [2.4.0] - 2026-03-17
 
 ### Added
-- Dynamic array index read: `arr[i]` where `i` is a variable (MC Function Macro, MC 1.20.2+)
-- Dynamic array index write: `arr[i] = val`, `arr[i] += val` compound assignment
-- `list_push(arr, val)` / `list_pop(arr)` / `list_len(arr)` builtins for NBT array manipulation
+- **Dynamic array index read**: `arr[i]` where `i` is a variable — compiled to MC Function Macro (`$()` syntax, requires MC 1.20.2+)
+- **Dynamic array index write**: `arr[i] = val`, `arr[i] += val`, and other compound assignments
+- **Array parameters by reference**: `fn foo(arr: int[], len: int)` — arrays passed to functions are now correctly accessible via dynamic index inside the callee. Per-call-site monomorphization ensures each array binding is specialized.
+- **`list_push(arr, val)`** — append int to NBT array
+- **`list_pop(arr)`** — remove last element from NBT array
+- **`list_push(arr, val)` / `list_pop(arr)` / `list_len(arr)`** — NBT array manipulation builtins
+- `stdlib/list.mcrs`: `sort4` / `sort5` optimal sorting networks (5/9 comparisons)
+- `stdlib/list.mcrs`: `list_sort_asc(arr, n)` / `list_sort_desc(arr, n)` — arbitrary-length in-place bubble sort via array reference
 
 ### Known Limitations
-- Array parameters in function calls do not pass the array by reference yet; use `while` loops with dynamic index directly in the calling scope
-- `for` loops with dynamic array access may incorrectly inline when loop bounds are constants; use `while` loops instead
+- `for` loop constant-unrolling may interfere with dynamic array access when loop bounds are compile-time constants; use `while` loops for dynamic array iteration
 
 ## [2.3.0] - 2026-03-17
 
