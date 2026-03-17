@@ -1,0 +1,112 @@
+// signal.mcrs — Statistical distributions and probability helpers.
+//
+// All functions use integer arithmetic with ×10000 scale where noted.
+// For game logic: loot tables, mob spawn weights, particle density, etc.
+//
+// Requires: import "stdlib/random" for seed-based RNG
+
+module library;
+
+// ─── Uniform distribution ────────────────────────────────────────────────────
+
+// uniform_int(seed, lo, hi): integer in [lo, hi] inclusive
+// Returns new seed for chaining: use the result as next seed input.
+fn uniform_int(seed: int, lo: int, hi: int): int {
+    let r: int = seed * 1664525 + 1013904223;
+    if (r < 0) { r = 0 - r; }
+    return lo + r % (hi - lo + 1);
+}
+
+// uniform_frac(seed): uniform fraction in [0, 10000] (×10000 scale)
+fn uniform_frac(seed: int): int {
+    let r: int = seed * 1664525 + 1013904223;
+    if (r < 0) { r = 0 - r; }
+    return r % 10001;
+}
+
+// ─── Normal (Gaussian) approximation ─────────────────────────────────────────
+//
+// Method: Sum of 12 uniform [0,1] random values → subtract 6 → scale.
+// Result approximates N(0,1). Good enough for game use.
+// (Box-Muller requires sqrt/ln; this is cheaper and sufficient.)
+//
+// normal_approx12(seed): approximate N(0, 1) × 10000, range ≈ [-60000, 60000]
+// Each call consumes the seed 12 times (chains internally).
+fn normal_approx12(seed: int): int {
+    let s: int = seed;
+    let sum: int = 0;
+    // 12 uniform samples [0, 10000]
+    let r: int = 0;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    s = s * 1664525 + 1013904223; r = s; if (r < 0) { r = 0 - r; } sum = sum + r % 10001;
+    // sum in [0, 120000], mean = 60000, σ ≈ 10000
+    return sum - 60000;
+}
+
+// ─── Exponential distribution ─────────────────────────────────────────────────
+//
+// Method: -ln(U) / λ where U is uniform [0,1].
+// Approximation: use ln from stdlib/math.
+//
+// exp_dist_approx(seed, lambda_fx): exponential variate × 10000
+// lambda_fx: rate parameter × 10000 (e.g. 10000 = rate 1.0)
+// Returns value in [0, ∞) × 10000, but caps at 100000 (10.0) for MC sanity.
+// Note: requires import "stdlib/math" for ln function.
+fn exp_dist_approx(seed: int, lambda_fx: int): int {
+    let r: int = seed * 1664525 + 1013904223;
+    if (r < 0) { r = 0 - r; }
+    let u: int = 100 + r % 9901;  // uniform in [100, 10000] (avoid ln(0))
+    // -ln(u/10000) × 10000 / lambda_fx
+    // ln(u) where u is ×10000 → use existing ln(u) which returns ×10000
+    // -ln(u/10000) = -(ln(u) - ln(10000)) = ln(10000) - ln(u)
+    // ln(10000) × 10000 ≈ 92103
+    let ln_u: int = ln(u);    // requires stdlib/math
+    let neg_ln: int = 92103 - ln_u;
+    if (neg_ln < 0) { neg_ln = 0; }
+    let result: int = neg_ln * 10000 / lambda_fx;
+    if (result > 100000) { result = 100000; }
+    return result;
+}
+
+// ─── Bernoulli trial ──────────────────────────────────────────────────────────
+
+// bernoulli(seed, p_fx): 1 with probability p/10000, else 0.
+// p_fx: probability × 10000 (e.g. 5000 = 50%, 1000 = 10%)
+fn bernoulli(seed: int, p_fx: int): int {
+    let r: int = seed * 1664525 + 1013904223;
+    if (r < 0) { r = 0 - r; }
+    if (r % 10000 < p_fx) { return 1; }
+    return 0;
+}
+
+// ─── Weighted choice ──────────────────────────────────────────────────────────
+
+// weighted2(seed, w0, w1): choose 0 or 1 with weights w0, w1
+fn weighted2(seed: int, w0: int, w1: int): int {
+    let total: int = w0 + w1;
+    let r: int = seed * 1664525 + 1013904223;
+    if (r < 0) { r = 0 - r; }
+    if (r % total < w0) { return 0; }
+    return 1;
+}
+
+// weighted3(seed, w0, w1, w2): choose 0, 1, or 2 with given weights
+fn weighted3(seed: int, w0: int, w1: int, w2: int): int {
+    let total: int = w0 + w1 + w2;
+    let r: int = seed * 1664525 + 1013904223;
+    if (r < 0) { r = 0 - r; }
+    let v: int = r % total;
+    if (v < w0) { return 0; }
+    if (v < w0 + w1) { return 1; }
+    return 2;
+}

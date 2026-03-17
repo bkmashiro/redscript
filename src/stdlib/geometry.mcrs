@@ -1,0 +1,124 @@
+// geometry.mcrs — 3D geometry helpers for Minecraft datapacks.
+//
+// Fixed-point convention: coordinates × 100 (so 1.0 block = 100 units)
+// Angles in degrees × 10000
+//
+// Requires: import "stdlib/math" (for sqrt_fx, sin_fixed, cos_fixed, abs)
+
+module library;
+
+// ─── Midpoint ─────────────────────────────────────────────────────────────────
+
+// midpoint_x/y/z(a, b): integer midpoint of two coordinates
+fn midpoint(a: int, b: int): int {
+    return (a + b) / 2;
+}
+
+// ─── Bounding box ─────────────────────────────────────────────────────────────
+
+// aabb_contains(px, py, pz, minx, miny, minz, maxx, maxy, maxz):
+// Returns 1 if point (px,py,pz) is inside axis-aligned bounding box, 0 otherwise.
+fn aabb_contains(px: int, py: int, pz: int,
+                 minx: int, miny: int, minz: int,
+                 maxx: int, maxy: int, maxz: int): int {
+    if (px < minx) { return 0; }
+    if (px > maxx) { return 0; }
+    if (py < miny) { return 0; }
+    if (py > maxy) { return 0; }
+    if (pz < minz) { return 0; }
+    if (pz > maxz) { return 0; }
+    return 1;
+}
+
+// sphere_contains(px, py, pz, cx, cy, cz, r):
+// Returns 1 if point is inside sphere (all coords in same unit, r is radius).
+// Avoids sqrt by comparing squared distances.
+fn sphere_contains(px: int, py: int, pz: int,
+                   cx: int, cy: int, cz: int,
+                   r: int): int {
+    let dx: int = px - cx;
+    let dy: int = py - cy;
+    let dz: int = pz - cz;
+    let dist_sq: int = dx * dx + dy * dy + dz * dz;
+    if (dist_sq <= r * r) { return 1; }
+    return 0;
+}
+
+// cylinder_contains(px, pz, cx, cz, r):
+// Returns 1 if point is inside vertical cylinder (ignores Y). 2D circle check.
+fn cylinder_contains(px: int, pz: int, cx: int, cz: int, r: int): int {
+    let dx: int = px - cx;
+    let dz: int = pz - cz;
+    if (dx * dx + dz * dz <= r * r) { return 1; }
+    return 0;
+}
+
+// ─── Parabola (projectile) ───────────────────────────────────────────────────
+//
+// MC projectile physics: velocity in blocks/tick, gravity ≈ 0.05 blocks/tick²
+// For a simplified fixed-point model:
+//   pos(t) = init_pos + init_vel * t - gravity_half * t²
+//
+// All values × 100 (1 block = 100 units), time in ticks.
+
+// parabola_y(y0, vy0, t): Y position at tick t.
+// y0: initial Y × 100, vy0: initial Y velocity × 100 (blocks/tick × 100)
+// gravity: 5 units/tick² (= 0.05 blocks/tick² × 100)
+fn parabola_y(y0: int, vy0: int, t: int): int {
+    return y0 + vy0 * t - 5 * t * t / 2;
+}
+
+// parabola_x(x0, vx0, t): horizontal X position at tick t (no drag, constant).
+fn parabola_x(x0: int, vx0: int, t: int): int {
+    return x0 + vx0 * t;
+}
+
+// parabola_land_t(vy0): approximate tick when projectile returns to Y=0.
+// t_land ≈ 2 * vy0 / gravity = 2 * vy0 / 5 (in fixed-point units)
+fn parabola_land_t(vy0: int): int {
+    return 2 * vy0 / 5;
+}
+
+// ─── Grid / tile math ────────────────────────────────────────────────────────
+
+// tile_of(coord): which tile a coordinate belongs to (floor division).
+// tile_of(250, 100) = 2 (block 2 when tile size = 100)
+fn tile_of(coord: int, tile_size: int): int {
+    if (coord >= 0) {
+        return coord / tile_size;
+    }
+    return (coord - tile_size + 1) / tile_size;
+}
+
+// tile_center(tile, tile_size): center coordinate of a tile
+fn tile_center(tile: int, tile_size: int): int {
+    return tile * tile_size + tile_size / 2;
+}
+
+// ─── Angle helpers ────────────────────────────────────────────────────────────
+
+// angle_normalize(deg): normalize angle to [0, 3600000) (degrees × 10000)
+fn angle_normalize(deg: int): int {
+    let a: int = deg;
+    while (a < 0) { a = a + 3600000; }
+    while (a >= 3600000) { a = a - 3600000; }
+    return a;
+}
+
+// angle_diff(a, b): signed shortest angular difference (degrees × 10000)
+// Result in (-1800000, 1800000]
+fn angle_diff(a: int, b: int): int {
+    let d: int = angle_normalize(b - a);
+    if (d > 1800000) { d = d - 3600000; }
+    return d;
+}
+
+// ─── Sun angle helper ────────────────────────────────────────────────────────
+
+// mc_day_angle(daytime): MC sun angle × 10000 from /time query daytime
+// Daytime 0 = dawn (sun at east = 90°), 6000 = noon (sun at south = 180°)
+fn mc_day_angle(daytime: int): int {
+    // MC daytime: 0-24000 ticks per day
+    // Sun angle = (daytime * 360 / 24000 + 90) mod 360
+    return ((daytime * 360 / 24000 + 90) % 360) * 10000;
+}
