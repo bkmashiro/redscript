@@ -715,6 +715,9 @@ export class TypeChecker {
       case 'long_lit':
       case 'double_lit':
         break
+      case 'type_cast':
+        this.checkExpr(expr.expr)
+        break
     }
   }
 
@@ -1211,6 +1214,9 @@ export class TypeChecker {
         if (expectedType?.kind === 'option') return expectedType
         return { kind: 'option', inner: { kind: 'named', name: 'void' } }
       }
+      case 'type_cast':
+        // The result type of (expr as T) is T
+        return this.normalizeType(expr.targetType)
       case 'lambda':
         return this.inferLambdaType(
           expr,

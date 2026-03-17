@@ -179,6 +179,7 @@ export type Expr =
   | { kind: 'tuple_lit'; elements: Expr[]; span?: Span }
   | { kind: 'some_lit'; value: Expr; span?: Span }  // Some(expr)
   | { kind: 'none_lit'; span?: Span }               // None
+  | { kind: 'type_cast'; expr: Expr; targetType: TypeNode; span?: Span }  // expr as Type
 
 export type LiteralExpr =
   | Extract<Expr, { kind: 'int_lit' }>

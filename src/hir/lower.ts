@@ -518,6 +518,9 @@ function lowerExpr(expr: Expr): HIRExpr {
     case 'none_lit':
       return { kind: 'none_lit', span: expr.span }
 
+    case 'type_cast':
+      return { kind: 'type_cast', expr: lowerExpr(expr.expr), targetType: expr.targetType, span: expr.span }
+
     case 'lambda': {
       const body = Array.isArray(expr.body) ? lowerBlock(expr.body) : lowerExpr(expr.body)
       return {

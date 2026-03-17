@@ -140,6 +140,9 @@ class FnContext {
   readonly constTemps = new Map<Temp, number>()
   /** Tracks temps that hold fixed (×10000 fixed-point) values — for mul/div scale correction */
   readonly floatTemps = new Set<Temp>()
+  /** Tracks double variables: varName → NBT storage path (without "rs:d " prefix) */
+  readonly doubleVars = new Map<string, string>()
+  private doubleVarCount = 0
   /** HIR function definitions for array-arg monomorphization */
   hirFunctions: Map<string, HIRFunction> = new Map()
   /** Shared registry of already-generated specialized (monomorphized) MIR functions */
@@ -227,6 +230,13 @@ class FnContext {
 
   getFnName(): string {
     return this.fnName
+  }
+
+  /** Allocate a unique NBT storage path for a double variable */
+  freshDoubleVar(varName: string): string {
+    const path = `${this.namespace}_${this.fnName}_${varName}_${this.doubleVarCount++}`
+    this.doubleVars.set(varName, path)
+    return path
   }
 }
 
@@ -508,6 +518,25 @@ function lowerStmt(
           ctx.emit({ kind: 'copy', dst: t, src: valOp })
           scope.set(stmt.name, t)
         }
+      } else if (stmt.type?.kind === 'named' && stmt.type.name === 'double') {
+        // double variable: store in NBT storage rs:d
+        const path = ctx.freshDoubleVar(stmt.name)
+        const ns = ctx.getNamespace()
+        if (stmt.init.kind === 'double_lit') {
+          // Store the double literal directly into NBT
+          ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d ${path} set value ${stmt.init.value}d`, args: [] })
+        } else {
+          // Lower init as fixed (×10000) then convert to double in NBT
+          const initOp = lowerExpr(stmt.init, ctx, scope)
+          const initTemp = ctx.freshTemp()
+          ctx.emit({ kind: 'copy', dst: initTemp, src: initOp })
+          // execute store result storage rs:d <path> double 0.0001 run scoreboard players get $<t> __<ns>
+          ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result storage rs:d ${path} double 0.0001 run scoreboard players get $${initTemp} __${ns}`, args: [] })
+        }
+        // Store a placeholder temp in scope (value = 0, not used directly for reads)
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        scope.set(stmt.name, t)
       } else if (stmt.init.kind === 'array_lit') {
         // Array literal: write to NBT storage, track the var for index access
         const ns = `${ctx.getNamespace()}:arrays`
@@ -968,8 +997,18 @@ function lowerExpr(
     case 'byte_lit':
     case 'short_lit':
     case 'long_lit':
-    case 'double_lit':
       return { kind: 'const', value: expr.value }
+
+    case 'double_lit': {
+      // Store as NBT double, return as ×10000 fixed score
+      const ns = ctx.getNamespace()
+      const path = ctx.freshDoubleVar(`dlit`)
+      ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d ${path} set value ${expr.value}d`, args: [] })
+      const t = ctx.freshTemp()
+      ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${path} 10000.0`, args: [] })
+      ctx.floatTemps.add(t)
+      return { kind: 'temp', name: t }
+    }
 
     case 'bool_lit': {
       return { kind: 'const', value: expr.value ? 1 : 0 }
@@ -1007,6 +1046,17 @@ function lowerExpr(
     }
 
     case 'ident': {
+      // If this is a double variable, load it as ×10000 fixed into a fresh temp
+      if (ctx.doubleVars.has(expr.name)) {
+        const path = ctx.doubleVars.get(expr.name)!
+        const ns = ctx.getNamespace()
+        const t = ctx.freshTemp()
+        // execute store result score $t __ns run data get storage rs:d <path> 10000.0
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${path} 10000.0`, args: [] })
+        // Mark as fixed (×10000) so arithmetic scale correction applies
+        ctx.floatTemps.add(t)
+        return { kind: 'temp', name: t }
+      }
       const temp = scope.get(expr.name)
       if (temp) return { kind: 'temp', name: temp }
       // Unresolved ident — could be a global or external reference
@@ -1544,6 +1594,54 @@ function lowerExpr(
       ctx.emit({ kind: 'copy', dst: '__rf_val', src: { kind: 'const', value: 0 } })
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'const', dst: t, value: 0 })
+      return { kind: 'temp', name: t }
+    }
+
+    case 'type_cast': {
+      const ns = ctx.getNamespace()
+      const targetName = expr.targetType.kind === 'named' ? expr.targetType.name : null
+
+      if (targetName === 'double') {
+        // expr as double: evaluate inner as fixed (×10000), store as double in NBT
+        const innerOp = lowerExpr(expr.expr, ctx, scope)
+        const innerTemp = ctx.freshTemp()
+        ctx.emit({ kind: 'copy', dst: innerTemp, src: innerOp })
+        const path = ctx.freshDoubleVar(`cast`)
+        // execute store result storage rs:d <path> double 0.0001 run scoreboard players get $<t> __<ns>
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result storage rs:d ${path} double 0.0001 run scoreboard players get $${innerTemp} __${ns}`, args: [] })
+        // Return a fresh temp that reads the stored double back as fixed ×10000
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${path} 10000.0`, args: [] })
+        ctx.floatTemps.add(t)
+        return { kind: 'temp', name: t }
+      }
+
+      if (targetName === 'fixed' || targetName === 'float' || targetName === 'int') {
+        // expr as fixed (or int): check if expr is a double variable
+        if (expr.expr.kind === 'ident' && ctx.doubleVars.has(expr.expr.name)) {
+          // Already handled in ident case — just return a fresh temp loaded from double
+          const path = ctx.doubleVars.get(expr.expr.name)!
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${path} 10000.0`, args: [] })
+          if (targetName === 'fixed' || targetName === 'float') {
+            ctx.floatTemps.add(t)
+          }
+          return { kind: 'temp', name: t }
+        }
+        // Otherwise just evaluate the inner expression (numeric coercion — no-op at scoreboard level)
+        const innerOp = lowerExpr(expr.expr, ctx, scope)
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'copy', dst: t, src: innerOp })
+        if (targetName === 'fixed' || targetName === 'float') {
+          ctx.floatTemps.add(t)
+        }
+        return { kind: 'temp', name: t }
+      }
+
+      // All other casts: pass through
+      const innerOp = lowerExpr(expr.expr, ctx, scope)
+      const t = ctx.freshTemp()
+      ctx.emit({ kind: 'copy', dst: t, src: innerOp })
       return { kind: 'temp', name: t }
     }
 

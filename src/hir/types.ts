@@ -95,6 +95,8 @@ export type HIRExpr =
   // Option literals
   | { kind: 'some_lit'; value: HIRExpr; span?: Span }
   | { kind: 'none_lit'; span?: Span }
+  // Type cast: expr as Type
+  | { kind: 'type_cast'; expr: HIRExpr; targetType: TypeNode; span?: Span }
 
 // ---------------------------------------------------------------------------
 // Execute Subcommands (unified — absorbs as_block, at_block, as_at)

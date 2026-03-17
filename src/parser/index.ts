@@ -598,6 +598,10 @@ export class Parser {
         const inner = this.parseType()
         this.expect('>')
         type = { kind: 'option', inner }
+      } else if (token.value === 'double' || token.value === 'byte' ||
+                 token.value === 'short' || token.value === 'long' ||
+                 token.value === 'format_string') {
+        type = { kind: 'named', name: token.value as any }
       } else {
         type = { kind: 'struct', name: token.value }
       }
@@ -1378,10 +1382,36 @@ export class Parser {
         continue
       }
 
+      // Type cast: expr as Type
+      // Only parse 'as' as a cast when followed by a type token (not a selector like @a)
+      if (this.check('as') && this.isTypeCastAs()) {
+        const asToken = this.advance() // consume 'as'
+        const targetType = this.parseType()
+        expr = this.withLoc(
+          { kind: 'type_cast', expr, targetType },
+          this.getLocToken(expr) ?? asToken
+        )
+        continue
+      }
+
       break
     }
 
     return expr
+  }
+
+  /** Returns true if the current 'as' token is a type cast (not a context block) */
+  private isTypeCastAs(): boolean {
+    // Look ahead past 'as' to see if the next token looks like a type
+    const next = this.tokens[this.pos + 1]
+    if (!next) return false
+    const typeStartTokens = new Set(['int', 'bool', 'float', 'fixed', 'string', 'void', 'BlockPos', '('])
+    if (typeStartTokens.has(next.kind)) return true
+    if (next.kind === 'ident' && (
+      next.value === 'double' || next.value === 'byte' || next.value === 'short' ||
+      next.value === 'long' || next.value === 'selector' || next.value === 'Option'
+    )) return true
+    return false
   }
 
   private parseArgs(): Expr[] {
