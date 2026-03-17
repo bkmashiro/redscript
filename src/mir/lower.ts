@@ -919,8 +919,9 @@ function lowerStmt(
 
     case 'raw': {
       // Raw commands are opaque at MIR level — emit as a call to a synthetic raw function
-      // For now, pass through as a call with no args (will be handled in LIR)
-      ctx.emit({ kind: 'call', dst: null, fn: `__raw:${stmt.cmd}`, args: [] })
+      // __NS__ is replaced with the current namespace so stdlib can reference self-functions.
+      const rawCmd = stmt.cmd.replace(/__NS__/g, ctx.getNamespace())
+      ctx.emit({ kind: 'call', dst: null, fn: `__raw:${rawCmd}`, args: [] })
       break
     }
 

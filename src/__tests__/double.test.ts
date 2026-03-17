@@ -6,6 +6,8 @@
  */
 
 import { compile } from '../emit/compile'
+import * as fs from 'fs'
+import * as path from 'path'
 
 function getAllMcContent(files: { path: string; content: string }[]): string {
   return files.filter(f => f.path.endsWith('.mcfunction')).map(f => f.content).join('\n')
@@ -182,5 +184,55 @@ describe('double parameter passing', () => {
     expect(all).toContain('data modify storage rs:d __dp0 set from storage rs:d')
     // Int arg passed via scoreboard $p0 (first non-double param)
     expect(all).toContain('$p0')
+  })
+})
+
+describe('double_mul_fixed — true double precision via function macro', () => {
+  const mathHpSrc = fs.readFileSync(
+    path.join(__dirname, '../stdlib/math_hp.mcrs'),
+    'utf-8',
+  )
+
+  test('double_mul_fixed compiles with function macro (with storage) pattern', () => {
+    const source = mathHpSrc + `
+      @keep fn test_dmul() {
+        let d: double = 2.5d;
+        let result: double = double_mul_fixed(d, 20000);
+      }
+    `
+    const result = compile(source, { namespace: 'dmultest' })
+    const all = getAllMcContent(result.files)
+    // Must use the macro helper function call
+    expect(all).toContain('with storage rs:math_hp __dmul_args')
+    // Helper must contain the $ macro line
+    expect(all).toContain('$execute store result storage rs:d __dp0 double $(scale)')
+    // Scale must be stored as double 0.0001 factor
+    expect(all).toContain('scale double 0.0001')
+  })
+
+  test('double_mul_fixed emits __dmul_apply_scale helper function', () => {
+    const source = mathHpSrc + `
+      @keep fn test_dmul() {
+        let d: double = 2.5d;
+        let result: double = double_mul_fixed(d, 20000);
+      }
+    `
+    const result = compile(source, { namespace: 'dmultest' })
+    const helper = result.files.find(f => f.path.includes('__dmul_apply_scale'))
+    expect(helper).toBeDefined()
+    expect(helper!.content).toContain('$execute store result storage rs:d __dp0 double $(scale)')
+  })
+
+  test('double_mul_fixed uses __NS__ correctly — helper called in same namespace', () => {
+    const source = mathHpSrc + `
+      @keep fn test_dmul() {
+        let d: double = 2.5d;
+        let result: double = double_mul_fixed(d, 20000);
+      }
+    `
+    const result = compile(source, { namespace: 'mynamespace' })
+    const all = getAllMcContent(result.files)
+    // The function call must use the compilation namespace, not a hardcoded one
+    expect(all).toContain('function mynamespace:__dmul_apply_scale with storage')
   })
 })

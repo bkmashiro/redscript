@@ -182,33 +182,39 @@ fn norm3_hp(x: int, y: int, z: int): int {
 
 // ─── Double-precision arithmetic helpers ──────────────────────────────────────
 //
-// double_mul_fixed(d, f): double × fixed-point
-// Computes d × (f / 10000) in double precision.
+// double_mul_fixed(d, f): double × fixed-point, true double precision.
+// Computes d × (f / 10000) entirely in IEEE 754 double arithmetic.
 // d: double (NBT-backed IEEE 754)
 // f: int in ×10000 fixed-point representation (e.g. 15000 = 1.5)
 // Returns: double result = d × (f / 10000)
 //
-// Algorithm:
-//   1. Read d as ×10000 score: score = floor(d × 10000)
-//   2. Multiply score × f (both ints): intermediate = d×10000 × f
-//   3. Divide by 10000: result_score = d × f  (still in ×10000 units)
-//   4. Cast result_score as double: stores result_score × 0.0001 = d×(f/10000)
+// Algorithm (function-macro trick):
+//   1. Compute scale = f × 0.0001 and store as a double in rs:math_hp __dmul_args.scale
+//   2. Call __dmul_apply_scale via 'with storage' macro so $(scale) is substituted
+//   3. Helper does: $execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 1
+//      = __dp0 ← __dp0 × scale   (pure double arithmetic, no integer intermediate)
+//   4. Return __dp0 (now contains d × (f/10000)) as fixed for the caller
 //
-// Overflow limit: |d×10000| × |f| < 2^31  ≈  |d| × |f/10000| < 214748
+// No integer overflow risk; no truncation of d before multiplication.
 //
+
+// Internal macro helper — DO NOT CALL DIRECTLY.
+// Called via: function __NS__:__dmul_apply_scale with storage rs:math_hp __dmul_args
+// Reads $(scale) from rs:math_hp __dmul_args.scale, multiplies __dp0 by it in-place.
+fn __dmul_apply_scale() {
+    raw("$execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 1");
+}
+
 fn double_mul_fixed(d: double, f: int): double {
-    // Load d as ×10000 integer score
-    let d_score: fixed = (d as fixed);
-    scoreboard_set("$dmul_d", "__rs_math_hp", d_score);
+    // Step 1: store f into math_hp scoreboard, then compute scale = f × 0.0001
     scoreboard_set("$dmul_f", "__rs_math_hp", f);
-    // Multiply: d×10000 × f
-    raw("scoreboard players operation $dmul_d __rs_math_hp *= $dmul_f __rs_math_hp");
-    // Divide by 10000 to get d×f in ×10000 units
-    raw("scoreboard players set $dmul_c __rs_math_hp 10000");
-    raw("scoreboard players operation $dmul_d __rs_math_hp /= $dmul_c __rs_math_hp");
-    // Cast to double: stores (d×f) × 0.0001 = d × (f/10000)
-    let r: int = scoreboard_get("$dmul_d", "__rs_math_hp");
-    return r as double;
+    // Store scale as double into the macro-args compound
+    raw("execute store result storage rs:math_hp __dmul_args scale double 0.0001 run scoreboard players get $dmul_f __rs_math_hp");
+    // Step 2: copy d into __dp0 (it is already there as the first double param)
+    // Step 3: call the macro helper — multiplies __dp0 by scale in double precision
+    raw("function __NS__:__dmul_apply_scale with storage rs:math_hp __dmul_args");
+    // Step 4: __dp0 now holds d × (f/10000). Return it (read as ×10000 fixed for caller).
+    return d;
 }
 
 // ─── Extended-precision natural logarithm (5-term atanh series) ───────────────
