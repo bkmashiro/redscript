@@ -50,6 +50,8 @@ class LoweringContext {
   private currentMIRFn: MIRFunction | null = null
   /** Block map for quick lookup */
   private blockMap = new Map<BlockId, MIRBlock>()
+  /** Track generated dynamic array macro helper functions to avoid duplicates: key → fn name */
+  private dynIdxHelpers = new Map<string, string>()
 
   constructor(namespace: string, objective: string) {
     this.namespace = namespace
@@ -75,6 +77,44 @@ class LoweringContext {
 
   addFunction(fn: LIRFunction): void {
     this.functions.push(fn)
+  }
+
+  /**
+   * Get or create a macro helper function for dynamic array index reads.
+   * The helper function is: $return run data get storage <ns> <pathPrefix>[$(arr_idx)] 1
+   * Returns the qualified MC function name (namespace:fnName).
+   */
+  getDynIdxHelper(ns: string, pathPrefix: string): string {
+    const key = `${ns}\0${pathPrefix}`
+    const existing = this.dynIdxHelpers.get(key)
+    if (existing) return existing
+
+    // Generate deterministic name from ns and pathPrefix
+    const sanitize = (s: string) => s.replace(/[^a-z0-9_]/gi, '_').toLowerCase()
+    // Extract just the storage name part from ns (e.g. "myns:arrays" → "myns_arrays")
+    const nsStr = sanitize(ns)
+    const prefixStr = sanitize(pathPrefix)
+    const helperName = `__dyn_idx_${nsStr}_${prefixStr}`
+
+    // The helper is placed in the current namespace
+    const qualifiedName = `${this.namespace}:${helperName}`
+
+    // Generate the macro function content:
+    // $return run data get storage <ns> <pathPrefix>[$(arr_idx)] 1
+    const macroLine: LIRInstr = {
+      kind: 'macro_line',
+      template: `return run data get storage ${ns} ${pathPrefix}[$(arr_idx)] 1`,
+    }
+
+    this.addFunction({
+      name: helperName,
+      instructions: [macroLine],
+      isMacro: true,
+      macroParams: ['arr_idx'],
+    })
+
+    this.dynIdxHelpers.set(key, qualifiedName)
+    return qualifiedName
   }
 
   /** Attach sourceLoc to newly added instructions (from the given start index onward) */
@@ -317,6 +357,46 @@ function lowerInstrInner(
         ns: instr.ns,
         path: instr.path,
         scale: instr.scale,
+      })
+      break
+    }
+
+    case 'nbt_read_dynamic': {
+      // Strategy:
+      // 1. Store the index value into rs:macro_args __arr_idx (int)
+      // 2. Call the per-array macro helper function with 'with storage rs:macro_args'
+      // 3. Result comes back via $ret scoreboard slot (the macro uses $return)
+
+      const dst = ctx.slot(instr.dst)
+      const idxSlot = operandToSlot(instr.indexSrc, ctx, instrs)
+
+      // Step 1: store index score → rs:macro_args arr_idx (int, scale 1)
+      instrs.push({
+        kind: 'store_score_to_nbt',
+        ns: 'rs:macro_args',
+        path: 'arr_idx',
+        type: 'int',
+        scale: 1,
+        src: idxSlot,
+      })
+
+      // Step 2: get or create the macro helper function, then call it
+      const helperFn = ctx.getDynIdxHelper(instr.ns, instr.pathPrefix)
+      instrs.push({ kind: 'call_macro', fn: helperFn, storage: 'rs:macro_args' })
+
+      // Step 3: the macro uses $return which sets the MC return value.
+      // We need to capture that. In MC, $return run ... returns the result
+      // to the caller via the execute store mechanism.
+      // Use store_cmd_to_score to capture the return value of the macro call.
+      // Actually, the call_macro instruction above already ran the function.
+      // The $return run data get ... sets the scoreboard return value for the
+      // *calling* function context. We need to use execute store result score.
+      // Rewrite: use raw command instead:
+      instrs.pop() // remove the call_macro we just added
+      instrs.push({
+        kind: 'store_cmd_to_score',
+        dst,
+        cmd: { kind: 'call_macro', fn: helperFn, storage: 'rs:macro_args' },
       })
       break
     }
