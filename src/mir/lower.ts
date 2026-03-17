@@ -278,11 +278,20 @@ function lowerFunction(
   }
 
   // Create temps for parameters, skipping array-type params that are pre-bound
+  // and double-type params (which are passed via NBT __dp<i> slots instead of scoreboard)
   const params: { name: Temp; isMacroParam: boolean }[] = []
   const scope = new Map<string, Temp>()
+  let doubleParamSlot = 0
   fn.params.forEach((p) => {
     if (p.type.kind === 'array' && arrayArgBindings?.has(p.name)) {
       // Array param already bound via arrayVars; no scoreboard slot needed
+      return
+    }
+    if (p.type.kind === 'named' && p.type.name === 'double') {
+      // double param: passed via NBT storage rs:d __dp<i> instead of scoreboard
+      const path = `__dp${doubleParamSlot++}`
+      ctx.doubleVars.set(p.name, path)
+      // No scoreboard param slot; callee reads from rs:d __dp<i> via doubleVars
       return
     }
     const t = ctx.freshTemp()
@@ -1497,6 +1506,49 @@ function lowerExpr(
         }
       }
       // --- end array monomorphization ---
+
+      // Check if any args are double-typed — pass via NBT __dp<i> slots
+      {
+        const targetParams = ctx.fnParamInfo.get(expr.fn)
+        if (targetParams) {
+          const hasDoubleParam = targetParams.some(
+            p => p.type.kind === 'named' && p.type.name === 'double'
+          )
+          if (hasDoubleParam) {
+            const ns = ctx.getNamespace()
+            const nonDoubleArgs: Operand[] = []
+            let doubleSlot = 0
+            for (let i = 0; i < targetParams.length && i < expr.args.length; i++) {
+              const p = targetParams[i]
+              if (p.type.kind === 'named' && p.type.name === 'double') {
+                // Caller has a double arg: copy NBT path directly to __dp<doubleSlot>
+                const arg = expr.args[i]
+                if (arg.kind === 'ident' && ctx.doubleVars.has(arg.name)) {
+                  // Arg is already a double var — copy NBT path directly
+                  const srcPath = ctx.doubleVars.get(arg.name)!
+                  ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d __dp${doubleSlot} set from storage rs:d ${srcPath}`, args: [] })
+                } else {
+                  // Arg is an expression — lower it as fixed (×10000), store as double
+                  const argOp = lowerExpr(arg, ctx, scope)
+                  const tmp = ctx.freshTemp()
+                  ctx.emit({ kind: 'copy', dst: tmp, src: argOp })
+                  ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result storage rs:d __dp${doubleSlot} double 0.0001 run scoreboard players get $${tmp} __${ns}`, args: [] })
+                }
+                doubleSlot++
+              } else {
+                nonDoubleArgs.push(lowerExpr(expr.args[i], ctx, scope))
+              }
+            }
+            // Any extra args beyond param count
+            for (let i = targetParams.length; i < expr.args.length; i++) {
+              nonDoubleArgs.push(lowerExpr(expr.args[i], ctx, scope))
+            }
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'call', dst: t, fn: expr.fn, args: nonDoubleArgs })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
 
       const args = expr.args.map(a => lowerExpr(a, ctx, scope))
       const t = ctx.freshTemp()

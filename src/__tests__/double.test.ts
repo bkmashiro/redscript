@@ -129,3 +129,58 @@ describe('double literal type system', () => {
     expect(all).toContain('10000.0')
   })
 })
+
+describe('double parameter passing', () => {
+  test('passing double var to fn uses data modify (no ×10000 conversion)', () => {
+    const source = `
+      fn take_double(d: double): fixed {
+        return d as fixed;
+      }
+      fn t(): fixed {
+        let x: double = 3.14d;
+        return take_double(x);
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const all = getAllMcContent(result.files)
+    // Caller must copy NBT path directly — no execute store with 10000 for the arg
+    expect(all).toContain('data modify storage rs:d __dp0 set from storage rs:d')
+    // Callee reads __dp0 as double
+    expect(all).toContain('data get storage rs:d __dp0')
+  })
+
+  test('double param returning double uses NBT round-trip', () => {
+    const source = `
+      fn identity(d: double): double {
+        return d;
+      }
+      fn t(): fixed {
+        let x: double = 2.0d;
+        let y: double = identity(x);
+        return y as fixed;
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const all = getAllMcContent(result.files)
+    expect(all).toContain('__dp0')
+    expect(all).toContain('data modify storage rs:d __dp0 set from storage rs:d')
+  })
+
+  test('mixed double and int params: double via NBT, int via scoreboard', () => {
+    const source = `
+      fn mixed(d: double, n: int): fixed {
+        return (d as fixed) + n;
+      }
+      fn t(): fixed {
+        let x: double = 1.5d;
+        return mixed(x, 42);
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const all = getAllMcContent(result.files)
+    // Double arg passed via NBT
+    expect(all).toContain('data modify storage rs:d __dp0 set from storage rs:d')
+    // Int arg passed via scoreboard $p0 (first non-double param)
+    expect(all).toContain('$p0')
+  })
+})
