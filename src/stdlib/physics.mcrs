@@ -1,0 +1,134 @@
+// physics.mcrs — Simple physics simulation for Minecraft datapacks.
+//
+// Fixed-point convention: positions/velocities ×100 (1 block = 100 units)
+// Time unit: 1 tick = 1/20 second
+// Gravity: MC default ≈ 0.08 blocks/tick² = 8 units/tick²
+//
+// All functions operate on components separately (x, y, z).
+// No vector types — returns each axis independently for MC compatibility.
+
+module library;
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+fn gravity_fx(): int { return 8; }      // 0.08 blocks/tick² × 100
+fn air_drag_fx(): int { return 9800; }  // 0.98 drag factor × 10000 (per tick)
+fn water_drag_fx(): int { return 8000; } // 0.80 drag (in water)
+
+// ─── Projectile motion ────────────────────────────────────────────────────────
+
+// projectile_pos(p0, v0, t): position after t ticks with initial velocity v0
+// p0, v0: ×100 (blocks × 100), t: ticks
+// No drag, constant gravity
+fn projectile_y(p0: int, v0: int, t: int): int {
+    return p0 + v0 * t - gravity_fx() * t * t / 2;
+}
+
+fn projectile_x(p0: int, v0: int, t: int): int {
+    return p0 + v0 * t;
+}
+
+// projectile_vy(v0, t): Y velocity after t ticks (with gravity)
+fn projectile_vy(v0: int, t: int): int {
+    return v0 - gravity_fx() * t;
+}
+
+// projectile_land_t(v0y): approximate tick when Y returns to 0
+// t = 2*v0y / gravity
+fn projectile_land_t(v0y: int): int {
+    if (v0y <= 0) { return 0; }
+    return 2 * v0y / gravity_fx();
+}
+
+// projectile_max_height(v0y): maximum height reached ×100
+// h = v0y² / (2*gravity)
+fn projectile_max_height(v0y: int): int {
+    return v0y * v0y / (2 * gravity_fx());
+}
+
+// ─── Velocity with drag ───────────────────────────────────────────────────────
+
+// apply_drag(v_fx, drag_fx): apply drag to velocity
+// v_fx: velocity ×100, drag_fx: drag factor ×10000
+fn apply_drag(v_fx: int, drag_fx: int): int {
+    return v_fx * drag_fx / 10000;
+}
+
+// apply_gravity(vy_fx): apply one tick of gravity to Y velocity
+fn apply_gravity(vy_fx: int): int {
+    return vy_fx - gravity_fx();
+}
+
+// update_pos(p_fx, v_fx): update position by one tick
+fn update_pos(p_fx: int, v_fx: int): int {
+    return p_fx + v_fx;
+}
+
+// ─── Collision / bounce ───────────────────────────────────────────────────────
+
+// bounce_v(v_fx, restitution_fx): reflect velocity with energy loss
+// restitution_fx ×10000: 10000=elastic, 5000=half energy, 0=inelastic
+fn bounce_v(v_fx: int, restitution_fx: int): int {
+    let neg: int = 0 - v_fx;
+    return neg * restitution_fx / 10000;
+}
+
+// clamp_velocity(v_fx, max_fx): clamp speed to max
+fn clamp_velocity(v_fx: int, max_fx: int): int {
+    if (v_fx > max_fx) { return max_fx; }
+    if (v_fx < 0 - max_fx) { return 0 - max_fx; }
+    return v_fx;
+}
+
+// ─── Spring physics ───────────────────────────────────────────────────────────
+
+// spring_force(pos_fx, target_fx, k_fx): Hooke's law F = -k(x - target)
+// k_fx: spring constant ×10000
+fn spring_force(pos_fx: int, target_fx: int, k_fx: int): int {
+    return (target_fx - pos_fx) * k_fx / 10000;
+}
+
+// spring_update_v(v_fx, pos_fx, target_fx, k_fx, damping_fx):
+// update velocity with spring force and damping
+fn spring_update_v(v_fx: int, pos_fx: int, target_fx: int, k_fx: int, damping_fx: int): int {
+    let force: int = spring_force(pos_fx, target_fx, k_fx);
+    let damped: int = v_fx * damping_fx / 10000;
+    return damped + force;
+}
+
+// ─── Circular motion ─────────────────────────────────────────────────────────
+
+// circular_x(cx, r, angle_deg): X position on circle
+// cx: center X ×100, r: radius ×100, angle_deg: degrees (NOT ×10000)
+fn circular_x(cx: int, r: int, angle_deg: int): int {
+    return cx + r * cos_fixed(angle_deg) / 1000;
+}
+
+fn circular_z(cz: int, r: int, angle_deg: int): int {
+    return cz + r * sin_fixed(angle_deg) / 1000;
+}
+
+// ─── Friction ────────────────────────────────────────────────────────────────
+
+// friction_decel(v_fx, friction_fx): reduce velocity toward zero by friction
+// friction_fx ×100: amount subtracted per tick (absolute)
+fn friction_decel(v_fx: int, friction_fx: int): int {
+    if (v_fx > friction_fx) { return v_fx - friction_fx; }
+    if (v_fx < 0 - friction_fx) { return v_fx + friction_fx; }
+    return 0;
+}
+
+// ─── Impact detection ────────────────────────────────────────────────────────
+
+// is_grounded(y_fx, ground_y_fx): returns 1 if at or below ground
+fn is_grounded(y_fx: int, ground_y_fx: int): int {
+    if (y_fx <= ground_y_fx) { return 1; }
+    return 0;
+}
+
+// impact_velocity(h_fx): velocity after falling from height h (blocks ×100)
+// v = sqrt(2*g*h), approximated
+fn impact_velocity(h_fx: int): int {
+    if (h_fx <= 0) { return 0; }
+    return isqrt(2 * gravity_fx() * h_fx / 100) * 10;
+}
