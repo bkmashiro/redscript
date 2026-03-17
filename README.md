@@ -444,6 +444,12 @@ See [CHANGELOG.md](./CHANGELOG.md) for the full release notes.
 
 ---
 
+## Acknowledgements
+
+Parts of the standard library are inspired by [kaer-3058/large_number](https://github.com/kaer-3058/large_number), a comprehensive math library for Minecraft datapacks. RedScript provides a higher-level, type-safe API over similar algorithms.
+
+---
+
 <div align="center">
 
 MIT License · Copyright © 2026 [bkmashiro](https://github.com/bkmashiro)
