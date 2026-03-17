@@ -472,3 +472,58 @@ fn gamma_int(n: int): int {
     if (n <= 1) { return 1; }
     return factorial(n - 1);
 }
+
+// ─── Linear equation solvers ─────────────────────────────────────────────────
+
+// solve2x2_x(a, b, e, c, d, f): solve ax + by = e, cx + dy = f → return x × 10000
+// Uses Cramer's rule. Returns 0 if determinant = 0 (singular system).
+// a, b, c, d, e, f are integers (not fixed-point); result is fixed-point ×10000.
+fn solve2x2_x(a: int, b: int, e: int, c: int, d: int, f: int): int {
+    let det: int = a * d - b * c;
+    if (det == 0) { return 0; }
+    return (e * d - b * f) * 10000 / det;
+}
+
+// solve2x2_y(a, b, e, c, d, f): same system, return y × 10000
+fn solve2x2_y(a: int, b: int, e: int, c: int, d: int, f: int): int {
+    let det: int = a * d - b * c;
+    if (det == 0) { return 0; }
+    return (a * f - e * c) * 10000 / det;
+}
+
+// ─── Quadratic equation ───────────────────────────────────────────────────────
+
+// quadratic_disc(a, b, c): discriminant b² - 4ac
+// Returns > 0 (two real roots), 0 (one root), < 0 (no real roots)
+fn quadratic_disc(a: int, b: int, c: int): int {
+    return b * b - 4 * a * c;
+}
+
+// quadratic_x1(a, b, c): larger root × 10000 using integer sqrt
+// Only valid when discriminant >= 0
+fn quadratic_x1(a: int, b: int, c: int): int {
+    if (a == 0) { return 0; }
+    let disc: int = b * b - 4 * a * c;
+    if (disc < 0) { return 0; }
+    let sq: int = isqrt(disc);
+    return (0 - b + sq) * 10000 / (2 * a);
+}
+
+// quadratic_x2(a, b, c): smaller root × 10000
+fn quadratic_x2(a: int, b: int, c: int): int {
+    if (a == 0) { return 0; }
+    let disc: int = b * b - 4 * a * c;
+    if (disc < 0) { return 0; }
+    let sq: int = isqrt(disc);
+    return (0 - b - sq) * 10000 / (2 * a);
+}
+
+// ─── Fixed-point comparison helpers ──────────────────────────────────────────
+
+// approx_eq(a, b, eps): 1 if |a - b| <= eps
+fn approx_eq(a: int, b: int, eps: int): int {
+    let d: int = a - b;
+    if (d < 0) { d = 0 - d; }
+    if (d <= eps) { return 1; }
+    return 0;
+}
