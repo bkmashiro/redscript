@@ -560,6 +560,11 @@ function rewriteExpr(expr: Expr, symbolMap: Map<string, string>): void {
       rewriteExpr(expr.obj, symbolMap)
       rewriteExpr(expr.index, symbolMap)
       break
+    case 'index_assign':
+      rewriteExpr(expr.obj, symbolMap)
+      rewriteExpr(expr.index, symbolMap)
+      rewriteExpr(expr.value, symbolMap)
+      break
     case 'array_lit':
       for (const el of expr.elements) rewriteExpr(el, symbolMap)
       break

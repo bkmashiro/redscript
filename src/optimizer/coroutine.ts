@@ -950,6 +950,8 @@ function rewriteInstr(instr: MIRInstr, promoted: Map<Temp, Temp>): MIRInstr {
       return { ...instr, dst: rTemp(instr.dst), indexSrc: rOp(instr.indexSrc) }
     case 'nbt_write':
       return { ...instr, src: rOp(instr.src) }
+    case 'nbt_write_dynamic':
+      return { ...instr, indexSrc: rOp(instr.indexSrc), valueSrc: rOp(instr.valueSrc) }
     case 'call':
       return { ...instr, dst: instr.dst ? rTemp(instr.dst) : null, args: instr.args.map(rOp) }
     case 'call_macro':
@@ -1022,6 +1024,8 @@ function getUsedTemps(instr: MIRInstr): Temp[] {
       addOp(instr.a); addOp(instr.b); break
     case 'nbt_write':
       addOp(instr.src); break
+    case 'nbt_write_dynamic':
+      addOp(instr.indexSrc); addOp(instr.valueSrc); break
     case 'nbt_read_dynamic':
       addOp(instr.indexSrc); break
     case 'call':

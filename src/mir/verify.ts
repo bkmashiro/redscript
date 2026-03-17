@@ -201,6 +201,9 @@ function getUsedTemps(instr: MIRInstr): Temp[] {
     case 'nbt_write':
       temps.push(...getOperandTemps(instr.src))
       break
+    case 'nbt_write_dynamic':
+      temps.push(...getOperandTemps(instr.indexSrc), ...getOperandTemps(instr.valueSrc))
+      break
     case 'call':
       for (const arg of instr.args) temps.push(...getOperandTemps(arg))
       break

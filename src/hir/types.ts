@@ -24,7 +24,7 @@ import type {
   EntityTypeName,
   LambdaParam,
 } from '../ast/types'
-import type { BinOp, CmpOp } from '../ast/types'
+import type { BinOp, CmpOp, AssignOp } from '../ast/types'
 
 // Re-export types that HIR shares with AST unchanged
 export type {
@@ -40,6 +40,7 @@ export type {
   LambdaParam,
   BinOp,
   CmpOp,
+  AssignOp,
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +78,7 @@ export type HIRExpr =
   // Assignment — only plain '=' (compound ops desugared)
   | { kind: 'assign'; target: string; value: HIRExpr; span?: Span }
   | { kind: 'member_assign'; obj: HIRExpr; field: string; value: HIRExpr; span?: Span }
+  | { kind: 'index_assign'; obj: HIRExpr; index: HIRExpr; op: AssignOp; value: HIRExpr; span?: Span }
   // Access
   | { kind: 'member'; obj: HIRExpr; field: string; span?: Span }
   | { kind: 'index'; obj: HIRExpr; index: HIRExpr; span?: Span }

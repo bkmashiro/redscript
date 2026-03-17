@@ -619,6 +619,12 @@ export class TypeChecker {
         this.checkExpr(expr.value)
         break
 
+      case 'index_assign':
+        this.checkExpr(expr.obj)
+        this.checkExpr(expr.index)
+        this.checkExpr(expr.value)
+        break
+
       case 'index':
         this.checkExpr(expr.obj)
         this.checkExpr(expr.index)

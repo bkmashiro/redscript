@@ -409,6 +409,36 @@ function lowerExpr(expr: Expr): HIRExpr {
     case 'index':
       return { kind: 'index', obj: lowerExpr(expr.obj), index: lowerExpr(expr.index), span: expr.span }
 
+    // --- Desugaring: compound index_assign → plain index_assign ---
+    case 'index_assign':
+      if (expr.op !== '=') {
+        const binOp = COMPOUND_TO_BINOP[expr.op]
+        const obj = lowerExpr(expr.obj)
+        const index = lowerExpr(expr.index)
+        return {
+          kind: 'index_assign',
+          obj,
+          index,
+          op: '=' as const,
+          value: {
+            kind: 'binary',
+            op: binOp as any,
+            left: { kind: 'index', obj, index },
+            right: lowerExpr(expr.value),
+            span: expr.span,
+          },
+          span: expr.span,
+        }
+      }
+      return {
+        kind: 'index_assign',
+        obj: lowerExpr(expr.obj),
+        index: lowerExpr(expr.index),
+        op: expr.op,
+        value: lowerExpr(expr.value),
+        span: expr.span,
+      }
+
     case 'call':
       return { kind: 'call', fn: expr.fn, args: expr.args.map(lowerExpr), typeArgs: expr.typeArgs, span: expr.span }
 

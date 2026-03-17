@@ -79,6 +79,7 @@ function recomputePreds(blocks: MIRBlock[]): MIRBlock[] {
 function hasSideEffects(instr: MIRInstr): boolean {
   if (instr.kind === 'call' || instr.kind === 'call_macro' ||
     instr.kind === 'call_context' || instr.kind === 'nbt_write' ||
+    instr.kind === 'nbt_write_dynamic' ||
     instr.kind === 'score_write') return true
   // Return field temps (__rf_) write to global return slots — not dead even if unused locally
   // Option slot temps (__opt_) write observable scoreboard state — preserve even if var unused
@@ -125,6 +126,8 @@ function getUsedTemps(instr: MIRInstr): Temp[] {
       addOp(instr.a); addOp(instr.b); break
     case 'nbt_write':
       addOp(instr.src); break
+    case 'nbt_write_dynamic':
+      addOp(instr.indexSrc); addOp(instr.valueSrc); break
     case 'nbt_read_dynamic':
       addOp(instr.indexSrc); break
     case 'call':

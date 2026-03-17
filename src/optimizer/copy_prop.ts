@@ -77,6 +77,8 @@ function rewriteUses(instr: MIRInstr, copies: Map<Temp, Operand>): MIRInstr {
       return { ...instr, a: resolve(instr.a, copies), b: resolve(instr.b, copies) }
     case 'nbt_write':
       return { ...instr, src: resolve(instr.src, copies) }
+    case 'nbt_write_dynamic':
+      return { ...instr, indexSrc: resolve(instr.indexSrc, copies), valueSrc: resolve(instr.valueSrc, copies) }
     case 'nbt_read_dynamic':
       return { ...instr, indexSrc: resolve(instr.indexSrc, copies) }
     case 'call':

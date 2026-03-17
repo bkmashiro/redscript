@@ -1098,6 +1098,25 @@ function lowerExpr(
       return { kind: 'temp', name: t }
     }
 
+    case 'index_assign': {
+      const valOp = lowerExpr(expr.value, ctx, scope)
+      if (expr.obj.kind === 'ident') {
+        const arrInfo = ctx.arrayVars.get(expr.obj.name)
+        if (arrInfo) {
+          if (expr.index.kind === 'int_lit') {
+            // constant index → direct nbt_write
+            ctx.emit({ kind: 'nbt_write', ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[${expr.index.value}]`, type: 'int', scale: 1, src: valOp })
+          } else {
+            // dynamic index → nbt_write_dynamic
+            const idxOp = lowerExpr(expr.index, ctx, scope)
+            ctx.emit({ kind: 'nbt_write_dynamic', ns: arrInfo.ns, pathPrefix: arrInfo.pathPrefix, indexSrc: idxOp, valueSrc: valOp })
+          }
+          return valOp
+        }
+      }
+      return valOp
+    }
+
     case 'call': {
       // Handle scoreboard_get / score — read from vanilla MC scoreboard
       if (expr.fn === 'scoreboard_get' || expr.fn === 'score') {
@@ -1117,6 +1136,52 @@ function lowerExpr(
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'const', dst: t, value: 0 })
         return { kind: 'temp', name: t }
+      }
+
+      // Handle list_push(arr_name, val) — append an int to an NBT int array
+      // list_push("rs:lists", "mylist", val) or simpler: uses the array's storage path
+      if (expr.fn === 'list_push') {
+        // list_push(array_var, value)
+        // 1. Append a placeholder 0
+        // 2. Overwrite [-1] with the actual value
+        if (expr.args[0].kind === 'ident') {
+          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+          if (arrInfo) {
+            const valOp = lowerExpr(expr.args[1], ctx, scope)
+            // Step 1: append placeholder
+            ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${arrInfo.ns} ${arrInfo.pathPrefix} append value 0`, args: [] })
+            // Step 2: overwrite last element with actual value
+            ctx.emit({ kind: 'nbt_write', ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[-1]`, type: 'int', scale: 1, src: valOp })
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: 0 })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
+
+      // Handle list_pop(arr_var) — remove last element from NBT int array
+      if (expr.fn === 'list_pop') {
+        if (expr.args[0].kind === 'ident') {
+          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+          if (arrInfo) {
+            ctx.emit({ kind: 'call', dst: null, fn: `__raw:data remove storage ${arrInfo.ns} ${arrInfo.pathPrefix}[-1]`, args: [] })
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: 0 })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
+
+      // Handle list_len(arr_var) — get length of NBT int array
+      if (expr.fn === 'list_len') {
+        if (expr.args[0].kind === 'ident') {
+          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+          if (arrInfo) {
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'nbt_read', dst: t, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}`, scale: 1 })
+            return { kind: 'temp', name: t }
+          }
+        }
       }
 
       // Handle setTimeout/setInterval: lift lambda arg to a named helper function

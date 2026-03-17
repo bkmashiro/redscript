@@ -1162,6 +1162,15 @@ export class Parser {
           this.getLocToken(left) ?? token
         )
       }
+
+      // Index assignment: arr[0] = val, arr[i] = val
+      if (left.kind === 'index') {
+        const value = this.parseAssignment()
+        return this.withLoc(
+          { kind: 'index_assign', obj: left.obj, index: left.index, op, value },
+          this.getLocToken(left) ?? token
+        )
+      }
     }
 
     return left

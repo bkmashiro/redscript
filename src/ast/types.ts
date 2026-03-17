@@ -171,6 +171,7 @@ export type Expr =
   | { kind: 'struct_lit'; fields: { name: string; value: Expr }[]; span?: Span }
   | { kind: 'member_assign'; obj: Expr; field: string; op: AssignOp; value: Expr; span?: Span }
   | { kind: 'index';      obj: Expr; index: Expr; span?: Span }
+  | { kind: 'index_assign'; obj: Expr; index: Expr; op: AssignOp; value: Expr; span?: Span }
   | { kind: 'array_lit';  elements: Expr[]; span?: Span }
   | { kind: 'static_call'; type: string; method: string; args: Expr[]; span?: Span }
   | { kind: 'path_expr'; enumName: string; variant: string; span?: Span }

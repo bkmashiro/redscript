@@ -52,6 +52,8 @@ class LoweringContext {
   private blockMap = new Map<BlockId, MIRBlock>()
   /** Track generated dynamic array macro helper functions to avoid duplicates: key → fn name */
   private dynIdxHelpers = new Map<string, string>()
+  /** Track generated dynamic array write helper functions: key → fn name */
+  private dynWrtHelpers = new Map<string, string>()
 
   constructor(namespace: string, objective: string) {
     this.namespace = namespace
@@ -114,6 +116,40 @@ class LoweringContext {
     })
 
     this.dynIdxHelpers.set(key, qualifiedName)
+    return qualifiedName
+  }
+
+  /**
+   * Get or create a macro helper function for dynamic array index writes.
+   * The helper function: $data modify storage <ns> <pathPrefix>[$(arr_idx)] set value $(arr_val)
+   * Returns the qualified MC function name.
+   */
+  getDynWrtHelper(ns: string, pathPrefix: string): string {
+    const key = `${ns}\0${pathPrefix}`
+    const existing = this.dynWrtHelpers.get(key)
+    if (existing) return existing
+
+    const sanitize = (s: string) => s.replace(/[^a-z0-9_]/gi, '_').toLowerCase()
+    const nsStr = sanitize(ns)
+    const prefixStr = sanitize(pathPrefix)
+    const helperName = `__dyn_wrt_${nsStr}_${prefixStr}`
+
+    const qualifiedName = `${this.namespace}:${helperName}`
+
+    // Macro line: $data modify storage <ns> <pathPrefix>[$(arr_idx)] set value $(arr_val)
+    const macroLine: LIRInstr = {
+      kind: 'macro_line',
+      template: `data modify storage ${ns} ${pathPrefix}[$(arr_idx)] set value $(arr_val)`,
+    }
+
+    this.addFunction({
+      name: helperName,
+      instructions: [macroLine],
+      isMacro: true,
+      macroParams: ['arr_idx', 'arr_val'],
+    })
+
+    this.dynWrtHelpers.set(key, qualifiedName)
     return qualifiedName
   }
 
@@ -411,6 +447,41 @@ function lowerInstrInner(
         scale: instr.scale,
         src: srcSlot,
       })
+      break
+    }
+
+    case 'nbt_write_dynamic': {
+      // Strategy:
+      // 1. Store index score → rs:macro_args arr_idx (int)
+      // 2. Store value score → rs:macro_args arr_val (int)
+      // 3. Call macro helper: $data modify storage <ns> <pathPrefix>[$(arr_idx)] set value $(arr_val)
+
+      const idxSlot = operandToSlot(instr.indexSrc, ctx, instrs)
+      const valSlot = operandToSlot(instr.valueSrc, ctx, instrs)
+
+      // Store index
+      instrs.push({
+        kind: 'store_score_to_nbt',
+        ns: 'rs:macro_args',
+        path: 'arr_idx',
+        type: 'int',
+        scale: 1,
+        src: idxSlot,
+      })
+
+      // Store value
+      instrs.push({
+        kind: 'store_score_to_nbt',
+        ns: 'rs:macro_args',
+        path: 'arr_val',
+        type: 'int',
+        scale: 1,
+        src: valSlot,
+      })
+
+      // Call macro helper function
+      const helperFn = ctx.getDynWrtHelper(instr.ns, instr.pathPrefix)
+      instrs.push({ kind: 'call_macro', fn: helperFn, storage: 'rs:macro_args' })
       break
     }
 

@@ -312,6 +312,8 @@ class Monomorphizer {
         return { ...expr, value: this.rewriteExpr(expr.value, ctx) }
       case 'member_assign':
         return { ...expr, obj: this.rewriteExpr(expr.obj, ctx), value: this.rewriteExpr(expr.value, ctx) }
+      case 'index_assign':
+        return { ...expr, obj: this.rewriteExpr(expr.obj, ctx), index: this.rewriteExpr(expr.index, ctx), value: this.rewriteExpr(expr.value, ctx) }
       case 'member':
         return { ...expr, obj: this.rewriteExpr(expr.obj, ctx) }
       case 'index':
