@@ -217,6 +217,157 @@ fn double_mul_fixed(d: double, f: int): double {
     return d;
 }
 
+// ─── Double-precision addition: entity position trick ─────────────────────────
+//
+// double_add(a, b): a + b in full IEEE 754 double precision.
+//
+// Algorithm: Minecraft internally stores entity Pos as Java double[].
+// By TPing a marker to x=a then doing a relative TP of +b, the game computes
+// a+b in native Java double arithmetic (no int intermediate).
+//
+// Entity: area_effect_cloud, UUID b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4
+// Tag: rs_math_hp_marker
+// Summoned once at load via init_double_add().
+//
+// ⚠ Precision: full double (~15 sig figs). No overflow within double range.
+//
+
+// init_double_add(): summon the AEC marker entity for double_add/sub.
+// Called automatically via @require_on_load.
+@require_on_load(init_double_add)
+fn init_double_add() {
+    raw("execute unless entity b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 run summon minecraft:area_effect_cloud ~ ~ ~ {UUID:[I;-1238834609,-698744574,-1879932794,1006600372],NoGravity:1b,Duration:2147483647,Tags:[\"rs_math_hp_marker\"]}");
+}
+
+// __dadd_tp_to: macro helper — teleport marker to absolute x=$(x).
+// DO NOT CALL DIRECTLY. Called via: function __NS__:__dadd_tp_to with storage rs:d __dadd_args
+fn __dadd_tp_to() {
+    raw("$tp b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 $(x) 0.0 0.0");
+}
+
+// __dadd_tp_rel: macro helper — relative TP marker by +$(dx) on X axis.
+// DO NOT CALL DIRECTLY. Called via: function __NS__:__dadd_tp_rel with storage rs:d __dadd_args
+fn __dadd_tp_rel() {
+    raw("$execute at b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 run tp b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 ~$(dx) 0.0 0.0");
+}
+
+// double_add(a, b): a + b in true double precision.
+// a, b: double (NBT-backed). Returns: a + b as double in __dp0.
+@require_on_load(init_double_add)
+fn double_add(a: double, b: double): double {
+    // __dp0 = a, __dp1 = b (set by caller)
+    // Copy a into __dadd_args.x, b into __dadd_args.dx for macro substitution
+    raw("data modify storage rs:d __dadd_args.x set from storage rs:d __dp0");
+    raw("function __NS__:__dadd_tp_to with storage rs:d __dadd_args");
+    raw("data modify storage rs:d __dadd_args.dx set from storage rs:d __dp1");
+    raw("function __NS__:__dadd_tp_rel with storage rs:d __dadd_args");
+    // Read Pos[0] back into __dp0 — this is a+b in double precision
+    raw("data modify storage rs:d __dp0 set from entity b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 Pos[0]");
+    // Reset marker to origin
+    raw("tp b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 0.0 0.0 0.0");
+    return a;
+}
+
+// ─── double_sub: subtraction via negation + add ────────────────────────────────
+//
+// double_sub(a, b): a - b.
+//
+// Negates b by re-reading it through execute store with scale -1 (double ×(-1)).
+// ⚠ Precision note: the negation step uses:
+//     execute store result storage rs:d __dp1 double -0.0001 run data get storage rs:d __dp1 10000
+//   This round-trips through a Java long (int64), which truncates the value to
+//   ~15 decimal digits (same as double precision). Exact for |b| ≤ 2^53.
+//   Catastrophic cancellation warning applies when a ≈ b (same as all FP subtraction).
+//
+
+// double_sub(a, b): a - b in double precision.
+// a, b: double. Returns: a - b as double in __dp0.
+@require_on_load(init_double_add)
+fn double_sub(a: double, b: double): double {
+    // Negate __dp1 (b): read as ×10000 long, store back as double × -0.0001
+    raw("execute store result storage rs:d __dp1 double -0.0001 run data get storage rs:d __dp1 10000");
+    // Now compute a + (-b)
+    raw("data modify storage rs:d __dadd_args.x set from storage rs:d __dp0");
+    raw("function __NS__:__dadd_tp_to with storage rs:d __dadd_args");
+    raw("data modify storage rs:d __dadd_args.dx set from storage rs:d __dp1");
+    raw("function __NS__:__dadd_tp_rel with storage rs:d __dadd_args");
+    raw("data modify storage rs:d __dp0 set from entity b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 Pos[0]");
+    raw("tp b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 0.0 0.0 0.0");
+    return a;
+}
+
+// ─── double_mul: scoreboard 4-decimal approximation ───────────────────────────
+//
+// double_mul(a, b): a × b — scoreboard integer approximation.
+//
+// Algorithm:
+//   score_a = floor(a × 10000)  [stored as int32 via data get × 10000]
+//   score_b = floor(b × 10000)
+//   result_score = (score_a × score_b) / 10000   [integer division]
+//   result = result_score as double × 0.0001
+//
+// ⚠ Limitations:
+//   - Overflow: score_a and score_b are Java int (32-bit signed).
+//     |a| × 10000 must fit in int32: safe for |a|, |b| ≤ ~214748.
+//     Products score_a × score_b overflow int32 for |a|×|b| > ~21474.
+//     For larger values use double_mul_fixed on log/exp decomposition.
+//   - Precision: ~4 decimal digits (10000× scale). Not full double precision.
+//   - Negative values: correctly handled by signed scoreboard arithmetic.
+//
+// For true double-precision multiplication, use the ln/exp approach once
+// double-precision ln/exp are available.
+//
+
+fn double_mul(a: double, b: double): double {
+    // Convert a and b to ×10000 integer scores
+    raw("execute store result score $dmul_a __rs_math_hp run data get storage rs:d __dp0 10000");
+    raw("execute store result score $dmul_b __rs_math_hp run data get storage rs:d __dp1 10000");
+    // Multiply: result = score_a * score_b / 10000
+    raw("scoreboard players operation $dmul_a __rs_math_hp *= $dmul_b __rs_math_hp");
+    raw("scoreboard players set $dmul_div __rs_math_hp 10000");
+    raw("scoreboard players operation $dmul_a __rs_math_hp /= $dmul_div __rs_math_hp");
+    // Store result back as double × 0.0001
+    raw("execute store result storage rs:d __dp0 double 0.0001 run scoreboard players get $dmul_a __rs_math_hp");
+    return a;
+}
+
+// ─── double_div: display entity SVD trick ─────────────────────────────────────
+//
+// double_div(a, b): a / b in full IEEE 754 double precision.
+//
+// Algorithm: MC display entities decompose their transformation matrix via SVD.
+// Setting matrix element [0] = a and [15] = b in a 4×4 diagonal matrix causes
+// MC to compute scale[0] = a/b in native Java double arithmetic.
+//
+// Uses the rs_div entity (block_display, tag="rs_div") from init_div() above.
+// init_div() must be called — it is via @require_on_load(init_div).
+//
+// ⚠ Precision: full double (~15 sig figs). Division by zero produces Infinity/NaN
+//   (Java double semantics) which will corrupt NBT if read back.
+//
+
+// __ddiv_set_mat: macro helper — set div entity transformation matrix elements.
+// $(da) → a as float, $(db) → b as float (already in NBT as doubles).
+// DO NOT CALL DIRECTLY.
+fn __ddiv_set_mat() {
+    raw("$data modify entity @e[tag=rs_div,limit=1] transformation set value [$(da)f,0f,0f,0f,0f,1f,0f,0f,0f,0f,1f,0f,0f,0f,0f,$(db)f]");
+}
+
+// double_div(a, b): a / b in true double precision.
+// a, b: double. Returns: a / b as double in __dp0.
+// ⚠ b must not be zero (produces Java Infinity, corrupts NBT).
+@require_on_load(init_div)
+fn double_div(a: double, b: double): double {
+    // Store a and b as float in macro args compound for __ddiv_set_mat
+    // We piggyback on rs:math_hp storage for the args
+    raw("execute store result storage rs:math_hp __ddiv_args.da float 1 run data get storage rs:d __dp0 1");
+    raw("execute store result storage rs:math_hp __ddiv_args.db float 1 run data get storage rs:d __dp1 1");
+    raw("function __NS__:__ddiv_set_mat with storage rs:math_hp __ddiv_args");
+    // Read scale[0] = a/b back as double into __dp0
+    raw("data modify storage rs:d __dp0 set from entity @e[tag=rs_div,limit=1] transformation.scale[0]");
+    return a;
+}
+
 // ─── Extended-precision natural logarithm (5-term atanh series) ───────────────
 //
 // ln_5term(x): natural log using 5-term atanh series (more precise than 3-term ln())

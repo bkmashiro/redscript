@@ -187,6 +187,179 @@ describe('double parameter passing', () => {
   })
 })
 
+describe('double_add — entity position trick', () => {
+  const mathHpSrc = fs.readFileSync(
+    path.join(__dirname, '../stdlib/math_hp.mcrs'),
+    'utf-8',
+  )
+
+  test('double_add compiles: emits tp macro helpers and Pos[0] read-back', () => {
+    const source = mathHpSrc + `
+      @keep fn test_dadd() {
+        let a: double = 1.5d;
+        let b: double = 2.5d;
+        let result: double = double_add(a, b);
+      }
+    `
+    const result = compile(source, { namespace: 'daddtest' })
+    const all = getAllMcContent(result.files)
+    // Macro helper for absolute TP must be used
+    expect(all).toContain('with storage rs:d __dadd_args')
+    // Pos[0] read-back into __dp0
+    expect(all).toContain('Pos[0]')
+    // Marker UUID used
+    expect(all).toContain('b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4')
+  })
+
+  test('double_add emits __dadd_tp_to and __dadd_tp_rel helper functions', () => {
+    const source = mathHpSrc + `
+      @keep fn test_dadd() {
+        let a: double = 1.5d;
+        let b: double = 2.5d;
+        let result: double = double_add(a, b);
+      }
+    `
+    const result = compile(source, { namespace: 'daddtest' })
+    const tp_to = result.files.find(f => f.path.includes('__dadd_tp_to'))
+    const tp_rel = result.files.find(f => f.path.includes('__dadd_tp_rel'))
+    expect(tp_to).toBeDefined()
+    expect(tp_rel).toBeDefined()
+    expect(tp_to!.content).toContain('$(x)')
+    expect(tp_rel!.content).toContain('$(dx)')
+  })
+
+  test('double_add uses __NS__ correctly — helpers called in compilation namespace', () => {
+    const source = mathHpSrc + `
+      @keep fn test_dadd() {
+        let a: double = 1.5d;
+        let b: double = 2.5d;
+        let result: double = double_add(a, b);
+      }
+    `
+    const result = compile(source, { namespace: 'mynamespace' })
+    const all = getAllMcContent(result.files)
+    expect(all).toContain('function mynamespace:__dadd_tp_to with storage')
+    expect(all).toContain('function mynamespace:__dadd_tp_rel with storage')
+  })
+
+  test('init_double_add is called on load — summons AEC marker UUID', () => {
+    const source = mathHpSrc + `
+      @keep fn test_dadd() {
+        let a: double = 1.5d;
+        let b: double = 2.5d;
+        let result: double = double_add(a, b);
+      }
+    `
+    const result = compile(source, { namespace: 'daddtest' })
+    const all = getAllMcContent(result.files)
+    expect(all).toContain('rs_math_hp_marker')
+    expect(all).toContain('area_effect_cloud')
+  })
+})
+
+describe('double_sub — negate-then-add', () => {
+  const mathHpSrc = fs.readFileSync(
+    path.join(__dirname, '../stdlib/math_hp.mcrs'),
+    'utf-8',
+  )
+
+  test('double_sub emits negation step (double -0.0001 × 10000)', () => {
+    const source = mathHpSrc + `
+      @keep fn test_dsub() {
+        let a: double = 5.0d;
+        let b: double = 2.0d;
+        let result: double = double_sub(a, b);
+      }
+    `
+    const result = compile(source, { namespace: 'dsubtest' })
+    const all = getAllMcContent(result.files)
+    // Negation: store __dp1 as double × -0.0001
+    expect(all).toContain('double -0.0001')
+    // Then uses the add machinery
+    expect(all).toContain('with storage rs:d __dadd_args')
+    expect(all).toContain('Pos[0]')
+  })
+})
+
+describe('double_mul — scoreboard approximation', () => {
+  const mathHpSrc = fs.readFileSync(
+    path.join(__dirname, '../stdlib/math_hp.mcrs'),
+    'utf-8',
+  )
+
+  test('double_mul emits data get ×10000 for both operands', () => {
+    const source = mathHpSrc + `
+      @keep fn test_dmul() {
+        let a: double = 3.0d;
+        let b: double = 2.0d;
+        let result: double = double_mul(a, b);
+      }
+    `
+    const result = compile(source, { namespace: 'dmultest2' })
+    const all = getAllMcContent(result.files)
+    // Both operands converted to ×10000 scores
+    expect(all).toContain('$dmul_a')
+    expect(all).toContain('$dmul_b')
+    // Result stored back as double × 0.0001
+    expect(all).toContain('double 0.0001')
+    // Scoreboard multiply
+    expect(all).toContain('$dmul_a __rs_math_hp *= $dmul_b __rs_math_hp')
+  })
+})
+
+describe('double_div — display entity SVD trick', () => {
+  const mathHpSrc = fs.readFileSync(
+    path.join(__dirname, '../stdlib/math_hp.mcrs'),
+    'utf-8',
+  )
+
+  test('double_div emits __ddiv_set_mat helper and reads transformation.scale[0]', () => {
+    const source = mathHpSrc + `
+      @keep fn test_ddiv() {
+        let a: double = 6.0d;
+        let b: double = 2.0d;
+        let result: double = double_div(a, b);
+      }
+    `
+    const result = compile(source, { namespace: 'ddivtest' })
+    const all = getAllMcContent(result.files)
+    // Uses rs_div entity (block_display)
+    expect(all).toContain('rs_div')
+    // Reads scale[0] back into __dp0
+    expect(all).toContain('transformation.scale[0]')
+    // Macro helper called with storage
+    expect(all).toContain('with storage rs:math_hp __ddiv_args')
+  })
+
+  test('double_div emits __ddiv_set_mat helper function with $(da)/$(db) macros', () => {
+    const source = mathHpSrc + `
+      @keep fn test_ddiv() {
+        let a: double = 6.0d;
+        let b: double = 2.0d;
+        let result: double = double_div(a, b);
+      }
+    `
+    const result = compile(source, { namespace: 'ddivtest' })
+    const helper = result.files.find(f => f.path.includes('__ddiv_set_mat'))
+    expect(helper).toBeDefined()
+    expect(helper!.content).toContain('$(da)')
+    expect(helper!.content).toContain('$(db)')
+  })
+
+  test('double_div uses __NS__ correctly', () => {
+    const source = mathHpSrc + `
+      @keep fn test_ddiv() {
+        let a: double = 6.0d;
+        let b: double = 2.0d;
+        let result: double = double_div(a, b);
+      }
+    `
+    const result = compile(source, { namespace: 'mynamespace' })
+    const all = getAllMcContent(result.files)
+    expect(all).toContain('function mynamespace:__ddiv_set_mat with storage')
+  })
+})
+
 describe('double_mul_fixed — true double precision via function macro', () => {
   const mathHpSrc = fs.readFileSync(
     path.join(__dirname, '../stdlib/math_hp.mcrs'),
