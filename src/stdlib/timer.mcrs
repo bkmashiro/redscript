@@ -75,3 +75,35 @@ impl Timer {
         }
     }
 }
+
+// ─── Tick-based stopwatch ─────────────────────────────────────────────────────
+
+// tick_to_seconds(ticks): convert MC ticks to seconds (20 ticks = 1 second)
+fn tick_to_seconds(ticks: int): int {
+    return ticks / 20;
+}
+
+// tick_to_ms(ticks): convert ticks to milliseconds
+fn tick_to_ms(ticks: int): int {
+    return ticks * 50;
+}
+
+// seconds_to_ticks(s): convert seconds to ticks
+fn seconds_to_ticks(s: int): int {
+    return s * 20;
+}
+
+// format_time_s(ticks): ticks → seconds component (mod 60)
+fn format_time_s(ticks: int): int {
+    return (ticks / 20) % 60;
+}
+
+// format_time_m(ticks): ticks → minutes component
+fn format_time_m(ticks: int): int {
+    return (ticks / 1200) % 60;
+}
+
+// format_time_h(ticks): ticks → hours component
+fn format_time_h(ticks: int): int {
+    return ticks / 72000;
+}
