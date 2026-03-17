@@ -1,0 +1,160 @@
+// parabola.mcrs — Projectile motion helpers for Minecraft datapacks.
+//
+// All values use Minecraft's native units:
+//   position: blocks (integer or ×10000 fixed-point)
+//   velocity: blocks/tick (×10000 fixed-point)
+//   time:     ticks (integer)
+//   gravity:  ≈ 0.08 blocks/tick² downward = -800 in ×10000 fixed-point per tick
+//
+// MC projectile physics (per tick):
+//   vy_new = (vy_old - gravity) * drag
+//   x_new = x + vx; y_new = y + vy; z_new = z + vz
+//   vx_new = vx * drag; vz_new = vz * drag
+//
+// For simplified ballistic (no drag), use drag = 10000 (1.0).
+// Standard MC arrow drag: 9900 (0.99). Thrown snowball: 9900.
+//
+// Requires: stdlib/math (for mulfix)
+
+module library;
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+// GRAVITY: MC gravity per tick ×10000 (≈ 0.08 * 10000 = 800)
+fn parabola_gravity(): int { return 800; }
+
+// GRAVITY_HALF: gravity/2 for displacement formula ×10000
+fn parabola_gravity_half(): int { return 400; }
+
+// ─── Ballistic trajectory (no drag) ──────────────────────────────────────────
+//
+// Given a target offset (dx, dy, dz) in blocks and time t in ticks:
+//   vx = dx * 10000 / t
+//   vy = (dy * 10000 + gravity_half * t * t) / t
+//   vz = dz * 10000 / t
+//
+// All velocities returned ×10000 (blocks/tick × 10000)
+
+// parabola_vx(dx, ticks): initial X velocity ×10000
+// dx: horizontal displacement in blocks
+// ticks: flight time in ticks
+fn parabola_vx(dx: int, ticks: int): int {
+    if (ticks <= 0) { return 0; }
+    return dx * 10000 / ticks;
+}
+
+// parabola_vy(dy, ticks): initial Y velocity ×10000
+// dy: vertical displacement in blocks (positive = up)
+fn parabola_vy(dy: int, ticks: int): int {
+    if (ticks <= 0) { return 0; }
+    // vy * t = dy * 10000 + gravity_half * t^2
+    // vy = (dy * 10000 + 400 * t * t) / t
+    let g_term: int = parabola_gravity_half() * ticks * ticks / 10000;
+    return (dy * 10000 + g_term) / ticks;
+}
+
+// parabola_vz(dz, ticks): initial Z velocity ×10000
+fn parabola_vz(dz: int, ticks: int): int {
+    if (ticks <= 0) { return 0; }
+    return dz * 10000 / ticks;
+}
+
+// parabola_speed_xz(dx, dz, ticks): horizontal speed ×10000 (for launch angle)
+// Returns sqrt(vx^2 + vz^2) ×10000
+fn parabola_speed_xz(dx: int, dz: int, ticks: int): int {
+    if (ticks <= 0) { return 0; }
+    let vx: int = parabola_vx(dx, ticks);
+    let vz: int = parabola_vz(dz, ticks);
+    // |vxz|^2 = (vx^2 + vz^2) / 10000 (since vx,vz are ×10000)
+    let vxz_sq: int = mulfix(vx, vx) + mulfix(vz, vz);
+    return isqrt(vxz_sq * 10000);
+}
+
+// ─── Position at time t ───────────────────────────────────────────────────────
+//
+// Given initial velocity (vx0, vy0, vz0) ×10000 and tick t:
+//   x(t) = vx0 * t / 10000
+//   y(t) = vy0 * t / 10000 - gravity_half * t^2 / 10000
+//   z(t) = vz0 * t / 10000
+
+// parabola_x(vx0, t): X position at tick t in blocks
+fn parabola_x(vx0: int, t: int): int {
+    return vx0 * t / 10000;
+}
+
+// parabola_y(vy0, t): Y position at tick t in blocks
+fn parabola_y(vy0: int, t: int): int {
+    let g_term: int = parabola_gravity_half() * t * t / 10000;
+    return vy0 * t / 10000 - g_term;
+}
+
+// parabola_z(vz0, t): Z position at tick t in blocks
+fn parabola_z(vz0: int, t: int): int {
+    return vz0 * t / 10000;
+}
+
+// ─── Flight time estimation ───────────────────────────────────────────────────
+//
+// Given initial upward velocity vy0 (×10000), find the tick when the projectile
+// returns to launch height (y=0):
+//   t = 2 * vy0 / gravity = 2 * vy0 / 800
+// Returns ticks (integer). Returns 0 if vy0 <= 0.
+
+// parabola_flight_time(vy0): ticks until returning to launch height
+fn parabola_flight_time(vy0: int): int {
+    if (vy0 <= 0) { return 0; }
+    return 2 * vy0 / parabola_gravity();
+}
+
+// parabola_max_height(vy0): maximum height above launch point in blocks
+// apex at t = vy0 / gravity
+fn parabola_max_height(vy0: int): int {
+    if (vy0 <= 0) { return 0; }
+    let t_apex: int = vy0 / parabola_gravity();
+    return parabola_y(vy0, t_apex);
+}
+
+// ─── With drag ────────────────────────────────────────────────────────────────
+//
+// One-tick physics step with drag (for animation/simulation, not aiming):
+//   vx_new = mulfix(vx, drag)
+//   vy_new = mulfix(vy - gravity, drag)  [gravity applied before drag]
+//   vz_new = mulfix(vz, drag)
+//
+// drag: ×10000 (e.g. 9900 = 0.99 for arrows, 9800 = 0.98 for fireballs)
+
+// parabola_step_vx(vx, drag): apply drag to X velocity
+fn parabola_step_vx(vx: int, drag: int): int {
+    return mulfix(vx, drag);
+}
+
+// parabola_step_vy(vy, drag): apply gravity then drag to Y velocity
+fn parabola_step_vy(vy: int, drag: int): int {
+    return mulfix(vy - parabola_gravity(), drag);
+}
+
+// parabola_step_vz(vz, drag): apply drag to Z velocity
+fn parabola_step_vz(vz: int, drag: int): int {
+    return mulfix(vz, drag);
+}
+
+// ─── Targeting helpers ────────────────────────────────────────────────────────
+
+// parabola_ticks_for_range(range): estimate ticks to reach a horizontal range
+// range: distance in blocks
+// Uses average speed heuristic: t ≈ range * 10000 / 8000 (arrow ≈ 0.8 b/t horizontal)
+// For precise aiming use parabola_vx/vy/vz with desired ticks.
+fn parabola_ticks_for_range(range: int): int {
+    if (range <= 0) { return 1; }
+    let t: int = range * 10000 / 8000;
+    if (t <= 0) { t = 1; }
+    return t;
+}
+
+// parabola_in_range(dx, dz, max_range): returns 1 if target within horizontal range
+fn parabola_in_range(dx: int, dz: int, max_range: int): int {
+    let dist_sq: int = dx * dx + dz * dz;
+    let range_sq: int = max_range * max_range;
+    if (dist_sq <= range_sq) { return 1; }
+    return 0;
+}
