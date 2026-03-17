@@ -63,9 +63,17 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
 
   const timerCounter = { count: 0, timerId: 0 }
 
+  // Build HIR function map for array-arg monomorphization
+  const hirFnMap = new Map<string, HIRFunction>()
+  for (const f of hir.functions) {
+    hirFnMap.set(f.name, f)
+  }
+  // Shared registry: specializedName → [mirFn, ...helpers]
+  const specializedFnsRegistry = new Map<string, MIRFunction[]>()
+
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry)
     allFunctions.push(fn, ...helpers)
   }
 
@@ -75,6 +83,11 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
       const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter)
       allFunctions.push(fn, ...helpers)
     }
+  }
+
+  // Add all specialized (array-monomorphized) functions
+  for (const fns of specializedFnsRegistry.values()) {
+    allFunctions.push(...fns)
   }
 
   return {
@@ -125,6 +138,10 @@ class FnContext {
   readonly timerCounter: { count: number; timerId: number }
   /** Tracks temps whose values are known compile-time constants (for Timer static ID propagation) */
   readonly constTemps = new Map<Temp, number>()
+  /** HIR function definitions for array-arg monomorphization */
+  hirFunctions: Map<string, HIRFunction> = new Map()
+  /** Shared registry of already-generated specialized (monomorphized) MIR functions */
+  specializedFnsRegistry: Map<string, MIRFunction[]> = new Map()
 
   constructor(
     namespace: string,
@@ -225,21 +242,40 @@ function lowerFunction(
   enumDefs: Map<string, Map<string, number>> = new Map(),
   sourceFile?: string,
   timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
+  /** Pre-bound array variable info for array-parameter monomorphization */
+  arrayArgBindings?: Map<string, { ns: string; pathPrefix: string }>,
+  /** HIR function map for generating specialized callees */
+  hirFnMap?: Map<string, HIRFunction>,
+  /** Shared registry of already-generated specialized MIR functions */
+  specializedFnsRegistry?: Map<string, MIRFunction[]>,
+  /** Override the MIR function name (used when generating specialized versions) */
+  overrideName?: string,
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
-  const ctx = new FnContext(namespace, fn.name, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter)
+  const mirFnName = overrideName ?? fn.name
+  const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter)
   ctx.sourceFile = sourceFile
+  if (hirFnMap) ctx.hirFunctions = hirFnMap
+  if (specializedFnsRegistry) ctx.specializedFnsRegistry = specializedFnsRegistry
   const fnMacroInfo = macroInfo.get(fn.name)
 
-  // Create temps for parameters
-  const params: { name: Temp; isMacroParam: boolean }[] = fn.params.map(p => {
-    const t = ctx.freshTemp()
-    return { name: t, isMacroParam: fnMacroInfo?.macroParams.has(p.name) ?? false }
-  })
+  // Pre-populate arrayVars from caller-provided array bindings
+  if (arrayArgBindings) {
+    for (const [paramName, arrInfo] of arrayArgBindings) {
+      ctx.arrayVars.set(paramName, arrInfo)
+    }
+  }
 
-  // Map parameter names to their temps
+  // Create temps for parameters, skipping array-type params that are pre-bound
+  const params: { name: Temp; isMacroParam: boolean }[] = []
   const scope = new Map<string, Temp>()
-  fn.params.forEach((p, i) => {
-    scope.set(p.name, params[i].name)
+  fn.params.forEach((p) => {
+    if (p.type.kind === 'array' && arrayArgBindings?.has(p.name)) {
+      // Array param already bound via arrayVars; no scoreboard slot needed
+      return
+    }
+    const t = ctx.freshTemp()
+    params.push({ name: t, isMacroParam: fnMacroInfo?.macroParams.has(p.name) ?? false })
+    scope.set(p.name, t)
   })
 
   lowerBlock(fn.body, ctx, scope)
@@ -258,7 +294,7 @@ function lowerFunction(
   computePreds(liveBlocks)
 
   const result: MIRFunction = {
-    name: fn.name,
+    name: mirFnName,
     params,
     blocks: liveBlocks,
     entry: 'entry',
@@ -1318,6 +1354,68 @@ function lowerExpr(
         ctx.emit({ kind: 'call_macro', dst: t, fn: expr.fn, args: macroArgs })
         return { kind: 'temp', name: t }
       }
+
+      // --- Array-parameter monomorphization ---
+      // Detect if any argument is an array variable; if so, generate a
+      // specialized callee version with array info pre-bound (per call-site).
+      {
+        const targetHirFn = ctx.hirFunctions.get(expr.fn)
+        if (targetHirFn && ctx.specializedFnsRegistry) {
+          const arrayArgBindings = new Map<string, { ns: string; pathPrefix: string }>()
+          for (let i = 0; i < expr.args.length; i++) {
+            const arg = expr.args[i]
+            if (arg.kind === 'ident' && ctx.arrayVars.has(arg.name)) {
+              const paramName = targetHirFn.params[i]?.name
+              if (paramName) {
+                arrayArgBindings.set(paramName, ctx.arrayVars.get(arg.name)!)
+              }
+            }
+          }
+          if (arrayArgBindings.size > 0) {
+            // Build a deterministic specialized function name from the array bindings
+            const bindingKey = [...arrayArgBindings.entries()]
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([p, { ns, pathPrefix }]) => `${p}__${ns.replace(/[^a-zA-Z0-9]/g, '_')}__${pathPrefix.replace(/[^a-zA-Z0-9]/g, '_')}`)
+              .join('__')
+            const specializedName = `${expr.fn}__arr_${bindingKey}`
+
+            // Generate the specialized function if not already done
+            if (!ctx.specializedFnsRegistry.has(specializedName)) {
+              // Placeholder to prevent re-entry
+              ctx.specializedFnsRegistry.set(specializedName, [])
+              const { fn: specFn, helpers: specHelpers } = lowerFunction(
+                targetHirFn,
+                ctx.getNamespace(),
+                ctx.structDefs,
+                ctx.implMethods,
+                ctx.macroInfo,
+                ctx.fnParamInfo,
+                ctx.enumDefs,
+                ctx.sourceFile,
+                ctx.timerCounter,
+                arrayArgBindings,
+                ctx.hirFunctions,
+                ctx.specializedFnsRegistry,
+                specializedName,
+              )
+              ctx.specializedFnsRegistry.set(specializedName, [specFn, ...specHelpers])
+            }
+
+            // Emit call to the specialized function, passing only non-array args
+            const nonArrayArgs: Operand[] = []
+            for (let i = 0; i < expr.args.length; i++) {
+              const param = targetHirFn.params[i]
+              if (!param || param.type.kind !== 'array' || !arrayArgBindings.has(param.name)) {
+                nonArrayArgs.push(lowerExpr(expr.args[i], ctx, scope))
+              }
+            }
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'call', dst: t, fn: specializedName, args: nonArrayArgs })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
+      // --- end array monomorphization ---
 
       const args = expr.args.map(a => lowerExpr(a, ctx, scope))
       const t = ctx.freshTemp()
