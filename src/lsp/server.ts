@@ -47,6 +47,7 @@ import { TypeChecker } from '../typechecker'
 import { DiagnosticError } from '../diagnostics'
 import type { Program, FnDecl, Span, TypeNode, Stmt, Block } from '../ast/types'
 import { BUILTIN_METADATA } from '../builtins/metadata'
+import type { BuiltinDef } from '../builtins/metadata'
 
 // ---------------------------------------------------------------------------
 // Connection and document manager
@@ -54,6 +55,92 @@ import { BUILTIN_METADATA } from '../builtins/metadata'
 
 const connection = createConnection(ProposedFeatures.all)
 const documents = new TextDocuments(TextDocument)
+
+// ---------------------------------------------------------------------------
+// Builtin metadata: augment BUILTIN_METADATA from builtins.d.mcrs if present
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse builtins.d.mcrs for `declare fn` entries and extract doc/param info.
+ * This ensures LSP hover covers every declared builtin even if metadata.ts
+ * is not yet updated.
+ */
+function loadBuiltinsFromDeclFile(): Record<string, BuiltinDef> {
+  const extra: Record<string, BuiltinDef> = {}
+  // Candidate paths: next to server.ts (dev), or next to the package root
+  const candidates = [
+    path.resolve(__dirname, '../../builtins.d.mcrs'),
+    path.resolve(__dirname, '../../../builtins.d.mcrs'),
+    path.resolve(__dirname, '../../../../builtins.d.mcrs'),
+  ]
+  let src = ''
+  for (const p of candidates) {
+    if (fs.existsSync(p)) { src = fs.readFileSync(p, 'utf-8'); break }
+  }
+  if (!src) return extra
+
+  const lines = src.split('\n')
+  let docLines: string[] = []
+  let paramDocs: Record<string, string> = {}
+
+  for (const line of lines) {
+    const tripleDoc = line.match(/^\/\/\/\s?(.*)$/)
+    if (tripleDoc) {
+      const content = tripleDoc[1]
+      const paramMatch = content.match(/^@param\s+(\w+)\s+(.+)$/)
+      if (paramMatch) {
+        paramDocs[paramMatch[1]] = paramMatch[2]
+      } else if (!content.startsWith('@example')) {
+        docLines.push(content)
+      }
+      continue
+    }
+
+    const declMatch = line.match(/^declare fn (\w+)\(([^)]*)\):\s*(\w+);?$/)
+    if (declMatch) {
+      const [, fnName, paramsStr, retType] = declMatch
+      // Only add if not already in BUILTIN_METADATA
+      if (!ALL_BUILTINS[fnName]) {
+        const params = paramsStr.trim()
+          ? paramsStr.split(',').map(p => {
+              const [pname, ptype] = p.trim().split(':').map(s => s.trim())
+              return {
+                name: pname ?? '',
+                type: ptype ?? 'string',
+                required: true,
+                doc: paramDocs[pname ?? ''] ?? '',
+                docZh: '',
+              }
+            })
+          : []
+        extra[fnName] = {
+          name: fnName,
+          params,
+          returns: (retType === 'void' || retType === 'int' || retType === 'bool' || retType === 'string')
+            ? retType : 'void',
+          doc: docLines.join(' ').trim(),
+          docZh: '',
+          examples: [],
+          category: 'builtin',
+        }
+      }
+      docLines = []
+      paramDocs = {}
+      continue
+    }
+
+    // Non-comment, non-declare line resets doc accumulator
+    if (line.trim() && !line.startsWith('//')) {
+      docLines = []
+      paramDocs = {}
+    }
+  }
+  return extra
+}
+
+const EXTRA_BUILTINS = loadBuiltinsFromDeclFile()
+/** Combined lookup: metadata.ts entries + anything declared in builtins.d.mcrs */
+const ALL_BUILTINS: Record<string, BuiltinDef> = { ...EXTRA_BUILTINS, ...BUILTIN_METADATA }
 
 // ---------------------------------------------------------------------------
 // Per-document parse cache
@@ -357,7 +444,7 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   if (!word) return null
 
   // Check builtins
-  const builtin = BUILTIN_METADATA[word]
+  const builtin = ALL_BUILTINS[word]
   if (builtin) {
     const paramStr = builtin.params
       .map(p => `${p.name}: ${p.type}${p.required ? '' : '?'}`)
@@ -754,7 +841,7 @@ connection.onSignatureHelp((params: SignatureHelpParams): SignatureHelp | null =
   const fn = parsed.program.declarations.find(s => s.name === fnName)
 
   // Also check builtins (BUILTIN_METADATA is a Record<string, BuiltinDef>)
-  const builtin = BUILTIN_METADATA[fnName]
+  const builtin = ALL_BUILTINS[fnName]
 
   if (!fn && !builtin) return null
 
