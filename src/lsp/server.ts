@@ -808,11 +808,28 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
     const atStart = atMatch ? charPos - atMatch[0].length : charPos - 1
     const before = lineText.slice(0, atStart).trim()
     const isExprContext = before.length > 0 && !/^(fn|let|if|while|for|return|@)/.test(before.split(/\s+/).pop() ?? '')
-    if (isExprContext) {
-      return SELECTOR_COMPLETIONS
+
+    // Build a textEdit that replaces the entire @xxx token so there's no duplication.
+    const editRange = {
+      start: { line: params.position.line, character: atStart },
+      end:   { line: params.position.line, character: charPos },
     }
-    // Decorator context — return decorator completions only
-    return DECORATOR_COMPLETIONS
+
+    if (isExprContext) {
+      return SELECTOR_COMPLETIONS.map(item => ({
+        ...item,
+        textEdit: { range: editRange, newText: item.label },
+        insertText: undefined,
+        filterText: item.label,
+      }))
+    }
+    // Decorator context — return decorator completions with textEdit
+    return DECORATOR_COMPLETIONS.map(item => ({
+      ...item,
+      textEdit: { range: editRange, newText: item.label },
+      insertText: undefined,
+      filterText: item.label,
+    }))
   }
 
   // ── Dot-access completion ──────────────────────────────────────────────────
