@@ -90,3 +90,27 @@ fn glass_box(x1: int, y1: int, z1: int, x2: int, y2: int, z2: int) {
     fill(x1, y1, z1, x2, y2, z2, "minecraft:glass");
     fill(x1 + 1, y1 + 1, z1 + 1, x2 - 1, y2 - 1, z2 - 1, "minecraft:air");
 }
+
+// ─── Sun angle helpers ────────────────────────────────────────────────────────
+//
+// MC day = 24000 ticks. Tick 0 = sunrise, tick 6000 = noon, tick 18000 = midnight.
+// Results are ×10000:
+//   sun_altitude: range [-900000, 900000]  (−90° to +90°, max at noon)
+//   sun_azimuth:  range [0, 3600000)       (0° = east, increases west over day)
+
+/// sun_altitude(ticks): sun elevation above horizon ×10000
+/// noon (6000) → 900000 (+90°), midnight (18000) → -900000 (-90°)
+/// Uses sin_fixed (requires math.mcrs).
+fn sun_altitude(ticks: int): int {
+    // angle = ticks * 360 / 24000 degrees
+    // noon: 6000 * 360 / 24000 = 90° → sin(90°) = 1000 → 1000 * 900 = 900000 ✓
+    let deg: int = ticks * 360 / 24000;
+    return sin_fixed(deg) * 900;
+}
+
+/// sun_azimuth(ticks): compass angle of sun ×10000
+/// tick 0 → 0 (east), increases linearly to 3600000 over 24000 ticks
+fn sun_azimuth(ticks: int): int {
+    // 3600000 / 24000 = 150; multiply first to avoid int32 overflow
+    return ticks * 150 % 3600000;
+}

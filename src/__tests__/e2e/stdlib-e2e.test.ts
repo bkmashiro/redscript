@@ -403,6 +403,14 @@ const GEOM_SRC = fs.readFileSync(
   path.join(__dirname, '../../stdlib/geometry.mcrs'),
   'utf-8',
 )
+const COLOR_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/color.mcrs'),
+  'utf-8',
+)
+const WORLD_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/world.mcrs'),
+  'utf-8',
+)
 
 // ===========================================================================
 // math.mcrs — runtime execution (extended)
@@ -1480,4 +1488,58 @@ describe('geometry.mcrs — in_sector_2d', () => {
 
   test('in_sector_2d(-10000,0, 0,0, 0, 157079, 20000) == 0  (behind)', () =>
     expect(callAndGetRet(rt, 'test_sector_behind')).toBe(0))
+})
+
+// ===========================================================================
+// color.mcrs — RGB↔HSL conversion
+// ===========================================================================
+
+describe('color.mcrs — rgb_to_l', () => {
+  const rt = makeRuntime(`
+    fn test_l_white(): int { return rgb_to_l(2550000, 2550000, 2550000); }
+    fn test_l_black(): int { return rgb_to_l(0, 0, 0); }
+  `, [COLOR_SRC])
+
+  test('rgb_to_l(2550000, 2550000, 2550000) == 10000  (white L=1.0)', () =>
+    expect(callAndGetRet(rt, 'test_l_white')).toBe(10000))
+
+  test('rgb_to_l(0, 0, 0) == 0  (black L=0)', () =>
+    expect(callAndGetRet(rt, 'test_l_black')).toBe(0))
+})
+
+describe('color.mcrs — rgb_to_s', () => {
+  const rt = makeRuntime(`
+    fn test_s_red(): int { return rgb_to_s(2550000, 0, 0); }
+  `, [COLOR_SRC])
+
+  test('rgb_to_s(2550000, 0, 0) > 0  (pure red S > 0)', () =>
+    expect(callAndGetRet(rt, 'test_s_red')).toBeGreaterThan(0))
+})
+
+describe('color.mcrs — hsl_to_r', () => {
+  const rt = makeRuntime(`
+    fn test_hsl_r_red(): int { return hsl_to_r(0, 10000, 5000); }
+  `, [COLOR_SRC])
+
+  test('hsl_to_r(0, 10000, 5000) close to 2550000  (red hue)', () =>
+    expect(callAndGetRet(rt, 'test_hsl_r_red')).toBeGreaterThan(2500000))
+})
+
+// ===========================================================================
+// world.mcrs — sun angle helpers
+// ===========================================================================
+
+describe('world.mcrs — sun_altitude', () => {
+  // sun_altitude uses sin_fixed which requires storage_get_int — not available
+  // in MCRuntime, so we test sun_azimuth only (pure arithmetic).
+  const rt = makeRuntime(`
+    fn test_azimuth_0(): int    { return sun_azimuth(0); }
+    fn test_azimuth_noon(): int { return sun_azimuth(6000); }
+  `, [WORLD_SRC, MATH_SRC])
+
+  test('sun_azimuth(0) == 0', () =>
+    expect(callAndGetRet(rt, 'test_azimuth_0')).toBe(0))
+
+  test('sun_azimuth(6000) == 900000  (quarter day = 90°)', () =>
+    expect(callAndGetRet(rt, 'test_azimuth_noon')).toBe(900000))
 })

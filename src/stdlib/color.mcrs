@@ -1,9 +1,7 @@
 // color.mcrs — Color utilities for RedScript datapacks.
 //
-// All RGB values: 0-255
-// All HSL values: H 0-360, S 0-100, L 0-100
-// Packed int format: 0xRRGGBB (R in bits 16-23, G in bits 8-15, B in bits 0-7)
-//   packed = R*65536 + G*256 + B
+// Pack/unpack: RGB values 0-255, packed int 0xRRGGBB = R*65536 + G*256 + B
+// HSL ×10000 scale: R,G,B ∈ [0,2550000], H ∈ [0,3600000], S,L ∈ [0,10000]
 //
 // Note: No native bitwise ops in MC scoreboard — packing/unpacking uses multiply/divide.
 
@@ -48,71 +46,14 @@ fn rgb_lerp(a: int, b: int, t: int): int {
     return r * 65536 + g * 256 + bv;
 }
 
-// ─── HSL ↔ RGB ────────────────────────────────────────────────────────────────
+// ─── RGB → HSL (×10000 scale) ─────────────────────────────────────────────────
+//
+// All values ×10000 scale:
+//   R, G, B ∈ [0, 2550000]  (255 × 10000)
+//   H ∈ [0, 3600000]        (360° × 10000)
+//   S, L ∈ [0, 10000]       (1.0 × 10000)
 
-// hsl_to_rgb_r/g/b: convert HSL to individual RGB components
-// H: 0-360, S: 0-100, L: 0-100, returns 0-255
-fn _hsl_chroma_x(h: int, c: int): int {
-    // X = C * (1 - |H/60 mod 2 - 1|)
-    let sector: int = h / 60;
-    let rem: int = h % 120;
-    if (rem > 60) { rem = 120 - rem; }
-    return c * rem / 60;
-}
-
-fn hsl_to_r(h: int, s: int, l: int): int {
-    let c: int = s * (1000 - (2 * l * 10 - 1000)) / 1000;
-    if (c < 0) { c = 0 - c; }
-    c = c / 10;
-    let x: int = _hsl_chroma_x(h, c);
-    let m: int = l * 255 / 100 - c / 2;
-    let sector: int = h / 60;
-    if (sector == 0) { return (c + m); }
-    if (sector == 1) { return (x + m); }
-    if (sector == 2) { return m; }
-    if (sector == 3) { return m; }
-    if (sector == 4) { return (x + m); }
-    return (c + m);
-}
-
-fn hsl_to_g(h: int, s: int, l: int): int {
-    let c: int = s * (1000 - (2 * l * 10 - 1000)) / 1000;
-    if (c < 0) { c = 0 - c; }
-    c = c / 10;
-    let x: int = _hsl_chroma_x(h, c);
-    let m: int = l * 255 / 100 - c / 2;
-    let sector: int = h / 60;
-    if (sector == 0) { return (x + m); }
-    if (sector == 1) { return (c + m); }
-    if (sector == 2) { return (c + m); }
-    if (sector == 3) { return (x + m); }
-    if (sector == 4) { return m; }
-    return m;
-}
-
-fn hsl_to_b(h: int, s: int, l: int): int {
-    let c: int = s * (1000 - (2 * l * 10 - 1000)) / 1000;
-    if (c < 0) { c = 0 - c; }
-    c = c / 10;
-    let x: int = _hsl_chroma_x(h, c);
-    let m: int = l * 255 / 100 - c / 2;
-    let sector: int = h / 60;
-    if (sector == 0) { return m; }
-    if (sector == 1) { return m; }
-    if (sector == 2) { return (x + m); }
-    if (sector == 3) { return (c + m); }
-    if (sector == 4) { return (c + m); }
-    return (x + m);
-}
-
-// hsl_to_packed(h, s, l): HSL → packed RGB int
-fn hsl_to_packed(h: int, s: int, l: int): int {
-    return rgb_pack(hsl_to_r(h, s, l), hsl_to_g(h, s, l), hsl_to_b(h, s, l));
-}
-
-// ─── RGB → HSL ────────────────────────────────────────────────────────────────
-
-// rgb_to_l(r, g, b): lightness 0-100
+// rgb_to_l(r, g, b): lightness ×10000, range [0, 10000]
 fn rgb_to_l(r: int, g: int, b: int): int {
     let mx: int = r;
     if (g > mx) { mx = g; }
@@ -120,10 +61,10 @@ fn rgb_to_l(r: int, g: int, b: int): int {
     let mn: int = r;
     if (g < mn) { mn = g; }
     if (b < mn) { mn = b; }
-    return (mx + mn) * 100 / 510;
+    return (mx + mn) / 510;
 }
 
-// rgb_to_s(r, g, b): saturation 0-100
+// rgb_to_s(r, g, b): saturation ×10000, range [0, 10000]
 fn rgb_to_s(r: int, g: int, b: int): int {
     let mx: int = r;
     if (g > mx) { mx = g; }
@@ -131,14 +72,16 @@ fn rgb_to_s(r: int, g: int, b: int): int {
     let mn: int = r;
     if (g < mn) { mn = g; }
     if (b < mn) { mn = b; }
-    let c: int = mx - mn;
-    if (c == 0) { return 0; }
-    let l: int = (mx + mn) * 100 / 510;
-    if (l <= 50) { return c * 100 / (mx + mn); }
-    return c * 100 / (510 - mx - mn);
+    let d: int = mx - mn;
+    if (d == 0) { return 0; }
+    let l: int = (mx + mn) / 510;
+    let denom: int = 2 * l;
+    if (20000 - 2 * l < denom) { denom = 20000 - 2 * l; }
+    if (denom == 0) { return 0; }
+    return d * 10000 / (255 * denom);
 }
 
-// rgb_to_h(r, g, b): hue 0-360
+// rgb_to_h(r, g, b): hue ×10000, range [0, 3600000]
 fn rgb_to_h(r: int, g: int, b: int): int {
     let mx: int = r;
     if (g > mx) { mx = g; }
@@ -146,15 +89,83 @@ fn rgb_to_h(r: int, g: int, b: int): int {
     let mn: int = r;
     if (g < mn) { mn = g; }
     if (b < mn) { mn = b; }
-    let c: int = mx - mn;
-    if (c == 0) { return 0; }
+    let d: int = mx - mn;
+    if (d == 0) { return 0; }
     if (mx == r) {
-        let h: int = 60 * (g - b) / c;
-        if (h < 0) { h = h + 360; }
+        let h: int = 600000 * (g - b) / d;
+        if (h < 0) { h = h + 3600000; }
         return h;
     }
     if (mx == g) {
-        return 60 * (b - r) / c + 120;
+        return 1200000 + 600000 * (b - r) / d;
     }
-    return 60 * (r - g) / c + 240;
+    return 2400000 + 600000 * (r - g) / d;
+}
+
+// ─── HSL → RGB (×10000 scale) ─────────────────────────────────────────────────
+
+// _hsl10k_chroma_x: helper — X component for HSL→RGB conversion (×10000 scale)
+// c: chroma ×10000, h: hue ×10000 [0, 3600000]
+fn _hsl10k_chroma_x(h: int, c: int): int {
+    // X = C * (1 - |H/600000 mod 2 - 1|)
+    let rem: int = h % 1200000;
+    if (rem > 600000) { rem = 1200000 - rem; }
+    return c * rem / 600000;
+}
+
+// _hsl10k_chroma: chroma C = (1 - |2L-1|) * S, all ×10000
+fn _hsl10k_chroma(s: int, l: int): int {
+    let abs2l1: int = 2 * l - 10000;
+    if (abs2l1 < 0) { abs2l1 = 0 - abs2l1; }
+    return (10000 - abs2l1) * s / 10000;
+}
+
+// hsl_to_r(h, s, l): H×10000, S×10000, L×10000 → R ∈ [0, 2550000]
+fn hsl_to_r(h: int, s: int, l: int): int {
+    let c: int = _hsl10k_chroma(s, l);
+    let x: int = _hsl10k_chroma_x(h, c);
+    let m: int = l - c / 2;
+    let sector: int = h / 600000;
+    let r1: int = 0;
+    if (sector == 0) { r1 = c; }
+    if (sector == 1) { r1 = x; }
+    if (sector == 4) { r1 = x; }
+    if (sector == 5) { r1 = c; }
+    return (r1 + m) * 255;
+}
+
+// hsl_to_g(h, s, l): H×10000, S×10000, L×10000 → G ∈ [0, 2550000]
+fn hsl_to_g(h: int, s: int, l: int): int {
+    let c: int = _hsl10k_chroma(s, l);
+    let x: int = _hsl10k_chroma_x(h, c);
+    let m: int = l - c / 2;
+    let sector: int = h / 600000;
+    let g1: int = 0;
+    if (sector == 0) { g1 = x; }
+    if (sector == 1) { g1 = c; }
+    if (sector == 2) { g1 = c; }
+    if (sector == 3) { g1 = x; }
+    return (g1 + m) * 255;
+}
+
+// hsl_to_b(h, s, l): H×10000, S×10000, L×10000 → B ∈ [0, 2550000]
+fn hsl_to_b(h: int, s: int, l: int): int {
+    let c: int = _hsl10k_chroma(s, l);
+    let x: int = _hsl10k_chroma_x(h, c);
+    let m: int = l - c / 2;
+    let sector: int = h / 600000;
+    let b1: int = 0;
+    if (sector == 2) { b1 = x; }
+    if (sector == 3) { b1 = c; }
+    if (sector == 4) { b1 = c; }
+    if (sector == 5) { b1 = x; }
+    return (b1 + m) * 255;
+}
+
+// hsl_to_packed(h, s, l): HSL (×10000 scale) → packed RGB int (0xRRGGBB)
+fn hsl_to_packed(h: int, s: int, l: int): int {
+    let r: int = hsl_to_r(h, s, l) / 10000;
+    let g: int = hsl_to_g(h, s, l) / 10000;
+    let b: int = hsl_to_b(h, s, l) / 10000;
+    return rgb_pack(r, g, b);
 }
