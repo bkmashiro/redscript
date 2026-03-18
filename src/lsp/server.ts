@@ -37,6 +37,9 @@ import {
   InlayHintKind,
 } from 'vscode-languageserver/node'
 import { TextDocument } from 'vscode-languageserver-textdocument'
+import * as path from 'path'
+import * as fs from 'fs'
+import { fileURLToPath, pathToFileURL } from 'url'
 
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
@@ -321,30 +324,34 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   if (!doc) return null
 
   const source = doc.getText()
-  const cached = parsedDocs.get(params.textDocument.uri)
-  const program = cached?.program ?? null
-  if (!program) return null
 
-  // Check if cursor is on a decorator (@tick, @load, etc.)
+  // ── Decorator hover: works even if program is null (parse errors elsewhere) ──
   const lines = source.split('\n')
   const lineText = lines[params.position.line] ?? ''
-  const decoratorMatch = lineText.match(/@([a-zA-Z_][a-zA-Z0-9_]*)/)
-  if (decoratorMatch) {
-    const ch = params.position.character
-    const atIdx = lineText.indexOf('@')
-    const decoratorEnd = atIdx + 1 + decoratorMatch[1].length
-    if (ch >= atIdx && ch <= decoratorEnd) {
-      const decoratorName = decoratorMatch[1]
+  const ch = params.position.character
+  // Find all @xxx on this line and check if cursor is inside one
+  const decorRe = /@([a-zA-Z_][a-zA-Z0-9_]*)/g
+  let dm: RegExpExecArray | null
+  while ((dm = decorRe.exec(lineText)) !== null) {
+    const atIdx = dm.index
+    const decorEnd = atIdx + dm[0].length
+    if (ch >= atIdx && ch <= decorEnd) {
+      const decoratorName = dm[1]
       const decoratorDoc = DECORATOR_DOCS[decoratorName]
       if (decoratorDoc) {
-        const content: MarkupContent = {
-          kind: MarkupKind.Markdown,
-          value: `**@${decoratorName}** — ${decoratorDoc}`,
+        return {
+          contents: {
+            kind: MarkupKind.Markdown,
+            value: `**@${decoratorName}** — ${decoratorDoc}`,
+          } as MarkupContent,
         }
-        return { contents: content }
       }
     }
   }
+
+  const cached = parsedDocs.get(params.textDocument.uri)
+  const program = cached?.program ?? null
+  if (!program) return null
 
   const word = wordAt(source, params.position)
   if (!word) return null
@@ -413,11 +420,63 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
 // Go-to-definition
 // ---------------------------------------------------------------------------
 
+/** Resolve a relative or stdlib import path to an absolute file path. */
+function resolveImportPath(importStr: string, fromUri: string): string | null {
+  try {
+    const fromFile = fileURLToPath(fromUri)
+    const fromDir  = path.dirname(fromFile)
+
+    if (importStr.startsWith('.')) {
+      // Relative path: import "../stdlib/math.mcrs"
+      const resolved = path.resolve(fromDir, importStr)
+      if (fs.existsSync(resolved)) return resolved
+      // Try adding .mcrs extension
+      if (!resolved.endsWith('.mcrs') && fs.existsSync(resolved + '.mcrs')) return resolved + '.mcrs'
+    } else {
+      // stdlib path: import "stdlib/math" or "stdlib/math.mcrs"
+      // Walk up to find package root (contains package.json)
+      let dir = fromDir
+      for (let i = 0; i < 10; i++) {
+        if (fs.existsSync(path.join(dir, 'package.json'))) {
+          const candidate = path.join(dir, 'src', importStr)
+          if (fs.existsSync(candidate)) return candidate
+          if (fs.existsSync(candidate + '.mcrs')) return candidate + '.mcrs'
+          // also try without 'src/'
+          const candidate2 = path.join(dir, importStr)
+          if (fs.existsSync(candidate2)) return candidate2
+          if (fs.existsSync(candidate2 + '.mcrs')) return candidate2 + '.mcrs'
+          break
+        }
+        dir = path.dirname(dir)
+      }
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
 connection.onDefinition((params: TextDocumentPositionParams): Location | null => {
   const doc = documents.get(params.textDocument.uri)
   if (!doc) return null
 
   const source = doc.getText()
+  const lines  = source.split('\n')
+  const lineText = lines[params.position.line] ?? ''
+  const ch = params.position.character
+
+  // ── import "path/to/file.mcrs" ─────────────────────────────────────────────
+  // Cursor is anywhere on the line that starts with `import "..."`
+  const fileImportMatch = lineText.match(/^import\s+"([^"]+)"/)
+  if (fileImportMatch) {
+    const importStr = fileImportMatch[1]
+    const resolved  = resolveImportPath(importStr, params.textDocument.uri)
+    if (resolved) {
+      return {
+        uri: pathToFileURL(resolved).toString(),
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      }
+    }
+  }
+
   const cached = parsedDocs.get(params.textDocument.uri)
   const program = cached?.program ?? null
   if (!program) return null
@@ -425,6 +484,22 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
   const word = wordAt(source, params.position)
   if (!word) return null
 
+  // ── import module::symbol — jump to the symbol in the imported module ───────
+  // Check if word is a known import symbol; try to resolve its module file
+  const importDecl = program.imports?.find(im => im.symbol === word || im.symbol === '*')
+  if (importDecl) {
+    const resolved = resolveImportPath(importDecl.moduleName, params.textDocument.uri)
+      ?? resolveImportPath(importDecl.moduleName + '.mcrs', params.textDocument.uri)
+    if (resolved) {
+      // Open file at start; could later search for the symbol definition
+      return {
+        uri: pathToFileURL(resolved).toString(),
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      }
+    }
+  }
+
+  // ── Normal in-file definition ──────────────────────────────────────────────
   const defMap = buildDefinitionMap(program, source)
   const span = defMap.get(word)
   if (!span) return null
