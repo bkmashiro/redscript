@@ -228,18 +228,18 @@ function toDiagnostic(err: DiagnosticError): Diagnostic {
 // ---------------------------------------------------------------------------
 
 const DECORATOR_DOCS: Record<string, string> = {
-  tick:         'Runs every MC game tick (~20 Hz). No arguments.',
-  load:         'Runs on `/reload`. Use for initialization logic.',
-  coroutine:    'Splits loops into tick-spread continuations. Arg: `batch=N` (steps per tick, default 1).',
-  schedule:     'Schedules the function to run after N ticks. Arg: `ticks=N`.',
-  on_trigger:   'Runs when a trigger scoreboard objective is set by a player. Arg: trigger name.',
-  keep:         'Prevents the compiler from dead-code-eliminating this function.',
-  on:           'Generic event handler decorator.',
-  on_advancement: 'Runs when a player earns an advancement. Arg: advancement id.',
-  on_craft:     'Runs when a player crafts an item. Arg: item id.',
-  on_death:     'Runs when a player dies.',
-  on_join_team: 'Runs when a player joins a team. Arg: team name.',
-  on_login:     'Runs when a player logs in.',
+  tick:         'Runs every game tick.\n\n**Optional args:** `rate=N` (every N ticks, e.g. `@tick(rate=20)` = once per second)\n\nExample: `@tick fn every_tick() {}` or `@tick(rate=20) fn every_second() {}`',
+  load:         'Runs once on `/reload`. Use for initialization.\n\nExample: `@load fn init() { scoreboard_create(...) }`',
+  coroutine:    'Wraps a loop to spread execution across multiple ticks.\n\n**Required arg:** `batch=N` — iterations per tick.\n\nExample: `@coroutine(batch=10) fn scan_blocks() { for i in 0..1000 { ... } }`',
+  schedule:     'Schedules the function to run after a delay.\n\n**Required arg:** `ticks=N`\n\nExample: `@schedule(ticks=100) fn delayed() {}`',
+  on_trigger:   'Runs when a player executes `/trigger <name>`.\n\n**Required arg:** trigger objective name.\n\nExample: `@on_trigger("shop") fn open_shop() {}`',
+  keep:         'Prevents dead-code elimination. Use for exported entry points not referenced in the same file.\n\nExample: `@keep fn public_api() {}`',
+  on:           'Generic event handler. Arg: event name.\n\nExample: `@on("custom:event") fn handler() {}`',
+  on_advancement: 'Runs when a player earns an advancement.\n\n**Arg:** advancement id (e.g. `"story/mine_diamond"`).\n\nExample: `@on_advancement("story/mine_diamond") fn reward() {}`',
+  on_craft:     'Runs when a player crafts an item.\n\n**Arg:** item id (e.g. `"minecraft:diamond_sword"`).\n\nExample: `@on_craft("minecraft:diamond_sword") fn on_craft_sword() {}`',
+  on_death:     'Runs when a player dies.\n\nExample: `@on_death fn on_player_death() {}`',
+  on_join_team: 'Runs when a player joins a team.\n\n**Arg:** team name.\n\nExample: `@on_join_team("red") fn joined_red() {}`',
+  on_login:     'Runs when a player logs into the server.\n\nExample: `@on_login fn welcome() { tell(@s, f"Welcome back!") }`',
 }
 
 // ---------------------------------------------------------------------------
