@@ -26,8 +26,9 @@ if (!fs.existsSync(CLI)) {
 const SKIP_GLOBS = [
   'node_modules',
   '.git',
-  'builtins.d.mcrs',   // declaration-only file, not valid source
-  'editors/',          // copy of builtins.d.mcrs
+  'builtins.d.mcrs',          // declaration-only file, not valid source
+  'editors/',                  // copy of builtins.d.mcrs
+  'heap-sort-mc-test.mcrs',   // requires librarySources injection (heap.mcrs, sort.mcrs)
 ]
 
 function shouldSkip(filePath: string): boolean {

@@ -1517,6 +1517,19 @@ describe('MC Integration - heap & sort stdlib', () => {
     console.log(`  sort_desc ok=${ok} ✓`)
   }, 15000)
 
-  // sort_merge uses int[] return value (NBT array passing) — same known issue as heap.
-  // Skipped in MC integration; covered by unit tests.
+  test('sort_merge([1,3,5], [2,4,6]) → NBT result = [1,2,3,4,5,6]', async () => {
+    if (!serverOnline) return
+    await mc.command('/function heap_sort_mc_test:test_sort_merge')
+    await mc.ticks(5)
+    const ran = await mc.scoreboard('#sort_merge_ran', 'hsmc')
+    expect(ran).toBe(1)
+    // Read result array from NBT storage directly via fetch
+    const url = `http://localhost:25561/nbt?storage=${encodeURIComponent('heap_sort_mc_test:arrays')}&path=${encodeURIComponent('result')}`
+    const resp = await fetch(url)
+    const data = await resp.json() as { value: string }
+    // result should be [1, 2, 3, 4, 5, 6]
+    const nums = data.value.replace(/[\[\]]/g, '').split(',').map((s: string) => parseInt(s.trim(), 10))
+    expect(nums).toEqual([1, 2, 3, 4, 5, 6])
+    console.log(`  sort_merge result = ${data.value} (expect [1,2,3,4,5,6]) ✓`)
+  }, 15000)
 })

@@ -1291,6 +1291,47 @@ function lowerExpr(
         return { kind: 'temp', name: t }
       }
 
+      // Handle __array_push(arr, val) — h.push(val) sugar (parser desugars arr.push → __array_push)
+      // Equivalent to list_push but uses the array's known NBT path directly.
+      if (expr.fn === '__array_push') {
+        if (expr.args[0].kind === 'ident') {
+          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+          if (arrInfo) {
+            const valOp = lowerExpr(expr.args[1], ctx, scope)
+            ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${arrInfo.ns} ${arrInfo.pathPrefix} append value 0`, args: [] })
+            ctx.emit({ kind: 'nbt_write', ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[-1]`, type: 'int', scale: 1, src: valOp })
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: 0 })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
+
+      // Handle __array_pop(arr) — h.pop() sugar
+      if (expr.fn === '__array_pop') {
+        if (expr.args[0].kind === 'ident') {
+          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+          if (arrInfo) {
+            ctx.emit({ kind: 'call', dst: null, fn: `__raw:data remove storage ${arrInfo.ns} ${arrInfo.pathPrefix}[-1]`, args: [] })
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: 0 })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
+
+      // Handle __array_length(arr) — h.length sugar → get array length via data get
+      if (expr.fn === '__array_length') {
+        if (expr.args[0].kind === 'ident') {
+          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+          if (arrInfo) {
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'nbt_read', dst: t, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}`, scale: 1 })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
+
       // Handle list_push(arr_name, val) — append an int to an NBT int array
       // list_push("rs:lists", "mylist", val) or simpler: uses the array's storage path
       if (expr.fn === 'list_push') {
