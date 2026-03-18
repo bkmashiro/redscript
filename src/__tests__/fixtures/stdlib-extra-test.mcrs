@@ -1,7 +1,8 @@
-// stdlib-extra-test.mcrs — MC integration tests for random, bits, list_sort, bigint
+// stdlib-extra-test.mcrs — MC integration tests for random, bits, list_sort, bigint, math_hp
 
 @load fn __load() {
     raw("scoreboard objectives add rsex dummy");
+    raw("scoreboard objectives add rshp dummy");
 }
 
 // ─── random.mcrs ─────────────────────────────────────────────────────────────
@@ -107,4 +108,32 @@
     scoreboard_set("#bi3_hi", "rsex",  int32_to_bigint3_hi(1023456789));   // 10
     scoreboard_set("#bi3_mid", "rsex", int32_to_bigint3_mid(1023456789));  // 2345
     scoreboard_set("#bi3_lo", "rsex",  int32_to_bigint3_lo(1023456789));   // 6789
+}
+
+// ─── math_hp.mcrs: ln_hp ─────────────────────────────────────────────────────
+
+@keep fn test_ln_hp() {
+    // ln_hp(10000) == 0  (ln(1) = 0, input ×10000 so 10000 = 1.0)
+    scoreboard_set("#ln_1", "rshp", ln_hp(10000));
+
+    // ln_hp(27183) ≈ 10000  (ln(e) ≈ 1.0, e≈2.71828 → 27183 in ×10000)
+    scoreboard_set("#ln_e", "rshp", ln_hp(27183));
+
+    // ln_hp(20000) ≈ 6931  (ln(2) ≈ 0.6931, 2.0 = 20000)
+    scoreboard_set("#ln_2", "rshp", ln_hp(20000));
+
+    // ln_hp(100000) ≈ 23026  (ln(10) ≈ 2.3026, 10.0 = 100000)
+    scoreboard_set("#ln_10", "rshp", ln_hp(100000));
+}
+
+// ─── math_hp.mcrs: double_mul_fixed ──────────────────────────────────────────
+
+@keep fn test_double_mul_fixed() {
+    // double_mul_fixed(2.0d, 15000) ≈ 3.0  (2.0 × 1.5 = 3.0)
+    // After call, __dp0 holds d×(f/10000); read it back as ×10000 fixed directly.
+    let d: double = 2.0d;
+    let f: int = scoreboard_get("#dmul_f_in", "rshp");
+    double_mul_fixed(d, f);
+    // Read __dp0 directly to avoid 'as fixed' temp var rename bug
+    raw("execute store result score #dmul_result rshp run data get storage rs:d __dp0 10000.0");
 }

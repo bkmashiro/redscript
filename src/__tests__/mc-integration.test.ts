@@ -1036,18 +1036,19 @@ describe('MC Integration - stdlib math', () => {
   })
 })
 
-// ─── stdlib extra (random, bits, list_sort, bigint) ───────────────────────────
+// ─── stdlib extra (random, bits, list_sort, bigint, math_hp) ─────────────────
 
-const RANDOM_SRC = fs.readFileSync(path.join(__dirname, '../stdlib/random.mcrs'), 'utf-8')
-const BITS_SRC   = fs.readFileSync(path.join(__dirname, '../stdlib/bits.mcrs'),   'utf-8')
-const LIST_SRC   = fs.readFileSync(path.join(__dirname, '../stdlib/list.mcrs'),   'utf-8')
-const BIGINT_SRC = fs.readFileSync(path.join(__dirname, '../stdlib/bigint.mcrs'), 'utf-8')
+const RANDOM_SRC  = fs.readFileSync(path.join(__dirname, '../stdlib/random.mcrs'),  'utf-8')
+const BITS_SRC    = fs.readFileSync(path.join(__dirname, '../stdlib/bits.mcrs'),    'utf-8')
+const LIST_SRC    = fs.readFileSync(path.join(__dirname, '../stdlib/list.mcrs'),    'utf-8')
+const BIGINT_SRC  = fs.readFileSync(path.join(__dirname, '../stdlib/bigint.mcrs'),  'utf-8')
+const MATH_HP_SRC = fs.readFileSync(path.join(__dirname, '../stdlib/math_hp.mcrs'), 'utf-8')
 
 describe('MC Integration - stdlib extra (random/bits/list/bigint)', () => {
   beforeAll(async () => {
     if (!serverOnline) return
     writeFixtureWithLibs('stdlib-extra-test.mcrs', 'stdextra',
-      [MATH_SRC, RANDOM_SRC, BITS_SRC, LIST_SRC, BIGINT_SRC])
+      [MATH_SRC, MATH_HP_SRC, RANDOM_SRC, BITS_SRC, LIST_SRC, BIGINT_SRC])
     await mc.reload()
     await mc.ticks(10)
     await mc.command('/function stdextra:__load').catch(() => {})
@@ -1222,5 +1223,71 @@ describe('MC Integration - stdlib extra (random/bits/list/bigint)', () => {
     await mc.command('/function stdextra:test_bigint')
     await mc.ticks(5)
     expect(await mc.scoreboard('#bi3_lo', 'rsex')).toBe(6789)
+  })
+})
+
+// ─── stdlib math_hp integration ───────────────────────────────────────────────
+
+describe('MC Integration - math_hp (ln_hp, double_mul_fixed)', () => {
+  beforeAll(async () => {
+    if (!serverOnline) return
+    // stdextra is already written with MATH_HP_SRC in the previous describe's beforeAll.
+    // Just need the scoreboard and a fresh reload.
+    await mc.command('/scoreboard objectives add rshp dummy').catch(() => {})
+    await mc.ticks(2)
+  })
+
+  // ─── ln_hp ─────────────────────────────────────────────────────────────────
+
+  test('ln_hp(10000) == 0  [ln(1) = 0]', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_ln_hp')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#ln_1', 'rshp')).toBe(0)
+  })
+
+  test('ln_hp(27183) ≈ 10000  [ln(e) ≈ 1.0, tolerance ±10]', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_ln_hp')
+    await mc.ticks(5)
+    const v = await mc.scoreboard('#ln_e', 'rshp')
+    expect(v).toBeGreaterThanOrEqual(9990)
+    expect(v).toBeLessThanOrEqual(10010)
+    console.log(`  ln_hp(27183) = ${v} (expect ≈10000) ✓`)
+  })
+
+  test('ln_hp(20000) ≈ 6931  [ln(2), tolerance ±10]', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_ln_hp')
+    await mc.ticks(5)
+    const v = await mc.scoreboard('#ln_2', 'rshp')
+    expect(v).toBeGreaterThanOrEqual(6921)
+    expect(v).toBeLessThanOrEqual(6941)
+    console.log(`  ln_hp(20000) = ${v} (expect ≈6931) ✓`)
+  })
+
+  test('ln_hp(100000) ≈ 23026  [ln(10), tolerance ±20]', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_ln_hp')
+    await mc.ticks(5)
+    const v = await mc.scoreboard('#ln_10', 'rshp')
+    expect(v).toBeGreaterThanOrEqual(23006)
+    expect(v).toBeLessThanOrEqual(23046)
+    console.log(`  ln_hp(100000) = ${v} (expect ≈23026) ✓`)
+  })
+
+  // ─── double_mul_fixed ───────────────────────────────────────────────────────
+
+  test('double_mul_fixed(2.0d, 15000) ≈ 30000  [2.0 × 1.5 = 3.0, as fixed]', async () => {
+    if (!serverOnline) return
+    // Set f=15000 (1.5 in ×10000 fixed) which the fixture reads via scoreboard_get
+    await mc.command('/scoreboard players set #dmul_f_in rshp 15000')
+    await mc.command('/function stdextra:test_double_mul_fixed')
+    await mc.ticks(5)
+    const v = await mc.scoreboard('#dmul_result', 'rshp')
+    // 2.0 × 1.5 = 3.0 → as fixed (×10000) = 30000
+    expect(v).toBeGreaterThanOrEqual(29990)
+    expect(v).toBeLessThanOrEqual(30010)
+    console.log(`  double_mul_fixed(2.0d, 15000) as fixed = ${v} (expect ≈30000) ✓`)
   })
 })

@@ -208,10 +208,10 @@ fn __dmul_apply_scale() {
 fn double_mul_fixed(d: double, f: int): double {
     // Step 1: store f into math_hp scoreboard, then compute scale = f × 0.0001
     scoreboard_set("$dmul_f", "__rs_math_hp", f);
-    // Store scale as double into the macro-args compound
-    raw("execute store result storage rs:math_hp __dmul_args scale double 0.0001 run scoreboard players get $dmul_f __rs_math_hp");
-    // Step 2: copy d into __dp0 (it is already there as the first double param)
-    // Step 3: call the macro helper — multiplies __dp0 by scale in double precision
+    // Store scale as double into the macro-args compound (path must use dot notation)
+    raw("execute store result storage rs:math_hp __dmul_args.scale double 0.0001 run scoreboard players get $dmul_f __rs_math_hp");
+    // Step 2: d is already in __dp0 (first double param convention)
+    // Step 3: call macro helper — overwrites __dp0 with d × (f/10000) in IEEE 754 double
     raw("function __NS__:__dmul_apply_scale with storage rs:math_hp __dmul_args");
     // Step 4: __dp0 now holds d × (f/10000). Return it (read as ×10000 fixed for caller).
     return d;
