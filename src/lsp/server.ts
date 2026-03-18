@@ -191,9 +191,11 @@ function parseDocument(uri: string, source: string): ParsedDoc {
     program = parser.parse('redscript')
 
     // Type-check (warn mode — collects errors but doesn't throw)
-    const checker = new TypeChecker(source, uri)
-    const typeErrors = checker.check(program)
-    errors.push(...typeErrors)
+    try {
+      const checker = new TypeChecker(source, uri)
+      const typeErrors = checker.check(program)
+      errors.push(...typeErrors)
+    } catch { /* type errors are non-fatal; keep the parsed program */ }
   } catch (err) {
     if (err instanceof DiagnosticError) {
       errors.push(err)
@@ -496,6 +498,35 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
           contents: {
             kind: MarkupKind.Markdown,
             value: `**@${decoratorName}** — ${decoratorDoc}`,
+          } as MarkupContent,
+        }
+      }
+    }
+  }
+
+  // ── Selector hover: @a, @p, @s etc ─────────────────────────────────────────
+  const SELECTOR_DOCS: Record<string, string> = {
+    '@a': 'All online players',
+    '@p': 'Nearest player to the command source',
+    '@s': 'The entity currently executing the command (self)',
+    '@e': 'All entities (use [type=...] to filter)',
+    '@r': 'A random online player',
+    '@n': 'The nearest entity of any type',
+  }
+  // Match @x or @x[...] token at cursor
+  const selRe = /@([a-zA-Z])/g
+  let sm: RegExpExecArray | null
+  while ((sm = selRe.exec(lineText)) !== null) {
+    const selStart = sm.index
+    const selEnd = selStart + sm[0].length
+    if (ch >= selStart && ch <= selEnd) {
+      const selKey = sm[0] // e.g. '@a'
+      const selDoc = SELECTOR_DOCS[selKey]
+      if (selDoc) {
+        return {
+          contents: {
+            kind: MarkupKind.Markdown,
+            value: `**${selKey}** — ${selDoc}`,
           } as MarkupContent,
         }
       }
