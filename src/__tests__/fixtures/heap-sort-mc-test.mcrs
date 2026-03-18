@@ -1,0 +1,92 @@
+// heap-sort-mc-test.mcrs — MC integration tests for heap and sort stdlib
+// heap.mcrs and sort.mcrs are injected as librarySources by writeFixtureWithLibs
+namespace heap_sort_mc_test
+
+@load fn load_fn() {
+  raw("scoreboard objectives add hsmc dummy")
+}
+
+// ── Test 1: MinHeap push/pop order ───────────────────────────────────────────
+// push 5,1,3,2,4 → pop order must be 1,2,3,4,5
+@keep fn test_min_heap() {
+  let h: int[] = heap_new()
+  h = heap_push(h, 5)
+  h = heap_push(h, 1)
+  h = heap_push(h, 3)
+  h = heap_push(h, 2)
+  h = heap_push(h, 4)
+
+  let v1: int = heap_peek(h)
+  h = heap_pop(h)
+  let v2: int = heap_peek(h)
+  h = heap_pop(h)
+  let v3: int = heap_peek(h)
+
+  // v1=1, v2=2, v3=3 → encode as 100*v1 + 10*v2 + v3
+  let encoded: int = v1 * 100 + v2 * 10 + v3
+  scoreboard_set("#heap_min_top3", "hsmc", encoded)
+
+  let final_size: int = heap_size(h)
+  scoreboard_set("#heap_size_after_pop3", "hsmc", final_size)
+}
+
+// ── Test 2: MaxHeap push/pop order ───────────────────────────────────────────
+// push 3,1,4,1,5 → first pop = 5
+@keep fn test_max_heap() {
+  let h: int[] = heap_new()
+  h = max_heap_push(h, 3)
+  h = max_heap_push(h, 1)
+  h = max_heap_push(h, 4)
+  h = max_heap_push(h, 1)
+  h = max_heap_push(h, 5)
+
+  let top: int = heap_peek(h)
+  scoreboard_set("#max_heap_top", "hsmc", top)
+
+  h = max_heap_pop(h)
+  let second: int = heap_peek(h)
+  scoreboard_set("#max_heap_second", "hsmc", second)
+}
+
+// ── Test 3: insertion_sort ascending ─────────────────────────────────────────
+@keep fn test_sort_asc() {
+  let arr: int[] = [30, 10, 50, 20, 40]
+  insertion_sort(arr, 5)
+  // expect [10, 20, 30, 40, 50]
+  let ok: int = 1
+  if (arr[0] != 10) { ok = 0 }
+  if (arr[1] != 20) { ok = 0 }
+  if (arr[2] != 30) { ok = 0 }
+  if (arr[3] != 40) { ok = 0 }
+  if (arr[4] != 50) { ok = 0 }
+  scoreboard_set("#sort_asc_ok", "hsmc", ok)
+  scoreboard_set("#sort_asc_first", "hsmc", arr[0])
+  scoreboard_set("#sort_asc_last", "hsmc", arr[4])
+}
+
+// ── Test 4: insertion_sort descending ────────────────────────────────────────
+@keep fn test_sort_desc() {
+  let arr: int[] = [30, 10, 50, 20, 40]
+  insertion_sort_desc(arr, 5)
+  // expect [50, 40, 30, 20, 10]
+  let ok: int = 1
+  if (arr[0] != 50) { ok = 0 }
+  if (arr[4] != 10) { ok = 0 }
+  scoreboard_set("#sort_desc_ok", "hsmc", ok)
+}
+
+// ── Test 5: sort_merge ────────────────────────────────────────────────────────
+@keep fn test_sort_merge() {
+  let a: int[] = [1, 3, 5]
+  let b: int[] = [2, 4, 6]
+  let merged: int[] = sort_merge(a, 3, b, 3)
+  // expect [1,2,3,4,5,6]
+  let ok: int = 1
+  if (merged[0] != 1) { ok = 0 }
+  if (merged[1] != 2) { ok = 0 }
+  if (merged[5] != 6) { ok = 0 }
+  scoreboard_set("#sort_merge_ok", "hsmc", ok)
+  // sum = 1+2+3+4+5+6 = 21
+  let s: int = merged[0] + merged[1] + merged[2] + merged[3] + merged[4] + merged[5]
+  scoreboard_set("#sort_merge_sum", "hsmc", s)
+}
