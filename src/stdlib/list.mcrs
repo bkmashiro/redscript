@@ -170,3 +170,102 @@ fn list_sort_desc(arr: int[], len: int) {
         i = i + 1;
     }
 }
+
+// ─── Dynamic array aggregates ─────────────────────────────────────────────────
+
+// list_sum(arr, len): sum of all elements
+fn list_sum(arr: int[], len: int): int {
+    let s: int = 0;
+    let i: int = 0;
+    while (i < len) {
+        s = s + arr[i];
+        i = i + 1;
+    }
+    return s;
+}
+
+// list_avg(arr, len): arithmetic mean ×10000 (fixed-point)
+// Returns (sum * 10000) / len; returns 0 for empty array
+fn list_avg(arr: int[], len: int): int {
+    if (len <= 0) { return 0; }
+    let s: int = list_sum(arr, len);
+    return s * 10000 / len;
+}
+
+// list_min(arr, len): minimum element in array
+fn list_min(arr: int[], len: int): int {
+    let m: int = arr[0];
+    let i: int = 1;
+    while (i < len) {
+        if (arr[i] < m) { m = arr[i]; }
+        i = i + 1;
+    }
+    return m;
+}
+
+// list_max(arr, len): maximum element in array
+fn list_max(arr: int[], len: int): int {
+    let m: int = arr[0];
+    let i: int = 1;
+    while (i < len) {
+        if (arr[i] > m) { m = arr[i]; }
+        i = i + 1;
+    }
+    return m;
+}
+
+// list_contains(arr, len, val): 1 if val is in arr, 0 otherwise
+fn list_contains(arr: int[], len: int, val: int): int {
+    let i: int = 0;
+    while (i < len) {
+        if (arr[i] == val) { return 1; }
+        i = i + 1;
+    }
+    return 0;
+}
+
+// list_index_of(arr, len, val): first index of val in arr, or -1 if not found
+fn list_index_of(arr: int[], len: int, val: int): int {
+    let i: int = 0;
+    while (i < len) {
+        if (arr[i] == val) { return i; }
+        i = i + 1;
+    }
+    return -1;
+}
+
+// list_shuffle(arr, len, seed): Fisher-Yates shuffle in-place using next_lcg RNG
+// For each i from len-1 down to 1: pick j in [0, i] using next_lcg, swap arr[i] and arr[j]
+fn list_shuffle(arr: int[], len: int, seed: int): int[] {
+    let i: int = len - 1;
+    let s: int = seed;
+    while (i > 0) {
+        s = next_lcg(s);
+        let r: int = s;
+        if (r < 0) { r = 0 - r; }
+        let j: int = r % (i + 1);
+        let tmp: int = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+        i = i - 1;
+    }
+    return arr;
+}
+
+// list_dedup_count(arr, len): count of unique values (O(n²) — fine for small arrays)
+fn list_dedup_count(arr: int[], len: int): int {
+    let count: int = 0;
+    let i: int = 0;
+    while (i < len) {
+        // Check if arr[i] appeared before index i
+        let seen: int = 0;
+        let j: int = 0;
+        while (j < i) {
+            if (arr[j] == arr[i]) { seen = 1; }
+            j = j + 1;
+        }
+        if (seen == 0) { count = count + 1; }
+        i = i + 1;
+    }
+    return count;
+}
