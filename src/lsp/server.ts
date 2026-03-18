@@ -42,7 +42,7 @@ import { Lexer } from '../lexer'
 import { Parser } from '../parser'
 import { TypeChecker } from '../typechecker'
 import { DiagnosticError } from '../diagnostics'
-import type { Program, FnDecl, Span, TypeNode } from '../ast/types'
+import type { Program, FnDecl, Span, TypeNode, Stmt, Block } from '../ast/types'
 import { BUILTIN_METADATA } from '../builtins/metadata'
 
 // ---------------------------------------------------------------------------
@@ -441,11 +441,136 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
 })
 
 // ---------------------------------------------------------------------------
+// Completion helpers
+// ---------------------------------------------------------------------------
+
+/** int[] built-in methods */
+const ARRAY_METHOD_COMPLETIONS: CompletionItem[] = [
+  { label: 'push',   kind: CompletionItemKind.Method, detail: '(value: int): void',  documentation: 'Append an element to the array.' },
+  { label: 'pop',    kind: CompletionItemKind.Method, detail: '(): int',              documentation: 'Remove and return the last element.' },
+  { label: 'length', kind: CompletionItemKind.Property, detail: 'int',               documentation: 'Number of elements in the array.' },
+]
+
+/** Collect (name → TypeNode) for all let bindings visible in the function body at offset. */
+function collectLocals(body: Block): Map<string, TypeNode> {
+  const map = new Map<string, TypeNode>()
+  function walk(stmts: Block): void {
+    for (const s of stmts) {
+      if (s.kind === 'let' && s.type) {
+        map.set(s.name, s.type)
+      } else if (s.kind === 'let_destruct') {
+        // no type info per-binding easily; skip
+      }
+      // Recurse into sub-blocks
+      const sub = (s as Record<string, unknown>)
+      if (Array.isArray(sub['body'])) walk(sub['body'] as Block)
+      if (Array.isArray(sub['then'])) walk(sub['then'] as Block)
+      if (Array.isArray(sub['else_'])) walk(sub['else_'] as Block)
+    }
+  }
+  walk(body)
+  return map
+}
+
+/** Determine if line at cursor is a dot-access context: `<expr>.` */
+function getDotReceiver(lineText: string, charPos: number): string | null {
+  // Check that the character just before cursor is '.'
+  if (lineText[charPos - 1] !== '.') return null
+  // Scan left to collect the identifier before '.'
+  let end = charPos - 2
+  while (end >= 0 && /\s/.test(lineText[end])) end--
+  if (end < 0) return null
+  let start = end
+  while (start > 0 && /[a-zA-Z0-9_]/.test(lineText[start - 1])) start--
+  return lineText.slice(start, end + 1) || null
+}
+
+// ---------------------------------------------------------------------------
 // Completion
 // ---------------------------------------------------------------------------
 
 connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] => {
   const doc = documents.get(params.textDocument.uri)
+  if (!doc) {
+    return [...KEYWORD_COMPLETIONS, ...TYPE_COMPLETIONS, ...BUILTIN_FN_COMPLETIONS, ...DECORATOR_COMPLETIONS]
+  }
+
+  const source = doc.getText()
+  const lines = source.split('\n')
+  const lineText = lines[params.position.line] ?? ''
+  const charPos  = params.position.character
+
+  const cached = parsedDocs.get(params.textDocument.uri)
+  const program = cached?.program ?? null
+
+  // ── Dot-access completion ──────────────────────────────────────────────────
+  const dotReceiver = getDotReceiver(lineText, charPos)
+  if (dotReceiver !== null) {
+    const items: CompletionItem[] = []
+
+    if (program) {
+      // Find which function body contains this line (by span)
+      const curLine = params.position.line + 1 // spans are 1-based
+      let locals: Map<string, TypeNode> | null = null
+      for (const fn of program.declarations) {
+        if (fn.body && fn.span) {
+          if (curLine >= fn.span.line && curLine <= (fn.span.endLine ?? Infinity)) {
+            locals = collectLocals(fn.body as Block)
+            break
+          }
+        }
+      }
+
+      // Determine type of receiver
+      const receiverType: TypeNode | undefined = locals?.get(dotReceiver)
+        ?? program.consts?.find(c => c.name === dotReceiver)?.type
+        ?? program.globals?.find(g => g.name === dotReceiver)?.type
+
+      if (receiverType) {
+        if (receiverType.kind === 'array') {
+          // int[] → push / pop / length
+          items.push(...ARRAY_METHOD_COMPLETIONS)
+        } else if (receiverType.kind === 'named' || receiverType.kind === 'struct') {
+          const typeName = (receiverType as { name: string }).name
+          // Struct fields
+          const structDecl = program.structs?.find(s => s.name === typeName)
+          if (structDecl) {
+            for (const f of structDecl.fields) {
+              items.push({
+                label: f.name,
+                kind: CompletionItemKind.Field,
+                detail: typeToString(f.type),
+              })
+            }
+          }
+          // Impl methods
+          const implBlock = program.implBlocks?.find(ib => ib.typeName === typeName)
+          if (implBlock) {
+            for (const m of implBlock.methods) {
+              const params_ = m.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')
+              items.push({
+                label: m.name,
+                kind: CompletionItemKind.Method,
+                detail: `(${params_}): ${typeToString(m.returnType)}`,
+              })
+            }
+          }
+        }
+      } else {
+        // Unknown type — offer all struct fields + impl methods as fallback
+        for (const ib of program.implBlocks ?? []) {
+          for (const m of ib.methods) {
+            items.push({ label: m.name, kind: CompletionItemKind.Method })
+          }
+        }
+        items.push(...ARRAY_METHOD_COMPLETIONS)
+      }
+    }
+
+    return items
+  }
+
+  // ── Global / normal completion ─────────────────────────────────────────────
   const items: CompletionItem[] = [
     ...KEYWORD_COMPLETIONS,
     ...TYPE_COMPLETIONS,
@@ -453,12 +578,8 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
     ...DECORATOR_COMPLETIONS,
   ]
 
-  if (!doc) return items
-
-  // Add user-defined functions from the parsed doc
-  const cached = parsedDocs.get(params.textDocument.uri)
-  const program = cached?.program ?? null
   if (program) {
+    // User-defined top-level symbols
     for (const fn of program.declarations) {
       items.push({ label: fn.name, kind: CompletionItemKind.Function })
     }
@@ -470,6 +591,26 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
     }
     for (const c of program.consts ?? []) {
       items.push({ label: c.name, kind: CompletionItemKind.Constant })
+    }
+    for (const g of program.globals ?? []) {
+      items.push({ label: g.name, kind: CompletionItemKind.Variable })
+    }
+
+    // Locals from the enclosing function
+    const curLine = params.position.line + 1
+    for (const fn of program.declarations) {
+      if (fn.body && fn.span) {
+        if (curLine >= fn.span.line && curLine <= (fn.span.endLine ?? Infinity)) {
+          for (const [name, typ] of collectLocals(fn.body as Block)) {
+            items.push({
+              label: name,
+              kind: CompletionItemKind.Variable,
+              detail: typeToString(typ),
+            })
+          }
+          break
+        }
+      }
     }
   }
 
