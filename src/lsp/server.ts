@@ -716,14 +716,17 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
     }
   }
 
-  // ── If word is a local variable / foreach binding, don't fall through to imports ──
-  // Collect all local names from fn bodies; if word is local, return null (no def jump).
+  // ── If word is a local variable / foreach binding / struct field / param,
+  //    don't fall through to imported symbol search ──────────────────────────
   for (const fn of program.declarations) {
     if (!fn.body) continue
     const locals = collectLocals(fn.body as import('../ast/types').Block)
     if (locals.has(word)) return null
-    // Also check function params
     if (fn.params.some(p => p.name === word)) return null
+  }
+  // Struct fields — clicking on .phase, .active etc. should not jump to stdlib
+  for (const s of program.structs ?? []) {
+    if (s.fields.some(f => f.name === word)) return null
   }
 
   // ── Imported symbol F12 — jump to definition inside the imported file ────────
@@ -778,12 +781,20 @@ const ARRAY_METHOD_COMPLETIONS: CompletionItem[] = [
 /** Collect (name → TypeNode) for all let bindings visible in the function body at offset. */
 function collectLocals(body: Block): Map<string, TypeNode> {
   const map = new Map<string, TypeNode>()
+  // Sentinel type for variables whose type is unknown (e.g. foreach bindings)
+  const ENTITY_TYPE: TypeNode = { kind: 'named', name: 'int' } // placeholder for entity/selector binding
   function walk(stmts: Block): void {
     for (const s of stmts) {
       if (s.kind === 'let' && s.type) {
         map.set(s.name, s.type)
-      } else if (s.kind === 'let_destruct') {
-        // no type info per-binding easily; skip
+      } else if (s.kind === 'foreach') {
+        // foreach binding is an entity/selector variable
+        map.set((s as any).binding, ENTITY_TYPE)
+        if (Array.isArray((s as any).body)) walk((s as any).body as Block)
+        continue
+      } else if (s.kind === 'for') {
+        // for i in range — binding is int
+        if ((s as any).binding) map.set((s as any).binding, { kind: 'named', name: 'int' })
       }
       // Recurse into sub-blocks
       const sub = (s as Record<string, unknown>)
