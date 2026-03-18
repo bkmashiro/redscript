@@ -1,0 +1,117 @@
+// expr.mcrs — RPN (Reverse Polish Notation) expression evaluator.
+//
+// All values use ×10000 fixed-point scale.
+// For dynamic expression evaluation: game formulas, configurable easing, etc.
+//
+// Requires: import "stdlib/math" for sin_fixed, cos_fixed, sqrt_fx, abs
+
+module library;
+
+// ─── Token encoding ───────────────────────────────────────────────────────────
+//
+// Positive tokens  — literal value (already ×10000)
+// -10000           — variable x (substituted with the x parameter)
+// -1  = ADD        — pop b, a; push a + b
+// -2  = SUB        — pop b, a; push a - b
+// -3  = MUL        — pop b, a; push a * b / 10000  (fixed-point multiply)
+// -4  = DIV        — pop b, a; push a * 10000 / b  (fixed-point divide)
+// -5  = SIN        — pop a (degrees ×10000); push sin_fixed(a/10000) * 10
+// -6  = COS        — pop a (degrees ×10000); push cos_fixed(a/10000) * 10
+// -7  = SQRT       — pop a; push sqrt_fx(a)
+// -8  = ABS        — pop a; push abs(a)
+//
+// Stack: 16-element internal int array, top tracked by sp index.
+//
+// Example: 2*x + 1 in RPN: [20000, -10000, -3, 10000, -1]
+//   With x = 15000 (1.5): result = mulfix10k(20000, 15000) + 10000
+//                                 = 30000 + 10000 = 40000 (4.0)
+
+// expr_eval(tokens, n, x): evaluate n RPN tokens, substituting x for -10000.
+// Returns the top-of-stack value (×10000 scale).
+// Undefined behaviour if the token stream is malformed (stack underflow/overflow).
+fn expr_eval(tokens: int[], n: int, x: int): int {
+    let stack: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let sp: int = 0;  // stack pointer: number of items on stack
+
+    let i: int = 0;
+    while (i < n) {
+        let tok: int = tokens[i];
+
+        if (tok == -10000) {
+            // Variable x
+            stack[sp] = x;
+            sp = sp + 1;
+        } else if (tok == -1) {
+            // ADD
+            let b: int = stack[sp - 1];
+            let a: int = stack[sp - 2];
+            sp = sp - 2;
+            stack[sp] = a + b;
+            sp = sp + 1;
+        } else if (tok == -2) {
+            // SUB
+            let b: int = stack[sp - 1];
+            let a: int = stack[sp - 2];
+            sp = sp - 2;
+            stack[sp] = a - b;
+            sp = sp + 1;
+        } else if (tok == -3) {
+            // MUL (fixed-point ×10000)
+            let b: int = stack[sp - 1];
+            let a: int = stack[sp - 2];
+            sp = sp - 2;
+            stack[sp] = a * b / 10000;
+            sp = sp + 1;
+        } else if (tok == -4) {
+            // DIV (fixed-point ×10000)
+            let b: int = stack[sp - 1];
+            let a: int = stack[sp - 2];
+            sp = sp - 2;
+            if (b == 0) {
+                stack[sp] = 0;
+            } else {
+                stack[sp] = a * 10000 / b;
+            }
+            sp = sp + 1;
+        } else if (tok == -5) {
+            // SIN: input degrees ×10000, result ×10000
+            // sin_fixed takes integer degrees (×1), returns ×1000
+            let a: int = stack[sp - 1];
+            sp = sp - 1;
+            let deg: int = a / 10000;
+            stack[sp] = sin_fixed(deg) * 10;
+            sp = sp + 1;
+        } else if (tok == -6) {
+            // COS: input degrees ×10000, result ×10000
+            let a: int = stack[sp - 1];
+            sp = sp - 1;
+            let deg: int = a / 10000;
+            stack[sp] = cos_fixed(deg) * 10;
+            sp = sp + 1;
+        } else if (tok == -7) {
+            // SQRT: input ×10000, result ×10000
+            let a: int = stack[sp - 1];
+            sp = sp - 1;
+            stack[sp] = sqrt_fx(a);
+            sp = sp + 1;
+        } else if (tok == -8) {
+            // ABS
+            let a: int = stack[sp - 1];
+            sp = sp - 1;
+            if (a < 0) {
+                stack[sp] = 0 - a;
+            } else {
+                stack[sp] = a;
+            }
+            sp = sp + 1;
+        } else {
+            // Positive literal (or any unrecognised token treated as literal)
+            stack[sp] = tok;
+            sp = sp + 1;
+        }
+
+        i = i + 1;
+    }
+
+    return stack[sp - 1];
+}

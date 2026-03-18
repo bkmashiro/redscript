@@ -395,6 +395,10 @@ const MATH_HP_SRC = fs.readFileSync(
   path.join(__dirname, '../../stdlib/math_hp.mcrs'),
   'utf-8',
 )
+const EXPR_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/expr.mcrs'),
+  'utf-8',
+)
 
 // ===========================================================================
 // math.mcrs — runtime execution (extended)
@@ -1327,5 +1331,89 @@ describe('math_hp.mcrs — ln_hp', () => {
   })
   test('ln_hp is at least as precise as ln for ln(e)', () => {
     expect(callAndGetRet(rt, 'test_ln_hp_vs_ln_e')).toBe(1)
+  })
+})
+
+// ===========================================================================
+// expr.mcrs — RPN expression evaluator
+// ===========================================================================
+
+describe('expr.mcrs — expr_eval', () => {
+  const rt = makeRuntime(`
+    // constant 1.0: tokens = [10000], n=1, x=0
+    fn test_expr_constant(): int {
+      let toks: int[] = [10000];
+      return expr_eval(toks, 1, 0);
+    }
+    // identity f(x)=x: tokens = [-10000], n=1, x=20000
+    fn test_expr_identity(): int {
+      let toks: int[] = [0 - 10000];
+      return expr_eval(toks, 1, 20000);
+    }
+    // 2*x + 1 at x=1.5: tokens = [20000, -10000, -3, 10000, -1], n=5, x=15000
+    // Expected: 20000*15000/10000 + 10000 = 30000 + 10000 = 40000
+    // Use element-by-element assignment to avoid compiler bug with mixed-sign arrays
+    fn test_expr_linear(): int {
+      let toks: int[] = [0, 0, 0, 0, 0];
+      toks[0] = 20000;
+      toks[1] = 0 - 10000;
+      toks[2] = 0 - 3;
+      toks[3] = 10000;
+      toks[4] = 0 - 1;
+      return expr_eval(toks, 5, 15000);
+    }
+    // subtraction: 3.0 - 1.0 = 2.0: tokens = [30000, 10000, -2], n=3, x=0
+    fn test_expr_sub(): int {
+      let toks: int[] = [0, 0, 0];
+      toks[0] = 30000;
+      toks[1] = 10000;
+      toks[2] = 0 - 2;
+      return expr_eval(toks, 3, 0);
+    }
+    // division: 10.0 / 4.0 = 2.5: tokens = [100000, 40000, -4], n=3, x=0
+    fn test_expr_div(): int {
+      let toks: int[] = [0, 0, 0];
+      toks[0] = 100000;
+      toks[1] = 40000;
+      toks[2] = 0 - 4;
+      return expr_eval(toks, 3, 0);
+    }
+    // abs(-3.0) = 3.0: tokens = [-30000, -8], n=2, x=0
+    // -30000 is not a recognized opcode so it falls through to the literal branch
+    fn test_expr_abs(): int {
+      let toks: int[] = [0, 0];
+      toks[0] = 0 - 30000;
+      toks[1] = 0 - 8;
+      return expr_eval(toks, 2, 0);
+    }
+    // sqrt(4.0) = 2.0: tokens = [40000, -7], n=2, x=0
+    fn test_expr_sqrt(): int {
+      let toks: int[] = [0, 0];
+      toks[0] = 40000;
+      toks[1] = 0 - 7;
+      return expr_eval(toks, 2, 0);
+    }
+  `, [MATH_SRC, EXPR_SRC])
+
+  test('expr_eval([10000], 1, 0) == 10000  (constant 1.0)', () => {
+    expect(callAndGetRet(rt, 'test_expr_constant')).toBe(10000)
+  })
+  test('expr_eval([-10000], 1, 20000) == 20000  (identity f(x)=x at x=2.0)', () => {
+    expect(callAndGetRet(rt, 'test_expr_identity')).toBe(20000)
+  })
+  test('expr_eval([20000,-10000,-3,10000,-1], 5, 15000) == 40000  (2*x+1 at x=1.5)', () => {
+    expect(callAndGetRet(rt, 'test_expr_linear')).toBe(40000)
+  })
+  test('expr_eval([30000,10000,-2], 3, 0) == 20000  (3.0 - 1.0 = 2.0)', () => {
+    expect(callAndGetRet(rt, 'test_expr_sub')).toBe(20000)
+  })
+  test('expr_eval([100000,40000,-4], 3, 0) == 25000  (10.0 / 4.0 = 2.5)', () => {
+    expect(callAndGetRet(rt, 'test_expr_div')).toBe(25000)
+  })
+  test('expr_eval([-30000,-8], 2, 0) == 30000  (abs(-3.0) = 3.0)', () => {
+    expect(callAndGetRet(rt, 'test_expr_abs')).toBe(30000)
+  })
+  test('expr_eval([40000,-7], 2, 0) == 20000  (sqrt(4.0) = 2.0)', () => {
+    expect(callAndGetRet(rt, 'test_expr_sqrt')).toBe(20000)
   })
 })
