@@ -438,3 +438,80 @@ fn ln_5term(x: int): int {
 
     return k * ln2 + lnxr;
 }
+
+// ─── double_sqrt: square root of a double-precision value ─────────────────────
+//
+// double_sqrt(x): √x, returned as double.
+// Strategy: x_fixed = x * 10000 (via "as fixed"), then sqrt_fx gives
+//   sqrt_fx(x_fixed) = floor(√x_fixed) = floor(√(x*10000)) = floor(√x * 100)
+// So r = sqrt_fx(x_fixed) satisfies r ≈ √x * 100.
+// Scale r by 100 more to get √x in ×10000 units: r_scaled = r * 100.
+// Then convert to double with scale 0.0001.
+//
+fn double_sqrt(x: double): double {
+    // Convert double → ×10000 int
+    let x_fixed: int = x as int;
+    raw("execute store result score $dsqrt_xfx __rs_math_hp run data get storage rs:d __dp0 10000");
+    let xfx: int = scoreboard_get("$dsqrt_xfx", "__rs_math_hp");
+    // r = floor(√(x * 10000)) ≈ √x * 100
+    let r: int = isqrt(xfx);
+    // r_scaled = r * 100 → represents √x in ×10000 units
+    let r_scaled: int = r * 100;
+    scoreboard_set("$dsqrt_rsc", "__rs_math_hp", r_scaled);
+    // Convert ×10000 int back to double with scale 0.0001
+    raw("execute store result storage rs:d __dp0 double 0.0001 run scoreboard players get $dsqrt_rsc __rs_math_hp");
+    return x;
+}
+
+// ─── pow_real: real-valued power base^exp_val ─────────────────────────────────
+//
+// pow_real(base, exp_val): base^exp_val for double inputs, double result.
+// Uses: a^b = e^(b * ln(a)) via fixed-point helpers.
+// Steps:
+//   1. base_fixed = base (×10000 int) via scoreboard read
+//   2. ln_base = ln_hp(base_fixed)          — ×10000 fixed, ≈ ln(base)
+//   3. exp_fixed = exp_val (×10000 int)     — ≈ exp_val
+//   4. exponent = ln_base * exp_fixed / 10000  — ×10000, ≈ ln(base) * exp_val
+//   5. result_fixed = exp_fx(exponent)         — ×10000, ≈ e^(ln(base)*exp_val)
+//   6. Convert result_fixed to double via scoreboard
+//
+@require_on_load(init_trig)
+fn pow_real(base: double, exp_val: double): double {
+    // Read base ×10000 from __dp0 (first double param)
+    raw("execute store result score $preal_base __rs_math_hp run data get storage rs:d __dp0 10000");
+    let base_fixed: int = scoreboard_get("$preal_base", "__rs_math_hp");
+    // Read exp_val ×10000 from __dp1 (second double param)
+    raw("execute store result score $preal_exp __rs_math_hp run data get storage rs:d __dp1 10000");
+    let exp_fixed: int = scoreboard_get("$preal_exp", "__rs_math_hp");
+    // Compute ln(base) via high-precision log
+    let ln_base: int = ln_hp(base_fixed);
+    // exponent = ln(base) * exp_val, both ×10000 → divide by 10000 to stay in scale
+    let exponent: int = ln_base * exp_fixed / 10000;
+    // result = e^exponent in ×10000
+    let result_fixed: int = exp_fx(exponent);
+    scoreboard_set("$preal_res", "__rs_math_hp", result_fixed);
+    // Convert result to double
+    raw("execute store result storage rs:d __dp0 double 0.0001 run scoreboard players get $preal_res __rs_math_hp");
+    return base;
+}
+
+// ─── pow_fast: integer-exponent double power via recursive squaring ────────────
+//
+// pow_fast(base, exp_val): base^exp_val for double base, int exponent.
+// Uses binary exponentiation. Handles negative exponents via double_div.
+// Recursion supported in RedScript.
+//
+fn pow_fast(base: double, exp_val: int): double {
+    if (exp_val == 0) { return 1.0d; }
+    if (exp_val < 0) {
+        // 1.0 / base^(-exp_val)
+        let pos_result: double = pow_fast(base, 0 - exp_val);
+        return double_div(1.0d, pos_result);
+    }
+    if (exp_val % 2 == 0) {
+        let half: double = pow_fast(base, exp_val / 2);
+        return double_mul(half, half);
+    }
+    let rest: double = pow_fast(base, exp_val - 1);
+    return double_mul(base, rest);
+}
