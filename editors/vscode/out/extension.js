@@ -18410,6 +18410,9 @@ var require_lexer = __commonJS({
         if (char === "." && this.peek() === ".") {
           this.advance();
           let value = "..";
+          if (this.peek() === "=") {
+            value += this.advance();
+          }
           while (/[0-9]/.test(this.peek())) {
             value += this.advance();
           }
@@ -18662,6 +18665,9 @@ var require_lexer = __commonJS({
         if (this.peek() === "." && this.peek(1) === ".") {
           value += this.advance();
           value += this.advance();
+          if (this.peek() === "=") {
+            value += this.advance();
+          }
           while (/[0-9]/.test(this.peek())) {
             value += this.advance();
           }
@@ -19167,7 +19173,7 @@ var require_parser = __commonJS({
           } else if (key === "batch") {
             args.batch = parseInt(val, 10);
           } else if (key === "onDone") {
-            args.onDone = val;
+            args.onDone = val.replace(/^["']|["']$/g, "");
           } else if (key === "trigger") {
             args.trigger = val;
           } else if (key === "advancement") {
@@ -19454,9 +19460,13 @@ var require_parser = __commonJS({
         this.expect("in");
         let start;
         let end;
+        let inclusive = false;
         if (this.check("range_lit")) {
           const rangeToken = this.advance();
-          const range = this.parseRangeValue(rangeToken.value);
+          const raw = rangeToken.value;
+          const incl = raw.includes("..=");
+          inclusive = incl;
+          const range = this.parseRangeValue(raw);
           start = this.withLoc({ kind: "int_lit", value: range.min ?? 0 }, rangeToken);
           if (range.max !== null && range.max !== void 0) {
             end = this.withLoc({ kind: "int_lit", value: range.max }, rangeToken);
@@ -19464,12 +19474,24 @@ var require_parser = __commonJS({
             end = this.parseUnaryExpr();
           }
         } else {
-          start = this.withLoc({ kind: "int_lit", value: 0 }, this.peek());
-          end = this.withLoc({ kind: "int_lit", value: 0 }, this.peek());
-          this.error("Dynamic range start requires a literal integer (e.g. 0..count)");
+          start = this.parseExpr();
+          if (this.check("range_lit")) {
+            const rangeOp = this.advance();
+            inclusive = rangeOp.value.includes("=");
+            const afterOp = rangeOp.value.replace(/^\.\.=?/, "");
+            if (afterOp.length > 0) {
+              end = this.withLoc({ kind: "int_lit", value: parseInt(afterOp, 10) }, rangeOp);
+            } else {
+              end = this.parseExpr();
+            }
+          } else {
+            this.error("Expected .. or ..= in for-range expression");
+            start = this.withLoc({ kind: "int_lit", value: 0 }, this.peek());
+            end = this.withLoc({ kind: "int_lit", value: 0 }, this.peek());
+          }
         }
         const body = this.parseBlock();
-        return this.withLoc({ kind: "for_range", varName, start, end, body }, forToken);
+        return this.withLoc({ kind: "for_range", varName, start, end, inclusive, body }, forToken);
       }
       parseForeachStmt() {
         const foreachToken = this.expect("foreach");
@@ -19961,6 +19983,10 @@ var require_parser = __commonJS({
             isSingle: computeIsSingle(token.value),
             sel: this.parseSelectorValue(token.value)
           }, token);
+        }
+        if (token.kind === "ident" && this.peek(1).kind === "{" && this.peek(2).kind === "ident" && this.peek(3).kind === ":") {
+          this.advance();
+          return this.parseStructLit();
         }
         if (token.kind === "ident" && token.value === "Some" && this.peek(1).kind === "(") {
           this.advance();
@@ -20483,18 +20509,36 @@ var require_parser = __commonJS({
         return scores;
       }
       parseRangeValue(value) {
-        if (value.startsWith("..")) {
-          const max = parseInt(value.slice(2), 10);
+        if (value.startsWith("..=")) {
+          const rest = value.slice(3);
+          if (!rest)
+            return {};
+          const max = parseInt(rest, 10);
           return { max };
         }
-        if (value.endsWith("..")) {
-          const min = parseInt(value.slice(0, -2), 10);
-          return { min };
+        if (value.startsWith("..")) {
+          const rest = value.slice(2);
+          if (!rest)
+            return {};
+          const max = parseInt(rest, 10);
+          return { max };
+        }
+        const inclIdx = value.indexOf("..=");
+        if (inclIdx !== -1) {
+          const min = parseInt(value.slice(0, inclIdx), 10);
+          const rest = value.slice(inclIdx + 3);
+          if (!rest)
+            return { min };
+          const max = parseInt(rest, 10);
+          return { min, max };
         }
         const dotIndex = value.indexOf("..");
         if (dotIndex !== -1) {
           const min = parseInt(value.slice(0, dotIndex), 10);
-          const max = parseInt(value.slice(dotIndex + 2), 10);
+          const rest = value.slice(dotIndex + 2);
+          if (!rest)
+            return { min };
+          const max = parseInt(rest, 10);
           return { min, max };
         }
         const val = parseInt(value, 10);
@@ -20822,7 +20866,7 @@ var require_lower = __commonJS({
             kind: "while",
             cond: {
               kind: "binary",
-              op: "<",
+              op: stmt.inclusive ? "<=" : "<",
               left: { kind: "ident", name: varName },
               right: lowerExpr(stmt.end)
             },
@@ -21874,15 +21918,40 @@ var require_lower2 = __commonJS({
         }
         ctx.structVars.set("self", { typeName, fields: selfFields });
         for (let i = 1; i < method.params.length; i++) {
-          const t = ctx.freshTemp();
-          params.push({ name: t, isMacroParam: false });
-          scope.set(method.params[i].name, t);
+          const p = method.params[i];
+          const paramTypeName = p.type.kind === "named" ? p.type.name : p.type.kind === "struct" ? p.type.name : null;
+          const paramFields = paramTypeName ? ctx.structDefs.get(paramTypeName) : null;
+          if (paramFields && paramFields.length > 0) {
+            const paramFieldTemps = /* @__PURE__ */ new Map();
+            for (const fieldName of paramFields) {
+              const t = ctx.freshTemp();
+              params.push({ name: t, isMacroParam: false });
+              paramFieldTemps.set(fieldName, t);
+            }
+            ctx.structVars.set(p.name, { typeName: paramTypeName, fields: paramFieldTemps });
+          } else {
+            const t = ctx.freshTemp();
+            params.push({ name: t, isMacroParam: false });
+            scope.set(p.name, t);
+          }
         }
       } else {
         for (const p of method.params) {
-          const t = ctx.freshTemp();
-          params.push({ name: t, isMacroParam: false });
-          scope.set(p.name, t);
+          const paramTypeName = p.type.kind === "named" ? p.type.name : p.type.kind === "struct" ? p.type.name : null;
+          const paramFields = paramTypeName ? ctx.structDefs.get(paramTypeName) : null;
+          if (paramFields && paramFields.length > 0) {
+            const paramFieldTemps = /* @__PURE__ */ new Map();
+            for (const fieldName of paramFields) {
+              const t = ctx.freshTemp();
+              params.push({ name: t, isMacroParam: false });
+              paramFieldTemps.set(fieldName, t);
+            }
+            ctx.structVars.set(p.name, { typeName: paramTypeName, fields: paramFieldTemps });
+          } else {
+            const t = ctx.freshTemp();
+            params.push({ name: t, isMacroParam: false });
+            scope.set(p.name, t);
+          }
         }
       }
       lowerBlock(method.body, ctx, scope);
@@ -22049,6 +22118,14 @@ var require_lower2 = __commonJS({
             }
             const lenTemp = ctx.freshTemp();
             ctx.emit({ kind: "const", dst: lenTemp, value: elems.length });
+            scope.set(stmt.name, lenTemp);
+          } else if (stmt.type?.kind === "array") {
+            const ns = `${ctx.getNamespace()}:arrays`;
+            const pathPrefix = stmt.name;
+            ctx.arrayVars.set(stmt.name, { ns, pathPrefix });
+            lowerExpr(stmt.init, ctx, scope);
+            const lenTemp = ctx.freshTemp();
+            ctx.emit({ kind: "const", dst: lenTemp, value: 0 });
             scope.set(stmt.name, lenTemp);
           } else {
             const valOp = lowerExpr(stmt.init, ctx, scope);
@@ -22629,6 +22706,61 @@ var require_lower2 = __commonJS({
             ctx.emit({ kind: "const", dst: t2, value: 0 });
             return { kind: "temp", name: t2 };
           }
+          if (expr.fn === "__entity_tag" || expr.fn === "__entity_untag") {
+            const selArg = expr.args[0];
+            const tagArg = expr.args[1];
+            const tagStr = tagArg.kind === "str_lit" ? tagArg.value : "unknown";
+            const selStr = selArg.kind === "selector" ? selectorToString(selArg.sel ?? selArg) : "@s";
+            const op = expr.fn === "__entity_tag" ? "add" : "remove";
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "call", dst: null, fn: `__raw:tag ${selStr} ${op} ${tagStr}`, args: [] });
+            ctx.emit({ kind: "const", dst: t2, value: 0 });
+            return { kind: "temp", name: t2 };
+          }
+          if (expr.fn === "__entity_has_tag") {
+            const tagArg = expr.args[1];
+            const tagStr = tagArg.kind === "str_lit" ? tagArg.value : "unknown";
+            const selArg = expr.args[0];
+            const selStr = selArg.kind === "selector" ? selectorToString(selArg.sel ?? selArg) : "@s";
+            const t2 = ctx.freshTemp();
+            const ns = ctx.getNamespace();
+            ctx.emit({ kind: "call", dst: t2, fn: `__raw:execute store success score $ret __${ns} if entity ${selStr}[tag=${tagStr}]`, args: [] });
+            return { kind: "temp", name: t2 };
+          }
+          if (expr.fn === "__array_push") {
+            if (expr.args[0].kind === "ident") {
+              const arrInfo = ctx.arrayVars.get(expr.args[0].name);
+              if (arrInfo) {
+                const valOp = lowerExpr(expr.args[1], ctx, scope);
+                ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage ${arrInfo.ns} ${arrInfo.pathPrefix} append value 0`, args: [] });
+                ctx.emit({ kind: "nbt_write", ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[-1]`, type: "int", scale: 1, src: valOp });
+                const t2 = ctx.freshTemp();
+                ctx.emit({ kind: "const", dst: t2, value: 0 });
+                return { kind: "temp", name: t2 };
+              }
+            }
+          }
+          if (expr.fn === "__array_pop") {
+            if (expr.args[0].kind === "ident") {
+              const arrInfo = ctx.arrayVars.get(expr.args[0].name);
+              if (arrInfo) {
+                ctx.emit({ kind: "call", dst: null, fn: `__raw:data remove storage ${arrInfo.ns} ${arrInfo.pathPrefix}[-1]`, args: [] });
+                const t2 = ctx.freshTemp();
+                ctx.emit({ kind: "const", dst: t2, value: 0 });
+                return { kind: "temp", name: t2 };
+              }
+            }
+          }
+          if (expr.fn === "__array_length") {
+            if (expr.args[0].kind === "ident") {
+              const arrInfo = ctx.arrayVars.get(expr.args[0].name);
+              if (arrInfo) {
+                const t2 = ctx.freshTemp();
+                ctx.emit({ kind: "nbt_read", dst: t2, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}`, scale: 1 });
+                return { kind: "temp", name: t2 };
+              }
+            }
+          }
           if (expr.fn === "list_push") {
             if (expr.args[0].kind === "ident") {
               const arrInfo = ctx.arrayVars.get(expr.args[0].name);
@@ -22735,7 +22867,21 @@ var require_lower2 = __commonJS({
                   const temp = sv.fields.get(f);
                   return temp ? { kind: "temp", name: temp } : { kind: "const", value: 0 };
                 });
-                const explicitArgs = expr.args.slice(1).map((a) => lowerExpr(a, ctx, scope));
+                const explicitArgs = [];
+                for (const argExpr of expr.args.slice(1)) {
+                  if (argExpr.kind === "ident") {
+                    const argSv = ctx.structVars.get(argExpr.name);
+                    if (argSv) {
+                      const argFields = ctx.structDefs.get(argSv.typeName) ?? [];
+                      for (const fieldName of argFields) {
+                        const ft = argSv.fields.get(fieldName);
+                        explicitArgs.push(ft ? { kind: "temp", name: ft } : { kind: "const", value: 0 });
+                      }
+                      continue;
+                    }
+                  }
+                  explicitArgs.push(lowerExpr(argExpr, ctx, scope));
+                }
                 const allArgs = [...selfArgs, ...explicitArgs];
                 const t2 = ctx.freshTemp();
                 ctx.emit({ kind: "call", dst: t2, fn: `${sv.typeName}::${expr.fn}`, args: allArgs });
@@ -23266,6 +23412,13 @@ var require_lower2 = __commonJS({
           cmd = `tag ${strs[0]} add ${strs[1]}`;
           break;
         case "tag_remove":
+          cmd = `tag ${strs[0]} remove ${strs[1]}`;
+          break;
+        // entity.tag(name) / entity.untag(name) sugar — same as tag_add/tag_remove
+        case "__entity_tag":
+          cmd = `tag ${strs[0]} add ${strs[1]}`;
+          break;
+        case "__entity_untag":
           cmd = `tag ${strs[0]} remove ${strs[1]}`;
           break;
         case "kick":
@@ -25649,15 +25802,17 @@ var require_coroutine = __commonJS({
       }
       const loopHeaders = new Set(backEdges.map((e) => e.target));
       const continuations = partitionIntoContinuations(fn, loopHeaders, backEdges);
+      const dispatcherName = `${prefix}_tick`;
+      const pcPlayer = `$${dispatcherName}_${pcTemp}`;
       const contFunctions = [];
       for (let i = 0; i < continuations.length; i++) {
         const contId = i + 1;
         const cont = continuations[i];
-        const contFn = buildContinuationFunction(`${prefix}_cont_${contId}`, cont, info.batch, contId, continuations.length, promoted, pcTemp, batchCountTemp, objective, info.onDone, fn.name);
+        const contFn = buildContinuationFunction(`${prefix}_cont_${contId}`, cont, info.batch, contId, continuations.length, promoted, pcTemp, batchCountTemp, objective, info.onDone, fn.name, pcPlayer);
         contFunctions.push(contFn);
       }
-      const initFn = buildInitFunction(fn, promoted, pcTemp, prefix, objective);
-      const dispatcher = buildDispatcher(`${prefix}_tick`, contFunctions, pcTemp, objective, fn.name);
+      const initFn = buildInitFunction(fn, promoted, pcTemp, prefix, objective, pcPlayer);
+      const dispatcher = buildDispatcher(dispatcherName, contFunctions, pcTemp, objective, fn.name);
       return { initFn, continuations: contFunctions, dispatcher };
     }
     function computeDominators(blocks, entry) {
@@ -25869,14 +26024,14 @@ var require_coroutine = __commonJS({
       }
       return conts;
     }
-    function buildContinuationFunction(name, cont, batch, contId, totalConts, promoted, pcTemp, batchCountTemp, objective, onDone, originalFnName) {
+    function buildContinuationFunction(name, cont, batch, contId, totalConts, promoted, pcTemp, batchCountTemp, objective, onDone, originalFnName, pcPlayer) {
       if (cont.isLoopBody) {
-        return buildLoopContinuation(name, cont, batch, contId, totalConts, promoted, pcTemp, batchCountTemp, objective, onDone);
+        return buildLoopContinuation(name, cont, batch, contId, totalConts, promoted, pcTemp, batchCountTemp, objective, onDone, pcPlayer);
       } else {
-        return buildPostLoopContinuation(name, cont, contId, promoted, pcTemp, objective, onDone);
+        return buildPostLoopContinuation(name, cont, contId, promoted, pcTemp, objective, onDone, pcPlayer);
       }
     }
-    function buildLoopContinuation(name, cont, batch, contId, totalConts, promoted, pcTemp, batchCountTemp, objective, onDone) {
+    function buildLoopContinuation(name, cont, batch, contId, totalConts, promoted, pcTemp, batchCountTemp, objective, onDone, pcPlayer) {
       const blocks = [];
       const batchCmpTemp = `${batchCountTemp}_cmp`;
       const entryBlock = {
@@ -25929,7 +26084,9 @@ var require_coroutine = __commonJS({
             const exitBlockId = `${block.id}_exit`;
             const exitBlock = {
               id: exitBlockId,
-              instrs: [],
+              instrs: [
+                { kind: "score_write", player: pcPlayer, obj: objective, src: { kind: "const", value: contId + 1 } }
+              ],
               term: { kind: "return", value: null },
               preds: [block.id]
             };
@@ -25975,23 +26132,23 @@ var require_coroutine = __commonJS({
         isMacro: false
       };
     }
-    function buildPostLoopContinuation(name, cont, contId, promoted, pcTemp, objective, onDone) {
+    function buildPostLoopContinuation(name, cont, contId, promoted, pcTemp, objective, onDone, pcPlayer) {
       const blocks = [];
       for (const block of cont.blocks) {
         blocks.push(rewriteBlock(block, promoted));
       }
       const entry = cont.blocks[0]?.id ?? "entry";
-      if (onDone) {
-        for (let i = 0; i < blocks.length; i++) {
-          if (blocks[i].term.kind === "return") {
-            blocks[i] = {
-              ...blocks[i],
-              instrs: [
-                ...blocks[i].instrs,
-                { kind: "call", dst: null, fn: onDone, args: [] }
-              ]
-            };
+      for (let i = 0; i < blocks.length; i++) {
+        if (blocks[i].term.kind === "return") {
+          const extraInstrs = [];
+          if (onDone) {
+            extraInstrs.push({ kind: "call", dst: null, fn: onDone, args: [] });
           }
+          extraInstrs.push({ kind: "score_write", player: pcPlayer, obj: objective, src: { kind: "const", value: 0 } });
+          blocks[i] = {
+            ...blocks[i],
+            instrs: [...blocks[i].instrs, ...extraInstrs]
+          };
         }
       }
       return {
@@ -26002,15 +26159,31 @@ var require_coroutine = __commonJS({
         isMacro: false
       };
     }
-    function buildInitFunction(originalFn, promoted, pcTemp, prefix, objective) {
+    function buildInitFunction(originalFn, promoted, pcTemp, prefix, objective, pcPlayer) {
       const instrs = [];
-      instrs.push({ kind: "const", dst: pcTemp, value: 1 });
+      instrs.push({ kind: "score_write", player: pcPlayer, obj: objective, src: { kind: "const", value: 1 } });
+      const dispatcherName = `${prefix}_cont_1`;
       const entryBlock = originalFn.blocks.find((b) => b.id === originalFn.entry);
       if (entryBlock) {
         for (const instr of entryBlock.instrs) {
           const dst = getDst(instr);
           if (dst && promoted.has(dst)) {
-            instrs.push(rewriteInstr(instr, promoted));
+            const promotedTemp = promoted.get(dst);
+            const player = `$${dispatcherName}_${promotedTemp}`;
+            if (instr.kind === "const") {
+              instrs.push({ kind: "score_write", player, obj: objective, src: { kind: "const", value: instr.value } });
+            } else if (instr.kind === "copy") {
+              let src;
+              if (instr.src.kind === "temp") {
+                const srcTemp = promoted.get(instr.src.name) ?? instr.src.name;
+                src = { kind: "temp", name: srcTemp };
+              } else {
+                src = instr.src;
+              }
+              instrs.push({ kind: "score_write", player, obj: objective, src });
+            } else {
+              instrs.push(rewriteInstr(instr, promoted));
+            }
           }
         }
       }
@@ -26078,12 +26251,15 @@ var require_coroutine = __commonJS({
     }
     function buildSingleContinuation(fn, info, prefix, pcTemp, objective) {
       const contName = `${prefix}_cont_1`;
+      const dispatcherName = `${prefix}_tick`;
+      const pcPlayer = `$${dispatcherName}_${pcTemp}`;
       const contBlocks = fn.blocks.map((block) => {
         if (block.term.kind === "return") {
           const instrs = [...block.instrs];
           if (info.onDone) {
             instrs.push({ kind: "call", dst: null, fn: info.onDone, args: [] });
           }
+          instrs.push({ kind: "score_write", player: pcPlayer, obj: objective, src: { kind: "const", value: 0 } });
           return { ...block, instrs };
         }
         return block;
@@ -26098,7 +26274,7 @@ var require_coroutine = __commonJS({
       const initBlock = {
         id: "entry",
         instrs: [
-          { kind: "const", dst: pcTemp, value: 1 }
+          { kind: "score_write", player: pcPlayer, obj: objective, src: { kind: "const", value: 1 } }
         ],
         term: { kind: "return", value: null },
         preds: []
@@ -26110,7 +26286,7 @@ var require_coroutine = __commonJS({
         entry: "entry",
         isMacro: fn.isMacro
       };
-      const dispatcher = buildDispatcher(`${prefix}_tick`, [contFn], pcTemp, objective, fn.name);
+      const dispatcher = buildDispatcher(dispatcherName, [contFn], pcTemp, objective, fn.name);
       return { initFn, continuations: [contFn], dispatcher };
     }
     function rewriteBlock(block, promoted) {
@@ -26151,6 +26327,10 @@ var require_coroutine = __commonJS({
           return { ...instr, src: rOp(instr.src) };
         case "nbt_write_dynamic":
           return { ...instr, indexSrc: rOp(instr.indexSrc), valueSrc: rOp(instr.valueSrc) };
+        case "score_read":
+          return { ...instr, dst: rTemp(instr.dst) };
+        case "score_write":
+          return { ...instr, src: rOp(instr.src) };
         case "call":
           return { ...instr, dst: instr.dst ? rTemp(instr.dst) : null, args: instr.args.map(rOp) };
         case "call_macro":
@@ -26233,6 +26413,9 @@ var require_coroutine = __commonJS({
           break;
         case "nbt_read_dynamic":
           addOp(instr.indexSrc);
+          break;
+        case "score_write":
+          addOp(instr.src);
           break;
         case "call":
           instr.args.forEach(addOp);
@@ -30627,9 +30810,16 @@ function getCompile() {
 var DEBOUNCE_MS = 600;
 var lspClient;
 function resolveLspServerPath() {
+  const fs2 = require("fs");
+  try {
+    const bundled = path2.join(__dirname, "lsp-server.js");
+    fs2.accessSync(bundled);
+    return bundled;
+  } catch {
+  }
   try {
     const candidate = path2.join(__dirname, "..", "node_modules", "redscript", "dist", "src", "lsp", "main.js");
-    require("fs").accessSync(candidate);
+    fs2.accessSync(candidate);
     return candidate;
   } catch {
     return null;
@@ -30659,9 +30849,9 @@ function activate(context) {
     context.subscriptions.push({ dispose: () => lspClient?.stop() });
   } else {
     activateFallbackDiagnostics(context);
+    registerHoverProvider(context);
+    registerCompletionProvider(context);
   }
-  registerHoverProvider(context);
-  registerCompletionProvider(context);
   registerCodeActions(context);
   registerSymbolProviders(context);
   const statusBar = vscode5.window.createStatusBarItem(vscode5.StatusBarAlignment.Left, 10);
