@@ -335,11 +335,20 @@ const TYPE_COMPLETIONS: CompletionItem[] = [
 }))
 
 const DECORATOR_COMPLETIONS: CompletionItem[] = [
-  '@tick', '@load', '@on', '@coroutine', '@keep',
-].map(d => ({
-  label: d,
-  kind: CompletionItemKind.Event,
-}))
+  { label: '@tick',           detail: 'Run every game tick (~20 Hz)' },
+  { label: '@load',           detail: 'Run on /reload (initialization)' },
+  { label: '@on_trigger',     detail: 'Run when a player uses /trigger' },
+  { label: '@schedule',       detail: 'Schedule function after N ticks' },
+  { label: '@coroutine',      detail: 'Spread loop across ticks (batch=N)' },
+  { label: '@keep',           detail: 'Prevent dead-code elimination' },
+  { label: '@on',             detail: 'Generic event handler' },
+  { label: '@on_advancement', detail: 'Run on advancement earned' },
+  { label: '@on_craft',       detail: 'Run on item craft' },
+  { label: '@on_death',       detail: 'Run on player death' },
+  { label: '@on_join_team',   detail: 'Run on team join' },
+  { label: '@on_login',       detail: 'Run on player login' },
+  { label: '@require_on_load',detail: 'Ensure a fn runs on load (stdlib)' },
+].map(d => ({ ...d, kind: CompletionItemKind.Event }))
 
 /** Entity selector completions triggered by @ inside expressions */
 const SELECTOR_COMPLETIONS: CompletionItem[] = [
@@ -676,15 +685,15 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
   const program = cached?.program ?? null
 
   // ── @ trigger: selector (@a/@p/@s/@e/@r/@n) vs decorator (@tick etc) ────────
-  // If the character just typed is '@', check context:
-  //   - Inside a fn body (after =, (, comma, etc.) → selector
-  //   - At statement start (line begins with whitespace then @) → decorator
+  // Check if current token starts with '@': prevChar='@' OR there's '@xxx' partial token
   const prevChar = lineText[charPos - 1]
-  if (prevChar === '@') {
-    // Heuristic: if there's a non-whitespace non-punctuation char before '@'
+  const atMatch = lineText.slice(0, charPos).match(/@([a-zA-Z_]*)$/)
+  if (prevChar === '@' || atMatch) {
+    // Heuristic: if there's a non-whitespace non-keyword char before '@'
     // on the same line it's likely an expression context (selector).
     // If line is only whitespace before '@', it's a decorator.
-    const before = lineText.slice(0, charPos - 1).trim()
+    const atStart = atMatch ? charPos - atMatch[0].length : charPos - 1
+    const before = lineText.slice(0, atStart).trim()
     const isExprContext = before.length > 0 && !/^(fn|let|if|while|for|return|@)/.test(before.split(/\s+/).pop() ?? '')
     if (isExprContext) {
       return SELECTOR_COMPLETIONS
