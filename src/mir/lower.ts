@@ -1307,18 +1307,19 @@ function lowerExpr(
       }
 
       // Handle __entity_has_tag(entity, tag) — entity.has_tag("vip") sugar
-      // Compiles to: execute store success score $t __ns if entity <sel>[tag=<name>]
+      // Compiles to: execute store success score $ret __ns if entity <sel>[tag=<name>]
+      // We use $ret as the store target so LIR's dst-copy mechanism picks it up.
       if (expr.fn === '__entity_has_tag') {
         const tagArg = expr.args[1]
         const tagStr = tagArg.kind === 'str_lit' ? tagArg.value : 'unknown'
-        // Extract selector string directly from args[0] (a selector expr)
         const selArg = expr.args[0]
         const selStr = selArg.kind === 'selector'
           ? selectorToString((selArg as any).sel ?? selArg)
           : '@s'
         const t = ctx.freshTemp()
-        ctx.emit({ kind: 'const', dst: t, value: 0 })
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store success score $${t} __${ctx.getNamespace()} if entity ${selStr}[tag=${tagStr}]`, args: [] })
+        const ns = ctx.getNamespace()
+        // Store result in $ret — LIR will copy $ret → $t when dst=t
+        ctx.emit({ kind: 'call', dst: t, fn: `__raw:execute store success score $ret __${ns} if entity ${selStr}[tag=${tagStr}]`, args: [] })
         return { kind: 'temp', name: t }
       }
 

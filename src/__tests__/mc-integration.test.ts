@@ -1533,3 +1533,64 @@ describe('MC Integration - heap & sort stdlib', () => {
     console.log(`  sort_merge result = ${data.value} (expect [1,2,3,4,5,6]) ✓`)
   }, 15000)
 })
+
+// ---------------------------------------------------------------------------
+// Entity tag: @s.tag / @s.untag / @s.has_tag (requires execute as TestBot)
+// ---------------------------------------------------------------------------
+
+describe('MC Integration - entity tag methods (@s.tag/untag/has_tag)', () => {
+  const NS = 'entity_tag_test'
+  const OBJ = '__entity_tag_test'
+
+  beforeAll(async () => {
+    if (!serverOnline) return
+
+    writeFixture(`
+      namespace entity_tag_test
+
+      @load fn __load() {
+        raw("scoreboard objectives add etag_obj dummy");
+      }
+
+      // Must be called with "execute as <player> run function ..."
+      // so @s refers to the player entity.
+      @keep fn test_tag_ops() {
+        // 1. add tag
+        @s.tag("etag_vip")
+
+        // 2. has_tag should return 1
+        let has1: int = @s.has_tag("etag_vip")
+        scoreboard_set("#has_after_tag", "etag_obj", has1)
+
+        // 3. remove tag
+        @s.untag("etag_vip")
+
+        // 4. has_tag should return 0
+        let has2: int = @s.has_tag("etag_vip")
+        scoreboard_set("#has_after_untag", "etag_obj", has2)
+      }
+    `, NS)
+
+    await mc.reload()
+    await mc.ticks(10)
+    await mc.command(`/function ${NS}:__load`).catch(() => {})
+    await mc.ticks(5)
+  })
+
+  test('@s.tag adds tag, has_tag returns 1; @s.untag removes tag, has_tag returns 0', async () => {
+    if (!serverOnline) return
+
+    // Must run as TestBot so @s is an actual player entity
+    await mc.command(`/execute as TestBot run function ${NS}:test_tag_ops`)
+    await mc.ticks(5)
+
+    const hasAfterTag   = await mc.scoreboard('#has_after_tag',   'etag_obj')
+    const hasAfterUntag = await mc.scoreboard('#has_after_untag', 'etag_obj')
+
+    expect(hasAfterTag).toBe(1)
+    expect(hasAfterUntag).toBe(0)
+
+    console.log(`  has_after_tag=${hasAfterTag} (expect 1) ✓`)
+    console.log(`  has_after_untag=${hasAfterUntag} (expect 0) ✓`)
+  }, 20000)
+})
