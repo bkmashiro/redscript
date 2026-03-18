@@ -399,6 +399,10 @@ const EXPR_SRC = fs.readFileSync(
   path.join(__dirname, '../../stdlib/expr.mcrs'),
   'utf-8',
 )
+const GEOM_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/geometry.mcrs'),
+  'utf-8',
+)
 
 // ===========================================================================
 // math.mcrs — runtime execution (extended)
@@ -1416,4 +1420,64 @@ describe('expr.mcrs — expr_eval', () => {
   test('expr_eval([40000,-7], 2, 0) == 20000  (sqrt(4.0) = 2.0)', () => {
     expect(callAndGetRet(rt, 'test_expr_sqrt')).toBe(20000)
   })
+})
+
+// ===========================================================================
+// geometry.mcrs — selector helpers (cylinder / cone / sector_2d)
+// ===========================================================================
+
+describe('geometry.mcrs — in_cylinder', () => {
+  const rt = makeRuntime(`
+    fn test_cyl_inside(): int {
+      return in_cylinder(0, 0, 0,  0, 0,  20000,  0, 10000);
+    }
+    fn test_cyl_outside_r(): int {
+      return in_cylinder(30000, 0, 0,  0, 0,  20000,  0, 10000);
+    }
+    fn test_cyl_outside_y(): int {
+      return in_cylinder(0, 20000, 0,  0, 0,  20000,  0, 10000);
+    }
+  `, [MATH_SRC, VEC_SRC, GEOM_SRC])
+
+  test('in_cylinder(0,0,0, 0,0, 20000, 0,10000) == 1  (inside)', () =>
+    expect(callAndGetRet(rt, 'test_cyl_inside')).toBe(1))
+
+  test('in_cylinder(30000,0,0, 0,0, 20000, 0,10000) == 0  (outside radius)', () =>
+    expect(callAndGetRet(rt, 'test_cyl_outside_r')).toBe(0))
+
+  test('in_cylinder(0,20000,0, 0,0, 20000, 0,10000) == 0  (outside y range)', () =>
+    expect(callAndGetRet(rt, 'test_cyl_outside_y')).toBe(0))
+})
+
+describe('geometry.mcrs — in_cone', () => {
+  // dir_y=1 → upward cone; half_angle_tan=10000 (tan 45°=1.0); height=20000
+  // test point directly above apex: dy=10000, horiz=0 → inside
+  const rt = makeRuntime(`
+    fn test_cone_above(): int {
+      return in_cone(0, 10000, 0,  0, 0, 0,  1, 10000, 20000);
+    }
+  `, [MATH_SRC, VEC_SRC, GEOM_SRC])
+
+  test('in_cone(0,10000,0, 0,0,0, 1, 10000, 20000) == 1  (directly above apex)', () =>
+    expect(callAndGetRet(rt, 'test_cone_above')).toBe(1))
+})
+
+describe('geometry.mcrs — in_sector_2d', () => {
+  // dir_angle=0 (+X axis), half_angle≈π/4 (157079), radius=20000
+  // point (10000,0) is at angle 0 → inside
+  // point (-10000,0) is at angle π → outside
+  const rt = makeRuntime(`
+    fn test_sector_front(): int {
+      return in_sector_2d(10000, 0,  0, 0,  0, 157079, 20000);
+    }
+    fn test_sector_behind(): int {
+      return in_sector_2d(-10000, 0,  0, 0,  0, 157079, 20000);
+    }
+  `, [MATH_SRC, VEC_SRC, GEOM_SRC])
+
+  test('in_sector_2d(10000,0, 0,0, 0, 157079, 20000) == 1  (in front, half_angle=π/4)', () =>
+    expect(callAndGetRet(rt, 'test_sector_front')).toBe(1))
+
+  test('in_sector_2d(-10000,0, 0,0, 0, 157079, 20000) == 0  (behind)', () =>
+    expect(callAndGetRet(rt, 'test_sector_behind')).toBe(0))
 })
