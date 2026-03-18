@@ -1491,9 +1491,27 @@ describe('MC Integration - heap & sort stdlib', () => {
     await mc.ticks(3)
   })
 
-  // NOTE: MinHeap/MaxHeap and sort_merge use int[] parameter passing (NBT array copy)
-  // which has a known issue with monomorphized function naming on real MC server.
-  // These are covered by unit tests (1666 passing). Tracked for future fix.
+  test('MinHeap push/pop: push 5,1,3,2,4 → first 3 pops = 1,2,3', async () => {
+    if (!serverOnline) return
+    await mc.command('/function heap_sort_mc_test:test_min_heap')
+    await mc.ticks(5)
+    const encoded = await mc.scoreboard('#heap_min_top3', 'hsmc')
+    expect(encoded).toBe(123)  // 100*1 + 10*2 + 3
+    const sizeAfter = await mc.scoreboard('#heap_size_after_pop3', 'hsmc')
+    expect(sizeAfter).toBe(3)  // 5 pushed, 2 pops (peek→pop→peek→pop→peek), 5-2=3
+    console.log(`  MinHeap top3 encoded=${encoded} (expect 123), size after 2 pops=${sizeAfter} (expect 3) ✓`)
+  }, 20000)
+
+  test('MaxHeap push/pop: push 3,1,4,1,5 → first pop = 5, second = 4', async () => {
+    if (!serverOnline) return
+    await mc.command('/function heap_sort_mc_test:test_max_heap')
+    await mc.ticks(5)
+    const top = await mc.scoreboard('#max_heap_top', 'hsmc')
+    expect(top).toBe(5)
+    const second = await mc.scoreboard('#max_heap_second', 'hsmc')
+    expect(second).toBe(4)
+    console.log(`  MaxHeap top=${top} (expect 5), second=${second} (expect 4) ✓`)
+  }, 20000)
 
   test('insertion_sort ascending: [30,10,50,20,40] → [10,20,30,40,50]', async () => {
     if (!serverOnline) return

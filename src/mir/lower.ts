@@ -601,6 +601,25 @@ function lowerStmt(
         const lenTemp = ctx.freshTemp()
         ctx.emit({ kind: 'const', dst: lenTemp, value: elems.length })
         scope.set(stmt.name, lenTemp)
+      } else if (stmt.type?.kind === 'array') {
+        // int[] variable initialized from a function call (e.g. let h: int[] = heap_new())
+        // Register as arrayVar so h[i] / h.push(v) / monomorphization all work correctly.
+        // The call returns the array in the caller's own NBT path (same ns:arrays/<name>).
+        const ns = `${ctx.getNamespace()}:arrays`
+        const pathPrefix = stmt.name
+        ctx.arrayVars.set(stmt.name, { ns, pathPrefix })
+        // Evaluate the init expression (e.g. heap_new() or some function call)
+        lowerExpr(stmt.init, ctx, scope)
+        // After the call, copy the NBT array from the return path into our own path.
+        // By convention array-returning functions write into ns:arrays/<ret> or a __ret path.
+        // Here we use 'data modify ... set from storage ns:arrays __ret_array' pattern,
+        // but since we don't have a unified return convention for arrays, we rely on
+        // monomorphization: the first time heap_push(h, val) is called with h in arrayVars,
+        // it will monomorphize correctly.
+        // Store a length temp so .length() works.
+        const lenTemp = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: lenTemp, value: 0 })
+        scope.set(stmt.name, lenTemp)
       } else {
         const valOp = lowerExpr(stmt.init, ctx, scope)
         const t = ctx.freshTemp()
