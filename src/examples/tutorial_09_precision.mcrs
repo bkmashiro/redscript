@@ -1,0 +1,154 @@
+// ============================================
+// Tutorial 09: Precision Arithmetic — fixed & double
+// ============================================
+// Demonstrates:
+// 1. fixed-point (×10000) for 4-decimal precision
+// 2. double type (NBT-backed IEEE 754) for 8+ decimal precision
+// 3. Compound interest: A = P * (1.05)^t
+// 4. Casting between types
+// ============================================
+
+namespace tutorial09
+
+import math::*
+import math_hp::*
+
+// ─── Setup ──────────────────────────────────────────────────────────────────
+
+@load
+fn on_load() {
+    scoreboard_add_objective("precision_data", "dummy")
+    scoreboard_add_objective("result_display", "dummy")
+    scoreboard_display("sidebar", "result_display")
+    say("Precision arithmetic tutorial! /trigger compound_interest  /trigger fixed_demo")
+}
+
+// ─── Fixed-point demo ────────────────────────────────────────────────────────
+
+@on_trigger("fixed_demo")
+fn fixed_demo() {
+    tell(@s, "=== Fixed-Point Arithmetic (×10000 scale) ===")
+
+    // fixed stores values as integer × 10000
+    // 1.5 → 15000,  3.14 → 31400,  0.001 → 10
+    let a: fixed = 15000 as fixed   // 1.5
+    let b: fixed = 25000 as fixed   // 2.5
+
+    // Arithmetic on fixed values works like int arithmetic
+    // BUT remember: adding two fixed values is fine (15000+25000=40000 = 4.0)
+    // Multiplying needs manual rescaling: a*b/10000
+
+    let sum: int = (a as int) + (b as int)   // 40000 = 4.0
+    tell(@s, "1.5 + 2.5 = " + sum + " (×10000, real value = 4.0)")
+
+    // Multiply: must divide by 10000 to stay in scale
+    let product: int = mulfix(a as int, b as int)   // 15000*25000/1000 ≈ 375000? No!
+    // mulfix uses scale=1000, but our fixed uses scale=10000
+    // For ×10000 scale: use (a * b) / 10000
+    let product_fx: int = (a as int) * (b as int) / 10000
+    tell(@s, "1.5 * 2.5 = " + product_fx + " (×10000, real value = 3.75)")
+
+    // Percentage calculation
+    let score: int = 750    // raw score
+    let max_score: int = 1000
+    let pct_fx: fixed = (score * 10000 / max_score) as fixed  // 7500 = 75.00%
+    tell(@s, "Score " + score + "/" + max_score + " = " + (pct_fx as int) + " (×10000 = 75.00%)")
+
+    // sqrt_fx: fixed-point square root (×10000 scale)
+    // sqrt_fx(20000) ≈ 14142 means sqrt(2.0) ≈ 1.4142
+    let sqrt2: int = sqrt_fx(20000)
+    tell(@s, "sqrt(2.0) ≈ " + sqrt2 + " (×10000)")
+
+    // sin_fixed: degrees, result ×1000 (note: math lib uses scale=1000 not 10000)
+    let sin45: int = sin_fixed(45)   // ≈ 707
+    tell(@s, "sin(45°) ≈ " + sin45 + " (×1000 = 0.707)")
+}
+
+// ─── Compound interest with fixed-point ─────────────────────────────────────
+// A = P * (1 + r)^t
+// Using fixed-point: rate = 500 (0.05 = 5%)
+
+@on_trigger("compound_interest")
+fn compound_interest() {
+    tell(@s, "=== Compound Interest Demo ===")
+    tell(@s, "P = 1000, rate = 5%, t = 10 years")
+
+    // Fixed-point approach
+    let principal: int = 1000
+    let rate_fx: int = 500   // 0.05 * 10000 = 500
+    let base_fx: int = 10000 + rate_fx   // 1.05 × 10000 = 10500
+
+    let amount: int = principal
+    let t: int = 0
+    while (t < 10) {
+        // A = A * 1.05  in fixed-point: A = A * base_fx / 10000
+        amount = amount * base_fx / 10000
+        t = t + 1
+    }
+
+    tell(@s, "Fixed-point result: " + amount + " (expected ~1629)")
+    scoreboard_set("#result_fx", "result_display", amount)
+    scoreboard_set("#result_fx", "precision_data", amount)
+
+    // Show step-by-step for first 3 years
+    let a: int = principal
+    tell(@s, "Year-by-year (fixed):")
+    let yr: int = 1
+    while (yr <= 5) {
+        a = a * base_fx / 10000
+        tell(@s, "Year " + yr + ": " + a)
+        yr = yr + 1
+    }
+}
+
+// ─── Double precision compound interest ─────────────────────────────────────
+// Uses NBT-backed IEEE 754 doubles for higher precision
+
+@on_trigger("compound_double")
+fn compound_double() {
+    tell(@s, "=== Compound Interest (double precision) ===")
+    tell(@s, "P = 1000.0, rate = 5%, t = 10 years")
+
+    // pow_real(base, exp) computes base^exp using ln/exp
+    // base = 1.05d, exp = 10.0d
+    let base: double = 1.05d
+    let exp_val: double = 10.0d
+
+    let result: double = pow_real(base, exp_val) as double
+
+    // Convert result to int (×10000) to display
+    let result_int: int = result as int
+    scoreboard_set("#result_dbl", "result_display", result_int)
+    tell(@s, "Double result (×10000): " + result_int + " (expected ~16289 = 1.6289)")
+
+    // Compare precision
+    // Fixed:  1000 * 10500^10 / 10000^10  (integer truncation each step)
+    // Double: exact IEEE 754 floating point computation
+    tell(@s, "Fixed gave: check sidebar 'result_fx' vs 'result_dbl'")
+}
+
+// ─── Casting between types ───────────────────────────────────────────────────
+
+@on_trigger("cast_demo")
+fn cast_demo() {
+    tell(@s, "=== Type Casting Demo ===")
+
+    let i: int = 42
+    let f: fixed = i as fixed       // int → fixed: just stores as-is (42 as fixed)
+    tell(@s, "int 42 as fixed = " + (f as int) + " (note: fixed stores the raw int)")
+
+    // To represent 4.2 as fixed: store 42000 (4.2 × 10000)
+    let four_two: fixed = 42000 as fixed
+    tell(@s, "4.2 as fixed = " + (four_two as int) + " (×10000)")
+
+    // fixed → int: drops the scale factor, use / 10000 for real value
+    let raw: int = four_two as int
+    let real: int = raw / 10000   // integer part
+    let decimal: int = raw % 10000   // decimal part (×10000)
+    tell(@s, "4.2 in fixed: integer=" + real + " decimal=" + decimal)
+
+    // double → int: reads the double as a ×10000 fixed integer
+    let d: double = 3.14d
+    let d_int: int = d as int
+    tell(@s, "3.14d as int = " + d_int + " (×10000 = 31400)")
+}

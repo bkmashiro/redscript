@@ -1,0 +1,131 @@
+// ============================================
+// Tutorial 05: Decorators & Scheduling
+// ============================================
+// A countdown timer system:
+// - /trigger start_countdown  begins a 10-second countdown
+// - Titles update every second
+// - Firework launches at the end
+// ============================================
+
+namespace tutorial05
+
+// ─── State ──────────────────────────────────────────────────────────────────
+
+struct TimerState {
+    running: int,
+    seconds_left: int
+}
+
+let timer: TimerState = {
+    running: 0,
+    seconds_left: 0
+}
+
+// ─── @load: runs once when the world loads ───────────────────────────────────
+
+@load
+fn on_load() {
+    scoreboard_add_objective("tut05_data", "dummy")
+    say("Countdown system ready! /trigger start_countdown")
+}
+
+// ─── @tick: runs every single game tick (20/sec) ────────────────────────────
+
+// This runs every tick but only does work if something is active.
+// Keep @tick functions lightweight — they run 20 times a second!
+@tick
+fn heartbeat() {
+    // We use a scoreboard flag to debounce: only tick once per 20 ticks
+    // (the @tick(rate=20) decorator below handles this more cleanly)
+}
+
+// ─── @tick(rate=20): runs every 20 ticks = once per second ──────────────────
+
+@tick(rate=20)
+fn every_second() {
+    if (timer.running == 0) {
+        return
+    }
+
+    timer.seconds_left = timer.seconds_left - 1
+
+    if (timer.seconds_left > 0) {
+        show_countdown(timer.seconds_left)
+    } else {
+        fire_at_zero()
+    }
+}
+
+fn show_countdown(sec: int) {
+    tell(@a, "Countdown: " + sec)
+    // Color changes as time runs out
+    if (sec <= 3) {
+        subtitle(@a, "Hurry!")
+        actionbar(@a, "⏱ " + sec + " seconds!")
+    } else {
+        subtitle(@a, "Get ready...")
+        actionbar(@a, "Countdown: " + sec)
+    }
+}
+
+fn fire_at_zero() {
+    timer.running = 0
+    timer.seconds_left = 0
+
+    title(@a, "GO!")
+    subtitle(@a, "Time is up!")
+    say("Countdown complete!")
+
+    // Summon firework
+    summon("minecraft:firework_rocket", 0, 65, 0)
+}
+
+// ─── @on_trigger: fires when a player uses /trigger ─────────────────────────
+
+// Players type:  /trigger start_countdown
+@on_trigger("start_countdown")
+fn start_countdown() {
+    if (timer.running == 1) {
+        tell(@s, "A countdown is already running!")
+        return
+    }
+
+    timer.running = 1
+    timer.seconds_left = 10
+
+    announce("Countdown started by a player!")
+    title(@a, "10")
+    subtitle(@a, "Countdown begins!")
+    title_times(@a, 5, 15, 5)
+}
+
+// Players type:  /trigger stop_countdown
+@on_trigger("stop_countdown")
+fn stop_countdown() {
+    if (timer.running == 0) {
+        tell(@s, "No countdown running.")
+        return
+    }
+
+    timer.running = 0
+    timer.seconds_left = 0
+    title(@a, "Stopped")
+    say("Countdown cancelled.")
+}
+
+// ─── @schedule: runs once after a delay ─────────────────────────────────────
+
+// Players type:  /trigger delayed_message
+// The message appears 5 seconds (100 ticks) later
+@on_trigger("delayed_message")
+fn queue_delayed() {
+    tell(@s, "Message will appear in 5 seconds...")
+    // Schedule the delivery 100 ticks (5 seconds) from now
+    delayed_deliver()
+}
+
+@schedule(100)
+fn delayed_deliver() {
+    say("This message was delayed by 5 seconds!")
+    title(@a, "Delayed!")
+}

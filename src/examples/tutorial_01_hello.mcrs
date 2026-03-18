@@ -1,0 +1,63 @@
+// ============================================
+// Tutorial 01: Hello Datapack
+// ============================================
+// A "hello world" datapack that announces server startup,
+// welcomes players who trigger the welcome kit, and gives
+// them starter items on demand.
+// ============================================
+
+// Declare a namespace for this datapack
+namespace tutorial01
+
+// ─── Scoreboard setup ───────────────────────────────────────────────────────
+
+@load
+fn setup() {
+    // Create a scoreboard objective so we can track anything we want later
+    scoreboard_add_objective("tut01_data", "dummy")
+
+    // This runs once when the world loads
+    say("Hello! Tutorial 01 datapack loaded.")
+    say("Type /trigger welcome_kit to get started!")
+}
+
+// ─── Tick function ───────────────────────────────────────────────────────────
+
+@tick
+fn every_tick() {
+    // This runs every game tick (20 times per second)
+    // Keep it lightweight — just checking a counter here
+    let active: int = scoreboard_get("#active", "tut01_data")
+    if (active == 1) {
+        // The datapack is running — nothing fancy yet
+    }
+}
+
+// ─── Welcome kit trigger ─────────────────────────────────────────────────────
+
+// Players run:  /trigger welcome_kit
+// This fires once per activation per player
+@on_trigger("welcome_kit")
+fn give_welcome_kit() {
+    // tell() sends a private message only to the triggering player (@s)
+    tell(@s, "Welcome to Tutorial 01!")
+    tell(@s, "Here is your starter kit:")
+
+    // give() hands items directly to the triggering player
+    give(@s, "minecraft:bread", 16)
+    give(@s, "minecraft:wooden_sword", 1)
+    give(@s, "minecraft:torch", 8)
+
+    // Announce to everyone that someone got the kit
+    announce("A player claimed the welcome kit!")
+}
+
+// ─── Bonus: greeting trigger ─────────────────────────────────────────────────
+
+// Players run:  /trigger greet
+@on_trigger("greet")
+fn greet_player() {
+    tell(@s, "Hello there, adventurer!")
+    title(@s, "Welcome!")
+    subtitle(@s, "Enjoy the server")
+}

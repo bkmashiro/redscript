@@ -1,0 +1,157 @@
+// ============================================
+// Tutorial 02: Variables & Control Flow
+// ============================================
+// A vote counter that lets players vote yes or no,
+// tracks results, and announces the winner.
+// ============================================
+
+namespace tutorial02
+
+// ─── Scoreboard setup ───────────────────────────────────────────────────────
+
+@load
+fn setup() {
+    scoreboard_add_objective("votes_yes", "dummy")
+    scoreboard_add_objective("votes_no", "dummy")
+    scoreboard_add_objective("vote_cast", "dummy")
+    say("Vote system ready! /trigger vote_yes  or  /trigger vote_no")
+}
+
+// ─── Variable types demo ─────────────────────────────────────────────────────
+
+fn demo_types() {
+    // int: whole numbers (stored in scoreboard)
+    let count: int = 42
+    let negative: int = -7
+
+    // bool: true or false
+    let is_active: bool = true
+    let has_voted: bool = false
+
+    // fixed: decimal numbers × 10000 (1.5 is stored as 15000)
+    // Useful for percentages, fractions, sub-block positions
+    let percentage: fixed = 7500 as fixed   // represents 0.75 (75%)
+    let half: fixed = 5000 as fixed         // represents 0.5
+
+    // string: text labels
+    let winner: string = "yes"
+
+    // Use the values so the compiler doesn't complain
+    if (is_active) {
+        tell(@a, "Demo types loaded")
+    }
+}
+
+// ─── Vote yes ───────────────────────────────────────────────────────────────
+
+@on_trigger("vote_yes")
+fn cast_yes() {
+    // Check if player already voted
+    let already_voted: int = scoreboard_get(@s, "vote_cast")
+    if (already_voted == 1) {
+        tell(@s, "You already voted!")
+        return
+    }
+
+    // Record vote
+    scoreboard_set(@s, "vote_cast", 1)
+    let yes_count: int = scoreboard_get("#total", "votes_yes")
+    yes_count = yes_count + 1
+    scoreboard_set("#total", "votes_yes", yes_count)
+
+    tell(@s, "You voted YES!")
+    announce("A player voted YES")
+}
+
+// ─── Vote no ────────────────────────────────────────────────────────────────
+
+@on_trigger("vote_no")
+fn cast_no() {
+    let already_voted: int = scoreboard_get(@s, "vote_cast")
+    if (already_voted == 1) {
+        tell(@s, "You already voted!")
+        return
+    }
+
+    scoreboard_set(@s, "vote_cast", 1)
+    let no_count: int = scoreboard_get("#total", "votes_no")
+    no_count = no_count + 1
+    scoreboard_set("#total", "votes_no", no_count)
+
+    tell(@s, "You voted NO!")
+    announce("A player voted NO")
+}
+
+// ─── Tally results ──────────────────────────────────────────────────────────
+
+@on_trigger("tally_votes")
+fn tally() {
+    let yes_count: int = scoreboard_get("#total", "votes_yes")
+    let no_count: int = scoreboard_get("#total", "votes_no")
+    let total: int = yes_count + no_count
+
+    say("=== Vote Results ===")
+    announce("YES: " + yes_count)
+    announce("NO:  " + no_count)
+
+    if (total == 0) {
+        say("No votes cast yet!")
+        return
+    }
+
+    // Determine winner using if/else
+    if (yes_count > no_count) {
+        title(@a, "YES wins!")
+        say("The YES vote wins!")
+    } else {
+        if (no_count > yes_count) {
+            title(@a, "NO wins!")
+            say("The NO vote wins!")
+        } else {
+            title(@a, "It's a tie!")
+            say("It's a perfect tie!")
+        }
+    }
+
+    // Show percentage with fixed-point arithmetic
+    // Multiply by 10000 first to keep precision, then divide by total
+    let yes_pct: fixed = (yes_count * 10000 / total) as fixed
+    announce("YES percentage (x10000): " + yes_pct)
+}
+
+// ─── While loop example ──────────────────────────────────────────────────────
+
+@on_trigger("count_down")
+fn count_down() {
+    let i: int = 5
+    while (i > 0) {
+        tell(@s, "Countdown: " + i)
+        i = i - 1
+    }
+    tell(@s, "Done!")
+}
+
+// ─── For loop example ────────────────────────────────────────────────────────
+
+@on_trigger("for_demo")
+fn for_demo() {
+    // for loop: start, end (exclusive), step defaults to 1
+    let i: int = 0
+    while (i < 5) {
+        tell(@s, "Step " + i)
+        i = i + 1
+    }
+}
+
+// ─── Reset votes ────────────────────────────────────────────────────────────
+
+@on_trigger("reset_votes")
+fn reset_votes() {
+    scoreboard_set("#total", "votes_yes", 0)
+    scoreboard_set("#total", "votes_no", 0)
+    // Reset all players' vote_cast flags
+    foreach (p in @a) {
+        scoreboard_set(p, "vote_cast", 0)
+    }
+    say("Votes reset! Everyone can vote again.")
+}

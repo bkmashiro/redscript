@@ -1,0 +1,163 @@
+// ============================================
+// Tutorial 08: Coroutines — Spread Heavy Work
+// ============================================
+// Phase 1: Scan a 100×100 region using @coroutine(batch=50)
+//          Yields at loop back-edges → 50 iterations per tick
+//          → 10000/50 = 200 ticks total (10 seconds)
+// Phase 2: After scan completes (onDone), announce results
+// ============================================
+
+namespace tutorial08
+
+// ─── State ──────────────────────────────────────────────────────────────────
+
+struct ScanState {
+    blocks_checked: int,
+    special_found: int,
+    scan_running: int
+}
+
+let scan: ScanState = {
+    blocks_checked: 0,
+    special_found: 0,
+    scan_running: 0
+}
+
+// ─── Setup ──────────────────────────────────────────────────────────────────
+
+@load
+fn setup() {
+    scoreboard_add_objective("scan_data", "dummy")
+    say("Coroutine tutorial loaded! /trigger start_scan")
+    say("The scan will process 50 blocks per tick over 200 ticks.")
+}
+
+// ─── Trigger the scan ───────────────────────────────────────────────────────
+
+@on_trigger("start_scan")
+fn start_scan() {
+    if (scan.scan_running == 1) {
+        tell(@s, "Scan already in progress!")
+        return
+    }
+
+    scan.blocks_checked = 0
+    scan.special_found = 0
+    scan.scan_running = 1
+
+    announce("Starting 100x100 region scan... (will take ~10 seconds)")
+    run_scan()
+}
+
+// ─── The coroutine: scan 100×100 = 10000 positions ─────────────────────────
+//
+// @coroutine(batch=50) means:
+//   - The while loop yields at its back-edge every 50 iterations
+//   - So 10000 iterations / 50 = 200 ticks = 10 seconds
+//   - Without @coroutine this would run all 10000 iterations in ONE tick
+//     → crash with "maxCommandChainLength exceeded" (default limit is 65536)
+//
+// Yield point: the BACK-EDGE of a loop (end of loop body, before condition check)
+// There is NO explicit yield keyword — it happens automatically.
+//
+// onDone: specifies a function to call when the coroutine finishes.
+
+@coroutine(batch=50)
+fn run_scan() {
+    let i: int = 0
+    // 10000 iterations total, 50 per tick
+    while (i < 10000) {
+        // Simulate scanning a block: x = i%100, z = i/100
+        let x: int = i % 100
+        let z: int = i / 100
+
+        // Pretend every 200th block is "special" (5% of region)
+        if (i % 200 == 0) {
+            scan.special_found = scan.special_found + 1
+        }
+
+        scan.blocks_checked = scan.blocks_checked + 1
+
+        // Progress update every 1000 blocks (every 20 ticks)
+        if (scan.blocks_checked % 1000 == 0) {
+            let pct: int = scan.blocks_checked * 100 / 10000
+            actionbar(@a, "Scanning: " + pct + "% (" + scan.blocks_checked + "/10000)")
+        }
+
+        i = i + 1
+        // <- Back-edge: coroutine yields here every 50 iterations
+    }
+    // When the while loop finishes, onDone fires:
+    scan_complete()
+}
+
+// ─── Called automatically when run_scan() finishes ──────────────────────────
+
+fn scan_complete() {
+    scan.scan_running = 0
+
+    say("=== Scan Complete! ===")
+    say("Blocks checked: " + scan.blocks_checked)
+    say("Special blocks found: " + scan.special_found)
+
+    title(@a, "Scan Done!")
+    let found: int = scan.special_found
+    subtitle(@a, "Special blocks found: " + found)
+
+    // Give a report item to all players
+    foreach (p in @a) {
+        give(p, "minecraft:paper", 1)
+        tell(p, "Your scan report: " + scan.special_found + " special blocks in 100x100 region")
+    }
+}
+
+// ─── Status check ────────────────────────────────────────────────────────────
+
+@on_trigger("scan_status")
+fn scan_status() {
+    if (scan.scan_running == 0) {
+        tell(@s, "No scan running. Last result: " + scan.special_found + " special blocks")
+        return
+    }
+
+    let pct: int = scan.blocks_checked * 100 / 10000
+    tell(@s, "Scan in progress: " + pct + "% (" + scan.blocks_checked + "/10000)")
+}
+
+// ─── Chained coroutine example ───────────────────────────────────────────────
+//
+// You can chain coroutines: when one finishes, start another.
+// Here we do a 3-phase pipeline: collect → process → report
+
+@on_trigger("chained_scan")
+fn start_chained() {
+    announce("Starting chained coroutine pipeline...")
+    phase1_collect()
+}
+
+@coroutine(batch=100)
+fn phase1_collect() {
+    let i: int = 0
+    while (i < 500) {
+        // Simulate data collection
+        i = i + 1
+    }
+    announce("Phase 1 (collect) done — starting phase 2")
+    phase2_process()
+}
+
+@coroutine(batch=25)
+fn phase2_process() {
+    let i: int = 0
+    while (i < 200) {
+        // Simulate heavy processing
+        i = i + 1
+    }
+    announce("Phase 2 (process) done — starting phase 3")
+    phase3_report()
+}
+
+fn phase3_report() {
+    say("Pipeline complete! All 3 phases finished.")
+    title(@a, "Pipeline Done")
+}

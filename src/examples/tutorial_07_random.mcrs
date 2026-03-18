@@ -1,0 +1,142 @@
+// ============================================
+// Tutorial 07: Standard Library — Random & Noise
+// ============================================
+// A treasure chest generator that uses:
+// 1. random_range to pick loot items
+// 2. value_noise_1d for a natural reward multiplier
+// 3. binomial_sample to determine bonus chest count
+// ============================================
+
+namespace tutorial07
+
+import random::*
+import noise::*
+
+// ─── State ──────────────────────────────────────────────────────────────────
+
+@load
+fn setup() {
+    scoreboard_add_objective("rng_seed", "dummy")
+    // Seed from a large prime for variety
+    scoreboard_set("#seed", "rng_seed", 987654321)
+    say("Treasure system loaded! /trigger open_chest  /trigger terrain_demo")
+}
+
+// ─── Get and advance the global seed ─────────────────────────────────────────
+
+fn advance_seed() -> int {
+    let seed: int = scoreboard_get("#seed", "rng_seed")
+    seed = next_lcg(seed)
+    scoreboard_set("#seed", "rng_seed", seed)
+    return seed
+}
+
+// ─── Loot table using random_range ───────────────────────────────────────────
+
+fn pick_loot_item(seed: int) -> string {
+    // random_range returns a value in [lo, hi)
+    let roll: int = random_range(seed, 0, 10)  // 0..9
+
+    if (roll < 2) {
+        return "minecraft:diamond"        // 20%
+    }
+    if (roll < 5) {
+        return "minecraft:gold_ingot"     // 30%
+    }
+    if (roll < 8) {
+        return "minecraft:iron_ingot"     // 30%
+    }
+    return "minecraft:bread"              // 20%
+}
+
+fn item_name(item: string) -> string {
+    if (item == "minecraft:diamond") { return "Diamond" }
+    if (item == "minecraft:gold_ingot") { return "Gold Ingot" }
+    if (item == "minecraft:iron_ingot") { return "Iron Ingot" }
+    return "Bread"
+}
+
+// ─── Open a treasure chest ───────────────────────────────────────────────────
+
+@on_trigger("open_chest")
+fn open_chest() {
+    tell(@s, "=== Treasure Chest ===")
+
+    // 1. Pick loot item
+    let seed1: int = advance_seed()
+    let item: string = pick_loot_item(seed1)
+    let name: string = item_name(item)
+
+    // 2. Reward multiplier from value_noise_1d
+    // value_noise_1d returns [0, 10000]  → scale to [1, 3] count
+    let seed2: int = advance_seed()
+    let noise_val: int = value_noise_1d(seed2)   // [0, 10000]
+    // Map [0, 10000] to [1, 3]  using linear mapping
+    let count: int = 1 + noise_val * 2 / 10000   // 1 or 2 or 3
+
+    // 3. Bonus chest count from binomial_sample
+    // binomial_sample(n, p*10000, seed) = successes in n trials with prob p
+    let seed3: int = advance_seed()
+    let bonus: int = binomial_sample(3, 2500, seed3)   // 3 trials, 25% each → 0..3
+
+    tell(@s, "Found: " + count + "x " + name)
+    give(@s, item, count)
+
+    if (bonus > 0) {
+        tell(@s, "BONUS! +" + bonus + " extra chests!")
+        let b: int = 0
+        while (b < bonus) {
+            let bseed: int = advance_seed()
+            let bitem: string = pick_loot_item(bseed)
+            give(@s, bitem, 1)
+            b = b + 1
+        }
+    } else {
+        tell(@s, "No bonus chests this time.")
+    }
+
+    announce("A player opened a treasure chest!")
+}
+
+// ─── Terrain height demo using value noise ───────────────────────────────────
+
+@on_trigger("terrain_demo")
+fn terrain_demo() {
+    tell(@s, "=== Terrain Noise Demo ===")
+    // terrain_height(x, z, base_y, amplitude)
+    // uses 3-octave fbm under the hood
+    let i: int = 0
+    while (i < 5) {
+        let h: int = terrain_height(i, 0, 64, 20)
+        tell(@s, "x=" + i + " → height=" + h)
+        i = i + 1
+    }
+}
+
+// ─── fbm (fractal Brownian motion) demo ─────────────────────────────────────
+
+@on_trigger("fbm_demo")
+fn fbm_demo() {
+    tell(@s, "=== FBM Noise (4 octaves) ===")
+    let i: int = 0
+    while (i < 8) {
+        // x_fx in ×10000 fixed-point: i * 5000 = 0.0, 0.5, 1.0, ...
+        let x_fx: int = i * 5000
+        let n: int = fbm_1d(x_fx, 4, 5000)   // 4 octaves, persistence=0.5
+        tell(@s, "fbm(" + i + "/2) = " + n)
+        i = i + 1
+    }
+}
+
+// ─── Random bool demo ────────────────────────────────────────────────────────
+
+@on_trigger("coin_flip")
+fn coin_flip() {
+    let seed: int = advance_seed()
+    let result: int = random_bool(seed)
+    if (result == 1) {
+        tell(@s, "Coin flip: HEADS!")
+    } else {
+        tell(@s, "Coin flip: TAILS!")
+    }
+}

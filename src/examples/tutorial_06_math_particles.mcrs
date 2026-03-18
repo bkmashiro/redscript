@@ -1,0 +1,123 @@
+// ============================================
+// Tutorial 06: Standard Library — Math & Particles
+// ============================================
+// Demonstrates math functions and particle drawing.
+// Draws a circle and a helix using trig + particle helpers.
+// ============================================
+
+namespace tutorial06
+
+import math::*
+import particles::*
+
+// ─── Setup ──────────────────────────────────────────────────────────────────
+
+@load
+fn setup() {
+    say("Math & Particles tutorial loaded!")
+    say("Triggers: /trigger draw_circle  /trigger draw_helix  /trigger demo_math")
+}
+
+// ─── Demo: core math functions ───────────────────────────────────────────────
+
+@on_trigger("demo_math")
+fn demo_math() {
+    // abs — absolute value
+    let neg: int = abs(-42)             // 42
+    tell(@s, "abs(-42) = " + neg)
+
+    // min / max
+    let lo: int = min(10, 20)           // 10
+    let hi: int = max(10, 20)           // 20
+    tell(@s, "min(10,20) = " + lo + "  max(10,20) = " + hi)
+
+    // clamp — restrict a value to a range
+    let clamped: int = clamp(150, 0, 100)   // 100
+    tell(@s, "clamp(150, 0, 100) = " + clamped)
+
+    // isqrt — integer square root
+    let root: int = isqrt(144)          // 12
+    tell(@s, "isqrt(144) = " + root)
+
+    // sqrt_fixed — fixed-point sqrt (scale = 1000)
+    let sq2: int = sqrt_fixed(2000)     // ~1414 = sqrt(2) * 1000
+    tell(@s, "sqrt_fixed(2000) = " + sq2 + "  (sqrt(2) * 1000 = 1414)")
+
+    // sqrt_fx — fixed-point sqrt (scale = 10000)
+    let sq2_hp: int = sqrt_fx(20000)    // ~14142 = sqrt(2) * 10000
+    tell(@s, "sqrt_fx(20000) = " + sq2_hp)
+
+    // sin_fixed / cos_fixed — trig in degrees, result * 1000
+    let sin30: int = sin_fixed(30)      // 500 = 0.5 * 1000
+    let cos60: int = cos_fixed(60)      // 500
+    tell(@s, "sin_fixed(30) = " + sin30 + "  cos_fixed(60) = " + cos60)
+
+    // lerp — linear interpolation  lerp(a, b, t) with t in [0,1000]
+    let midpoint: int = lerp(100, 200, 500)   // 150
+    tell(@s, "lerp(100, 200, 500) = " + midpoint)
+
+    // mulfix — multiply two fixed-point values (scale=1000)
+    // mulfix(a,b) = a*b/1000
+    let product: int = mulfix(sin30, cos60)   // 500*500/1000 = 250
+    tell(@s, "mulfix(500, 500) = " + product + "  (0.5 * 0.5 = 0.25 * 1000 = 250)")
+}
+
+// ─── Draw a circle of particles ──────────────────────────────────────────────
+
+// Uses draw_circle() from particles stdlib
+// Draws a circle in the XZ plane at Y=65, radius=5 blocks
+@on_trigger("draw_circle")
+fn do_draw_circle() {
+    // draw_circle(cx, cy, cz, radius*100, steps, particle)
+    // radius * 100 because coords are in units of 0.01 blocks
+    draw_circle(0, 65, 0, 500, 36, "minecraft:flame")
+    tell(@s, "Drew a circle of 36 flame particles!")
+}
+
+// ─── Draw a helix of particles ───────────────────────────────────────────────
+
+// Uses draw_helix() from particles stdlib
+@on_trigger("draw_helix")
+fn do_draw_helix() {
+    // draw_helix(cx, cy_start, cz, radius*100, height_blocks, rotations, steps, particle)
+    draw_helix(0, 64, 0, 300, 10, 3, 60, "minecraft:enchant")
+    tell(@s, "Drew a helix of 60 enchant particles!")
+}
+
+// ─── Manual sine wave using sin_fixed ────────────────────────────────────────
+
+// Draws a sine wave as particles at Y = 65 + sin(i*10°) * 3 blocks
+@on_trigger("draw_sine")
+fn draw_sine_wave() {
+    let i: int = 0
+    while (i < 36) {
+        let angle: int = i * 10          // 0, 10, 20, ... 350 degrees
+        let sin_val: int = sin_fixed(angle)  // -1000 .. +1000
+
+        // Convert to block coords:
+        //   x = i (1 block per step, 0..35)
+        //   y = 65 + sin_val * 3 / 1000  (±3 blocks amplitude)
+        //   z = 0
+        let y_offset: int = sin_val * 3 / 1000
+        let y_pos: int = 65 + y_offset
+
+        // particle_dot places a single particle at integer block coords
+        particle_dot(i, y_pos, 0, "minecraft:end_rod")
+
+        i = i + 1
+    }
+    tell(@s, "Drew a sine wave!")
+}
+
+// ─── Particle effects helpers demo ──────────────────────────────────────────
+
+@on_trigger("particle_demo")
+fn particle_demo() {
+    // Convenience functions from particles stdlib
+    flames(0, 66, 0)
+    sparkles_at(1, 66, 0)
+    hearts_at(2, 66, 0)
+    smoke(3, 66, 0)
+    explosion_effect(4, 66, 0)
+    tell(@s, "Spawned particle effects!")
+}

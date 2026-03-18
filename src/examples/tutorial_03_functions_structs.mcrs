@@ -1,0 +1,162 @@
+// ============================================
+// Tutorial 03: Functions & Structs
+// ============================================
+// A boss health tracking system.
+// Demonstrates functions with parameters/return values
+// and structs for organizing related data.
+// ============================================
+
+namespace tutorial03
+
+// ─── Struct definition ───────────────────────────────────────────────────────
+
+// A struct groups related data into one named type
+struct BossState {
+    max_hp: int,
+    current_hp: int,
+    phase: int,        // 1=normal, 2=enraged (below 50%), 3=dying (below 20%)
+    alive: int         // 0=dead, 1=alive
+}
+
+// Global boss instance
+let boss: BossState = {
+    max_hp: 200,
+    current_hp: 200,
+    phase: 1,
+    alive: 0
+}
+
+// ─── Setup ──────────────────────────────────────────────────────────────────
+
+@load
+fn setup() {
+    scoreboard_add_objective("boss_hp", "dummy")
+    scoreboard_add_objective("boss_phase", "dummy")
+    say("Boss system loaded! /trigger spawn_boss to begin")
+}
+
+// ─── Functions ──────────────────────────────────────────────────────────────
+
+// A pure function that computes a value and returns it
+fn hp_percentage(current: int, max: int) -> int {
+    if (max <= 0) {
+        return 0
+    }
+    return current * 100 / max
+}
+
+// A function that checks and updates boss phase
+// Takes the boss state by value (RedScript structs are value types)
+fn get_phase(current_hp: int, max_hp: int) -> int {
+    let pct: int = hp_percentage(current_hp, max_hp)
+    if (pct <= 20) {
+        return 3
+    }
+    if (pct <= 50) {
+        return 2
+    }
+    return 1
+}
+
+fn describe_phase(phase: int) -> string {
+    if (phase == 1) {
+        return "Normal"
+    }
+    if (phase == 2) {
+        return "Enraged"
+    }
+    return "Dying"
+}
+
+// ─── Spawn boss ─────────────────────────────────────────────────────────────
+
+@on_trigger("spawn_boss")
+fn spawn_boss() {
+    boss.max_hp = 200
+    boss.current_hp = 200
+    boss.phase = 1
+    boss.alive = 1
+
+    scoreboard_set("#boss", "boss_hp", boss.current_hp)
+    scoreboard_set("#boss", "boss_phase", boss.phase)
+
+    summon("minecraft:wither_skeleton", 0, 64, 0)
+    say("The Boss has appeared! HP: 200")
+    title(@a, "BOSS FIGHT")
+    subtitle(@a, "Phase 1: Normal")
+}
+
+// ─── Damage boss ────────────────────────────────────────────────────────────
+
+@on_trigger("damage_boss")
+fn damage_boss() {
+    if (boss.alive == 0) {
+        tell(@s, "No boss is active!")
+        return
+    }
+
+    // Deal 15 damage
+    let damage: int = 15
+    boss.current_hp = boss.current_hp - damage
+
+    // Clamp to zero
+    if (boss.current_hp < 0) {
+        boss.current_hp = 0
+    }
+
+    // Update scoreboard
+    scoreboard_set("#boss", "boss_hp", boss.current_hp)
+
+    // Check for phase transition
+    let new_phase: int = get_phase(boss.current_hp, boss.max_hp)
+    if (new_phase != boss.phase) {
+        boss.phase = new_phase
+        scoreboard_set("#boss", "boss_phase", boss.phase)
+        let phase_name: string = describe_phase(boss.phase)
+        announce("Boss entered phase " + boss.phase + ": " + phase_name + "!")
+        title(@a, "Phase " + boss.phase)
+    }
+
+    let pct: int = hp_percentage(boss.current_hp, boss.max_hp)
+    announce("Boss HP: " + boss.current_hp + "/" + boss.max_hp + " (" + pct + "%)")
+
+    // Check for death
+    if (boss.current_hp <= 0) {
+        kill_boss()
+    }
+}
+
+// ─── Kill boss ───────────────────────────────────────────────────────────────
+
+fn kill_boss() {
+    boss.alive = 0
+    boss.phase = 0
+
+    kill(@e[type=minecraft:wither_skeleton])
+    title(@a, "Boss Defeated!")
+    subtitle(@a, "Well done, heroes!")
+    say("The Boss has been slain!")
+
+    // Give reward to all players
+    foreach (p in @a) {
+        give(p, "minecraft:diamond", 3)
+        tell(p, "You earned 3 diamonds for defeating the boss!")
+    }
+}
+
+// ─── Status check ────────────────────────────────────────────────────────────
+
+@on_trigger("boss_status")
+fn check_status() {
+    if (boss.alive == 0) {
+        tell(@s, "No boss is currently active.")
+        return
+    }
+
+    let pct: int = hp_percentage(boss.current_hp, boss.max_hp)
+    let phase_name: string = describe_phase(boss.phase)
+    tell(@s, "=== Boss Status ===")
+    tell(@s, "HP: " + boss.current_hp + "/" + boss.max_hp)
+    tell(@s, "Health: " + pct + "%")
+    tell(@s, "Phase: " + phase_name)
+}

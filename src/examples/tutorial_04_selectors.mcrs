@@ -1,0 +1,139 @@
+// ============================================
+// Tutorial 04: Selectors & Execute Context
+// ============================================
+// A proximity detector that finds players near a
+// zone, grants them glowing + speed, and alerts them.
+// ============================================
+
+namespace tutorial04
+
+import effects::*
+
+// ─── Setup ──────────────────────────────────────────────────────────────────
+
+@load
+fn setup() {
+    scoreboard_add_objective("in_zone", "dummy")
+    say("Proximity detector loaded! Zone is around 0,64,0 radius 10.")
+}
+
+// ─── Zone check runs every second (rate=20 ticks) ───────────────────────────
+
+@tick(rate=20)
+fn check_zone() {
+    // @a[distance=..10] selects all players within 10 blocks of the executor
+    // The executor position is the world origin (0,0,0) here
+    // In a real setup you'd use execute at (x,y,z) run { ... }
+
+    // Mark players currently in zone
+    foreach (p in @a[distance=..10]) {
+        let was_in_zone: int = scoreboard_get(p, "in_zone")
+        if (was_in_zone == 0) {
+            // Player just entered the zone
+            scoreboard_set(p, "in_zone", 1)
+            on_player_enter(p)
+        }
+        // Refresh effects while in zone
+        refresh_zone_effects(p)
+    }
+
+    // Mark players who left the zone
+    foreach (p in @a[distance=10..]) {
+        let was_in_zone: int = scoreboard_get(p, "in_zone")
+        if (was_in_zone == 1) {
+            scoreboard_set(p, "in_zone", 0)
+            on_player_leave(p)
+        }
+    }
+}
+
+// ─── Zone entry handler ──────────────────────────────────────────────────────
+
+fn on_player_enter(p: selector) {
+    tell(p, "You entered the magic zone!")
+    title(p, "Zone Entered")
+    subtitle(p, "You have the blessing")
+}
+
+fn on_player_leave(p: selector) {
+    tell(p, "You left the magic zone.")
+    // Remove effects when leaving
+    effect_clear(p)
+}
+
+fn refresh_zone_effects(p: selector) {
+    // Give short-duration effects (refreshed every second)
+    speed(p, 2, 1)         // speed II for 2 seconds
+    glow(p, 2)             // glowing for 2 seconds
+}
+
+// ─── Selector filter demos ───────────────────────────────────────────────────
+
+@on_trigger("demo_selectors")
+fn demo_selectors() {
+    // @s  — the entity running this function (the trigger activator)
+    tell(@s, "You are @s")
+
+    // @p  — nearest player to the executor
+    // tell(@p, "Hello, nearest player!")
+
+    // @a  — all players
+    // tell(@a, "Hello everyone!")
+
+    // @e  — all entities
+    // @e[type=minecraft:zombie]  — only zombies
+    // @e[tag=boss]               — only entities with the "boss" tag
+
+    // Count players in zone using selector
+    let in_zone_count: int = 0
+    foreach (p in @a[distance=..10]) {
+        in_zone_count = in_zone_count + 1
+    }
+    tell(@s, "Players in zone: " + in_zone_count)
+}
+
+// ─── Tag-based selection ─────────────────────────────────────────────────────
+
+@on_trigger("mark_vip")
+fn mark_vip() {
+    // Add a tag to the triggering player
+    tag_add(@s, "vip")
+    tell(@s, "You are now VIP!")
+
+    // Now we can select only VIPs
+    foreach (vip in @a[tag=vip]) {
+        tell(vip, "VIP check: you have VIP status!")
+    }
+}
+
+@on_trigger("give_vip_buff")
+fn give_vip_buff() {
+    // Give buff only to tagged VIP players
+    foreach (vip in @a[tag=vip]) {
+        regen(vip, 30, 1)
+        tell(vip, "VIP buff granted!")
+    }
+    // Non-VIPs get a message too
+    foreach (p in @a) {
+        let is_vip: int = 0
+        // Check tag using selector filter
+        foreach (check in @a[tag=vip]) {
+            // If we're checking the same player
+        }
+    }
+}
+
+// ─── foreach with as/at context ──────────────────────────────────────────────
+
+@on_trigger("sweep_entities")
+fn sweep_entities() {
+    // foreach runs the body "as" each selected entity
+    // meaning @s inside the body refers to each entity
+    foreach (zombie in @e[type=minecraft:zombie, distance=..20]) {
+        // @s here is each zombie
+        tell(@s, "Found a zombie!")
+        // Tag it for later use
+        tag_add(zombie, "detected")
+    }
+    announce("Entity sweep complete!")
+}
