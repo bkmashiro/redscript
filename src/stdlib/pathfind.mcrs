@@ -1,0 +1,321 @@
+// pathfind.mcrs — BFS grid pathfinding for RedScript datapacks.
+//
+// Implements breadth-first search on a 16×16 grid (x: 0–15, z: 0–15).
+//
+// Coordinate packing: packed = x * 16 + z  (unique within 16×16 grid)
+//   x = packed / 16
+//   z = packed % 16
+//
+// Obstacle map:
+//   Allocate with pf_new_map() — returns a 256-element int[] (all passable).
+//   pf_set_blocked(map, x, z) — mark a cell as impassable (value 1).
+//   pf_set_open(map, x, z)    — mark a cell as passable (value 0).
+//   pf_is_blocked(map, x, z)  — returns 1 if blocked or out-of-bounds, 0 otherwise.
+//
+// Pathfinding:
+//   pathfind_bfs(map, sx, sz, gx, gz)
+//     → returns int[] of packed coords from (sx,sz) to (gx,gz) inclusive,
+//       or [] if no path exists.
+//
+// Coroutine variant:
+//   pathfind_bfs_coro(map, sx, sz, gx, gz, out) — same BFS but spread across
+//   ticks via @coroutine(batch=16). Results are pushed into the caller-supplied
+//   out[] array. Use onDone to get notified when the path is ready.
+//
+// Example:
+//   let map: int[] = pf_new_map()
+//   pf_set_blocked(map, 3, 5)
+//   let path: int[] = pathfind_bfs(map, 0, 0, 7, 7)
+//   let step_x: int = pf_unpack_x(path[0])
+//   let step_z: int = pf_unpack_z(path[0])
+
+module library
+
+// ─── Coordinate utilities ─────────────────────────────────────────────────────
+
+// pf_pack(x, z): encode (x, z) as a single int (x*16+z)
+fn pf_pack(x: int, z: int): int { return x * 16 + z }
+
+// pf_unpack_x(packed): recover the x component
+fn pf_unpack_x(packed: int): int { return packed / 16 }
+
+// pf_unpack_z(packed): recover the z component
+fn pf_unpack_z(packed: int): int { return packed % 16 }
+
+// ─── Obstacle map ─────────────────────────────────────────────────────────────
+
+// pf_new_map(): allocate a 256-element map, all cells passable (value 0)
+fn pf_new_map(): int[] {
+    let map: int[] = []
+    let i: int = 0
+    while (i < 256) {
+        map.push(0)
+        i = i + 1
+    }
+    return map
+}
+
+// pf_set_blocked(map, x, z): mark cell (x, z) as impassable
+fn pf_set_blocked(map: int[], x: int, z: int) {
+    let idx: int = pf_pack(x, z)
+    map[idx] = 1
+}
+
+// pf_set_open(map, x, z): mark cell (x, z) as passable
+fn pf_set_open(map: int[], x: int, z: int) {
+    let idx: int = pf_pack(x, z)
+    map[idx] = 0
+}
+
+// pf_is_blocked(map, x, z): 1 if out-of-bounds or impassable, 0 otherwise
+fn pf_is_blocked(map: int[], x: int, z: int): int {
+    if (x < 0) { return 1 }
+    if (z < 0) { return 1 }
+    if (x >= 16) { return 1 }
+    if (z >= 16) { return 1 }
+    return map[pf_pack(x, z)]
+}
+
+// ─── Manhattan heuristic ──────────────────────────────────────────────────────
+
+// pf_heuristic(x1, z1, x2, z2): Manhattan distance ×10000 (fixed-point)
+// Informational — not used by BFS, but useful if you extend to A*.
+fn pf_heuristic(x1: int, z1: int, x2: int, z2: int): int {
+    let dx: int = x1 - x2
+    let dz: int = z1 - z2
+    if (dx < 0) { dx = 0 - dx }
+    if (dz < 0) { dz = 0 - dz }
+    return (dx + dz) * 10000
+}
+
+// ─── BFS pathfinding (synchronous) ───────────────────────────────────────────
+
+// pathfind_bfs(map, sx, sz, gx, gz): find shortest path via BFS
+//
+// Returns int[] of packed coords start→goal (inclusive), or [] if unreachable.
+//
+// Internal arrays (size 256):
+//   visited[] — 1 = cell was enqueued; 0 = not yet seen
+//   parent[]  — packed coord of predecessor (-1 = no parent / unvisited)
+//   queue[]   — BFS frontier; consumed via qhead index (no front-dequeue needed)
+fn pathfind_bfs(map: int[], sx: int, sz: int, gx: int, gz: int): int[] {
+    // Allocate visited and parent arrays (256 cells each)
+    let visited: int[] = []
+    let parent: int[] = []
+    let k: int = 0
+    while (k < 256) {
+        visited.push(0)
+        parent.push(-1)
+        k = k + 1
+    }
+
+    let queue: int[] = []
+    let qhead: int = 0
+    let qsize: int = 0
+
+    let start: int = pf_pack(sx, sz)
+    let goal: int = pf_pack(gx, gz)
+
+    visited[start] = 1
+    queue.push(start)
+    qsize = 1
+
+    let found: int = 0
+
+    while (qhead < qsize) {
+        let cur: int = queue[qhead]
+        qhead = qhead + 1
+
+        if (cur == goal) {
+            found = 1
+            qhead = qsize // stop BFS
+        } else {
+            let cx: int = pf_unpack_x(cur)
+            let cz: int = pf_unpack_z(cur)
+
+            // North (z-1)
+            if (pf_is_blocked(map, cx, cz - 1) == 0) {
+                let nb: int = pf_pack(cx, cz - 1)
+                if (visited[nb] == 0) {
+                    visited[nb] = 1
+                    parent[nb] = cur
+                    queue.push(nb)
+                    qsize = qsize + 1
+                }
+            }
+            // South (z+1)
+            if (pf_is_blocked(map, cx, cz + 1) == 0) {
+                let nb: int = pf_pack(cx, cz + 1)
+                if (visited[nb] == 0) {
+                    visited[nb] = 1
+                    parent[nb] = cur
+                    queue.push(nb)
+                    qsize = qsize + 1
+                }
+            }
+            // West (x-1)
+            if (pf_is_blocked(map, cx - 1, cz) == 0) {
+                let nb: int = pf_pack(cx - 1, cz)
+                if (visited[nb] == 0) {
+                    visited[nb] = 1
+                    parent[nb] = cur
+                    queue.push(nb)
+                    qsize = qsize + 1
+                }
+            }
+            // East (x+1)
+            if (pf_is_blocked(map, cx + 1, cz) == 0) {
+                let nb: int = pf_pack(cx + 1, cz)
+                if (visited[nb] == 0) {
+                    visited[nb] = 1
+                    parent[nb] = cur
+                    queue.push(nb)
+                    qsize = qsize + 1
+                }
+            }
+        }
+    }
+
+    let empty: int[] = []
+    if (found == 0) { return empty }
+
+    // Reconstruct path: walk parent[] links from goal back to start
+    let rev: int[] = []
+    let node: int = goal
+    let walking: int = 1
+    while (walking == 1) {
+        rev.push(node)
+        if (node == start) {
+            walking = 0
+        } else {
+            node = parent[node]
+        }
+    }
+
+    // Reverse rev[] into path[]
+    let path: int[] = []
+    let rlen: int = rev.len
+    let ri: int = rlen - 1
+    while (ri >= 0) {
+        path.push(rev[ri])
+        ri = ri - 1
+    }
+
+    return path
+}
+
+// ─── Coroutine BFS (tick-spread for server-friendly operation) ────────────────
+
+// pathfind_bfs_coro: identical BFS logic, spread across ticks via @coroutine.
+//
+// @coroutine(batch=16) processes 16 BFS iterations per server tick, preventing
+// lag spikes on busy grids. Results are pushed into caller-supplied out[] when done.
+//
+// Limitations:
+//   - @coroutine functions cannot return values; use the out[] ref pattern instead.
+//   - Replace pf_noop with your own handler if you need a done callback.
+//   - The out[] array must outlive the coroutine; store it in a scoreboard-backed var.
+//
+// Usage:
+//   let out: int[] = []
+//   pathfind_bfs_coro(map, 0, 0, 7, 7, out)
+//   // … several ticks later, out[] contains the packed-coord path
+
+@coroutine(batch=16, onDone=pf_noop)
+fn pathfind_bfs_coro(map: int[], sx: int, sz: int, gx: int, gz: int, out: int[]) {
+    let visited: int[] = []
+    let parent: int[] = []
+    let k: int = 0
+    while (k < 256) {
+        visited.push(0)
+        parent.push(-1)
+        k = k + 1
+    }
+
+    let queue: int[] = []
+    let qhead: int = 0
+    let qsize: int = 0
+
+    let start: int = pf_pack(sx, sz)
+    let goal: int = pf_pack(gx, gz)
+
+    visited[start] = 1
+    queue.push(start)
+    qsize = 1
+
+    let found: int = 0
+
+    // @coroutine spreads this loop: 16 iterations per tick
+    while (qhead < qsize) {
+        let cur: int = queue[qhead]
+        qhead = qhead + 1
+
+        if (cur == goal) {
+            found = 1
+            qhead = qsize
+        } else {
+            let cx: int = pf_unpack_x(cur)
+            let cz: int = pf_unpack_z(cur)
+
+            if (pf_is_blocked(map, cx, cz - 1) == 0) {
+                let nb: int = pf_pack(cx, cz - 1)
+                if (visited[nb] == 0) {
+                    visited[nb] = 1
+                    parent[nb] = cur
+                    queue.push(nb)
+                    qsize = qsize + 1
+                }
+            }
+            if (pf_is_blocked(map, cx, cz + 1) == 0) {
+                let nb: int = pf_pack(cx, cz + 1)
+                if (visited[nb] == 0) {
+                    visited[nb] = 1
+                    parent[nb] = cur
+                    queue.push(nb)
+                    qsize = qsize + 1
+                }
+            }
+            if (pf_is_blocked(map, cx - 1, cz) == 0) {
+                let nb: int = pf_pack(cx - 1, cz)
+                if (visited[nb] == 0) {
+                    visited[nb] = 1
+                    parent[nb] = cur
+                    queue.push(nb)
+                    qsize = qsize + 1
+                }
+            }
+            if (pf_is_blocked(map, cx + 1, cz) == 0) {
+                let nb: int = pf_pack(cx + 1, cz)
+                if (visited[nb] == 0) {
+                    visited[nb] = 1
+                    parent[nb] = cur
+                    queue.push(nb)
+                    qsize = qsize + 1
+                }
+            }
+        }
+    }
+
+    if (found == 1) {
+        let rev: int[] = []
+        let node: int = goal
+        let walking: int = 1
+        while (walking == 1) {
+            rev.push(node)
+            if (node == start) {
+                walking = 0
+            } else {
+                node = parent[node]
+            }
+        }
+        let rlen: int = rev.len
+        let ri: int = rlen - 1
+        while (ri >= 0) {
+            out.push(rev[ri])
+            ri = ri - 1
+        }
+    }
+}
+
+// pf_noop: default onDone callback — replace with your own handler
+fn pf_noop() {}
