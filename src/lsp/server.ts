@@ -298,17 +298,31 @@ function extractDocComment(source: string, fn: FnDecl): string | null {
   if (endLine < 0) return null
   // Skip blank lines
   while (endLine >= 0 && lines[endLine].trim() === '') endLine--
-  if (endLine < 0 || !lines[endLine].trim().endsWith('*/')) return null
-  // Scan up to find the /** start
-  let startLine = endLine
-  while (startLine >= 0 && !lines[startLine].trim().startsWith('/**')) startLine--
-  if (startLine < 0) return null
-  const commentLines = lines.slice(startLine, endLine + 1)
-  // Strip /** */ and leading * 
-  return commentLines
-    .map(l => l.replace(/^\s*\/\*\*\s?/, '').replace(/^\s*\*\/\s?$/, '').replace(/^\s*\*\s?/, '').trimEnd())
-    .filter(l => l.length > 0)
-    .join('\n')
+  if (endLine < 0) return null
+
+  // Case 1: /** ... */ block comment
+  if (lines[endLine].trim().endsWith('*/')) {
+    let startLine = endLine
+    while (startLine >= 0 && !lines[startLine].trim().startsWith('/**')) startLine--
+    if (startLine < 0) return null
+    const commentLines = lines.slice(startLine, endLine + 1)
+    return commentLines
+      .map(l => l.replace(/^\s*\/\*\*\s?/, '').replace(/^\s*\*\/\s?$/, '').replace(/^\s*\*\s?/, '').trimEnd())
+      .filter(l => l.length > 0)
+      .join('\n') || null
+  }
+
+  // Case 2: consecutive // or /// line comments
+  if (lines[endLine].trim().startsWith('//')) {
+    let startLine = endLine
+    while (startLine > 0 && lines[startLine - 1].trim().startsWith('//')) startLine--
+    return lines.slice(startLine, endLine + 1)
+      .map(l => l.replace(/^\s*\/\/\/?\/?\s?/, '').trimEnd())
+      .filter(l => l.length > 0)
+      .join('\n') || null
+  }
+
+  return null
 }
 
 function buildDefinitionMap(program: Program, source: string): Map<string, Span> {
@@ -683,8 +697,33 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
   const word = wordAt(source, params.position)
   if (!word) return null
 
+  // ── Normal in-file definition (top-level fn/struct/const/global) ────────────
+  const defMap = buildDefinitionMap(program, source)
+  const span = defMap.get(word)
+  if (span) {
+    const line = Math.max(0, span.line - 1)
+    const col  = Math.max(0, span.col  - 1)
+    return {
+      uri: params.textDocument.uri,
+      range: {
+        start: { line, character: col },
+        end:   { line, character: col + word.length },
+      },
+    }
+  }
+
+  // ── If word is a local variable / foreach binding, don't fall through to imports ──
+  // Collect all local names from fn bodies; if word is local, return null (no def jump).
+  for (const fn of program.declarations) {
+    if (!fn.body) continue
+    const locals = collectLocals(fn.body as import('../ast/types').Block)
+    if (locals.has(word)) return null
+    // Also check function params
+    if (fn.params.some(p => p.name === word)) return null
+  }
+
   // ── Imported symbol F12 — jump to definition inside the imported file ────────
-  // Search all imported programs for the word as a function/struct definition.
+  // Only reached if word is not a local. Avoids false matches for short names like 'p', 'k'.
   try {
     const importedPrograms = getImportedPrograms(source, params.textDocument.uri)
     for (const { prog, filePath } of importedPrograms) {
@@ -718,20 +757,7 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
     }
   }
 
-  // ── Normal in-file definition ──────────────────────────────────────────────
-  const defMap = buildDefinitionMap(program, source)
-  const span = defMap.get(word)
-  if (!span) return null
-
-  const line = Math.max(0, span.line - 1)
-  const col  = Math.max(0, span.col  - 1)
-  return {
-    uri: params.textDocument.uri,
-    range: {
-      start: { line, character: col },
-      end:   { line, character: col + word.length },
-    },
-  }
+  return null
 })
 
 // ---------------------------------------------------------------------------
