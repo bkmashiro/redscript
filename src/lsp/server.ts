@@ -576,6 +576,47 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
     return { contents: content }
   }
 
+  // Check globals
+  const globalDecl = program.globals?.find(g => g.name === word)
+  if (globalDecl) {
+    const content: MarkupContent = {
+      kind: MarkupKind.Markdown,
+      value: `\`\`\`redscript\nlet ${globalDecl.name}: ${typeToString(globalDecl.type)}\n\`\`\`\n*global variable*`,
+    }
+    return { contents: content }
+  }
+
+  // Check locals and params in the enclosing function
+  {
+    const curLine = params.position.line + 1
+    for (const fn of program.declarations) {
+      if (!fn.body || !fn.span) continue
+      if (curLine < fn.span.line || curLine > (fn.span.endLine ?? Infinity)) continue
+      // Check params
+      const param = fn.params.find(p => p.name === word)
+      if (param) {
+        return {
+          contents: {
+            kind: MarkupKind.Markdown,
+            value: `\`\`\`redscript\n(param) ${param.name}: ${typeToString(param.type)}\n\`\`\``,
+          } as MarkupContent,
+        }
+      }
+      // Check locals
+      const locals = collectLocals(fn.body as import('../ast/types').Block)
+      const localType = locals.get(word)
+      if (localType) {
+        return {
+          contents: {
+            kind: MarkupKind.Markdown,
+            value: `\`\`\`redscript\nlet ${word}: ${typeToString(localType)}\n\`\`\``,
+          } as MarkupContent,
+        }
+      }
+      break
+    }
+  }
+
   // ── Check imported files (import "stdlib/xxx.mcrs" and import xxx::*) ──────
   try {
     const importedPrograms = getImportedPrograms(source, params.textDocument.uri)
