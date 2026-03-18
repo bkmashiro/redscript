@@ -1,0 +1,58 @@
+namespace coro_mc_test
+
+// ── Test 1: basic sum ──────────────────────────────────────────────────────
+// batch=10, 100 iterations → needs 10 ticks minimum
+// sum(0..99) = 4950
+//
+// Variables stored in __coro_mc_test objective (auto-created by load fn):
+//   player $coro_sum_acc   — running accumulator
+//   player $coro_done_count — how many times onDone fired
+
+@coroutine(batch=10, onDone="on_sum_done")
+fn coro_sum_100() {
+  let i: int = 0
+  while (i < 100) {
+    let cur: int = scoreboard_get("$coro_sum_acc", "__coro_mc_test")
+    scoreboard_set("$coro_sum_acc", "__coro_mc_test", cur + i)
+    i = i + 1
+  }
+}
+
+fn on_sum_done() {
+  let done: int = scoreboard_get("$coro_done_count", "__coro_mc_test")
+  scoreboard_set("$coro_done_count", "__coro_mc_test", done + 1)
+}
+
+fn trigger_coro_sum() {
+  scoreboard_set("$coro_sum_acc", "__coro_mc_test", 0)
+  scoreboard_set("$coro_done_count", "__coro_mc_test", 0)
+  coro_sum_100()
+}
+
+// ── Test 2: partial result check ──────────────────────────────────────────
+// batch=5, sum 0..49 = 1225 (50 iters / batch=5 = 10 ticks)
+// After 3 ticks only 15 iters done — onDone not yet fired
+//
+// Variables:
+//   player $partial_acc  — running accumulator
+//   player $partial_done — 1 when onDone fires
+
+@coroutine(batch=5, onDone="on_partial_done")
+fn coro_partial() {
+  let i: int = 0
+  while (i < 50) {
+    let cur: int = scoreboard_get("$partial_acc", "__coro_mc_test")
+    scoreboard_set("$partial_acc", "__coro_mc_test", cur + i)
+    i = i + 1
+  }
+}
+
+fn on_partial_done() {
+  scoreboard_set("$partial_done", "__coro_mc_test", 1)
+}
+
+fn trigger_partial() {
+  scoreboard_set("$partial_acc", "__coro_mc_test", 0)
+  scoreboard_set("$partial_done", "__coro_mc_test", 0)
+  coro_partial()
+}

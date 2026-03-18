@@ -117,7 +117,7 @@ export class MCTestClient {
     return this.post('/command', { cmd })
   }
 
-  /** Wait for N server ticks (50ms each) */
+  /** Wait for N server ticks (50ms each, real-time) */
   async ticks(count: number): Promise<void> {
     await this.post('/tick', { count })
   }
@@ -125,6 +125,37 @@ export class MCTestClient {
   /** Wait for 1 second = 20 ticks */
   async seconds(s: number): Promise<void> {
     await this.ticks(s * 20)
+  }
+
+  /** Freeze the server tick loop (/tick freeze) */
+  async tickFreeze(): Promise<void> {
+    await this.command('tick freeze')
+  }
+
+  /** Advance exactly N frozen ticks synchronously (/tick step N) */
+  async tickStep(n = 1): Promise<void> {
+    await this.command(`tick step ${n}`)
+    // Brief real-time pause to allow the step to fully process
+    await new Promise(r => setTimeout(r, 50 * n))
+  }
+
+  /** Resume the server tick loop (/tick unfreeze) */
+  async tickUnfreeze(): Promise<void> {
+    await this.command('tick unfreeze')
+  }
+
+  /**
+   * Run a tick-precise coroutine test:
+   * freeze → run fn → step N ticks → unfreeze
+   * Returns a cleanup function that unfreezes.
+   */
+  async withTickControl<T>(fn: (step: (n?: number) => Promise<void>) => Promise<T>): Promise<T> {
+    await this.tickFreeze()
+    try {
+      return await fn((n = 1) => this.tickStep(n))
+    } finally {
+      await this.tickUnfreeze()
+    }
   }
 
   /** Get a scoreboard value */

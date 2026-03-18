@@ -168,6 +168,15 @@ function transformCoroutine(
   // Continuation N: from loop header → until next yield or exit
   const continuations = partitionIntoContinuations(fn, loopHeaders, backEdges)
 
+  // Compute the dispatcher name and the exact scoreboard player for the PC slot.
+  // The LIR lowerer prefixes each temp with the function name, so the PC slot
+  // used by the dispatcher (function = `${prefix}_tick`) is:
+  //   player = `$${prefix}_tick_${pcTemp}`, obj = objective
+  // We pass this pre-computed player string into builders so they can emit
+  // side-effectful `score_write` instructions that survive DCE.
+  const dispatcherName = `${prefix}_tick`
+  const pcPlayer = `$${dispatcherName}_${pcTemp}`
+
   // Step 4: Build continuation functions with batch counting and variable promotion
   const contFunctions: MIRFunction[] = []
 
@@ -186,16 +195,17 @@ function transformCoroutine(
       objective,
       info.onDone,
       fn.name,
+      pcPlayer,
     )
     contFunctions.push(contFn)
   }
 
   // Step 5: Build the init function (replaces original)
-  const initFn = buildInitFunction(fn, promoted, pcTemp, prefix, objective)
+  const initFn = buildInitFunction(fn, promoted, pcTemp, prefix, objective, pcPlayer)
 
   // Step 6: Build the @tick dispatcher
   const dispatcher = buildDispatcher(
-    `${prefix}_tick`,
+    dispatcherName,
     contFunctions,
     pcTemp,
     objective,
@@ -518,15 +528,16 @@ function buildContinuationFunction(
   objective: string,
   onDone: string | undefined,
   originalFnName: string,
+  pcPlayer: string,
 ): MIRFunction {
   if (cont.isLoopBody) {
     return buildLoopContinuation(
       name, cont, batch, contId, totalConts,
-      promoted, pcTemp, batchCountTemp, objective, onDone,
+      promoted, pcTemp, batchCountTemp, objective, onDone, pcPlayer,
     )
   } else {
     return buildPostLoopContinuation(
-      name, cont, contId, promoted, pcTemp, objective, onDone,
+      name, cont, contId, promoted, pcTemp, objective, onDone, pcPlayer,
     )
   }
 }
@@ -542,6 +553,7 @@ function buildLoopContinuation(
   batchCountTemp: Temp,
   objective: string,
   onDone: string | undefined,
+  pcPlayer: string,
 ): MIRFunction {
   // Build a new function that:
   // 1. Initializes batch_count = 0
@@ -625,11 +637,15 @@ function buildLoopContinuation(
       // Check if this block exits the loop
       const exitSuccs = succs.filter(s => !cont.blocks.some(b => b.id === s))
       if (exitSuccs.length > 0) {
-        // Redirect exit branch to an exit block that returns
+        // Redirect exit branch to an exit block that advances PC and returns.
+        // Setting PC to contId+1 tells the dispatcher to run the next continuation
+        // on the following tick (post-loop code / onDone).
         const exitBlockId = `${block.id}_exit`
         const exitBlock: MIRBlock = {
           id: exitBlockId,
-          instrs: [],
+          instrs: [
+            { kind: 'score_write', player: pcPlayer, obj: objective, src: { kind: 'const', value: contId + 1 } },
+          ],
           term: { kind: 'return', value: null },
           preds: [block.id],
         }
@@ -689,6 +705,7 @@ function buildPostLoopContinuation(
   pcTemp: Temp,
   objective: string,
   onDone: string | undefined,
+  pcPlayer: string,
 ): MIRFunction {
   const blocks: MIRBlock[] = []
 
@@ -700,18 +717,19 @@ function buildPostLoopContinuation(
   // The entry is the first block in the continuation
   const entry = cont.blocks[0]?.id ?? 'entry'
 
-  // Add onDone call if this is the last continuation
-  if (onDone) {
-    // Find blocks with return terminators and add onDone call before them
-    for (let i = 0; i < blocks.length; i++) {
-      if (blocks[i].term.kind === 'return') {
-        blocks[i] = {
-          ...blocks[i],
-          instrs: [
-            ...blocks[i].instrs,
-            { kind: 'call', dst: null, fn: onDone, args: [] },
-          ],
-        }
+  // Add onDone call and PC reset on completion (this is the last continuation).
+  // Setting PC=0 marks the coroutine as done so the dispatcher stops running.
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].term.kind === 'return') {
+      const extraInstrs: MIRInstr[] = []
+      if (onDone) {
+        extraInstrs.push({ kind: 'call', dst: null, fn: onDone, args: [] })
+      }
+      // Reset PC to 0 → dispatcher will find no matching continuation → coroutine done
+      extraInstrs.push({ kind: 'score_write', player: pcPlayer, obj: objective, src: { kind: 'const', value: 0 } })
+      blocks[i] = {
+        ...blocks[i],
+        instrs: [...blocks[i].instrs, ...extraInstrs],
       }
     }
   }
@@ -735,25 +753,56 @@ function buildInitFunction(
   pcTemp: Temp,
   prefix: string,
   objective: string,
+  pcPlayer: string,
 ): MIRFunction {
   // The init function:
   // 1. Sets pc = 1 (start from continuation 1)
   // 2. Initializes promoted variables from the entry block's pre-loop code
+  //
+  // NOTE: We use `score_write` (side-effectful, not removed by DCE) to write
+  // directly to the dispatcher's PC scoreboard slot.  Using `const` would
+  // write to a function-local temp (prefixed with the init-function name) which
+  // is a *different* slot from the one the dispatcher reads.
 
   const instrs: MIRInstr[] = []
 
-  // Set pc = 1
-  instrs.push({ kind: 'const', dst: pcTemp, value: 1 })
+  // Set pc = 1 via score_write so DCE cannot eliminate it
+  instrs.push({ kind: 'score_write', player: pcPlayer, obj: objective, src: { kind: 'const', value: 1 } })
 
-  // Initialize promoted variables from entry block instructions
-  // Walk the entry block and copy any const/copy instructions for promoted vars
+  // Initialize promoted variables from entry block instructions.
+  // We must use score_write (side-effectful) rather than const/copy so that DCE
+  // does not eliminate these instructions (the dst is never read in the init fn).
+  // Continuations read promoted vars from `$${contName}_${promotedTemp}`, where
+  // contName = `${prefix}_cont_1` (the first continuation).
+  // We write to EACH continuation's slot so all continuations see the initial values.
+  // (In practice there is usually only one continuation with a loop.)
+  const dispatcherName = `${prefix}_cont_1`
   const entryBlock = originalFn.blocks.find(b => b.id === originalFn.entry)
   if (entryBlock) {
     for (const instr of entryBlock.instrs) {
       const dst = getDst(instr)
       if (dst && promoted.has(dst)) {
-        // Rewrite to use promoted name
-        instrs.push(rewriteInstr(instr, promoted))
+        const promotedTemp = promoted.get(dst)!
+        const player = `$${dispatcherName}_${promotedTemp}`
+        if (instr.kind === 'const') {
+          instrs.push({ kind: 'score_write', player, obj: objective, src: { kind: 'const', value: instr.value } })
+        } else if (instr.kind === 'copy') {
+          // src is an Operand; if it's a temp, resolve through promoted map
+          let src: { kind: 'temp'; name: string } | { kind: 'const'; value: number }
+          if (instr.src.kind === 'temp') {
+            const srcTemp = promoted.get(instr.src.name) ?? instr.src.name
+            src = { kind: 'temp', name: srcTemp }
+          } else {
+            src = instr.src
+          }
+          instrs.push({ kind: 'score_write', player, obj: objective, src })
+        } else {
+          // Fallback for other instruction types: rewrite and emit as-is.
+          // These will have the init-function prefix, which may be wrong, but they
+          // are uncommon — the promoted variable set only contains loop-carried vars
+          // that are initialised with const/copy in the entry block.
+          instrs.push(rewriteInstr(instr, promoted))
+        }
       }
     }
   }
@@ -863,13 +912,18 @@ function buildSingleContinuation(
 
   const contName = `${prefix}_cont_1`
 
-  // Continuation = entire original function body, plus set pc=-1 at the end
+  const dispatcherName = `${prefix}_tick`
+  const pcPlayer = `$${dispatcherName}_${pcTemp}`
+
+  // Continuation = entire original function body, plus onDone call and PC reset at the end
   const contBlocks = fn.blocks.map(block => {
     if (block.term.kind === 'return') {
       const instrs = [...block.instrs]
       if (info.onDone) {
         instrs.push({ kind: 'call', dst: null, fn: info.onDone, args: [] })
       }
+      // Reset PC to 0 so dispatcher stops after one run
+      instrs.push({ kind: 'score_write', player: pcPlayer, obj: objective, src: { kind: 'const', value: 0 } })
       return { ...block, instrs }
     }
     return block
@@ -883,11 +937,11 @@ function buildSingleContinuation(
     isMacro: false,
   }
 
-  // Init: set pc = 1
+  // Init: set pc = 1 via score_write (side-effectful, not removed by DCE)
   const initBlock: MIRBlock = {
     id: 'entry',
     instrs: [
-      { kind: 'const', dst: pcTemp, value: 1 },
+      { kind: 'score_write', player: pcPlayer, obj: objective, src: { kind: 'const', value: 1 } },
     ],
     term: { kind: 'return', value: null },
     preds: [],
@@ -901,7 +955,7 @@ function buildSingleContinuation(
   }
 
   const dispatcher = buildDispatcher(
-    `${prefix}_tick`,
+    dispatcherName,
     [contFn],
     pcTemp,
     objective,
@@ -952,6 +1006,10 @@ function rewriteInstr(instr: MIRInstr, promoted: Map<Temp, Temp>): MIRInstr {
       return { ...instr, src: rOp(instr.src) }
     case 'nbt_write_dynamic':
       return { ...instr, indexSrc: rOp(instr.indexSrc), valueSrc: rOp(instr.valueSrc) }
+    case 'score_read':
+      return { ...instr, dst: rTemp(instr.dst) }
+    case 'score_write':
+      return { ...instr, src: rOp(instr.src) }
     case 'call':
       return { ...instr, dst: instr.dst ? rTemp(instr.dst) : null, args: instr.args.map(rOp) }
     case 'call_macro':
@@ -1028,6 +1086,8 @@ function getUsedTemps(instr: MIRInstr): Temp[] {
       addOp(instr.indexSrc); addOp(instr.valueSrc); break
     case 'nbt_read_dynamic':
       addOp(instr.indexSrc); break
+    case 'score_write':
+      addOp(instr.src); break
     case 'call':
       instr.args.forEach(addOp); break
     case 'call_macro':

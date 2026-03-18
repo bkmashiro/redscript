@@ -507,7 +507,7 @@ export class Parser {
       } else if (key === 'batch') {
         args.batch = parseInt(val, 10)
       } else if (key === 'onDone') {
-        args.onDone = val
+        args.onDone = val.replace(/^["']|["']$/g, '')
       } else if (key === 'trigger') {
         args.trigger = val
       } else if (key === 'advancement') {

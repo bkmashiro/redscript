@@ -1412,3 +1412,67 @@ describe('double precision: NBT read/write via /nbt endpoint', () => {
     console.log(`  rs:d result = ${val} (expect 1.0) ✓`)
   })
 })
+
+// ─── @coroutine MC integration tests ─────────────────────────────────────────
+
+describe('@coroutine: tick-spreading via /tick freeze+step', () => {
+  const CORO_NS = 'coro_mc_test'
+  const OBJ = `__${CORO_NS}`
+
+  beforeAll(async () => {
+    if (!serverOnline) return
+    writeFixtureFile('coroutine-mc-test.mcrs', CORO_NS)
+    await mc.reload()
+  })
+
+  test('sum(0..99) = 4950 with batch=10 after 15 ticks', async () => {
+    if (!serverOnline) return
+    // Reset accumulators
+    await mc.command(`scoreboard players set $coro_sum_acc ${OBJ} 0`)
+    await mc.command(`scoreboard players set $coro_done_count ${OBJ} 0`)
+
+    await mc.withTickControl(async (step) => {
+      // Trigger: call trigger_coro_sum function directly
+      await mc.command(`/function coro_mc_test:trigger_coro_sum`)
+      // batch=10, 100 iters → need 10 ticks; give 15 for safety
+      await step(15)
+    })
+
+    const result = await mc.scoreboard('$coro_sum_acc', OBJ)
+    const doneCount = await mc.scoreboard('$coro_done_count', OBJ)
+    expect(result).toBe(4950)
+    expect(doneCount).toBe(1)
+    console.log(`  coro sum(0..99) = ${result} (expect 4950), onDone = ${doneCount} ✓`)
+  }, 30000)
+
+  test('partial: batch=5 — not complete after 3 ticks', async () => {
+    if (!serverOnline) return
+    // Reset
+    await mc.command(`scoreboard players set $partial_acc ${OBJ} 0`)
+    await mc.command(`scoreboard players set $partial_done ${OBJ} 0`)
+
+    await mc.tickFreeze()
+    try {
+      // Trigger
+      await mc.command(`/function coro_mc_test:trigger_partial`)
+      // Step only 3 ticks (need 10 for 50 iters / batch=5)
+      await mc.tickStep(3)
+
+      const earlyDone = await mc.scoreboard('$partial_done', OBJ).catch(() => 0)
+      // onDone not yet fired — proves tick spreading
+      expect(earlyDone).toBe(0)
+      console.log(`  after 3 ticks: partial_done = ${earlyDone} (expect 0 — not yet complete) ✓`)
+
+      // Now advance enough to complete
+      await mc.tickStep(10)
+    } finally {
+      await mc.tickUnfreeze()
+    }
+
+    const finalDone = await mc.scoreboard('$partial_done', OBJ)
+    const finalAcc = await mc.scoreboard('$partial_acc', OBJ)
+    expect(finalDone).toBe(1)
+    expect(finalAcc).toBe(1225) // sum(0..49) = 1225
+    console.log(`  after 13 ticks: partial_done = ${finalDone}, acc = ${finalAcc} (expect 1225) ✓`)
+  }, 30000)
+})

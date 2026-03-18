@@ -98,10 +98,11 @@ describe('coroutine transform', () => {
       const initFn = result.module.functions.find(f => f.name === 'process_all')!
       expect(initFn).toBeDefined()
 
-      // Init function should have a const instruction setting pc = 1
+      // Init function should have a score_write instruction setting pc = 1
+      // (score_write is used instead of const so DCE cannot eliminate it)
       const allInstrs = initFn.blocks.flatMap(b => b.instrs)
       const pcSet = allInstrs.find(i =>
-        i.kind === 'const' && i.dst.includes('_pc') && i.value === 1
+        i.kind === 'score_write' && i.player.includes('_pc') && i.src.kind === 'const' && i.src.value === 1
       )
       expect(pcSet).toBeDefined()
     })
