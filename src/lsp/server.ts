@@ -286,6 +286,31 @@ function formatFnSignature(fn: FnDecl): string {
 // ---------------------------------------------------------------------------
 
 /** Build a mapping from identifier name → definition location. */
+/**
+ * Extract the leading doc comment (/** ... *\/) immediately before a function
+ * declaration, returning it as plain text (tags stripped).
+ */
+function extractDocComment(source: string, fn: FnDecl): string | null {
+  if (!fn.span) return null
+  const lines = source.split('\n')
+  // fn.span.line is 1-based; scan upward from fn declaration line
+  let endLine = fn.span.line - 2  // 0-based index of line before fn
+  if (endLine < 0) return null
+  // Skip blank lines
+  while (endLine >= 0 && lines[endLine].trim() === '') endLine--
+  if (endLine < 0 || !lines[endLine].trim().endsWith('*/')) return null
+  // Scan up to find the /** start
+  let startLine = endLine
+  while (startLine >= 0 && !lines[startLine].trim().startsWith('/**')) startLine--
+  if (startLine < 0) return null
+  const commentLines = lines.slice(startLine, endLine + 1)
+  // Strip /** */ and leading * 
+  return commentLines
+    .map(l => l.replace(/^\s*\/\*\*\s?/, '').replace(/^\s*\*\/\s?$/, '').replace(/^\s*\*\s?/, '').trimEnd())
+    .filter(l => l.length > 0)
+    .join('\n')
+}
+
 function buildDefinitionMap(program: Program, source: string): Map<string, Span> {
   const map = new Map<string, Span>()
 
@@ -526,9 +551,12 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
       const importedFn = findFunction(prog, word)
       if (importedFn) {
         const sig = formatFnSignature(importedFn)
+        // Extract leading /** ... */ comment from the source file
+        const docComment = extractDocComment(fs.readFileSync(filePath, 'utf-8'), importedFn)
+        const docLine = docComment ? `\n\n${docComment}` : ''
         const content: MarkupContent = {
           kind: MarkupKind.Markdown,
-          value: `\`\`\`redscript\n${sig}\n\`\`\`\n*from ${path.basename(filePath)}*`,
+          value: `\`\`\`redscript\n${sig}\n\`\`\`${docLine}\n\n*from ${path.basename(filePath)}*`,
         }
         return { contents: content }
       }
@@ -537,7 +565,7 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
         const fields = importedStruct.fields.map(f => `  ${f.name}: ${typeToString(f.type)}`).join('\n')
         const content: MarkupContent = {
           kind: MarkupKind.Markdown,
-          value: `\`\`\`redscript\nstruct ${importedStruct.name} {\n${fields}\n}\n\`\`\`\n*from ${path.basename(filePath)}*`,
+          value: `\`\`\`redscript\nstruct ${importedStruct.name} {\n${fields}\n}\n\`\`\`\n\n*from ${path.basename(filePath)}*`,
         }
         return { contents: content }
       }
@@ -653,14 +681,34 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
   const word = wordAt(source, params.position)
   if (!word) return null
 
-  // ── import module::symbol — jump to the symbol in the imported module ───────
-  // Check if word is a known import symbol; try to resolve its module file
+  // ── Imported symbol F12 — jump to definition inside the imported file ────────
+  // Search all imported programs for the word as a function/struct definition.
+  try {
+    const importedPrograms = getImportedPrograms(source, params.textDocument.uri)
+    for (const { prog, filePath } of importedPrograms) {
+      const importedDefMap = buildDefinitionMap(prog, fs.readFileSync(filePath, 'utf-8'))
+      const importedSpan = importedDefMap.get(word)
+      if (importedSpan) {
+        const line = Math.max(0, importedSpan.line - 1)
+        const col  = Math.max(0, importedSpan.col  - 1)
+        return {
+          uri: pathToFileURL(filePath).toString(),
+          range: {
+            start: { line, character: col },
+            end:   { line, character: col + word.length },
+          },
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  // ── import module::symbol (legacy AST imports) — open the module file ────────
   const importDecl = program.imports?.find(im => im.symbol === word || im.symbol === '*')
   if (importDecl) {
-    const resolved = resolveImportPath(importDecl.moduleName, params.textDocument.uri)
+    const resolved = resolveImportPath(`stdlib/${importDecl.moduleName}.mcrs`, params.textDocument.uri)
+      ?? resolveImportPath(importDecl.moduleName, params.textDocument.uri)
       ?? resolveImportPath(importDecl.moduleName + '.mcrs', params.textDocument.uri)
     if (resolved) {
-      // Open file at start; could later search for the symbol definition
       return {
         uri: pathToFileURL(resolved).toString(),
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
