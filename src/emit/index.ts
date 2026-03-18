@@ -176,7 +176,7 @@ function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersio
       return `execute store result storage ${instr.ns} ${instr.path} ${instr.type} ${instr.scale} run scoreboard players get ${slot(instr.src)}`
 
     case 'store_nbt_to_score':
-      return `execute store result score ${slot(instr.dst)} run data get storage ${instr.ns} ${instr.path} ${instr.scale}`
+      return `execute store result score ${slot(instr.dst)} run data get storage ${instr.ns} ${instr.path} ${Number.isInteger(instr.scale) ? instr.scale.toFixed(1) : instr.scale}`
 
     case 'nbt_set_literal':
       return `data modify storage ${instr.ns} ${instr.path} set value ${instr.value}`

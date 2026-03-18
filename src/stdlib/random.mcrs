@@ -47,7 +47,7 @@ fn random_bool(seed: int): int {
 // pcg_next_lo(state_lo, state_hi): advance PCG state (low word).
 // Returns new low word. Use with pcg_next_hi.
 fn pcg_next_lo(state_lo: int): int {
-    return state_lo * 747796405 + 2891336453;
+    return state_lo * 747796405 + -1403630843;
 }
 
 // pcg_next_hi(state_lo, state_hi): advance PCG state (high word).

@@ -920,7 +920,11 @@ function lowerStmt(
     case 'raw': {
       // Raw commands are opaque at MIR level — emit as a call to a synthetic raw function
       // __NS__ is replaced with the current namespace so stdlib can reference self-functions.
-      const rawCmd = stmt.cmd.replace(/__NS__/g, ctx.getNamespace())
+      // __OBJ__ is replaced with the scoreboard objective (__<namespace>).
+      const ns = ctx.getNamespace()
+      const rawCmd = stmt.cmd
+        .replace(/__NS__/g, ns)
+        .replace(/__OBJ__/g, `__${ns}`)
       ctx.emit({ kind: 'call', dst: null, fn: `__raw:${rawCmd}`, args: [] })
       break
     }
@@ -1011,11 +1015,10 @@ function lowerExpr(
 
     case 'double_lit': {
       // Store as NBT double, return as ×10000 fixed score
-      const ns = ctx.getNamespace()
       const path = ctx.freshDoubleVar(`dlit`)
       ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d ${path} set value ${expr.value}d`, args: [] })
       const t = ctx.freshTemp()
-      ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${path} 10000.0`, args: [] })
+      ctx.emit({ kind: 'nbt_read', dst: t, ns: 'rs:d', path, scale: 10000.0 })
       ctx.floatTemps.add(t)
       return { kind: 'temp', name: t }
     }
@@ -1059,10 +1062,9 @@ function lowerExpr(
       // If this is a double variable, load it as ×10000 fixed into a fresh temp
       if (ctx.doubleVars.has(expr.name)) {
         const path = ctx.doubleVars.get(expr.name)!
-        const ns = ctx.getNamespace()
         const t = ctx.freshTemp()
-        // execute store result score $t __ns run data get storage rs:d <path> 10000.0
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${path} 10000.0`, args: [] })
+        // Load double NBT as ×10000 fixed-point score via nbt_read (LIR renames dst properly)
+        ctx.emit({ kind: 'nbt_read', dst: t, ns: 'rs:d', path, scale: 10000.0 })
         // Mark as fixed (×10000) so arithmetic scale correction applies
         ctx.floatTemps.add(t)
         return { kind: 'temp', name: t }
@@ -1105,7 +1107,7 @@ function lowerExpr(
         const resultPath = ctx.freshDoubleVar('dres')
         ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d ${resultPath} set from storage rs:d __dp0`, args: [] })
         const t = ctx.freshTemp()
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${resultPath} 10000.0`, args: [] })
+        ctx.emit({ kind: 'nbt_read', dst: t, ns: 'rs:d', path: resultPath, scale: 10000.0 })
         ctx.floatTemps.add(t)
         return { kind: 'temp', name: t }
       }
@@ -1687,9 +1689,9 @@ function lowerExpr(
         const path = ctx.freshDoubleVar(`cast`)
         // execute store result storage rs:d <path> double 0.0001 run scoreboard players get $<t> __<ns>
         ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result storage rs:d ${path} double 0.0001 run scoreboard players get $${innerTemp} __${ns}`, args: [] })
-        // Return a fresh temp that reads the stored double back as fixed ×10000
+        // Return a fresh temp that reads the stored double back as fixed ×10000 via nbt_read
         const t = ctx.freshTemp()
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${path} 10000.0`, args: [] })
+        ctx.emit({ kind: 'nbt_read', dst: t, ns: 'rs:d', path, scale: 10000.0 })
         ctx.floatTemps.add(t)
         return { kind: 'temp', name: t }
       }
@@ -1697,10 +1699,10 @@ function lowerExpr(
       if (targetName === 'fixed' || targetName === 'float' || targetName === 'int') {
         // expr as fixed (or int): check if expr is a double variable
         if (expr.expr.kind === 'ident' && ctx.doubleVars.has(expr.expr.name)) {
-          // Already handled in ident case — just return a fresh temp loaded from double
+          // Load double NBT as ×10000 fixed-point score via nbt_read (LIR renames dst properly)
           const path = ctx.doubleVars.get(expr.expr.name)!
           const t = ctx.freshTemp()
-          ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${path} 10000.0`, args: [] })
+          ctx.emit({ kind: 'nbt_read', dst: t, ns: 'rs:d', path, scale: 10000.0 })
           if (targetName === 'fixed' || targetName === 'float') {
             ctx.floatTemps.add(t)
           }
