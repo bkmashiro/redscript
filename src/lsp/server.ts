@@ -377,8 +377,9 @@ const TYPE_COMPLETIONS: CompletionItem[] = [
   kind: CompletionItemKind.TypeParameter,
 }))
 
-// For @ completions: label includes @ (for display/filter), insertText excludes @
-// so that VSCode replaces only the partial text after the already-typed @.
+// Decorator completions — triggered when '@' is typed at line start context.
+// insertText is the full token WITHOUT '@' because '@' is already on screen.
+// VSCode will keep the completion open as user types more letters (filter by label).
 const DECORATOR_COMPLETIONS: CompletionItem[] = [
   { label: '@tick',           detail: 'Run every game tick (~20 Hz)',          insertText: 'tick' },
   { label: '@load',           detail: 'Run on /reload (initialization)',        insertText: 'load' },
@@ -393,16 +394,17 @@ const DECORATOR_COMPLETIONS: CompletionItem[] = [
   { label: '@on_join_team',   detail: 'Run on team join',                       insertText: 'on_join_team' },
   { label: '@on_login',       detail: 'Run on player login',                    insertText: 'on_login' },
   { label: '@require_on_load',detail: 'Ensure a fn runs on load (stdlib)',       insertText: 'require_on_load' },
-].map(d => ({ ...d, kind: CompletionItemKind.Event, filterText: d.label }))
+].map(d => ({ ...d, kind: CompletionItemKind.Event }))
 
-/** Entity selector completions triggered by @ inside expressions */
+/** Entity selector completions triggered by @ inside expressions.
+ *  insertText is without '@' (already typed). label has '@' for display. */
 const SELECTOR_COMPLETIONS: CompletionItem[] = [
-  { label: '@a', insertText: 'a', filterText: '@a', kind: CompletionItemKind.Value, detail: 'All players',        documentation: 'Targets all online players.' },
-  { label: '@p', insertText: 'p', filterText: '@p', kind: CompletionItemKind.Value, detail: 'Nearest player',     documentation: 'Targets the nearest player to the command source.' },
-  { label: '@s', insertText: 's', filterText: '@s', kind: CompletionItemKind.Value, detail: 'Executing entity',   documentation: 'Targets the entity currently executing the command.' },
-  { label: '@e', insertText: 'e', filterText: '@e', kind: CompletionItemKind.Value, detail: 'All entities',       documentation: 'Targets all entities (use [type=...] to filter).' },
-  { label: '@r', insertText: 'r', filterText: '@r', kind: CompletionItemKind.Value, detail: 'Random player',      documentation: 'Targets a random online player.' },
-  { label: '@n', insertText: 'n', filterText: '@n', kind: CompletionItemKind.Value, detail: 'Nearest entity',     documentation: 'Targets the nearest entity (any type).' },
+  { label: '@a', insertText: 'a', kind: CompletionItemKind.Value, detail: 'All players',        documentation: 'Targets all online players.' },
+  { label: '@p', insertText: 'p', kind: CompletionItemKind.Value, detail: 'Nearest player',     documentation: 'Targets the nearest player to the command source.' },
+  { label: '@s', insertText: 's', kind: CompletionItemKind.Value, detail: 'Executing entity',   documentation: 'Targets the entity currently executing the command.' },
+  { label: '@e', insertText: 'e', kind: CompletionItemKind.Value, detail: 'All entities',       documentation: 'Targets all entities (use [type=...] to filter).' },
+  { label: '@r', insertText: 'r', kind: CompletionItemKind.Value, detail: 'Random player',      documentation: 'Targets a random online player.' },
+  { label: '@n', insertText: 'n', kind: CompletionItemKind.Value, detail: 'Nearest entity',     documentation: 'Targets the nearest entity (any type).' },
 ]
 
 const BUILTIN_FN_COMPLETIONS: CompletionItem[] = [
@@ -839,38 +841,16 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
   const program = cached?.program ?? null
 
   // ── @ trigger: selector (@a/@p/@s/@e/@r/@n) vs decorator (@tick etc) ────────
-  // Check if current token starts with '@': prevChar='@' OR there's '@xxx' partial token
+  // Only fires when the character just typed is '@' (triggerCharacter).
+  // insertText includes the full @xxx so VSCode replaces the '@' already on screen.
   const prevChar = lineText[charPos - 1]
-  const atMatch = lineText.slice(0, charPos).match(/@([a-zA-Z_]*)$/)
-  if (prevChar === '@' || atMatch) {
-    // Heuristic: if there's a non-whitespace non-keyword char before '@'
-    // on the same line it's likely an expression context (selector).
-    // If line is only whitespace before '@', it's a decorator.
-    const atStart = atMatch ? charPos - atMatch[0].length : charPos - 1
-    const before = lineText.slice(0, atStart).trim()
+  if (prevChar === '@') {
+    const before = lineText.slice(0, charPos - 1).trim()
     const isExprContext = before.length > 0 && !/^(fn|let|if|while|for|return|@)/.test(before.split(/\s+/).pop() ?? '')
-
-    // Build a textEdit that replaces the entire @xxx token so there's no duplication.
-    const editRange = {
-      start: { line: params.position.line, character: atStart },
-      end:   { line: params.position.line, character: charPos },
-    }
-
     if (isExprContext) {
-      return SELECTOR_COMPLETIONS.map(item => ({
-        ...item,
-        textEdit: { range: editRange, newText: item.label },
-        insertText: undefined,
-        filterText: item.label,
-      }))
+      return SELECTOR_COMPLETIONS
     }
-    // Decorator context — return decorator completions with textEdit
-    return DECORATOR_COMPLETIONS.map(item => ({
-      ...item,
-      textEdit: { range: editRange, newText: item.label },
-      insertText: undefined,
-      filterText: item.label,
-    }))
+    return DECORATOR_COMPLETIONS
   }
 
   // ── Dot-access completion ──────────────────────────────────────────────────
