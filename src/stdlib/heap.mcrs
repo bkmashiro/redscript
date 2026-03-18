@@ -1,0 +1,175 @@
+// heap.mcrs — Min-heap and Max-heap priority queues for RedScript datapacks.
+//
+// Heap layout in int[]:
+//   h[0]       = current size (number of elements stored)
+//   h[1..size] = heap elements (1-indexed, root at h[1])
+//
+// Parent of node i  = i / 2
+// Left child of i   = i * 2
+// Right child of i  = i * 2 + 1
+//
+// Capacity: up to 64 elements (indices 1–64, so array length 65).
+//
+// Usage:
+//   let h: int[] = heap_new()
+//   h = heap_push(h, 42)
+//   let top: int = heap_peek(h)   // min element without removing
+//   h = heap_pop(h)               // remove min
+//   let sz: int = heap_size(h)
+//
+// MaxHeap variants use reversed comparisons:
+//   h = max_heap_push(h, 42)
+//   h = max_heap_pop(h)
+
+module library
+
+// ─── Construction ─────────────────────────────────────────────────────────────
+
+// heap_new(): allocate a heap array with size=0 and 64 pre-filled slots
+fn heap_new(): int[] {
+    let h: int[] = []
+    h.push(0)
+    let i: int = 0
+    while (i < 64) {
+        h.push(0)
+        i = i + 1
+    }
+    return h
+}
+
+// ─── Common helpers ───────────────────────────────────────────────────────────
+
+// heap_size(h): number of elements currently in the heap
+fn heap_size(h: int[]): int {
+    return h[0]
+}
+
+// heap_peek(h): return the root (minimum for MinHeap, maximum for MaxHeap)
+// Precondition: heap_size(h) > 0
+fn heap_peek(h: int[]): int {
+    return h[1]
+}
+
+// ─── MinHeap ──────────────────────────────────────────────────────────────────
+
+// heap_push(h, val): insert val into MinHeap; returns updated heap
+fn heap_push(h: int[], val: int): int[] {
+    let sz: int = h[0] + 1
+    h[0] = sz
+    h[sz] = val
+    // sift up: while i > 1 and h[i] < h[parent]
+    let i: int = sz
+    let going: int = 1
+    while (going == 1) {
+        if (i > 1) {
+            let parent: int = i / 2
+            if (h[i] < h[parent]) {
+                let tmp: int = h[i]
+                h[i] = h[parent]
+                h[parent] = tmp
+                i = parent
+            } else {
+                going = 0
+            }
+        } else {
+            going = 0
+        }
+    }
+    return h
+}
+
+// heap_pop(h): remove and discard the minimum element; returns updated heap
+fn heap_pop(h: int[]): int[] {
+    let sz: int = h[0]
+    h[1] = h[sz]
+    h[0] = sz - 1
+    // sift down
+    let i: int = 1
+    let cont: int = 1
+    while (cont == 1) {
+        let left: int = i * 2
+        let right: int = i * 2 + 1
+        let smallest: int = i
+        if (left <= h[0]) {
+            if (h[left] < h[smallest]) {
+                smallest = left
+            }
+        }
+        if (right <= h[0]) {
+            if (h[right] < h[smallest]) {
+                smallest = right
+            }
+        }
+        if (smallest != i) {
+            let tmp: int = h[i]
+            h[i] = h[smallest]
+            h[smallest] = tmp
+            i = smallest
+        } else {
+            cont = 0
+        }
+    }
+    return h
+}
+
+// ─── MaxHeap ──────────────────────────────────────────────────────────────────
+
+// max_heap_push(h, val): insert val into MaxHeap; returns updated heap
+fn max_heap_push(h: int[], val: int): int[] {
+    let sz: int = h[0] + 1
+    h[0] = sz
+    h[sz] = val
+    // sift up: while i > 1 and h[i] > h[parent]
+    let i: int = sz
+    let going: int = 1
+    while (going == 1) {
+        if (i > 1) {
+            let parent: int = i / 2
+            if (h[i] > h[parent]) {
+                let tmp: int = h[i]
+                h[i] = h[parent]
+                h[parent] = tmp
+                i = parent
+            } else {
+                going = 0
+            }
+        } else {
+            going = 0
+        }
+    }
+    return h
+}
+
+// max_heap_pop(h): remove and discard the maximum element; returns updated heap
+fn max_heap_pop(h: int[]): int[] {
+    let sz: int = h[0]
+    h[1] = h[sz]
+    h[0] = sz - 1
+    // sift down
+    let i: int = 1
+    let cont: int = 1
+    while (cont == 1) {
+        let left: int = i * 2
+        let right: int = i * 2 + 1
+        let largest: int = i
+        if (left <= h[0]) {
+            if (h[left] > h[largest]) {
+                largest = left
+            }
+        }
+        if (right <= h[0]) {
+            if (h[right] > h[largest]) {
+                largest = right
+            }
+        }
+        if (largest != i) {
+            let tmp: int = h[i]
+            h[i] = h[largest]
+            h[largest] = tmp
+            i = largest
+        } else {
+            cont = 0
+        }
+    }
+    return h
+}
