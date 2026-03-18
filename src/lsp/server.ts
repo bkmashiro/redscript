@@ -359,30 +359,32 @@ const TYPE_COMPLETIONS: CompletionItem[] = [
   kind: CompletionItemKind.TypeParameter,
 }))
 
+// For @ completions: label includes @ (for display/filter), insertText excludes @
+// so that VSCode replaces only the partial text after the already-typed @.
 const DECORATOR_COMPLETIONS: CompletionItem[] = [
-  { label: '@tick',           detail: 'Run every game tick (~20 Hz)' },
-  { label: '@load',           detail: 'Run on /reload (initialization)' },
-  { label: '@on_trigger',     detail: 'Run when a player uses /trigger' },
-  { label: '@schedule',       detail: 'Schedule function after N ticks' },
-  { label: '@coroutine',      detail: 'Spread loop across ticks (batch=N)' },
-  { label: '@keep',           detail: 'Prevent dead-code elimination' },
-  { label: '@on',             detail: 'Generic event handler' },
-  { label: '@on_advancement', detail: 'Run on advancement earned' },
-  { label: '@on_craft',       detail: 'Run on item craft' },
-  { label: '@on_death',       detail: 'Run on player death' },
-  { label: '@on_join_team',   detail: 'Run on team join' },
-  { label: '@on_login',       detail: 'Run on player login' },
-  { label: '@require_on_load',detail: 'Ensure a fn runs on load (stdlib)' },
-].map(d => ({ ...d, kind: CompletionItemKind.Event }))
+  { label: '@tick',           detail: 'Run every game tick (~20 Hz)',          insertText: 'tick' },
+  { label: '@load',           detail: 'Run on /reload (initialization)',        insertText: 'load' },
+  { label: '@on_trigger',     detail: 'Run when a player uses /trigger',        insertText: 'on_trigger' },
+  { label: '@schedule',       detail: 'Schedule function after N ticks',        insertText: 'schedule' },
+  { label: '@coroutine',      detail: 'Spread loop across ticks (batch=N)',      insertText: 'coroutine' },
+  { label: '@keep',           detail: 'Prevent dead-code elimination',          insertText: 'keep' },
+  { label: '@on',             detail: 'Generic event handler',                  insertText: 'on' },
+  { label: '@on_advancement', detail: 'Run on advancement earned',              insertText: 'on_advancement' },
+  { label: '@on_craft',       detail: 'Run on item craft',                      insertText: 'on_craft' },
+  { label: '@on_death',       detail: 'Run on player death',                    insertText: 'on_death' },
+  { label: '@on_join_team',   detail: 'Run on team join',                       insertText: 'on_join_team' },
+  { label: '@on_login',       detail: 'Run on player login',                    insertText: 'on_login' },
+  { label: '@require_on_load',detail: 'Ensure a fn runs on load (stdlib)',       insertText: 'require_on_load' },
+].map(d => ({ ...d, kind: CompletionItemKind.Event, filterText: d.label }))
 
 /** Entity selector completions triggered by @ inside expressions */
 const SELECTOR_COMPLETIONS: CompletionItem[] = [
-  { label: '@a',  kind: CompletionItemKind.Value, detail: 'All players',              documentation: 'Targets all online players.' },
-  { label: '@p',  kind: CompletionItemKind.Value, detail: 'Nearest player',           documentation: 'Targets the nearest player to the command source.' },
-  { label: '@s',  kind: CompletionItemKind.Value, detail: 'Executing entity',         documentation: 'Targets the entity currently executing the command.' },
-  { label: '@e',  kind: CompletionItemKind.Value, detail: 'All entities',             documentation: 'Targets all entities (use [type=...] to filter).' },
-  { label: '@r',  kind: CompletionItemKind.Value, detail: 'Random player',            documentation: 'Targets a random online player.' },
-  { label: '@n',  kind: CompletionItemKind.Value, detail: 'Nearest entity',           documentation: 'Targets the nearest entity (any type).' },
+  { label: '@a', insertText: 'a', filterText: '@a', kind: CompletionItemKind.Value, detail: 'All players',        documentation: 'Targets all online players.' },
+  { label: '@p', insertText: 'p', filterText: '@p', kind: CompletionItemKind.Value, detail: 'Nearest player',     documentation: 'Targets the nearest player to the command source.' },
+  { label: '@s', insertText: 's', filterText: '@s', kind: CompletionItemKind.Value, detail: 'Executing entity',   documentation: 'Targets the entity currently executing the command.' },
+  { label: '@e', insertText: 'e', filterText: '@e', kind: CompletionItemKind.Value, detail: 'All entities',       documentation: 'Targets all entities (use [type=...] to filter).' },
+  { label: '@r', insertText: 'r', filterText: '@r', kind: CompletionItemKind.Value, detail: 'Random player',      documentation: 'Targets a random online player.' },
+  { label: '@n', insertText: 'n', filterText: '@n', kind: CompletionItemKind.Value, detail: 'Nearest entity',     documentation: 'Targets the nearest entity (any type).' },
 ]
 
 const BUILTIN_FN_COMPLETIONS: CompletionItem[] = [
