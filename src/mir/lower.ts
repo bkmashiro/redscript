@@ -1291,6 +1291,37 @@ function lowerExpr(
         return { kind: 'temp', name: t }
       }
 
+      // Handle __entity_tag / __entity_untag — entity.tag("name") / entity.untag("name") sugar
+      if (expr.fn === '__entity_tag' || expr.fn === '__entity_untag') {
+        const selArg = expr.args[0]
+        const tagArg = expr.args[1]
+        const tagStr = tagArg.kind === 'str_lit' ? tagArg.value : 'unknown'
+        const selStr = selArg.kind === 'selector'
+          ? selectorToString((selArg as any).sel ?? selArg)
+          : '@s'
+        const op = expr.fn === '__entity_tag' ? 'add' : 'remove'
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:tag ${selStr} ${op} ${tagStr}`, args: [] })
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+
+      // Handle __entity_has_tag(entity, tag) — entity.has_tag("vip") sugar
+      // Compiles to: execute store success score $t __ns if entity <sel>[tag=<name>]
+      if (expr.fn === '__entity_has_tag') {
+        const tagArg = expr.args[1]
+        const tagStr = tagArg.kind === 'str_lit' ? tagArg.value : 'unknown'
+        // Extract selector string directly from args[0] (a selector expr)
+        const selArg = expr.args[0]
+        const selStr = selArg.kind === 'selector'
+          ? selectorToString((selArg as any).sel ?? selArg)
+          : '@s'
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store success score $${t} __${ctx.getNamespace()} if entity ${selStr}[tag=${tagStr}]`, args: [] })
+        return { kind: 'temp', name: t }
+      }
+
       // Handle __array_push(arr, val) — h.push(val) sugar (parser desugars arr.push → __array_push)
       // Equivalent to list_push but uses the array's known NBT path directly.
       if (expr.fn === '__array_push') {
@@ -2123,8 +2154,11 @@ function formatBuiltinCall(
     case 'time_set': cmd = `time set ${strs[0]}`; break
     case 'time_add': cmd = `time add ${strs[0]}`; break
     case 'gamerule': cmd = `gamerule ${strs[0]} ${strs[1]}`; break
-    case 'tag_add': cmd = `tag ${strs[0]} add ${strs[1]}`; break
-    case 'tag_remove': cmd = `tag ${strs[0]} remove ${strs[1]}`; break
+    case 'tag_add':        cmd = `tag ${strs[0]} add ${strs[1]}`; break
+    case 'tag_remove':     cmd = `tag ${strs[0]} remove ${strs[1]}`; break
+    // entity.tag(name) / entity.untag(name) sugar — same as tag_add/tag_remove
+    case '__entity_tag':   cmd = `tag ${strs[0]} add ${strs[1]}`; break
+    case '__entity_untag': cmd = `tag ${strs[0]} remove ${strs[1]}`; break
     case 'kick': cmd = `kick ${strs[0]} ${strs[1] ?? ''}`.trim(); break
     case 'clone': cmd = `clone ${strs.join(' ')}`; break
     case 'difficulty': cmd = `difficulty ${strs[0]}`; break
