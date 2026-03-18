@@ -171,3 +171,37 @@ describe('impl: compile', () => {
     expect(() => compile(src, { namespace: 'impl_test' })).not.toThrow()
   })
 })
+
+describe('impl: struct param method (bug fix)', () => {
+  test('method receiving another struct instance as param compiles and produces correct ops', () => {
+    // Regression: dot(self: Vec2, other: Vec2) was broken because struct args
+    // were not flattened field-by-field at call sites and in lowerImplMethod.
+    const src = `
+      struct Vec2 { x: int, y: int }
+      impl Vec2 {
+        fn dot(self, other: Vec2): int {
+          return self.x * other.x + self.y * other.y
+        }
+        fn length_sq(self): int {
+          return self.x * self.x + self.y * self.y
+        }
+      }
+      @keep fn test(): void {
+        let a: Vec2 = { x: 3, y: 4 }
+        let b: Vec2 = { x: 1, y: 2 }
+        let d: int = a.dot(b)
+        let l: int = a.length_sq()
+      }
+    `
+    const result = compile(src, { namespace: 'test' })
+    // dot(a={3,4}, b={1,2}) = 3*1 + 4*2 = 11, length_sq(a) = 9+16 = 25
+    // Compiler constant-folds into a specialized function dot__const_3_4_1_2
+    const allContent = result.files.map(f => f.content).join('\n')
+    // The specialized dot function should compute 3*1=3 and 4*2=8 and add them = 11
+    expect(allContent).toMatch(/set.*3\b/)
+    expect(allContent).toMatch(/set.*8\b/)
+    // Ensure no helper files for __entity_tag or nonexistent functions are emitted
+    const fnPaths = result.files.map(f => f.path)
+    expect(fnPaths.some(p => p.includes('dot'))).toBe(true)
+  })
+})

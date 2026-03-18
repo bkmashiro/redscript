@@ -355,18 +355,46 @@ function lowerImplMethod(
       selfFields.set(fieldName, t)
     }
     ctx.structVars.set('self', { typeName, fields: selfFields })
-    // Remaining params (after self)
+    // Remaining params (after self) — struct params get one slot per field
     for (let i = 1; i < method.params.length; i++) {
-      const t = ctx.freshTemp()
-      params.push({ name: t, isMacroParam: false })
-      scope.set(method.params[i].name, t)
+      const p = method.params[i]
+      const paramTypeName = p.type.kind === 'named' ? p.type.name
+        : p.type.kind === 'struct' ? p.type.name : null
+      const paramFields = paramTypeName ? ctx.structDefs.get(paramTypeName) : null
+      if (paramFields && paramFields.length > 0) {
+        // Struct param: one slot per field, register as structVar
+        const paramFieldTemps = new Map<string, Temp>()
+        for (const fieldName of paramFields) {
+          const t = ctx.freshTemp()
+          params.push({ name: t, isMacroParam: false })
+          paramFieldTemps.set(fieldName, t)
+        }
+        ctx.structVars.set(p.name, { typeName: paramTypeName!, fields: paramFieldTemps })
+      } else {
+        const t = ctx.freshTemp()
+        params.push({ name: t, isMacroParam: false })
+        scope.set(p.name, t)
+      }
     }
   } else {
-    // Static method — regular params
+    // Static method — regular params (struct params get one slot per field)
     for (const p of method.params) {
-      const t = ctx.freshTemp()
-      params.push({ name: t, isMacroParam: false })
-      scope.set(p.name, t)
+      const paramTypeName = p.type.kind === 'named' ? p.type.name
+        : p.type.kind === 'struct' ? p.type.name : null
+      const paramFields = paramTypeName ? ctx.structDefs.get(paramTypeName) : null
+      if (paramFields && paramFields.length > 0) {
+        const paramFieldTemps = new Map<string, Temp>()
+        for (const fieldName of paramFields) {
+          const t = ctx.freshTemp()
+          params.push({ name: t, isMacroParam: false })
+          paramFieldTemps.set(fieldName, t)
+        }
+        ctx.structVars.set(p.name, { typeName: paramTypeName!, fields: paramFieldTemps })
+      } else {
+        const t = ctx.freshTemp()
+        params.push({ name: t, isMacroParam: false })
+        scope.set(p.name, t)
+      }
     }
   }
 
@@ -1512,7 +1540,25 @@ function lowerExpr(
               const temp = sv.fields.get(f)
               return temp ? { kind: 'temp' as const, name: temp } : { kind: 'const' as const, value: 0 }
             })
-            const explicitArgs = expr.args.slice(1).map(a => lowerExpr(a, ctx, scope))
+            // Flatten struct args field-by-field; primitives as single operand
+            const explicitArgs: Operand[] = []
+            for (const argExpr of expr.args.slice(1)) {
+              if (argExpr.kind === 'ident') {
+                const argSv = ctx.structVars.get(argExpr.name)
+                if (argSv) {
+                  // Struct arg: pass each field as a separate operand
+                  const argFields = ctx.structDefs.get(argSv.typeName) ?? []
+                  for (const fieldName of argFields) {
+                    const ft = argSv.fields.get(fieldName)
+                    explicitArgs.push(ft
+                      ? { kind: 'temp' as const, name: ft }
+                      : { kind: 'const' as const, value: 0 })
+                  }
+                  continue
+                }
+              }
+              explicitArgs.push(lowerExpr(argExpr, ctx, scope))
+            }
             const allArgs = [...selfArgs, ...explicitArgs]
             const t = ctx.freshTemp()
             ctx.emit({ kind: 'call', dst: t, fn: `${sv.typeName}::${expr.fn}`, args: allArgs })
