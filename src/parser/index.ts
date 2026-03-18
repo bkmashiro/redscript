@@ -904,10 +904,25 @@ export class Parser {
         end = this.parseUnaryExpr()
       }
     } else {
-      // Dynamic range: expr..expr — not yet supported
-      start = this.withLoc({ kind: 'int_lit', value: 0 }, this.peek())
-      end   = this.withLoc({ kind: 'int_lit', value: 0 }, this.peek())
-      this.error('Dynamic range start requires a literal integer (e.g. 0..count)')
+      // Dynamic range: expr..expr or expr..=expr
+      // parseExpr stops before range_lit (not in BINARY_OPS), so this is safe
+      start = this.parseExpr()
+      // Consume the range_lit token which should be ".." or "..="
+      if (this.check('range_lit')) {
+        const rangeOp = this.advance()
+        inclusive = rangeOp.value.includes('=')
+        // If the range_lit captured digits after .., use them as end
+        const afterOp = rangeOp.value.replace(/^\.\.=?/, '')
+        if (afterOp.length > 0) {
+          end = this.withLoc({ kind: 'int_lit', value: parseInt(afterOp, 10) }, rangeOp)
+        } else {
+          end = this.parseExpr()
+        }
+      } else {
+        this.error('Expected .. or ..= in for-range expression')
+        start = this.withLoc({ kind: 'int_lit', value: 0 }, this.peek())
+        end = this.withLoc({ kind: 'int_lit', value: 0 }, this.peek())
+      }
     }
 
     const body = this.parseBlock()
