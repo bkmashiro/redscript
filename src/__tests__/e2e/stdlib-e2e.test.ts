@@ -1543,3 +1543,492 @@ describe('world.mcrs — sun_altitude', () => {
   test('sun_azimuth(6000) == 900000  (quarter day = 90°)', () =>
     expect(callAndGetRet(rt, 'test_azimuth_noon')).toBe(900000))
 })
+
+// ===========================================================================
+// ADDITIONAL COMPREHENSIVE TESTS — geometry / expr / DFT / color / world
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// geometry.mcrs — in_cylinder (extended)
+// ---------------------------------------------------------------------------
+
+describe('geometry.mcrs — in_cylinder (extended)', () => {
+  const rt = makeRuntime(`
+    // Point exactly on boundary radius (dx=radius → dx²+dz²=r² → inside)
+    fn test_cyl_boundary(): int {
+      return in_cylinder(20000, 5000, 0,  0, 0,  20000,  0, 10000);
+    }
+    // Point at centre (0,0,0) with y in range → definitely inside
+    fn test_cyl_center(): int {
+      return in_cylinder(0, 5000, 0,  0, 0,  10000,  0, 10000);
+    }
+    // Negative coordinates — point at (-5000, 5000, -5000), centre at (-5000, 0, -5000), r=1000
+    fn test_cyl_neg_coords(): int {
+      return in_cylinder(0 - 5000, 5000, 0 - 5000,  0 - 5000, 0 - 5000,  1000,  0, 10000);
+    }
+    // y exactly at lower boundary y_lo → inside (boundary inclusive)
+    fn test_cyl_y_at_lo(): int {
+      return in_cylinder(0, 0, 0,  0, 0,  10000,  0, 10000);
+    }
+    // y exactly at upper boundary y_hi → inside (boundary inclusive)
+    fn test_cyl_y_at_hi(): int {
+      return in_cylinder(0, 10000, 0,  0, 0,  10000,  0, 10000);
+    }
+    // y just below lower boundary → outside
+    fn test_cyl_y_below_lo(): int {
+      return in_cylinder(0, 0 - 1, 0,  0, 0,  10000,  0, 10000);
+    }
+    // Point offset from non-zero centre
+    fn test_cyl_offset_centre(): int {
+      return in_cylinder(15000, 5000, 15000,  10000, 10000,  10000,  0, 10000);
+    }
+  `, [MATH_SRC, VEC_SRC, GEOM_SRC])
+
+  test('in_cylinder: point on exact radius boundary == 1', () =>
+    expect(callAndGetRet(rt, 'test_cyl_boundary')).toBe(1))
+
+  test('in_cylinder: point at centre == 1', () =>
+    expect(callAndGetRet(rt, 'test_cyl_center')).toBe(1))
+
+  test('in_cylinder: negative coordinates, point at centre == 1', () =>
+    expect(callAndGetRet(rt, 'test_cyl_neg_coords')).toBe(1))
+
+  test('in_cylinder: y at lower boundary == 1  (inclusive)', () =>
+    expect(callAndGetRet(rt, 'test_cyl_y_at_lo')).toBe(1))
+
+  test('in_cylinder: y at upper boundary == 1  (inclusive)', () =>
+    expect(callAndGetRet(rt, 'test_cyl_y_at_hi')).toBe(1))
+
+  test('in_cylinder: y just below lower boundary == 0', () =>
+    expect(callAndGetRet(rt, 'test_cyl_y_below_lo')).toBe(0))
+
+  test('in_cylinder: point inside shifted cylinder == 1', () =>
+    expect(callAndGetRet(rt, 'test_cyl_offset_centre')).toBe(1))
+})
+
+// ---------------------------------------------------------------------------
+// geometry.mcrs — in_cone (extended)
+// ---------------------------------------------------------------------------
+
+describe('geometry.mcrs — in_cone (extended)', () => {
+  const rt = makeRuntime(`
+    // Point at apex itself: dy=0 → lhs=0, rhs=0 → 0<=0 → inside
+    fn test_cone_apex(): int {
+      return in_cone(0, 0, 0,  0, 0, 0,  1, 10000, 20000);
+    }
+    // Point outside height (dy > height) → outside
+    fn test_cone_above_height(): int {
+      return in_cone(0, 30000, 0,  0, 0, 0,  1, 10000, 20000);
+    }
+    // Point at exactly height on axis → inside (dy=height, horiz=0)
+    fn test_cone_at_height(): int {
+      return in_cone(0, 20000, 0,  0, 0, 0,  1, 10000, 20000);
+    }
+    // Wide angle (tan=20000 → 63°), point at (10000,10000,0): lhs=100000000, rhs=dy*20000/10000=20000 → rhs²=400000000 ≥ lhs → inside
+    fn test_cone_wide_angle(): int {
+      return in_cone(10000, 10000, 0,  0, 0, 0,  1, 20000, 20000);
+    }
+    // Downward cone (dir_y=-1): point below apex
+    fn test_cone_downward(): int {
+      return in_cone(0, 0 - 5000, 0,  0, 0, 0,  0 - 1, 10000, 20000);
+    }
+    // Narrow angle (tan=5000 → 27°), point just outside: dx=10000,dy=10000 → lhs=100000000, rhs=5000 → rhs²=25000000 < lhs → outside
+    fn test_cone_narrow_outside(): int {
+      return in_cone(10000, 10000, 0,  0, 0, 0,  1, 5000, 20000);
+    }
+  `, [MATH_SRC, VEC_SRC, GEOM_SRC])
+
+  test('in_cone: point at apex == 1', () =>
+    expect(callAndGetRet(rt, 'test_cone_apex')).toBe(1))
+
+  test('in_cone: point above height == 0', () =>
+    expect(callAndGetRet(rt, 'test_cone_above_height')).toBe(0))
+
+  test('in_cone: point at exactly height on axis == 1', () =>
+    expect(callAndGetRet(rt, 'test_cone_at_height')).toBe(1))
+
+  test('in_cone: wide angle (45°), point inside == 1', () =>
+    expect(callAndGetRet(rt, 'test_cone_wide_angle')).toBe(1))
+
+  test('in_cone: downward cone, point below apex == 1', () =>
+    expect(callAndGetRet(rt, 'test_cone_downward')).toBe(1))
+
+  test('in_cone: narrow angle, point outside == 0', () =>
+    expect(callAndGetRet(rt, 'test_cone_narrow_outside')).toBe(0))
+})
+
+// ---------------------------------------------------------------------------
+// geometry.mcrs — in_sector_2d (extended)
+// ---------------------------------------------------------------------------
+
+describe('geometry.mcrs — in_sector_2d (extended)', () => {
+  const rt = makeRuntime(`
+    // Point at origin (cx,cz) → should be inside (zero distance)
+    fn test_sector_at_origin(): int {
+      return in_sector_2d(0, 0,  0, 0,  0, 157079, 20000);
+    }
+    // Point at exact radius boundary (still inside, <=)
+    fn test_sector_radius_boundary(): int {
+      return in_sector_2d(20000, 0,  0, 0,  0, 157079, 20000);
+    }
+    // Point just outside radius → outside
+    fn test_sector_outside_radius(): int {
+      return in_sector_2d(21000, 0,  0, 0,  0, 157079, 20000);
+    }
+    // dir_angle = π/2 (157079), point at (0, 10000): angle=90° → inside
+    fn test_sector_dir_90(): int {
+      return in_sector_2d(0, 10000,  0, 0,  157079, 78540, 20000);
+    }
+    // dir_angle = 0, half_angle = full circle (314159≈π): point at (-10000,0) should be inside
+    fn test_sector_full_half(): int {
+      return in_sector_2d(0 - 10000, 0,  0, 0,  0, 314159, 20000);
+    }
+    // Point at 45° angle, dir at 0°, half_angle = π/6 (~52360) — 45° outside half_angle
+    fn test_sector_45_narrow(): int {
+      return in_sector_2d(10000, 10000,  0, 0,  0, 52360, 20000);
+    }
+  `, [MATH_SRC, VEC_SRC, GEOM_SRC])
+
+  test('in_sector_2d: point at origin == 1  (always inside)', () =>
+    expect(callAndGetRet(rt, 'test_sector_at_origin')).toBe(1))
+
+  test('in_sector_2d: point at exact radius == 1  (boundary inclusive)', () =>
+    expect(callAndGetRet(rt, 'test_sector_radius_boundary')).toBe(1))
+
+  test('in_sector_2d: point just beyond radius == 0', () =>
+    expect(callAndGetRet(rt, 'test_sector_outside_radius')).toBe(0))
+
+  test('in_sector_2d: dir=π/2, point at 90° == 1', () =>
+    expect(callAndGetRet(rt, 'test_sector_dir_90')).toBe(1))
+
+  test('in_sector_2d: half_angle=π (semicircle), point behind == 1', () =>
+    expect(callAndGetRet(rt, 'test_sector_full_half')).toBe(1))
+
+  test('in_sector_2d: 45° point, narrow half_angle=30° == 0', () =>
+    expect(callAndGetRet(rt, 'test_sector_45_narrow')).toBe(0))
+})
+
+// ---------------------------------------------------------------------------
+// expr.mcrs — expr_eval (extended)
+// ---------------------------------------------------------------------------
+
+describe('expr.mcrs — expr_eval (extended)', () => {
+  const rt = makeRuntime(`
+    // 2*x+1 at x=0 → 0+10000=10000
+    fn test_expr_linear_x0(): int {
+      let toks: int[] = [0, 0, 0, 0, 0];
+      toks[0] = 20000;
+      toks[1] = 0 - 10000;
+      toks[2] = 0 - 3;
+      toks[3] = 10000;
+      toks[4] = 0 - 1;
+      return expr_eval(toks, 5, 0);
+    }
+    // 2*x+1 at x=10000 (1.0) → 20000+10000=30000
+    fn test_expr_linear_x1(): int {
+      let toks: int[] = [0, 0, 0, 0, 0];
+      toks[0] = 20000;
+      toks[1] = 0 - 10000;
+      toks[2] = 0 - 3;
+      toks[3] = 10000;
+      toks[4] = 0 - 1;
+      return expr_eval(toks, 5, 10000);
+    }
+    // 2*x+1 at x=20000 (2.0) → 40000+10000=50000
+    fn test_expr_linear_x2(): int {
+      let toks: int[] = [0, 0, 0, 0, 0];
+      toks[0] = 20000;
+      toks[1] = 0 - 10000;
+      toks[2] = 0 - 3;
+      toks[3] = 10000;
+      toks[4] = 0 - 1;
+      return expr_eval(toks, 5, 20000);
+    }
+    // (x+1)*x at x=20000 (2.0): RPN = [x, 10000, +, x, *] → (2+1)*2=6.0=60000
+    fn test_expr_chain(): int {
+      let toks: int[] = [0, 0, 0, 0, 0];
+      toks[0] = 0 - 10000;
+      toks[1] = 10000;
+      toks[2] = 0 - 1;
+      toks[3] = 0 - 10000;
+      toks[4] = 0 - 3;
+      return expr_eval(toks, 5, 20000);
+    }
+    // n=0: return 0 (empty stack)
+    fn test_expr_n0(): int {
+      let toks: int[] = [10000];
+      return expr_eval(toks, 0, 0);
+    }
+    // Single literal: 42.0 = 420000
+    fn test_expr_literal42(): int {
+      let toks: int[] = [420000];
+      return expr_eval(toks, 1, 0);
+    }
+    // x passthrough: tokens=[-10000], n=1, x=30000 → 30000
+    fn test_expr_x_passthrough(): int {
+      let toks: int[] = [0 - 10000];
+      return expr_eval(toks, 1, 30000);
+    }
+  `, [MATH_SRC, EXPR_SRC])
+
+  test('expr_eval: 2*x+1 at x=0 == 10000', () =>
+    expect(callAndGetRet(rt, 'test_expr_linear_x0')).toBe(10000))
+
+  test('expr_eval: 2*x+1 at x=10000 (1.0) == 30000', () =>
+    expect(callAndGetRet(rt, 'test_expr_linear_x1')).toBe(30000))
+
+  test('expr_eval: 2*x+1 at x=20000 (2.0) == 50000', () =>
+    expect(callAndGetRet(rt, 'test_expr_linear_x2')).toBe(50000))
+
+  test('expr_eval: (x+1)*x at x=2.0 == 60000  (chained ops)', () =>
+    expect(callAndGetRet(rt, 'test_expr_chain')).toBe(60000))
+
+  test('expr_eval: n=0 → 0  (empty stack)', () =>
+    expect(callAndGetRet(rt, 'test_expr_n0')).toBe(0))
+
+  test('expr_eval: single literal 420000 → 420000', () =>
+    expect(callAndGetRet(rt, 'test_expr_literal42')).toBe(420000))
+
+  test('expr_eval: x passthrough at x=30000 → 30000', () =>
+    expect(callAndGetRet(rt, 'test_expr_x_passthrough')).toBe(30000))
+})
+
+// ---------------------------------------------------------------------------
+// signal.mcrs — DFT (extended)
+// ---------------------------------------------------------------------------
+
+describe('signal.mcrs — DFT (extended)', () => {
+  const rt = makeRuntime(`
+    // Alternating signal [10000, -10000, 10000, -10000]: DC should be 0
+    fn test_dft_alt_dc(): int {
+      return dft_real(10000, 0 - 10000, 10000, 0 - 10000, 0, 0, 0, 0, 4, 0);
+    }
+    // Alternating signal k=2: should have large real component (signal frequency)
+    fn test_dft_alt_k2(): int {
+      let v: int = dft_real(10000, 0 - 10000, 10000, 0 - 10000, 0, 0, 0, 0, 4, 2);
+      if (v < 0) { v = 0 - v; }
+      if (v >= 5000) { return 1; }
+      return 0;
+    }
+    // dft_imag of alternating signal at k=0 should be 0
+    fn test_dft_alt_imag_dc(): int {
+      return dft_imag(10000, 0 - 10000, 10000, 0 - 10000, 0, 0, 0, 0, 4, 0);
+    }
+    // dft_magnitude of alternating [10000,-10000,10000,-10000] at k=2 should be large
+    fn test_dft_alt_mag_k2(): int {
+      let v: int = dft_magnitude(10000, 0 - 10000, 10000, 0 - 10000, 0, 0, 0, 0, 4, 2);
+      if (v >= 5000) { return 1; }
+      return 0;
+    }
+    // Uniform n=4 k=0: dft_real == mean=10000 (already tested, but verify magnitude==real when imag=0)
+    fn test_dft_uniform_mag_equals_real(): int {
+      let re: int = dft_real(10000, 10000, 10000, 10000, 0, 0, 0, 0, 4, 0);
+      let mg: int = dft_magnitude(10000, 10000, 10000, 10000, 0, 0, 0, 0, 4, 0);
+      if (re == mg) { return 1; }
+      return 0;
+    }
+    // n=2 signal [20000, 0]: DC = mean = 10000
+    fn test_dft_n2_dc(): int {
+      return dft_real(20000, 0, 0, 0, 0, 0, 0, 0, 2, 0);
+    }
+    // n=2 signal [20000, 0]: k=1 real = (20000 - 0)/2 = 10000
+    fn test_dft_n2_k1(): int {
+      return dft_real(20000, 0, 0, 0, 0, 0, 0, 0, 2, 1);
+    }
+    // Constant signal with n=8, k=4 (Nyquist): real alternates → should be 0 for uniform
+    fn test_dft_n8_k4_uniform(): int {
+      let v: int = dft_real(10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 8, 4);
+      if (v < 0) { v = 0 - v; }
+      if (v <= 500) { return 1; }
+      return 0;
+    }
+  `, [MATH_SRC, SIGNAL_SRC])
+
+  test('dft_real(alternating, n=4, k=0) == 0  (DC of alternating = 0)', () =>
+    expect(callAndGetRet(rt, 'test_dft_alt_dc')).toBe(0))
+
+  test('dft_real(alternating, n=4, k=2): large component >= 5000', () =>
+    expect(callAndGetRet(rt, 'test_dft_alt_k2')).toBe(1))
+
+  test('dft_imag(alternating, n=4, k=0) == 0', () =>
+    expect(callAndGetRet(rt, 'test_dft_alt_imag_dc')).toBe(0))
+
+  test('dft_magnitude(alternating, n=4, k=2) >= 5000  (large frequency bin)', () =>
+    expect(callAndGetRet(rt, 'test_dft_alt_mag_k2')).toBe(1))
+
+  test('dft_magnitude == dft_real for uniform DC bin (imag=0)', () =>
+    expect(callAndGetRet(rt, 'test_dft_uniform_mag_equals_real')).toBe(1))
+
+  test('dft_real(n=2, [20000,0], k=0) == 10000  (DC = mean)', () =>
+    expect(callAndGetRet(rt, 'test_dft_n2_dc')).toBe(10000))
+
+  test('dft_real(n=2, [20000,0], k=1) == 10000  (first harmonic)', () =>
+    expect(callAndGetRet(rt, 'test_dft_n2_k1')).toBe(10000))
+
+  test('dft_real(uniform×8, n=8, k=4) ≈ 0  (Nyquist bin near zero)', () =>
+    expect(callAndGetRet(rt, 'test_dft_n8_k4_uniform')).toBe(1))
+})
+
+// ---------------------------------------------------------------------------
+// color.mcrs — RGB↔HSL (extended)
+// ---------------------------------------------------------------------------
+
+describe('color.mcrs — rgb_to_l (extended)', () => {
+  const rt = makeRuntime(`
+    // Gray: R=G=B=1275000 (half of 2550000) → L = (max+min)/510 = (1275000+1275000)/510 = 5000
+    fn test_l_gray(): int { return rgb_to_l(1275000, 1275000, 1275000); }
+    // Red-only: max=2550000, min=0 → L=(2550000+0)/510=5000
+    fn test_l_red(): int { return rgb_to_l(2550000, 0, 0); }
+    // Blue-only: same as red → L=5000
+    fn test_l_blue(): int { return rgb_to_l(0, 0, 2550000); }
+  `, [COLOR_SRC])
+
+  test('rgb_to_l(gray) == 5000  (L = 0.5)', () =>
+    expect(callAndGetRet(rt, 'test_l_gray')).toBe(5000))
+
+  test('rgb_to_l(pure red) == 5000  (L = 0.5)', () =>
+    expect(callAndGetRet(rt, 'test_l_red')).toBe(5000))
+
+  test('rgb_to_l(pure blue) == 5000  (L = 0.5)', () =>
+    expect(callAndGetRet(rt, 'test_l_blue')).toBe(5000))
+})
+
+describe('color.mcrs — rgb_to_s (extended)', () => {
+  const rt = makeRuntime(`
+    // Gray → S = 0
+    fn test_s_gray(): int { return rgb_to_s(1275000, 1275000, 1275000); }
+    // Black → S = 0
+    fn test_s_black(): int { return rgb_to_s(0, 0, 0); }
+    // Pure green → S = 10000
+    fn test_s_green(): int { return rgb_to_s(0, 2550000, 0); }
+    // Pure blue → S > 0
+    fn test_s_blue(): int { return rgb_to_s(0, 0, 2550000); }
+  `, [COLOR_SRC])
+
+  test('rgb_to_s(gray) == 0  (gray has no saturation)', () =>
+    expect(callAndGetRet(rt, 'test_s_gray')).toBe(0))
+
+  test('rgb_to_s(black) == 0', () =>
+    expect(callAndGetRet(rt, 'test_s_black')).toBe(0))
+
+  test('rgb_to_s(pure green) == 10000  (max saturation)', () =>
+    expect(callAndGetRet(rt, 'test_s_green')).toBe(10000))
+
+  test('rgb_to_s(pure blue) > 0', () =>
+    expect(callAndGetRet(rt, 'test_s_blue')).toBeGreaterThan(0))
+})
+
+describe('color.mcrs — rgb_to_h (extended)', () => {
+  const rt = makeRuntime(`
+    // Pure red (max=R): h = 600000*(g-b)/d = 0
+    fn test_h_red(): int { return rgb_to_h(2550000, 0, 0); }
+    // Pure green (max=G): h = 1200000 + 600000*(b-r)/d = 1200000
+    fn test_h_green(): int { return rgb_to_h(0, 2550000, 0); }
+    // Pure blue (max=B): h = 2400000 + 600000*(r-g)/d = 2400000
+    fn test_h_blue(): int { return rgb_to_h(0, 0, 2550000); }
+    // Gray → h = 0 (achromatic, d=0)
+    fn test_h_gray(): int { return rgb_to_h(1275000, 1275000, 1275000); }
+    // Black → h = 0
+    fn test_h_black(): int { return rgb_to_h(0, 0, 0); }
+  `, [COLOR_SRC])
+
+  test('rgb_to_h(pure red) == 0', () =>
+    expect(callAndGetRet(rt, 'test_h_red')).toBe(0))
+
+  test('rgb_to_h(pure green) == 1200000  (120° × 10000)', () =>
+    expect(callAndGetRet(rt, 'test_h_green')).toBe(1200000))
+
+  test('rgb_to_h(pure blue) == 2400000  (240° × 10000)', () =>
+    expect(callAndGetRet(rt, 'test_h_blue')).toBe(2400000))
+
+  test('rgb_to_h(gray) == 0  (achromatic)', () =>
+    expect(callAndGetRet(rt, 'test_h_gray')).toBe(0))
+
+  test('rgb_to_h(black) == 0', () =>
+    expect(callAndGetRet(rt, 'test_h_black')).toBe(0))
+})
+
+describe('color.mcrs — hsl_to_r/g/b (extended)', () => {
+  const rt = makeRuntime(`
+    // hsl_to_r(0, 10000, 5000): red hue, full sat, mid lightness → R≈2550000
+    fn test_hsl_r_red(): int { return hsl_to_r(0, 10000, 5000); }
+    // hsl_to_g(0, 10000, 5000): red hue → G≈0
+    fn test_hsl_g_from_red_hue(): int { return hsl_to_g(0, 10000, 5000); }
+    // hsl_to_b(0, 10000, 5000): red hue → B≈0
+    fn test_hsl_b_from_red_hue(): int { return hsl_to_b(0, 10000, 5000); }
+    // hsl_to_g(1200000, 10000, 5000): green hue → G≈2550000
+    fn test_hsl_g_green(): int { return hsl_to_g(1200000, 10000, 5000); }
+    // hsl_to_r(1200000, 10000, 5000): green hue → R≈0
+    fn test_hsl_r_from_green_hue(): int { return hsl_to_r(1200000, 10000, 5000); }
+    // hsl_to_b(2400000, 10000, 5000): blue hue → B≈2550000
+    fn test_hsl_b_blue(): int { return hsl_to_b(2400000, 10000, 5000); }
+    // Gray: h=0, s=0, l=5000 → R=G=B = m*255 = 5000*255 = 1275000
+    fn test_hsl_r_gray(): int { return hsl_to_r(0, 0, 5000); }
+    fn test_hsl_g_gray(): int { return hsl_to_g(0, 0, 5000); }
+    fn test_hsl_b_gray(): int { return hsl_to_b(0, 0, 5000); }
+  `, [COLOR_SRC])
+
+  test('hsl_to_r(0, 10000, 5000) ≈ 2550000  (red)', () => {
+    const v = callAndGetRet(rt, 'test_hsl_r_red')
+    expect(Math.abs(v - 2550000)).toBeLessThanOrEqual(1000)
+  })
+
+  test('hsl_to_g(0, 10000, 5000) ≈ 0  (red hue → no green)', () => {
+    const v = callAndGetRet(rt, 'test_hsl_g_from_red_hue')
+    expect(v).toBeLessThanOrEqual(1000)
+  })
+
+  test('hsl_to_b(0, 10000, 5000) ≈ 0  (red hue → no blue)', () => {
+    const v = callAndGetRet(rt, 'test_hsl_b_from_red_hue')
+    expect(v).toBeLessThanOrEqual(1000)
+  })
+
+  test('hsl_to_g(1200000, 10000, 5000) ≈ 2550000  (green hue → max green)', () => {
+    const v = callAndGetRet(rt, 'test_hsl_g_green')
+    expect(Math.abs(v - 2550000)).toBeLessThanOrEqual(1000)
+  })
+
+  test('hsl_to_r(1200000, 10000, 5000) ≈ 0  (green hue → no red)', () => {
+    const v = callAndGetRet(rt, 'test_hsl_r_from_green_hue')
+    expect(v).toBeLessThanOrEqual(1000)
+  })
+
+  test('hsl_to_b(2400000, 10000, 5000) ≈ 2550000  (blue hue → max blue)', () => {
+    const v = callAndGetRet(rt, 'test_hsl_b_blue')
+    expect(Math.abs(v - 2550000)).toBeLessThanOrEqual(1000)
+  })
+
+  test('hsl_to_r(gray) == hsl_to_g(gray) == hsl_to_b(gray) == 1275000', () => {
+    const r = callAndGetRet(rt, 'test_hsl_r_gray')
+    const g = callAndGetRet(rt, 'test_hsl_g_gray')
+    const b = callAndGetRet(rt, 'test_hsl_b_gray')
+    expect(r).toBe(1275000)
+    expect(g).toBe(1275000)
+    expect(b).toBe(1275000)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// world.mcrs — sun_azimuth (extended)
+// ---------------------------------------------------------------------------
+
+describe('world.mcrs — sun_azimuth (extended)', () => {
+  const rt = makeRuntime(`
+    fn test_azimuth_half_day(): int { return sun_azimuth(12000); }
+    fn test_azimuth_full_day(): int { return sun_azimuth(24000); }
+    fn test_azimuth_three_quarter(): int { return sun_azimuth(18000); }
+    fn test_azimuth_quarter_plus(): int { return sun_azimuth(8000); }
+  `, [WORLD_SRC, MATH_SRC])
+
+  test('sun_azimuth(12000) == 1800000  (half day = 180°)', () =>
+    expect(callAndGetRet(rt, 'test_azimuth_half_day')).toBe(1800000))
+
+  test('sun_azimuth(24000) == 0  (full day wraps to 0)', () =>
+    expect(callAndGetRet(rt, 'test_azimuth_full_day')).toBe(0))
+
+  test('sun_azimuth(18000) == 2700000  (three-quarter day = 270°)', () =>
+    expect(callAndGetRet(rt, 'test_azimuth_three_quarter')).toBe(2700000))
+
+  test('sun_azimuth(8000) == 1200000  (8000/24000 × 360° × 10000)', () =>
+    expect(callAndGetRet(rt, 'test_azimuth_quarter_plus')).toBe(1200000))
+})
