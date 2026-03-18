@@ -203,3 +203,133 @@ fn negative_binomial_sample(r: int, p_success: int, seed: int): int {
     }
     return s;
 }
+
+// ─── DFT helpers ──────────────────────────────────────────────────────────────
+//
+// _sin45(q): sin(q × 45°) × 10000, q = 0..7 (handles full circle in 45° steps)
+// Pure arithmetic — no NBT storage required. Works in MCRuntime for testing.
+fn _sin45(q: int): int {
+    let qi: int = q % 8;
+    if (qi < 0) { qi = qi + 8; }
+    if (qi == 0) { return 0; }
+    if (qi == 1) { return 7071; }
+    if (qi == 2) { return 10000; }
+    if (qi == 3) { return 7071; }
+    if (qi == 4) { return 0; }
+    if (qi == 5) { return -7071; }
+    if (qi == 6) { return -10000; }
+    return -7071;  // qi == 7
+}
+
+// _cos45(q): cos(q × 45°) × 10000
+fn _cos45(q: int): int {
+    return _sin45(q + 2);  // cos(x) = sin(x + 90°) = sin((q+2)×45°)
+}
+
+// ─── Discrete Fourier Transform (fixed-point, n ≤ 8) ─────────────────────────
+//
+// Computes DFT bin k of a real-valued signal with n samples.
+// All values use ×10000 scale.
+//
+// Angle convention: 360*k*j/n degrees — always a multiple of 45° for n ≤ 8.
+// Trig is handled by _sin45/_cos45 which take a 45°-step index.
+//
+// dft_real(s0..s7, n, k): real part of DFT bin k
+//   real[k] = (1/n) × Σ(j=0..n-1) samples[j] × cos(2π k j / n)
+//   Return value ×10000.
+//
+// To keep within int32: divide each term by 10000 before accumulating,
+// then divide the sum by n at the end.
+//
+// Note: passes samples as 8 explicit integers (s0..s7).
+//       Use s0..s(n-1); remaining args are ignored based on n.
+
+fn dft_real(s0: int, s1: int, s2: int, s3: int,
+            s4: int, s5: int, s6: int, s7: int,
+            n: int, k: int): int {
+    let acc: int = 0;
+    // j=0: angle = 0 → cos = 10000, term = s0 * 10000 / 10000 = s0
+    acc = acc + s0 * _cos45(0) / 10000;
+    if (n > 1) {
+        // j=1: angle_steps = 360*k*1/n / 45 = 8*k/n
+        let q1: int = 8 * k * 1 / n;
+        acc = acc + s1 * _cos45(q1) / 10000;
+    }
+    if (n > 2) {
+        let q2: int = 8 * k * 2 / n;
+        acc = acc + s2 * _cos45(q2) / 10000;
+    }
+    if (n > 3) {
+        let q3: int = 8 * k * 3 / n;
+        acc = acc + s3 * _cos45(q3) / 10000;
+    }
+    if (n > 4) {
+        let q4: int = 8 * k * 4 / n;
+        acc = acc + s4 * _cos45(q4) / 10000;
+    }
+    if (n > 5) {
+        let q5: int = 8 * k * 5 / n;
+        acc = acc + s5 * _cos45(q5) / 10000;
+    }
+    if (n > 6) {
+        let q6: int = 8 * k * 6 / n;
+        acc = acc + s6 * _cos45(q6) / 10000;
+    }
+    if (n > 7) {
+        let q7: int = 8 * k * 7 / n;
+        acc = acc + s7 * _cos45(q7) / 10000;
+    }
+    return acc / n;
+}
+
+// dft_imag(s0..s7, n, k): imaginary part of DFT bin k (negative sine convention)
+//   imag[k] = -(1/n) × Σ(j=0..n-1) samples[j] × sin(2π k j / n)
+fn dft_imag(s0: int, s1: int, s2: int, s3: int,
+            s4: int, s5: int, s6: int, s7: int,
+            n: int, k: int): int {
+    let acc: int = 0;
+    acc = acc + s0 * _sin45(0) / 10000;
+    if (n > 1) {
+        let q1: int = 8 * k * 1 / n;
+        acc = acc + s1 * _sin45(q1) / 10000;
+    }
+    if (n > 2) {
+        let q2: int = 8 * k * 2 / n;
+        acc = acc + s2 * _sin45(q2) / 10000;
+    }
+    if (n > 3) {
+        let q3: int = 8 * k * 3 / n;
+        acc = acc + s3 * _sin45(q3) / 10000;
+    }
+    if (n > 4) {
+        let q4: int = 8 * k * 4 / n;
+        acc = acc + s4 * _sin45(q4) / 10000;
+    }
+    if (n > 5) {
+        let q5: int = 8 * k * 5 / n;
+        acc = acc + s5 * _sin45(q5) / 10000;
+    }
+    if (n > 6) {
+        let q6: int = 8 * k * 6 / n;
+        acc = acc + s6 * _sin45(q6) / 10000;
+    }
+    if (n > 7) {
+        let q7: int = 8 * k * 7 / n;
+        acc = acc + s7 * _sin45(q7) / 10000;
+    }
+    // Negate (imaginary part uses -sin)
+    return 0 - (acc / n);
+}
+
+// dft_magnitude(s0..s7, n, k): magnitude of DFT bin k
+//   magnitude = sqrt_fx(real² + imag²)  where both real,imag are ×10000
+fn dft_magnitude(s0: int, s1: int, s2: int, s3: int,
+                 s4: int, s5: int, s6: int, s7: int,
+                 n: int, k: int): int {
+    let re: int = dft_real(s0, s1, s2, s3, s4, s5, s6, s7, n, k);
+    let im: int = dft_imag(s0, s1, s2, s3, s4, s5, s6, s7, n, k);
+    // re, im are ×10000; re²+im² in ×10000 units for sqrt_fx
+    let re2: int = re * re / 10000;
+    let im2: int = im * im / 10000;
+    return sqrt_fx(re2 + im2);
+}

@@ -783,6 +783,77 @@ describe('signal.mcrs — statistical distributions', () => {
 })
 
 // ===========================================================================
+// signal.mcrs — DFT (Discrete Fourier Transform)
+// ===========================================================================
+
+describe('signal.mcrs — DFT', () => {
+  const rt = makeRuntime(`
+    // Uniform signal [10000, 10000, 10000, 10000], n=4
+    // DC bin (k=0): real = mean = 10000, imag = 0, magnitude = 10000
+    fn test_dft_real_dc(): int {
+      return dft_real(10000, 10000, 10000, 10000, 0, 0, 0, 0, 4, 0);
+    }
+    fn test_dft_imag_dc(): int {
+      return dft_imag(10000, 10000, 10000, 10000, 0, 0, 0, 0, 4, 0);
+    }
+    fn test_dft_mag_dc(): int {
+      return dft_magnitude(10000, 10000, 10000, 10000, 0, 0, 0, 0, 4, 0);
+    }
+    // Uniform signal, k=1: all non-DC bins should be ~0
+    fn test_dft_real_k1(): int {
+      let v: int = dft_real(10000, 10000, 10000, 10000, 0, 0, 0, 0, 4, 1);
+      if (v < 0) { v = 0 - v; }
+      if (v <= 500) { return 1; }
+      return 0;
+    }
+    fn test_dft_mag_k1_near_zero(): int {
+      let v: int = dft_magnitude(10000, 10000, 10000, 10000, 0, 0, 0, 0, 4, 1);
+      if (v <= 500) { return 1; }
+      return 0;
+    }
+    fn test_dft_mag_k2_near_zero(): int {
+      let v: int = dft_magnitude(10000, 10000, 10000, 10000, 0, 0, 0, 0, 4, 2);
+      if (v <= 500) { return 1; }
+      return 0;
+    }
+    fn test_dft_mag_k3_near_zero(): int {
+      let v: int = dft_magnitude(10000, 10000, 10000, 10000, 0, 0, 0, 0, 4, 3);
+      if (v <= 500) { return 1; }
+      return 0;
+    }
+    // n=8 uniform signal: DC = 10000, all other bins near zero
+    fn test_dft_real_dc_n8(): int {
+      return dft_real(10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 8, 0);
+    }
+    fn test_dft_mag_k1_n8(): int {
+      let v: int = dft_magnitude(10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 8, 1);
+      if (v <= 500) { return 1; }
+      return 0;
+    }
+    // _sin45 / _cos45 sanity checks
+    fn test_sin45_0(): int { return _sin45(0); }
+    fn test_sin45_2(): int { return _sin45(2); }
+    fn test_cos45_0(): int { return _cos45(0); }
+    fn test_cos45_2(): int { return _cos45(2); }
+  `, [MATH_SRC, SIGNAL_SRC])
+
+  test('_sin45(0) == 0',     () => expect(callAndGetRet(rt, 'test_sin45_0')).toBe(0))
+  test('_sin45(2) == 10000', () => expect(callAndGetRet(rt, 'test_sin45_2')).toBe(10000))
+  test('_cos45(0) == 10000', () => expect(callAndGetRet(rt, 'test_cos45_0')).toBe(10000))
+  test('_cos45(2) == 0',     () => expect(callAndGetRet(rt, 'test_cos45_2')).toBe(0))
+
+  test('dft_real(uniform×4, n=4, k=0) == 10000 (DC = mean)', () => expect(callAndGetRet(rt, 'test_dft_real_dc')).toBe(10000))
+  test('dft_imag(uniform×4, n=4, k=0) == 0',                 () => expect(callAndGetRet(rt, 'test_dft_imag_dc')).toBe(0))
+  test('dft_magnitude(uniform×4, n=4, k=0) == 10000',        () => expect(callAndGetRet(rt, 'test_dft_mag_dc')).toBe(10000))
+  test('dft_real(uniform×4, n=4, k=1) ≈ 0 (±500)',           () => expect(callAndGetRet(rt, 'test_dft_real_k1')).toBe(1))
+  test('dft_magnitude(uniform×4, n=4, k=1) ≤ 500',           () => expect(callAndGetRet(rt, 'test_dft_mag_k1_near_zero')).toBe(1))
+  test('dft_magnitude(uniform×4, n=4, k=2) ≤ 500',           () => expect(callAndGetRet(rt, 'test_dft_mag_k2_near_zero')).toBe(1))
+  test('dft_magnitude(uniform×4, n=4, k=3) ≤ 500',           () => expect(callAndGetRet(rt, 'test_dft_mag_k3_near_zero')).toBe(1))
+  test('dft_real(uniform×8, n=8, k=0) == 10000 (DC = mean)', () => expect(callAndGetRet(rt, 'test_dft_real_dc_n8')).toBe(10000))
+  test('dft_magnitude(uniform×8, n=8, k=1) ≤ 500',           () => expect(callAndGetRet(rt, 'test_dft_mag_k1_n8')).toBe(1))
+})
+
+// ===========================================================================
 // advanced.mcrs — runtime
 // ===========================================================================
 
