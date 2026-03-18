@@ -181,9 +181,13 @@ function parseDocument(uri: string, source: string): ParsedDoc {
   let program: Program | null = null
 
   try {
-    const lexer = new Lexer(source)
+    // Strip path-based imports ("import "stdlib/xxx.mcrs"") before parsing,
+    // since the Parser only understands import module::symbol syntax.
+    // These are handled at compile time by pre-processing, not by the parser.
+    const strippedSource = source.replace(/^import\s+"[^"]*"\s*;?\s*$/gm, '// (import stripped for LSP)')
+    const lexer = new Lexer(strippedSource)
     const tokens = lexer.tokenize()
-    const parser = new Parser(tokens, source, uri)
+    const parser = new Parser(tokens, strippedSource, uri)
     program = parser.parse('redscript')
 
     // Type-check (warn mode — collects errors but doesn't throw)
