@@ -1,0 +1,23 @@
+fn test_exclusive(n: int): int {
+    let sum: int = 0
+    for i in 0..n {
+        sum = sum + i
+    }
+    return sum
+}
+
+fn test_inclusive(): int {
+    let sum: int = 0
+    for i in 0..=4 {
+        sum = sum + i
+    }
+    return sum
+}
+
+fn test_literal(): int {
+    let sum: int = 0
+    for i in 0..5 {
+        sum = sum + i
+    }
+    return sum
+}

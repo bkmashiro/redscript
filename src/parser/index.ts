@@ -885,29 +885,33 @@ export class Parser {
 
     let start: Expr
     let end: Expr
+    let inclusive = false
 
     if (this.check('range_lit')) {
-      // Literal range: 0..10, 0..count, 0..=9
+      // Literal range: 0..10, 0..count, 0..=9, 0..=count
       const rangeToken = this.advance()
-      const range = this.parseRangeValue(rangeToken.value)
+      const raw = rangeToken.value
+      // Detect inclusive: ends with = after .. (e.g. "0..=" or "..=")
+      const incl = raw.includes('..=')
+      inclusive = incl
+      const range = this.parseRangeValue(raw)
       start = this.withLoc({ kind: 'int_lit', value: range.min ?? 0 }, rangeToken)
       if (range.max !== null && range.max !== undefined) {
-        // Fully numeric: 0..10
+        // Fully numeric: 0..10 or 0..=9
         end = this.withLoc({ kind: 'int_lit', value: range.max }, rangeToken)
       } else {
-        // Open-ended: "0.." — parse the end expression from next tokens
+        // Open-ended: "0.." or "0..=" — parse the end expression from next tokens
         end = this.parseUnaryExpr()
       }
     } else {
-      // Dynamic range: expr..expr (e.g. start..end) — not yet supported
-      // Fall back to: parse as int_lit 0..0 (safe default)
+      // Dynamic range: expr..expr — not yet supported
       start = this.withLoc({ kind: 'int_lit', value: 0 }, this.peek())
       end   = this.withLoc({ kind: 'int_lit', value: 0 }, this.peek())
       this.error('Dynamic range start requires a literal integer (e.g. 0..count)')
     }
 
     const body = this.parseBlock()
-    return this.withLoc({ kind: 'for_range', varName, start, end, body }, forToken)
+    return this.withLoc({ kind: 'for_range', varName, start, end, inclusive, body }, forToken)
   }
 
   private parseForeachStmt(): Stmt {
@@ -2176,24 +2180,42 @@ export class Parser {
 
   private parseRangeValue(value: string): RangeExpr {
     // ..5 → { max: 5 }
+    // ..=5 → { max: 5 }
     // 1.. → { min: 1 }
+    // 1..= → { min: 1 } (open-ended inclusive, end parsed separately)
     // 1..10 → { min: 1, max: 10 }
+    // 1..=10 → { min: 1, max: 10 }
     // 5 → { min: 5, max: 5 } (exact match)
 
-    if (value.startsWith('..')) {
-      const max = parseInt(value.slice(2), 10)
+    if (value.startsWith('..=')) {
+      const rest = value.slice(3)
+      if (!rest) return {}  // open upper bound, no max
+      const max = parseInt(rest, 10)
       return { max }
     }
 
-    if (value.endsWith('..')) {
-      const min = parseInt(value.slice(0, -2), 10)
-      return { min }
+    if (value.startsWith('..')) {
+      const rest = value.slice(2)
+      if (!rest) return {}  // open upper bound, no max
+      const max = parseInt(rest, 10)
+      return { max }
+    }
+
+    const inclIdx = value.indexOf('..=')
+    if (inclIdx !== -1) {
+      const min = parseInt(value.slice(0, inclIdx), 10)
+      const rest = value.slice(inclIdx + 3)
+      if (!rest) return { min }  // open-ended inclusive
+      const max = parseInt(rest, 10)
+      return { min, max }
     }
 
     const dotIndex = value.indexOf('..')
     if (dotIndex !== -1) {
       const min = parseInt(value.slice(0, dotIndex), 10)
-      const max = parseInt(value.slice(dotIndex + 2), 10)
+      const rest = value.slice(dotIndex + 2)
+      if (!rest) return { min }  // open-ended
+      const max = parseInt(rest, 10)
       return { min, max }
     }
 

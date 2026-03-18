@@ -234,7 +234,7 @@ export type Stmt =
   | { kind: 'while';      cond: Expr; body: Block; span?: Span }
   | { kind: 'for';        init?: Stmt; cond: Expr; step: Expr; body: Block; span?: Span }
   | { kind: 'foreach';    binding: string; iterable: Expr; body: Block; executeContext?: string; span?: Span }
-  | { kind: 'for_range';  varName: string; start: Expr; end: Expr; body: Block; span?: Span }
+  | { kind: 'for_range';  varName: string; start: Expr; end: Expr; inclusive?: boolean; body: Block; span?: Span }
   | { kind: 'for_in_array'; binding: string; arrayName: string; lenExpr: Expr; body: Block; span?: Span }
   | { kind: 'match';      expr: Expr; arms: { pattern: Expr | null; body: Block }[]; span?: Span }
   | { kind: 'if_let_some'; binding: string; init: Expr; then: Block; else_?: Block; span?: Span }

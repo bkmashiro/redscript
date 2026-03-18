@@ -277,6 +277,10 @@ export class Lexer {
     if (char === '.' && this.peek() === '.') {
       this.advance() // consume second .
       let value = '..'
+      // Check for inclusive range operator ..=
+      if (this.peek() === '=') {
+        value += this.advance() // consume =
+      }
       while (/[0-9]/.test(this.peek())) {
         value += this.advance()
       }
@@ -564,10 +568,14 @@ export class Lexer {
       value += this.advance()
     }
 
-    // Check for range literal (e.g., 1.., 1..10)
+    // Check for range literal (e.g., 1.., 1..10, 1..=10)
     if (this.peek() === '.' && this.peek(1) === '.') {
       value += this.advance() // first .
       value += this.advance() // second .
+      // Check for inclusive range operator =
+      if (this.peek() === '=') {
+        value += this.advance() // consume =
+      }
       // Optional max value
       while (/[0-9]/.test(this.peek())) {
         value += this.advance()

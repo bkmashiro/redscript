@@ -185,7 +185,7 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
         kind: 'while',
         cond: {
           kind: 'binary',
-          op: '<',
+          op: stmt.inclusive ? '<=' : '<',
           left: { kind: 'ident', name: varName },
           right: lowerExpr(stmt.end),
         },
