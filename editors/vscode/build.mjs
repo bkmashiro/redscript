@@ -1,28 +1,47 @@
 import esbuild from 'esbuild'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const watch = process.argv.includes('--watch')
 
-/** @type {import('esbuild').BuildOptions} */
-const config = {
-  entryPoints: ['src/extension.ts'],
+const common = {
   bundle: true,
-  outfile: 'out/extension.js',
-  external: ['vscode'],   // vscode is provided by the host, never bundle it
   format: 'cjs',
   platform: 'node',
   target: 'node18',
   sourcemap: false,
   minify: false,
-  // Stub out Node builtins that the compiler might use
-  // (they're fine in the extension since it runs in Node)
-  // The compiler uses fs/path, which are available in the extension host
+}
+
+// Extension host bundle
+const extensionConfig = {
+  ...common,
+  entryPoints: ['src/extension.ts'],
+  outfile: 'out/extension.js',
+  external: ['vscode'],
+}
+
+// LSP server bundle — bundled separately so it runs in a clean Node process.
+// The server is located in the monorepo root (../../src/lsp/main.ts).
+const lspServerConfig = {
+  ...common,
+  entryPoints: [path.join(__dirname, '../../src/lsp/main.ts')],
+  outfile: 'out/lsp-server.js',
+  // No 'vscode' external — LSP server doesn't use vscode API
 }
 
 if (watch) {
-  const ctx = await esbuild.context(config)
-  await ctx.watch()
+  const [extCtx, lspCtx] = await Promise.all([
+    esbuild.context(extensionConfig),
+    esbuild.context(lspServerConfig),
+  ])
+  await Promise.all([extCtx.watch(), lspCtx.watch()])
   console.log('Watching for changes...')
 } else {
-  await esbuild.build(config)
-  console.log('Built out/extension.js')
+  await Promise.all([
+    esbuild.build(extensionConfig),
+    esbuild.build(lspServerConfig),
+  ])
+  console.log('Built out/extension.js + out/lsp-server.js')
 }

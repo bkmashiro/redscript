@@ -34,16 +34,21 @@ let lspClient: LanguageClient | undefined
  * or null if not available.
  */
 function resolveLspServerPath(): string | null {
-  // When the extension bundles redscript, the LSP server is at
-  // node_modules/redscript/dist/src/lsp/main.js relative to the extension dir.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require('fs')
   try {
-    // __dirname is the extension's out/ directory when bundled by esbuild.
+    // 1. Bundled LSP server (primary): out/lsp-server.js packed inside the vsix.
+    //    __dirname is the extension's out/ directory when bundled by esbuild.
+    const bundled = path.join(__dirname, 'lsp-server.js')
+    fs.accessSync(bundled)
+    return bundled
+  } catch { /* fall through */ }
+  try {
+    // 2. Dev/symlink: node_modules/redscript/dist/src/lsp/main.js
     const candidate = path.join(__dirname, '..', 'node_modules', 'redscript', 'dist', 'src', 'lsp', 'main.js')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('fs').accessSync(candidate)
+    fs.accessSync(candidate)
     return candidate
   } catch {
-    // Not found via local node_modules; try the global bin
     return null
   }
 }
