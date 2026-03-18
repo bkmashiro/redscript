@@ -341,6 +341,16 @@ const DECORATOR_COMPLETIONS: CompletionItem[] = [
   kind: CompletionItemKind.Event,
 }))
 
+/** Entity selector completions triggered by @ inside expressions */
+const SELECTOR_COMPLETIONS: CompletionItem[] = [
+  { label: '@a',  kind: CompletionItemKind.Value, detail: 'All players',              documentation: 'Targets all online players.' },
+  { label: '@p',  kind: CompletionItemKind.Value, detail: 'Nearest player',           documentation: 'Targets the nearest player to the command source.' },
+  { label: '@s',  kind: CompletionItemKind.Value, detail: 'Executing entity',         documentation: 'Targets the entity currently executing the command.' },
+  { label: '@e',  kind: CompletionItemKind.Value, detail: 'All entities',             documentation: 'Targets all entities (use [type=...] to filter).' },
+  { label: '@r',  kind: CompletionItemKind.Value, detail: 'Random player',            documentation: 'Targets a random online player.' },
+  { label: '@n',  kind: CompletionItemKind.Value, detail: 'Nearest entity',           documentation: 'Targets the nearest entity (any type).' },
+]
+
 const BUILTIN_FN_COMPLETIONS: CompletionItem[] = [
   'say', 'tell', 'give', 'kill', 'teleport', 'summon', 'setblock',
   'fill', 'clone', 'effect', 'enchant', 'experience', 'gamemode',
@@ -664,6 +674,24 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
 
   const cached = parsedDocs.get(params.textDocument.uri)
   const program = cached?.program ?? null
+
+  // ── @ trigger: selector (@a/@p/@s/@e/@r/@n) vs decorator (@tick etc) ────────
+  // If the character just typed is '@', check context:
+  //   - Inside a fn body (after =, (, comma, etc.) → selector
+  //   - At statement start (line begins with whitespace then @) → decorator
+  const prevChar = lineText[charPos - 1]
+  if (prevChar === '@') {
+    // Heuristic: if there's a non-whitespace non-punctuation char before '@'
+    // on the same line it's likely an expression context (selector).
+    // If line is only whitespace before '@', it's a decorator.
+    const before = lineText.slice(0, charPos - 1).trim()
+    const isExprContext = before.length > 0 && !/^(fn|let|if|while|for|return|@)/.test(before.split(/\s+/).pop() ?? '')
+    if (isExprContext) {
+      return SELECTOR_COMPLETIONS
+    }
+    // Decorator context — return decorator completions only
+    return DECORATOR_COMPLETIONS
+  }
 
   // ── Dot-access completion ──────────────────────────────────────────────────
   const dotReceiver = getDotReceiver(lineText, charPos)
