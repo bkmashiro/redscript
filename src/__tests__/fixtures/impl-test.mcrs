@@ -1,46 +1,15 @@
-struct timer {
-    _id: int,
-    _duration: int
+namespace impl_test
+struct Counter {
+  value: int
 }
-
-impl timer {
-    fn new(duration: int) -> timer {
-        scoreboard_set("timer_ticks", #rs, 0);
-        scoreboard_set("timer_active", #rs, 0);
-        return { _id: 0, _duration: duration };
-    }
-
-    fn start(self) {
-        scoreboard_set("timer_active", #rs, 1);
-    }
-
-    fn tick(self) {
-        let active: int = scoreboard_get("timer_active", #rs);
-        let ticks: int = scoreboard_get("timer_ticks", #rs);
-
-        if (active == 1) {
-            if (ticks < self._duration) {
-                scoreboard_set("timer_ticks", #rs, ticks + 1);
-            }
-        }
-    }
-
-    fn done(self) -> bool {
-        let ticks: int = scoreboard_get("timer_ticks", #rs);
-        return ticks >= 3;
-    }
-}
-
-fn test() {
-    let timer_value: timer = timer::new(3);
-    timer_value.start();
-    timer_value.tick();
-    timer_value.tick();
-    timer_value.tick();
-    let finished: bool = timer_value.done();
-    if (finished) {
-        scoreboard_set("#impl", #done, 1);
-        return;
-    }
-    scoreboard_set("#impl", #done, 1);
+impl Counter {
+  fn increment(self): Counter {
+    return Counter { value: self.value + 1 }
+  }
+  fn add(self, n: int): Counter {
+    return Counter { value: self.value + n }
+  }
+  fn get(self): int {
+    return self.value
+  }
 }

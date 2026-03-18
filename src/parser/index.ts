@@ -1553,6 +1553,14 @@ export class Parser {
       }, token)
     }
 
+    // Named struct literal: TypeName { field: value, ... }
+    // Require at least one field (ident + :) to avoid ambiguity with blocks.
+    if (token.kind === 'ident' && this.peek(1).kind === '{' &&
+        this.peek(2).kind === 'ident' && this.peek(3).kind === ':') {
+      this.advance() // consume type name (used only for disambiguation, dropped from AST)
+      return this.parseStructLit()
+    }
+
     // Some(expr) — Option constructor
     if (token.kind === 'ident' && token.value === 'Some' && this.peek(1).kind === '(') {
       this.advance() // consume 'Some'
