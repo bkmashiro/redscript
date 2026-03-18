@@ -83,9 +83,9 @@ Last updated: 2026-03-17
 - [x] **高精度 ln_hp** `status: done` — Newton refinement of ln_5term，误差 < 0.001 (8–9 digit precision)
 
 ### P4 — 游戏工具
-- [ ] **几何选区** `status: todo` `priority: p4` — 圆锥/扇形/圆柱 entity selector helper
-- [ ] **RGB ↔ HSL 转换** `status: todo` `priority: p4` — color.mcrs 扩展
-- [ ] **太阳角度** `status: todo` `priority: p4` — world.mcrs 扩展
+- [x] **几何选区** `status: done` — 圆锥/扇形/圆柱 entity selector helper (geometry.mcrs)
+- [x] **RGB ↔ HSL 转换** `status: done` — color.mcrs 扩展 (rgb_to_h/s/l, hsl_to_r/g/b)
+- [x] **太阳角度** `status: done` — world.mcrs 扩展 (sun_altitude, sun_azimuth)
 - [ ] **math_hp MC integration 测试** `status: todo` `priority: p4` — 需要 MC server
 
 
