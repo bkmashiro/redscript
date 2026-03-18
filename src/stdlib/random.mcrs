@@ -65,3 +65,48 @@ fn pcg_output(state_lo: int): int {
     if (xored < 0) { xored = 0 - xored; }
     return xored;
 }
+
+// ─── Statistical distributions ───────────────────────────────────────────────
+
+// _binom_loop(n, p, seed, acc): recursive helper for binomial_sample
+fn _binom_loop(n: int, p: int, seed: int, acc: int): int {
+    if (n <= 0) { return acc; }
+    let s2: int = next_lcg(seed);
+    let r: int = s2;
+    if (r < 0) { r = 0 - r; }
+    let hit: int = 0;
+    if (r % 10000 < p) { hit = 1; }
+    return _binom_loop(n - 1, p, s2, acc + hit);
+}
+
+// binomial_sample(n, p_x10000, seed): count successes in n Bernoulli trials
+// p_x10000: probability ×10000 (e.g. 5000 = 0.5 = 50%)
+// seed: LCG seed (any non-zero int)
+// Returns: number of successes ∈ [0, n]
+fn binomial_sample(n: int, p_x10000: int, seed: int): int {
+    return _binom_loop(n, p_x10000, seed, 0);
+}
+
+// _hyper_loop: recursive helper for hypergeometric_sample
+// rem_pop: remaining population, rem_succ: remaining successes, draws: draws left
+// seed: LCG seed, acc: successes so far
+fn _hyper_loop(rem_pop: int, rem_succ: int, draws: int, seed: int, acc: int): int {
+    if (draws <= 0) { return acc; }
+    if (rem_pop <= 0) { return acc; }
+    // Probability of success = rem_succ / rem_pop, scaled ×10000
+    let p: int = rem_succ * 10000 / rem_pop;
+    let s2: int = next_lcg(seed);
+    let r: int = s2;
+    if (r < 0) { r = 0 - r; }
+    let success: int = 0;
+    if (r % 10000 < p) { success = 1; }
+    return _hyper_loop(rem_pop - 1, rem_succ - success, draws - 1, s2, acc + success);
+}
+
+// hypergeometric_sample(pop_size, success_states, draws, seed):
+// Simulate drawing `draws` items without replacement from a population of `pop_size`
+// items of which `success_states` are successes.
+// seed: LCG seed. Returns: number of successes drawn ∈ [0, min(draws, success_states)].
+fn hypergeometric_sample(pop_size: int, success_states: int, draws: int, seed: int): int {
+    return _hyper_loop(pop_size, success_states, draws, seed, 0);
+}
