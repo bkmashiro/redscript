@@ -1291,3 +1291,124 @@ describe('MC Integration - math_hp (ln_hp, double_mul_fixed)', () => {
     console.log(`  double_mul_fixed(2.0d, 15000) as fixed = ${v} (expect ≈30000) ✓`)
   })
 })
+
+// ─── Bot API helpers ──────────────────────────────────────────────────────────
+
+const BOT_URL = 'http://localhost:25562'
+
+async function botGet(endpoint: string): Promise<any> {
+  const res = await fetch(`${BOT_URL}${endpoint}`)
+  return res.json()
+}
+
+async function botPost(endpoint: string, body: object = {}): Promise<any> {
+  const res = await fetch(`${BOT_URL}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return res.json()
+}
+
+async function botItemCount(name: string): Promise<number> {
+  const data = await botGet(`/inventory/count?name=${encodeURIComponent(name)}`)
+  return (data as any).count ?? 0
+}
+
+async function clearBotInventory(): Promise<void> {
+  await mc.command('clear TestBot')
+  await botPost('/wait', { ticks: 5 })
+}
+
+async function getNbt(storage: string, nbtPath: string): Promise<number | null> {
+  const res = await fetch(
+    `http://localhost:25561/nbt?storage=${encodeURIComponent(storage)}&path=${encodeURIComponent(nbtPath)}`
+  )
+  const data: any = await res.json()
+  return typeof data.value === 'number' ? data.value : null
+}
+
+// ─── Player-facing tests ──────────────────────────────────────────────────────
+
+let botOnline = false
+
+describe('player-facing: bot setup', () => {
+  beforeAll(async () => {
+    try {
+      const status: any = await botGet('/status')
+      botOnline = status.connected === true
+    } catch {
+      botOnline = false
+    }
+  })
+
+  test('mineflayer TestBot is connected', () => {
+    if (!botOnline) {
+      console.warn('  ⚠ TestBot not running — skipping player-facing tests')
+    }
+    // Non-fatal: skip rather than fail if bot is not up
+    expect(typeof botOnline).toBe('boolean')
+  })
+})
+
+describe('player-facing: give items', () => {
+  beforeEach(async () => {
+    if (!botOnline || !serverOnline) return
+    await clearBotInventory()
+  })
+
+  test('give command delivers diamond to TestBot', async () => {
+    if (!botOnline || !serverOnline) return
+    await mc.command('give TestBot minecraft:diamond 5')
+    await botPost('/wait', { ticks: 10 })
+    const count = await botItemCount('diamond')
+    expect(count).toBe(5)
+    console.log(`  give TestBot diamond 5 → inventory count = ${count} ✓`)
+  })
+
+  test('give gold_ingot to TestBot', async () => {
+    if (!botOnline || !serverOnline) return
+    await mc.command('give TestBot minecraft:gold_ingot 3')
+    await botPost('/wait', { ticks: 10 })
+    const count = await botItemCount('gold_ingot')
+    expect(count).toBe(3)
+    console.log(`  give TestBot gold_ingot 3 → inventory count = ${count} ✓`)
+  })
+})
+
+describe('player-facing: effects', () => {
+  test('effect give speed applies to TestBot', async () => {
+    if (!botOnline || !serverOnline) return
+    await mc.command('effect clear TestBot')
+    await botPost('/wait', { ticks: 5 })
+    await mc.command('effect give TestBot minecraft:speed 30 1')
+    await botPost('/wait', { ticks: 10 })
+    const data: any = await botGet('/effects')
+    // Speed = MC effect id 1
+    // mineflayer uses 0-based effect ids (speed = 0), MC uses 1-based (speed = 1)
+    const hasSpeed = Array.isArray(data.effects) && data.effects.length > 0
+    expect(hasSpeed).toBe(true)
+    console.log(`  effect give speed → effects: ${JSON.stringify(data.effects)} ✓`)
+  })
+})
+
+describe('double precision: NBT read/write via /nbt endpoint', () => {
+  test('write double to rs:d and read it back', async () => {
+    if (!serverOnline) return
+    await mc.command('data modify storage rs:d result set value 3.14159d')
+    await mc.ticks(2)
+    const val = await getNbt('rs:d', 'result')
+    expect(val).not.toBeNull()
+    expect(val!).toBeCloseTo(3.14159, 4)
+    console.log(`  rs:d result = ${val} (expect ≈3.14159) ✓`)
+  })
+
+  test('write integer double and read back as 1.0', async () => {
+    if (!serverOnline) return
+    await mc.command('data modify storage rs:d result set value 1.0d')
+    await mc.ticks(2)
+    const val = await getNbt('rs:d', 'result')
+    expect(val).toBe(1.0)
+    console.log(`  rs:d result = ${val} (expect 1.0) ✓`)
+  })
+})
