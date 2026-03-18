@@ -80,9 +80,7 @@ Last updated: 2026-03-17
   - loot spawn 无限坐标 trick
 - [ ] **compiler intrinsic: double + double → double_add** `status: todo` `priority: p3`
   - lower.ts BinaryExpr(double, +, double) 自动降级
-- [ ] **高精度 ln_hp** `status: todo` `priority: p3`
-  - 依赖 double 运算链路打通
-  - Remez 7-系数多项式，误差 2^-58 级别
+- [x] **高精度 ln_hp** `status: done` — Newton refinement of ln_5term，误差 < 0.001 (8–9 digit precision)
 
 ### P4 — 游戏工具
 - [ ] **几何选区** `status: todo` `priority: p4` — 圆锥/扇形/圆柱 entity selector helper

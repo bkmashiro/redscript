@@ -391,6 +391,10 @@ const QUAT_SRC = fs.readFileSync(
   path.join(__dirname, '../../stdlib/quaternion.mcrs'),
   'utf-8',
 )
+const MATH_HP_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/math_hp.mcrs'),
+  'utf-8',
+)
 
 // ===========================================================================
 // math.mcrs — runtime execution (extended)
@@ -1181,4 +1185,46 @@ describe('advanced.mcrs — bezier_quartic & bezier_n', () => {
   // bezier_n
   test('bezier_n([0,333,667,1000], 4, t=0) == 0 (start = pts[0])', () => expect(callAndGetRet(rt, 'test_bezier_n_start')).toBe(0))
   test('bezier_n([0,333,667,1000], 4, t=1000) == 1000 (end = pts[n-1])', () => expect(callAndGetRet(rt, 'test_bezier_n_end')).toBe(1000))
+})
+
+// ===========================================================================
+// math_hp.mcrs — ln_hp (Newton-refined high-precision natural log)
+// ===========================================================================
+
+describe('math_hp.mcrs — ln_hp', () => {
+  const rt = makeRuntime(`
+    fn test_ln_hp_one(): int { return ln_hp(10000); }
+    fn test_ln_hp_e(): int { return ln_hp(27183); }
+    fn test_ln_hp_2(): int { return ln_hp(20000); }
+    fn test_ln_hp_10(): int { return ln_hp(100000); }
+    fn test_ln_hp_vs_ln_e(): int {
+        // Compare ln_hp(e) and ln(e): ln_hp should be closer to 10000
+        let a: int = ln_hp(27183);
+        let b: int = ln(27183);
+        let da: int = a - 10000;
+        if (da < 0) { da = 0 - da; }
+        let db: int = b - 10000;
+        if (db < 0) { db = 0 - db; }
+        // Return 1 if ln_hp is at least as precise as ln, 0 otherwise
+        if (da <= db) { return 1; }
+        return 0;
+    }
+  `, [MATH_SRC, MATH_HP_SRC])
+
+  test('ln_hp(10000) == 0  (ln(1.0) = 0)', () => expect(callAndGetRet(rt, 'test_ln_hp_one')).toBe(0))
+  test('ln_hp(27183) ≈ 10000  (ln(e) ≈ 1.0)', () => {
+    const v = callAndGetRet(rt, 'test_ln_hp_e')
+    expect(Math.abs(v - 10000)).toBeLessThanOrEqual(5)
+  })
+  test('ln_hp(20000) ≈ 6931  (ln(2) ≈ 0.6931)', () => {
+    const v = callAndGetRet(rt, 'test_ln_hp_2')
+    expect(Math.abs(v - 6931)).toBeLessThanOrEqual(5)
+  })
+  test('ln_hp(100000) ≈ 23026  (ln(10) ≈ 2.3026)', () => {
+    const v = callAndGetRet(rt, 'test_ln_hp_10')
+    expect(Math.abs(v - 23026)).toBeLessThanOrEqual(10)
+  })
+  test('ln_hp is at least as precise as ln for ln(e)', () => {
+    expect(callAndGetRet(rt, 'test_ln_hp_vs_ln_e')).toBe(1)
+  })
 })

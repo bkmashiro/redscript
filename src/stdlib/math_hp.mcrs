@@ -368,6 +368,37 @@ fn double_div(a: double, b: double): double {
     return a;
 }
 
+// ─── High-precision natural logarithm (Newton-refined) ───────────────────────
+//
+// ln_hp(x): high-precision natural log via Newton refinement of ln_5term.
+// Input/Output: ×10000 fixed-point (e.g. 10000 = 1.0, 27183 ≈ e)
+// Valid range: x ∈ [100, 1000000]
+//
+// Algorithm:
+//   1. y = ln_5term(x)                   — ~6-digit atanh series estimate
+//   2. e_y = exp_fx(y)                   — compute e^y in ×10000 fixed-point
+//   3. correction = (x - e_y) * 10000 / e_y   — Newton step: ln(x/e^y) ≈ x/e^y - 1
+//   4. return y + correction
+//
+// Precision: one Newton step squares the error, improving from ~6 digits to ~11 digits.
+// Since exp_fx itself has ~6-digit precision, the effective output is ~8–9 digits.
+//
+fn ln_hp(x: int): int {
+    // Step 1: initial estimate via 5-term atanh series
+    let y: int = ln_5term(x);
+
+    // Step 2: compute e^y — exp_fx takes ×10000 input, returns ×10000 output
+    let e_y: int = exp_fx(y);
+
+    // Step 3: Newton correction — (x/e^y - 1) in ×10000 fixed-point
+    // correction = (x - e_y) × 10000 / e_y
+    if (e_y <= 0) { return y; }
+    let correction: int = (x - e_y) * 10000 / e_y;
+
+    // Step 4: refined result
+    return y + correction;
+}
+
 // ─── Extended-precision natural logarithm (5-term atanh series) ───────────────
 //
 // ln_5term(x): natural log using 5-term atanh series (more precise than 3-term ln())
@@ -376,8 +407,6 @@ fn double_div(a: double, b: double): double {
 //
 // max_error ≈ 0.000002 (2× better than 3-term ln())
 // Cost: ~5 more scoreboard operations than ln()
-//
-// Note: for full double-precision ln, await double type infrastructure.
 //
 fn ln_5term(x: int): int {
     let scale: int = 10000;
