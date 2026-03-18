@@ -2,7 +2,7 @@
   "name": "redscript-vscode",
   "displayName": "RedScript for Minecraft",
   "description": "Syntax highlighting, error diagnostics, and language support for RedScript — a compiler targeting Minecraft Java Edition",
-  "version": "1.2.66",
+  "version": "1.2.67",
   "publisher": "bkmashiro",
   "icon": "icon.png",
   "license": "MIT",
