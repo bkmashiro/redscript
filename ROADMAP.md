@@ -69,7 +69,7 @@ Last updated: 2026-03-17
 - [x] **bigint 全乘法** `status: done` — `bigint_mul` / `bigint_sq` 已实现
 - [x] **抛物线弹道** `status: done` — `parabola.mcrs` 14个测试通过
 - [x] **N 阶贝塞尔** `status: done` — `bezier_quartic` / `bezier_n` / `bezier_n_safe` 已实现
-- [ ] **统计分布扩充** `status: todo` `priority: p2`
+- [x] **统计分布扩充** `status: done` — gamma/poisson/negative-binomial added (signal.mcrs)
   - Gamma 分布 / 负二项分布 / 超几何分布（signal.mcrs 扩展）
 
 ### P3 — 编译器 / Double 运算
