@@ -122,3 +122,92 @@ fn mc_day_angle(daytime: int): int {
     // Sun angle = (daytime * 360 / 24000 + 90) mod 360
     return ((daytime * 360 / 24000 + 90) % 360) * 10000;
 }
+
+// ─── Selector helpers ─────────────────────────────────────────────────────────
+//
+// All coordinates in ×10000 fixed-point units (1.0 block = 10000 units).
+// Angles for in_sector_2d in ×10000 radians (2π ≈ 628318).
+
+// in_cylinder(px,py,pz, cx,cz, radius, y_lo,y_hi):
+// Returns 1 if (px,py,pz) is inside a vertical cylinder centred at (cx,*,cz).
+// Condition: dx²+dz² <= r²  AND  y_lo <= py <= y_hi
+// Note: radius up to ~46340 (×10000 units ≈ 4.6 blocks) avoids overflow.
+// For larger radii, divide all coords by 10 first.
+fn in_cylinder(px: int, py: int, pz: int,
+               cx: int, cz: int,
+               radius: int,
+               y_lo: int, y_hi: int): int {
+    if (py < y_lo) { return 0; }
+    if (py > y_hi) { return 0; }
+    let dx: int = px - cx;
+    let dz: int = pz - cz;
+    if (dx * dx + dz * dz <= radius * radius) { return 1; }
+    return 0;
+}
+
+// in_cone(px,py,pz, apex_x,apex_y,apex_z, dir_y, half_angle_tan, height):
+// Returns 1 if point is inside an upright cone (axis along +Y from apex).
+// half_angle_tan = tan(half-angle) × 10000  (e.g. 45° → 10000, 30° → 5773).
+// Condition: 0 <= dy <= height  AND  horiz_dist <= dy * half_angle_tan / 10000
+// Both sides are compared squared to avoid sqrt:
+//   (dx²+dz²) * 10000² <= (dy * half_angle_tan)²
+fn in_cone(px: int, py: int, pz: int,
+           apex_x: int, apex_y: int, apex_z: int,
+           dir_y: int, half_angle_tan: int, height: int): int {
+    let dy: int = py - apex_y;
+    if (dir_y > 0) {
+        if (dy < 0) { return 0; }
+        if (dy > height) { return 0; }
+    } else {
+        if (dy > 0) { return 0; }
+        if (dy < 0 - height) { return 0; }
+        dy = 0 - dy;
+    }
+    let dx: int = px - apex_x;
+    let dz: int = pz - apex_z;
+    // Compare horiz_dist² <= (dy * half_angle_tan / 10000)²
+    // i.e. (dx²+dz²) * 100000000 <= dy² * half_angle_tan²
+    // To avoid overflow, divide both sides by 10000:
+    //   (dx²+dz²) * 10000 <= (dy * half_angle_tan / 10000)² * 10000 / ...
+    // Use: lhs = (dx*dx + dz*dz), rhs_numerator = dy * half_angle_tan
+    // lhs * 10000 * 10000 <= rhs_numerator * rhs_numerator
+    // Both sides can overflow for large values. Clamp inputs to safe range:
+    let lhs: int = dx * dx + dz * dz;
+    let rhs: int = dy * half_angle_tan / 10000;
+    if (lhs <= rhs * rhs) { return 1; }
+    return 0;
+}
+
+// in_sector_2d(px,pz, cx,cz, dir_angle, half_angle, radius):
+// Returns 1 if (px,pz) is inside a 2D fan (sector) in the XZ plane.
+// dir_angle: centre direction in ×10000 radians (0 = +X axis, 628318 = 2π).
+// half_angle: half-width of sector in ×10000 radians.
+// radius: maximum distance in same units as px/pz/cx/cz.
+// Uses atan2_fixed (returns integer degrees) converted to ×10000 radians.
+fn in_sector_2d(px: int, pz: int,
+                cx: int, cz: int,
+                dir_angle: int, half_angle: int,
+                radius: int): int {
+    let dx: int = px - cx;
+    let dz: int = pz - cz;
+    // Distance check (squared, avoids sqrt)
+    if (dx * dx + dz * dz > radius * radius) { return 0; }
+    if (dx == 0) {
+        if (dz == 0) { return 1; }
+    }
+    // atan2_fixed(y, x) where XZ maps to (y=dz, x=dx) → degrees [0, 359]
+    let deg: int = atan2_fixed(dz, dx);
+    // Convert degrees to ×10000 radians: deg * 628318 / 360
+    let point_angle: int = deg * 628318 / 360;
+    // Normalise dir_angle to [0, 628318)
+    let dir: int = dir_angle;
+    while (dir < 0) { dir = dir + 628318; }
+    while (dir >= 628318) { dir = dir - 628318; }
+    // Signed angular difference, shortest path
+    let diff: int = point_angle - dir;
+    if (diff > 314159) { diff = diff - 628318; }
+    if (diff < 0 - 314159) { diff = diff + 628318; }
+    if (diff < 0) { diff = 0 - diff; }
+    if (diff <= half_angle) { return 1; }
+    return 0;
+}
