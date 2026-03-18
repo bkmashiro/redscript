@@ -509,6 +509,16 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   const word = wordAt(source, params.position)
   if (!word) return null
 
+  // If cursor is on a selector like @s/@a/@p, the word is just 's'/'a'/'p'.
+  // Detect this by checking the character before the word start.
+  const hovLines = source.split('\n')
+  const hovLine = hovLines[params.position.line] ?? ''
+  const hovCh = params.position.character
+  // Find start of current word
+  let hovWordStart = hovCh
+  while (hovWordStart > 0 && /\w/.test(hovLine[hovWordStart - 1])) hovWordStart--
+  if (hovWordStart > 0 && hovLine[hovWordStart - 1] === '@') return null  // It's a selector, no hover
+
   // Check builtins
   const builtin = ALL_BUILTINS[word]
   if (builtin) {
@@ -703,6 +713,11 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
   const word = wordAt(source, params.position)
   if (!word) return null
 
+  // If cursor is on a selector like @s/@a, the word is 's'/'a' — no F12.
+  let defWordStart = params.position.character
+  while (defWordStart > 0 && /\w/.test(lineText[defWordStart - 1])) defWordStart--
+  if (defWordStart > 0 && lineText[defWordStart - 1] === '@') return null
+
   // ── Normal in-file definition (top-level fn/struct/const/global) ────────────
   const defMap = buildDefinitionMap(program, source)
   const span = defMap.get(word)
@@ -752,8 +767,9 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
     }
   } catch { /* ignore */ }
 
-  // ── import module::symbol (legacy AST imports) — open the module file ────────
-  const importDecl = program.imports?.find(im => im.symbol === word || im.symbol === '*')
+  // ── import module::symbol (legacy AST imports) — open module file ONLY for explicit symbols ──
+  // NOTE: do NOT match im.symbol === '*' — that would cause any word to jump to the first import!
+  const importDecl = program.imports?.find(im => im.symbol === word)
   if (importDecl) {
     const resolved = resolveImportPath(`stdlib/${importDecl.moduleName}.mcrs`, params.textDocument.uri)
       ?? resolveImportPath(importDecl.moduleName, params.textDocument.uri)
