@@ -100,8 +100,64 @@ describe('fixed to double cast', () => {
   })
 })
 
-describe('double arithmetic via fixed', () => {
-  test('double + double compiles (both read as ×10000, added)', () => {
+describe('double arithmetic intrinsics', () => {
+  test('double + double lowers to math_hp:double_add call', () => {
+    const source = `
+      fn t(): double {
+        let a: double = 2.0d;
+        let b: double = 3.0d;
+        return a + b;
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const all = getAllMcContent(result.files)
+    expect(all).toContain('function math_hp:double_add')
+    expect(all).toContain('rs:d __dp0')
+    expect(all).toContain('rs:d __dp1')
+  })
+
+  test('double / double lowers to math_hp:double_div call', () => {
+    const source = `
+      fn t(): double {
+        let a: double = 6.0d;
+        let b: double = 2.0d;
+        return a / b;
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const all = getAllMcContent(result.files)
+    expect(all).toContain('function math_hp:double_div')
+    expect(all).toContain('rs:d __dp0')
+    expect(all).toContain('rs:d __dp1')
+  })
+
+  test('double - double lowers to math_hp:double_sub call', () => {
+    const source = `
+      fn t(): double {
+        let a: double = 5.0d;
+        let b: double = 1.0d;
+        return a - b;
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const all = getAllMcContent(result.files)
+    expect(all).toContain('function math_hp:double_sub')
+  })
+
+  test('double * double lowers to math_hp:double_mul call', () => {
+    const source = `
+      fn t(): double {
+        let a: double = 3.0d;
+        let b: double = 4.0d;
+        return a * b;
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const all = getAllMcContent(result.files)
+    expect(all).toContain('function math_hp:double_mul')
+  })
+
+  test('double + double result readable as fixed (10000.0 scale back)', () => {
     const source = `
       fn t(): fixed {
         let a: double = 1.5d;
@@ -111,9 +167,20 @@ describe('double arithmetic via fixed', () => {
     `
     const result = compile(source, { namespace: 'doubletest' })
     const all = getAllMcContent(result.files)
-    // Both reads should use 10000.0
     expect(all).toContain('10000.0')
     expect(all).toContain('rs:d')
+    expect(all).toContain('function math_hp:double_add')
+  })
+
+  test('double + double via literals lowers to math_hp:double_add', () => {
+    const source = `
+      fn t(): double {
+        return 1.5d + 2.5d;
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const all = getAllMcContent(result.files)
+    expect(all).toContain('function math_hp:double_add')
   })
 })
 

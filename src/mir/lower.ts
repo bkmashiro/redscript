@@ -1085,6 +1085,31 @@ function lowerExpr(
         return lowerShortCircuitOr(expr, ctx, scope)
       }
 
+      // Double arithmetic intrinsics: double op double → call math_hp:double_add/sub/mul/div
+      const doubleArithOps: Record<string, string> = {
+        '+': 'math_hp:double_add',
+        '-': 'math_hp:double_sub',
+        '*': 'math_hp:double_mul',
+        '/': 'math_hp:double_div',
+      }
+      if (expr.op in doubleArithOps && isDoubleExpr(expr.left, ctx) && isDoubleExpr(expr.right, ctx)) {
+        const ns = ctx.getNamespace()
+        const leftPath = lowerDoubleExprToPath(expr.left, ctx, scope)
+        const rightPath = lowerDoubleExprToPath(expr.right, ctx, scope)
+        // Copy operands into __dp0 and __dp1 (intrinsic calling convention)
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d __dp0 set from storage rs:d ${leftPath}`, args: [] })
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d __dp1 set from storage rs:d ${rightPath}`, args: [] })
+        // Call the intrinsic
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:function ${doubleArithOps[expr.op]}`, args: [] })
+        // Result is in rs:d __dp0 — register as a new double var and read back as ×10000 fixed
+        const resultPath = ctx.freshDoubleVar('dres')
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d ${resultPath} set from storage rs:d __dp0`, args: [] })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result score $${t} __${ns} run data get storage rs:d ${resultPath} 10000.0`, args: [] })
+        ctx.floatTemps.add(t)
+        return { kind: 'temp', name: t }
+      }
+
       const left = lowerExpr(expr.left, ctx, scope)
       const right = lowerExpr(expr.right, ctx, scope)
       const t = ctx.freshTemp()
@@ -1703,6 +1728,42 @@ function lowerExpr(
       throw new Error(`Unknown HIR expression kind: ${(_exhaustive as any).kind}`)
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Double arithmetic helpers
+// ---------------------------------------------------------------------------
+
+/** Returns true if expr is a double-typed HIR expression (ident in doubleVars or double_lit). */
+function isDoubleExpr(expr: HIRExpr, ctx: FnContext): boolean {
+  if (expr.kind === 'ident' && ctx.doubleVars.has(expr.name)) return true
+  if (expr.kind === 'double_lit') return true
+  return false
+}
+
+/**
+ * Lower a double HIR expression to its NBT storage path in rs:d.
+ * For double_lit, stores the value and returns the path.
+ * For double idents, returns the existing path directly.
+ * For other expressions, lowers as fixed (×10000) and converts to double.
+ */
+function lowerDoubleExprToPath(expr: HIRExpr, ctx: FnContext, scope: Map<string, Temp>): string {
+  if (expr.kind === 'ident' && ctx.doubleVars.has(expr.name)) {
+    return ctx.doubleVars.get(expr.name)!
+  }
+  if (expr.kind === 'double_lit') {
+    const path = ctx.freshDoubleVar('dlit')
+    ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d ${path} set value ${expr.value}d`, args: [] })
+    return path
+  }
+  // Fallback: lower as fixed (×10000), then convert to double NBT
+  const op = lowerExpr(expr, ctx, scope)
+  const tmp = ctx.freshTemp()
+  ctx.emit({ kind: 'copy', dst: tmp, src: op })
+  const ns = ctx.getNamespace()
+  const path = ctx.freshDoubleVar('dtmp')
+  ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result storage rs:d ${path} double 0.0001 run scoreboard players get $${tmp} __${ns}`, args: [] })
+  return path
 }
 
 // ---------------------------------------------------------------------------
