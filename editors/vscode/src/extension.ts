@@ -83,16 +83,13 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push({ dispose: () => lspClient?.stop() })
   } else {
     // -----------------------------------------------------------------------
-    // Fallback: bundled compiler diagnostics (no redscript-lsp available)
+    // Fallback: bundled compiler diagnostics + legacy hover/completion
+    // Only used when LSP server is not available.
     // -----------------------------------------------------------------------
     activateFallbackDiagnostics(context)
+    registerHoverProvider(context)
+    registerCompletionProvider(context)
   }
-
-  // -------------------------------------------------------------------------
-  // Providers that always run regardless of LSP availability
-  // -------------------------------------------------------------------------
-  registerHoverProvider(context)
-  registerCompletionProvider(context)
   registerCodeActions(context)
   registerSymbolProviders(context)
 
