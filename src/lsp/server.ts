@@ -519,12 +519,75 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
     return { contents: content }
   }
 
+  // ── Check imported files (import "stdlib/xxx.mcrs" and import xxx::*) ──────
+  try {
+    const importedPrograms = getImportedPrograms(source, params.textDocument.uri)
+    for (const { prog, filePath } of importedPrograms) {
+      const importedFn = findFunction(prog, word)
+      if (importedFn) {
+        const sig = formatFnSignature(importedFn)
+        const content: MarkupContent = {
+          kind: MarkupKind.Markdown,
+          value: `\`\`\`redscript\n${sig}\n\`\`\`\n*from ${path.basename(filePath)}*`,
+        }
+        return { contents: content }
+      }
+      const importedStruct = prog.structs?.find(s => s.name === word)
+      if (importedStruct) {
+        const fields = importedStruct.fields.map(f => `  ${f.name}: ${typeToString(f.type)}`).join('\n')
+        const content: MarkupContent = {
+          kind: MarkupKind.Markdown,
+          value: `\`\`\`redscript\nstruct ${importedStruct.name} {\n${fields}\n}\n\`\`\`\n*from ${path.basename(filePath)}*`,
+        }
+        return { contents: content }
+      }
+    }
+  } catch { /* ignore */ }
+
   return null
 })
 
 // ---------------------------------------------------------------------------
 // Go-to-definition
 // ---------------------------------------------------------------------------
+
+/**
+ * Parse all import declarations in `source` (both path-based and module::*
+ * forms) and return parsed Program objects for each resolved file.
+ */
+function getImportedPrograms(source: string, fromUri: string): Array<{ prog: import('../ast/types').Program; filePath: string }> {
+  const result: Array<{ prog: import('../ast/types').Program; filePath: string }> = []
+  // 1. Path-based: import "stdlib/math.mcrs"
+  const FILE_IMPORT_RE = /^import\s+"([^"]+)"/gm
+  let m: RegExpExecArray | null
+  while ((m = FILE_IMPORT_RE.exec(source)) !== null) {
+    const resolved = resolveImportPath(m[1], fromUri)
+    if (!resolved || !fs.existsSync(resolved)) continue
+    try {
+      const src = fs.readFileSync(resolved, 'utf-8')
+      const tokens = new Lexer(src).tokenize()
+      const prog = new Parser(tokens).parse(path.basename(resolved, '.mcrs'))
+      result.push({ prog, filePath: resolved })
+    } catch { /* skip */ }
+  }
+  // 2. Module-star: import random::* or import random::fn_name
+  const MOD_IMPORT_RE = /^import\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*::/gm
+  while ((m = MOD_IMPORT_RE.exec(source)) !== null) {
+    const modName = m[1]
+    // Try to resolve as stdlib/modName.mcrs
+    const resolved = resolveImportPath(`stdlib/${modName}.mcrs`, fromUri)
+    if (!resolved || !fs.existsSync(resolved)) continue
+    // Avoid duplicates if already resolved above
+    if (result.some(r => r.filePath === resolved)) continue
+    try {
+      const src = fs.readFileSync(resolved, 'utf-8')
+      const tokens = new Lexer(src).tokenize()
+      const prog = new Parser(tokens).parse(modName)
+      result.push({ prog, filePath: resolved })
+    } catch { /* skip */ }
+  }
+  return result
+}
 
 /** Resolve a relative or stdlib import path to an absolute file path. */
 function resolveImportPath(importStr: string, fromUri: string): string | null {
@@ -813,32 +876,22 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
     }
   }
 
-  // ── Functions from imported files ──────────────────────────────────────────
-  // Parse 'import "stdlib/math.mcrs"' lines and add their fn declarations.
+  // ── Functions from imported files (both "path" and module::* forms) ────────
   try {
-    const FILE_IMPORT_RE = /^import\s+"([^"]+)"/gm
-    let m: RegExpExecArray | null
-    while ((m = FILE_IMPORT_RE.exec(source)) !== null) {
-      const resolved = resolveImportPath(m[1], params.textDocument.uri)
-      if (!resolved || !fs.existsSync(resolved)) continue
-      try {
-        const importedSrc = fs.readFileSync(resolved, 'utf-8')
-        const importedTokens = new Lexer(importedSrc).tokenize()
-        const importedProg = new Parser(importedTokens).parse(path.basename(resolved, '.mcrs'))
-        for (const fn of importedProg.declarations) {
-          const paramList = fn.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')
-          items.push({
-            label: fn.name,
-            kind: CompletionItemKind.Function,
-            detail: `(imported) (${paramList}) → ${typeToString(fn.returnType ?? { kind: 'named', name: 'void' })}`,
-            documentation: `from ${path.basename(resolved)}`,
-          })
-        }
-        // Also add structs, consts, globals from the imported file
-        for (const s of importedProg.structs ?? []) {
-          items.push({ label: s.name, kind: CompletionItemKind.Struct, documentation: `from ${path.basename(resolved)}` })
-        }
-      } catch { /* skip files that fail to parse */ }
+    const importedPrograms = getImportedPrograms(source, params.textDocument.uri)
+    for (const { prog, filePath } of importedPrograms) {
+      for (const fn of prog.declarations) {
+        const paramList = fn.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')
+        items.push({
+          label: fn.name,
+          kind: CompletionItemKind.Function,
+          detail: `(${paramList}) → ${typeToString(fn.returnType ?? { kind: 'named', name: 'void' })}`,
+          documentation: `from ${path.basename(filePath)}`,
+        })
+      }
+      for (const s of prog.structs ?? []) {
+        items.push({ label: s.name, kind: CompletionItemKind.Struct, documentation: `from ${path.basename(filePath)}` })
+      }
     }
   } catch { /* ignore import completion errors */ }
 
