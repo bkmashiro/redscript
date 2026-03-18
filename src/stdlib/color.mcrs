@@ -169,3 +169,12 @@ fn hsl_to_packed(h: int, s: int, l: int): int {
     let b: int = hsl_to_b(h, s, l) / 10000;
     return rgb_pack(r, g, b);
 }
+
+// ─── rgb_to_hex ───────────────────────────────────────────────────────────────
+
+// rgb_to_hex(r, g, b): pack RGB into 0xRRGGBB integer
+// Equivalent to rgb_pack; provided as an explicit named alias.
+// r, g, b ∈ [0, 255]; no fixed-point — simple integer arithmetic.
+fn rgb_to_hex(r: int, g: int, b: int): int {
+    return r * 65536 + g * 256 + b;
+}
