@@ -292,20 +292,59 @@ fn delayed_explosion() {
 
 ### `@coroutine`
 
-Marks a function as a tick-splitting state machine. The body can use `yield <ticks>` to pause execution across ticks, resuming automatically when the countdown completes.
+Marks a function as a tick-splitting state machine. Loop back-edges become automatic yield points: the loop body runs up to `batch` iterations per tick, then returns — resuming next tick where it left off.
 
 ```rs
-@coroutine
-fn cutscene() {
-    title(@s, "Chapter 1");
-    yield 60;  // pause 60 ticks
-    title(@s, "Chapter 2");
-    yield 40;
-    title(@s, "The End");
+@coroutine(batch=10, onDone="on_scan_done")
+fn scan_region() {
+    let x: int = 0;
+    while (x < 1000) {
+        process(x);
+        x += 1;
+    }
+    // after the loop: calls on_scan_done()
 }
 ```
 
-The compiler generates a scoreboard-backed state machine; no blocking occurs — other functions continue to run during the yield.
+**Parameters:**
+- `batch` — maximum loop iterations per tick (default: 1). Total ticks = actual iterations / batch.
+- `onDone` — optional function name to call when the coroutine finishes.
+
+**How it works:**
+
+The compiler performs control-flow analysis (dominator tree + back-edge detection) to find all loop headers. Each loop is split into a *continuation function* that runs up to `batch` iterations before returning. A generated `@tick` dispatcher checks a scoreboard `pc` counter and calls the right continuation each tick.
+
+```
+call scan_region()           → sets pc = 1, initializes live vars
+@tick → dispatcher           → pc == 1 → call _coro_scan_region_cont_1
+cont_1 runs 10 iterations    → returns (yield)
+next tick: cont_1 runs again → ... until loop exits
+loop done                    → calls onDone, sets pc = -1 (stopped)
+```
+
+Variables that are live across yield points are automatically promoted to persistent scoreboard slots.
+
+**Constraints:**
+- Functions containing macro calls cannot use `@coroutine` (continuations are invoked via `function`, which does not substitute macro variables).
+- Nested loops: the transform handles each loop independently. For nested loops, extract the inner loop into a separate function.
+- Multiple sequential loops compile to multiple continuations dispatched in order.
+- Calling one coroutine from another: use `onDone` chaining — the first coroutine's `onDone` callback initializes the second.
+
+```rs
+@coroutine(batch=5, onDone="start_phase2")
+fn phase1() { /* long work */ }
+
+fn start_phase2() {
+    phase2();  // initializes phase2's pc, starts it
+}
+
+@coroutine(batch=5)
+fn phase2() { /* runs after phase1 completes */ }
+```
+
+**Performance note:** `@coroutine` is designed to stay within MC's per-tick command budget (`maxCommandChainLength`, default 65536). Without it, 1000 iterations × 20 commands = 20000 commands/tick — fine. But 10000 iterations × 20 = 200000 — exceeds the limit and causes silent truncation. The `batch` parameter is your throttle valve.
+
+No blocking occurs — other `@tick` functions and game logic continue to run while the coroutine is spread across ticks.
 
 ---
 
