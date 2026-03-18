@@ -331,6 +331,21 @@ function extractDocComment(source: string, fn: FnDecl): string | null {
   return null
 }
 
+/**
+ * Find which function declaration contains the given 1-based line number.
+ * Uses the next fn's start line as the implicit end when span.endLine is missing.
+ */
+function findEnclosingFn(program: Program, curLine: number): import('../ast/types').FnDecl | null {
+  const fns = program.declarations.filter(f => f.span)
+  for (let i = 0; i < fns.length; i++) {
+    const fn = fns[i]
+    const startLine = fn.span!.line
+    const endLine = fn.span!.endLine ?? (fns[i + 1]?.span?.line ? fns[i + 1].span!.line - 1 : Infinity)
+    if (curLine >= startLine && curLine <= endLine) return fn
+  }
+  return null
+}
+
 function buildDefinitionMap(program: Program, source: string): Map<string, Span> {
   const map = new Map<string, Span>()
 
@@ -620,9 +635,8 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   // Check locals and params in the enclosing function
   {
     const curLine = params.position.line + 1
-    for (const fn of program.declarations) {
-      if (!fn.body || !fn.span) continue
-      if (curLine < fn.span.line || curLine > (fn.span.endLine ?? Infinity)) continue
+    const fn = findEnclosingFn(program, curLine)
+    if (fn) {
       // Check params
       const param = fn.params.find(p => p.name === word)
       if (param) {
@@ -634,17 +648,18 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
         }
       }
       // Check locals
-      const locals = collectLocals(fn.body as import('../ast/types').Block)
-      const localType = locals.get(word)
-      if (localType) {
-        return {
-          contents: {
-            kind: MarkupKind.Markdown,
-            value: `\`\`\`redscript\nlet ${word}: ${typeToString(localType)}\n\`\`\``,
-          } as MarkupContent,
+      if (fn.body) {
+        const locals = collectLocals(fn.body as import('../ast/types').Block)
+        const localType = locals.get(word)
+        if (localType) {
+          return {
+            contents: {
+              kind: MarkupKind.Markdown,
+              value: `\`\`\`redscript\nlet ${word}: ${typeToString(localType)}\n\`\`\``,
+            } as MarkupContent,
+          }
         }
       }
-      break
     }
   }
 
@@ -805,13 +820,15 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
     }
   }
 
-  // ── If word is a local variable / foreach binding / struct field / param,
-  //    don't fall through to imported symbol search ──────────────────────────
-  for (const fn of program.declarations) {
-    if (!fn.body) continue
-    const locals = collectLocals(fn.body as import('../ast/types').Block)
-    if (locals.has(word)) return null
-    if (fn.params.some(p => p.name === word)) return null
+  // ── If word is a local/param in the enclosing fn, don't fall through to imports ──
+  const defCurLine = params.position.line + 1 // 1-based
+  const enclosingFn = findEnclosingFn(program, defCurLine)
+  if (enclosingFn) {
+    if (enclosingFn.params.some(p => p.name === word)) return null
+    if (enclosingFn.body) {
+      const locals = collectLocals(enclosingFn.body as import('../ast/types').Block)
+      if (locals.has(word)) return null
+    }
   }
   // Struct fields — clicking on .phase, .active etc. should not jump to stdlib
   for (const s of program.structs ?? []) {
@@ -949,15 +966,10 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
     if (program) {
       // Find which function body contains this line (by span)
       const curLine = params.position.line + 1 // spans are 1-based
-      let locals: Map<string, TypeNode> | null = null
-      for (const fn of program.declarations) {
-        if (fn.body && fn.span) {
-          if (curLine >= fn.span.line && curLine <= (fn.span.endLine ?? Infinity)) {
-            locals = collectLocals(fn.body as Block)
-            break
-          }
-        }
-      }
+      const encFn = findEnclosingFn(program, curLine)
+      const locals: Map<string, TypeNode> | null = encFn?.body
+        ? collectLocals(encFn.body as Block)
+        : null
 
       // Determine type of receiver
       const receiverType: TypeNode | undefined = locals?.get(dotReceiver)
@@ -1035,19 +1047,15 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
     }
 
     // Locals from the enclosing function
-    const curLine = params.position.line + 1
-    for (const fn of program.declarations) {
-      if (fn.body && fn.span) {
-        if (curLine >= fn.span.line && curLine <= (fn.span.endLine ?? Infinity)) {
-          for (const [name, typ] of collectLocals(fn.body as Block)) {
-            items.push({
-              label: name,
-              kind: CompletionItemKind.Variable,
-              detail: typeToString(typ),
-            })
-          }
-          break
-        }
+    const curLine2 = params.position.line + 1
+    const encFn2 = findEnclosingFn(program, curLine2)
+    if (encFn2?.body) {
+      for (const [name, typ] of collectLocals(encFn2.body as Block)) {
+        items.push({
+          label: name,
+          kind: CompletionItemKind.Variable,
+          detail: typeToString(typ),
+        })
       }
     }
   }
