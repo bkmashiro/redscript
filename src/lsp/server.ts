@@ -804,6 +804,35 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
     }
   }
 
+  // ── Functions from imported files ──────────────────────────────────────────
+  // Parse 'import "stdlib/math.mcrs"' lines and add their fn declarations.
+  try {
+    const FILE_IMPORT_RE = /^import\s+"([^"]+)"/gm
+    let m: RegExpExecArray | null
+    while ((m = FILE_IMPORT_RE.exec(source)) !== null) {
+      const resolved = resolveImportPath(m[1], params.textDocument.uri)
+      if (!resolved || !fs.existsSync(resolved)) continue
+      try {
+        const importedSrc = fs.readFileSync(resolved, 'utf-8')
+        const importedTokens = new Lexer(importedSrc).tokenize()
+        const importedProg = new Parser(importedTokens).parse(path.basename(resolved, '.mcrs'))
+        for (const fn of importedProg.declarations) {
+          const paramList = fn.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')
+          items.push({
+            label: fn.name,
+            kind: CompletionItemKind.Function,
+            detail: `(imported) (${paramList}) → ${typeToString(fn.returnType ?? { kind: 'named', name: 'void' })}`,
+            documentation: `from ${path.basename(resolved)}`,
+          })
+        }
+        // Also add structs, consts, globals from the imported file
+        for (const s of importedProg.structs ?? []) {
+          items.push({ label: s.name, kind: CompletionItemKind.Struct, documentation: `from ${path.basename(resolved)}` })
+        }
+      } catch { /* skip files that fail to parse */ }
+    }
+  } catch { /* ignore import completion errors */ }
+
   return items
 })
 
