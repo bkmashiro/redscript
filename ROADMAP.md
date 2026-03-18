@@ -1,107 +1,90 @@
 # RedScript Roadmap
 
-Last updated: 2026-03-17
+Last updated: 2026-03-18
 
-## Done ✅
+---
+
+## Current State (v2.5.0)
 
 ### Compiler
-- v2 pipeline (HIR → MIR → LIR → mcfunction)
-- Module system (`module library` / `import`)
-- Type checker + generics + enum + Option<T>
-- @coroutine (tick-splitting state machine)
-- @schedule decorator
-- Incremental compilation (file-level SHA256 cache)
-- Source map (`--source-map`)
-- LSP (diagnostics / hover / goto-def / completion, 50+ builtins)
-- Multi-MC-version target (`--mc-version`)
-- Interprocedural constant propagation + specialization
-- int32 overflow-safe constant folding (`(n | 0)` wrap on all arithmetic)
-- LIR score_set out-of-range warning (defensive layer)
-- DCE (dead code elimination)
-- Peephole: execute-store-success, constant immediate folding
+- v2 pipeline: HIR → MIR → LIR → mcfunction
+- Type system: int / fixed (×10000) / double (NBT IEEE 754) / float (deprecated)
+- `double` type: NBT storage `rs:d`, explicit `as` cast required, binary ops auto-lower to stdlib intrinsics
+- Module system, generics, enum, Option<T>
+- @coroutine, @schedule, @on decorators
+- Incremental compilation, source maps, LSP, DCE, peephole optimizer
+- Compiler intrinsics: `double + double` → `double_add`, etc.
+- int32 overflow-safe constant folding, LIR out-of-range lint
 
-### stdlib
-- `math.mcrs`: abs/sign/min/max/clamp/lerp/isqrt/sqrt_fixed/sin_fixed/cos_fixed/atan2_fixed/gcd/lcm/pow_int/log2_int/mulfix/divfix/smoothstep/smootherstep/ln/exp_fx/cbrt_fx/cbrt_newton/gamma_int/quadratic/asin_approx/acos_approx + more
-  - ln coefficients SA-tuned: max_error = 0.000504
-- `math_hp.mcrs`: high-precision sin/cos via entity rotation trick
-- `bigint.mcrs`: 3-chunk (96-bit) helpers + arbitrary-length array API (add/sub/mul_small/cmp/zero/copy/div_small)
-- `bits.mcrs`: bit_get/set/clear/toggle/shl/shr/and/or/xor/not/popcount
-- `list.mcrs`: sort2–5 networks, list_sort_asc/desc, min/max/avg helpers
-- `random.mcrs`: LCG/PCG RNG, random_range/bool
-- `easing.mcrs`: 12 easing functions
-- `noise.mcrs`: hash_1d/2d, value_noise_1d/2d, fbm_1d/2d, terrain_height
-- `physics.mcrs`: projectile/drag/spring/friction/circular motion
-- `matrix.mcrs`: 2D/3D rotation, quaternion helpers, billboard, lerp_angle
-- `signal.mcrs`: uniform/bernoulli/normal_approx12/exp_dist/weighted2/3
-- `advanced.mcrs`: fib/is_prime/collatz/digit_sum/mod_pow/bezier_quad/cubic/mandelbrot/julia + geometry
-- `vec.mcrs`: 2D/3D vector ops (dot/cross/length/normalize/lerp)
-- `calculus.mcrs`: trapezoid/simpson/newton_step
-- `color.mcrs`, `combat.mcrs`, `cooldown.mcrs`, `effects.mcrs`, `interactions.mcrs`
-- `inventory.mcrs`, `mobs.mcrs`, `particles.mcrs`, `spawn.mcrs`, `tags.mcrs`
-- `teams.mcrs`, `timer.mcrs`, `world.mcrs`, `player.mcrs`, `bossbar.mcrs`, `strings.mcrs`, `sets.mcrs`
+### stdlib (complete)
+| Module | Contents |
+|--------|----------|
+| `math.mcrs` | abs/sign/min/max/clamp/lerp/sqrt/sin/cos/atan2/ln/exp/cbrt/bezier + more (SA-tuned) |
+| `math_hp.mcrs` | double_add/sub/mul/div, double_mul_fixed, ln_hp, ln_5term, sin/cos via entity rotation |
+| `bigint.mcrs` | 96-bit helpers + arbitrary-length array API (add/sub/mul/div/cmp) |
+| `signal.mcrs` | DFT, gamma/poisson/negbin distributions, uniform/bernoulli/normal |
+| `geometry.mcrs` | in_cylinder, in_cone, in_sector_2d |
+| `expr.mcrs` | RPN expression evaluator |
+| `parabola.mcrs` | ballistic trajectory |
+| `quaternion.mcrs` | Display Entity rotation, SLERP |
+| `advanced.mcrs` | bezier_n, fib, primes, Mandelbrot |
+| `color.mcrs` | RGB↔HSL |
+| `world.mcrs` | sun_altitude, sun_azimuth |
+| `noise/easing/physics/matrix/bits/list/random/vec/calculus/...` | complete |
 
-### Testing
-- Unit/e2e: 1373 tests all passing
-- MC integration: 69 tests all passing (random/bits/list/bigint/math)
-- int32 overflow regression tests in constant_fold
-- advanced.mcrs e2e (+39 tests)
-- noise.mcrs + signal.mcrs e2e (+30 tests)
-- matrix.mcrs compilation tests (+18 tests)
+### Tests
+- Unit/e2e: **1588** passing
+- MC integration: **74** passing
 
 ### Tooling
-- Tuner (SA + Nelder-Mead) for polynomial coefficient optimization
-  - ln-polynomial adapter (tuned: A1=20026 A3=6394 A5=5511)
-  - sqrt-newton adapter
-- `redscript tune --adapter <name> --strategy sa`
-- VSCode extension (syntax highlight, f-string, #rs, hover tooltips) — auto-bumped via CI
+- SA + Nelder-Mead tuner (`redscript tune --adapter <name>`)
+  - Adapters: ln-polynomial, sqrt-newton
+- VSCode extension (syntax highlight, hover, goto-def, completion)
 
 ---
 
-## Up Next 📋
+## Next Steps 🗺️
 
-### P1 — Docs
-- [ ] **docs 网站更新** `status: todo` `priority: p4`
-  - easing / noise / physics / matrix / signal / advanced / bigint / parabola / quaternion / bezier_n
-  - 编译器新特性：coroutine、module system、double 类型
-  - 每个 stdlib 函数加 usage example
+### Near-term (v2.6)
 
-### P2 — Stdlib 扩充
-- [x] **bigint 全乘法** `status: done` — `bigint_mul` / `bigint_sq` 已实现
-- [x] **抛物线弹道** `status: done` — `parabola.mcrs` 14个测试通过
-- [x] **N 阶贝塞尔** `status: done` — `bezier_quartic` / `bezier_n` / `bezier_n_safe` 已实现
-- [x] **统计分布扩充** `status: done` — gamma/poisson/negative-binomial added (signal.mcrs)
-  - Gamma 分布 / 负二项分布 / 超几何分布（signal.mcrs 扩展）
+#### Compiler improvements
+- [ ] **`as fixed` temp var rename bug** — raw() 内的 `$tN` 不被 LIR rename，导致 double→fixed cast 在嵌套调用中出错。需在 lower.ts 用 prefixed name 或改用非 raw emit。
+- [ ] **exp_fx / sin_fixed Tuner adapters** — 参照 ln-polynomial，用 SA 优化系数，减小误差
+- [ ] **函数宏 `__NS__` 扩展** — 目前只替换 namespace 名，考虑支持 `__OBJ__`（objective 名）减少 raw() hardcode
 
-### P3 — 编译器 / Double 运算
-- [x] **double 类型基础** `status: done` — NBT storage rs:d，`as` cast，参数传递 NBT 直拷
-- [x] **float arithmetic lint** `status: done` — `[FloatArithmetic]` warning
-- [x] **double_mul_fixed 真正 double 精度** `status: done` — 函数宏 trick，\_\_NS\_\_ 占位符，真正 IEEE 754 double 精度
-- [ ] **double_add / double_sub** `status: todo` `priority: p3`
-  - loot spawn 无限坐标 trick
-- [ ] **compiler intrinsic: double + double → double_add** `status: todo` `priority: p3`
-  - lower.ts BinaryExpr(double, +, double) 自动降级
-- [x] **高精度 ln_hp** `status: done` — Newton refinement of ln_5term，误差 < 0.001 (8–9 digit precision)
+#### stdlib
+- [ ] **超几何分布** — `hypergeometric_sample(N, K, n, seed)` 补进 signal.mcrs（kaer 还有这个）
+- [ ] **矩阵乘法** — `mat3_mul(a, b)` / `mat4_mul` in matrix.mcrs（目前只有旋转，缺通用乘法）
+- [ ] **bigint 除法** — 目前只有 `div_small`（除以小整数），缺 bigint÷bigint
 
-### P4 — 游戏工具
-- [x] **几何选区** `status: done` — 圆锥/扇形/圆柱 entity selector helper (geometry.mcrs)
-- [x] **RGB ↔ HSL 转换** `status: done` — color.mcrs 扩展 (rgb_to_h/s/l, hsl_to_r/g/b)
-- [x] **太阳角度** `status: done` — world.mcrs 扩展 (sun_altitude, sun_azimuth)
-- [ ] **math_hp MC integration 测试** `status: todo` `priority: p4` — 需要 MC server
+#### Testing
+- [ ] **sun_altitude MC integration** — 依赖 sin_fixed + NBT storage，需真实 MC 服务器验证
+- [ ] **double_add/sub MC integration** — 需要 entity position trick 的 MC 验证
 
+### Medium-term (v3.0)
 
----
+#### 语言层
+- [ ] **`for` 循环语法糖** — `for i in 0..n` 脱糖为 while，减少样板代码
+- [ ] **数组字面量类型推断** — `let a = [1, 2, 3]` 自动推断 `int[]`
+- [ ] **结构体方法** — `impl Vec3 { fn dot(self, other) }` 语法
 
-## Long-term 🌱
-- [ ] **Fourier 分析** — DFT/FFT，kaer 有，RedScript 最复杂的缺口
-- [ ] **表达式解析器** — 运行时解析 `"2*x+sin(x)"` 字符串，kaer 有逆波兰算法
-- [ ] **更多 Tuner adapter** — exp_fx / sin_fixed 系数优化
+#### 工具链
+- [ ] **REPL / playground** — 浏览器内 RedScript→mcfunction 实时预览
+- [ ] **exp_fx / sin_fixed adapter** — SA 调参进一步减小误差
+
+### Long-term 🌱
+
+- [ ] **FFT** — 快速傅里叶（O(n log n)），目前只有 DFT（O(n²)）
+- [ ] **字符串插值编译期支持** — 目前 f-string 是 VSCode 插件 trick，不是真正语言特性
+- [ ] **跨文件增量测试** — 只重跑受影响模块的测试，加快 CI
 
 ---
 
-## Notes
+## Architecture Notes
 
-**vs kaer (large_number):**
-- kaer 最大优势：double 精度（NBT float/double 作载体）
-- RedScript 优势：编译器（高级语言语法，类型安全，不用手写 .mcfunction）
-- bigint 全乘法 + 抛物线弹道 是最值得优先做的两个缺口
-- 高精度浮点需要编译器层支持，工作量最大
+- **double 参数传递**：callee 内 `rs:d __dp0`, `__dp1`（NBT 直拷，不经 scoreboard）
+- **double_mul_fixed 宏 trick**：`__dmul_args.scale`（必须用点号，空格是旧 bug）
+- **marker entity UUID**：`b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4`（double_add/sub 用）
+- **`__NS__` placeholder**：raw() 中使用，编译时替换为 namespace 名
+- **mulfix(a,b) = a×b/1000**（×10000 scale 下的乘法修正）
+- **PCG next_lo** 有超出 int32 范围的常数问题（已知，不影响功能，待修）
