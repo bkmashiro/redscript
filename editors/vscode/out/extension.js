@@ -18263,6 +18263,7 @@ var require_lexer = __commonJS({
       int: "int",
       bool: "bool",
       float: "float",
+      fixed: "fixed",
       string: "string",
       void: "void",
       BlockPos: "BlockPos",
@@ -18826,6 +18827,7 @@ var require_parser = __commonJS({
       constructor(tokens, source, filePath) {
         this.pos = 0;
         this.inLibraryMode = false;
+        this.warnings = [];
         this.tokens = tokens;
         this.sourceLines = source?.split("\n") ?? [];
         this.filePath = filePath;
@@ -18897,12 +18899,14 @@ var require_parser = __commonJS({
         const implBlocks = [];
         const enums = [];
         const consts = [];
+        const imports = [];
         let isLibrary = false;
+        let moduleName;
         if (this.check("namespace")) {
           this.advance();
           const name = this.expect("ident");
           namespace = name.value;
-          this.expect(";");
+          this.match(";");
         }
         if (this.check("module")) {
           this.advance();
@@ -18910,8 +18914,10 @@ var require_parser = __commonJS({
           if (modKind.value === "library") {
             isLibrary = true;
             this.inLibraryMode = true;
+          } else {
+            moduleName = modKind.value;
           }
-          this.expect(";");
+          this.match(";");
         }
         while (!this.check("eof")) {
           if (this.check("let")) {
@@ -18929,11 +18935,25 @@ var require_parser = __commonJS({
             this.parseDeclareStub();
           } else if (this.check("export")) {
             declarations.push(this.parseExportedFnDecl());
+          } else if (this.check("ident") && this.peek().value === "import") {
+            this.advance();
+            const importToken = this.peek();
+            const modName = this.expect("ident").value;
+            this.expect("::");
+            let symbol;
+            if (this.check("*")) {
+              this.advance();
+              symbol = "*";
+            } else {
+              symbol = this.expect("ident").value;
+            }
+            this.match(";");
+            imports.push(this.withLoc({ moduleName: modName, symbol }, importToken));
           } else {
             declarations.push(this.parseFnDecl());
           }
         }
-        return { namespace, globals, declarations, structs, implBlocks, enums, consts, isLibrary };
+        return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, isLibrary };
       }
       // -------------------------------------------------------------------------
       // Struct Declaration
@@ -18998,7 +19018,7 @@ var require_parser = __commonJS({
         this.expect("=");
         const value = this.parseLiteralExpr();
         this.match(";");
-        const inferredType = type ?? (value.kind === "str_lit" ? { kind: "named", name: "string" } : value.kind === "bool_lit" ? { kind: "named", name: "bool" } : value.kind === "float_lit" ? { kind: "named", name: "float" } : { kind: "named", name: "int" });
+        const inferredType = type ?? (value.kind === "str_lit" ? { kind: "named", name: "string" } : value.kind === "bool_lit" ? { kind: "named", name: "bool" } : value.kind === "float_lit" ? { kind: "named", name: "fixed" } : { kind: "named", name: "int" });
         return this.withLoc({ name, type: inferredType, value }, constToken);
       }
       parseGlobalDecl(mutable) {
@@ -19008,7 +19028,7 @@ var require_parser = __commonJS({
         const type = this.parseType();
         this.expect("=");
         const init = this.parseExpr();
-        this.expect(";");
+        this.match(";");
         return this.withLoc({ kind: "global", name, type, init, mutable }, token);
       }
       // -------------------------------------------------------------------------
@@ -19142,6 +19162,8 @@ var require_parser = __commonJS({
           const [key, val] = part.split("=").map((s) => s.trim());
           if (key === "rate") {
             args.rate = parseInt(val, 10);
+          } else if (key === "ticks") {
+            args.ticks = parseInt(val, 10);
           } else if (key === "batch") {
             args.batch = parseInt(val, 10);
           } else if (key === "onDone") {
@@ -19199,7 +19221,12 @@ var require_parser = __commonJS({
           }
           return { kind: "tuple", elements };
         }
-        if (token.kind === "int" || token.kind === "bool" || token.kind === "float" || token.kind === "string" || token.kind === "void" || token.kind === "BlockPos") {
+        if (token.kind === "float") {
+          this.advance();
+          const filePart = this.filePath ? `${this.filePath}:` : "";
+          this.warnings.push(`[DeprecatedType] ${filePart}line ${token.line}, col ${token.col}: 'float' is deprecated, use 'fixed' instead (\xD710000 fixed-point)`);
+          type = { kind: "named", name: "float" };
+        } else if (token.kind === "int" || token.kind === "bool" || token.kind === "fixed" || token.kind === "string" || token.kind === "void" || token.kind === "BlockPos") {
           this.advance();
           type = { kind: "named", name: token.kind };
         } else if (token.kind === "ident") {
@@ -19211,6 +19238,13 @@ var require_parser = __commonJS({
             type = { kind: "selector", entityType };
           } else if (token.value === "selector") {
             type = { kind: "selector" };
+          } else if (token.value === "Option" && this.check("<")) {
+            this.advance();
+            const inner = this.parseType();
+            this.expect(">");
+            type = { kind: "option", inner };
+          } else if (token.value === "double" || token.value === "byte" || token.value === "short" || token.value === "long" || token.value === "format_string") {
+            type = { kind: "named", name: token.value };
           } else {
             type = { kind: "struct", name: token.value };
           }
@@ -19312,7 +19346,7 @@ var require_parser = __commonJS({
           }
           this.expect("=");
           const init2 = this.parseExpr();
-          this.expect(";");
+          this.match(";");
           return this.withLoc({ kind: "let_destruct", names, type: type2, init: init2 }, letToken);
         }
         const name = this.expect("ident").value;
@@ -19322,20 +19356,39 @@ var require_parser = __commonJS({
         }
         this.expect("=");
         const init = this.parseExpr();
-        this.expect(";");
+        this.match(";");
         return this.withLoc({ kind: "let", name, type, init }, letToken);
       }
       parseReturnStmt() {
         const returnToken = this.expect("return");
         let value;
-        if (!this.check(";")) {
+        if (!this.check(";") && !this.check("}") && !this.check("eof")) {
           value = this.parseExpr();
         }
-        this.expect(";");
+        this.match(";");
         return this.withLoc({ kind: "return", value }, returnToken);
       }
       parseIfStmt() {
         const ifToken = this.expect("if");
+        if (this.check("let") && this.peek(1).kind === "ident" && this.peek(1).value === "Some") {
+          this.advance();
+          this.advance();
+          this.expect("(");
+          const binding = this.expect("ident").value;
+          this.expect(")");
+          this.expect("=");
+          const init = this.parseExpr();
+          const then2 = this.parseBlock();
+          let else_2;
+          if (this.match("else")) {
+            if (this.check("if")) {
+              else_2 = [this.parseIfStmt()];
+            } else {
+              else_2 = this.parseBlock();
+            }
+          }
+          return this.withLoc({ kind: "if_let_some", binding, init, then: then2, else_: else_2 }, ifToken);
+        }
         this.expect("(");
         const cond = this.parseExpr();
         this.expect(")");
@@ -19364,6 +19417,17 @@ var require_parser = __commonJS({
           return this.parseForRangeStmt(forToken);
         }
         this.expect("(");
+        if (this.check("let") && this.peek(1).kind === "ident" && this.peek(2).kind === "in" && this.peek(3).kind === "ident" && this.peek(4).kind === ",") {
+          this.advance();
+          const binding = this.expect("ident").value;
+          this.expect("in");
+          const arrayName = this.expect("ident").value;
+          this.expect(",");
+          const lenExpr = this.parseExpr();
+          this.expect(")");
+          const body2 = this.parseBlock();
+          return this.withLoc({ kind: "for_in_array", binding, arrayName, lenExpr, body: body2 }, forToken);
+        }
         let init;
         if (this.check("let")) {
           const letToken = this.expect("let");
@@ -19623,7 +19687,7 @@ var require_parser = __commonJS({
       }
       parseExprStmt() {
         const expr = this.parseExpr();
-        this.expect(";");
+        this.match(";");
         const exprToken = this.getLocToken(expr) ?? this.peek();
         return this.withLoc({ kind: "expr", expr }, exprToken);
       }
@@ -19645,6 +19709,10 @@ var require_parser = __commonJS({
           if (left.kind === "member") {
             const value = this.parseAssignment();
             return this.withLoc({ kind: "member_assign", obj: left.obj, field: left.field, op, value }, this.getLocToken(left) ?? token);
+          }
+          if (left.kind === "index") {
+            const value = this.parseAssignment();
+            return this.withLoc({ kind: "index_assign", obj: left.obj, index: left.index, op, value }, this.getLocToken(left) ?? token);
           }
         }
         return left;
@@ -19781,9 +19849,27 @@ var require_parser = __commonJS({
             expr = this.withLoc({ kind: "member", obj: expr, field }, this.getLocToken(expr) ?? this.tokens[this.pos - 1]);
             continue;
           }
+          if (this.check("as") && this.isTypeCastAs()) {
+            const asToken = this.advance();
+            const targetType = this.parseType();
+            expr = this.withLoc({ kind: "type_cast", expr, targetType }, this.getLocToken(expr) ?? asToken);
+            continue;
+          }
           break;
         }
         return expr;
+      }
+      /** Returns true if the current 'as' token is a type cast (not a context block) */
+      isTypeCastAs() {
+        const next = this.tokens[this.pos + 1];
+        if (!next)
+          return false;
+        const typeStartTokens = /* @__PURE__ */ new Set(["int", "bool", "float", "fixed", "string", "void", "BlockPos", "("]);
+        if (typeStartTokens.has(next.kind))
+          return true;
+        if (next.kind === "ident" && (next.value === "double" || next.value === "byte" || next.value === "short" || next.value === "long" || next.value === "selector" || next.value === "Option"))
+          return true;
+        return false;
       }
       parseArgs() {
         const args = [];
@@ -19875,6 +19961,17 @@ var require_parser = __commonJS({
             isSingle: computeIsSingle(token.value),
             sel: this.parseSelectorValue(token.value)
           }, token);
+        }
+        if (token.kind === "ident" && token.value === "Some" && this.peek(1).kind === "(") {
+          this.advance();
+          this.advance();
+          const value = this.parseExpr();
+          this.expect(")");
+          return this.withLoc({ kind: "some_lit", value }, token);
+        }
+        if (token.kind === "ident" && token.value === "None") {
+          this.advance();
+          return this.withLoc({ kind: "none_lit" }, token);
         }
         if (token.kind === "ident") {
           this.advance();
@@ -20168,7 +20265,7 @@ var require_parser = __commonJS({
           const returnLen = this.typeTokenLength(inner);
           return returnLen === 0 ? 0 : inner + returnLen - offset;
         }
-        const isNamedType = token.kind === "int" || token.kind === "bool" || token.kind === "float" || token.kind === "string" || token.kind === "void" || token.kind === "BlockPos" || token.kind === "ident";
+        const isNamedType = token.kind === "int" || token.kind === "bool" || token.kind === "float" || token.kind === "fixed" || token.kind === "string" || token.kind === "void" || token.kind === "BlockPos" || token.kind === "ident";
         if (!isNamedType) {
           return 0;
         }
@@ -20480,6 +20577,25 @@ var require_compile = __commonJS({
       }
       return false;
     }
+    function resolveImportPath(spec, fromFile, includeDirs) {
+      const candidates = spec.endsWith(".mcrs") ? [spec] : [spec, spec + ".mcrs"];
+      for (const candidate of candidates) {
+        const rel = path3.resolve(path3.dirname(fromFile), candidate);
+        if (fs2.existsSync(rel))
+          return rel;
+        const stdlibDir = path3.resolve(__dirname, "..", "src", "stdlib");
+        const stdlibCandidate = candidate.replace(/^stdlib\//, "");
+        const stdlib = path3.resolve(stdlibDir, stdlibCandidate);
+        if (fs2.existsSync(stdlib))
+          return stdlib;
+        for (const dir of includeDirs) {
+          const extra = path3.resolve(dir, candidate);
+          if (fs2.existsSync(extra))
+            return extra;
+        }
+      }
+      return null;
+    }
     function countLines(source) {
       return source === "" ? 0 : source.split("\n").length;
     }
@@ -20493,6 +20609,7 @@ var require_compile = __commonJS({
     function preprocessSourceWithMetadata(source, options = {}) {
       const { filePath } = options;
       const seen = options.seen ?? /* @__PURE__ */ new Set();
+      const includeDirs = options.includeDirs ?? [];
       if (filePath) {
         seen.add(path3.resolve(filePath));
       }
@@ -20509,22 +20626,20 @@ var require_compile = __commonJS({
           if (!filePath) {
             throw new diagnostics_1.DiagnosticError("ParseError", "Import statements require a file path", { line: i + 1, col: 1 }, lines);
           }
-          const importPath = path3.resolve(path3.dirname(filePath), match[1]);
+          const importPath = resolveImportPath(match[1], filePath, includeDirs);
+          if (!importPath) {
+            throw new diagnostics_1.DiagnosticError("ParseError", `Cannot import '${match[1]}'`, { file: filePath, line: i + 1, col: 1 }, lines);
+          }
           if (!seen.has(importPath)) {
             seen.add(importPath);
-            let importedSource;
-            try {
-              importedSource = fs2.readFileSync(importPath, "utf-8");
-            } catch {
-              throw new diagnostics_1.DiagnosticError("ParseError", `Cannot import '${match[1]}'`, { file: filePath, line: i + 1, col: 1 }, lines);
-            }
+            const importedSource = fs2.readFileSync(importPath, "utf-8");
             if (isLibrarySource(importedSource)) {
-              const nested = preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen });
+              const nested = preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen, includeDirs });
               libraryImports.push({ source: importedSource, filePath: importPath });
               if (nested.libraryImports)
                 libraryImports.push(...nested.libraryImports);
             } else {
-              imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen }));
+              imports.push(preprocessSourceWithMetadata(importedSource, { filePath: importPath, seen, includeDirs }));
             }
           }
           continue;
@@ -20717,6 +20832,57 @@ var require_lower = __commonJS({
           };
           return [initStmt, whileStmt];
         }
+        // --- Desugaring: for_in_array → let idx = 0; while(idx < len) { let v = arr[idx]; body; idx = idx + 1 } ---
+        case "for_in_array": {
+          const idxName = `__forin_idx_${stmt.binding}`;
+          const initStmt = {
+            kind: "let",
+            name: idxName,
+            type: { kind: "named", name: "int" },
+            init: { kind: "int_lit", value: 0 },
+            span: stmt.span
+          };
+          const bindingInit = {
+            kind: "let",
+            name: stmt.binding,
+            type: void 0,
+            init: {
+              kind: "index",
+              obj: { kind: "ident", name: stmt.arrayName },
+              index: { kind: "ident", name: idxName }
+            },
+            span: stmt.span
+          };
+          const stepStmt = {
+            kind: "expr",
+            expr: {
+              kind: "assign",
+              target: idxName,
+              value: {
+                kind: "binary",
+                op: "+",
+                left: { kind: "ident", name: idxName },
+                right: { kind: "int_lit", value: 1 }
+              }
+            },
+            span: stmt.span
+          };
+          const body = [bindingInit, ...lowerBlock(stmt.body)];
+          const step = [stepStmt];
+          const whileStmt = {
+            kind: "while",
+            cond: {
+              kind: "binary",
+              op: "<",
+              left: { kind: "ident", name: idxName },
+              right: lowerExpr(stmt.lenExpr)
+            },
+            body,
+            step,
+            span: stmt.span
+          };
+          return [initStmt, whileStmt];
+        }
         case "foreach":
           return {
             kind: "foreach",
@@ -20772,6 +20938,15 @@ var require_lower = __commonJS({
           };
         case "raw":
           return { kind: "raw", cmd: stmt.cmd, span: stmt.span };
+        case "if_let_some":
+          return {
+            kind: "if_let_some",
+            binding: stmt.binding,
+            init: lowerExpr(stmt.init),
+            then: lowerBlock(stmt.then),
+            else_: stmt.else_ ? lowerBlock(stmt.else_) : void 0,
+            span: stmt.span
+          };
         default: {
           const _exhaustive = stmt;
           throw new Error(`Unknown statement kind: ${_exhaustive.kind}`);
@@ -20886,6 +21061,35 @@ var require_lower = __commonJS({
           return { kind: "member", obj: lowerExpr(expr.obj), field: expr.field, span: expr.span };
         case "index":
           return { kind: "index", obj: lowerExpr(expr.obj), index: lowerExpr(expr.index), span: expr.span };
+        // --- Desugaring: compound index_assign → plain index_assign ---
+        case "index_assign":
+          if (expr.op !== "=") {
+            const binOp = COMPOUND_TO_BINOP[expr.op];
+            const obj = lowerExpr(expr.obj);
+            const index = lowerExpr(expr.index);
+            return {
+              kind: "index_assign",
+              obj,
+              index,
+              op: "=",
+              value: {
+                kind: "binary",
+                op: binOp,
+                left: { kind: "index", obj, index },
+                right: lowerExpr(expr.value),
+                span: expr.span
+              },
+              span: expr.span
+            };
+          }
+          return {
+            kind: "index_assign",
+            obj: lowerExpr(expr.obj),
+            index: lowerExpr(expr.index),
+            op: expr.op,
+            value: lowerExpr(expr.value),
+            span: expr.span
+          };
         case "call":
           return { kind: "call", fn: expr.fn, args: expr.args.map(lowerExpr), typeArgs: expr.typeArgs, span: expr.span };
         case "invoke":
@@ -20902,6 +21106,12 @@ var require_lower = __commonJS({
           return { kind: "path_expr", enumName: expr.enumName, variant: expr.variant, span: expr.span };
         case "tuple_lit":
           return { kind: "tuple_lit", elements: expr.elements.map(lowerExpr), span: expr.span };
+        case "some_lit":
+          return { kind: "some_lit", value: lowerExpr(expr.value), span: expr.span };
+        case "none_lit":
+          return { kind: "none_lit", span: expr.span };
+        case "type_cast":
+          return { kind: "type_cast", expr: lowerExpr(expr.expr), targetType: expr.targetType, span: expr.span };
         case "lambda": {
           const body = Array.isArray(expr.body) ? lowerBlock(expr.body) : lowerExpr(expr.body);
           return {
@@ -20943,6 +21153,8 @@ var require_monomorphize = __commonJS({
           return `arr_${typeSuffix(t.elem)}`;
         case "tuple":
           return `tup_${t.elements.map(typeSuffix).join("_")}`;
+        case "option":
+          return `opt_${typeSuffix(t.inner)}`;
         default:
           return "unknown";
       }
@@ -20969,6 +21181,8 @@ var require_monomorphize = __commonJS({
           return { kind: "array", elem: substType(t.elem, subst) };
         case "tuple":
           return { kind: "tuple", elements: t.elements.map((e) => substType(e, subst)) };
+        case "option":
+          return { kind: "option", inner: substType(t.inner, subst) };
         case "function_type":
           return { kind: "function_type", params: t.params.map((p) => substType(p, subst)), return: substType(t.return, subst) };
         default:
@@ -21116,6 +21330,13 @@ var require_monomorphize = __commonJS({
             };
           case "execute":
             return { ...stmt, body: this.rewriteBlock(stmt.body, ctx) };
+          case "if_let_some":
+            return {
+              ...stmt,
+              init: this.rewriteExpr(stmt.init, ctx),
+              then: this.rewriteBlock(stmt.then, ctx),
+              else_: stmt.else_ ? this.rewriteBlock(stmt.else_, ctx) : void 0
+            };
           case "break":
           case "continue":
           case "raw":
@@ -21152,6 +21373,8 @@ var require_monomorphize = __commonJS({
             return { ...expr, value: this.rewriteExpr(expr.value, ctx) };
           case "member_assign":
             return { ...expr, obj: this.rewriteExpr(expr.obj, ctx), value: this.rewriteExpr(expr.value, ctx) };
+          case "index_assign":
+            return { ...expr, obj: this.rewriteExpr(expr.obj, ctx), index: this.rewriteExpr(expr.index, ctx), value: this.rewriteExpr(expr.value, ctx) };
           case "member":
             return { ...expr, obj: this.rewriteExpr(expr.obj, ctx) };
           case "index":
@@ -21171,6 +21394,10 @@ var require_monomorphize = __commonJS({
           case "str_interp":
             return { ...expr, parts: expr.parts.map((p) => typeof p === "string" ? p : this.rewriteExpr(p, ctx)) };
           case "f_string":
+            return expr;
+          case "some_lit":
+            return { ...expr, value: this.rewriteExpr(expr.value, ctx) };
+          case "none_lit":
             return expr;
           // Literals / terminals — pass through unchanged
           default:
@@ -21223,7 +21450,7 @@ var require_monomorphize = __commonJS({
           case "int_lit":
             return { kind: "named", name: "int" };
           case "float_lit":
-            return { kind: "named", name: "float" };
+            return { kind: "named", name: "fixed" };
           case "bool_lit":
             return { kind: "named", name: "bool" };
           case "str_lit":
@@ -21400,6 +21627,11 @@ var require_macro = __commonJS({
           scanExpr(expr.obj, paramNames, macroParams);
           scanExpr(expr.value, paramNames, macroParams);
           break;
+        case "index_assign":
+          scanExpr(expr.obj, paramNames, macroParams);
+          scanExpr(expr.index, paramNames, macroParams);
+          scanExpr(expr.value, paramNames, macroParams);
+          break;
         case "member":
           scanExpr(expr.obj, paramNames, macroParams);
           break;
@@ -21465,16 +21697,25 @@ var require_lower2 = __commonJS({
           fnParamInfo.set(`${ib.typeName}::${m.name}`, m.params);
         }
       }
+      const timerCounter = { count: 0, timerId: 0 };
+      const hirFnMap = /* @__PURE__ */ new Map();
+      for (const f of hir.functions) {
+        hirFnMap.set(f.name, f);
+      }
+      const specializedFnsRegistry = /* @__PURE__ */ new Map();
       const allFunctions = [];
       for (const f of hir.functions) {
-        const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile);
+        const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, void 0, hirFnMap, specializedFnsRegistry);
         allFunctions.push(fn, ...helpers);
       }
       for (const ib of hir.implBlocks) {
         for (const m of ib.methods) {
-          const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile);
+          const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter);
           allFunctions.push(fn, ...helpers);
         }
+      }
+      for (const fns of specializedFnsRegistry.values()) {
+        allFunctions.push(...fns);
       }
       return {
         functions: allFunctions,
@@ -21483,7 +21724,7 @@ var require_lower2 = __commonJS({
       };
     }
     var FnContext = class {
-      constructor(namespace, fnName, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map()) {
+      constructor(namespace, fnName, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), timerCounter = { count: 0, timerId: 0 }) {
         this.tempCounter = 0;
         this.blockCounter = 0;
         this.blocks = [];
@@ -21491,8 +21732,15 @@ var require_lower2 = __commonJS({
         this.helperFunctions = [];
         this.structVars = /* @__PURE__ */ new Map();
         this.tupleVars = /* @__PURE__ */ new Map();
+        this.arrayVars = /* @__PURE__ */ new Map();
         this.currentSourceLoc = void 0;
         this.sourceFile = void 0;
+        this.constTemps = /* @__PURE__ */ new Map();
+        this.floatTemps = /* @__PURE__ */ new Set();
+        this.doubleVars = /* @__PURE__ */ new Map();
+        this.doubleVarCount = 0;
+        this.hirFunctions = /* @__PURE__ */ new Map();
+        this.specializedFnsRegistry = /* @__PURE__ */ new Map();
         this.namespace = namespace;
         this.fnName = fnName;
         this.structDefs = structDefs;
@@ -21501,6 +21749,7 @@ var require_lower2 = __commonJS({
         this.fnParamInfo = fnParamInfo;
         this.currentMacroParams = macroInfo.get(fnName)?.macroParams ?? /* @__PURE__ */ new Set();
         this.enumDefs = enumDefs;
+        this.timerCounter = timerCounter;
         const entry = this.makeBlock("entry");
         this.currentBlock = entry;
       }
@@ -21554,18 +21803,42 @@ var require_lower2 = __commonJS({
       getFnName() {
         return this.fnName;
       }
+      /** Allocate a unique NBT storage path for a double variable */
+      freshDoubleVar(varName) {
+        const path3 = `${this.namespace}_${this.fnName}_${varName}_${this.doubleVarCount++}`;
+        this.doubleVars.set(varName, path3);
+        return path3;
+      }
     };
-    function lowerFunction(fn, namespace, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile) {
-      const ctx = new FnContext(namespace, fn.name, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs);
+    function lowerFunction(fn, namespace, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }, arrayArgBindings, hirFnMap, specializedFnsRegistry, overrideName) {
+      const mirFnName = overrideName ?? fn.name;
+      const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter);
       ctx.sourceFile = sourceFile;
+      if (hirFnMap)
+        ctx.hirFunctions = hirFnMap;
+      if (specializedFnsRegistry)
+        ctx.specializedFnsRegistry = specializedFnsRegistry;
       const fnMacroInfo = macroInfo.get(fn.name);
-      const params = fn.params.map((p) => {
-        const t = ctx.freshTemp();
-        return { name: t, isMacroParam: fnMacroInfo?.macroParams.has(p.name) ?? false };
-      });
+      if (arrayArgBindings) {
+        for (const [paramName, arrInfo] of arrayArgBindings) {
+          ctx.arrayVars.set(paramName, arrInfo);
+        }
+      }
+      const params = [];
       const scope = /* @__PURE__ */ new Map();
-      fn.params.forEach((p, i) => {
-        scope.set(p.name, params[i].name);
+      let doubleParamSlot = 0;
+      fn.params.forEach((p) => {
+        if (p.type.kind === "array" && arrayArgBindings?.has(p.name)) {
+          return;
+        }
+        if (p.type.kind === "named" && p.type.name === "double") {
+          const path3 = `__dp${doubleParamSlot++}`;
+          ctx.doubleVars.set(p.name, path3);
+          return;
+        }
+        const t = ctx.freshTemp();
+        params.push({ name: t, isMacroParam: fnMacroInfo?.macroParams.has(p.name) ?? false });
+        scope.set(p.name, t);
       });
       lowerBlock(fn.body, ctx, scope);
       const cur = ctx.current();
@@ -21576,7 +21849,7 @@ var require_lower2 = __commonJS({
       const liveBlocks = ctx.blocks.filter((b) => reachable.has(b.id));
       computePreds(liveBlocks);
       const result = {
-        name: fn.name,
+        name: mirFnName,
         params,
         blocks: liveBlocks,
         entry: "entry",
@@ -21584,9 +21857,9 @@ var require_lower2 = __commonJS({
       };
       return { fn: result, helpers: ctx.helperFunctions };
     }
-    function lowerImplMethod(method, typeName, namespace, structDefs, implMethods, macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile) {
+    function lowerImplMethod(method, typeName, namespace, structDefs, implMethods, macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }) {
       const fnName = `${typeName}::${method.name}`;
-      const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs);
+      const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter);
       ctx.sourceFile = sourceFile;
       const fields = structDefs.get(typeName) ?? [];
       const hasSelf = method.params.length > 0 && method.params[0].name === "self";
@@ -21686,7 +21959,22 @@ var require_lower2 = __commonJS({
       }
       switch (stmt.kind) {
         case "let": {
-          if (stmt.init.kind === "struct_lit") {
+          if (stmt.init.kind === "some_lit") {
+            const hasTemp = `__opt_${stmt.name}_has`;
+            const valTemp = `__opt_${stmt.name}_val`;
+            ctx.emit({ kind: "const", dst: hasTemp, value: 1 });
+            const valOp = lowerExpr(stmt.init.value, ctx, scope);
+            ctx.emit({ kind: "copy", dst: valTemp, src: valOp });
+            const fieldTemps = /* @__PURE__ */ new Map([["has", hasTemp], ["val", valTemp]]);
+            ctx.structVars.set(stmt.name, { typeName: "__option", fields: fieldTemps });
+          } else if (stmt.init.kind === "none_lit") {
+            const hasTemp = `__opt_${stmt.name}_has`;
+            const valTemp = `__opt_${stmt.name}_val`;
+            ctx.emit({ kind: "const", dst: hasTemp, value: 0 });
+            ctx.emit({ kind: "const", dst: valTemp, value: 0 });
+            const fieldTemps = /* @__PURE__ */ new Map([["has", hasTemp], ["val", valTemp]]);
+            ctx.structVars.set(stmt.name, { typeName: "__option", fields: fieldTemps });
+          } else if (stmt.init.kind === "struct_lit") {
             const typeName = stmt.type?.kind === "struct" ? stmt.type.name : "__anon";
             const fieldTemps = /* @__PURE__ */ new Map();
             for (const field of stmt.init.fields) {
@@ -21696,6 +21984,14 @@ var require_lower2 = __commonJS({
               fieldTemps.set(field.name, t);
             }
             ctx.structVars.set(stmt.name, { typeName, fields: fieldTemps });
+          } else if (stmt.type?.kind === "option") {
+            lowerExpr(stmt.init, ctx, scope);
+            const hasTemp = `__opt_${stmt.name}_has`;
+            const valTemp = `__opt_${stmt.name}_val`;
+            ctx.emit({ kind: "copy", dst: hasTemp, src: { kind: "temp", name: "__rf_has" } });
+            ctx.emit({ kind: "copy", dst: valTemp, src: { kind: "temp", name: "__rf_val" } });
+            const fieldTemps = /* @__PURE__ */ new Map([["has", hasTemp], ["val", valTemp]]);
+            ctx.structVars.set(stmt.name, { typeName: "__option", fields: fieldTemps });
           } else if (stmt.type?.kind === "struct") {
             const fields = ctx.structDefs.get(stmt.type.name);
             if (fields) {
@@ -21705,6 +22001,11 @@ var require_lower2 = __commonJS({
                 const t = ctx.freshTemp();
                 ctx.emit({ kind: "copy", dst: t, src: { kind: "temp", name: `__rf_${fieldName}` } });
                 fieldTemps.set(fieldName, t);
+                const rfSlot = `__rf_${fieldName}`;
+                const constVal = ctx.constTemps.get(rfSlot);
+                if (constVal !== void 0) {
+                  ctx.constTemps.set(t, constVal);
+                }
               }
               ctx.structVars.set(stmt.name, { typeName: stmt.type.name, fields: fieldTemps });
             } else {
@@ -21713,11 +22014,50 @@ var require_lower2 = __commonJS({
               ctx.emit({ kind: "copy", dst: t, src: valOp });
               scope.set(stmt.name, t);
             }
+          } else if (stmt.type?.kind === "named" && stmt.type.name === "double") {
+            const path3 = ctx.freshDoubleVar(stmt.name);
+            const ns = ctx.getNamespace();
+            if (stmt.init.kind === "double_lit") {
+              ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage rs:d ${path3} set value ${stmt.init.value}d`, args: [] });
+            } else {
+              const initOp = lowerExpr(stmt.init, ctx, scope);
+              const initTemp = ctx.freshTemp();
+              ctx.emit({ kind: "copy", dst: initTemp, src: initOp });
+              ctx.emit({ kind: "call", dst: null, fn: `__raw:execute store result storage rs:d ${path3} double 0.0001 run scoreboard players get $${initTemp} __${ns}`, args: [] });
+            }
+            const t = ctx.freshTemp();
+            ctx.emit({ kind: "const", dst: t, value: 0 });
+            scope.set(stmt.name, t);
+          } else if (stmt.init.kind === "array_lit") {
+            const ns = `${ctx.getNamespace()}:arrays`;
+            const pathPrefix = stmt.name;
+            ctx.arrayVars.set(stmt.name, { ns, pathPrefix });
+            const elems = stmt.init.elements;
+            const allConst = elems.every((e) => e.kind === "int_lit");
+            if (allConst) {
+              const vals = elems.map((e) => e.value).join(", ");
+              ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${vals}]`, args: [] });
+            } else {
+              const zeros = elems.map(() => "0").join(", ");
+              ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${zeros}]`, args: [] });
+              for (let i = 0; i < elems.length; i++) {
+                const elemOp = lowerExpr(elems[i], ctx, scope);
+                if (elemOp.kind !== "const" || elems[i].kind !== "int_lit") {
+                  ctx.emit({ kind: "nbt_write", ns, path: `${pathPrefix}[${i}]`, type: "int", scale: 1, src: elemOp });
+                }
+              }
+            }
+            const lenTemp = ctx.freshTemp();
+            ctx.emit({ kind: "const", dst: lenTemp, value: elems.length });
+            scope.set(stmt.name, lenTemp);
           } else {
             const valOp = lowerExpr(stmt.init, ctx, scope);
             const t = ctx.freshTemp();
             ctx.emit({ kind: "copy", dst: t, src: valOp });
             scope.set(stmt.name, t);
+            if (stmt.type?.kind === "named" && (stmt.type.name === "fixed" || stmt.type.name === "float")) {
+              ctx.floatTemps.add(t);
+            }
           }
           break;
         }
@@ -21767,7 +22107,16 @@ var require_lower2 = __commonJS({
           break;
         }
         case "return": {
-          if (stmt.value?.kind === "struct_lit") {
+          if (stmt.value?.kind === "some_lit") {
+            const valOp = lowerExpr(stmt.value.value, ctx, scope);
+            ctx.emit({ kind: "copy", dst: "__rf_has", src: { kind: "const", value: 1 } });
+            ctx.emit({ kind: "copy", dst: "__rf_val", src: valOp });
+            ctx.terminate({ kind: "return", value: null });
+          } else if (stmt.value?.kind === "none_lit") {
+            ctx.emit({ kind: "copy", dst: "__rf_has", src: { kind: "const", value: 0 } });
+            ctx.emit({ kind: "copy", dst: "__rf_val", src: { kind: "const", value: 0 } });
+            ctx.terminate({ kind: "return", value: null });
+          } else if (stmt.value?.kind === "struct_lit") {
             for (const field of stmt.value.fields) {
               const val = lowerExpr(field.value, ctx, scope);
               ctx.emit({ kind: "copy", dst: `__rf_${field.name}`, src: val });
@@ -21779,6 +22128,18 @@ var require_lower2 = __commonJS({
               ctx.emit({ kind: "copy", dst: `__rf_${i}`, src: val });
             }
             ctx.terminate({ kind: "return", value: null });
+          } else if (stmt.value?.kind === "ident") {
+            const sv = ctx.structVars.get(stmt.value.name);
+            if (sv && sv.typeName === "__option") {
+              const hasT = sv.fields.get("has");
+              const valT = sv.fields.get("val");
+              ctx.emit({ kind: "copy", dst: "__rf_has", src: { kind: "temp", name: hasT } });
+              ctx.emit({ kind: "copy", dst: "__rf_val", src: { kind: "temp", name: valT } });
+              ctx.terminate({ kind: "return", value: null });
+            } else {
+              const val = lowerExpr(stmt.value, ctx, scope);
+              ctx.terminate({ kind: "return", value: val });
+            }
           } else {
             const val = stmt.value ? lowerExpr(stmt.value, ctx, scope) : null;
             ctx.terminate({ kind: "return", value: val });
@@ -21916,6 +22277,34 @@ var require_lower2 = __commonJS({
               if (isPlaceholderTerm(ctx.current().term)) {
                 ctx.terminate({ kind: "jump", target: mergeBlock.id });
               }
+            } else if (arm.pattern.kind === "range_lit") {
+              const range = arm.pattern.range;
+              const armBody = ctx.newBlock("match_arm");
+              const nextArm = ctx.newBlock("match_next");
+              const checks = [];
+              if (range.min !== void 0)
+                checks.push({ op: "ge", bound: range.min });
+              if (range.max !== void 0)
+                checks.push({ op: "le", bound: range.max });
+              if (checks.length === 0) {
+                ctx.terminate({ kind: "jump", target: armBody.id });
+              } else {
+                for (let ci = 0; ci < checks.length; ci++) {
+                  const { op, bound } = checks[ci];
+                  const cmpTemp = ctx.freshTemp();
+                  ctx.emit({ kind: "cmp", dst: cmpTemp, op, a: matchVal, b: { kind: "const", value: bound } });
+                  const passBlock = ci === checks.length - 1 ? armBody : ctx.newBlock("match_range_check");
+                  ctx.terminate({ kind: "branch", cond: { kind: "temp", name: cmpTemp }, then: passBlock.id, else: nextArm.id });
+                  if (ci < checks.length - 1)
+                    ctx.switchTo(passBlock);
+                }
+              }
+              ctx.switchTo(armBody);
+              lowerBlock(arm.body, ctx, new Map(scope));
+              if (isPlaceholderTerm(ctx.current().term)) {
+                ctx.terminate({ kind: "jump", target: mergeBlock.id });
+              }
+              ctx.switchTo(nextArm);
             } else {
               const patOp = lowerExpr(arm.pattern, ctx, scope);
               const cmpTemp = ctx.freshTemp();
@@ -21938,7 +22327,53 @@ var require_lower2 = __commonJS({
           break;
         }
         case "raw": {
-          ctx.emit({ kind: "call", dst: null, fn: `__raw:${stmt.cmd}`, args: [] });
+          const ns = ctx.getNamespace();
+          const rawCmd = stmt.cmd.replace(/__NS__/g, ns).replace(/__OBJ__/g, `__${ns}`);
+          ctx.emit({ kind: "call", dst: null, fn: `__raw:${rawCmd}`, args: [] });
+          break;
+        }
+        case "if_let_some": {
+          const sv = (() => {
+            if (stmt.init.kind === "ident")
+              return ctx.structVars.get(stmt.init.name);
+            return void 0;
+          })();
+          let hasOp;
+          let valTemp;
+          if (sv && sv.typeName === "__option") {
+            const hasT = sv.fields.get("has");
+            const valT = sv.fields.get("val");
+            hasOp = { kind: "temp", name: hasT };
+            valTemp = valT;
+          } else {
+            lowerExpr(stmt.init, ctx, scope);
+            const hasT = ctx.freshTemp();
+            const valT = ctx.freshTemp();
+            ctx.emit({ kind: "copy", dst: hasT, src: { kind: "temp", name: "__rf_has" } });
+            ctx.emit({ kind: "copy", dst: valT, src: { kind: "temp", name: "__rf_val" } });
+            hasOp = { kind: "temp", name: hasT };
+            valTemp = valT;
+          }
+          const thenBlock = ctx.newBlock("ifl_then");
+          const mergeBlock = ctx.newBlock("ifl_merge");
+          const elseBlock = stmt.else_ ? ctx.newBlock("ifl_else") : mergeBlock;
+          ctx.terminate({ kind: "branch", cond: hasOp, then: thenBlock.id, else: elseBlock.id });
+          ctx.switchTo(thenBlock);
+          const thenScope = new Map(scope);
+          if (valTemp)
+            thenScope.set(stmt.binding, valTemp);
+          lowerBlock(stmt.then, ctx, thenScope);
+          if (isPlaceholderTerm(ctx.current().term)) {
+            ctx.terminate({ kind: "jump", target: mergeBlock.id });
+          }
+          if (stmt.else_) {
+            ctx.switchTo(elseBlock);
+            lowerBlock(stmt.else_, ctx, new Map(scope));
+            if (isPlaceholderTerm(ctx.current().term)) {
+              ctx.terminate({ kind: "jump", target: mergeBlock.id });
+            }
+          }
+          ctx.switchTo(mergeBlock);
           break;
         }
         default: {
@@ -21952,12 +22387,19 @@ var require_lower2 = __commonJS({
         case "int_lit":
           return { kind: "const", value: expr.value };
         case "float_lit":
-          return { kind: "const", value: expr.value };
+          return { kind: "const", value: Math.round(expr.value * 1e4) };
         case "byte_lit":
         case "short_lit":
         case "long_lit":
-        case "double_lit":
           return { kind: "const", value: expr.value };
+        case "double_lit": {
+          const path3 = ctx.freshDoubleVar(`dlit`);
+          ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage rs:d ${path3} set value ${expr.value}d`, args: [] });
+          const t = ctx.freshTemp();
+          ctx.emit({ kind: "nbt_read", dst: t, ns: "rs:d", path: path3, scale: 1e4 });
+          ctx.floatTemps.add(t);
+          return { kind: "temp", name: t };
+        }
         case "bool_lit": {
           return { kind: "const", value: expr.value ? 1 : 0 };
         }
@@ -21986,6 +22428,13 @@ var require_lower2 = __commonJS({
           return { kind: "temp", name: t };
         }
         case "ident": {
+          if (ctx.doubleVars.has(expr.name)) {
+            const path3 = ctx.doubleVars.get(expr.name);
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "nbt_read", dst: t2, ns: "rs:d", path: path3, scale: 1e4 });
+            ctx.floatTemps.add(t2);
+            return { kind: "temp", name: t2 };
+          }
           const temp = scope.get(expr.name);
           if (temp)
             return { kind: "temp", name: temp };
@@ -22000,6 +22449,26 @@ var require_lower2 = __commonJS({
           }
           if (expr.op === "||") {
             return lowerShortCircuitOr(expr, ctx, scope);
+          }
+          const doubleArithOps = {
+            "+": "math_hp:double_add",
+            "-": "math_hp:double_sub",
+            "*": "math_hp:double_mul",
+            "/": "math_hp:double_div"
+          };
+          if (expr.op in doubleArithOps && isDoubleExpr(expr.left, ctx) && isDoubleExpr(expr.right, ctx)) {
+            const ns = ctx.getNamespace();
+            const leftPath = lowerDoubleExprToPath(expr.left, ctx, scope);
+            const rightPath = lowerDoubleExprToPath(expr.right, ctx, scope);
+            ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage rs:d __dp0 set from storage rs:d ${leftPath}`, args: [] });
+            ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage rs:d __dp1 set from storage rs:d ${rightPath}`, args: [] });
+            ctx.emit({ kind: "call", dst: null, fn: `__raw:function ${doubleArithOps[expr.op]}`, args: [] });
+            const resultPath = ctx.freshDoubleVar("dres");
+            ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage rs:d ${resultPath} set from storage rs:d __dp0`, args: [] });
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "nbt_read", dst: t2, ns: "rs:d", path: resultPath, scale: 1e4 });
+            ctx.floatTemps.add(t2);
+            return { kind: "temp", name: t2 };
           }
           const left = lowerExpr(expr.left, ctx, scope);
           const right = lowerExpr(expr.right, ctx, scope);
@@ -22020,7 +22489,29 @@ var require_lower2 = __commonJS({
             ">=": "ge"
           };
           if (expr.op in arithmeticOps) {
-            ctx.emit({ kind: arithmeticOps[expr.op], dst: t, a: left, b: right });
+            const isFloatLeft = left.kind === "temp" && ctx.floatTemps.has(left.name);
+            const isFloatRight = right.kind === "temp" && ctx.floatTemps.has(right.name);
+            if (expr.op === "*" && isFloatLeft && isFloatRight) {
+              ctx.emit({ kind: "mul", dst: t, a: left, b: right });
+              const scaleTemp = ctx.freshTemp();
+              ctx.emit({ kind: "const", dst: scaleTemp, value: 1e4 });
+              const corrected = ctx.freshTemp();
+              ctx.emit({ kind: "div", dst: corrected, a: { kind: "temp", name: t }, b: { kind: "temp", name: scaleTemp } });
+              ctx.floatTemps.add(corrected);
+              return { kind: "temp", name: corrected };
+            } else if (expr.op === "/" && isFloatLeft && isFloatRight) {
+              const scaleTemp = ctx.freshTemp();
+              ctx.emit({ kind: "const", dst: scaleTemp, value: 1e4 });
+              const scaled = ctx.freshTemp();
+              ctx.emit({ kind: "mul", dst: scaled, a: left, b: { kind: "temp", name: scaleTemp } });
+              ctx.emit({ kind: "div", dst: t, a: { kind: "temp", name: scaled }, b: right });
+              ctx.floatTemps.add(t);
+            } else {
+              ctx.emit({ kind: arithmeticOps[expr.op], dst: t, a: left, b: right });
+              if (isFloatLeft || isFloatRight) {
+                ctx.floatTemps.add(t);
+              }
+            }
           } else if (expr.op in cmpOps) {
             ctx.emit({ kind: "cmp", dst: t, op: cmpOps[expr.op], a: left, b: right });
           } else {
@@ -22086,13 +22577,140 @@ var require_lower2 = __commonJS({
           return { kind: "temp", name: t };
         }
         case "index": {
+          if (expr.obj.kind === "ident") {
+            const arrInfo = ctx.arrayVars.get(expr.obj.name);
+            if (arrInfo) {
+              const t2 = ctx.freshTemp();
+              if (expr.index.kind === "int_lit") {
+                ctx.emit({ kind: "nbt_read", dst: t2, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[${expr.index.value}]`, scale: 1 });
+              } else {
+                const idxOp = lowerExpr(expr.index, ctx, scope);
+                ctx.emit({ kind: "nbt_read_dynamic", dst: t2, ns: arrInfo.ns, pathPrefix: arrInfo.pathPrefix, indexSrc: idxOp });
+              }
+              return { kind: "temp", name: t2 };
+            }
+          }
           const obj = lowerExpr(expr.obj, ctx, scope);
-          const idx = lowerExpr(expr.index, ctx, scope);
+          lowerExpr(expr.index, ctx, scope);
           const t = ctx.freshTemp();
           ctx.emit({ kind: "copy", dst: t, src: obj });
           return { kind: "temp", name: t };
         }
+        case "index_assign": {
+          const valOp = lowerExpr(expr.value, ctx, scope);
+          if (expr.obj.kind === "ident") {
+            const arrInfo = ctx.arrayVars.get(expr.obj.name);
+            if (arrInfo) {
+              if (expr.index.kind === "int_lit") {
+                ctx.emit({ kind: "nbt_write", ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[${expr.index.value}]`, type: "int", scale: 1, src: valOp });
+              } else {
+                const idxOp = lowerExpr(expr.index, ctx, scope);
+                ctx.emit({ kind: "nbt_write_dynamic", ns: arrInfo.ns, pathPrefix: arrInfo.pathPrefix, indexSrc: idxOp, valueSrc: valOp });
+              }
+              return valOp;
+            }
+          }
+          return valOp;
+        }
         case "call": {
+          if (expr.fn === "scoreboard_get" || expr.fn === "score") {
+            const player = hirExprToStringLiteral(expr.args[0]);
+            const obj = hirExprToStringLiteral(expr.args[1]);
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "score_read", dst: t2, player, obj });
+            return { kind: "temp", name: t2 };
+          }
+          if (expr.fn === "scoreboard_set") {
+            const player = hirExprToStringLiteral(expr.args[0]);
+            const obj = hirExprToStringLiteral(expr.args[1]);
+            const src = lowerExpr(expr.args[2], ctx, scope);
+            ctx.emit({ kind: "score_write", player, obj, src });
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "const", dst: t2, value: 0 });
+            return { kind: "temp", name: t2 };
+          }
+          if (expr.fn === "list_push") {
+            if (expr.args[0].kind === "ident") {
+              const arrInfo = ctx.arrayVars.get(expr.args[0].name);
+              if (arrInfo) {
+                const valOp = lowerExpr(expr.args[1], ctx, scope);
+                ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage ${arrInfo.ns} ${arrInfo.pathPrefix} append value 0`, args: [] });
+                ctx.emit({ kind: "nbt_write", ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[-1]`, type: "int", scale: 1, src: valOp });
+                const t2 = ctx.freshTemp();
+                ctx.emit({ kind: "const", dst: t2, value: 0 });
+                return { kind: "temp", name: t2 };
+              }
+            }
+          }
+          if (expr.fn === "list_pop") {
+            if (expr.args[0].kind === "ident") {
+              const arrInfo = ctx.arrayVars.get(expr.args[0].name);
+              if (arrInfo) {
+                ctx.emit({ kind: "call", dst: null, fn: `__raw:data remove storage ${arrInfo.ns} ${arrInfo.pathPrefix}[-1]`, args: [] });
+                const t2 = ctx.freshTemp();
+                ctx.emit({ kind: "const", dst: t2, value: 0 });
+                return { kind: "temp", name: t2 };
+              }
+            }
+          }
+          if (expr.fn === "list_len") {
+            if (expr.args[0].kind === "ident") {
+              const arrInfo = ctx.arrayVars.get(expr.args[0].name);
+              if (arrInfo) {
+                const t2 = ctx.freshTemp();
+                ctx.emit({ kind: "nbt_read", dst: t2, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}`, scale: 1 });
+                return { kind: "temp", name: t2 };
+              }
+            }
+          }
+          if ((expr.fn === "setTimeout" || expr.fn === "setInterval") && expr.args.length === 2) {
+            const ticksArg = expr.args[0];
+            const callbackArg = expr.args[1];
+            const ns = ctx.getNamespace();
+            const id = ctx.timerCounter.count++;
+            const callbackName = `__timeout_callback_${id}`;
+            let ticksLiteral = null;
+            if (ticksArg.kind === "int_lit") {
+              ticksLiteral = ticksArg.value;
+            }
+            if (callbackArg.kind === "lambda") {
+              const cbCtx = new FnContext(ns, callbackName, ctx.structDefs, ctx.implMethods, ctx.macroInfo, ctx.fnParamInfo, ctx.enumDefs, ctx.timerCounter);
+              cbCtx.sourceFile = ctx.sourceFile;
+              const cbBody = Array.isArray(callbackArg.body) ? callbackArg.body : [{ kind: "expr", expr: callbackArg.body }];
+              const bodyStmts = [...cbBody];
+              if (expr.fn === "setInterval" && ticksLiteral !== null) {
+                bodyStmts.push({
+                  kind: "raw",
+                  cmd: `schedule function ${ns}:${callbackName} ${ticksLiteral}t`
+                });
+              }
+              lowerBlock(bodyStmts, cbCtx, /* @__PURE__ */ new Map());
+              const cbCur = cbCtx.current();
+              if (isPlaceholderTerm(cbCur.term)) {
+                cbCtx.terminate({ kind: "return", value: null });
+              }
+              const cbReachable = computeReachable(cbCtx.blocks, "entry");
+              const cbLiveBlocks = cbCtx.blocks.filter((b) => cbReachable.has(b.id));
+              computePreds(cbLiveBlocks);
+              const cbFn = {
+                name: callbackName,
+                params: [],
+                blocks: cbLiveBlocks,
+                entry: "entry",
+                isMacro: false
+              };
+              ctx.helperFunctions.push(cbFn, ...cbCtx.helperFunctions);
+            }
+            if (ticksLiteral !== null) {
+              ctx.emit({ kind: "call", dst: null, fn: `__raw:schedule function ${ns}:${callbackName} ${ticksLiteral}t`, args: [] });
+            } else {
+              const ticksOp = lowerExpr(ticksArg, ctx, scope);
+              ctx.emit({ kind: "call", dst: null, fn: `__raw:schedule function ${ns}:${callbackName} 1t`, args: [ticksOp] });
+            }
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "const", dst: t2, value: 0 });
+            return { kind: "temp", name: t2 };
+          }
           if (macro_1.BUILTIN_SET.has(expr.fn)) {
             const cmd = formatBuiltinCall(expr.fn, expr.args, ctx.currentMacroParams);
             ctx.emit({ kind: "call", dst: null, fn: `__raw:${cmd}`, args: [] });
@@ -22103,6 +22721,13 @@ var require_lower2 = __commonJS({
           if (expr.args.length > 0 && expr.args[0].kind === "ident") {
             const sv = ctx.structVars.get(expr.args[0].name);
             if (sv) {
+              if (sv.typeName === "Timer") {
+                const idTemp = sv.fields.get("_id");
+                const timerId = idTemp !== void 0 ? ctx.constTemps.get(idTemp) : void 0;
+                if (timerId !== void 0) {
+                  return lowerTimerMethod(expr.fn, timerId, sv, ctx, scope, expr.args.slice(1));
+                }
+              }
               const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.fn);
               if (methodInfo?.hasSelf) {
                 const fields = ctx.structDefs.get(sv.typeName) ?? [];
@@ -22128,17 +22753,87 @@ var require_lower2 = __commonJS({
               if (targetMacro.macroParams.has(paramName)) {
                 const paramTypeName = targetMacro.paramTypes.get(paramName) ?? "int";
                 const isFloat = paramTypeName === "float";
+                const isFixed = paramTypeName === "fixed";
                 macroArgs.push({
                   name: paramName,
                   value: args2[i],
-                  type: isFloat ? "double" : "int",
-                  scale: isFloat ? 0.01 : 1
+                  type: isFloat || isFixed ? "double" : "int",
+                  scale: isFloat ? 0.01 : isFixed ? 1e-4 : 1
                 });
               }
             }
             const t2 = ctx.freshTemp();
             ctx.emit({ kind: "call_macro", dst: t2, fn: expr.fn, args: macroArgs });
             return { kind: "temp", name: t2 };
+          }
+          {
+            const targetHirFn = ctx.hirFunctions.get(expr.fn);
+            if (targetHirFn && ctx.specializedFnsRegistry) {
+              const arrayArgBindings = /* @__PURE__ */ new Map();
+              for (let i = 0; i < expr.args.length; i++) {
+                const arg = expr.args[i];
+                if (arg.kind === "ident" && ctx.arrayVars.has(arg.name)) {
+                  const paramName = targetHirFn.params[i]?.name;
+                  if (paramName) {
+                    arrayArgBindings.set(paramName, ctx.arrayVars.get(arg.name));
+                  }
+                }
+              }
+              if (arrayArgBindings.size > 0) {
+                const bindingKey = [...arrayArgBindings.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([p, { ns, pathPrefix }]) => `${p}__${ns.replace(/[^a-zA-Z0-9]/g, "_")}__${pathPrefix.replace(/[^a-zA-Z0-9]/g, "_")}`).join("__");
+                const specializedName = `${expr.fn}__arr_${bindingKey}`;
+                if (!ctx.specializedFnsRegistry.has(specializedName)) {
+                  ctx.specializedFnsRegistry.set(specializedName, []);
+                  const { fn: specFn, helpers: specHelpers } = lowerFunction(targetHirFn, ctx.getNamespace(), ctx.structDefs, ctx.implMethods, ctx.macroInfo, ctx.fnParamInfo, ctx.enumDefs, ctx.sourceFile, ctx.timerCounter, arrayArgBindings, ctx.hirFunctions, ctx.specializedFnsRegistry, specializedName);
+                  ctx.specializedFnsRegistry.set(specializedName, [specFn, ...specHelpers]);
+                }
+                const nonArrayArgs = [];
+                for (let i = 0; i < expr.args.length; i++) {
+                  const param = targetHirFn.params[i];
+                  if (!param || param.type.kind !== "array" || !arrayArgBindings.has(param.name)) {
+                    nonArrayArgs.push(lowerExpr(expr.args[i], ctx, scope));
+                  }
+                }
+                const t2 = ctx.freshTemp();
+                ctx.emit({ kind: "call", dst: t2, fn: specializedName, args: nonArrayArgs });
+                return { kind: "temp", name: t2 };
+              }
+            }
+          }
+          {
+            const targetParams = ctx.fnParamInfo.get(expr.fn);
+            if (targetParams) {
+              const hasDoubleParam = targetParams.some((p) => p.type.kind === "named" && p.type.name === "double");
+              if (hasDoubleParam) {
+                const ns = ctx.getNamespace();
+                const nonDoubleArgs = [];
+                let doubleSlot = 0;
+                for (let i = 0; i < targetParams.length && i < expr.args.length; i++) {
+                  const p = targetParams[i];
+                  if (p.type.kind === "named" && p.type.name === "double") {
+                    const arg = expr.args[i];
+                    if (arg.kind === "ident" && ctx.doubleVars.has(arg.name)) {
+                      const srcPath = ctx.doubleVars.get(arg.name);
+                      ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage rs:d __dp${doubleSlot} set from storage rs:d ${srcPath}`, args: [] });
+                    } else {
+                      const argOp = lowerExpr(arg, ctx, scope);
+                      const tmp = ctx.freshTemp();
+                      ctx.emit({ kind: "copy", dst: tmp, src: argOp });
+                      ctx.emit({ kind: "call", dst: null, fn: `__raw:execute store result storage rs:d __dp${doubleSlot} double 0.0001 run scoreboard players get $${tmp} __${ns}`, args: [] });
+                    }
+                    doubleSlot++;
+                  } else {
+                    nonDoubleArgs.push(lowerExpr(expr.args[i], ctx, scope));
+                  }
+                }
+                for (let i = targetParams.length; i < expr.args.length; i++) {
+                  nonDoubleArgs.push(lowerExpr(expr.args[i], ctx, scope));
+                }
+                const t2 = ctx.freshTemp();
+                ctx.emit({ kind: "call", dst: t2, fn: expr.fn, args: nonDoubleArgs });
+                return { kind: "temp", name: t2 };
+              }
+            }
           }
           const args = expr.args.map((a) => lowerExpr(a, ctx, scope));
           const t = ctx.freshTemp();
@@ -22149,6 +22844,13 @@ var require_lower2 = __commonJS({
           if (expr.callee.kind === "member" && expr.callee.obj.kind === "ident") {
             const sv = ctx.structVars.get(expr.callee.obj.name);
             if (sv) {
+              if (sv.typeName === "Timer") {
+                const idTemp = sv.fields.get("_id");
+                const timerId = idTemp !== void 0 ? ctx.constTemps.get(idTemp) : void 0;
+                if (timerId !== void 0) {
+                  return lowerTimerMethod(expr.callee.field, timerId, sv, ctx, scope, expr.args);
+                }
+              }
               const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.callee.field);
               if (methodInfo?.hasSelf) {
                 const fields = ctx.structDefs.get(sv.typeName) ?? [];
@@ -22171,6 +22873,20 @@ var require_lower2 = __commonJS({
           return { kind: "temp", name: t };
         }
         case "static_call": {
+          if (expr.type === "Timer" && expr.method === "new" && expr.args.length === 1) {
+            const id = ctx.timerCounter.timerId++;
+            const ns = ctx.getNamespace();
+            const playerName = `__timer_${id}`;
+            ctx.emit({ kind: "score_write", player: `${playerName}_ticks`, obj: ns, src: { kind: "const", value: 0 } });
+            ctx.emit({ kind: "score_write", player: `${playerName}_active`, obj: ns, src: { kind: "const", value: 0 } });
+            const durationOp = lowerExpr(expr.args[0], ctx, scope);
+            ctx.emit({ kind: "const", dst: "__rf__id", value: id });
+            ctx.constTemps.set("__rf__id", id);
+            ctx.emit({ kind: "copy", dst: "__rf__duration", src: durationOp });
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "const", dst: t2, value: 0 });
+            return { kind: "temp", name: t2 };
+          }
           const args = expr.args.map((a) => lowerExpr(a, ctx, scope));
           const t = ctx.freshTemp();
           ctx.emit({ kind: "call", dst: t, fn: `${expr.type}::${expr.method}`, args });
@@ -22185,11 +22901,87 @@ var require_lower2 = __commonJS({
           ctx.emit({ kind: "const", dst: t, value: 0 });
           return { kind: "temp", name: t };
         }
+        case "some_lit": {
+          const valOp = lowerExpr(expr.value, ctx, scope);
+          ctx.emit({ kind: "copy", dst: "__rf_has", src: { kind: "const", value: 1 } });
+          ctx.emit({ kind: "copy", dst: "__rf_val", src: valOp });
+          const t = ctx.freshTemp();
+          ctx.emit({ kind: "const", dst: t, value: 1 });
+          return { kind: "temp", name: t };
+        }
+        case "none_lit": {
+          ctx.emit({ kind: "copy", dst: "__rf_has", src: { kind: "const", value: 0 } });
+          ctx.emit({ kind: "copy", dst: "__rf_val", src: { kind: "const", value: 0 } });
+          const t = ctx.freshTemp();
+          ctx.emit({ kind: "const", dst: t, value: 0 });
+          return { kind: "temp", name: t };
+        }
+        case "type_cast": {
+          const ns = ctx.getNamespace();
+          const targetName = expr.targetType.kind === "named" ? expr.targetType.name : null;
+          if (targetName === "double") {
+            const innerOp2 = lowerExpr(expr.expr, ctx, scope);
+            const innerTemp = ctx.freshTemp();
+            ctx.emit({ kind: "copy", dst: innerTemp, src: innerOp2 });
+            const path3 = ctx.freshDoubleVar(`cast`);
+            ctx.emit({ kind: "call", dst: null, fn: `__raw:execute store result storage rs:d ${path3} double 0.0001 run scoreboard players get $${innerTemp} __${ns}`, args: [] });
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "nbt_read", dst: t2, ns: "rs:d", path: path3, scale: 1e4 });
+            ctx.floatTemps.add(t2);
+            return { kind: "temp", name: t2 };
+          }
+          if (targetName === "fixed" || targetName === "float" || targetName === "int") {
+            if (expr.expr.kind === "ident" && ctx.doubleVars.has(expr.expr.name)) {
+              const path3 = ctx.doubleVars.get(expr.expr.name);
+              const t3 = ctx.freshTemp();
+              ctx.emit({ kind: "nbt_read", dst: t3, ns: "rs:d", path: path3, scale: 1e4 });
+              if (targetName === "fixed" || targetName === "float") {
+                ctx.floatTemps.add(t3);
+              }
+              return { kind: "temp", name: t3 };
+            }
+            const innerOp2 = lowerExpr(expr.expr, ctx, scope);
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "copy", dst: t2, src: innerOp2 });
+            if (targetName === "fixed" || targetName === "float") {
+              ctx.floatTemps.add(t2);
+            }
+            return { kind: "temp", name: t2 };
+          }
+          const innerOp = lowerExpr(expr.expr, ctx, scope);
+          const t = ctx.freshTemp();
+          ctx.emit({ kind: "copy", dst: t, src: innerOp });
+          return { kind: "temp", name: t };
+        }
         default: {
           const _exhaustive = expr;
           throw new Error(`Unknown HIR expression kind: ${_exhaustive.kind}`);
         }
       }
+    }
+    function isDoubleExpr(expr, ctx) {
+      if (expr.kind === "ident" && ctx.doubleVars.has(expr.name))
+        return true;
+      if (expr.kind === "double_lit")
+        return true;
+      return false;
+    }
+    function lowerDoubleExprToPath(expr, ctx, scope) {
+      if (expr.kind === "ident" && ctx.doubleVars.has(expr.name)) {
+        return ctx.doubleVars.get(expr.name);
+      }
+      if (expr.kind === "double_lit") {
+        const path4 = ctx.freshDoubleVar("dlit");
+        ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage rs:d ${path4} set value ${expr.value}d`, args: [] });
+        return path4;
+      }
+      const op = lowerExpr(expr, ctx, scope);
+      const tmp = ctx.freshTemp();
+      ctx.emit({ kind: "copy", dst: tmp, src: op });
+      const ns = ctx.getNamespace();
+      const path3 = ctx.freshDoubleVar("dtmp");
+      ctx.emit({ kind: "call", dst: null, fn: `__raw:execute store result storage rs:d ${path3} double 0.0001 run scoreboard players get $${tmp} __${ns}`, args: [] });
+      return path3;
     }
     function lowerShortCircuitAnd(expr, ctx, scope) {
       const left = lowerExpr(expr.left, ctx, scope);
@@ -22224,6 +23016,80 @@ var require_lower2 = __commonJS({
       ctx.terminate({ kind: "jump", target: merge.id });
       ctx.switchTo(merge);
       return { kind: "temp", name: result };
+    }
+    function lowerTimerMethod(method, timerId, sv, ctx, scope, extraArgs) {
+      const ns = ctx.getNamespace();
+      const player = `__timer_${timerId}`;
+      const t = ctx.freshTemp();
+      if (method === "start") {
+        ctx.emit({ kind: "score_write", player: `${player}_active`, obj: ns, src: { kind: "const", value: 1 } });
+        ctx.emit({ kind: "const", dst: t, value: 0 });
+      } else if (method === "pause") {
+        ctx.emit({ kind: "score_write", player: `${player}_active`, obj: ns, src: { kind: "const", value: 0 } });
+        ctx.emit({ kind: "const", dst: t, value: 0 });
+      } else if (method === "reset") {
+        ctx.emit({ kind: "score_write", player: `${player}_ticks`, obj: ns, src: { kind: "const", value: 0 } });
+        ctx.emit({ kind: "const", dst: t, value: 0 });
+      } else if (method === "tick") {
+        const durationTemp = sv.fields.get("_duration");
+        const activeTemp = ctx.freshTemp();
+        const ticksTemp = ctx.freshTemp();
+        ctx.emit({ kind: "score_read", dst: activeTemp, player: `${player}_active`, obj: ns });
+        ctx.emit({ kind: "score_read", dst: ticksTemp, player: `${player}_ticks`, obj: ns });
+        const innerThen = ctx.newBlock("timer_tick_inner");
+        const innerMerge = ctx.newBlock("timer_tick_after_lt");
+        const outerMerge = ctx.newBlock("timer_tick_done");
+        const activeCheck = ctx.freshTemp();
+        ctx.emit({ kind: "cmp", op: "eq", dst: activeCheck, a: { kind: "temp", name: activeTemp }, b: { kind: "const", value: 1 } });
+        ctx.terminate({ kind: "branch", cond: { kind: "temp", name: activeCheck }, then: innerThen.id, else: outerMerge.id });
+        ctx.switchTo(innerThen);
+        const lessCheck = ctx.freshTemp();
+        if (durationTemp) {
+          ctx.emit({ kind: "cmp", op: "lt", dst: lessCheck, a: { kind: "temp", name: ticksTemp }, b: { kind: "temp", name: durationTemp } });
+        } else {
+          ctx.emit({ kind: "const", dst: lessCheck, value: 0 });
+        }
+        const doIncBlock = ctx.newBlock("timer_tick_inc");
+        ctx.terminate({ kind: "branch", cond: { kind: "temp", name: lessCheck }, then: doIncBlock.id, else: innerMerge.id });
+        ctx.switchTo(doIncBlock);
+        const newTicks = ctx.freshTemp();
+        ctx.emit({ kind: "add", dst: newTicks, a: { kind: "temp", name: ticksTemp }, b: { kind: "const", value: 1 } });
+        ctx.emit({ kind: "score_write", player: `${player}_ticks`, obj: ns, src: { kind: "temp", name: newTicks } });
+        ctx.terminate({ kind: "jump", target: innerMerge.id });
+        ctx.switchTo(innerMerge);
+        ctx.terminate({ kind: "jump", target: outerMerge.id });
+        ctx.switchTo(outerMerge);
+        ctx.emit({ kind: "const", dst: t, value: 0 });
+      } else if (method === "done") {
+        const durationTemp = sv.fields.get("_duration");
+        const ticksTemp = ctx.freshTemp();
+        ctx.emit({ kind: "score_read", dst: ticksTemp, player: `${player}_ticks`, obj: ns });
+        if (durationTemp) {
+          ctx.emit({ kind: "cmp", op: "ge", dst: t, a: { kind: "temp", name: ticksTemp }, b: { kind: "temp", name: durationTemp } });
+        } else {
+          ctx.emit({ kind: "const", dst: t, value: 0 });
+        }
+      } else if (method === "elapsed") {
+        ctx.emit({ kind: "score_read", dst: t, player: `${player}_ticks`, obj: ns });
+      } else if (method === "remaining") {
+        const durationTemp = sv.fields.get("_duration");
+        const ticksTemp = ctx.freshTemp();
+        ctx.emit({ kind: "score_read", dst: ticksTemp, player: `${player}_ticks`, obj: ns });
+        if (durationTemp) {
+          ctx.emit({ kind: "sub", dst: t, a: { kind: "temp", name: durationTemp }, b: { kind: "temp", name: ticksTemp } });
+        } else {
+          ctx.emit({ kind: "const", dst: t, value: 0 });
+        }
+      } else {
+        const fields = ["_id", "_duration"];
+        const selfArgs = fields.map((f) => {
+          const temp = sv.fields.get(f);
+          return temp ? { kind: "temp", name: temp } : { kind: "const", value: 0 };
+        });
+        const explicitArgs = extraArgs.map((a) => lowerExpr(a, ctx, scope));
+        ctx.emit({ kind: "call", dst: t, fn: `Timer::${method}`, args: [...selfArgs, ...explicitArgs] });
+      }
+      return { kind: "temp", name: t };
     }
     function lowerExecuteSubcmd(sub) {
       switch (sub.kind) {
@@ -22312,13 +23178,34 @@ var require_lower2 = __commonJS({
           break;
         }
         case "setblock": {
-          const [x, y, z, block] = strs;
-          cmd = `setblock ${x} ${y} ${z} ${block}`;
+          const [posOrX, blockOrY] = args;
+          if (posOrX?.kind === "blockpos") {
+            const px = coordStr(posOrX.x);
+            const py = coordStr(posOrX.y);
+            const pz = coordStr(posOrX.z);
+            const blk = exprToCommandArg(blockOrY, macroParams).str;
+            cmd = `setblock ${px} ${py} ${pz} ${blk}`;
+          } else {
+            const [x, y, z, block] = strs;
+            cmd = `setblock ${x} ${y} ${z} ${block}`;
+          }
           break;
         }
         case "fill": {
-          const [x1, y1, z1, x2, y2, z2, block] = strs;
-          cmd = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}`;
+          const [p1, p2, blkArg] = args;
+          if (p1?.kind === "blockpos" && p2?.kind === "blockpos") {
+            const x1 = coordStr(p1.x);
+            const y1 = coordStr(p1.y);
+            const z1 = coordStr(p1.z);
+            const x2 = coordStr(p2.x);
+            const y2 = coordStr(p2.y);
+            const z2 = coordStr(p2.z);
+            const blk = exprToCommandArg(blkArg, macroParams).str;
+            cmd = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${blk}`;
+          } else {
+            const [x1, y1, z1, x2, y2, z2, block] = strs;
+            cmd = `fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${block}`;
+          }
           break;
         }
         case "say":
@@ -22401,6 +23288,16 @@ var require_lower2 = __commonJS({
       }
       return hasMacro ? `${MACRO_SENTINEL}${cmd}` : cmd;
     }
+    function coordStr(c) {
+      switch (c.kind) {
+        case "absolute":
+          return String(c.value);
+        case "relative":
+          return c.offset === 0 ? "~" : `~${c.offset}`;
+        case "local":
+          return c.offset === 0 ? "^" : `^${c.offset}`;
+      }
+    }
     function exprToCommandArg(expr, macroParams) {
       switch (expr.kind) {
         case "int_lit":
@@ -22455,6 +23352,20 @@ var require_lower2 = __commonJS({
           return { str: "~", isMacro: false };
       }
     }
+    function hirExprToStringLiteral(expr) {
+      switch (expr.kind) {
+        case "str_lit":
+          return expr.value;
+        case "mc_name":
+          return expr.value;
+        case "selector":
+          return expr.raw;
+        case "int_lit":
+          return String(expr.value);
+        default:
+          return "";
+      }
+    }
   }
 });
 
@@ -22464,6 +23375,9 @@ var require_constant_fold = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.constantFold = constantFold;
+    function int32(n) {
+      return n | 0;
+    }
     function constantFold(fn) {
       return {
         ...fn,
@@ -22485,27 +23399,27 @@ var require_constant_fold = __commonJS({
       switch (instr.kind) {
         case "add":
           if (isConst(instr.a) && isConst(instr.b))
-            return { kind: "const", dst: instr.dst, value: instr.a.value + instr.b.value };
+            return { kind: "const", dst: instr.dst, value: int32(instr.a.value + instr.b.value) };
           break;
         case "sub":
           if (isConst(instr.a) && isConst(instr.b))
-            return { kind: "const", dst: instr.dst, value: instr.a.value - instr.b.value };
+            return { kind: "const", dst: instr.dst, value: int32(instr.a.value - instr.b.value) };
           break;
         case "mul":
           if (isConst(instr.a) && isConst(instr.b))
-            return { kind: "const", dst: instr.dst, value: instr.a.value * instr.b.value };
+            return { kind: "const", dst: instr.dst, value: int32(instr.a.value * instr.b.value) };
           break;
         case "div":
           if (isConst(instr.a) && isConst(instr.b) && instr.b.value !== 0)
-            return { kind: "const", dst: instr.dst, value: Math.trunc(instr.a.value / instr.b.value) };
+            return { kind: "const", dst: instr.dst, value: int32(Math.trunc(instr.a.value / instr.b.value)) };
           break;
         case "mod":
           if (isConst(instr.a) && isConst(instr.b) && instr.b.value !== 0)
-            return { kind: "const", dst: instr.dst, value: instr.a.value % instr.b.value };
+            return { kind: "const", dst: instr.dst, value: int32(instr.a.value % instr.b.value) };
           break;
         case "neg":
           if (isConst(instr.src))
-            return { kind: "const", dst: instr.dst, value: -instr.src.value };
+            return { kind: "const", dst: instr.dst, value: int32(-instr.src.value) };
           break;
         case "not":
           if (isConst(instr.src))
@@ -22610,6 +23524,10 @@ var require_copy_prop = __commonJS({
           return { ...instr, a: resolve(instr.a, copies), b: resolve(instr.b, copies) };
         case "nbt_write":
           return { ...instr, src: resolve(instr.src, copies) };
+        case "nbt_write_dynamic":
+          return { ...instr, indexSrc: resolve(instr.indexSrc, copies), valueSrc: resolve(instr.valueSrc, copies) };
+        case "nbt_read_dynamic":
+          return { ...instr, indexSrc: resolve(instr.indexSrc, copies) };
         case "call":
           return { ...instr, args: instr.args.map((a) => resolve(a, copies)) };
         case "call_macro":
@@ -22618,6 +23536,8 @@ var require_copy_prop = __commonJS({
           return { ...instr, cond: resolve(instr.cond, copies) };
         case "return":
           return { ...instr, value: instr.value ? resolve(instr.value, copies) : null };
+        case "score_write":
+          return { ...instr, src: resolve(instr.src, copies) };
         default:
           return instr;
       }
@@ -22637,9 +23557,12 @@ var require_copy_prop = __commonJS({
         case "or":
         case "not":
         case "nbt_read":
+        case "nbt_read_dynamic":
           return instr.dst;
         case "call":
         case "call_macro":
+          return instr.dst;
+        case "score_read":
           return instr.dst;
         default:
           return null;
@@ -22715,10 +23638,10 @@ var require_dce = __commonJS({
       return blocks.map((b) => ({ ...b, preds: predMap.get(b.id) ?? [] }));
     }
     function hasSideEffects(instr) {
-      if (instr.kind === "call" || instr.kind === "call_macro" || instr.kind === "call_context" || instr.kind === "nbt_write")
+      if (instr.kind === "call" || instr.kind === "call_macro" || instr.kind === "call_context" || instr.kind === "nbt_write" || instr.kind === "nbt_write_dynamic" || instr.kind === "score_write")
         return true;
       const dst = getDst(instr);
-      if (dst && dst.startsWith("__rf_"))
+      if (dst && (dst.startsWith("__rf_") || dst.startsWith("__opt_")))
         return true;
       return false;
     }
@@ -22747,9 +23670,12 @@ var require_dce = __commonJS({
         case "or":
         case "not":
         case "nbt_read":
+        case "nbt_read_dynamic":
           return instr.dst;
         case "call":
         case "call_macro":
+          return instr.dst;
+        case "score_read":
           return instr.dst;
         default:
           return null;
@@ -22781,6 +23707,13 @@ var require_dce = __commonJS({
         case "nbt_write":
           addOp(instr.src);
           break;
+        case "nbt_write_dynamic":
+          addOp(instr.indexSrc);
+          addOp(instr.valueSrc);
+          break;
+        case "nbt_read_dynamic":
+          addOp(instr.indexSrc);
+          break;
         case "call":
           instr.args.forEach(addOp);
           break;
@@ -22793,6 +23726,9 @@ var require_dce = __commonJS({
         case "return":
           if (instr.value)
             addOp(instr.value);
+          break;
+        case "score_write":
+          addOp(instr.src);
           break;
       }
       return temps;
@@ -23103,6 +24039,8 @@ var require_unroll = __commonJS({
           return { ...instr, a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) };
         case "nbt_write":
           return { ...instr, src: substituteOp(instr.src, sub) };
+        case "nbt_write_dynamic":
+          return { ...instr, indexSrc: substituteOp(instr.indexSrc, sub), valueSrc: substituteOp(instr.valueSrc, sub) };
         case "call":
           return { ...instr, args: instr.args.map((a) => substituteOp(a, sub)) };
         case "call_macro":
@@ -23130,6 +24068,7 @@ var require_unroll = __commonJS({
         case "or":
         case "not":
         case "nbt_read":
+        case "nbt_read_dynamic":
           return instr.dst;
         case "call":
         case "call_macro":
@@ -23526,6 +24465,8 @@ var require_lower3 = __commonJS({
         this.blockFnNames = /* @__PURE__ */ new Map();
         this.currentMIRFn = null;
         this.blockMap = /* @__PURE__ */ new Map();
+        this.dynIdxHelpers = /* @__PURE__ */ new Map();
+        this.dynWrtHelpers = /* @__PURE__ */ new Map();
         this.namespace = namespace;
         this.objective = objective;
       }
@@ -23543,6 +24484,62 @@ var require_lower3 = __commonJS({
       }
       addFunction(fn) {
         this.functions.push(fn);
+      }
+      /**
+       * Get or create a macro helper function for dynamic array index reads.
+       * The helper function is: $return run data get storage <ns> <pathPrefix>[$(arr_idx)] 1
+       * Returns the qualified MC function name (namespace:fnName).
+       */
+      getDynIdxHelper(ns, pathPrefix) {
+        const key = `${ns}\0${pathPrefix}`;
+        const existing = this.dynIdxHelpers.get(key);
+        if (existing)
+          return existing;
+        const sanitize = (s) => s.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+        const nsStr = sanitize(ns);
+        const prefixStr = sanitize(pathPrefix);
+        const helperName = `__dyn_idx_${nsStr}_${prefixStr}`;
+        const qualifiedName = `${this.namespace}:${helperName}`;
+        const macroLine = {
+          kind: "macro_line",
+          template: `return run data get storage ${ns} ${pathPrefix}[$(arr_idx)] 1`
+        };
+        this.addFunction({
+          name: helperName,
+          instructions: [macroLine],
+          isMacro: true,
+          macroParams: ["arr_idx"]
+        });
+        this.dynIdxHelpers.set(key, qualifiedName);
+        return qualifiedName;
+      }
+      /**
+       * Get or create a macro helper function for dynamic array index writes.
+       * The helper function: $data modify storage <ns> <pathPrefix>[$(arr_idx)] set value $(arr_val)
+       * Returns the qualified MC function name.
+       */
+      getDynWrtHelper(ns, pathPrefix) {
+        const key = `${ns}\0${pathPrefix}`;
+        const existing = this.dynWrtHelpers.get(key);
+        if (existing)
+          return existing;
+        const sanitize = (s) => s.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+        const nsStr = sanitize(ns);
+        const prefixStr = sanitize(pathPrefix);
+        const helperName = `__dyn_wrt_${nsStr}_${prefixStr}`;
+        const qualifiedName = `${this.namespace}:${helperName}`;
+        const macroLine = {
+          kind: "macro_line",
+          template: `data modify storage ${ns} ${pathPrefix}[$(arr_idx)] set value $(arr_val)`
+        };
+        this.addFunction({
+          name: helperName,
+          instructions: [macroLine],
+          isMacro: true,
+          macroParams: ["arr_idx", "arr_val"]
+        });
+        this.dynWrtHelpers.set(key, qualifiedName);
+        return qualifiedName;
       }
       /** Attach sourceLoc to newly added instructions (from the given start index onward) */
       tagSourceLoc(instrs, fromIndex, sourceLoc) {
@@ -23725,6 +24722,27 @@ var require_lower3 = __commonJS({
           });
           break;
         }
+        case "nbt_read_dynamic": {
+          const dst = ctx.slot(instr.dst);
+          const idxSlot = operandToSlot(instr.indexSrc, ctx, instrs);
+          instrs.push({
+            kind: "store_score_to_nbt",
+            ns: "rs:macro_args",
+            path: "arr_idx",
+            type: "int",
+            scale: 1,
+            src: idxSlot
+          });
+          const helperFn = ctx.getDynIdxHelper(instr.ns, instr.pathPrefix);
+          instrs.push({ kind: "call_macro", fn: helperFn, storage: "rs:macro_args" });
+          instrs.pop();
+          instrs.push({
+            kind: "store_cmd_to_score",
+            dst,
+            cmd: { kind: "call_macro", fn: helperFn, storage: "rs:macro_args" }
+          });
+          break;
+        }
         case "nbt_write": {
           const srcSlot = operandToSlot(instr.src, ctx, instrs);
           instrs.push({
@@ -23735,6 +24753,51 @@ var require_lower3 = __commonJS({
             scale: instr.scale,
             src: srcSlot
           });
+          break;
+        }
+        case "nbt_write_dynamic": {
+          const idxSlot = operandToSlot(instr.indexSrc, ctx, instrs);
+          const valSlot = operandToSlot(instr.valueSrc, ctx, instrs);
+          instrs.push({
+            kind: "store_score_to_nbt",
+            ns: "rs:macro_args",
+            path: "arr_idx",
+            type: "int",
+            scale: 1,
+            src: idxSlot
+          });
+          instrs.push({
+            kind: "store_score_to_nbt",
+            ns: "rs:macro_args",
+            path: "arr_val",
+            type: "int",
+            scale: 1,
+            src: valSlot
+          });
+          const helperFn = ctx.getDynWrtHelper(instr.ns, instr.pathPrefix);
+          instrs.push({ kind: "call_macro", fn: helperFn, storage: "rs:macro_args" });
+          break;
+        }
+        case "score_read": {
+          const dst = ctx.slot(instr.dst);
+          instrs.push({
+            kind: "store_cmd_to_score",
+            dst,
+            cmd: { kind: "raw", cmd: `scoreboard players get ${instr.player} ${instr.obj}` }
+          });
+          break;
+        }
+        case "score_write": {
+          if (instr.src.kind === "const") {
+            instrs.push({ kind: "raw", cmd: `scoreboard players set ${instr.player} ${instr.obj} ${instr.src.value}` });
+          } else {
+            const srcSlot = operandToSlot(instr.src, ctx, instrs);
+            instrs.push({
+              kind: "store_cmd_to_score",
+              dst: { player: instr.player, obj: instr.obj },
+              cmd: { kind: "raw", cmd: `scoreboard players get ${srcSlot.player} ${srcSlot.obj}` }
+            });
+          }
           break;
         }
         case "call": {
@@ -23913,7 +24976,7 @@ var require_dead_slot = __commonJS({
     }
     function extractSlotsFromRaw(cmd) {
       const slots = [];
-      const re = /(\$[\w.]+)\s+(\S+)/g;
+      const re = /(\$[\w.:]+)\s+(\S+)/g;
       let m;
       while ((m = re.exec(cmd)) !== null) {
         slots.push({ player: m[1], obj: m[2] });
@@ -23968,7 +25031,11 @@ var require_dead_slot = __commonJS({
     }
     function isProtectedSlot(s) {
       const p = s.player;
-      return p === "$ret" || p.startsWith("$ret_") || /^\$p\d+$/.test(p);
+      if (p === "$ret" || p.startsWith("$ret_") || /^\$p\d+$/.test(p))
+        return true;
+      if (p.includes("__opt_"))
+        return true;
+      return false;
     }
     function deadSlotElim(fn) {
       const readSet = /* @__PURE__ */ new Set();
@@ -24030,7 +25097,7 @@ var require_const_imm = __commonJS({
     }
     function extractSlotsFromRaw(cmd) {
       const slots = [];
-      const re = /(\$[\w.]+)\s+(\S+)/g;
+      const re = /(\$[\w.:]+)\s+(\S+)/g;
       let m;
       while ((m = re.exec(cmd)) !== null) {
         slots.push({ player: m[1], obj: m[2] });
@@ -24142,6 +25209,7 @@ var require_peephole = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.execStorePeephole = execStorePeephole;
+    var SET_ZERO_SET_ONE_RE = /^execute (.+) run scoreboard players set (\S+) (\S+) 1$/;
     function execStorePeephole(fn) {
       const instrs = fn.instructions;
       if (instrs.length < 2)
@@ -24161,6 +25229,19 @@ var require_peephole = __commonJS({
           changed = true;
           i += 2;
           continue;
+        }
+        if (next && curr.kind === "score_set" && curr.value === 0 && next.kind === "raw") {
+          const m = SET_ZERO_SET_ONE_RE.exec(next.cmd);
+          if (m && m[2] === curr.dst.player && m[3] === curr.dst.obj) {
+            const cond = m[1];
+            result.push({
+              kind: "raw",
+              cmd: `execute store success score ${curr.dst.player} ${curr.dst.obj} ${cond}`
+            });
+            changed = true;
+            i += 2;
+            continue;
+          }
         }
         result.push(curr);
         i++;
@@ -24256,6 +25337,47 @@ var require_sourcemap = __commonJS({
   }
 });
 
+// ../../dist/src/types/mc-version.js
+var require_mc_version = __commonJS({
+  "../../dist/src/types/mc-version.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.DEFAULT_MC_VERSION = exports2.McVersion = void 0;
+    exports2.parseMcVersion = parseMcVersion;
+    exports2.compareMcVersion = compareMcVersion;
+    var McVersion;
+    (function(McVersion2) {
+      McVersion2[McVersion2["v1_19"] = 19e3] = "v1_19";
+      McVersion2[McVersion2["v1_20"] = 2e4] = "v1_20";
+      McVersion2[McVersion2["v1_20_2"] = 20002] = "v1_20_2";
+      McVersion2[McVersion2["v1_20_4"] = 20004] = "v1_20_4";
+      McVersion2[McVersion2["v1_21"] = 21e3] = "v1_21";
+      McVersion2[McVersion2["v1_21_4"] = 21004] = "v1_21_4";
+    })(McVersion || (exports2.McVersion = McVersion = {}));
+    function parseMcVersion(s) {
+      const parts = s.trim().split(".");
+      if (parts.length < 2 || parts.length > 3) {
+        throw new Error(`Invalid MC version: "${s}" \u2014 expected format "1.20" or "1.20.2"`);
+      }
+      const [majorStr, minorStr, patchStr = "0"] = parts;
+      const major = parseInt(majorStr, 10);
+      const minor = parseInt(minorStr, 10);
+      const patch = parseInt(patchStr, 10);
+      if (isNaN(major) || isNaN(minor) || isNaN(patch)) {
+        throw new Error(`Invalid MC version: "${s}" \u2014 non-numeric component`);
+      }
+      if (major !== 1) {
+        throw new Error(`Invalid MC version: "${s}" \u2014 only Minecraft 1.x is supported`);
+      }
+      return minor * 1e3 + patch;
+    }
+    function compareMcVersion(a, b) {
+      return a - b;
+    }
+    exports2.DEFAULT_MC_VERSION = McVersion.v1_21;
+  }
+});
+
 // ../../dist/src/emit/index.js
 var require_emit = __commonJS({
   "../../dist/src/emit/index.js"(exports2) {
@@ -24263,12 +25385,15 @@ var require_emit = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.emit = emit;
     var sourcemap_1 = require_sourcemap();
+    var mc_version_1 = require_mc_version();
     function emit(module3, options) {
       const { namespace } = options;
       const tickFns = options.tickFunctions ?? [];
       const loadFns = options.loadFunctions ?? [];
+      const scheduleFns = options.scheduleFunctions ?? [];
       const objective = module3.objective;
       const genSourceMap = options.generateSourceMap ?? false;
+      const mcVersion = options.mcVersion ?? mc_version_1.DEFAULT_MC_VERSION;
       const files = [];
       files.push({
         path: "pack.mcmeta",
@@ -24285,16 +25410,23 @@ var require_emit = __commonJS({
         const fnPath = fnNameToPath(fn.name, namespace);
         if (genSourceMap) {
           const builder = new sourcemap_1.SourceMapBuilder(fnPath);
-          const lines = emitFunctionWithSourceMap(fn, namespace, objective, builder);
+          const lines = emitFunctionWithSourceMap(fn, namespace, objective, builder, mcVersion);
           files.push({ path: fnPath, content: lines.join("\n") + "\n" });
           const map = builder.build();
           if (map) {
             files.push({ path: (0, sourcemap_1.sourceMapPath)(fnPath), content: (0, sourcemap_1.serializeSourceMap)(map) });
           }
         } else {
-          const lines = emitFunction(fn, namespace, objective);
+          const lines = emitFunction(fn, namespace, objective, mcVersion);
           files.push({ path: fnPath, content: lines.join("\n") + "\n" });
         }
+      }
+      for (const { name, ticks } of scheduleFns) {
+        files.push({
+          path: `data/${namespace}/function/_schedule_${name}.mcfunction`,
+          content: `schedule function ${namespace}:${name} ${ticks}t
+`
+        });
       }
       if (loadFns.length > 0 || true) {
         const loadValues = [`${namespace}:load`, ...loadFns.map((fn) => `${namespace}:${fn}`)];
@@ -24312,17 +25444,17 @@ var require_emit = __commonJS({
       }
       return files;
     }
-    function emitFunction(fn, namespace, objective) {
+    function emitFunction(fn, namespace, objective, mcVersion) {
       const lines = [];
       for (const instr of fn.instructions) {
-        lines.push(emitInstr(instr, namespace, objective));
+        lines.push(emitInstr(instr, namespace, objective, mcVersion));
       }
       return lines;
     }
-    function emitFunctionWithSourceMap(fn, namespace, objective, builder) {
+    function emitFunctionWithSourceMap(fn, namespace, objective, builder, mcVersion) {
       const lines = [];
       for (const instr of fn.instructions) {
-        lines.push(emitInstr(instr, namespace, objective));
+        lines.push(emitInstr(instr, namespace, objective, mcVersion));
         builder.addLine(instr.sourceLoc);
       }
       return lines;
@@ -24331,7 +25463,7 @@ var require_emit = __commonJS({
       const mcName = name.replace(/::/g, "/").toLowerCase();
       return `data/${namespace}/function/${mcName}.mcfunction`;
     }
-    function emitInstr(instr, ns, obj) {
+    function emitInstr(instr, ns, obj, mcVersion) {
       switch (instr.kind) {
         case "score_set":
           return `scoreboard players set ${slot(instr.dst)} ${instr.value}`;
@@ -24354,11 +25486,11 @@ var require_emit = __commonJS({
         case "score_swap":
           return `scoreboard players operation ${slot(instr.a)} >< ${slot(instr.b)}`;
         case "store_cmd_to_score":
-          return `execute store result score ${slot(instr.dst)} run ${emitInstr(instr.cmd, ns, obj)}`;
+          return `execute store result score ${slot(instr.dst)} run ${emitInstr(instr.cmd, ns, obj, mcVersion)}`;
         case "store_score_to_nbt":
           return `execute store result storage ${instr.ns} ${instr.path} ${instr.type} ${instr.scale} run scoreboard players get ${slot(instr.src)}`;
         case "store_nbt_to_score":
-          return `execute store result score ${slot(instr.dst)} run data get storage ${instr.ns} ${instr.path} ${instr.scale}`;
+          return `execute store result score ${slot(instr.dst)} run data get storage ${instr.ns} ${instr.path} ${Number.isInteger(instr.scale) ? instr.scale.toFixed(1) : instr.scale}`;
         case "nbt_set_literal":
           return `data modify storage ${instr.ns} ${instr.path} set value ${instr.value}`;
         case "nbt_copy":
@@ -24366,7 +25498,10 @@ var require_emit = __commonJS({
         case "call":
           return `function ${instr.fn}`;
         case "call_macro":
-          return `function ${instr.fn} with storage ${instr.storage}`;
+          if (mcVersion >= mc_version_1.McVersion.v1_20_2) {
+            return `function ${instr.fn} with storage ${instr.storage}`;
+          }
+          return `function ${instr.fn}`;
         case "call_if_matches":
           return `execute if score ${slot(instr.slot)} matches ${instr.range} run function ${instr.fn}`;
         case "call_unless_matches":
@@ -24377,12 +25512,15 @@ var require_emit = __commonJS({
           return `execute unless score ${slot(instr.a)} ${cmpToMC(instr.op)} ${slot(instr.b)} run function ${instr.fn}`;
         case "call_context": {
           const subcmds = instr.subcommands.map(emitSubcmd).join(" ");
-          return `execute ${subcmds} run function ${instr.fn}`;
+          return subcmds ? `execute ${subcmds} run function ${instr.fn}` : `function ${instr.fn}`;
         }
         case "return_value":
           return `scoreboard players operation $ret ${instr.slot.obj} = ${slot(instr.slot)}`;
         case "macro_line":
-          return `$${instr.template}`;
+          if (mcVersion >= mc_version_1.McVersion.v1_20_2) {
+            return `$${instr.template}`;
+          }
+          return macroLineCompat(instr.template);
         case "raw":
           return instr.cmd;
       }
@@ -24406,6 +25544,9 @@ var require_emit = __commonJS({
         case "ge":
           return ">=";
       }
+    }
+    function macroLineCompat(template) {
+      return template.replace(/\$\((\w+)\)/g, (_m, p) => `{storage:rs:macro_args,path:${p}}`);
     }
     function emitSubcmd(sub) {
       switch (sub.kind) {
@@ -24444,13 +25585,19 @@ var require_coroutine = __commonJS({
     exports2.coroutineTransform = coroutineTransform;
     function coroutineTransform(mod, infos) {
       if (infos.length === 0)
-        return { module: mod, generatedTickFunctions: [] };
+        return { module: mod, generatedTickFunctions: [], warnings: [] };
       const infoMap = new Map(infos.map((i) => [i.fnName, i]));
       const newFunctions = [];
       const tickFns = [];
+      const warnings = [];
       for (const fn of mod.functions) {
         const info = infoMap.get(fn.name);
         if (!info) {
+          newFunctions.push(fn);
+          continue;
+        }
+        if (fnContainsMacroCalls(fn)) {
+          warnings.push(`@coroutine cannot be applied to functions containing macro calls (skipped: ${fn.name})`);
           newFunctions.push(fn);
           continue;
         }
@@ -24462,8 +25609,23 @@ var require_coroutine = __commonJS({
       }
       return {
         module: { ...mod, functions: newFunctions },
-        generatedTickFunctions: tickFns
+        generatedTickFunctions: tickFns,
+        warnings
       };
+    }
+    function fnContainsMacroCalls(fn) {
+      for (const block of fn.blocks) {
+        for (const instr of [...block.instrs, block.term]) {
+          if (instr.kind === "call_macro")
+            return true;
+          if (instr.kind === "call" && instr.fn.startsWith("__raw:")) {
+            const cmd = instr.fn.slice(6);
+            if (cmd.startsWith("") || cmd.includes("${"))
+              return true;
+          }
+        }
+      }
+      return false;
     }
     function transformCoroutine(fn, info, objective) {
       const prefix = `_coro_${fn.name}`;
@@ -24983,8 +26145,12 @@ var require_coroutine = __commonJS({
           return { ...instr, dst: rTemp(instr.dst), src: rOp(instr.src) };
         case "nbt_read":
           return { ...instr, dst: rTemp(instr.dst) };
+        case "nbt_read_dynamic":
+          return { ...instr, dst: rTemp(instr.dst), indexSrc: rOp(instr.indexSrc) };
         case "nbt_write":
           return { ...instr, src: rOp(instr.src) };
+        case "nbt_write_dynamic":
+          return { ...instr, indexSrc: rOp(instr.indexSrc), valueSrc: rOp(instr.valueSrc) };
         case "call":
           return { ...instr, dst: instr.dst ? rTemp(instr.dst) : null, args: instr.args.map(rOp) };
         case "call_macro":
@@ -25026,6 +26192,7 @@ var require_coroutine = __commonJS({
         case "or":
         case "not":
         case "nbt_read":
+        case "nbt_read_dynamic":
           return instr.dst;
         case "call":
         case "call_macro":
@@ -25059,6 +26226,13 @@ var require_coroutine = __commonJS({
           break;
         case "nbt_write":
           addOp(instr.src);
+          break;
+        case "nbt_write_dynamic":
+          addOp(instr.indexSrc);
+          addOp(instr.valueSrc);
+          break;
+        case "nbt_read_dynamic":
+          addOp(instr.indexSrc);
           break;
         case "call":
           instr.args.forEach(addOp);
@@ -25289,6 +26463,1286 @@ var require_budget = __commonJS({
   }
 });
 
+// ../../dist/src/events/types.js
+var require_types = __commonJS({
+  "../../dist/src/events/types.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.EVENT_TYPES = void 0;
+    exports2.isEventTypeName = isEventTypeName;
+    exports2.getEventParamSpecs = getEventParamSpecs;
+    exports2.EVENT_TYPES = {
+      PlayerDeath: {
+        tag: "rs.just_died",
+        params: ["player: Player"],
+        detection: "scoreboard"
+      },
+      PlayerJoin: {
+        tag: "rs.just_joined",
+        params: ["player: Player"],
+        detection: "tag"
+      },
+      BlockBreak: {
+        tag: "rs.just_broke_block",
+        params: ["player: Player", "block: string"],
+        detection: "advancement"
+      },
+      EntityKill: {
+        tag: "rs.just_killed",
+        params: ["player: Player"],
+        detection: "scoreboard"
+      },
+      ItemUse: {
+        tag: "rs.just_used_item",
+        params: ["player: Player"],
+        detection: "scoreboard"
+      }
+    };
+    function isEventTypeName(value) {
+      return value in exports2.EVENT_TYPES;
+    }
+    function getEventParamSpecs(eventType) {
+      return exports2.EVENT_TYPES[eventType].params.map(parseEventParam);
+    }
+    function parseEventParam(spec) {
+      const match = spec.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)$/);
+      if (!match) {
+        throw new Error(`Invalid event parameter spec: ${spec}`);
+      }
+      const [, name, typeName] = match;
+      return {
+        name,
+        type: toTypeNode(typeName)
+      };
+    }
+    function toTypeNode(typeName) {
+      if (typeName === "Player") {
+        return { kind: "entity", entityType: "Player" };
+      }
+      if (typeName === "string" || typeName === "int" || typeName === "bool" || typeName === "float" || typeName === "fixed" || typeName === "void" || typeName === "BlockPos" || typeName === "byte" || typeName === "short" || typeName === "long" || typeName === "double") {
+        return { kind: "named", name: typeName };
+      }
+      return { kind: "struct", name: typeName };
+    }
+  }
+});
+
+// ../../dist/src/typechecker/index.js
+var require_typechecker = __commonJS({
+  "../../dist/src/typechecker/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.TypeChecker = void 0;
+    var diagnostics_1 = require_diagnostics();
+    var types_1 = require_types();
+    var ENTITY_HIERARCHY = {
+      "entity": null,
+      "Player": "entity",
+      "Mob": "entity",
+      "HostileMob": "Mob",
+      "PassiveMob": "Mob",
+      "Zombie": "HostileMob",
+      "Skeleton": "HostileMob",
+      "Creeper": "HostileMob",
+      "Spider": "HostileMob",
+      "Enderman": "HostileMob",
+      "Blaze": "HostileMob",
+      "Witch": "HostileMob",
+      "Slime": "HostileMob",
+      "ZombieVillager": "HostileMob",
+      "Husk": "HostileMob",
+      "Drowned": "HostileMob",
+      "Stray": "HostileMob",
+      "WitherSkeleton": "HostileMob",
+      "CaveSpider": "HostileMob",
+      "Pig": "PassiveMob",
+      "Cow": "PassiveMob",
+      "Sheep": "PassiveMob",
+      "Chicken": "PassiveMob",
+      "Villager": "PassiveMob",
+      "WanderingTrader": "PassiveMob",
+      "ArmorStand": "entity",
+      "Item": "entity",
+      "Arrow": "entity"
+    };
+    var MC_TYPE_TO_ENTITY = {
+      "zombie": "Zombie",
+      "minecraft:zombie": "Zombie",
+      "skeleton": "Skeleton",
+      "minecraft:skeleton": "Skeleton",
+      "creeper": "Creeper",
+      "minecraft:creeper": "Creeper",
+      "spider": "Spider",
+      "minecraft:spider": "Spider",
+      "enderman": "Enderman",
+      "minecraft:enderman": "Enderman",
+      "blaze": "Blaze",
+      "minecraft:blaze": "Blaze",
+      "witch": "Witch",
+      "minecraft:witch": "Witch",
+      "slime": "Slime",
+      "minecraft:slime": "Slime",
+      "zombie_villager": "ZombieVillager",
+      "minecraft:zombie_villager": "ZombieVillager",
+      "husk": "Husk",
+      "minecraft:husk": "Husk",
+      "drowned": "Drowned",
+      "minecraft:drowned": "Drowned",
+      "stray": "Stray",
+      "minecraft:stray": "Stray",
+      "wither_skeleton": "WitherSkeleton",
+      "minecraft:wither_skeleton": "WitherSkeleton",
+      "cave_spider": "CaveSpider",
+      "minecraft:cave_spider": "CaveSpider",
+      "pig": "Pig",
+      "minecraft:pig": "Pig",
+      "cow": "Cow",
+      "minecraft:cow": "Cow",
+      "sheep": "Sheep",
+      "minecraft:sheep": "Sheep",
+      "chicken": "Chicken",
+      "minecraft:chicken": "Chicken",
+      "villager": "Villager",
+      "minecraft:villager": "Villager",
+      "wandering_trader": "WanderingTrader",
+      "minecraft:wandering_trader": "WanderingTrader",
+      "armor_stand": "ArmorStand",
+      "minecraft:armor_stand": "ArmorStand",
+      "item": "Item",
+      "minecraft:item": "Item",
+      "arrow": "Arrow",
+      "minecraft:arrow": "Arrow"
+    };
+    var VOID_TYPE = { kind: "named", name: "void" };
+    var INT_TYPE = { kind: "named", name: "int" };
+    var STRING_TYPE = { kind: "named", name: "string" };
+    var FORMAT_STRING_TYPE = { kind: "named", name: "format_string" };
+    var BUILTIN_SIGNATURES = {
+      setTimeout: {
+        params: [INT_TYPE, { kind: "function_type", params: [], return: VOID_TYPE }],
+        return: VOID_TYPE
+      },
+      setInterval: {
+        params: [INT_TYPE, { kind: "function_type", params: [], return: VOID_TYPE }],
+        return: INT_TYPE
+      },
+      clearInterval: {
+        params: [INT_TYPE],
+        return: VOID_TYPE
+      }
+    };
+    var TypeChecker = class {
+      constructor(source, filePath) {
+        this.lintWarnings = [];
+        this.functions = /* @__PURE__ */ new Map();
+        this.implMethods = /* @__PURE__ */ new Map();
+        this.structs = /* @__PURE__ */ new Map();
+        this.enums = /* @__PURE__ */ new Map();
+        this.consts = /* @__PURE__ */ new Map();
+        this.globals = /* @__PURE__ */ new Map();
+        this.currentFn = null;
+        this.currentReturnType = null;
+        this.scope = /* @__PURE__ */ new Map();
+        this.selfTypeStack = ["entity"];
+        this.loopDepth = 0;
+        this.condDepth = 0;
+        this.richTextBuiltins = /* @__PURE__ */ new Map([
+          ["say", { messageIndex: 0 }],
+          ["announce", { messageIndex: 0 }],
+          ["tell", { messageIndex: 1 }],
+          ["tellraw", { messageIndex: 1 }],
+          ["title", { messageIndex: 1 }],
+          ["actionbar", { messageIndex: 1 }],
+          ["subtitle", { messageIndex: 1 }]
+        ]);
+        this.collector = new diagnostics_1.DiagnosticCollector(source, filePath);
+        this.filePath = filePath;
+      }
+      getNodeLocation(node) {
+        const span = node?.span;
+        return {
+          line: span?.line ?? 1,
+          col: span?.col ?? 1
+        };
+      }
+      report(message, node) {
+        const { line, col } = this.getNodeLocation(node);
+        this.collector.error("TypeError", message, line, col);
+      }
+      warnLint(message, node) {
+        const { line, col } = this.getNodeLocation(node);
+        const filePart = this.filePath ? `${this.filePath}:` : "";
+        this.lintWarnings.push(`${filePart}line ${line}, col ${col}: ${message}`);
+      }
+      /** Returns lint warnings (non-blocking). */
+      getWarnings() {
+        return this.lintWarnings;
+      }
+      /**
+       * Type check a program. Returns collected errors.
+       */
+      check(program) {
+        for (const fn of program.declarations) {
+          this.functions.set(fn.name, fn);
+        }
+        for (const global of program.globals ?? []) {
+          this.globals.set(global.name, this.normalizeType(global.type));
+        }
+        for (const implBlock of program.implBlocks ?? []) {
+          let methods = this.implMethods.get(implBlock.typeName);
+          if (!methods) {
+            methods = /* @__PURE__ */ new Map();
+            this.implMethods.set(implBlock.typeName, methods);
+          }
+          for (const method of implBlock.methods) {
+            const selfIndex = method.params.findIndex((param) => param.name === "self");
+            if (selfIndex > 0) {
+              this.report(`Method '${method.name}' must declare 'self' as the first parameter`, method.params[selfIndex]);
+            }
+            if (selfIndex === 0) {
+              const selfType = this.normalizeType(method.params[0].type);
+              if (selfType.kind !== "struct" || selfType.name !== implBlock.typeName) {
+                this.report(`Method '${method.name}' has invalid 'self' type`, method.params[0]);
+              }
+            }
+            methods.set(method.name, method);
+          }
+        }
+        for (const struct of program.structs ?? []) {
+          const fields = /* @__PURE__ */ new Map();
+          for (const field of struct.fields) {
+            fields.set(field.name, field.type);
+          }
+          this.structs.set(struct.name, fields);
+        }
+        for (const enumDecl of program.enums ?? []) {
+          const variants = /* @__PURE__ */ new Map();
+          for (const variant of enumDecl.variants) {
+            variants.set(variant.name, variant.value ?? 0);
+          }
+          this.enums.set(enumDecl.name, variants);
+        }
+        for (const constDecl of program.consts ?? []) {
+          const constType = this.normalizeType(constDecl.type);
+          const actualType = this.inferType(constDecl.value);
+          if (!this.typesMatch(constType, actualType)) {
+            this.report(`Type mismatch: expected ${this.typeToString(constType)}, got ${this.typeToString(actualType)}`, constDecl.value);
+          }
+          this.consts.set(constDecl.name, constType);
+        }
+        for (const fn of program.declarations) {
+          this.checkFunction(fn);
+        }
+        for (const implBlock of program.implBlocks ?? []) {
+          for (const method of implBlock.methods) {
+            this.checkFunction(method);
+          }
+        }
+        return this.collector.getErrors();
+      }
+      checkFunction(fn) {
+        if (fn.typeParams && fn.typeParams.length > 0)
+          return;
+        this.currentFn = fn;
+        this.currentReturnType = this.normalizeType(fn.returnType);
+        this.scope = /* @__PURE__ */ new Map();
+        let seenDefault = false;
+        this.checkFunctionDecorators(fn);
+        for (const [name, type] of this.consts.entries()) {
+          this.scope.set(name, { type, mutable: false });
+        }
+        for (const [name, type] of this.globals.entries()) {
+          this.scope.set(name, { type, mutable: true });
+        }
+        for (const param of fn.params) {
+          this.scope.set(param.name, { type: this.normalizeType(param.type), mutable: true });
+          if (param.default) {
+            seenDefault = true;
+            this.checkExpr(param.default);
+            const defaultType = this.inferType(param.default);
+            const paramType = this.normalizeType(param.type);
+            if (!this.typesMatch(paramType, defaultType)) {
+              this.report(`Default value for '${param.name}' must be ${this.typeToString(paramType)}, got ${this.typeToString(defaultType)}`, param.default);
+            }
+          } else if (seenDefault) {
+            this.report(`Parameter '${param.name}' cannot follow a default parameter`, param);
+          }
+        }
+        this.checkBlock(fn.body);
+        this.currentFn = null;
+        this.currentReturnType = null;
+      }
+      checkFunctionDecorators(fn) {
+        const eventDecorators = fn.decorators.filter((decorator) => decorator.name === "on");
+        if (eventDecorators.length === 0) {
+          return;
+        }
+        if (eventDecorators.length > 1) {
+          this.report(`Function '${fn.name}' cannot have multiple @on decorators`, fn);
+          return;
+        }
+        const eventType = eventDecorators[0].args?.eventType;
+        if (!eventType) {
+          this.report(`Function '${fn.name}' is missing an event type in @on(...)`, fn);
+          return;
+        }
+        if (!(0, types_1.isEventTypeName)(eventType)) {
+          this.report(`Unknown event type '${eventType}'`, fn);
+          return;
+        }
+        const expectedParams = (0, types_1.getEventParamSpecs)(eventType);
+        if (fn.params.length !== expectedParams.length) {
+          this.report(`Event handler '${fn.name}' for ${eventType} must declare ${expectedParams.length} parameter(s), got ${fn.params.length}`, fn);
+          return;
+        }
+        for (let i = 0; i < expectedParams.length; i++) {
+          const actual = this.normalizeType(fn.params[i].type);
+          const expected = this.normalizeType(expectedParams[i].type);
+          if (!this.typesMatch(expected, actual)) {
+            this.report(`Event handler '${fn.name}' parameter ${i + 1} must be ${this.typeToString(expected)}, got ${this.typeToString(actual)}`, fn.params[i]);
+          }
+        }
+      }
+      checkBlock(stmts) {
+        for (const stmt of stmts) {
+          this.checkStmt(stmt);
+        }
+      }
+      checkStmt(stmt) {
+        switch (stmt.kind) {
+          case "let":
+            this.checkLetStmt(stmt);
+            break;
+          case "let_destruct":
+            this.checkLetDestructStmt(stmt);
+            break;
+          case "return":
+            this.checkReturnStmt(stmt);
+            break;
+          case "if":
+            this.checkExpr(stmt.cond);
+            this.condDepth++;
+            this.checkIfBranches(stmt);
+            this.condDepth--;
+            break;
+          case "while":
+            this.checkExpr(stmt.cond);
+            this.loopDepth++;
+            this.checkBlock(stmt.body);
+            this.loopDepth--;
+            break;
+          case "for":
+            if (stmt.init)
+              this.checkStmt(stmt.init);
+            this.checkExpr(stmt.cond);
+            this.checkExpr(stmt.step);
+            this.loopDepth++;
+            this.checkBlock(stmt.body);
+            this.loopDepth--;
+            break;
+          case "foreach":
+            this.checkExpr(stmt.iterable);
+            if (stmt.iterable.kind === "selector") {
+              const entityType = this.inferEntityTypeFromSelector(stmt.iterable.sel);
+              this.scope.set(stmt.binding, {
+                type: { kind: "entity", entityType },
+                mutable: false
+                // Entity bindings are not reassignable
+              });
+              this.pushSelfType(entityType);
+              this.loopDepth++;
+              this.checkBlock(stmt.body);
+              this.loopDepth--;
+              this.popSelfType();
+            } else {
+              const iterableType = this.inferType(stmt.iterable);
+              if (iterableType.kind === "array") {
+                this.scope.set(stmt.binding, { type: iterableType.elem, mutable: true });
+              } else {
+                this.scope.set(stmt.binding, { type: { kind: "named", name: "void" }, mutable: true });
+              }
+              this.loopDepth++;
+              this.checkBlock(stmt.body);
+              this.loopDepth--;
+            }
+            break;
+          case "match":
+            this.checkExpr(stmt.expr);
+            for (const arm of stmt.arms) {
+              if (arm.pattern) {
+                this.checkExpr(arm.pattern);
+                const subjectType = this.inferType(stmt.expr);
+                const patternType = this.inferType(arm.pattern);
+                const isUnknown = (t) => t.kind === "named" && t.name === "void";
+                if (!isUnknown(subjectType) && !isUnknown(patternType) && !this.typesMatch(subjectType, patternType)) {
+                  this.report("Match arm pattern type must match subject type", arm.pattern);
+                }
+              }
+              this.checkBlock(arm.body);
+            }
+            break;
+          case "as_block": {
+            const entityType = this.inferEntityTypeFromSelector(stmt.selector);
+            this.pushSelfType(entityType);
+            this.checkBlock(stmt.body);
+            this.popSelfType();
+            break;
+          }
+          case "at_block":
+            this.checkBlock(stmt.body);
+            break;
+          case "as_at": {
+            const entityType = this.inferEntityTypeFromSelector(stmt.as_sel);
+            this.pushSelfType(entityType);
+            this.checkBlock(stmt.body);
+            this.popSelfType();
+            break;
+          }
+          case "execute":
+            for (const sub of stmt.subcommands) {
+              if (sub.kind === "as" && sub.selector) {
+                const entityType = this.inferEntityTypeFromSelector(sub.selector);
+                this.pushSelfType(entityType);
+              }
+            }
+            this.checkBlock(stmt.body);
+            for (const sub of stmt.subcommands) {
+              if (sub.kind === "as") {
+                this.popSelfType();
+              }
+            }
+            break;
+          case "expr":
+            this.checkExpr(stmt.expr);
+            break;
+          case "raw":
+            break;
+        }
+      }
+      checkLetDestructStmt(stmt) {
+        this.checkExpr(stmt.init);
+        const initType = this.inferType(stmt.init);
+        if (stmt.type) {
+          const normalized = this.normalizeType(stmt.type);
+          if (normalized.kind !== "tuple") {
+            this.report(`Destructuring type annotation must be a tuple type`, stmt);
+            return;
+          }
+          if (normalized.elements.length !== stmt.names.length) {
+            this.report(`Destructuring pattern has ${stmt.names.length} bindings but type has ${normalized.elements.length} elements`, stmt);
+          }
+          for (let i = 0; i < stmt.names.length; i++) {
+            const elemType = normalized.elements[i] ?? { kind: "named", name: "int" };
+            this.scope.set(stmt.names[i], { type: elemType, mutable: true });
+          }
+        } else if (initType.kind === "tuple") {
+          if (initType.elements.length !== stmt.names.length) {
+            this.report(`Destructuring pattern has ${stmt.names.length} bindings but tuple has ${initType.elements.length} elements`, stmt);
+          }
+          for (let i = 0; i < stmt.names.length; i++) {
+            const elemType = initType.elements[i] ?? { kind: "named", name: "int" };
+            this.scope.set(stmt.names[i], { type: elemType, mutable: true });
+          }
+        } else {
+          for (const name of stmt.names) {
+            this.scope.set(name, { type: INT_TYPE, mutable: true });
+          }
+        }
+      }
+      checkLetStmt(stmt) {
+        const expectedType = stmt.type ? this.normalizeType(stmt.type) : void 0;
+        this.checkExpr(stmt.init, expectedType);
+        const type = expectedType ?? this.inferType(stmt.init);
+        this.scope.set(stmt.name, { type, mutable: true });
+        const actualType = this.inferType(stmt.init, expectedType);
+        if (expectedType && stmt.init.kind !== "struct_lit" && stmt.init.kind !== "array_lit" && !(actualType.kind === "named" && actualType.name === "void")) {
+          if (this.isNumericMismatch(expectedType, actualType)) {
+            this.report(`Type mismatch: cannot implicitly convert ${this.typeToString(actualType)} to ${this.typeToString(expectedType)} (use an explicit cast: 'as ${this.typeToString(expectedType)}')`, stmt);
+          } else if (!this.typesMatch(expectedType, actualType)) {
+            this.report(`Type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`, stmt);
+          }
+        }
+      }
+      checkReturnStmt(stmt) {
+        if (!this.currentReturnType)
+          return;
+        const expectedType = this.currentReturnType;
+        if (stmt.value) {
+          const actualType = this.inferType(stmt.value, expectedType);
+          this.checkExpr(stmt.value, expectedType);
+          const returnIsFloat = expectedType.kind === "named" && expectedType.name === "float";
+          if (returnIsFloat && stmt.value.kind === "binary") {
+            const arithmeticOps = ["+", "-", "*", "/", "%"];
+            if (arithmeticOps.includes(stmt.value.op)) {
+              this.warnLint(`[FloatArithmetic] 'float' is a system boundary type (MC NBT float); use 'fixed' for arithmetic instead.`, stmt.value);
+            }
+          }
+          if (this.isNumericMismatch(expectedType, actualType)) {
+            this.report(`Return type mismatch: cannot implicitly convert ${this.typeToString(actualType)} to ${this.typeToString(expectedType)} (use an explicit cast: 'as ${this.typeToString(expectedType)}')`, stmt);
+          } else if (!this.typesMatch(expectedType, actualType)) {
+            this.report(`Return type mismatch: expected ${this.typeToString(expectedType)}, got ${this.typeToString(actualType)}`, stmt);
+          }
+        } else {
+          if (expectedType.kind !== "named" || expectedType.name !== "void") {
+            this.report(`Missing return value: expected ${this.typeToString(expectedType)}`, stmt);
+          }
+        }
+      }
+      checkExpr(expr, expectedType) {
+        switch (expr.kind) {
+          case "ident":
+            if (!this.scope.has(expr.name)) {
+              this.report(`Variable '${expr.name}' used before declaration`, expr);
+            }
+            break;
+          case "call":
+            this.checkCallExpr(expr);
+            break;
+          case "invoke":
+            this.checkInvokeExpr(expr);
+            break;
+          case "member":
+            this.checkMemberExpr(expr);
+            break;
+          case "static_call":
+            this.checkStaticCallExpr(expr);
+            break;
+          case "binary": {
+            this.checkExpr(expr.left);
+            this.checkExpr(expr.right);
+            const arithmeticOps = ["+", "-", "*", "/", "%"];
+            if (arithmeticOps.includes(expr.op)) {
+              const leftType = this.inferType(expr.left);
+              const rightType = this.inferType(expr.right);
+              const leftIsFloat = leftType.kind === "named" && leftType.name === "float";
+              const rightIsFloat = rightType.kind === "named" && rightType.name === "float";
+              if (leftIsFloat || rightIsFloat) {
+                this.warnLint(`[FloatArithmetic] 'float' is a system boundary type (MC NBT); use 'fixed' for arithmetic. Float arithmetic results are undefined.`, expr);
+              }
+            }
+            break;
+          }
+          case "is_check": {
+            this.checkExpr(expr.expr);
+            const checkedType = this.inferType(expr.expr);
+            if (checkedType.kind !== "entity") {
+              this.report(`'is' checks require an entity expression, got ${this.typeToString(checkedType)}`, expr.expr);
+            }
+            break;
+          }
+          case "unary":
+            this.checkExpr(expr.operand);
+            break;
+          case "assign":
+            if (!this.scope.has(expr.target)) {
+              this.report(`Variable '${expr.target}' used before declaration`, expr);
+            } else if (!this.scope.get(expr.target)?.mutable) {
+              this.report(`Cannot assign to const '${expr.target}'`, expr);
+            }
+            this.checkExpr(expr.value, this.scope.get(expr.target)?.type);
+            break;
+          case "member_assign":
+            this.checkExpr(expr.obj);
+            this.checkExpr(expr.value);
+            break;
+          case "index_assign":
+            this.checkExpr(expr.obj);
+            this.checkExpr(expr.index);
+            this.checkExpr(expr.value);
+            break;
+          case "index":
+            this.checkExpr(expr.obj);
+            this.checkExpr(expr.index);
+            const indexType = this.inferType(expr.index);
+            if (indexType.kind !== "named" || indexType.name !== "int") {
+              this.report("Array index must be int", expr.index);
+            }
+            break;
+          case "struct_lit":
+            for (const field of expr.fields) {
+              this.checkExpr(field.value);
+            }
+            break;
+          case "str_interp":
+            for (const part of expr.parts) {
+              if (typeof part !== "string") {
+                this.checkExpr(part);
+              }
+            }
+            break;
+          case "f_string":
+            for (const part of expr.parts) {
+              if (part.kind !== "expr") {
+                continue;
+              }
+              this.checkExpr(part.expr);
+              const partType = this.inferType(part.expr);
+              const isUnknown = partType.kind === "named" && partType.name === "void";
+              if (!isUnknown && !(partType.kind === "named" && (partType.name === "int" || partType.name === "string" || partType.name === "format_string"))) {
+                this.report(`f-string placeholder must be int or string, got ${this.typeToString(partType)}`, part.expr);
+              }
+            }
+            break;
+          case "array_lit":
+            for (const elem of expr.elements) {
+              this.checkExpr(elem);
+            }
+            break;
+          case "tuple_lit":
+            if (expr.elements.length < 2 || expr.elements.length > 8) {
+              this.report(`Tuple must have 2-8 elements, got ${expr.elements.length}`, expr);
+            }
+            for (const elem of expr.elements) {
+              this.checkExpr(elem);
+            }
+            break;
+          case "lambda":
+            this.checkLambdaExpr(expr, expectedType);
+            break;
+          case "path_expr":
+            if (!this.enums.has(expr.enumName)) {
+              this.report(`Unknown enum '${expr.enumName}'`, expr);
+            } else {
+              const variants = this.enums.get(expr.enumName);
+              if (!variants.has(expr.variant)) {
+                this.report(`Enum '${expr.enumName}' has no variant '${expr.variant}'`, expr);
+              }
+            }
+            break;
+          case "blockpos":
+            break;
+          // Literals don't need checking
+          case "int_lit":
+          case "float_lit":
+          case "bool_lit":
+          case "str_lit":
+          case "mc_name":
+          case "range_lit":
+          case "selector":
+          case "byte_lit":
+          case "short_lit":
+          case "long_lit":
+          case "double_lit":
+            break;
+          case "type_cast":
+            this.checkExpr(expr.expr);
+            break;
+        }
+      }
+      checkCallExpr(expr) {
+        if (expr.fn === "tp" || expr.fn === "tp_to") {
+          this.checkTpCall(expr);
+        }
+        const richTextBuiltin = this.richTextBuiltins.get(expr.fn);
+        if (richTextBuiltin) {
+          this.checkRichTextBuiltinCall(expr, richTextBuiltin.messageIndex);
+          return;
+        }
+        const builtin = BUILTIN_SIGNATURES[expr.fn];
+        if (builtin) {
+          if (expr.fn === "setTimeout" || expr.fn === "setInterval") {
+            if (this.loopDepth > 0) {
+              this.report(`${expr.fn}() cannot be called inside a loop. Declare timers at the top level.`, expr);
+            } else if (this.condDepth > 0) {
+              this.report(`${expr.fn}() cannot be called inside an if/else body. Declare timers at the top level.`, expr);
+            }
+          }
+          this.checkFunctionCallArgs(expr.args, builtin.params, expr.fn, expr);
+          return;
+        }
+        const fn = this.functions.get(expr.fn);
+        if (fn) {
+          if (fn.typeParams && fn.typeParams.length > 0) {
+            const requiredParams2 = fn.params.filter((param) => !param.default).length;
+            if (expr.args.length < requiredParams2 || expr.args.length > fn.params.length) {
+              this.report(`Function '${expr.fn}' expects ${requiredParams2}-${fn.params.length} arguments, got ${expr.args.length}`, expr);
+            }
+            for (const arg of expr.args)
+              this.checkExpr(arg);
+            return;
+          }
+          const requiredParams = fn.params.filter((param) => !param.default).length;
+          if (expr.args.length < requiredParams || expr.args.length > fn.params.length) {
+            const expectedRange = requiredParams === fn.params.length ? `${fn.params.length}` : `${requiredParams}-${fn.params.length}`;
+            this.report(`Function '${expr.fn}' expects ${expectedRange} arguments, got ${expr.args.length}`, expr);
+          }
+          for (let i = 0; i < expr.args.length; i++) {
+            const paramType = fn.params[i] ? this.normalizeType(fn.params[i].type) : void 0;
+            if (paramType) {
+              this.checkExpr(expr.args[i], paramType);
+            }
+            const argType = this.inferType(expr.args[i], paramType);
+            if (paramType && !this.typesMatch(paramType, argType)) {
+              this.report(`Argument ${i + 1} of '${expr.fn}' expects ${this.typeToString(paramType)}, got ${this.typeToString(argType)}`, expr.args[i]);
+            }
+          }
+          return;
+        }
+        const varType = this.scope.get(expr.fn)?.type;
+        if (varType?.kind === "function_type") {
+          this.checkFunctionCallArgs(expr.args, varType.params, expr.fn, expr);
+          return;
+        }
+        const implMethod = this.resolveInstanceMethod(expr);
+        if (implMethod) {
+          this.checkFunctionCallArgs(expr.args, implMethod.params.map((param) => this.normalizeType(param.type)), implMethod.name, expr);
+          return;
+        }
+        for (const arg of expr.args) {
+          this.checkExpr(arg);
+        }
+      }
+      checkRichTextBuiltinCall(expr, messageIndex) {
+        for (let i = 0; i < expr.args.length; i++) {
+          this.checkExpr(expr.args[i], i === messageIndex ? void 0 : STRING_TYPE);
+        }
+        const message = expr.args[messageIndex];
+        if (!message) {
+          return;
+        }
+        const messageType = this.inferType(message);
+        if (messageType.kind !== "named" || messageType.name !== "string" && messageType.name !== "format_string") {
+          this.report(`Argument ${messageIndex + 1} of '${expr.fn}' expects string or format_string, got ${this.typeToString(messageType)}`, message);
+        }
+      }
+      checkInvokeExpr(expr) {
+        this.checkExpr(expr.callee);
+        const calleeType = this.inferType(expr.callee);
+        if (calleeType.kind !== "function_type") {
+          this.report("Attempted to call a non-function value", expr.callee);
+          for (const arg of expr.args) {
+            this.checkExpr(arg);
+          }
+          return;
+        }
+        this.checkFunctionCallArgs(expr.args, calleeType.params, "lambda", expr);
+      }
+      checkFunctionCallArgs(args, params, calleeName, node) {
+        if (args.length !== params.length) {
+          this.report(`Function '${calleeName}' expects ${params.length} arguments, got ${args.length}`, node);
+        }
+        for (let i = 0; i < args.length; i++) {
+          const paramType = params[i];
+          if (!paramType) {
+            this.checkExpr(args[i]);
+            continue;
+          }
+          this.checkExpr(args[i], paramType);
+          const argType = this.inferType(args[i], paramType);
+          if (!this.typesMatch(paramType, argType)) {
+            this.report(`Argument ${i + 1} of '${calleeName}' expects ${this.typeToString(paramType)}, got ${this.typeToString(argType)}`, args[i]);
+          }
+        }
+      }
+      checkTpCall(expr) {
+        const dest = expr.args[1];
+        if (!dest) {
+          return;
+        }
+        const destType = this.inferType(dest);
+        if (destType.kind === "named" && destType.name === "BlockPos") {
+          return;
+        }
+        if (dest.kind === "selector" && !dest.isSingle) {
+          this.report("tp destination must be a single-entity selector (@s, @p, @r, or limit=1)", dest);
+        }
+      }
+      checkMemberExpr(expr) {
+        if (!(expr.obj.kind === "ident" && this.enums.has(expr.obj.name))) {
+          this.checkExpr(expr.obj);
+        }
+        if (expr.obj.kind === "ident") {
+          if (this.enums.has(expr.obj.name)) {
+            const enumVariants = this.enums.get(expr.obj.name);
+            if (!enumVariants.has(expr.field)) {
+              this.report(`Enum '${expr.obj.name}' has no variant '${expr.field}'`, expr);
+            }
+            return;
+          }
+          const varSymbol = this.scope.get(expr.obj.name);
+          const varType = varSymbol?.type;
+          if (varType) {
+            if (varType.kind === "struct") {
+              const structFields = this.structs.get(varType.name);
+              if (structFields && !structFields.has(expr.field)) {
+                this.report(`Struct '${varType.name}' has no field '${expr.field}'`, expr);
+              }
+            } else if (varType.kind === "array") {
+              if (expr.field !== "len" && expr.field !== "push" && expr.field !== "pop") {
+                this.report(`Array has no field '${expr.field}'`, expr);
+              }
+            } else if (varType.kind === "named") {
+              if (varType.name !== "void") {
+                if (["int", "bool", "float", "fixed", "string", "byte", "short", "long", "double"].includes(varType.name)) {
+                  this.report(`Cannot access member '${expr.field}' on ${this.typeToString(varType)}`, expr);
+                }
+              }
+            }
+          }
+        }
+      }
+      checkStaticCallExpr(expr) {
+        if (expr.type === "Timer" && expr.method === "new") {
+          if (this.loopDepth > 0) {
+            this.report(`Timer::new() cannot be called inside a loop. Declare timers at the top level.`, expr);
+          } else if (this.condDepth > 0) {
+            this.report(`Timer::new() cannot be called inside an if/else body. Declare timers at the top level.`, expr);
+          }
+        }
+        const method = this.implMethods.get(expr.type)?.get(expr.method);
+        if (!method) {
+          this.report(`Type '${expr.type}' has no static method '${expr.method}'`, expr);
+          for (const arg of expr.args) {
+            this.checkExpr(arg);
+          }
+          return;
+        }
+        if (method.params[0]?.name === "self") {
+          this.report(`Method '${expr.type}::${expr.method}' is an instance method`, expr);
+          return;
+        }
+        this.checkFunctionCallArgs(expr.args, method.params.map((param) => this.normalizeType(param.type)), `${expr.type}::${expr.method}`, expr);
+      }
+      checkLambdaExpr(expr, expectedType) {
+        const normalizedExpected = expectedType ? this.normalizeType(expectedType) : void 0;
+        const expectedFnType = normalizedExpected?.kind === "function_type" ? normalizedExpected : void 0;
+        const lambdaType = this.inferLambdaType(expr, expectedFnType);
+        if (expectedFnType && !this.typesMatch(expectedFnType, lambdaType)) {
+          this.report(`Type mismatch: expected ${this.typeToString(expectedFnType)}, got ${this.typeToString(lambdaType)}`, expr);
+          return;
+        }
+        const outerScope = this.scope;
+        const outerReturnType = this.currentReturnType;
+        const lambdaScope = new Map(this.scope);
+        const paramTypes = expectedFnType?.params ?? lambdaType.params;
+        for (let i = 0; i < expr.params.length; i++) {
+          lambdaScope.set(expr.params[i].name, {
+            type: paramTypes[i] ?? { kind: "named", name: "void" },
+            mutable: true
+          });
+        }
+        this.scope = lambdaScope;
+        this.currentReturnType = expr.returnType ? this.normalizeType(expr.returnType) : expectedFnType?.return ?? lambdaType.return;
+        if (Array.isArray(expr.body)) {
+          this.checkBlock(expr.body);
+        } else {
+          this.checkExpr(expr.body, this.currentReturnType);
+          const actualType = this.inferType(expr.body, this.currentReturnType);
+          if (!this.typesMatch(this.currentReturnType, actualType)) {
+            this.report(`Return type mismatch: expected ${this.typeToString(this.currentReturnType)}, got ${this.typeToString(actualType)}`, expr.body);
+          }
+        }
+        this.scope = outerScope;
+        this.currentReturnType = outerReturnType;
+      }
+      checkIfBranches(stmt) {
+        const narrowed = this.getThenBranchNarrowing(stmt.cond);
+        if (narrowed) {
+          const thenScope = new Map(this.scope);
+          thenScope.set(narrowed.name, { type: narrowed.type, mutable: narrowed.mutable });
+          const outerScope = this.scope;
+          this.scope = thenScope;
+          this.checkBlock(stmt.then);
+          this.scope = outerScope;
+        } else {
+          this.checkBlock(stmt.then);
+        }
+        if (stmt.else_) {
+          this.checkBlock(stmt.else_);
+        }
+      }
+      getThenBranchNarrowing(cond) {
+        if (cond.kind !== "is_check" || cond.expr.kind !== "ident") {
+          return null;
+        }
+        const symbol = this.scope.get(cond.expr.name);
+        if (!symbol || symbol.type.kind !== "entity") {
+          return null;
+        }
+        return {
+          name: cond.expr.name,
+          type: { kind: "entity", entityType: cond.entityType },
+          mutable: symbol.mutable
+        };
+      }
+      inferType(expr, expectedType) {
+        switch (expr.kind) {
+          case "int_lit":
+            return { kind: "named", name: "int" };
+          case "float_lit":
+            return { kind: "named", name: "fixed" };
+          case "byte_lit":
+            return { kind: "named", name: "byte" };
+          case "short_lit":
+            return { kind: "named", name: "short" };
+          case "long_lit":
+            return { kind: "named", name: "long" };
+          case "double_lit":
+            return { kind: "named", name: "double" };
+          case "bool_lit":
+            return { kind: "named", name: "bool" };
+          case "str_lit":
+          case "mc_name":
+            return { kind: "named", name: "string" };
+          case "str_interp":
+            for (const part of expr.parts) {
+              if (typeof part !== "string") {
+                this.checkExpr(part);
+              }
+            }
+            return { kind: "named", name: "string" };
+          case "f_string":
+            for (const part of expr.parts) {
+              if (part.kind === "expr") {
+                this.checkExpr(part.expr);
+              }
+            }
+            return FORMAT_STRING_TYPE;
+          case "blockpos":
+            return { kind: "named", name: "BlockPos" };
+          case "ident":
+            return this.scope.get(expr.name)?.type ?? { kind: "named", name: "void" };
+          case "call": {
+            const builtin = BUILTIN_SIGNATURES[expr.fn];
+            if (builtin) {
+              return builtin.return;
+            }
+            if (expr.fn === "__array_push") {
+              return VOID_TYPE;
+            }
+            if (expr.fn === "__array_pop") {
+              const target = expr.args[0];
+              if (target && target.kind === "ident") {
+                const targetType = this.scope.get(target.name)?.type;
+                if (targetType?.kind === "array")
+                  return targetType.elem;
+              }
+              return INT_TYPE;
+            }
+            if (expr.fn === "bossbar_get_value") {
+              return INT_TYPE;
+            }
+            if (expr.fn === "random_sequence") {
+              return VOID_TYPE;
+            }
+            const varType = this.scope.get(expr.fn)?.type;
+            if (varType?.kind === "function_type") {
+              return varType.return;
+            }
+            const implMethod = this.resolveInstanceMethod(expr);
+            if (implMethod) {
+              return this.normalizeType(implMethod.returnType);
+            }
+            const fn = this.functions.get(expr.fn);
+            if (fn) {
+              if (fn.typeParams && fn.typeParams.length > 0) {
+                return expectedType ?? INT_TYPE;
+              }
+              return this.normalizeType(fn.returnType);
+            }
+            return INT_TYPE;
+          }
+          case "static_call": {
+            const method = this.implMethods.get(expr.type)?.get(expr.method);
+            return method ? this.normalizeType(method.returnType) : { kind: "named", name: "void" };
+          }
+          case "invoke": {
+            const calleeType = this.inferType(expr.callee);
+            if (calleeType.kind === "function_type") {
+              return calleeType.return;
+            }
+            return { kind: "named", name: "void" };
+          }
+          case "path_expr":
+            if (this.enums.has(expr.enumName)) {
+              return { kind: "enum", name: expr.enumName };
+            }
+            return { kind: "named", name: "void" };
+          case "member":
+            if (expr.obj.kind === "ident" && this.enums.has(expr.obj.name)) {
+              return { kind: "enum", name: expr.obj.name };
+            }
+            if (expr.obj.kind === "ident") {
+              const objTypeNode = this.scope.get(expr.obj.name)?.type;
+              if (objTypeNode?.kind === "array" && expr.field === "len") {
+                return { kind: "named", name: "int" };
+              }
+            }
+            return { kind: "named", name: "void" };
+          case "index": {
+            const objType = this.inferType(expr.obj);
+            if (objType.kind === "array")
+              return objType.elem;
+            return { kind: "named", name: "void" };
+          }
+          case "binary":
+            if (["==", "!=", "<", "<=", ">", ">=", "&&", "||"].includes(expr.op)) {
+              return { kind: "named", name: "bool" };
+            }
+            return this.inferType(expr.left);
+          case "is_check":
+            return { kind: "named", name: "bool" };
+          case "unary":
+            if (expr.op === "!")
+              return { kind: "named", name: "bool" };
+            return this.inferType(expr.operand);
+          case "selector": {
+            const entityType = this.inferEntityTypeFromSelector(expr.sel);
+            return { kind: "selector", entityType: entityType ?? void 0 };
+          }
+          case "array_lit":
+            if (expr.elements.length > 0) {
+              return { kind: "array", elem: this.inferType(expr.elements[0]) };
+            }
+            return { kind: "array", elem: { kind: "named", name: "int" } };
+          case "struct_lit":
+            if (expectedType) {
+              const normalized = this.normalizeType(expectedType);
+              if (normalized.kind === "struct") {
+                return normalized;
+              }
+            }
+            return { kind: "named", name: "void" };
+          case "tuple_lit":
+            return {
+              kind: "tuple",
+              elements: expr.elements.map((e) => this.inferType(e))
+            };
+          case "some_lit": {
+            const innerType = this.inferType(expr.value, expectedType?.kind === "option" ? expectedType.inner : void 0);
+            return { kind: "option", inner: innerType };
+          }
+          case "none_lit": {
+            if (expectedType?.kind === "option")
+              return expectedType;
+            return { kind: "option", inner: { kind: "named", name: "void" } };
+          }
+          case "type_cast":
+            return this.normalizeType(expr.targetType);
+          case "lambda":
+            return this.inferLambdaType(expr, expectedType && this.normalizeType(expectedType).kind === "function_type" ? this.normalizeType(expectedType) : void 0);
+          default:
+            return { kind: "named", name: "void" };
+        }
+      }
+      inferLambdaType(expr, expectedType) {
+        const params = expr.params.map((param, index) => {
+          if (param.type) {
+            return this.normalizeType(param.type);
+          }
+          const inferred = expectedType?.params[index];
+          if (inferred) {
+            return inferred;
+          }
+          this.report(`Lambda parameter '${param.name}' requires a type annotation`, expr);
+          return { kind: "named", name: "void" };
+        });
+        let returnType = expr.returnType ? this.normalizeType(expr.returnType) : expectedType?.return;
+        if (!returnType) {
+          returnType = Array.isArray(expr.body) ? { kind: "named", name: "void" } : this.inferType(expr.body);
+        }
+        return { kind: "function_type", params, return: returnType };
+      }
+      // ---------------------------------------------------------------------------
+      // Entity Type Helpers
+      // ---------------------------------------------------------------------------
+      /** Infer entity type from a selector */
+      inferEntityTypeFromSelector(selector) {
+        if (selector.kind === "@a" || selector.kind === "@p" || selector.kind === "@r") {
+          return "Player";
+        }
+        if (selector.filters?.type) {
+          const mcType = selector.filters.type.toLowerCase();
+          return MC_TYPE_TO_ENTITY[mcType] ?? "entity";
+        }
+        if (selector.kind === "@s") {
+          return this.selfTypeStack[this.selfTypeStack.length - 1];
+        }
+        return "entity";
+      }
+      resolveInstanceMethod(expr) {
+        const receiver = expr.args[0];
+        if (!receiver) {
+          return null;
+        }
+        const receiverType = this.inferType(receiver);
+        if (receiverType.kind !== "struct") {
+          return null;
+        }
+        const method = this.implMethods.get(receiverType.name)?.get(expr.fn);
+        if (!method || method.params[0]?.name !== "self") {
+          return null;
+        }
+        return method;
+      }
+      /** Check if childType is a subtype of parentType */
+      isEntitySubtype(childType, parentType) {
+        if (childType === parentType)
+          return true;
+        let current = childType;
+        while (current !== null) {
+          if (current === parentType)
+            return true;
+          current = ENTITY_HIERARCHY[current];
+        }
+        return false;
+      }
+      /** Push a new self type context */
+      pushSelfType(entityType) {
+        this.selfTypeStack.push(entityType);
+      }
+      /** Pop self type context */
+      popSelfType() {
+        if (this.selfTypeStack.length > 1) {
+          this.selfTypeStack.pop();
+        }
+      }
+      /** Get current @s type */
+      getCurrentSelfType() {
+        return this.selfTypeStack[this.selfTypeStack.length - 1];
+      }
+      /** Returns true if expected/actual are a numeric type mismatch (int vs float/fixed/double).
+       * These pairs are NOT implicitly compatible — require explicit `as` cast.
+       * Only int↔byte/short/long remain implicitly compatible (MC NBT narrowing). */
+      isNumericMismatch(expected, actual) {
+        if (expected.kind !== "named" || actual.kind !== "named")
+          return false;
+        const numericPairs = [
+          ["int", "float"],
+          ["float", "int"],
+          ["int", "fixed"],
+          ["fixed", "int"],
+          ["int", "double"],
+          ["double", "int"],
+          ["float", "double"],
+          ["double", "float"],
+          ["fixed", "double"],
+          ["double", "fixed"]
+          // float and fixed are compatible (float is deprecated alias for fixed)
+        ];
+        return numericPairs.some(([e, a]) => expected.name === e && actual.name === a);
+      }
+      typesMatch(expected, actual) {
+        if (expected.kind === "named" && expected.name === "int" && actual.kind === "enum") {
+          return true;
+        }
+        if (expected.kind === "enum" && actual.kind === "named" && actual.name === "int") {
+          return true;
+        }
+        if (expected.kind === "selector" && actual.kind === "entity") {
+          return true;
+        }
+        if (expected.kind === "entity" && actual.kind === "selector") {
+          return true;
+        }
+        if (expected.kind === "entity" && actual.kind === "entity") {
+          return this.isEntitySubtype(actual.entityType, expected.entityType);
+        }
+        if (expected.kind === "selector" && actual.kind === "selector") {
+          return true;
+        }
+        if (expected.kind !== actual.kind)
+          return false;
+        if (expected.kind === "named" && actual.kind === "named") {
+          if (actual.name === "void")
+            return true;
+          if (expected.name === actual.name)
+            return true;
+          const floatFixed = (expected.name === "float" || expected.name === "fixed") && (actual.name === "float" || actual.name === "fixed");
+          if (floatFixed)
+            return true;
+          const nbtNarrowing = [
+            ["int", "byte"],
+            ["byte", "int"],
+            ["int", "short"],
+            ["short", "int"],
+            ["int", "long"],
+            ["long", "int"]
+          ];
+          if (nbtNarrowing.some(([e, a]) => expected.name === e && actual.name === a))
+            return true;
+          return false;
+        }
+        if (expected.kind === "array" && actual.kind === "array") {
+          return this.typesMatch(expected.elem, actual.elem);
+        }
+        if (expected.kind === "struct" && actual.kind === "struct") {
+          return expected.name === actual.name;
+        }
+        if (expected.kind === "enum" && actual.kind === "enum") {
+          return expected.name === actual.name;
+        }
+        if (expected.kind === "function_type" && actual.kind === "function_type") {
+          return expected.params.length === actual.params.length && expected.params.every((param, index) => this.typesMatch(param, actual.params[index])) && this.typesMatch(expected.return, actual.return);
+        }
+        if (expected.kind === "tuple" && actual.kind === "tuple") {
+          return expected.elements.length === actual.elements.length && expected.elements.every((elem, i) => this.typesMatch(elem, actual.elements[i]));
+        }
+        if (expected.kind === "option" && actual.kind === "option") {
+          return this.typesMatch(expected.inner, actual.inner);
+        }
+        if (expected.kind === "option" && actual.kind === "named" && actual.name === "void") {
+          return true;
+        }
+        return false;
+      }
+      typeToString(type) {
+        switch (type.kind) {
+          case "named":
+            return type.name;
+          case "array":
+            return `${this.typeToString(type.elem)}[]`;
+          case "struct":
+            return type.name;
+          case "enum":
+            return type.name;
+          case "function_type":
+            return `(${type.params.map((param) => this.typeToString(param)).join(", ")}) -> ${this.typeToString(type.return)}`;
+          case "entity":
+            return type.entityType;
+          case "selector":
+            return "selector";
+          case "tuple":
+            return `(${type.elements.map((e) => this.typeToString(e)).join(", ")})`;
+          case "option":
+            return `Option<${this.typeToString(type.inner)}>`;
+          default:
+            return "unknown";
+        }
+      }
+      normalizeType(type) {
+        if (type.kind === "array") {
+          return { kind: "array", elem: this.normalizeType(type.elem) };
+        }
+        if (type.kind === "option") {
+          return { kind: "option", inner: this.normalizeType(type.inner) };
+        }
+        if (type.kind === "tuple") {
+          return { kind: "tuple", elements: type.elements.map((e) => this.normalizeType(e)) };
+        }
+        if (type.kind === "function_type") {
+          return {
+            kind: "function_type",
+            params: type.params.map((param) => this.normalizeType(param)),
+            return: this.normalizeType(type.return)
+          };
+        }
+        if ((type.kind === "struct" || type.kind === "enum") && this.enums.has(type.name)) {
+          return { kind: "enum", name: type.name };
+        }
+        if (type.kind === "struct" && type.name in ENTITY_HIERARCHY) {
+          return { kind: "entity", entityType: type.name };
+        }
+        if (type.kind === "named" && type.name in ENTITY_HIERARCHY) {
+          return { kind: "entity", entityType: type.name };
+        }
+        return type;
+      }
+    };
+    exports2.TypeChecker = TypeChecker;
+  }
+});
+
 // ../../dist/src/emit/compile.js
 var require_compile2 = __commonJS({
   "../../dist/src/emit/compile.js"(exports2) {
@@ -25308,19 +27762,24 @@ var require_compile2 = __commonJS({
     var index_1 = require_emit();
     var coroutine_1 = require_coroutine();
     var budget_1 = require_budget();
+    var mc_version_1 = require_mc_version();
+    var typechecker_1 = require_typechecker();
     function compile(source, options = {}) {
-      const { namespace = "redscript", filePath, generateSourceMap = false } = options;
+      const { namespace = "redscript", filePath, generateSourceMap = false, mcVersion = mc_version_1.DEFAULT_MC_VERSION, lenient = false, includeDirs } = options;
       const warnings = [];
-      const preprocessed = (0, compile_1.preprocessSourceWithMetadata)(source, { filePath });
+      const preprocessed = (0, compile_1.preprocessSourceWithMetadata)(source, { filePath, includeDirs });
       const processedSource = preprocessed.source;
       const lexer = new lexer_1.Lexer(processedSource);
       const tokens = lexer.tokenize();
       const parser = new parser_1.Parser(tokens, processedSource, filePath);
       const ast = parser.parse(namespace);
+      warnings.push(...parser.warnings);
       for (const li of preprocessed.libraryImports ?? []) {
         const libPreprocessed = (0, compile_1.preprocessSourceWithMetadata)(li.source, { filePath: li.filePath });
         const libTokens = new lexer_1.Lexer(libPreprocessed.source, li.filePath).tokenize();
-        const libAst = new parser_1.Parser(libTokens, libPreprocessed.source, li.filePath).parse(namespace);
+        const libParser = new parser_1.Parser(libTokens, libPreprocessed.source, li.filePath);
+        const libAst = libParser.parse(namespace);
+        warnings.push(...libParser.warnings);
         for (const fn of libAst.declarations)
           fn.isLibraryFn = true;
         ast.declarations.push(...libAst.declarations);
@@ -25344,12 +27803,27 @@ var require_compile2 = __commonJS({
           ast.globals.push(...libAst.globals);
         }
       }
+      {
+        const checker = new typechecker_1.TypeChecker(processedSource, filePath);
+        const typeErrors = checker.check(ast);
+        warnings.push(...checker.getWarnings());
+        if (typeErrors.length > 0) {
+          if (lenient) {
+            for (const e of typeErrors) {
+              warnings.push(`[TypeError] line ${e.location.line}, col ${e.location.col}: ${e.message}`);
+            }
+          } else {
+            throw typeErrors[0];
+          }
+        }
+      }
       try {
         const hirRaw = (0, lower_1.lowerToHIR)(ast);
         const hir = (0, monomorphize_1.monomorphize)(hirRaw);
         const tickFunctions = [];
         const loadFunctions = [];
         const coroutineInfos = [];
+        const scheduleFunctions = [];
         for (const fn of hir.functions) {
           for (const dec of fn.decorators) {
             if (dec.name === "tick")
@@ -25363,6 +27837,9 @@ var require_compile2 = __commonJS({
                 onDone: dec.args?.onDone
               });
             }
+            if (dec.name === "schedule") {
+              scheduleFunctions.push({ name: fn.name, ticks: dec.args?.ticks ?? 1 });
+            }
           }
         }
         const mir = (0, lower_2.lowerToMIR)(hir, filePath);
@@ -25370,6 +27847,7 @@ var require_compile2 = __commonJS({
         const coroResult = (0, coroutine_1.coroutineTransform)(mirOpt, coroutineInfos);
         const mirFinal = coroResult.module;
         tickFunctions.push(...coroResult.generatedTickFunctions);
+        warnings.push(...coroResult.warnings);
         const lir = (0, lower_3.lowerToLIR)(mirFinal);
         const lirOpt = (0, pipeline_2.lirOptimizeModule)(lir);
         const coroutineNames = new Set(coroutineInfos.map((c) => c.fnName));
@@ -25380,13 +27858,435 @@ var require_compile2 = __commonJS({
           }
           warnings.push(diag.message);
         }
-        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, generateSourceMap });
+        const INT32_MAX = 2147483647;
+        const INT32_MIN = -2147483648;
+        for (const fn of lirOpt.functions) {
+          for (const instr of fn.instructions) {
+            if (instr.kind === "score_set" && (instr.value > INT32_MAX || instr.value < INT32_MIN)) {
+              warnings.push(`[ConstantOverflow] function '${fn.name}': scoreboard immediate ${instr.value} is outside MC int32 range [${INT32_MIN}, ${INT32_MAX}]. This indicates a constant-folding overflow bug \u2014 please report this.`);
+            }
+          }
+        }
+        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions, generateSourceMap, mcVersion });
         return { files, warnings, success: true };
       } catch (err) {
         if (err instanceof diagnostics_1.DiagnosticError)
           throw err;
         const sourceLines = processedSource.split("\n");
         throw (0, diagnostics_1.parseErrorMessage)("LoweringError", err.message, sourceLines, filePath);
+      }
+    }
+  }
+});
+
+// ../../dist/src/emit/modules.js
+var require_modules = __commonJS({
+  "../../dist/src/emit/modules.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.compileModules = compileModules;
+    var lexer_1 = require_lexer();
+    var parser_1 = require_parser();
+    var diagnostics_1 = require_diagnostics();
+    var lower_1 = require_lower();
+    var monomorphize_1 = require_monomorphize();
+    var lower_2 = require_lower2();
+    var pipeline_1 = require_pipeline();
+    var lower_3 = require_lower3();
+    var pipeline_2 = require_pipeline2();
+    var index_1 = require_emit();
+    var coroutine_1 = require_coroutine();
+    function compileModules(modules, options = {}) {
+      const namespace = options.namespace ?? "redscript";
+      const warnings = [];
+      if (modules.length === 0) {
+        throw new diagnostics_1.DiagnosticError("LoweringError", "No modules provided", { line: 1, col: 1 });
+      }
+      const parsedModules = /* @__PURE__ */ new Map();
+      for (const mod of modules) {
+        const lexer = new lexer_1.Lexer(mod.source, mod.filePath);
+        const tokens = lexer.tokenize();
+        const parser = new parser_1.Parser(tokens, mod.source, mod.filePath);
+        const ast = parser.parse(namespace);
+        const declaredName = ast.moduleName;
+        if (declaredName && declaredName !== mod.name) {
+          throw new diagnostics_1.DiagnosticError("LoweringError", `Module declares name '${declaredName}' but was registered as '${mod.name}'`, { file: mod.filePath, line: 1, col: 1 });
+        }
+        parsedModules.set(mod.name, ast);
+      }
+      const exportTable = /* @__PURE__ */ new Map();
+      for (const [modName, ast] of parsedModules) {
+        const exports3 = /* @__PURE__ */ new Set();
+        for (const fn of ast.declarations) {
+          if (fn.isExported)
+            exports3.add(fn.name);
+        }
+        exportTable.set(modName, exports3);
+      }
+      detectCircularImports(parsedModules);
+      const importMap = /* @__PURE__ */ new Map();
+      for (const [modName, ast] of parsedModules) {
+        const resolved = /* @__PURE__ */ new Map();
+        for (const imp of ast.imports) {
+          const sourceExports = exportTable.get(imp.moduleName);
+          if (!sourceExports) {
+            throw new diagnostics_1.DiagnosticError("LoweringError", `Module '${imp.moduleName}' not found (imported in '${modName}')`, { file: ast.namespace, line: 1, col: 1 });
+          }
+          if (imp.symbol === "*") {
+            for (const sym of sourceExports) {
+              resolved.set(sym, `${imp.moduleName}/${sym}`);
+            }
+          } else {
+            if (!sourceExports.has(imp.symbol)) {
+              throw new diagnostics_1.DiagnosticError("LoweringError", `Module '${imp.moduleName}' does not export '${imp.symbol}'`, { line: 1, col: 1 });
+            }
+            resolved.set(imp.symbol, `${imp.moduleName}/${imp.symbol}`);
+          }
+        }
+        importMap.set(modName, resolved);
+      }
+      const usedExports = /* @__PURE__ */ new Map();
+      for (const modName of parsedModules.keys()) {
+        usedExports.set(modName, /* @__PURE__ */ new Set());
+      }
+      for (const ast of parsedModules.values()) {
+        for (const imp of ast.imports) {
+          const used = usedExports.get(imp.moduleName);
+          if (!used)
+            continue;
+          if (imp.symbol === "*") {
+            const exports3 = exportTable.get(imp.moduleName);
+            if (exports3)
+              for (const s of exports3)
+                used.add(s);
+          } else {
+            used.add(imp.symbol);
+          }
+        }
+      }
+      const allFiles = [];
+      const libraryFilePaths = /* @__PURE__ */ new Set();
+      let packMetaEmitted = false;
+      for (const mod of modules) {
+        const ast = parsedModules.get(mod.name);
+        const symbolMap = importMap.get(mod.name) ?? /* @__PURE__ */ new Map();
+        const isNamed = !!ast.moduleName;
+        if (symbolMap.size > 0) {
+          rewriteCallsInProgram(ast, symbolMap);
+        }
+        const unusedExportedFns = /* @__PURE__ */ new Set();
+        if (isNamed) {
+          const used = usedExports.get(mod.name) ?? /* @__PURE__ */ new Set();
+          for (const fn of ast.declarations) {
+            fn.name = `${mod.name}/${fn.name}`;
+            const baseName = fn.name.split("/").pop();
+            if (fn.isExported && !used.has(baseName)) {
+              unusedExportedFns.add(fn.name);
+            }
+          }
+        }
+        const objective = isNamed ? `__${namespace}_${mod.name}` : `__${namespace}`;
+        const modFiles = compileSingleModule(ast, namespace, objective, isNamed ? mod.name : void 0, mod.filePath);
+        warnings.push(...modFiles.warnings);
+        if (modules.length > 1) {
+          for (const fnName of unusedExportedFns) {
+            libraryFilePaths.add(`data/${namespace}/function/${fnName}.mcfunction`);
+          }
+        }
+        for (const file of modFiles.files) {
+          if (file.path === "pack.mcmeta") {
+            if (!packMetaEmitted) {
+              allFiles.push(file);
+              packMetaEmitted = true;
+            }
+            continue;
+          }
+          if (file.path === "data/minecraft/tags/function/load.json") {
+            mergeTagFile(allFiles, file);
+            continue;
+          }
+          if (file.path === "data/minecraft/tags/function/tick.json") {
+            mergeTagFile(allFiles, file);
+            continue;
+          }
+          allFiles.push(file);
+        }
+      }
+      const finalFiles = crossModuleDCE(allFiles, libraryFilePaths, namespace);
+      return { files: finalFiles, warnings };
+    }
+    function crossModuleDCE(files, libraryPaths, namespace) {
+      if (libraryPaths.size === 0)
+        return files;
+      const fnPathToFilePath = /* @__PURE__ */ new Map();
+      for (const file of files) {
+        const m = file.path.match(/^data\/([^/]+)\/function\/(.+)\.mcfunction$/);
+        if (m) {
+          fnPathToFilePath.set(`${m[1]}:${m[2]}`, file.path);
+        }
+      }
+      const callGraph = /* @__PURE__ */ new Map();
+      const callPattern = /\bfunction\s+([\w\-]+:[\w\-./]+)/g;
+      for (const file of files) {
+        if (!file.path.endsWith(".mcfunction"))
+          continue;
+        const called = /* @__PURE__ */ new Set();
+        let match;
+        callPattern.lastIndex = 0;
+        while ((match = callPattern.exec(file.content)) !== null) {
+          called.add(match[1]);
+        }
+        callGraph.set(file.path, called);
+      }
+      const reachableFiles = /* @__PURE__ */ new Set();
+      const queue = [];
+      for (const file of files) {
+        if (!file.path.endsWith(".mcfunction"))
+          continue;
+        if (!libraryPaths.has(file.path)) {
+          queue.push(file.path);
+          reachableFiles.add(file.path);
+        }
+      }
+      while (queue.length > 0) {
+        const current = queue.shift();
+        const called = callGraph.get(current) ?? /* @__PURE__ */ new Set();
+        for (const fnPath of called) {
+          const filePath = fnPathToFilePath.get(fnPath);
+          if (filePath && !reachableFiles.has(filePath)) {
+            reachableFiles.add(filePath);
+            queue.push(filePath);
+          }
+        }
+      }
+      return files.filter((file) => {
+        if (!libraryPaths.has(file.path))
+          return true;
+        return reachableFiles.has(file.path);
+      });
+    }
+    function compileSingleModule(ast, namespace, objective, moduleName, filePath) {
+      const warnings = [];
+      try {
+        const hirRaw = (0, lower_1.lowerToHIR)(ast);
+        const hir = (0, monomorphize_1.monomorphize)(hirRaw);
+        const tickFunctions = [];
+        const loadFunctions = [];
+        const coroutineInfos = [];
+        const scheduleFunctions = [];
+        for (const fn of hir.functions) {
+          for (const dec of fn.decorators) {
+            if (dec.name === "tick")
+              tickFunctions.push(fn.name);
+            if (dec.name === "load")
+              loadFunctions.push(fn.name);
+            if (dec.name === "coroutine") {
+              coroutineInfos.push({ fnName: fn.name, batch: dec.args?.batch ?? 10, onDone: dec.args?.onDone });
+            }
+            if (dec.name === "schedule") {
+              scheduleFunctions.push({ name: fn.name, ticks: dec.args?.ticks ?? 1 });
+            }
+          }
+        }
+        const mir = (0, lower_2.lowerToMIR)(hir, filePath);
+        mir.objective = objective;
+        const mirOpt = (0, pipeline_1.optimizeModule)(mir);
+        const coroResult = (0, coroutine_1.coroutineTransform)(mirOpt, coroutineInfos);
+        const mirFinal = coroResult.module;
+        tickFunctions.push(...coroResult.generatedTickFunctions);
+        const lir = (0, lower_3.lowerToLIR)(mirFinal);
+        lir.objective = objective;
+        const lirOpt = (0, pipeline_2.lirOptimizeModule)(lir);
+        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions });
+        if (moduleName) {
+          const loadPath = `data/${namespace}/function/load.mcfunction`;
+          const newLoadPath = `data/${namespace}/function/${moduleName}/_load.mcfunction`;
+          const loadTagPath = "data/minecraft/tags/function/load.json";
+          for (const file of files) {
+            if (file.path === loadPath) {
+              file.path = newLoadPath;
+            } else if (file.path === loadTagPath) {
+              const tag = JSON.parse(file.content);
+              tag.values = tag.values.map((v) => v === `${namespace}:load` ? `${namespace}:${moduleName}/_load` : v);
+              file.content = JSON.stringify(tag, null, 2) + "\n";
+            }
+          }
+        }
+        return { files, warnings };
+      } catch (err) {
+        if (err instanceof diagnostics_1.DiagnosticError)
+          throw err;
+        throw err;
+      }
+    }
+    function mergeTagFile(files, newFile) {
+      const existing = files.find((f) => f.path === newFile.path);
+      if (!existing) {
+        files.push(newFile);
+        return;
+      }
+      const existingJson = JSON.parse(existing.content);
+      const newJson = JSON.parse(newFile.content);
+      existingJson.values.push(...newJson.values);
+      existing.content = JSON.stringify(existingJson, null, 2) + "\n";
+    }
+    function detectCircularImports(parsedModules) {
+      const visited = /* @__PURE__ */ new Set();
+      const inStack = /* @__PURE__ */ new Set();
+      function dfs(modName, stack) {
+        if (inStack.has(modName)) {
+          const cycle = [...stack.slice(stack.indexOf(modName)), modName];
+          throw new diagnostics_1.DiagnosticError("LoweringError", `Circular import detected: ${cycle.join(" \u2192 ")}`, { line: 1, col: 1 });
+        }
+        if (visited.has(modName))
+          return;
+        visited.add(modName);
+        inStack.add(modName);
+        const ast = parsedModules.get(modName);
+        if (ast) {
+          for (const imp of ast.imports) {
+            dfs(imp.moduleName, [...stack, modName]);
+          }
+        }
+        inStack.delete(modName);
+      }
+      for (const modName of parsedModules.keys()) {
+        dfs(modName, []);
+      }
+    }
+    function rewriteCallsInProgram(program, symbolMap) {
+      for (const fn of program.declarations) {
+        rewriteBlock(fn.body, symbolMap);
+      }
+      for (const ib of program.implBlocks) {
+        for (const m of ib.methods) {
+          rewriteBlock(m.body, symbolMap);
+        }
+      }
+    }
+    function rewriteBlock(block, symbolMap) {
+      for (const stmt of block) {
+        rewriteStmt(stmt, symbolMap);
+      }
+    }
+    function rewriteStmt(stmt, symbolMap) {
+      switch (stmt.kind) {
+        case "let":
+        case "expr":
+          rewriteExpr(stmt.kind === "let" ? stmt.init : stmt.expr, symbolMap);
+          break;
+        case "return":
+          if (stmt.value)
+            rewriteExpr(stmt.value, symbolMap);
+          break;
+        case "if":
+          rewriteExpr(stmt.cond, symbolMap);
+          rewriteBlock(stmt.then, symbolMap);
+          if (stmt.else_)
+            rewriteBlock(stmt.else_, symbolMap);
+          break;
+        case "while":
+          rewriteExpr(stmt.cond, symbolMap);
+          rewriteBlock(stmt.body, symbolMap);
+          break;
+        case "for":
+          if (stmt.init)
+            rewriteStmt(stmt.init, symbolMap);
+          rewriteExpr(stmt.cond, symbolMap);
+          rewriteExpr(stmt.step, symbolMap);
+          rewriteBlock(stmt.body, symbolMap);
+          break;
+        case "for_range":
+          rewriteExpr(stmt.start, symbolMap);
+          rewriteExpr(stmt.end, symbolMap);
+          rewriteBlock(stmt.body, symbolMap);
+          break;
+        case "foreach":
+          rewriteExpr(stmt.iterable, symbolMap);
+          rewriteBlock(stmt.body, symbolMap);
+          break;
+        case "match":
+          rewriteExpr(stmt.expr, symbolMap);
+          for (const arm of stmt.arms) {
+            if (arm.pattern)
+              rewriteExpr(arm.pattern, symbolMap);
+            rewriteBlock(arm.body, symbolMap);
+          }
+          break;
+        case "as_block":
+        case "at_block":
+          rewriteBlock(stmt.body, symbolMap);
+          break;
+        case "as_at":
+          rewriteBlock(stmt.body, symbolMap);
+          break;
+        case "execute":
+          rewriteBlock(stmt.body, symbolMap);
+          break;
+        case "let_destruct":
+          rewriteExpr(stmt.init, symbolMap);
+          break;
+      }
+    }
+    function rewriteExpr(expr, symbolMap) {
+      switch (expr.kind) {
+        case "call": {
+          const remapped = symbolMap.get(expr.fn);
+          if (remapped) {
+            ;
+            expr.fn = remapped;
+          }
+          for (const arg of expr.args)
+            rewriteExpr(arg, symbolMap);
+          break;
+        }
+        case "assign":
+          rewriteExpr(expr.value, symbolMap);
+          break;
+        case "binary":
+          rewriteExpr(expr.left, symbolMap);
+          rewriteExpr(expr.right, symbolMap);
+          break;
+        case "unary":
+          rewriteExpr(expr.operand, symbolMap);
+          break;
+        case "member":
+          rewriteExpr(expr.obj, symbolMap);
+          break;
+        case "member_assign":
+          rewriteExpr(expr.obj, symbolMap);
+          rewriteExpr(expr.value, symbolMap);
+          break;
+        case "index":
+          rewriteExpr(expr.obj, symbolMap);
+          rewriteExpr(expr.index, symbolMap);
+          break;
+        case "index_assign":
+          rewriteExpr(expr.obj, symbolMap);
+          rewriteExpr(expr.index, symbolMap);
+          rewriteExpr(expr.value, symbolMap);
+          break;
+        case "array_lit":
+          for (const el of expr.elements)
+            rewriteExpr(el, symbolMap);
+          break;
+        case "struct_lit":
+          for (const f of expr.fields)
+            rewriteExpr(f.value, symbolMap);
+          break;
+        case "invoke":
+          rewriteExpr(expr.callee, symbolMap);
+          for (const arg of expr.args)
+            rewriteExpr(arg, symbolMap);
+          break;
+        case "tuple_lit":
+          for (const el of expr.elements)
+            rewriteExpr(el, symbolMap);
+          break;
+        case "static_call":
+          for (const arg of expr.args)
+            rewriteExpr(arg, symbolMap);
+          break;
       }
     }
   }
@@ -26165,7 +29065,7 @@ var require_src = __commonJS({
   "../../dist/src/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.resetCompileCache = exports2.compileIncremental = exports2.parseImports = exports2.DependencyGraph = exports2.hashFile = exports2.FileCache = exports2.MCCommandValidator = exports2.preprocessSourceWithMetadata = exports2.preprocessSource = exports2.Parser = exports2.Lexer = exports2.compile = exports2.version = void 0;
+    exports2.resetCompileCache = exports2.compileIncremental = exports2.parseImports = exports2.DependencyGraph = exports2.hashFile = exports2.FileCache = exports2.MCCommandValidator = exports2.preprocessSourceWithMetadata = exports2.preprocessSource = exports2.Parser = exports2.Lexer = exports2.DEFAULT_MC_VERSION = exports2.compareMcVersion = exports2.parseMcVersion = exports2.McVersion = exports2.compileModules = exports2.compile = exports2.version = void 0;
     exports2.check = check;
     exports2.checkWithWarnings = checkWithWarnings;
     exports2.version = "2.0.0";
@@ -26173,6 +29073,23 @@ var require_src = __commonJS({
     var compile_2 = require_compile2();
     Object.defineProperty(exports2, "compile", { enumerable: true, get: function() {
       return compile_2.compile;
+    } });
+    var modules_1 = require_modules();
+    Object.defineProperty(exports2, "compileModules", { enumerable: true, get: function() {
+      return modules_1.compileModules;
+    } });
+    var mc_version_1 = require_mc_version();
+    Object.defineProperty(exports2, "McVersion", { enumerable: true, get: function() {
+      return mc_version_1.McVersion;
+    } });
+    Object.defineProperty(exports2, "parseMcVersion", { enumerable: true, get: function() {
+      return mc_version_1.parseMcVersion;
+    } });
+    Object.defineProperty(exports2, "compareMcVersion", { enumerable: true, get: function() {
+      return mc_version_1.compareMcVersion;
+    } });
+    Object.defineProperty(exports2, "DEFAULT_MC_VERSION", { enumerable: true, get: function() {
+      return mc_version_1.DEFAULT_MC_VERSION;
     } });
     var lexer_1 = require_lexer();
     Object.defineProperty(exports2, "Lexer", { enumerable: true, get: function() {

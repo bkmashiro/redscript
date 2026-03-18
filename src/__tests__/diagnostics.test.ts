@@ -152,14 +152,10 @@ describe('compile function', () => {
     }
   })
 
-  it('throws DiagnosticError for missing semicolon', () => {
-    try {
-      compile('fn main() { let x = 42 }', { namespace: 'test' })
-      fail('Expected compile to throw')
-    } catch (e) {
-      expect((e as DiagnosticError).kind).toBe('ParseError')
-      expect((e as DiagnosticError).message).toContain("Expected ';'")
-    }
+  it('semicolons are optional: parses without semicolon', () => {
+    // Semicolons are now optional — this should parse and compile successfully
+    const result = compile('fn main() { let x = 42 }', { namespace: 'test' })
+    expect(result.success).toBe(true)
   })
 
   it('includes file path in error', () => {
@@ -169,7 +165,8 @@ describe('compile function', () => {
 
   it('formats error nicely', () => {
     try {
-      compile('fn main() {\n  let x = 42\n}', { namespace: 'test' })
+      // Missing closing paren — genuine parse error
+      compile('fn main() { let x = (42 }', { namespace: 'test' })
       fail('Expected compile to throw')
     } catch (e) {
       expect(e).toBeInstanceOf(DiagnosticError)
@@ -205,7 +202,8 @@ describe('Lexer DiagnosticError', () => {
 describe('Parser DiagnosticError', () => {
   it('includes line and column info', () => {
     try {
-      compile('fn main() { return }', { namespace: 'test' })
+      // Missing closing brace — genuine parse error with location info
+      compile('fn main() { let x = (42', { namespace: 'test' })
       fail('Expected compile to throw')
     } catch (e) {
       expect((e as DiagnosticError).location.line).toBeGreaterThan(0)

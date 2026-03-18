@@ -185,7 +185,7 @@ export class Parser {
       this.advance()
       const name = this.expect('ident')
       namespace = name.value
-      this.expect(';')
+      this.match(';')
     }
 
     // Check for module declaration: `module library;` or `module <name>;`
@@ -202,7 +202,7 @@ export class Parser {
         // Named module declaration: `module math;`
         moduleName = modKind.value
       }
-      this.expect(';')
+      this.match(';')
     }
 
     // Parse struct, function, and import declarations
@@ -236,7 +236,7 @@ export class Parser {
         } else {
           symbol = this.expect('ident').value
         }
-        this.expect(';')
+        this.match(';')
         imports.push(this.withLoc({ moduleName: modName, symbol }, importToken))
       } else {
         declarations.push(this.parseFnDecl())
@@ -342,7 +342,7 @@ export class Parser {
     const type = this.parseType()
     this.expect('=')
     const init = this.parseExpr()
-    this.expect(';')
+    this.match(';')
     return this.withLoc({ kind: 'global', name, type, init, mutable }, token)
   }
 
@@ -742,7 +742,7 @@ export class Parser {
       }
       this.expect('=')
       const init = this.parseExpr()
-      this.expect(';')
+      this.match(';')
       return this.withLoc({ kind: 'let_destruct', names, type, init }, letToken)
     }
 
@@ -755,7 +755,7 @@ export class Parser {
 
     this.expect('=')
     const init = this.parseExpr()
-    this.expect(';')
+    this.match(';')
 
     return this.withLoc({ kind: 'let', name, type, init }, letToken)
   }
@@ -764,11 +764,11 @@ export class Parser {
     const returnToken = this.expect('return')
 
     let value: Expr | undefined
-    if (!this.check(';')) {
+    if (!this.check(';') && !this.check('}') && !this.check('eof')) {
       value = this.parseExpr()
     }
 
-    this.expect(';')
+    this.match(';')
     return this.withLoc({ kind: 'return', value }, returnToken)
   }
 
@@ -1153,7 +1153,7 @@ export class Parser {
 
   private parseExprStmt(): Stmt {
     const expr = this.parseExpr()
-    this.expect(';')
+    this.match(';')
     const exprToken = this.getLocToken(expr) ?? this.peek()
     return this.withLoc({ kind: 'expr', expr }, exprToken)
   }

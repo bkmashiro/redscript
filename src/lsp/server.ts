@@ -26,6 +26,15 @@ import {
   Location,
   Position,
   TextDocumentPositionParams,
+  SignatureHelp,
+  SignatureInformation,
+  ParameterInformation,
+  SignatureHelpParams,
+  ReferenceParams,
+  RenameParams,
+  WorkspaceEdit,
+  InlayHint,
+  InlayHintKind,
 } from 'vscode-languageserver/node'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 
@@ -267,6 +276,12 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => {
         triggerCharacters: ['.', '@'],
         resolveProvider: false,
       },
+      signatureHelpProvider: {
+        triggerCharacters: ['(', ','],
+      },
+      referencesProvider: true,
+      renameProvider: true,
+      inlayHintProvider: true,
     },
     serverInfo: {
       name: 'redscript-lsp',
@@ -459,6 +474,208 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
   }
 
   return items
+})
+
+// ---------------------------------------------------------------------------
+// Helpers for word-at-position (used by references and rename)
+// ---------------------------------------------------------------------------
+
+function getWordRangeAtPosition(
+  doc: import('vscode-languageserver-textdocument').TextDocument,
+  position: Position,
+): { start: Position; end: Position } | null {
+  const text = doc.getText()
+  const offset = doc.offsetAt(position)
+  let start = offset
+  let end = offset
+  while (start > 0 && /[a-zA-Z0-9_]/.test(text[start - 1])) start--
+  while (end < text.length && /[a-zA-Z0-9_]/.test(text[end])) end++
+  if (start === end) return null
+  return { start: doc.positionAt(start), end: doc.positionAt(end) }
+}
+
+// ---------------------------------------------------------------------------
+// Signature Help
+// ---------------------------------------------------------------------------
+
+connection.onSignatureHelp((params: SignatureHelpParams): SignatureHelp | null => {
+  const doc = documents.get(params.textDocument.uri)
+  if (!doc) return null
+
+  const parsed = parsedDocs.get(params.textDocument.uri)
+  if (!parsed?.program) return null
+
+  const text = doc.getText()
+  const offset = doc.offsetAt(params.position)
+
+  // Walk backwards to find the opening '(' and count active parameter
+  let depth = 0
+  let i = offset - 1
+  let activeParam = 0
+
+  while (i >= 0) {
+    const ch = text[i]
+    if (ch === ')') depth++
+    else if (ch === '(') {
+      if (depth === 0) break
+      depth--
+    } else if (ch === ',' && depth === 0) activeParam++
+    i--
+  }
+
+  if (i < 0) return null
+
+  // Extract function name before '('
+  let nameEnd = i - 1
+  while (nameEnd >= 0 && /\s/.test(text[nameEnd])) nameEnd--
+  let nameStart = nameEnd
+  while (nameStart > 0 && /[a-zA-Z0-9_]/.test(text[nameStart - 1])) nameStart--
+  const fnName = text.slice(nameStart, nameEnd + 1)
+
+  if (!fnName) return null
+
+  // Find function declaration in parsed program
+  const fn = parsed.program.declarations.find(s => s.name === fnName)
+
+  // Also check builtins (BUILTIN_METADATA is a Record<string, BuiltinDef>)
+  const builtin = BUILTIN_METADATA[fnName]
+
+  if (!fn && !builtin) return null
+
+  let label: string
+  let paramsList: string[]
+
+  if (fn) {
+    paramsList = fn.params.map(p => `${p.name}: ${typeToString(p.type)}`)
+    label = `fn ${fn.name}(${paramsList.join(', ')}): ${typeToString(fn.returnType)}`
+  } else {
+    paramsList = builtin.params?.map(p => `${p.name}: ${p.type}`) ?? []
+    label = `${builtin.name}(${paramsList.join(', ')}): ${builtin.returns ?? 'void'}`
+  }
+
+  const paramInfos: ParameterInformation[] = paramsList.map(p => ({ label: p }))
+
+  return {
+    signatures: [
+      {
+        label,
+        parameters: paramInfos,
+        activeParameter: Math.min(activeParam, Math.max(0, paramInfos.length - 1)),
+      } as SignatureInformation,
+    ],
+    activeSignature: 0,
+    activeParameter: Math.min(activeParam, Math.max(0, paramInfos.length - 1)),
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Inlay Hints
+// ---------------------------------------------------------------------------
+
+connection.onRequest(
+  'textDocument/inlayHint',
+  (params: { textDocument: { uri: string }; range: unknown }): InlayHint[] => {
+    const parsed = parsedDocs.get(params.textDocument.uri)
+    if (!parsed?.program) return []
+    const doc = documents.get(params.textDocument.uri)
+    if (!doc) return []
+
+    const hints: InlayHint[] = []
+
+    // Walk all let declarations with no explicit type annotation
+    // (where the type was inferred by the type checker)
+    function walkStmt(stmt: Record<string, unknown>): void {
+      if (
+        stmt['kind'] === 'let_decl' &&
+        !stmt['typeAnnotation'] &&
+        stmt['inferredType']
+      ) {
+        const spanVal = stmt['span'] as { end?: number } | undefined
+        const pos = doc!.positionAt(spanVal?.end ?? 0)
+        hints.push({
+          position: { line: pos.line, character: pos.character },
+          label: `: ${typeToString(stmt['inferredType'] as import('../ast/types').TypeNode)}`,
+          kind: InlayHintKind.Type,
+          paddingLeft: true,
+        })
+      }
+      // Recurse into blocks, if/else bodies, etc.
+      const body = stmt['body'] as Record<string, unknown>[] | undefined
+      if (Array.isArray(body)) body.forEach(walkStmt)
+      const then_ = stmt['then'] as Record<string, unknown>[] | undefined
+      if (Array.isArray(then_)) then_.forEach(walkStmt)
+      const else_ = stmt['else_'] as Record<string, unknown>[] | undefined
+      if (Array.isArray(else_)) else_.forEach(walkStmt)
+    }
+
+    parsed.program.declarations.forEach(top => {
+      if (top.body) {
+        (top.body as Record<string, unknown>[]).forEach(walkStmt)
+      }
+    })
+
+    return hints
+  },
+)
+
+// ---------------------------------------------------------------------------
+// Find References
+// ---------------------------------------------------------------------------
+
+connection.onReferences((params: ReferenceParams): Location[] => {
+  const doc = documents.get(params.textDocument.uri)
+  if (!doc) return []
+
+  const parsed = parsedDocs.get(params.textDocument.uri)
+  if (!parsed?.program) return []
+
+  const wordRange = getWordRangeAtPosition(doc, params.position)
+  if (!wordRange) return []
+  const word = doc.getText(wordRange)
+  if (!word) return []
+
+  const text = doc.getText()
+  const locations: Location[] = []
+  const regex = new RegExp(`\\b${word}\\b`, 'g')
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    const start = doc.positionAt(match.index)
+    const end = doc.positionAt(match.index + word.length)
+    locations.push({
+      uri: params.textDocument.uri,
+      range: { start, end },
+    })
+  }
+
+  return locations
+})
+
+// ---------------------------------------------------------------------------
+// Rename Symbol
+// ---------------------------------------------------------------------------
+
+connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
+  const doc = documents.get(params.textDocument.uri)
+  if (!doc) return null
+
+  const wordRange = getWordRangeAtPosition(doc, params.position)
+  if (!wordRange) return null
+  const word = doc.getText(wordRange)
+  if (!word) return null
+
+  const text = doc.getText()
+  const edits: import('vscode-languageserver/node').TextEdit[] = []
+  const regex = new RegExp(`\\b${word}\\b`, 'g')
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    const start = doc.positionAt(match.index)
+    const end = doc.positionAt(match.index + word.length)
+    edits.push({ range: { start, end }, newText: params.newName })
+  }
+
+  return { changes: { [params.textDocument.uri]: edits } }
 })
 
 // ---------------------------------------------------------------------------
