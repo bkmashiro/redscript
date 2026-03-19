@@ -619,12 +619,20 @@ export class TypeChecker {
       case 'binary': {
         this.checkExpr(expr.left)
         this.checkExpr(expr.right)
-        // Warn when float is used in arithmetic — float is a MC NBT system boundary type,
-        // not suitable for computation. Use fixed (×10000) instead.
         const arithmeticOps = ['+', '-', '*', '/', '%']
         if (arithmeticOps.includes(expr.op)) {
           const leftType = this.inferType(expr.left)
           const rightType = this.inferType(expr.right)
+          const leftIsString = leftType.kind === 'named' && (leftType.name === 'string' || leftType.name === 'format_string')
+          const rightIsString = rightType.kind === 'named' && (rightType.name === 'string' || rightType.name === 'format_string')
+          if (leftIsString || rightIsString) {
+            // String concatenation with + is not supported. Use f-strings instead.
+            this.report(
+              `[StringConcat] String concatenation with '+' is not supported. Use f-strings instead: f"text{variable}" — e.g. f"Score: {score}"`,
+              expr
+            )
+          }
+          // Warn when float is used in arithmetic — float is a MC NBT system boundary type
           const leftIsFloat = leftType.kind === 'named' && leftType.name === 'float'
           const rightIsFloat = rightType.kind === 'named' && rightType.name === 'float'
           if (leftIsFloat || rightIsFloat) {
@@ -704,7 +712,7 @@ export class TypeChecker {
           const isUnknown = partType.kind === 'named' && partType.name === 'void'
           if (
             !isUnknown &&
-            !(partType.kind === 'named' && (partType.name === 'int' || partType.name === 'string' || partType.name === 'format_string'))
+            !(partType.kind === 'named' && ['int', 'string', 'format_string', 'fixed', 'double', 'bool', 'byte', 'short', 'long'].includes(partType.name))
           ) {
             this.report(
               `f-string placeholder must be int or string, got ${this.typeToString(partType)}`,

@@ -1532,7 +1532,7 @@ function lowerExpr(
 
       // Handle builtin calls → raw MC commands
       if (BUILTIN_SET.has(expr.fn)) {
-        const cmd = formatBuiltinCall(expr.fn, expr.args, ctx.currentMacroParams)
+        const cmd = formatBuiltinCall(expr.fn, expr.args, ctx.currentMacroParams, ctx.getNamespace())
         ctx.emit({ kind: 'call', dst: null, fn: `__raw:${cmd}`, args: [] })
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'const', dst: t, value: 0 })
@@ -2145,11 +2145,47 @@ const MACRO_SENTINEL = '\x01'
  * If any argument uses a macro param, the command is prefixed with \x01
  * (converted to $ in LIR emission).
  */
+/**
+ * Convert an f_string HIRExpr to a Minecraft JSON text component string.
+ * Each interpolated variable becomes a {"score":{"name":"$var","objective":"__ns"}} component.
+ */
+function fStringToJsonText(expr: HIRExpr, namespace: string): string {
+  if (expr.kind !== 'f_string') return JSON.stringify(expr.kind === 'str_lit' ? { text: expr.value } : { text: '~' })
+  const objective = `__${namespace}`
+  const extra: unknown[] = []
+  for (const part of expr.parts) {
+    if (part.kind === 'text') {
+      if (part.value) extra.push({ text: part.value })
+    } else {
+      // expr part — must be a scoreboard variable (ident)
+      const inner = part.expr
+      if (inner.kind === 'ident') {
+        extra.push({ score: { name: `$${inner.name}`, objective } })
+      } else if (inner.kind === 'int_lit') {
+        extra.push({ text: String(inner.value) })
+      } else {
+        extra.push({ text: '?' })
+      }
+    }
+  }
+  if (extra.length === 0) return '{"text":""}'
+  if (extra.length === 1) return JSON.stringify(extra[0])
+  return JSON.stringify({ text: '', extra })
+}
+
 function formatBuiltinCall(
   fn: string,
   args: HIRExpr[],
   macroParams: Set<string>,
+  namespace = '',
 ): string {
+  // For text-display builtins, the message arg may be an f_string — convert to JSON text
+  const TEXT_BUILTINS = new Set(['tell', 'tellraw', 'title', 'subtitle', 'actionbar', 'announce'])
+  const resolveTextArg = (arg: HIRExpr): string => {
+    if (arg.kind === 'f_string') return fStringToJsonText(arg, namespace)
+    return JSON.stringify({ text: exprToCommandArg(arg, macroParams).str })
+  }
+
   const fmtArgs = args.map(a => exprToCommandArg(a, macroParams))
   const strs = fmtArgs.map(a => a.str)
   const hasMacro = fmtArgs.some(a => a.isMacro)
@@ -2200,12 +2236,32 @@ function formatBuiltinCall(
     }
     case 'say': cmd = `say ${strs[0] ?? ''}`; break
     case 'tell':
-    case 'tellraw': cmd = `tellraw ${strs[0]} {"text":"${strs[1]}"}`; break
-    case 'title': cmd = `title ${strs[0]} title {"text":"${strs[1]}"}`; break
-    case 'actionbar': cmd = `title ${strs[0]} actionbar {"text":"${strs[1]}"}`; break
-    case 'subtitle': cmd = `title ${strs[0]} subtitle {"text":"${strs[1]}"}`; break
+    case 'tellraw': {
+      const msgJson = resolveTextArg(args[1])
+      cmd = `tellraw ${strs[0]} ${msgJson}`
+      break
+    }
+    case 'title': {
+      const msgJson = resolveTextArg(args[1])
+      cmd = `title ${strs[0]} title ${msgJson}`
+      break
+    }
+    case 'actionbar': {
+      const msgJson = resolveTextArg(args[1])
+      cmd = `title ${strs[0]} actionbar ${msgJson}`
+      break
+    }
+    case 'subtitle': {
+      const msgJson = resolveTextArg(args[1])
+      cmd = `title ${strs[0]} subtitle ${msgJson}`
+      break
+    }
     case 'title_times': cmd = `title ${strs[0]} times ${strs[1]} ${strs[2]} ${strs[3]}`; break
-    case 'announce': cmd = `tellraw @a {"text":"${strs[0]}"}`; break
+    case 'announce': {
+      const msgJson = resolveTextArg(args[0])
+      cmd = `tellraw @a ${msgJson}`
+      break
+    }
     case 'give': {
       const nbt = strs[3] ? strs[3] : ''
       cmd = `give ${strs[0]} ${strs[1]}${nbt} ${strs[2] ?? '1'}`

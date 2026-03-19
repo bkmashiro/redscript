@@ -144,9 +144,11 @@ fn test() {
     })
 
     it('rejects unsupported f-string placeholder types', () => {
+      // entity type is not allowed in f-string
       const errors = typeCheck(`
 fn test() {
-    say(f"Flag: {true}");
+    let e: entity = @s
+    say(f"Flag: {e}");
 }
 `)
       expect(errors.length).toBeGreaterThan(0)
