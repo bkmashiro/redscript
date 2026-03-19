@@ -1,0 +1,274 @@
+// graph.mcrs — Fixed-capacity graph utilities for RedScript datapacks.
+//
+// Graph layout in int[]:
+//   g[0] = edge_count
+//   g[1] = node_count
+//   g[2 + i*3]     = src of edge i
+//   g[2 + i*3 + 1] = dst of edge i
+//   g[2 + i*3 + 2] = weight of edge i
+//
+// Capacity:
+//   - up to 64 nodes
+//   - up to 256 directed edges
+//   - total array size = 770
+//
+// Usage:
+//   let g: int[] = graph_new(5)
+//   g = graph_add_edge(g, 0, 1, 1)
+//   g = graph_add_edge(g, 0, 2, 4)
+//   g = graph_add_undirected(g, 2, 3, 2)
+//
+//   let vis: int[] = [0, 0, 0, 0, 0]
+//   let bfs_order: int[] = graph_bfs(g, 0, vis)
+//   let has_0_to_3: int = graph_has_path(g, 0, 3)
+//
+//   let dist: int[] = [0, 0, 0, 0, 0]
+//   let shortest: int = graph_shortest_path(g, 0, 3, dist)
+
+module library
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+fn graph_is_valid_node(g: int[], node: int): int {
+    if (node < 0) { return 0 }
+    if (node >= g[1]) { return 0 }
+    return 1
+}
+
+// ─── Construction ────────────────────────────────────────────────────────────
+
+fn graph_new(n: int): int[] {
+    if (n < 0) { n = 0 }
+    if (n > 64) { n = 64 }
+    let g: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    g[1] = n
+    return g
+}
+
+fn graph_add_edge(g: int[], src: int, dst: int, weight: int): int[] {
+    let e: int = g[0]
+    if (e >= 256) { return g }
+    if (graph_is_valid_node(g, src) == 0) { return g }
+    if (graph_is_valid_node(g, dst) == 0) { return g }
+    let base: int = 2 + e * 3
+    g[base] = src
+    g[base + 1] = dst
+    g[base + 2] = weight
+    g[0] = e + 1
+    return g
+}
+
+fn graph_add_undirected(g: int[], a: int, b: int, weight: int): int[] {
+    g = graph_add_edge(g, a, b, weight)
+    g = graph_add_edge(g, b, a, weight)
+    return g
+}
+
+// ─── Metadata ────────────────────────────────────────────────────────────────
+
+fn graph_node_count(g: int[]): int { return g[1] }
+
+fn graph_edge_count(g: int[]): int { return g[0] }
+
+// ─── Traversal ───────────────────────────────────────────────────────────────
+
+fn graph_bfs(g: int[], start: int, out_visited: int[]): int[] {
+    let order: int[] = []
+    if (graph_is_valid_node(g, start) == 0) { return order }
+
+    let visited: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let queue: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let head: int = 0
+    let tail: int = 0
+
+    visited[start] = 1
+    out_visited[start] = 1
+    queue[tail] = start
+    tail = tail + 1
+    order.push(start)
+
+    while (head < tail) {
+        let cur: int = queue[head]
+        head = head + 1
+
+        let e: int = 0
+        let edge_count: int = g[0]
+        while (e < edge_count) {
+            let base: int = 2 + e * 3
+            if (g[base] == cur) {
+                let next: int = g[base + 1]
+                if (visited[next] == 0) {
+                    visited[next] = 1
+                    out_visited[next] = 1
+                    queue[tail] = next
+                    tail = tail + 1
+                    order.push(next)
+                }
+            }
+            e = e + 1
+        }
+    }
+
+    return order
+}
+
+fn graph_dfs(g: int[], start: int, out_visited: int[]): int[] {
+    let order: int[] = []
+    if (graph_is_valid_node(g, start) == 0) { return order }
+
+    let visited: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let stack: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let top: int = 0
+
+    visited[start] = 1
+    out_visited[start] = 1
+    stack[top] = start
+    top = top + 1
+
+    while (top > 0) {
+        top = top - 1
+        let cur: int = stack[top]
+        order.push(cur)
+
+        let e: int = g[0] - 1
+        while (e >= 0) {
+            let base: int = 2 + e * 3
+            if (g[base] == cur) {
+                let next: int = g[base + 1]
+                if (visited[next] == 0) {
+                    visited[next] = 1
+                    out_visited[next] = 1
+                    stack[top] = next
+                    top = top + 1
+                }
+            }
+            e = e - 1
+        }
+    }
+
+    return order
+}
+
+fn graph_has_path(g: int[], src: int, dst: int): int {
+    if (graph_is_valid_node(g, src) == 0) { return 0 }
+    if (graph_is_valid_node(g, dst) == 0) { return 0 }
+
+    let visited: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let queue: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let head: int = 0
+    let tail: int = 0
+
+    visited[src] = 1
+    queue[tail] = src
+    tail = tail + 1
+
+    let found: int = 0
+    while (head < tail) {
+        let cur: int = queue[head]
+        head = head + 1
+
+        if (cur == dst) {
+            found = 1
+            head = tail
+        } else {
+            let e: int = 0
+            let edge_count: int = g[0]
+            while (e < edge_count) {
+                let base: int = 2 + e * 3
+                if (g[base] == cur) {
+                    let next: int = g[base + 1]
+                    if (visited[next] == 0) {
+                        visited[next] = 1
+                        queue[tail] = next
+                        tail = tail + 1
+                    }
+                }
+                e = e + 1
+            }
+        }
+    }
+
+    return found
+}
+
+// ─── Shortest paths ──────────────────────────────────────────────────────────
+
+fn graph_shortest_path(g: int[], src: int, dst: int, out_dist: int[]): int {
+    let n: int = g[1]
+    if (graph_is_valid_node(g, src) == 0) { return -1 }
+    if (graph_is_valid_node(g, dst) == 0) { return -1 }
+
+    let work: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let visited: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+    let i: int = 0
+    while (i < n) {
+        work[i] = 999999
+        visited[i] = 0
+        out_dist[i] = -1
+        i = i + 1
+    }
+
+    work[src] = 0
+
+    let iter: int = 0
+    let running: int = 1
+    while (running == 1) {
+        if (iter < n) {
+            let best_node: int = -1
+            let best_dist: int = 1000000
+
+            i = 0
+            while (i < n) {
+                if (visited[i] == 0) {
+                    if (work[i] < best_dist) {
+                        best_dist = work[i]
+                        best_node = i
+                    }
+                }
+                i = i + 1
+            }
+
+            if (best_node == -1) {
+                running = 0
+            } else {
+                if (best_dist >= 999999) {
+                    running = 0
+                } else {
+                    visited[best_node] = 1
+
+                    let e: int = 0
+                    let edge_count: int = g[0]
+                    while (e < edge_count) {
+                        let base: int = 2 + e * 3
+                        if (g[base] == best_node) {
+                            let next: int = g[base + 1]
+                            let weight: int = g[base + 2]
+                            let cand: int = work[best_node] + weight
+                            if (cand < work[next]) {
+                                work[next] = cand
+                            }
+                        }
+                        e = e + 1
+                    }
+
+                    iter = iter + 1
+                }
+            }
+        } else {
+            running = 0
+        }
+    }
+
+    i = 0
+    while (i < n) {
+        if (work[i] >= 999999) {
+            out_dist[i] = -1
+        } else {
+            out_dist[i] = work[i]
+        }
+        i = i + 1
+    }
+
+    return out_dist[dst]
+}

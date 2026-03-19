@@ -28,6 +28,10 @@ const VEC_SRC = fs.readFileSync(
   path.join(__dirname, '../../stdlib/vec.mcrs'),
   'utf-8',
 )
+const ODE_SRC = fs.readFileSync(
+  path.join(__dirname, '../../stdlib/ode.mcrs'),
+  'utf-8',
+)
 
 /** Compile source with math stdlib, load into MCRuntime, init objective */
 function makeRuntime(source: string, libs: string[] = [MATH_SRC]): MCRuntime {
@@ -2031,4 +2035,156 @@ describe('world.mcrs — sun_azimuth (extended)', () => {
 
   test('sun_azimuth(8000) == 1200000  (8000/24000 × 360° × 10000)', () =>
     expect(callAndGetRet(rt, 'test_azimuth_quarter_plus')).toBe(1200000))
+})
+
+// ---------------------------------------------------------------------------
+// graph.mcrs — runtime
+// ---------------------------------------------------------------------------
+
+describe('graph.mcrs — runtime', () => {
+  const GRAPH_SRC = fs.readFileSync(
+    path.join(__dirname, '../../stdlib/graph.mcrs'),
+    'utf-8',
+  )
+  const rt = makeRuntime(`
+    fn build_graph(): int[] {
+      let g: int[] = graph_new(5);
+      g = graph_add_edge(g, 0, 1, 1);
+      g = graph_add_edge(g, 0, 2, 4);
+      g = graph_add_edge(g, 1, 3, 2);
+      g = graph_add_edge(g, 2, 4, 3);
+      g = graph_add_edge(g, 1, 2, 2);
+      return g;
+    }
+
+    fn build_weighted_graph(): int[] {
+      let g: int[] = graph_new(5);
+      g = graph_add_edge(g, 0, 1, 1);
+      g = graph_add_edge(g, 0, 2, 4);
+      g = graph_add_edge(g, 1, 2, 2);
+      g = graph_add_edge(g, 1, 3, 5);
+      g = graph_add_edge(g, 2, 3, 1);
+      g = graph_add_edge(g, 3, 4, 3);
+      return g;
+    }
+
+    fn test_graph_counts(): int {
+      let g: int[] = graph_new(4);
+      g = graph_add_undirected(g, 0, 1, 7);
+      g = graph_add_edge(g, 1, 2, 3);
+      return graph_node_count(g) * 100 + graph_edge_count(g);
+    }
+
+    fn test_bfs_order(): int {
+      let g: int[] = build_graph();
+      let vis: int[] = [0, 0, 0, 0, 0];
+      let order: int[] = graph_bfs(g, 0, vis);
+      return order[0] * 10000 + order[1] * 1000 + order[2] * 100 + order[3] * 10 + order[4];
+    }
+
+    fn test_bfs_visited(): int {
+      let g: int[] = build_graph();
+      let vis: int[] = [0, 0, 0, 0, 0];
+      let order: int[] = graph_bfs(g, 0, vis);
+      return vis[0] * 10000 + vis[1] * 1000 + vis[2] * 100 + vis[3] * 10 + vis[4];
+    }
+
+    fn test_dfs_order(): int {
+      let g: int[] = build_graph();
+      let vis: int[] = [0, 0, 0, 0, 0];
+      let order: int[] = graph_dfs(g, 0, vis);
+      return order[0] * 10000 + order[1] * 1000 + order[2] * 100 + order[3] * 10 + order[4];
+    }
+
+    fn test_has_path_yes(): int {
+      let g: int[] = build_graph();
+      return graph_has_path(g, 0, 4);
+    }
+
+    fn test_has_path_no(): int {
+      let g: int[] = build_graph();
+      return graph_has_path(g, 4, 0);
+    }
+
+    fn test_shortest_path(): int {
+      let g: int[] = build_weighted_graph();
+      let dist: int[] = [0, 0, 0, 0, 0];
+      return graph_shortest_path(g, 0, 4, dist);
+    }
+
+    fn test_shortest_path_distances(): int {
+      let g: int[] = build_weighted_graph();
+      let dist: int[] = [0, 0, 0, 0, 0];
+      let best: int = graph_shortest_path(g, 0, 4, dist);
+      return best * 1000 + dist[2] * 100 + dist[3] * 10 + dist[4];
+    }
+
+    fn test_shortest_path_unreachable(): int {
+      let g: int[] = graph_new(3);
+      g = graph_add_edge(g, 0, 1, 2);
+      let dist: int[] = [0, 0, 0];
+      return graph_shortest_path(g, 1, 2, dist);
+    }
+  `, [GRAPH_SRC])
+
+  test('graph metadata reports node and edge counts', () =>
+    expect(callAndGetRet(rt, 'test_graph_counts')).toBe(403))
+
+  test('graph_bfs returns discovery order', () =>
+    expect(callAndGetRet(rt, 'test_bfs_order')).toBe(1234))
+
+  test('graph_bfs marks reachable nodes in out_visited', () =>
+    expect(callAndGetRet(rt, 'test_bfs_visited')).toBe(11111))
+
+  test('graph_dfs returns iterative DFS order', () =>
+    expect(callAndGetRet(rt, 'test_dfs_order')).toBe(1324))
+
+  test('graph_has_path returns 1 when reachable', () =>
+    expect(callAndGetRet(rt, 'test_has_path_yes')).toBe(1))
+
+  test('graph_has_path returns 0 when unreachable', () =>
+    expect(callAndGetRet(rt, 'test_has_path_no')).toBe(0))
+
+  test('graph_shortest_path returns weighted shortest distance', () =>
+    expect(callAndGetRet(rt, 'test_shortest_path')).toBe(7))
+
+  test('graph_shortest_path fills out_dist for reachable nodes', () =>
+    expect(callAndGetRet(rt, 'test_shortest_path_distances')).toBe(7347))
+
+  test('graph_shortest_path returns -1 when dst is unreachable', () =>
+    expect(callAndGetRet(rt, 'test_shortest_path_unreachable')).toBe(-1))
+})
+
+describe('ode.mcrs — runtime', () => {
+  const rt = makeRuntime(`
+    fn test_decay_y(): int {
+      ode_run(1, 0, 10000, 1000, 10, 10000);
+      return ode_get_y();
+    }
+
+    fn test_growth_y(): int {
+      ode_run(2, 0, 10000, 1000, 5, 10000);
+      return ode_get_y();
+    }
+
+    fn test_final_t(): int {
+      ode_run(1, 2500, 10000, 1000, 10, 10000);
+      return ode_get_t();
+    }
+  `, [MATH_SRC, ODE_SRC])
+
+  test('ode_run decay stays near e^-1', () => {
+    const val = callAndGetRet(rt, 'test_decay_y')
+    expect(val).toBeGreaterThanOrEqual(3629)
+    expect(val).toBeLessThanOrEqual(3729)
+  })
+
+  test('ode_run growth stays near e^0.5', () => {
+    const val = callAndGetRet(rt, 'test_growth_y')
+    expect(val).toBeGreaterThanOrEqual(16287)
+    expect(val).toBeLessThanOrEqual(16687)
+  })
+
+  test('ode_get_t returns t0 + steps*h', () =>
+    expect(callAndGetRet(rt, 'test_final_t')).toBe(12500))
 })

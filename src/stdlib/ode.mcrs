@@ -1,0 +1,168 @@
+// ode.mcrs — Runge-Kutta 4th order ODE helpers for RedScript datapacks.
+//
+// Fixed-point convention in this module: scale = 10000.
+//   1.0  -> 10000
+//   0.1  -> 1000
+//
+// Usage example (exponential decay):
+//   // dy/dt = -k*y, with k = 1.0, y0 = 1.0, h = 0.1, 10 steps
+//   ode_run(ODE_SYSTEM_DECAY, 0, 10000, 1000, 10, 10000)
+//   let y1: int = ode_get_y()
+//   // Exact solution: y(t) = y0 * e^(-k*t)
+//   // At t = 1.0: y ≈ 3679 (= 0.3679 × 10000)
+//
+// State layout in storage-backed int[] (8 slots):
+//   [system_id, t_fx, y_fx, y2_fx, param_k, param_extra, step_count, reserved]
+//
+// Built-in systems:
+//   1 = exponential decay   (dy/dt = -k*y)
+//   2 = exponential growth  (dy/dt =  k*y)
+//   3 = harmonic oscillator (y' = y2, y2' = -k*y - extra*y2)
+
+module library
+
+fn ode_mul_fx(a_fx: int, b_fx: int): int {
+    return a_fx * b_fx / 10000
+}
+
+fn ode_weighted_increment(h_fx: int, deriv_sum_fx: int): int {
+    return h_fx * deriv_sum_fx / 60000
+}
+
+fn _ode_set_slot0(v: int) { raw("execute store result storage rs:ode state[0] int 1 run scoreboard players get $p0 __OBJ__") }
+fn _ode_set_slot1(v: int) { raw("execute store result storage rs:ode state[1] int 1 run scoreboard players get $p0 __OBJ__") }
+fn _ode_set_slot2(v: int) { raw("execute store result storage rs:ode state[2] int 1 run scoreboard players get $p0 __OBJ__") }
+fn _ode_set_slot3(v: int) { raw("execute store result storage rs:ode state[3] int 1 run scoreboard players get $p0 __OBJ__") }
+fn _ode_set_slot4(v: int) { raw("execute store result storage rs:ode state[4] int 1 run scoreboard players get $p0 __OBJ__") }
+fn _ode_set_slot5(v: int) { raw("execute store result storage rs:ode state[5] int 1 run scoreboard players get $p0 __OBJ__") }
+fn _ode_set_slot6(v: int) { raw("execute store result storage rs:ode state[6] int 1 run scoreboard players get $p0 __OBJ__") }
+fn _ode_set_slot7(v: int) { raw("execute store result storage rs:ode state[7] int 1 run scoreboard players get $p0 __OBJ__") }
+
+fn _ode_get_slot0(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[0]"); raw("return 1"); return 0 }
+fn _ode_get_slot1(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[1]"); raw("return 1"); return 0 }
+fn _ode_get_slot2(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[2]"); raw("return 1"); return 0 }
+fn _ode_get_slot3(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[3]"); raw("return 1"); return 0 }
+fn _ode_get_slot4(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[4]"); raw("return 1"); return 0 }
+fn _ode_get_slot5(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[5]"); raw("return 1"); return 0 }
+fn _ode_get_slot6(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[6]"); raw("return 1"); return 0 }
+fn _ode_get_slot7(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[7]"); raw("return 1"); return 0 }
+
+fn ode_reset(system_id: int, t_fx: int, y_fx: int, y2_fx: int, k_fx: int, extra_fx: int) {
+    raw("data modify storage rs:ode state set value [0,0,0,0,0,0,0,0]")
+    _ode_set_slot0(system_id)
+    _ode_set_slot1(t_fx)
+    _ode_set_slot2(y_fx)
+    _ode_set_slot3(y2_fx)
+    _ode_set_slot4(k_fx)
+    _ode_set_slot5(extra_fx)
+    _ode_set_slot6(0)
+    _ode_set_slot7(0)
+}
+
+fn ode_get_system(): int { return _ode_get_slot0() }
+fn ode_get_t(): int { return _ode_get_slot1() }
+fn ode_get_y(): int { return _ode_get_slot2() }
+fn ode_get_y2(): int { return _ode_get_slot3() }
+fn ode_get_k(): int { return _ode_get_slot4() }
+fn ode_get_extra(): int { return _ode_get_slot5() }
+fn ode_get_steps(): int { return _ode_get_slot6() }
+
+// Scalar-system dispatcher helper matching the callback-free pattern.
+// Uses the module state parameter k from slot 4.
+fn ode_k1(system_id: int, t_fx: int, y_fx: int): int {
+    let k_fx: int = ode_get_k()
+    if (system_id == 1) {
+        return 0 - ode_mul_fx(k_fx, y_fx)
+    }
+    if (system_id == 2) {
+        return ode_mul_fx(k_fx, y_fx)
+    }
+    return 0
+}
+
+fn ode_eval_y(system_id: int, t_fx: int, y_fx: int, y2_fx: int, k_fx: int, extra_fx: int): int {
+    if (system_id == 1) {
+        return 0 - ode_mul_fx(k_fx, y_fx)
+    }
+    if (system_id == 2) {
+        return ode_mul_fx(k_fx, y_fx)
+    }
+    if (system_id == 3) {
+        return y2_fx
+    }
+    return 0
+}
+
+fn ode_eval_y2(system_id: int, t_fx: int, y_fx: int, y2_fx: int, k_fx: int, extra_fx: int): int {
+    if (system_id == 3) {
+        return 0 - ode_mul_fx(k_fx, y_fx) - ode_mul_fx(extra_fx, y2_fx)
+    }
+    return 0
+}
+
+fn ode_step(h_fx: int) {
+    let system_id: int = ode_get_system()
+    let t_fx: int = ode_get_t()
+    let y_fx: int = ode_get_y()
+    let y2_fx: int = ode_get_y2()
+    let k_fx: int = ode_get_k()
+    let extra_fx: int = ode_get_extra()
+    let step_count: int = ode_get_steps()
+
+    let half_h_fx: int = h_fx / 2
+
+    if (system_id == 3) {
+        let k1_y: int = ode_eval_y(system_id, t_fx, y_fx, y2_fx, k_fx, extra_fx)
+        let k1_y2: int = ode_eval_y2(system_id, t_fx, y_fx, y2_fx, k_fx, extra_fx)
+
+        let t2_fx: int = t_fx + half_h_fx
+        let y_k2_fx: int = y_fx + half_h_fx * k1_y / 10000
+        let y2_k2_fx: int = y2_fx + half_h_fx * k1_y2 / 10000
+        let k2_y: int = ode_eval_y(system_id, t2_fx, y_k2_fx, y2_k2_fx, k_fx, extra_fx)
+        let k2_y2: int = ode_eval_y2(system_id, t2_fx, y_k2_fx, y2_k2_fx, k_fx, extra_fx)
+
+        let y_k3_fx: int = y_fx + half_h_fx * k2_y / 10000
+        let y2_k3_fx: int = y2_fx + half_h_fx * k2_y2 / 10000
+        let k3_y: int = ode_eval_y(system_id, t2_fx, y_k3_fx, y2_k3_fx, k_fx, extra_fx)
+        let k3_y2: int = ode_eval_y2(system_id, t2_fx, y_k3_fx, y2_k3_fx, k_fx, extra_fx)
+
+        let t4_fx: int = t_fx + h_fx
+        let y_k4_fx: int = y_fx + h_fx * k3_y / 10000
+        let y2_k4_fx: int = y2_fx + h_fx * k3_y2 / 10000
+        let k4_y: int = ode_eval_y(system_id, t4_fx, y_k4_fx, y2_k4_fx, k_fx, extra_fx)
+        let k4_y2: int = ode_eval_y2(system_id, t4_fx, y_k4_fx, y2_k4_fx, k_fx, extra_fx)
+
+        _ode_set_slot1(t_fx + h_fx)
+        _ode_set_slot2(y_fx + ode_weighted_increment(h_fx, k1_y + 2 * k2_y + 2 * k3_y + k4_y))
+        _ode_set_slot3(y2_fx + ode_weighted_increment(h_fx, k1_y2 + 2 * k2_y2 + 2 * k3_y2 + k4_y2))
+        _ode_set_slot6(step_count + 1)
+        return
+    }
+
+    let k1: int = ode_eval_y(system_id, t_fx, y_fx, y2_fx, k_fx, extra_fx)
+    let k2: int = ode_eval_y(system_id, t_fx + half_h_fx, y_fx + half_h_fx * k1 / 10000, y2_fx, k_fx, extra_fx)
+    let k3: int = ode_eval_y(system_id, t_fx + half_h_fx, y_fx + half_h_fx * k2 / 10000, y2_fx, k_fx, extra_fx)
+    let k4: int = ode_eval_y(system_id, t_fx + h_fx, y_fx + h_fx * k3 / 10000, y2_fx, k_fx, extra_fx)
+
+    _ode_set_slot1(t_fx + h_fx)
+    _ode_set_slot2(y_fx + ode_weighted_increment(h_fx, k1 + 2 * k2 + 2 * k3 + k4))
+    _ode_set_slot6(step_count + 1)
+}
+
+fn ode_run(system_id: int, t0_fx: int, y0_fx: int, h_fx: int, steps: int, k_fx: int) {
+    ode_reset(system_id, t0_fx, y0_fx, 0, k_fx, 0)
+    let i: int = 0
+    while (i < steps) {
+        ode_step(h_fx)
+        i = i + 1
+    }
+}
+
+fn ode_run2(system_id: int, t0_fx: int, y0_fx: int, y20_fx: int, h_fx: int, steps: int, k_fx: int, extra_fx: int) {
+    ode_reset(system_id, t0_fx, y0_fx, y20_fx, k_fx, extra_fx)
+    let i: int = 0
+    while (i < steps) {
+        ode_step(h_fx)
+        i = i + 1
+    }
+}
