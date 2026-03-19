@@ -65,35 +65,35 @@ Last updated: 2026-03-19
 Priority order (dependencies first):
 
 ### ① Parser: add `span.endLine` to fn declarations
-- **Status**: todo
+- **Status**: ✅ done (commit `eded998`)
 - **Why**: LSP currently uses "next fn start - 1" as implicit endLine. This works but is fragile.
   Proper fix: parser emits `endLine` when it sees the closing `}`.
 - **Impact**: hover/F12/completion scope all improve
 
 ### ② Compiler: `string + var` type error
-- **Status**: todo  
+- **Status**: ✅ done (commit `8ce5955`)
 - **Why**: `"text" + 5` silently compiles to broken `tellraw @a {"text":"~"}`. 
   Should be a compile error directing user to f-strings.
 - **Change**: in HIR binary op lowering, if either operand is string type, throw DiagnosticError.
 
 ### ③ f-string in tell/subtitle/actionbar/title
-- **Status**: partially broken (outputs `"~"`)
+- **Status**: ✅ done (commit `8ce5955`)
 - **Why**: f-string emit for builtins doesn't interpolate scoreboard values into JSON text component.
   Need to emit `{"score":{"name":"$var","objective":"..."}}` or `{"text":"","extra":[...]}` form.
 - **Impact**: `tell(@a, f"Score: {score}")` actually works
 
 ### ④ LSP: Inlay hints
-- **Status**: todo
+- **Status**: ✅ done (commit `80fe229`)
 - **Why**: `let x = some_fn()` — type shown next to variable name
 - **Needs**: type inference info from TypeChecker or from collectLocals result
 
 ### ⑤ stdlib: mat3_mul / mat4_mul
-- **Status**: todo
+- **Status**: ✅ done (commit `c44e581`)
 - **Where**: `src/stdlib/matrix.mcrs`
 - **Notes**: pure fixed-point arithmetic, no new compiler features needed
 
 ### ⑥ stdlib: bigint ÷ bigint
-- **Status**: todo
+- **Status**: ✅ done (commit `c44e581`)
 - **Where**: `src/stdlib/bigint.mcrs`  
 - **Notes**: algorithm: long division on int[] representation
 
@@ -107,15 +107,15 @@ Priority order (dependencies first):
 - [x] **`for i in 0..n` syntax sugar** — implemented
 - [x] **Array literal type inference** — `let a = [1, 2, 3]` → `int[]` without annotation (already worked)
 - [x] **Struct methods** — `impl Vec3 { fn dot(self, other) }` with field-by-field expansion
-- [ ] **`string + var` type error** — should error, not silently emit broken JSON ← TODAY ②
-- [ ] **f-string tell/subtitle/actionbar** — proper JSON text component emit ← TODAY ③
-- [ ] **Inlay hints** — show inferred types next to `let` ← TODAY ④
-- [ ] **Parser: fn endLine in span** — accurate scope for LSP ← TODAY ①
+- [x] **`string + var` type error** — errors with clear f-string hint ✅
+- [x] **f-string tell/subtitle/actionbar** — proper JSON text component emit ✅
+- [x] **Inlay hints** — shows inferred type next to unannotated `let` ✅
+- [x] **Parser: fn endLine in span** — accurate scope for LSP ✅
 - [ ] **exp_fx / sin_fixed SA Tuner adapters** — further error reduction
 
 #### stdlib  
-- [ ] **bigint ÷ bigint** — full arbitrary-precision division ← TODAY ⑥
-- [ ] **mat3_mul / mat4_mul** — general matrix multiply in matrix.mcrs ← TODAY ⑤
+- [x] **bigint ÷ bigint** — full arbitrary-precision long division ✅
+- [x] **mat3_mul / mat4_mul** — 3×3 and 4×4 matrix multiply (fixed ×10000) ✅
 
 ---
 
