@@ -395,12 +395,15 @@ export class Parser {
     }
 
     const body = this.parseBlock()
+    // Record the closing '}' line as endLine for accurate LSP scope detection
+    const closingBraceLine = this.tokens[this.pos - 1]?.line
 
     const fn: import('../ast/types').FnDecl = this.withLoc(
       { name, typeParams, params, returnType, decorators: filteredDecorators, body,
         isLibraryFn: this.inLibraryMode || undefined, isExported },
       fnToken,
     )
+    if (fn.span && closingBraceLine) fn.span.endLine = closingBraceLine
     return fn
   }
 
