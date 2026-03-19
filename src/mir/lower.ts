@@ -587,14 +587,15 @@ function lowerStmt(
           const vals = elems.map(e => (e as { kind: 'int_lit'; value: number }).value).join(', ')
           ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${vals}]`, args: [] })
         } else {
-          // Initialize with zeros, then overwrite dynamic elements
-          const zeros = elems.map(() => '0').join(', ')
-          ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${zeros}]`, args: [] })
+          // Initialize with known int_lit values (0 for dynamic slots), then overwrite dynamic elements.
+          // Using actual int_lit values avoids a bug where non-zero literals (e.g. 10000) would be
+          // left as 0 because the nbt_write for pure int_lits was skipped.
+          const initVals = elems.map(e => (e.kind === 'int_lit' ? String(e.value) : '0')).join(', ')
+          ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${initVals}]`, args: [] })
           for (let i = 0; i < elems.length; i++) {
+            if (elems[i].kind === 'int_lit') continue  // already in the init array
             const elemOp = lowerExpr(elems[i], ctx, scope)
-            if (elemOp.kind !== 'const' || (elems[i].kind !== 'int_lit')) {
-              ctx.emit({ kind: 'nbt_write', ns, path: `${pathPrefix}[${i}]`, type: 'int', scale: 1, src: elemOp })
-            }
+            ctx.emit({ kind: 'nbt_write', ns, path: `${pathPrefix}[${i}]`, type: 'int', scale: 1, src: elemOp })
           }
         }
         // Store array length as a temp in scope (for .len access)
@@ -1335,6 +1336,36 @@ function lowerExpr(
         ctx.emit({ kind: 'score_write', player, obj, src })
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+
+      // Handle storage_set_array(storagePath, fieldName, nbtArrayLiteral)
+      // Writes a literal NBT int array to data storage (used in @load for tables).
+      // Emits: data modify storage <storagePath> <fieldName> set value <nbtArray>
+      if (expr.fn === 'storage_set_array' && expr.args.length >= 3) {
+        const storagePath = hirExprToStringLiteral(expr.args[0])
+        const fieldName = hirExprToStringLiteral(expr.args[1])
+        const nbtLiteral = hirExprToStringLiteral(expr.args[2])
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${storagePath} ${fieldName} set value ${nbtLiteral}`, args: [] })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+
+      // Handle storage_get_int(storagePath, fieldName, index) → int
+      // Reads one element from an NBT int-array stored in data storage.
+      // Const index: execute store result score $dst run data get storage <ns> <field>[N] 1
+      // Runtime index: nbt_read_dynamic via macro sub-function
+      if (expr.fn === 'storage_get_int' && expr.args.length >= 3) {
+        const storagePath = hirExprToStringLiteral(expr.args[0])
+        const fieldName = hirExprToStringLiteral(expr.args[1])
+        const indexOp = lowerExpr(expr.args[2], ctx, scope)
+        const t = ctx.freshTemp()
+        if (indexOp.kind === 'const') {
+          ctx.emit({ kind: 'nbt_read', dst: t, ns: storagePath, path: `${fieldName}[${indexOp.value}]`, scale: 1 })
+        } else {
+          ctx.emit({ kind: 'nbt_read_dynamic', dst: t, ns: storagePath, pathPrefix: fieldName, indexSrc: indexOp })
+        }
         return { kind: 'temp', name: t }
       }
 

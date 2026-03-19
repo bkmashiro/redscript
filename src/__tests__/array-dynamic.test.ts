@@ -145,3 +145,45 @@ describe('Dynamic array index: multiple arrays, separate helpers', () => {
     expect(contents).toContain('b[$(arr_idx)]')
   })
 })
+
+describe('Array literal with mixed int/non-const elements initializes correctly', () => {
+  test('non-zero int_lit at index 0 is not zeroed out when array has dynamic elements', () => {
+    const src = `
+      fn test(): void {
+        let a: int[] = [10000, 0, -10000, 0];
+      }
+    `
+    const { files } = compile(src, { namespace: 'test' })
+    const body = getFunctionBody(files, 'test')
+    // The NBT init array should start with 10000, not 0
+    expect(body).toContain('set value [10000,')
+    // The dynamic element (-10000 = unary neg) should be patched
+    expect(body).toContain('a[2]')
+  })
+})
+
+describe('interprocedural const prop substitutes nbt_read_dynamic indexSrc', () => {
+  test('dft_magnitude with constant k reads re[k] and im[k] correctly', () => {
+    const { MCRuntime } = require('../runtime')
+    const MATH = require('fs').readFileSync('./src/stdlib/math.mcrs', 'utf8')
+    const FFT = require('fs').readFileSync('./src/stdlib/fft.mcrs', 'utf8')
+    const src = `
+      fn test_mag(): int {
+        let re: int[] = [0, 20000, 0, 0];
+        let im: int[] = [0, 0, 0, 0];
+        return dft_magnitude(re, im, 1);
+      }
+    `
+    const r = compile(src, { namespace: 'test', librarySources: [MATH, FFT] })
+    const rt = new MCRuntime('test')
+    for (const f of r.files) {
+      if (!f.path.endsWith('.mcfunction')) continue
+      const m = f.path.match(/data\/([^/]+)\/function\/(.+)\.mcfunction/)
+      if (!m) continue
+      rt.loadFunction(m[1] + ':' + m[2], f.content.split('\n'))
+    }
+    rt.execFunction('test:load')
+    rt.execFunction('test:test_mag')
+    expect(rt.getScore('$ret', '__test')).toBe(20000)
+  })
+})

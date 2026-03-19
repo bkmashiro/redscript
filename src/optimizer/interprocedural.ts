@@ -134,6 +134,10 @@ function substituteInstr(instr: MIRInstr, sub: Map<Temp, Operand>): MIRInstr {
       return { ...instr, a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) }
     case 'nbt_write':
       return { ...instr, src: substituteOp(instr.src, sub) }
+    case 'nbt_read_dynamic':
+      return { ...instr, indexSrc: substituteOp(instr.indexSrc, sub) }
+    case 'nbt_write_dynamic':
+      return { ...instr, indexSrc: substituteOp(instr.indexSrc, sub), valueSrc: substituteOp(instr.valueSrc, sub) }
     case 'call':
       return { ...instr, args: instr.args.map(a => substituteOp(a, sub)) }
     case 'call_macro':
