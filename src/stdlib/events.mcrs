@@ -1,0 +1,29 @@
+module events
+// RedScript event dispatcher — detects MC events and dispatches to function tags.
+// Handlers register via @on(EventType) decorator (compiler-generated tag JSON).
+
+@load fn __events_load() {
+    raw("scoreboard objectives add rs.deaths deathCount")
+    raw("scoreboard objectives add rs.kills totalKillCount")
+    raw("scoreboard objectives add rs.item_use minecraft.used:minecraft.carrot_on_a_stick")
+}
+
+@tick fn __events_tick() {
+    // PlayerJoin: players without rs.joined tag
+    raw("execute as @a[tag=!rs.joined] run function #rs:on_player_join")
+    raw("tag @a[tag=!rs.joined] add rs.joined")
+
+    // PlayerDeath
+    raw("execute as @a[scores={rs.deaths=1..}] run function #rs:on_player_death")
+    raw("scoreboard players set @a rs.deaths 0")
+
+    // EntityKill
+    raw("execute as @a[scores={rs.kills=1..}] run function #rs:on_entity_kill")
+    raw("scoreboard players set @a rs.kills 0")
+
+    // ItemUse (carrot_on_a_stick by default)
+    raw("execute as @a[scores={rs.item_use=1..}] run function #rs:on_item_use")
+    raw("scoreboard players set @a rs.item_use 0")
+
+    // BlockBreak requires advancement JSON (not yet implemented)
+}

@@ -23,6 +23,8 @@ export interface EmitOptions {
   generateSourceMap?: boolean
   /** Target Minecraft version; controls which MC features are used in codegen */
   mcVersion?: McVersion
+  /** Map of EventTypeName → list of fully-qualified function references for @on handlers */
+  eventHandlers?: Map<string, string[]>
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +97,27 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
       path: 'data/minecraft/tags/function/tick.json',
       content: JSON.stringify({ values: tickValues }, null, 2) + '\n',
     })
+  }
+
+  // Event handler tag files: data/rs/tags/function/on_<event>.json
+  const EVENT_TAG_NAMES: Record<string, string> = {
+    PlayerJoin: 'on_player_join',
+    PlayerDeath: 'on_player_death',
+    EntityKill: 'on_entity_kill',
+    ItemUse: 'on_item_use',
+    BlockBreak: 'on_block_break',
+  }
+
+  if (options.eventHandlers) {
+    for (const [evType, handlers] of options.eventHandlers) {
+      const tagName = EVENT_TAG_NAMES[evType]
+      if (tagName && handlers.length > 0) {
+        files.push({
+          path: `data/rs/tags/function/${tagName}.json`,
+          content: JSON.stringify({ values: handlers }, null, 2) + '\n',
+        })
+      }
+    }
   }
 
   return files
