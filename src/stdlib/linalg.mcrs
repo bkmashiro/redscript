@@ -1,0 +1,242 @@
+// linalg.mcrs — Double-precision linear algebra for RedScript.
+//
+// Provides 2D/3D vector operations, 2×2 matrix arithmetic, and
+// 2×2 linear system solving, all in IEEE 754 double precision.
+//
+// DEPENDENCIES:
+//   import "stdlib/math_hp"   (for double_sqrt, double_add, double_sub,
+//                               double_mul, double_div)
+//
+// USAGE EXAMPLE:
+//   import "stdlib/linalg"
+//   import "stdlib/math_hp"
+//
+//   // Normalize a 3D direction vector
+//   fn aim_dir(dx: double, dy: double, dz: double) {
+//       let nx: double = vec3d_normalize_x(dx, dy, dz);
+//       let ny: double = vec3d_normalize_y(dx, dy, dz);
+//       let nz: double = vec3d_normalize_z(dx, dy, dz);
+//   }
+//
+//   // Solve Ax = b for rotation matrix inverse
+//   //   [cos θ  -sin θ] [x]   [bx]
+//   //   [sin θ   cos θ] [y] = [by]
+//   fn rotate_inv(c: double, s: double, bx: double, by: double) {
+//       let ns: double = double_sub(0.0d, s);
+//       let x: double = solve2d_x(c, ns, s, c, bx, by);
+//       let y: double = solve2d_y(c, ns, s, c, bx, by);
+//   }
+
+module library;
+
+// ─── 2D Vector ────────────────────────────────────────────────────────────────
+
+// vec2d_dot(ax, ay, bx, by): dot product of 2D vectors a and b.
+fn vec2d_dot(ax: double, ay: double, bx: double, by: double): double {
+    let t0: double = ax * bx;
+    let t1: double = ay * by;
+    return t0 + t1;
+}
+
+// vec2d_length(x, y): Euclidean length of 2D vector.
+fn vec2d_length(x: double, y: double): double {
+    let xx: double = x * x;
+    let yy: double = y * y;
+    let s: double = xx + yy;
+    return double_sqrt(s);
+}
+
+// vec2d_dist(ax, ay, bx, by): Euclidean distance between two 2D points.
+fn vec2d_dist(ax: double, ay: double, bx: double, by: double): double {
+    let dx: double = ax - bx;
+    let dy: double = ay - by;
+    return vec2d_length(dx, dy);
+}
+
+// vec2d_normalize_x(x, y): x component of the unit vector.
+//   Returns 0.0 if the vector has zero length.
+fn vec2d_normalize_x(x: double, y: double): double {
+    let len: double = vec2d_length(x, y);
+    let zero: double = 0.0d;
+    if len == zero {
+        return zero;
+    }
+    return x / len;
+}
+
+// vec2d_normalize_y(x, y): y component of the unit vector.
+//   Returns 0.0 if the vector has zero length.
+fn vec2d_normalize_y(x: double, y: double): double {
+    let len: double = vec2d_length(x, y);
+    let zero: double = 0.0d;
+    if len == zero {
+        return zero;
+    }
+    return y / len;
+}
+
+// ─── 3D Vector ────────────────────────────────────────────────────────────────
+
+// vec3d_dot(ax,ay,az, bx,by,bz): dot product of 3D vectors a and b.
+fn vec3d_dot(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
+    let t0: double = ax * bx;
+    let t1: double = ay * by;
+    let t2: double = az * bz;
+    let s: double = t0 + t1;
+    return s + t2;
+}
+
+// vec3d_length(x, y, z): Euclidean length of 3D vector.
+fn vec3d_length(x: double, y: double, z: double): double {
+    let xx: double = x * x;
+    let yy: double = y * y;
+    let zz: double = z * z;
+    let s: double = xx + yy;
+    let s2: double = s + zz;
+    return double_sqrt(s2);
+}
+
+// vec3d_dist(ax,ay,az, bx,by,bz): Euclidean distance between two 3D points.
+fn vec3d_dist(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
+    let dx: double = ax - bx;
+    let dy: double = ay - by;
+    let dz: double = az - bz;
+    return vec3d_length(dx, dy, dz);
+}
+
+// vec3d_cross_x: x component of cross product a × b.
+fn vec3d_cross_x(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
+    let t0: double = ay * bz;
+    let t1: double = az * by;
+    return t0 - t1;
+}
+
+// vec3d_cross_y: y component of cross product a × b.
+fn vec3d_cross_y(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
+    let t0: double = az * bx;
+    let t1: double = ax * bz;
+    return t0 - t1;
+}
+
+// vec3d_cross_z: z component of cross product a × b.
+fn vec3d_cross_z(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
+    let t0: double = ax * by;
+    let t1: double = ay * bx;
+    return t0 - t1;
+}
+
+// vec3d_normalize_x(x, y, z): x component of the unit vector.
+//   Returns 0.0 if the vector has zero length.
+fn vec3d_normalize_x(x: double, y: double, z: double): double {
+    let len: double = vec3d_length(x, y, z);
+    let zero: double = 0.0d;
+    if len == zero {
+        return zero;
+    }
+    return x / len;
+}
+
+// vec3d_normalize_y(x, y, z): y component of the unit vector.
+//   Returns 0.0 if the vector has zero length.
+fn vec3d_normalize_y(x: double, y: double, z: double): double {
+    let len: double = vec3d_length(x, y, z);
+    let zero: double = 0.0d;
+    if len == zero {
+        return zero;
+    }
+    return y / len;
+}
+
+// vec3d_normalize_z(x, y, z): z component of the unit vector.
+//   Returns 0.0 if the vector has zero length.
+fn vec3d_normalize_z(x: double, y: double, z: double): double {
+    let len: double = vec3d_length(x, y, z);
+    let zero: double = 0.0d;
+    if len == zero {
+        return zero;
+    }
+    return z / len;
+}
+
+// ─── 2×2 Matrix ───────────────────────────────────────────────────────────────
+//
+// Row-major layout:
+//   [ a  b ]   a = m[0,0]  b = m[0,1]
+//   [ c  d ]   c = m[1,0]  d = m[1,1]
+
+// mat2d_det(a,b,c,d): determinant of a 2×2 matrix.
+fn mat2d_det(a: double, b: double, c: double, d: double): double {
+    let t0: double = a * d;
+    let t1: double = b * c;
+    return t0 - t1;
+}
+
+// mat2d_mul_r0c0: element [0,0] of matrix product M0 × M1.
+fn mat2d_mul_r0c0(a0: double, b0: double, c0: double, d0: double, a1: double, b1: double, c1: double, d1: double): double {
+    let t0: double = a0 * a1;
+    let t1: double = b0 * c1;
+    return t0 + t1;
+}
+
+// mat2d_mul_r0c1: element [0,1] of matrix product M0 × M1.
+fn mat2d_mul_r0c1(a0: double, b0: double, c0: double, d0: double, a1: double, b1: double, c1: double, d1: double): double {
+    let t0: double = a0 * b1;
+    let t1: double = b0 * d1;
+    return t0 + t1;
+}
+
+// mat2d_mul_r1c0: element [1,0] of matrix product M0 × M1.
+fn mat2d_mul_r1c0(a0: double, b0: double, c0: double, d0: double, a1: double, b1: double, c1: double, d1: double): double {
+    let t0: double = c0 * a1;
+    let t1: double = d0 * c1;
+    return t0 + t1;
+}
+
+// mat2d_mul_r1c1: element [1,1] of matrix product M0 × M1.
+fn mat2d_mul_r1c1(a0: double, b0: double, c0: double, d0: double, a1: double, b1: double, c1: double, d1: double): double {
+    let t0: double = c0 * b1;
+    let t1: double = d0 * d1;
+    return t0 + t1;
+}
+
+// mat2d_vecmul_x(a,b,c,d, vx,vy): x component of matrix-vector product M × v.
+fn mat2d_vecmul_x(a: double, b: double, c: double, d: double, vx: double, vy: double): double {
+    let t0: double = a * vx;
+    let t1: double = b * vy;
+    return t0 + t1;
+}
+
+// mat2d_vecmul_y(a,b,c,d, vx,vy): y component of matrix-vector product M × v.
+fn mat2d_vecmul_y(a: double, b: double, c: double, d: double, vx: double, vy: double): double {
+    let t0: double = c * vx;
+    let t1: double = d * vy;
+    return t0 + t1;
+}
+
+// ─── Solve 2×2 Linear System (Cramer's rule) ──────────────────────────────────
+//
+// Solves  [ a  b ] [x]   [ex]
+//         [ c  d ] [y] = [ey]
+//
+// x = (ex*d - b*ey) / det
+// y = (a*ey - ex*c) / det
+//
+// NOTE: det must be non-zero; no guard is applied (caller's responsibility).
+
+// solve2d_x: x solution component via Cramer's rule.
+fn solve2d_x(a: double, b: double, c: double, d: double, ex: double, ey: double): double {
+    let num: double = ex * d;
+    let sub: double = b * ey;
+    let numer: double = num - sub;
+    let det: double = mat2d_det(a, b, c, d);
+    return numer / det;
+}
+
+// solve2d_y: y solution component via Cramer's rule.
+fn solve2d_y(a: double, b: double, c: double, d: double, ex: double, ey: double): double {
+    let num: double = a * ey;
+    let sub: double = ex * c;
+    let numer: double = num - sub;
+    let det: double = mat2d_det(a, b, c, d);
+    return numer / det;
+}
