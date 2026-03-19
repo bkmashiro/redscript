@@ -266,16 +266,16 @@ describe('fft.mcrs — dft_real (requires trig stub)', () => {
   test('DC input: out_im[0] == 0 (imaginary part = 0 for DC)', () =>
     expect(callAndGetRet(rt, 'test_dft_dc_im0')).toBe(0))
 
-  // NOTE: bin k≥1 uses sin_fixed/cos_fixed which need MC storage — skipped in unit tests.
-  test.skip('DC input: out_re[1] ≈ 0 (harmonics cancel, requires MC storage)', () => {
+  test('DC input: out_re[1] ≈ 0 (harmonics cancel)', () => {
     const val = callAndGetRet(rt, 'test_dft_dc_re1')
     expect(Math.abs(val)).toBeLessThan(100)
   })
 
-  // NOTE: sin_fixed/cos_fixed depend on `math:tables` NBT storage which is not
-  // available in the unit-test MCRuntime (no MC server). The quarter-wave test
-  // therefore cannot run here — it is covered by MC integration tests instead.
-  test.skip('quarter-wave [10000,0,-10000,0]: X[1] magnitude ≈ 20000 (requires MC storage)', () => {
+  // NOTE: dft_real uses dynamic array indexing on a function parameter (input[j]).
+  // The RedScript compiler currently passes array params as handles — dynamic index
+  // on param arrays doesn't produce correct results in MCRuntime unit tests.
+  // This is covered by MC integration tests where the full datapack runs correctly.
+  test.skip('quarter-wave [10000,0,-10000,0]: X[1] magnitude ≈ 20000 (array param dyn-idx limitation)', () => {
     const val = callAndGetRet(rt, 'test_dft_quarter_wave_mag1')
     expect(val).toBeGreaterThanOrEqual(19500)
     expect(val).toBeLessThanOrEqual(20500)

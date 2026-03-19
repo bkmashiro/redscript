@@ -77,8 +77,8 @@ fn dft_real(input: int[], n: int, out_re: int[], out_im: int[]) {
         let sum_im: int = 0;
         let j: int = 0;
         while (j < n) {
-            // angle in degrees × 10000 (sin_fixed/cos_fixed convention)
-            let angle: int = 3600000 * k * j / n;
+            // angle in integer degrees (sin_fixed/cos_fixed take plain degrees 0-360)
+            let angle: int = 360 * k * j / n;
             let c: int = cos_fixed(angle);   // ×1000
             let s: int = sin_fixed(angle);   // ×1000
             // x[j] is ×10000, c/s are ×1000 → product is ×10000000 → /1000 → ×10000
@@ -147,7 +147,7 @@ fn dft_coro(input: int[], n: int, out_re: int[], out_im: int[]) {
         let sum_im: int = 0;
         let j: int = 0;
         while (j < n) {
-            let angle: int = 3600000 * k * j / n;
+            let angle: int = 360 * k * j / n;
             let c: int = cos_fixed(angle);
             let s: int = sin_fixed(angle);
             sum_re = sum_re + input[j] * c / 1000;

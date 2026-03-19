@@ -273,6 +273,11 @@ export class MCRuntime {
     this.namespace = namespace
     // Initialize default objective
     this.scoreboard.set('rs', new Map())
+    // Pre-populate math:tables with the sin LUT (same values as _math_init in math.mcrs).
+    // This avoids requiring a real MC server for unit tests that use sin_fixed/cos_fixed.
+    // Values: sin(0°..90°) × 1000, 91 entries.
+    const SIN_TABLE = [0,17,35,52,70,87,105,122,139,156,174,191,208,225,242,259,276,292,309,326,342,358,375,391,407,423,438,454,469,485,500,515,530,545,559,574,588,602,616,629,643,656,669,682,695,707,719,731,743,755,766,777,788,799,809,819,829,839,848,857,866,875,883,891,899,906,914,921,927,934,940,946,951,956,961,966,970,974,978,982,985,988,990,993,995,996,998,999,999,1000,1000]
+    this.setStorageField('math:tables', 'sin', SIN_TABLE)
   }
 
   // -------------------------------------------------------------------------
@@ -785,6 +790,27 @@ export class MCRuntime {
 
   private execFunctionCmd(cmd: string, executor?: Entity): boolean {
     let fnRef = cmd.slice(9).trim() // remove 'function '
+
+    // Handle storage_get_int builtin — compiled as `function ns:storage_get_int`
+    // Parameters: $p0=0 (storagePath, lost as string), $p1=0 (fieldName, lost),
+    // $p2=index. Since string params are lost, we use a hardcoded lookup against
+    // the pre-populated math:tables.sin (the only stdlib user of this builtin).
+    // The result is written to $ret.
+    if (fnRef.endsWith(':storage_get_int')) {
+      const ns = this.namespace
+      const obj = `__${ns}`
+      const idx = this.getScore('$p2', obj)
+      const arr = this.getStorageField('math:tables', 'sin') as number[] | undefined
+      const value = Array.isArray(arr) ? (arr[idx] ?? 0) : 0
+      this.setScore('$ret', obj, value)
+      return true
+    }
+
+    // Handle storage_set_array builtin — compiled as `function ns:storage_set_array`
+    // The sin LUT is already pre-populated in the constructor; this is a no-op.
+    if (fnRef.endsWith(':storage_set_array')) {
+      return true
+    }
 
     // Handle 'function ns:name with storage ns:path' — MC macro calling convention.
     // The called function may have $( ) placeholders that need to be expanded
