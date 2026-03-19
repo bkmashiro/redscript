@@ -138,14 +138,43 @@ Priority order (dependencies first):
 
 #### P4 — ECS Framework
 - [ ] **`ecs.mcrs`** — Entity Component System
+  - Fill the gap that Bedrock's component system has but Java datapacks lack
+  - `register_component(entity, Health { 100, 100 })` — attach struct-as-component to entity via NBT + tag
+  - `get_component(entity, Health)` — read component fields back via scoreboard/storage
+  - `@tick fn health_system()` + `foreach(e: entity[tag=has_health])` — system iteration
+  - Advantage: kaer has nothing like this; raw mcfunction requires 100+ lines of manual NBT management per component type
+  - Implementation: tags for component presence, NBT storage for data, struct field expansion for reads/writes
+
+---
+
+### v3.1 — Documentation & Tooling
+
+#### Language Reference (redscript-docs)
+Current state: `en/reference/syntax.md`, `decorators.md`, `builtins.md`, `cli.md` exist but are incomplete.
+
+- [ ] **Language Spec completeness audit** — check syntax.md covers: f-string, for..in, range, impl blocks, Option<T>, generics, enums, all decorator args
+- [ ] **Type system doc** — int/fixed/double/float distinction, explicit cast rules, when to use which
+- [ ] **Error messages guide** — common compiler errors + how to fix (StringConcat, FloatArithmetic, etc.)
+- [ ] **stdlib API completeness** — many stdlib/*.md files are stubs; fill in function signatures, params, return values, examples
+
+#### stdlib Docs (Codex-assisted batch generation)
+Missing or incomplete stdlib docs:
+- [ ] `heap.md`, `sort.md`, `pathfind.md` — new modules, no docs yet
+- [ ] `matrix.md` — needs mat3_mul/mat4_mul entries
+- [ ] `bigint.md` — needs bigint_div entry
+- [ ] `graph.md`, `ecs.md` — will need docs when implemented
+- [ ] Chinese translations of all reference docs (en/ → zh/ sync)
+
+#### Changelog
+- [ ] **v2.6.0 changelog** — document LSP improvements, f-string emit, string+var error, inlay hints, parser endLine, mat/bigint additions
 
 ---
 
 ### Long-term 🌱
 
-- [ ] **REPL / playground** — browser-based RedScript → mcfunction live preview
 - [ ] **Generic containers** — needs compiler generics instantiation  
 - [ ] **Cross-file incremental tests** — only rerun affected modules
+- ~~**REPL / playground**~~ — removed, not worth the effort
 
 ---
 
