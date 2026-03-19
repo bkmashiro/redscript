@@ -106,3 +106,116 @@ fn lerp_angle(a_fx: int, b_fx: int, t: int): int {
     while (diff < -1800000) { diff = diff + 3600000; }
     return a_fx + diff * t / 10000;
 }
+
+// ─── 3×3 Matrix multiplication ───────────────────────────────────────────────
+// All matrix values are ×10000 (fixed-point).
+// mat3_mul(a, b): C = A × B  where each element = sum of row×col / 10000
+//
+// Matrix layout (row-major, 9 components):
+//   a00 a01 a02
+//   a10 a11 a12
+//   a20 a21 a22
+
+// mat3_mul: compute one element C[row][col] of a 3×3 matrix product
+// row ∈ {0,1,2}, col ∈ {0,1,2}
+// Pass all 18 components of A and B individually.
+// Returns C[row][col] ×10000
+
+fn mat3_mul_elem(
+    a00: int, a01: int, a02: int,
+    a10: int, a11: int, a12: int,
+    a20: int, a21: int, a22: int,
+    b00: int, b01: int, b02: int,
+    b10: int, b11: int, b12: int,
+    b20: int, b21: int, b22: int,
+    row: int, col: int
+): int {
+    let r0: int = 0;
+    let r1: int = 0;
+    let r2: int = 0;
+    // Select row of A
+    let ar0: int = 0; let ar1: int = 0; let ar2: int = 0;
+    if (row == 0) { ar0 = a00; ar1 = a01; ar2 = a02; }
+    if (row == 1) { ar0 = a10; ar1 = a11; ar2 = a12; }
+    if (row == 2) { ar0 = a20; ar1 = a21; ar2 = a22; }
+    // Select column of B
+    let bc0: int = 0; let bc1: int = 0; let bc2: int = 0;
+    if (col == 0) { bc0 = b00; bc1 = b10; bc2 = b20; }
+    if (col == 1) { bc0 = b01; bc1 = b11; bc2 = b21; }
+    if (col == 2) { bc0 = b02; bc1 = b12; bc2 = b22; }
+    // Dot product: divide each term by 10000 to keep ×10000 scale
+    r0 = ar0 * bc0 / 10000;
+    r1 = ar1 * bc1 / 10000;
+    r2 = ar2 * bc2 / 10000;
+    return r0 + r1 + r2;
+}
+
+// mat3_mul_vec3: multiply 3×3 matrix by a column vector (vx, vy, vz) ×10000
+// Returns one component (0=x, 1=y, 2=z) of the result vector ×10000
+fn mat3_mul_vec3_elem(
+    a00: int, a01: int, a02: int,
+    a10: int, a11: int, a12: int,
+    a20: int, a21: int, a22: int,
+    vx: int, vy: int, vz: int,
+    comp: int
+): int {
+    let row0: int = a00 * vx / 10000 + a01 * vy / 10000 + a02 * vz / 10000;
+    let row1: int = a10 * vx / 10000 + a11 * vy / 10000 + a12 * vz / 10000;
+    let row2: int = a20 * vx / 10000 + a21 * vy / 10000 + a22 * vz / 10000;
+    if (comp == 0) { return row0; }
+    if (comp == 1) { return row1; }
+    return row2;
+}
+
+// ─── 4×4 Matrix multiplication ───────────────────────────────────────────────
+// MC Display Entity transformation uses 4×4 matrices (TRS decomposition).
+// All values ×10000.
+//
+// mat4_mul_elem: compute one element C[row][col] of a 4×4 matrix product.
+// Row-major, 16+16=32 components. Returns C[row][col] ×10000.
+
+fn mat4_mul_elem(
+    a00: int, a01: int, a02: int, a03: int,
+    a10: int, a11: int, a12: int, a13: int,
+    a20: int, a21: int, a22: int, a23: int,
+    a30: int, a31: int, a32: int, a33: int,
+    b00: int, b01: int, b02: int, b03: int,
+    b10: int, b11: int, b12: int, b13: int,
+    b20: int, b21: int, b22: int, b23: int,
+    b30: int, b31: int, b32: int, b33: int,
+    row: int, col: int
+): int {
+    // Select row of A
+    let ar0: int = 0; let ar1: int = 0; let ar2: int = 0; let ar3: int = 0;
+    if (row == 0) { ar0 = a00; ar1 = a01; ar2 = a02; ar3 = a03; }
+    if (row == 1) { ar0 = a10; ar1 = a11; ar2 = a12; ar3 = a13; }
+    if (row == 2) { ar0 = a20; ar1 = a21; ar2 = a22; ar3 = a23; }
+    if (row == 3) { ar0 = a30; ar1 = a31; ar2 = a32; ar3 = a33; }
+    // Select column of B
+    let bc0: int = 0; let bc1: int = 0; let bc2: int = 0; let bc3: int = 0;
+    if (col == 0) { bc0 = b00; bc1 = b10; bc2 = b20; bc3 = b30; }
+    if (col == 1) { bc0 = b01; bc1 = b11; bc2 = b21; bc3 = b31; }
+    if (col == 2) { bc0 = b02; bc1 = b12; bc2 = b22; bc3 = b32; }
+    if (col == 3) { bc0 = b03; bc1 = b13; bc2 = b23; bc3 = b33; }
+    return ar0 * bc0 / 10000 + ar1 * bc1 / 10000 + ar2 * bc2 / 10000 + ar3 * bc3 / 10000;
+}
+
+// mat4_mul_vec4_elem: multiply 4×4 matrix by homogeneous vector (vx,vy,vz,vw) ×10000
+// comp: 0=x, 1=y, 2=z, 3=w
+fn mat4_mul_vec4_elem(
+    a00: int, a01: int, a02: int, a03: int,
+    a10: int, a11: int, a12: int, a13: int,
+    a20: int, a21: int, a22: int, a23: int,
+    a30: int, a31: int, a32: int, a33: int,
+    vx: int, vy: int, vz: int, vw: int,
+    comp: int
+): int {
+    let row0: int = a00*vx/10000 + a01*vy/10000 + a02*vz/10000 + a03*vw/10000;
+    let row1: int = a10*vx/10000 + a11*vy/10000 + a12*vz/10000 + a13*vw/10000;
+    let row2: int = a20*vx/10000 + a21*vy/10000 + a22*vz/10000 + a23*vw/10000;
+    let row3: int = a30*vx/10000 + a31*vy/10000 + a32*vz/10000 + a33*vw/10000;
+    if (comp == 0) { return row0; }
+    if (comp == 1) { return row1; }
+    if (comp == 2) { return row2; }
+    return row3;
+}

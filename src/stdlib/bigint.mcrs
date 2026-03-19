@@ -318,3 +318,130 @@ fn bigint_sq(a: int[], result: int[], len: int) {
         k = k - 1;
     }
 }
+
+// ─── Full bigint ÷ bigint (Long Division) ────────────────────────────────────
+//
+// bigint_div(a, b, quotient, remainder, la, lb):
+//   Compute a / b → quotient, a % b → remainder
+//   a has la chunks, b has lb chunks (most-significant first, base 10000)
+//   quotient must have la chunks (pre-zeroed)
+//   remainder must have lb chunks (pre-zeroed)
+//
+//   Algorithm: Binary-search trial subtraction per digit position.
+//   For each position i in quotient (0..la-lb):
+//     trial_subtract(a_window, b, lb) to find max digit q such that q*b ≤ window.
+//
+// Prerequisite helpers: bigint_cmp, bigint_mul_small, bigint_sub (all in bigint.mcrs)
+
+// bigint_shl1(a, len): shift bigint left by 1 chunk (multiply by base 10000)
+// Modifies a in-place, drops most-significant chunk.
+fn bigint_shl1(a: int[], len: int): void {
+    let i: int = 0;
+    while (i < len - 1) {
+        a[i] = a[i + 1];
+        i = i + 1;
+    }
+    a[len - 1] = 0;
+}
+
+// bigint_cmp_window(a, aoff, b, len): compare a[aoff..aoff+len] with b[0..len]
+// Returns 1 if a_window > b, -1 if a_window < b, 0 if equal
+fn bigint_cmp_window(a: int[], aoff: int, b: int[], len: int): int {
+    let i: int = 0;
+    while (i < len) {
+        let ai: int = a[aoff + i];
+        let bi: int = b[i];
+        if (ai > bi) { return 1; }
+        if (ai < bi) { return -1; }
+        i = i + 1;
+    }
+    return 0;
+}
+
+// bigint_sub_window(a, aoff, b, len): a[aoff..aoff+len] -= b[0..len]  (in-place)
+fn bigint_sub_window(a: int[], aoff: int, b: int[], len: int): void {
+    let borrow: int = 0;
+    let i: int = len - 1;
+    while (i >= 0) {
+        let diff: int = a[aoff + i] - b[i] - borrow;
+        if (diff < 0) {
+            diff = diff + 10000;
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
+        a[aoff + i] = diff;
+        i = i - 1;
+    }
+}
+
+// bigint_mul_small_into(b, factor, out, len): out = b * factor (small int)
+fn bigint_mul_small_into(b: int[], factor: int, out: int[], len: int): void {
+    let carry: int = 0;
+    let i: int = len - 1;
+    while (i >= 0) {
+        let prod: int = b[i] * factor + carry;
+        out[i] = prod % 10000;
+        carry = prod / 10000;
+        i = i - 1;
+    }
+}
+
+// bigint_div(a, b, quotient, remainder, la, lb):
+// Full arbitrary-precision integer division.
+// quotient[0..la-1] is written, remainder[0..lb-1] is written.
+// a and b must not alias quotient or remainder.
+// NOTE: la >= lb required; both arrays most-significant first, base 10000.
+fn bigint_div(a: int[], b: int[], quotient: int[], remainder: int[], la: int, lb: int): void {
+    // Work on a copy of a (dividend) to allow in-place subtraction
+    let work: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let wi: int = 0;
+    while (wi < la) {
+        work[wi] = a[wi];
+        wi = wi + 1;
+    }
+
+    // Temp buffer for trial product: b * q_digit
+    let trial: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+    // Zero quotient
+    let qi: int = 0;
+    while (qi < la) {
+        quotient[qi] = 0;
+        qi = qi + 1;
+    }
+
+    // Process each quotient digit position (la - lb + 1 digits)
+    let pos: int = 0;
+    while (pos <= la - lb) {
+        // Binary search for largest q in [0, 9999] s.t. b * q ≤ work[pos..pos+lb]
+        let lo: int = 0;
+        let hi: int = 9999;
+        let q: int = 0;
+        while (lo <= hi) {
+            let mid: int = (lo + hi) / 2;
+            bigint_mul_small_into(b, mid, trial, lb);
+            let cmp: int = bigint_cmp_window(work, pos, trial, lb);
+            if (cmp >= 0) {
+                q = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        quotient[pos] = q;
+        // Subtract b * q from work window
+        if (q > 0) {
+            bigint_mul_small_into(b, q, trial, lb);
+            bigint_sub_window(work, pos, trial, lb);
+        }
+        pos = pos + 1;
+    }
+
+    // Remainder is work[la-lb .. la-1]
+    let ri: int = 0;
+    while (ri < lb) {
+        remainder[ri] = work[la - lb + ri];
+        ri = ri + 1;
+    }
+}
