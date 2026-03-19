@@ -1,0 +1,238 @@
+// ecs.mcrs — Entity Component System for Minecraft Java datapacks.
+//
+// ─── What is ECS? ────────────────────────────────────────────────────────────
+//
+// Entity Component System (ECS) is a data-driven pattern for attaching typed
+// "components" (structured data) to game entities. In Minecraft Java Edition,
+// datapacks have no built-in component system (unlike Bedrock). ECS fills this
+// gap by using:
+//
+//   - Scoreboard objectives  → integer fields (HP, velocity, etc.)
+//   - Entity tags            → component presence flags
+//   - NBT storage            → complex/string data (via raw())
+//
+// Without ECS you'd write 100+ lines of raw NBT per component type, hard-coded
+// per entity. With ecs.mcrs, component state is captured in an int[] "state
+// array" that can be passed around, modified, and read with typed helpers.
+//
+// ─── Usage example ───────────────────────────────────────────────────────────
+//
+//   // Initialise health for entity with score-ID 42, max HP 100
+//   let hp_state: int[] = ecs_health_init(42, 100)
+//
+//   // Take damage
+//   hp_state = ecs_health_damage(hp_state, 30)
+//
+//   // Initialise velocity (×1000 fixed-point)
+//   let vel_state: int[] = ecs_vel_init(1000, 0, 500)  // 1.0, 0.0, 0.5
+//
+//   // Apply gravity each tick
+//   vel_state = ecs_vel_apply_gravity(vel_state, 980)
+//
+//   // Tag the entity in MC (run via raw() or a separate mcfunction):
+//   //   tag @e[scores={ecs_entity=42}] add ecs_has_health
+//   //   tag @e[scores={ecs_entity=42}] add ecs_has_velocity
+//
+// ─── Tag naming convention ───────────────────────────────────────────────────
+//
+//   Entities should carry tag: ecs_has_<comp_name>
+//   e.g.  ecs_has_health, ecs_has_velocity, ecs_has_damage
+//
+//   This lets selectors filter: @e[tag=ecs_has_health]
+//
+// ─── Component type IDs ──────────────────────────────────────────────────────
+
+module library
+
+// Pre-defined component type IDs (used with ecs_register / ecs_is_registered)
+let ECS_COMP_HEALTH: int = 1
+let ECS_COMP_VELOCITY: int = 2
+let ECS_COMP_DAMAGE: int = 3
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ECS Registry
+// Tracks which component types are active in this datapack.
+// Registry is a 16-element int[] where registry[comp_id] == 1 means registered.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ecs_registry_new(): allocate a blank 16-slot registry
+fn ecs_registry_new(): int[] {
+    let reg: int[] = []
+    let i: int = 0
+    while (i < 16) {
+        reg.push(0)
+        i = i + 1
+    }
+    return reg
+}
+
+// ecs_register(reg, comp_id): mark comp_id as registered; returns updated reg
+fn ecs_register(reg: int[], comp_id: int): int[] {
+    if (comp_id >= 0) {
+        if (comp_id < 16) {
+            reg[comp_id] = 1
+        }
+    }
+    return reg
+}
+
+// ecs_is_registered(reg, comp_id): 1 if registered, 0 otherwise
+fn ecs_is_registered(reg: int[], comp_id: int): int {
+    if (comp_id >= 0) {
+        if (comp_id < 16) {
+            return reg[comp_id]
+        }
+    }
+    return 0
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Health Component
+//
+// State layout (int[], 8 elements):
+//   [0] entity_score  — scoreboard score used as entity identifier
+//   [1] current_hp    — current hit points
+//   [2] max_hp        — maximum hit points
+//   [3..7] reserved   — 0
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ecs_health_init(entity_score, max_hp): create a health component state
+// Sets current_hp = max_hp (full health at spawn)
+fn ecs_health_init(entity_score: int, max_hp: int): int[] {
+    let s: int[] = []
+    s.push(entity_score)
+    s.push(max_hp)
+    s.push(max_hp)
+    s.push(0)
+    s.push(0)
+    s.push(0)
+    s.push(0)
+    s.push(0)
+    return s
+}
+
+// ecs_health_get(state): return current HP
+fn ecs_health_get(state: int[]): int {
+    return state[1]
+}
+
+// ecs_health_max(state): return maximum HP
+fn ecs_health_max(state: int[]): int {
+    return state[2]
+}
+
+// ecs_health_set(state, hp): set current HP (clamped to [0, max]), return state
+fn ecs_health_set(state: int[], hp: int): int[] {
+    let clamped: int = hp
+    if (clamped < 0) { clamped = 0 }
+    if (clamped > state[2]) { clamped = state[2] }
+    state[1] = clamped
+    return state
+}
+
+// ecs_health_damage(state, amount): subtract amount from HP, clamp to 0
+fn ecs_health_damage(state: int[], amount: int): int[] {
+    let next: int = state[1] - amount
+    if (next < 0) { next = 0 }
+    state[1] = next
+    return state
+}
+
+// ecs_health_heal(state, amount): add amount to HP, clamp to max
+fn ecs_health_heal(state: int[], amount: int): int[] {
+    let next: int = state[1] + amount
+    if (next > state[2]) { next = state[2] }
+    state[1] = next
+    return state
+}
+
+// ecs_health_is_dead(state): 1 if HP <= 0, else 0
+fn ecs_health_is_dead(state: int[]): int {
+    if (state[1] <= 0) { return 1 }
+    return 0
+}
+
+// ecs_health_pct(state): HP percentage as fixed-point ×10000
+// e.g. 50 HP out of 100 max → 5000  (= 50.00%)
+fn ecs_health_pct(state: int[]): int {
+    if (state[2] <= 0) { return 0 }
+    return state[1] * 10000 / state[2]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Velocity Component
+//
+// State layout (int[], 8 elements):
+//   [0] vx  — x velocity ×1000 fixed-point
+//   [1] vy  — y velocity ×1000 fixed-point
+//   [2] vz  — z velocity ×1000 fixed-point
+//   [3..7] reserved — 0
+//
+// Fixed-point convention: 1000 = 1.0 block/tick
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ecs_vel_init(vx, vy, vz): create a velocity component state
+fn ecs_vel_init(vx: int, vy: int, vz: int): int[] {
+    let s: int[] = []
+    s.push(vx)
+    s.push(vy)
+    s.push(vz)
+    s.push(0)
+    s.push(0)
+    s.push(0)
+    s.push(0)
+    s.push(0)
+    return s
+}
+
+// ecs_vel_get_x(state): return vx
+fn ecs_vel_get_x(state: int[]): int {
+    return state[0]
+}
+
+// ecs_vel_get_y(state): return vy
+fn ecs_vel_get_y(state: int[]): int {
+    return state[1]
+}
+
+// ecs_vel_get_z(state): return vz
+fn ecs_vel_get_z(state: int[]): int {
+    return state[2]
+}
+
+// ecs_vel_set(state, vx, vy, vz): set all velocity components, return state
+fn ecs_vel_set(state: int[], vx: int, vy: int, vz: int): int[] {
+    state[0] = vx
+    state[1] = vy
+    state[2] = vz
+    return state
+}
+
+// ecs_vel_speed(state): magnitude of velocity vector ×1000
+// Uses sqrt_fixed: speed = sqrt(vx² + vy² + vz²) in fixed-point units
+// e.g. ecs_vel_speed([3000, 4000, 0, ...]) == 5000
+fn ecs_vel_speed(state: int[]): int {
+    let vx: int = state[0]
+    let vy: int = state[1]
+    let vz: int = state[2]
+    // mag_sq in units of ×1000² = ×1000000
+    // sqrt_fixed expects value in same ×1000 scale, so divide by 1000 first
+    let mag_sq: int = vx * vx / 1000 + vy * vy / 1000 + vz * vz / 1000
+    return sqrt_fixed(mag_sq)
+}
+
+// ecs_vel_apply_gravity(state, gravity_fx): subtract gravity from vy
+// gravity_fx is fixed-point ×1000 (e.g. 980 ≈ 0.980 blocks/tick², roughly 0.08g per tick)
+fn ecs_vel_apply_gravity(state: int[], gravity_fx: int): int[] {
+    state[1] = state[1] - gravity_fx
+    return state
+}
+
+// ecs_vel_damp(state, factor_fx): multiply each velocity component by factor_fx/10000
+// factor_fx: friction factor ×10000 (e.g. 8000 = 0.80 damping)
+fn ecs_vel_damp(state: int[], factor_fx: int): int[] {
+    state[0] = state[0] * factor_fx / 10000
+    state[1] = state[1] * factor_fx / 10000
+    state[2] = state[2] * factor_fx / 10000
+    return state
+}
