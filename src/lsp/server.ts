@@ -1188,36 +1188,53 @@ connection.onRequest(
 
     const hints: InlayHint[] = []
 
-    // Walk all let declarations with no explicit type annotation
-    // (where the type was inferred by the type checker)
-    function walkStmt(stmt: Record<string, unknown>): void {
-      if (
-        stmt['kind'] === 'let_decl' &&
-        !stmt['typeAnnotation'] &&
-        stmt['inferredType']
-      ) {
-        const spanVal = stmt['span'] as { end?: number } | undefined
-        const pos = doc!.positionAt(spanVal?.end ?? 0)
-        hints.push({
-          position: { line: pos.line, character: pos.character },
-          label: `: ${typeToString(stmt['inferredType'] as import('../ast/types').TypeNode)}`,
-          kind: InlayHintKind.Type,
-          paddingLeft: true,
-        })
+    // Walk all let declarations with no explicit type annotation and emit inlay hints.
+    // Since TypeChecker doesn't attach inferredType to AST nodes, we use collectLocals
+    // which already infers types from init expressions.
+    function walkBlock(stmts: import('../ast/types').Stmt[]): void {
+      // Build a locals map for this block (includes inferred types)
+      const locals = collectLocals(stmts as import('../ast/types').Block)
+
+      for (const stmt of stmts) {
+        if (stmt.kind === 'let' && !stmt.type) {
+          // No explicit type annotation — show inferred type as inlay hint
+          const inferredType = locals.get(stmt.name)
+          if (!inferredType) continue
+          const spanVal = (stmt as { span?: { line: number; col: number } }).span
+          if (!spanVal) continue
+          // Position hint after the variable name: line is 1-based in span, col is 1-based
+          const line = Math.max(0, spanVal.line - 1)
+          // Find the position after the variable name on that line
+          const lineText = source.split('\n')[line] ?? ''
+          const nameEnd = lineText.indexOf(stmt.name) + stmt.name.length
+          hints.push({
+            position: { line, character: nameEnd },
+            label: `: ${typeToString(inferredType)}`,
+            kind: InlayHintKind.Type,
+            paddingLeft: false,
+          })
+        }
+        // Recurse into nested blocks
+        if (stmt.kind === 'if' || stmt.kind === 'while' || stmt.kind === 'for') {
+          const s = stmt as Record<string, unknown>
+          const then_ = s['then'] as import('../ast/types').Stmt[] | undefined
+          if (Array.isArray(then_)) walkBlock(then_)
+          const else_ = s['else_'] as import('../ast/types').Stmt[] | undefined
+          if (Array.isArray(else_)) walkBlock(else_)
+          const body = s['body'] as import('../ast/types').Stmt[] | undefined
+          if (Array.isArray(body)) walkBlock(body)
+        }
+        if (stmt.kind === 'foreach') {
+          const s = stmt as Record<string, unknown>
+          const body = s['body'] as import('../ast/types').Stmt[] | undefined
+          if (Array.isArray(body)) walkBlock(body)
+        }
       }
-      // Recurse into blocks, if/else bodies, etc.
-      const body = stmt['body'] as Record<string, unknown>[] | undefined
-      if (Array.isArray(body)) body.forEach(walkStmt)
-      const then_ = stmt['then'] as Record<string, unknown>[] | undefined
-      if (Array.isArray(then_)) then_.forEach(walkStmt)
-      const else_ = stmt['else_'] as Record<string, unknown>[] | undefined
-      if (Array.isArray(else_)) else_.forEach(walkStmt)
     }
 
+    const source = doc.getText()
     parsed.program.declarations.forEach(top => {
-      if (top.body) {
-        (top.body as Record<string, unknown>[]).forEach(walkStmt)
-      }
+      if (top.body) walkBlock(top.body as import('../ast/types').Stmt[])
     })
 
     return hints
