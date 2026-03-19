@@ -2188,3 +2188,113 @@ describe('ode.mcrs — runtime', () => {
   test('ode_get_t returns t0 + steps*h', () =>
     expect(callAndGetRet(rt, 'test_final_t')).toBe(12500))
 })
+
+// ---------------------------------------------------------------------------
+// linalg.mcrs — runtime
+// NOTE: double arithmetic intrinsics (double_mul, double_add, etc.) rely on
+// MC entity commands that do not execute in MCRuntime.  Only operations whose
+// result is zero (so the multiply-by-zero path short-circuits correctly) and
+// the integer zero-length guard are verifiable here.
+// ---------------------------------------------------------------------------
+
+describe('linalg.mcrs — runtime', () => {
+  const LINALG_SRC = fs.readFileSync(
+    path.join(__dirname, '../../stdlib/linalg.mcrs'),
+    'utf-8',
+  )
+
+  const rt = makeRuntime(`
+    // dot(⊥) = 0
+    fn test_dot2d_perp(): int {
+      let d: double = vec2d_dot(1.0d, 0.0d, 0.0d, 1.0d);
+      return d as int;
+    }
+    fn test_dot3d_perp(): int {
+      let d: double = vec3d_dot(1.0d, 0.0d, 0.0d, 0.0d, 1.0d, 0.0d);
+      return d as int;
+    }
+    // cross of parallel vectors = (0, 0, 0)
+    fn test_cross_parallel_x(): int {
+      let d: double = vec3d_cross_x(2.0d, 0.0d, 0.0d, 3.0d, 0.0d, 0.0d);
+      return d as int;
+    }
+    fn test_cross_parallel_y(): int {
+      let d: double = vec3d_cross_y(2.0d, 0.0d, 0.0d, 3.0d, 0.0d, 0.0d);
+      return d as int;
+    }
+    fn test_cross_parallel_z(): int {
+      let d: double = vec3d_cross_z(2.0d, 0.0d, 0.0d, 3.0d, 0.0d, 0.0d);
+      return d as int;
+    }
+    // normalize zero-length vector returns 0.0
+    fn test_normalize2d_zero_x(): int {
+      let d: double = vec2d_normalize_x(0.0d, 0.0d);
+      return d as int;
+    }
+    fn test_normalize2d_zero_y(): int {
+      let d: double = vec2d_normalize_y(0.0d, 0.0d);
+      return d as int;
+    }
+    fn test_normalize3d_zero_x(): int {
+      let d: double = vec3d_normalize_x(0.0d, 0.0d, 0.0d);
+      return d as int;
+    }
+    fn test_normalize3d_zero_z(): int {
+      let d: double = vec3d_normalize_z(0.0d, 0.0d, 0.0d);
+      return d as int;
+    }
+    // mat2d_vecmul with zero column
+    fn test_matmul_zero_col(): int {
+      let d: double = mat2d_vecmul_x(0.0d, 0.0d, 0.0d, 1.0d, 3.0d, 4.0d);
+      return d as int;
+    }
+    // solve2d: Cramer numerator zero → x = 0
+    // A = [[0, 1], [1, 0]], b = [0, 5] → x = (0*0 - 1*5) / det(0,1,1,0)
+    // det = 0*0 - 1*1 = -1 (but double_mul won't compute 1*1 correctly)
+    // Instead test with b=[0,0] → x = 0
+    fn test_solve2d_x_zero_rhs(): int {
+      let d: double = solve2d_x(1.0d, 0.0d, 0.0d, 1.0d, 0.0d, 0.0d);
+      return d as int;
+    }
+    fn test_solve2d_y_zero_rhs(): int {
+      let d: double = solve2d_y(1.0d, 0.0d, 0.0d, 1.0d, 0.0d, 0.0d);
+      return d as int;
+    }
+  `, [MATH_SRC, MATH_HP_SRC, LINALG_SRC])
+
+  test('vec2d_dot of perpendicular unit vectors = 0', () =>
+    expect(callAndGetRet(rt, 'test_dot2d_perp')).toBe(0))
+
+  test('vec3d_dot of perpendicular unit vectors = 0', () =>
+    expect(callAndGetRet(rt, 'test_dot3d_perp')).toBe(0))
+
+  test('vec3d_cross_x of parallel vectors = 0', () =>
+    expect(callAndGetRet(rt, 'test_cross_parallel_x')).toBe(0))
+
+  test('vec3d_cross_y of parallel vectors = 0', () =>
+    expect(callAndGetRet(rt, 'test_cross_parallel_y')).toBe(0))
+
+  test('vec3d_cross_z of parallel vectors = 0', () =>
+    expect(callAndGetRet(rt, 'test_cross_parallel_z')).toBe(0))
+
+  test('vec2d_normalize_x of zero vector = 0', () =>
+    expect(callAndGetRet(rt, 'test_normalize2d_zero_x')).toBe(0))
+
+  test('vec2d_normalize_y of zero vector = 0', () =>
+    expect(callAndGetRet(rt, 'test_normalize2d_zero_y')).toBe(0))
+
+  test('vec3d_normalize_x of zero vector = 0', () =>
+    expect(callAndGetRet(rt, 'test_normalize3d_zero_x')).toBe(0))
+
+  test('vec3d_normalize_z of zero vector = 0', () =>
+    expect(callAndGetRet(rt, 'test_normalize3d_zero_z')).toBe(0))
+
+  test('mat2d_vecmul_x with zero row = 0', () =>
+    expect(callAndGetRet(rt, 'test_matmul_zero_col')).toBe(0))
+
+  test('solve2d_x with zero rhs = 0', () =>
+    expect(callAndGetRet(rt, 'test_solve2d_x_zero_rhs')).toBe(0))
+
+  test('solve2d_y with zero rhs = 0', () =>
+    expect(callAndGetRet(rt, 'test_solve2d_y_zero_rhs')).toBe(0))
+})

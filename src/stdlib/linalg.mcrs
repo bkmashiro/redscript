@@ -53,25 +53,33 @@ fn vec2d_dist(ax: double, ay: double, bx: double, by: double): double {
     return vec2d_length(dx, dy);
 }
 
+// _vec2d_len_sq_fx(x, y): squared length as ×10000 fixed int (for zero-check).
+fn _vec2d_len_sq_fx(x: double, y: double): int {
+    let xx: double = x * x;
+    let yy: double = y * y;
+    let sq: double = xx + yy;
+    return sq as int;
+}
+
 // vec2d_normalize_x(x, y): x component of the unit vector.
 //   Returns 0.0 if the vector has zero length.
 fn vec2d_normalize_x(x: double, y: double): double {
-    let len: double = vec2d_length(x, y);
-    let zero: double = 0.0d;
-    if len == zero {
-        return zero;
+    let sq_fx: int = _vec2d_len_sq_fx(x, y);
+    if (sq_fx == 0) {
+        return 0.0d;
     }
+    let len: double = vec2d_length(x, y);
     return x / len;
 }
 
 // vec2d_normalize_y(x, y): y component of the unit vector.
 //   Returns 0.0 if the vector has zero length.
 fn vec2d_normalize_y(x: double, y: double): double {
-    let len: double = vec2d_length(x, y);
-    let zero: double = 0.0d;
-    if len == zero {
-        return zero;
+    let sq_fx: int = _vec2d_len_sq_fx(x, y);
+    if (sq_fx == 0) {
+        return 0.0d;
     }
+    let len: double = vec2d_length(x, y);
     return y / len;
 }
 
@@ -125,36 +133,46 @@ fn vec3d_cross_z(ax: double, ay: double, az: double, bx: double, by: double, bz:
     return t0 - t1;
 }
 
+// _vec3d_len_sq_fx(x, y, z): squared length as ×10000 fixed int (for zero-check).
+fn _vec3d_len_sq_fx(x: double, y: double, z: double): int {
+    let xx: double = x * x;
+    let yy: double = y * y;
+    let zz: double = z * z;
+    let s: double = xx + yy;
+    let sq: double = s + zz;
+    return sq as int;
+}
+
 // vec3d_normalize_x(x, y, z): x component of the unit vector.
 //   Returns 0.0 if the vector has zero length.
 fn vec3d_normalize_x(x: double, y: double, z: double): double {
-    let len: double = vec3d_length(x, y, z);
-    let zero: double = 0.0d;
-    if len == zero {
-        return zero;
+    let sq_fx: int = _vec3d_len_sq_fx(x, y, z);
+    if (sq_fx == 0) {
+        return 0.0d;
     }
+    let len: double = vec3d_length(x, y, z);
     return x / len;
 }
 
 // vec3d_normalize_y(x, y, z): y component of the unit vector.
 //   Returns 0.0 if the vector has zero length.
 fn vec3d_normalize_y(x: double, y: double, z: double): double {
-    let len: double = vec3d_length(x, y, z);
-    let zero: double = 0.0d;
-    if len == zero {
-        return zero;
+    let sq_fx: int = _vec3d_len_sq_fx(x, y, z);
+    if (sq_fx == 0) {
+        return 0.0d;
     }
+    let len: double = vec3d_length(x, y, z);
     return y / len;
 }
 
 // vec3d_normalize_z(x, y, z): z component of the unit vector.
 //   Returns 0.0 if the vector has zero length.
 fn vec3d_normalize_z(x: double, y: double, z: double): double {
-    let len: double = vec3d_length(x, y, z);
-    let zero: double = 0.0d;
-    if len == zero {
-        return zero;
+    let sq_fx: int = _vec3d_len_sq_fx(x, y, z);
+    if (sq_fx == 0) {
+        return 0.0d;
     }
+    let len: double = vec3d_length(x, y, z);
     return z / len;
 }
 
