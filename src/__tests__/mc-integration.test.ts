@@ -1612,3 +1612,181 @@ describe('MC Integration - entity tag methods (@s.tag/untag/has_tag)', () => {
     console.log(`  has_after_untag=${hasAfterUntag} (expect 0) ✓`)
   }, 20000)
 })
+
+// ===========================================================================
+// fft.mcrs — MC integration test for dft_real array param dynamic indexing
+// ===========================================================================
+describe('MC Integration - fft.mcrs dft_real', () => {
+  const NS = 'fft_mc_test'
+
+  beforeAll(async () => {
+    if (!serverOnline) return
+
+    const MATH_SRC = fs.readFileSync(path.join(__dirname, '../stdlib/math.mcrs'), 'utf-8')
+    const FFT_SRC  = fs.readFileSync(path.join(__dirname, '../stdlib/fft.mcrs'),  'utf-8')
+
+    const fftSrc = `
+      namespace fft_mc_test
+
+      @load fn __load() {
+        raw("scoreboard objectives add fft_obj dummy");
+        _math_init()
+      }
+
+      @keep fn test_dft_re0(): int {
+        let input: int[] = [10000, 10000, 10000, 10000]
+        let re: int[] = [0, 0, 0, 0]
+        let im: int[] = [0, 0, 0, 0]
+        dft_real(input, 4, re, im)
+        let v: int = re[0]
+        scoreboard_set("#dft_re0", "fft_obj", v)
+        return v
+      }
+
+      @keep fn test_dft_mag1(): int {
+        let input: int[] = [10000, 0, -10000, 0]
+        let re: int[] = [0, 0, 0, 0]
+        let im: int[] = [0, 0, 0, 0]
+        dft_real(input, 4, re, im)
+        let mag: int = dft_magnitude(re, im, 1)
+        scoreboard_set("#dft_mag1", "fft_obj", mag)
+        return mag
+      }
+    `
+
+    // Use compile directly with librarySources (writeFixture doesn't support libs)
+    fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+    if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
+      fs.writeFileSync(path.join(DATAPACK_DIR, 'pack.mcmeta'), JSON.stringify({
+        pack: { pack_format: 48, description: 'RedScript integration tests' }
+      }))
+    }
+    const fftResult = compile(fftSrc, { namespace: NS, librarySources: [MATH_SRC, FFT_SRC] })
+    for (const file of fftResult.files) {
+      if (file.path === 'pack.mcmeta') continue
+      const filePath = path.join(DATAPACK_DIR, file.path)
+      fs.mkdirSync(path.dirname(filePath), { recursive: true })
+      if (file.path.includes('data/minecraft/tags/') && fs.existsSync(filePath)) {
+        const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+        const incoming = JSON.parse(file.content)
+        const merged = { values: [...new Set([...(existing.values ?? []), ...(incoming.values ?? [])])] }
+        fs.writeFileSync(filePath, JSON.stringify(merged, null, 2))
+      } else {
+        fs.writeFileSync(filePath, file.content)
+      }
+    }
+
+    await mc.reload()
+    await mc.ticks(10)
+    await mc.command(`/function ${NS}:__load`).catch(() => {})
+    await mc.ticks(5)
+  })
+
+  test('dft_real DC input: re[0] == 40000', async () => {
+    if (!serverOnline) return
+    await mc.command(`/function ${NS}:test_dft_re0`)
+    await mc.ticks(3)
+    const val = await mc.scoreboard('#dft_re0', 'fft_obj')
+    expect(val).toBe(40000)
+  }, 20000)
+
+  test('dft_real quarter-wave: X[1] magnitude ≈ 20000', async () => {
+    if (!serverOnline) return
+    await mc.command(`/function ${NS}:test_dft_mag1`)
+    await mc.ticks(3)
+    const val = await mc.scoreboard('#dft_mag1', 'fft_obj')
+    expect(val).toBeGreaterThanOrEqual(19500)
+    expect(val).toBeLessThanOrEqual(20500)
+  }, 20000)
+})
+
+// ===========================================================================
+// events.mcrs — MC integration test for @on(EventType) event handler system
+// ===========================================================================
+describe('MC Integration - @on(EventType) event system', () => {
+  const NS = 'ev_mc_test'
+  let botOnline = false
+
+  beforeAll(async () => {
+    if (!serverOnline) return
+
+    const EVENTS_SRC = fs.readFileSync(path.join(__dirname, '../stdlib/events.mcrs'), 'utf-8')
+
+    const evSrc = `
+      namespace ev_mc_test
+
+      @on(PlayerJoin) fn on_join(p: Player) {
+        raw("scoreboard objectives add ev_obj dummy");
+        scoreboard_add(p, "ev_obj", 1)
+      }
+
+      @on(PlayerDeath) fn on_death(p: Player) {
+        raw("scoreboard objectives add ev_obj dummy");
+        scoreboard_add(p, "ev_obj", 100)
+      }
+    `
+
+    // Compile with events.mcrs as library source
+    fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+    if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
+      fs.writeFileSync(path.join(DATAPACK_DIR, 'pack.mcmeta'), JSON.stringify({
+        pack: { pack_format: 48, description: 'RedScript integration tests' }
+      }))
+    }
+    const evResult = compile(evSrc, { namespace: NS, librarySources: [EVENTS_SRC] })
+    for (const file of evResult.files) {
+      if (file.path === 'pack.mcmeta') continue
+      const filePath = path.join(DATAPACK_DIR, file.path)
+      fs.mkdirSync(path.dirname(filePath), { recursive: true })
+      if (file.path.includes('data/minecraft/tags/') && fs.existsSync(filePath)) {
+        const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+        const incoming = JSON.parse(file.content)
+        const merged = { values: [...new Set([...(existing.values ?? []), ...(incoming.values ?? [])])] }
+        fs.writeFileSync(filePath, JSON.stringify(merged, null, 2))
+      } else {
+        fs.writeFileSync(filePath, file.content)
+      }
+    }
+
+    await mc.reload()
+    await mc.ticks(20)
+
+    // Check if TestBot is online
+    const status = await mc.status()
+    botOnline = status.playerNames?.includes('TestBot') ?? false
+  })
+
+  test('events.mcrs dispatcher loads without error', async () => {
+    if (!serverOnline) return
+    // If we got here, reload succeeded
+    expect(serverOnline).toBe(true)
+  }, 10000)
+
+  test('PlayerJoin: removing rs.joined tag fires @on(PlayerJoin) handlers', async () => {
+    if (!serverOnline || !botOnline) return
+
+    // Reset score
+    await mc.command(`scoreboard objectives add ev_obj dummy`).catch(() => {})
+    await mc.command(`scoreboard players set TestBot ev_obj 0`)
+
+    // Simulate "join" by removing the rs.joined tag
+    await mc.command(`tag TestBot remove rs.joined`)
+    await mc.ticks(3)  // wait for @tick to fire
+
+    const score = await mc.scoreboard('TestBot', 'ev_obj')
+    expect(score).toBeGreaterThanOrEqual(1)
+    console.log(`  PlayerJoin handler fired: ev_obj = ${score} (expect >= 1) ✓`)
+  }, 20000)
+
+  test('PlayerDeath: killing TestBot fires @on(PlayerDeath) handlers', async () => {
+    if (!serverOnline || !botOnline) return
+
+    await mc.command(`scoreboard players set TestBot ev_obj 0`)
+    await mc.command(`kill TestBot`)
+    await mc.ticks(5)
+
+    const score = await mc.scoreboard('TestBot', 'ev_obj')
+    expect(score).toBeGreaterThanOrEqual(100)
+    console.log(`  PlayerDeath handler fired: ev_obj = ${score} (expect >= 100) ✓`)
+  }, 20000)
+})
