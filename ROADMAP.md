@@ -1,10 +1,10 @@
 # RedScript Roadmap
 
-Last updated: 2026-03-18
+Last updated: 2026-03-19
 
 ---
 
-## Current State (v2.5.0)
+## Current State (v2.6.0)
 
 ### Compiler
 - v2 pipeline: HIR → MIR → LIR → mcfunction
@@ -13,11 +13,14 @@ Last updated: 2026-03-18
 - Module system, generics, enum, Option<T>
 - @coroutine (back-edge yield, batch/onDone), @schedule, @on_trigger, @tick
 - Optional semicolons
-- Incremental compilation, source maps, LSP (hover/goto/completion/signature help/references/rename)
+- `for i in 0..n` range syntax sugar ✅
+- Incremental compilation, source maps
 - DCE, peephole optimizer, int32 overflow-safe constant folding
 - Compiler intrinsics: `double + double` → `double_add`, etc.
 - `__NS__` / `__OBJ__` placeholders in raw()
 - `nbt_read` MIR instruction (fixes as-fixed temp rename bug)
+- `impl TypeName {}` struct methods with field-by-field param expansion ✅
+- `let h: int[] = heap_new()` — int[] var from function call monomorphized ✅
 
 ### stdlib (35 modules, complete)
 | Module | Contents |
@@ -41,33 +44,78 @@ Last updated: 2026-03-18
 | `calculus` | trapezoid/Simpson integration, Welford statistics |
 | `expr` | RPN expression evaluator |
 | `world` | sun_altitude, sun_azimuth |
-| `physics/particles/combat/effects/player/mobs/...` | 16 more game mechanic modules |
+| `heap` | MinHeap / MaxHeap (priority queue) ✅ |
+| `sort` | heapsort + mergesort over int[] ✅ |
+| `pathfind` | A* (coroutine-based, 20 nodes/tick) ✅ |
+| `physics/particles/combat/effects/player/mobs/...` | 13 more game mechanic modules |
 
 ### Tests
-- Unit/e2e: **1588** passing
-- MC integration: **74** passing
+- Unit/e2e: **1679** passing
+- MC integration: **88** passing
 
 ### Tooling
 - SA + Nelder-Mead tuner (`redscript tune --adapter <name>`)
-- VSCode extension v1.2.73 (syntax highlight, hover, goto-def, completion, signature help, find references, rename)
-- VitePress docs site with stdlib reference + zh translations
+- VSCode extension v1.3.14 — full LSP: hover (builtins/fn/struct/var/selector/decorator), goto-def, completion (imported modules, @decorators, @selectors, locals), signature help, references, rename
+- VitePress docs site with stdlib reference + zh tutorials 01-10
+
+---
+
+## Today's Sprint (2026-03-19)
+
+Priority order (dependencies first):
+
+### ① Parser: add `span.endLine` to fn declarations
+- **Status**: todo
+- **Why**: LSP currently uses "next fn start - 1" as implicit endLine. This works but is fragile.
+  Proper fix: parser emits `endLine` when it sees the closing `}`.
+- **Impact**: hover/F12/completion scope all improve
+
+### ② Compiler: `string + var` type error
+- **Status**: todo  
+- **Why**: `"text" + 5` silently compiles to broken `tellraw @a {"text":"~"}`. 
+  Should be a compile error directing user to f-strings.
+- **Change**: in HIR binary op lowering, if either operand is string type, throw DiagnosticError.
+
+### ③ f-string in tell/subtitle/actionbar/title
+- **Status**: partially broken (outputs `"~"`)
+- **Why**: f-string emit for builtins doesn't interpolate scoreboard values into JSON text component.
+  Need to emit `{"score":{"name":"$var","objective":"..."}}` or `{"text":"","extra":[...]}` form.
+- **Impact**: `tell(@a, f"Score: {score}")` actually works
+
+### ④ LSP: Inlay hints
+- **Status**: todo
+- **Why**: `let x = some_fn()` — type shown next to variable name
+- **Needs**: type inference info from TypeChecker or from collectLocals result
+
+### ⑤ stdlib: mat3_mul / mat4_mul
+- **Status**: todo
+- **Where**: `src/stdlib/matrix.mcrs`
+- **Notes**: pure fixed-point arithmetic, no new compiler features needed
+
+### ⑥ stdlib: bigint ÷ bigint
+- **Status**: todo
+- **Where**: `src/stdlib/bigint.mcrs`  
+- **Notes**: algorithm: long division on int[] representation
 
 ---
 
 ## Roadmap
 
-### v2.6 — Language Polish
+### v2.6 — Language Polish (in progress)
 
 #### Compiler
-- [ ] **`for i in 0..n` syntax sugar** — desugar to while, less boilerplate
-- [ ] **Array literal type inference** — `let a = [1, 2, 3]` → `int[]` without annotation
-- [ ] **Struct methods** — `impl Vec3 { fn dot(self, other) }` syntax
-- [ ] **Inlay hints** — show inferred types next to `let` (LSP framework ready, needs AST `inferredType`)
+- [x] **`for i in 0..n` syntax sugar** — implemented
+- [x] **Array literal type inference** — `let a = [1, 2, 3]` → `int[]` without annotation (already worked)
+- [x] **Struct methods** — `impl Vec3 { fn dot(self, other) }` with field-by-field expansion
+- [ ] **`string + var` type error** — should error, not silently emit broken JSON ← TODAY ②
+- [ ] **f-string tell/subtitle/actionbar** — proper JSON text component emit ← TODAY ③
+- [ ] **Inlay hints** — show inferred types next to `let` ← TODAY ④
+- [ ] **Parser: fn endLine in span** — accurate scope for LSP ← TODAY ①
 - [ ] **exp_fx / sin_fixed SA Tuner adapters** — further error reduction
 
 #### stdlib  
-- [ ] **bigint ÷ bigint** — full arbitrary-precision division (currently only div_small)
-- [ ] **mat3_mul / mat4_mul** — general matrix multiply in matrix.mcrs
+- [ ] **bigint ÷ bigint** — full arbitrary-precision division ← TODAY ⑥
+- [ ] **mat3_mul / mat4_mul** — general matrix multiply in matrix.mcrs ← TODAY ⑤
 
 ---
 
@@ -75,53 +123,21 @@ Last updated: 2026-03-18
 > These use features unique to RedScript (coroutine, struct, type system) that raw mcfunction cannot replicate.
 
 #### P1 — Data Structures (leverages struct + int[] backend)
-- [ ] **`heap.mcrs`** — MinHeap / MaxHeap (priority queue over int[])
-  - `heap_push(h, val)`, `heap_pop(h)`, `heap_peek(h)`
-  - Use case: event scheduling, Dijkstra priority queue
-  - Advantage: type-safe struct wrapper; in raw mcfunction requires 100+ lines of manual storage management
+- [x] **`heap.mcrs`** — MinHeap / MaxHeap — done
+- [x] **`sort.mcrs`** — heapsort + mergesort — done
+- [x] **`pathfind.mcrs`** — A* pathfinding — done
+- [ ] **`graph.mcrs`** — adjacency list + BFS/DFS
 
-- [ ] **`graph.mcrs`** — adjacency list + traversal
-  - `graph_add_edge(g, from, to, weight)`, BFS, DFS
-  - Backed by int[] arrays, struct for graph metadata
-  - Prerequisite for pathfinding
+#### P2 — Coroutine-Native Algorithms
+- [ ] **`fft.mcrs`** — Fast Fourier Transform (O(n log n)) via @coroutine
+- [ ] **`sort.mcrs` v2** — merge sort via @coroutine for large n
 
-#### P2 — Coroutine-Native Algorithms (leverages @coroutine)
-> The killer differentiator vs kaer. These are impossible to implement cleanly in raw mcfunction because they require tick-spreading.
-
-- [ ] **`pathfind.mcrs`** — A* pathfinding
-  - `@coroutine(batch=20, onDone="on_path_done")`
-  - Processes 20 nodes/tick → 500-node graph in 25 ticks
-  - Input: start/goal coords + obstacle tags. Output: waypoint list in storage
-  - Use case: mob AI, NPC navigation, auto-turret targeting
-  - kaer equivalent: impossible (each tick can run ~65k commands total, A* on 500 nodes = timeout)
-
-- [ ] **`fft.mcrs`** — Fast Fourier Transform (O(n log n))
-  - Current DFT is O(n²), n≤8. FFT enables n=64/128 in reasonable ticks
-  - `@coroutine(batch=8)` for butterfly stages
-  - Use case: audio analysis, terrain frequency analysis, signal filtering
-  - Advantage: requires double precision (we have it), kaer has only DFT
-
-- [ ] **`sort.mcrs`** — merge sort / quicksort over int[]
-  - Current list.mcrs has bubble sort (O(n²))
-  - Merge sort via @coroutine: sort 1000 elements in ~50 ticks
-  - Use case: leaderboards, inventory sorting
-
-#### P3 — Numerical Computing (leverages double precision chain)
+#### P3 — Numerical Computing (double precision)
 - [ ] **`ode.mcrs`** — Runge-Kutta 4 ODE solver
-  - `rk4_step(f, y, t, h)` — one integration step
-  - Use case: physics simulation, smooth projectile arcs with drag
-  - Requires double precision throughout (we have double_mul, pow_real etc.)
-
 - [ ] **`linalg.mcrs`** — Linear algebra over double
-  - Dot product, matrix-vector multiply, Gaussian elimination
-  - Use case: 3D transformations, regression, curve fitting
-  - More precision than fixed-point matrix.mcrs
 
-#### P4 — ECS Framework (leverages foreach + struct + type system)
+#### P4 — ECS Framework
 - [ ] **`ecs.mcrs`** — Entity Component System
-  - `register_component(entity, Health { 100, 100 })`
-  - `@tick` system auto-iterates over tagged entities
-  - Advantage: type-safe component access; kaer has no abstraction over entity NBT
 
 ---
 
@@ -130,7 +146,6 @@ Last updated: 2026-03-18
 - [ ] **REPL / playground** — browser-based RedScript → mcfunction live preview
 - [ ] **Generic containers** — needs compiler generics instantiation  
 - [ ] **Cross-file incremental tests** — only rerun affected modules
-- [ ] **String interpolation** — proper language feature (currently VSCode extension trick)
 
 ---
 
@@ -143,3 +158,4 @@ Last updated: 2026-03-18
 - **mulfix(a,b) = a×b/1000** (correction divisor for ×10000 fixed multiply)
 - **Coroutine yield mechanism**: loop back-edges, NOT a `yield` keyword
 - **@coroutine constraint**: cannot contain macro calls (continuations called via `function`, not macro)
+- **f-string tell emit**: must generate `{"text":"","extra":[{"text":"prefix"},{"score":...},...]}` JSON
