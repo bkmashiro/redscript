@@ -660,10 +660,10 @@ fn handle(player: Player) {}
     it('rejects mismatched event signatures', () => {
       const errors = typeCheck(`
 @on(BlockBreak)
-fn handle_break(player: Player) {}
+fn handle_break() {}
 `)
       expect(errors.length).toBeGreaterThan(0)
-      expect(errors[0].message).toContain('must declare 2 parameter(s)')
+      expect(errors[0].message).toContain('must declare 1 parameter(s)')
     })
   })
 })

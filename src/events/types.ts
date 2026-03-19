@@ -13,8 +13,11 @@ export const EVENT_TYPES = {
   },
   BlockBreak: {
     tag: 'rs.just_broke_block',
-    params: ['player: Player', 'block: string'],
+    params: ['player: Player'],
     detection: 'advancement',
+    // Note: block type is NOT available as a runtime parameter — MC has no mechanism
+    // to pass event data to function tags. Use minecraft.mined:<block> scoreboard
+    // stats for per-block detection, or check the block at player's position in handler.
   },
   EntityKill: {
     tag: 'rs.just_killed',
