@@ -271,11 +271,7 @@ describe('fft.mcrs — dft_real (requires trig stub)', () => {
     expect(Math.abs(val)).toBeLessThan(100)
   })
 
-  // NOTE: dft_real uses dynamic array indexing on a function parameter (input[j]).
-  // The RedScript compiler currently passes array params as handles — dynamic index
-  // on param arrays doesn't produce correct results in MCRuntime unit tests.
-  // This is covered by MC integration tests where the full datapack runs correctly.
-  test.skip('quarter-wave [10000,0,-10000,0]: X[1] magnitude ≈ 20000 (array param dyn-idx limitation)', () => {
+  test('quarter-wave [10000,0,-10000,0]: X[1] magnitude ≈ 20000', () => {
     const val = callAndGetRet(rt, 'test_dft_quarter_wave_mag1')
     expect(val).toBeGreaterThanOrEqual(19500)
     expect(val).toBeLessThanOrEqual(20500)
