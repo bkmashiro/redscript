@@ -2,6 +2,26 @@
 
 All notable changes to RedScript will be documented in this file.
 
+## [2.6.0] - 2026-03-19
+
+### Compiler
+
+- **Parser** now emits `span.endLine` for function declarations — LSP clients receive accurate scope ranges for hovers and highlights
+- **String concatenation error:** `"string" + var` now raises a compile-time error with a hint to use f-string interpolation instead of silently producing broken output
+- **F-string MC text components:** f-string interpolation inside `tell`, `title`, `subtitle`, `actionbar`, and `announce` now emits proper Minecraft JSON text components (e.g. `["", {"score": …}, " text"]`) instead of raw concatenated strings
+- **LSP inlay hints:** the language server now shows inferred types next to unannotated `let` bindings inline in the editor
+
+### stdlib
+
+- **`mat3_mul` / `mat4_mul`** — 3×3 and 4×4 matrix multiply helpers (fixed-point ×10000 scale) in `stdlib/matrix.mcrs`
+- **`bigint_div`** — full arbitrary-precision long division returning both quotient and remainder in `stdlib/bigint.mcrs`
+- **`graph.mcrs`** — adjacency-list graph library: `graph_add_edge`, BFS, DFS, `has_path`, and `shortest_path` (Dijkstra's algorithm)
+- **`ode.mcrs`** — Runge-Kutta 4th-order ODE solver supporting exponential decay/growth and sine oscillator systems
+
+### VSCode Extension
+
+- **v1.3.17:** inlay hints for inferred `let` binding types; improved variable hover tooltips showing type and declaration site
+
 ## [2.5.0] - 2026-03-17
 
 ### Added
