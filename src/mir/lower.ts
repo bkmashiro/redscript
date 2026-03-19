@@ -1321,7 +1321,13 @@ function lowerExpr(
     case 'call': {
       // Handle scoreboard_get / score — read from vanilla MC scoreboard
       if (expr.fn === 'scoreboard_get' || expr.fn === 'score') {
-        const player = hirExprToStringLiteral(expr.args[0])
+        const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams)
+        // If the arg is a plain ident (Player variable, not a macro param), use @s —
+        // event handlers are always called via `execute as <player> run function ...`
+        // so @s correctly refers to the player in context.
+        const player = (!playerArg.isMacro && expr.args[0].kind === 'ident')
+          ? '@s'
+          : (playerArg.str || '@s')
         const obj = hirExprToStringLiteral(expr.args[1])
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'score_read', dst: t, player, obj })
@@ -1330,7 +1336,10 @@ function lowerExpr(
 
       // Handle scoreboard_set — write to vanilla MC scoreboard
       if (expr.fn === 'scoreboard_set') {
-        const player = hirExprToStringLiteral(expr.args[0])
+        const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams)
+        const player = (!playerArg.isMacro && expr.args[0].kind === 'ident')
+          ? '@s'
+          : (playerArg.str || '@s')
         const obj = hirExprToStringLiteral(expr.args[1])
         const src = lowerExpr(expr.args[2], ctx, scope)
         ctx.emit({ kind: 'score_write', player, obj, src })
