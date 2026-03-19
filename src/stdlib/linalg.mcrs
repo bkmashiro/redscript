@@ -43,7 +43,7 @@ fn vec2d_length(x: double, y: double): double {
     let xx: double = x * x;
     let yy: double = y * y;
     let s: double = xx + yy;
-    return double_sqrt(s);
+    return double_sqrt(s) as double;
 }
 
 // vec2d_dist(ax, ay, bx, by): Euclidean distance between two 2D points.
@@ -101,7 +101,7 @@ fn vec3d_length(x: double, y: double, z: double): double {
     let zz: double = z * z;
     let s: double = xx + yy;
     let s2: double = s + zz;
-    return double_sqrt(s2);
+    return double_sqrt(s2) as double;
 }
 
 // vec3d_dist(ax,ay,az, bx,by,bz): Euclidean distance between two 3D points.
