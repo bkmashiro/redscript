@@ -91,8 +91,8 @@ fn tally() {
     let total: int = yes_count + no_count
 
     say("=== Vote Results ===")
-    announce("YES: " + yes_count)
-    announce("NO:  " + no_count)
+    announce(f"YES: {yes_count}")
+    announce(f"NO:  {no_count}")
 
     if (total == 0) {
         say("No votes cast yet!")
@@ -116,7 +116,7 @@ fn tally() {
     // Show percentage with fixed-point arithmetic
     // Multiply by 10000 first to keep precision, then divide by total
     let yes_pct: fixed = (yes_count * 10000 / total) as fixed
-    announce("YES percentage (x10000): " + yes_pct)
+    announce(f"YES percentage (x10000): {yes_pct}")
 }
 
 // ─── While loop example ──────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ fn tally() {
 fn count_down() {
     let i: int = 5
     while (i > 0) {
-        tell(@s, "Countdown: " + i)
+        tell(@s, f"Countdown: {i}")
         i = i - 1
     }
     tell(@s, "Done!")
@@ -138,7 +138,7 @@ fn for_demo() {
     // for loop: start, end (exclusive), step defaults to 1
     let i: int = 0
     while (i < 5) {
-        tell(@s, "Step " + i)
+        tell(@s, f"Step {i}")
         i = i + 1
     }
 }

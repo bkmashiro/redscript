@@ -24,42 +24,42 @@ fn setup() {
 fn demo_math() {
     // abs — absolute value
     let neg: int = abs(-42)             // 42
-    tell(@s, "abs(-42) = " + neg)
+    tell(@s, f"abs(-42) = {neg}")
 
     // min / max
     let lo: int = min(10, 20)           // 10
     let hi: int = max(10, 20)           // 20
-    tell(@s, "min(10,20) = " + lo + "  max(10,20) = " + hi)
+    tell(@s, f"min(10,20) = {lo}  max(10,20) = {hi}")
 
     // clamp — restrict a value to a range
     let clamped: int = clamp(150, 0, 100)   // 100
-    tell(@s, "clamp(150, 0, 100) = " + clamped)
+    tell(@s, f"clamp(150, 0, 100) = {clamped}")
 
     // isqrt — integer square root
     let root: int = isqrt(144)          // 12
-    tell(@s, "isqrt(144) = " + root)
+    tell(@s, f"isqrt(144) = {root}")
 
     // sqrt_fixed — fixed-point sqrt (scale = 1000)
     let sq2: int = sqrt_fixed(2000)     // ~1414 = sqrt(2) * 1000
-    tell(@s, "sqrt_fixed(2000) = " + sq2 + "  (sqrt(2) * 1000 = 1414)")
+    tell(@s, f"sqrt_fixed(2000) = {sq2}  (sqrt(2) * 1000 = 1414)")
 
     // sqrt_fx — fixed-point sqrt (scale = 10000)
     let sq2_hp: int = sqrt_fx(20000)    // ~14142 = sqrt(2) * 10000
-    tell(@s, "sqrt_fx(20000) = " + sq2_hp)
+    tell(@s, f"sqrt_fx(20000) = {sq2_hp}")
 
     // sin_fixed / cos_fixed — trig in degrees, result * 1000
     let sin30: int = sin_fixed(30)      // 500 = 0.5 * 1000
     let cos60: int = cos_fixed(60)      // 500
-    tell(@s, "sin_fixed(30) = " + sin30 + "  cos_fixed(60) = " + cos60)
+    tell(@s, f"sin_fixed(30) = {sin30}  cos_fixed(60) = {cos60}")
 
     // lerp — linear interpolation  lerp(a, b, t) with t in [0,1000]
     let midpoint: int = lerp(100, 200, 500)   // 150
-    tell(@s, "lerp(100, 200, 500) = " + midpoint)
+    tell(@s, f"lerp(100, 200, 500) = {midpoint}")
 
     // mulfix — multiply two fixed-point values (scale=1000)
     // mulfix(a,b) = a*b/1000
     let product: int = mulfix(sin30, cos60)   // 500*500/1000 = 250
-    tell(@s, "mulfix(500, 500) = " + product + "  (0.5 * 0.5 = 0.25 * 1000 = 250)")
+    tell(@s, f"mulfix(500, 500) = {product}  (0.5 * 0.5 = 0.25 * 1000 = 250)")
 }
 
 // ─── Draw a circle of particles ──────────────────────────────────────────────

@@ -151,7 +151,7 @@ fn check_flag_capture() {
         let dist: int = distance_to(p, BLUE_BASE_X, BASE_Y, BLUE_BASE_Z);
         if (dist < 5) {
             game.blue_score = game.blue_score + 1;
-            announce("§e[CTF] §9Blue Team §ascores! §f(" + game.blue_score + "/" + WIN_SCORE + ")");
+            announce(f"§e[CTF] §9Blue Team §ascores! §f({game.blue_score}/{WIN_SCORE})");
             tag_remove(p, "has_flag");
             effect_clear(p, "minecraft:glowing");
             place_flags();
@@ -164,7 +164,7 @@ fn check_flag_capture() {
         let dist: int = distance_to(p, RED_BASE_X, BASE_Y, RED_BASE_Z);
         if (dist < 5) {
             game.red_score = game.red_score + 1;
-            announce("§e[CTF] §cRed Team §ascores! §f(" + game.red_score + "/" + WIN_SCORE + ")");
+            announce(f"§e[CTF] §cRed Team §ascores! §f({game.red_score}/{WIN_SCORE})");
             tag_remove(p, "has_flag");
             effect_clear(p, "minecraft:glowing");
             place_flags();

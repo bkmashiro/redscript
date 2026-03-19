@@ -90,7 +90,7 @@ fn start_prep_phase() {
     state.prep_timer = WAVE_DELAY;
     state.wave = state.wave + 1;
     
-    announce("§4[Zombie Survival] §eWave " + state.wave + " incoming!");
+    announce(f"§4[Zombie Survival] §eWave {state.wave} incoming!");
     announce("§7Preparation time: 10 seconds...");
     
     // Shop hint
@@ -110,7 +110,7 @@ fn start_combat_phase() {
     bossbar_set_max("zs_wave", zombie_count);
     bossbar_set_value("zs_wave", zombie_count);
     
-    title(@a, "§cWave " + state.wave);
+    title(@a, f"§cWave {state.wave}");
     
     // Spawn zombies
     spawn_zombies(zombie_count);
@@ -138,7 +138,7 @@ fn spawn_zombies(count: int) {
         }
     }
     
-    announce("§c" + count + " zombies have appeared!");
+    announce(f"§c{count} zombies have appeared!");
 }
 
 // ===== Every Tick =====
@@ -200,7 +200,7 @@ fn combat_tick() {
 }
 
 fn wave_complete() {
-    announce("§4[Zombie Survival] §aWave " + state.wave + " complete!");
+    announce(f"§4[Zombie Survival] §aWave {state.wave} complete!");
     
     // Reward coins
     let reward: int = 50 + (state.wave * 25);
@@ -208,7 +208,7 @@ fn wave_complete() {
         scoreboard_add(p, "zs_coins", reward);
         happy(p);
     }
-    announce("§6+" + reward + " coins");
+    announce(f"§6+{reward} coins");
     
     // Check special wave
     if (state.wave == 10) {
@@ -291,8 +291,8 @@ fn game_over() {
     state.running = 0;
     
     title(@a, "§cGame Over");
-    subtitle(@a, "§7Survived " + state.wave + " waves");
-    announce("§4[Zombie Survival] §cAll players eliminated! Highest wave: " + state.wave);
+    subtitle(@a, f"§7Survived {state.wave} waves");
+    announce(f"§4[Zombie Survival] §cAll players eliminated! Highest wave: {state.wave}");
     
     // Clean up zombies
     kill(@e[type=zombie]);

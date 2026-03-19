@@ -74,7 +74,7 @@ fn game_timer() {
 
 fn countdown_tick() {
     game.timer = game.timer - 1
-    actionbar(@a, "Game starting in " + game.timer + "...")
+    actionbar(@a, f"Game starting in {game.timer}...")
 
     if (game.timer <= 0) {
         begin_game()
@@ -91,11 +91,11 @@ fn playing_tick() {
     // Actionbar with time remaining
     let mins: int = game.timer / 60
     let secs: int = game.timer % 60
-    actionbar(@a, "⏱ " + mins + "m " + secs + "s remaining — get kills!")
+    actionbar(@a, f"⏱ {mins}m {secs}s remaining — get kills!")
 
     if (game.timer <= 10) {
         // Warning sound region
-        actionbar(@a, "⚠ FINAL " + game.timer + " SECONDS!")
+        actionbar(@a, f"⚠ FINAL {game.timer} SECONDS!")
     }
 
     if (game.timer <= 0) {
@@ -257,17 +257,17 @@ fn announce_winner() {
         let k: int = scoreboard_get(p, "kr_kills")
         if (k == top_kills) {
             title(p, "You Win!")
-            subtitle(p, "Top score: " + top_kills + " kills!")
+            subtitle(p, f"Top score: {top_kills} kills!")
             buff_all(p, 60)
             give(p, "minecraft:diamond", top_kills)
-            tell(p, "Winner's prize: " + top_kills + " diamonds!")
+            tell(p, f"Winner's prize: {top_kills} diamonds!")
         } else {
             title(p, "Game Over")
-            subtitle(p, "Your kills: " + k)
+            subtitle(p, f"Your kills: {k}")
         }
     }
 
-    announce("Kill Race winner had " + top_kills + " kills!")
+    announce(f"Kill Race winner had {top_kills} kills!")
 }
 
 @schedule(200)

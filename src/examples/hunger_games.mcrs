@@ -182,7 +182,7 @@ fn shrink_border() {
         }
         
         // worldborder set game.current_border 60
-        announce("§c[Hunger Games] §eBorder is shrinking! Current size: " + game.current_border);
+        announce(f"§c[Hunger Games] §eBorder is shrinking! Current size: {game.current_border}");
         
         // Update bossbar
         bossbar_set_max("hg_border", INITIAL_BORDER);
@@ -225,7 +225,7 @@ fn check_alive() {
     game.alive_count = alive;
     
     // Update scoreboard display
-    actionbar(@a, "§cAlive: " + alive);
+    actionbar(@a, f"§cAlive: {alive}");
     
     // Check for victory
     if (alive <= 1) {
@@ -246,7 +246,7 @@ fn declare_winner(winner: selector) {
     
     title(@a, "§6Winner!");
     announce("§c[Hunger Games] §6Game Over!");
-    announce("§aWinner's kills: " + kills);
+    announce(f"§aWinner's kills: {kills}");
     
     // Victory effects
     totem_effect(winner);
@@ -276,7 +276,7 @@ fn on_player_death(player: selector, killer: selector) {
     // gamemode spectator player
     
     let kills: int = scoreboard_get(killer, "hg_kills");
-    announce("§c☠ §7A player was eliminated! Killer now has " + kills + " kills");
+    announce(f"§c☠ §7A player was eliminated! Killer now has {kills} kills");
 }
 
 // ===== Reset Game =====

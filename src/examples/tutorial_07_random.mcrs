@@ -79,11 +79,11 @@ fn open_chest() {
     let seed3: int = advance_seed()
     let bonus: int = binomial_sample(3, 2500, seed3)   // 3 trials, 25% each → 0..3
 
-    tell(@s, "Found: " + count + "x " + name)
+    tell(@s, f"Found: {count}x {name}")
     give(@s, item, count)
 
     if (bonus > 0) {
-        tell(@s, "BONUS! +" + bonus + " extra chests!")
+        tell(@s, f"BONUS! +{bonus} extra chests!")
         let b: int = 0
         while (b < bonus) {
             let bseed: int = advance_seed()
@@ -108,7 +108,7 @@ fn terrain_demo() {
     let i: int = 0
     while (i < 5) {
         let h: int = terrain_height(i, 0, 64, 20)
-        tell(@s, "x=" + i + " → height=" + h)
+        tell(@s, f"x={i} → height={h}")
         i = i + 1
     }
 }
@@ -123,7 +123,7 @@ fn fbm_demo() {
         // x_fx in ×10000 fixed-point: i * 5000 = 0.0, 0.5, 1.0, ...
         let x_fx: int = i * 5000
         let n: int = fbm_1d(x_fx, 4, 5000)   // 4 octaves, persistence=0.5
-        tell(@s, "fbm(" + i + "/2) = " + n)
+        tell(@s, f"fbm({i}/2) = {n}")
         i = i + 1
     }
 }

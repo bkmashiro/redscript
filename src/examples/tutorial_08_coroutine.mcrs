@@ -81,7 +81,7 @@ fn run_scan() {
         // Progress update every 1000 blocks (every 20 ticks)
         if (scan.blocks_checked % 1000 == 0) {
             let pct: int = scan.blocks_checked * 100 / 10000
-            actionbar(@a, "Scanning: " + pct + "% (" + scan.blocks_checked + "/10000)")
+            actionbar(@a, f"Scanning: {pct}% ({scan.blocks_checked}/10000)")
         }
 
         i = i + 1
@@ -97,17 +97,17 @@ fn scan_complete() {
     scan.scan_running = 0
 
     say("=== Scan Complete! ===")
-    say("Blocks checked: " + scan.blocks_checked)
-    say("Special blocks found: " + scan.special_found)
+    say(f"Blocks checked: {scan.blocks_checked}")
+    say(f"Special blocks found: {scan.special_found}")
 
     title(@a, "Scan Done!")
     let found: int = scan.special_found
-    subtitle(@a, "Special blocks found: " + found)
+    subtitle(@a, f"Special blocks found: {found}")
 
     // Give a report item to all players
     foreach (p in @a) {
         give(p, "minecraft:paper", 1)
-        tell(p, "Your scan report: " + scan.special_found + " special blocks in 100x100 region")
+        tell(p, f"Your scan report: {scan.special_found} special blocks in 100x100 region")
     }
 }
 
@@ -116,12 +116,12 @@ fn scan_complete() {
 @on_trigger("scan_status")
 fn scan_status() {
     if (scan.scan_running == 0) {
-        tell(@s, "No scan running. Last result: " + scan.special_found + " special blocks")
+        tell(@s, f"No scan running. Last result: {scan.special_found} special blocks")
         return
     }
 
     let pct: int = scan.blocks_checked * 100 / 10000
-    tell(@s, "Scan in progress: " + pct + "% (" + scan.blocks_checked + "/10000)")
+    tell(@s, f"Scan in progress: {pct}% ({scan.blocks_checked}/10000)")
 }
 
 // ─── Chained coroutine example ───────────────────────────────────────────────

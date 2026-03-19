@@ -89,7 +89,7 @@ fn demo_selectors() {
     foreach (p in @a[distance=..10]) {
         in_zone_count = in_zone_count + 1
     }
-    tell(@s, "Players in zone: " + in_zone_count)
+    tell(@s, f"Players in zone: {in_zone_count}")
 }
 
 // ─── Tag-based selection ─────────────────────────────────────────────────────

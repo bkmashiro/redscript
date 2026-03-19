@@ -92,7 +92,7 @@ fn race_tick() {
             let time: int = scoreboard_get(p, "pk_time");
             let seconds: int = time / 20;
             let ms: int = (time % 20) * 5;
-            actionbar(p, "§e⏱ " + seconds + "." + ms + "s");
+            actionbar(p, f"§e⏱ {seconds}.{ms}s");
             
             // Check fall
             check_fall(p);
@@ -109,7 +109,7 @@ fn check_fall(player: selector) {
     execute if entity player[y=..50] run {
         let cp: int = scoreboard_get(player, "pk_checkpoint");
         respawn_at_checkpoint(player, cp);
-        tell(player, "§cFell! Returning to checkpoint " + cp);
+        tell(player, f"§cFell! Returning to checkpoint {cp}");
         angry(player);
     }
 }
@@ -157,7 +157,7 @@ fn reach_checkpoint(player: selector, cp: int) {
     scoreboard_set(player, "pk_checkpoint", cp);
     
     title(player, "");
-    subtitle(player, "§aCheckpoint " + cp + " / " + CHECKPOINT_COUNT);
+    subtitle(player, f"§aCheckpoint {cp} / {CHECKPOINT_COUNT}");
     
     happy(player);
     playsound("minecraft:entity.experience_orb.pickup", "player", player);
@@ -194,19 +194,19 @@ fn finish_race(player: selector) {
         // First completion
         scoreboard_set(player, "pk_best", time);
         title(player, "§6Finished!");
-        subtitle(player, "§e" + seconds + "." + ms + "s §7(first record)");
-        announce("§b[Parkour] §fA player finished! Time: §e" + seconds + "." + ms + "s");
+        subtitle(player, f"§e{seconds}.{ms}s §7(first record)");
+        announce(f"§b[Parkour] §fA player finished! Time: §e{seconds}.{ms}s");
     } else {
         if (time < best) {
             // New record!
             scoreboard_set(player, "pk_best", time);
             title(player, "§6New Record!");
-            subtitle(player, "§e" + seconds + "." + ms + "s");
-            announce("§b[Parkour] §6New Record! §fTime: §e" + seconds + "." + ms + "s");
+            subtitle(player, f"§e{seconds}.{ms}s");
+            announce(f"§b[Parkour] §6New Record! §fTime: §e{seconds}.{ms}s");
             totem_effect(player);
         } else {
             title(player, "§aFinished!");
-            subtitle(player, "§e" + seconds + "." + ms + "s");
+            subtitle(player, f"§e{seconds}.{ms}s");
         }
     }
     
