@@ -419,17 +419,19 @@ export class TypeChecker {
       case 'match':
         this.checkExpr(stmt.expr)
         for (const arm of stmt.arms) {
-          if (arm.pattern) {
-            this.checkExpr(arm.pattern)
+          if (arm.pattern.kind === 'PatExpr') {
+            // Legacy: check the wrapped expression against the subject type
+            this.checkExpr(arm.pattern.expr)
             const subjectType = this.inferType(stmt.expr)
-            const patternType = this.inferType(arm.pattern)
+            const patternType = this.inferType(arm.pattern.expr)
             // Skip check if either type is unknown (void) — struct field access not yet inferred
             const isUnknown = (t: TypeNode) => t.kind === 'named' && t.name === 'void'
             if (!isUnknown(subjectType) && !isUnknown(patternType) &&
                 !this.typesMatch(subjectType, patternType)) {
-              this.report('Match arm pattern type must match subject type', arm.pattern)
+              this.report('Match arm pattern type must match subject type', arm.pattern.expr)
             }
           }
+          // PatSome / PatNone / PatInt / PatWild are structurally typed — no expr to check
           this.checkBlock(arm.body)
         }
         break

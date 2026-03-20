@@ -892,67 +892,142 @@ function lowerStmt(
 
     case 'match': {
       // Lower match as chained if/else
-      const matchVal = lowerExpr(stmt.expr, ctx, scope)
       const mergeBlock = ctx.newBlock('match_merge')
+
+      // Determine if any arm uses Option patterns (PatSome / PatNone).
+      // If so, resolve the Option has/val slots from the subject ident.
+      const hasOptionPats = stmt.arms.some(a =>
+        a.pattern.kind === 'PatSome' || a.pattern.kind === 'PatNone'
+      )
+
+      // For Option match: resolve has/val temps from subject (must be an ident)
+      let optHasOp: Operand | undefined
+      let optValTemp: string | undefined
+      if (hasOptionPats) {
+        if (stmt.expr.kind === 'ident') {
+          const sv = ctx.structVars.get(stmt.expr.name)
+          if (sv && sv.typeName === '__option') {
+            optHasOp = { kind: 'temp', name: sv.fields.get('has')! }
+            optValTemp = sv.fields.get('val')!
+          } else {
+            // Fall back: evaluate and use __rf_has/__rf_val convention
+            lowerExpr(stmt.expr, ctx, scope)
+            const hasT = ctx.freshTemp()
+            const valT = ctx.freshTemp()
+            ctx.emit({ kind: 'copy', dst: hasT, src: { kind: 'temp', name: '__rf_has' } })
+            ctx.emit({ kind: 'copy', dst: valT, src: { kind: 'temp', name: '__rf_val' } })
+            optHasOp = { kind: 'temp', name: hasT }
+            optValTemp = valT
+          }
+        } else {
+          lowerExpr(stmt.expr, ctx, scope)
+          const hasT = ctx.freshTemp()
+          const valT = ctx.freshTemp()
+          ctx.emit({ kind: 'copy', dst: hasT, src: { kind: 'temp', name: '__rf_has' } })
+          ctx.emit({ kind: 'copy', dst: valT, src: { kind: 'temp', name: '__rf_val' } })
+          optHasOp = { kind: 'temp', name: hasT }
+          optValTemp = valT
+        }
+      }
+
+      // For non-option match, evaluate the subject once
+      const matchVal: Operand = hasOptionPats
+        ? optHasOp! // unused for non-option path
+        : lowerExpr(stmt.expr, ctx, scope)
 
       for (let i = 0; i < stmt.arms.length; i++) {
         const arm = stmt.arms[i]
-        if (arm.pattern === null) {
-          // Default arm — just emit the body
+        const pat = arm.pattern
+
+        if (pat.kind === 'PatWild') {
+          // Wildcard/default arm — always matches
           lowerBlock(arm.body, ctx, new Map(scope))
           if (isPlaceholderTerm(ctx.current().term)) {
             ctx.terminate({ kind: 'jump', target: mergeBlock.id })
           }
-        } else if (arm.pattern.kind === 'range_lit') {
-          // Range pattern: e.g. 0..59 => emit ge/le comparisons
-          const range = arm.pattern.range
-          const armBody = ctx.newBlock('match_arm')
-          const nextArm = ctx.newBlock('match_next')
-
-          // Chain checks: if min defined, check matchVal >= min; if max defined, check matchVal <= max
-          // Each failed check jumps to nextArm
-          const checks: Array<{ op: 'ge' | 'le'; bound: number }> = []
-          if (range.min !== undefined) checks.push({ op: 'ge', bound: range.min })
-          if (range.max !== undefined) checks.push({ op: 'le', bound: range.max })
-
-          if (checks.length === 0) {
-            // Open range — always matches
-            ctx.terminate({ kind: 'jump', target: armBody.id })
-          } else {
-            // Emit checks sequentially; each check passes → continue to next or armBody
-            for (let ci = 0; ci < checks.length; ci++) {
-              const { op, bound } = checks[ci]
-              const cmpTemp = ctx.freshTemp()
-              ctx.emit({ kind: 'cmp', dst: cmpTemp, op, a: matchVal, b: { kind: 'const', value: bound } })
-              const passBlock = ci === checks.length - 1 ? armBody : ctx.newBlock('match_range_check')
-              ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: cmpTemp }, then: passBlock.id, else: nextArm.id })
-              if (ci < checks.length - 1) ctx.switchTo(passBlock)
-            }
-          }
-
-          ctx.switchTo(armBody)
-          lowerBlock(arm.body, ctx, new Map(scope))
-          if (isPlaceholderTerm(ctx.current().term)) {
-            ctx.terminate({ kind: 'jump', target: mergeBlock.id })
-          }
-
-          ctx.switchTo(nextArm)
-        } else {
-          const patOp = lowerExpr(arm.pattern, ctx, scope)
+        } else if (pat.kind === 'PatNone') {
+          // None arm: optHasOp == 0
           const cmpTemp = ctx.freshTemp()
-          ctx.emit({ kind: 'cmp', dst: cmpTemp, op: 'eq', a: matchVal, b: patOp })
-
+          ctx.emit({ kind: 'cmp', dst: cmpTemp, op: 'eq', a: optHasOp!, b: { kind: 'const', value: 0 } })
           const armBody = ctx.newBlock('match_arm')
           const nextArm = ctx.newBlock('match_next')
           ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: cmpTemp }, then: armBody.id, else: nextArm.id })
-
           ctx.switchTo(armBody)
           lowerBlock(arm.body, ctx, new Map(scope))
           if (isPlaceholderTerm(ctx.current().term)) {
             ctx.terminate({ kind: 'jump', target: mergeBlock.id })
           }
-
           ctx.switchTo(nextArm)
+        } else if (pat.kind === 'PatSome') {
+          // Some(x) arm: optHasOp == 1, bind x = optValTemp
+          const cmpTemp = ctx.freshTemp()
+          ctx.emit({ kind: 'cmp', dst: cmpTemp, op: 'eq', a: optHasOp!, b: { kind: 'const', value: 1 } })
+          const armBody = ctx.newBlock('match_arm')
+          const nextArm = ctx.newBlock('match_next')
+          ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: cmpTemp }, then: armBody.id, else: nextArm.id })
+          ctx.switchTo(armBody)
+          const armScope = new Map(scope)
+          // Bind the pattern variable to the option value temp
+          if (optValTemp) armScope.set(pat.binding, optValTemp)
+          lowerBlock(arm.body, ctx, armScope)
+          if (isPlaceholderTerm(ctx.current().term)) {
+            ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+          }
+          ctx.switchTo(nextArm)
+        } else if (pat.kind === 'PatInt') {
+          const cmpTemp = ctx.freshTemp()
+          ctx.emit({ kind: 'cmp', dst: cmpTemp, op: 'eq', a: matchVal, b: { kind: 'const', value: pat.value } })
+          const armBody = ctx.newBlock('match_arm')
+          const nextArm = ctx.newBlock('match_next')
+          ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: cmpTemp }, then: armBody.id, else: nextArm.id })
+          ctx.switchTo(armBody)
+          lowerBlock(arm.body, ctx, new Map(scope))
+          if (isPlaceholderTerm(ctx.current().term)) {
+            ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+          }
+          ctx.switchTo(nextArm)
+        } else if (pat.kind === 'PatExpr') {
+          // Legacy: range_lit or other expression
+          const expr = pat.expr
+          if (expr.kind === 'range_lit') {
+            const range = expr.range
+            const armBody = ctx.newBlock('match_arm')
+            const nextArm = ctx.newBlock('match_next')
+            const checks: Array<{ op: 'ge' | 'le'; bound: number }> = []
+            if (range.min !== undefined) checks.push({ op: 'ge', bound: range.min })
+            if (range.max !== undefined) checks.push({ op: 'le', bound: range.max })
+            if (checks.length === 0) {
+              ctx.terminate({ kind: 'jump', target: armBody.id })
+            } else {
+              for (let ci = 0; ci < checks.length; ci++) {
+                const { op, bound } = checks[ci]
+                const cmpTemp = ctx.freshTemp()
+                ctx.emit({ kind: 'cmp', dst: cmpTemp, op, a: matchVal, b: { kind: 'const', value: bound } })
+                const passBlock = ci === checks.length - 1 ? armBody : ctx.newBlock('match_range_check')
+                ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: cmpTemp }, then: passBlock.id, else: nextArm.id })
+                if (ci < checks.length - 1) ctx.switchTo(passBlock)
+              }
+            }
+            ctx.switchTo(armBody)
+            lowerBlock(arm.body, ctx, new Map(scope))
+            if (isPlaceholderTerm(ctx.current().term)) {
+              ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+            }
+            ctx.switchTo(nextArm)
+          } else {
+            const patOp = lowerExpr(expr, ctx, scope)
+            const cmpTemp = ctx.freshTemp()
+            ctx.emit({ kind: 'cmp', dst: cmpTemp, op: 'eq', a: matchVal, b: patOp })
+            const armBody = ctx.newBlock('match_arm')
+            const nextArm = ctx.newBlock('match_next')
+            ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: cmpTemp }, then: armBody.id, else: nextArm.id })
+            ctx.switchTo(armBody)
+            lowerBlock(arm.body, ctx, new Map(scope))
+            if (isPlaceholderTerm(ctx.current().term)) {
+              ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+            }
+            ctx.switchTo(nextArm)
+          }
         }
       }
 

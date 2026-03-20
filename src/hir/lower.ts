@@ -13,11 +13,11 @@
 
 import type {
   Program, Expr, Stmt, Block, FnDecl, Param,
-  AssignOp, ExecuteSubcommand,
+  AssignOp, ExecuteSubcommand, MatchPattern,
 } from '../ast/types'
 import type {
   HIRModule, HIRFunction, HIRParam, HIRExpr, HIRStmt, HIRBlock,
-  HIRExecuteSubcommand, HIRStruct, HIRImplBlock, HIREnum, HIRConst, HIRGlobal,
+  HIRExecuteSubcommand, HIRStruct, HIRImplBlock, HIREnum, HIRConst, HIRGlobal, HIRMatchPattern,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -51,6 +51,20 @@ export function lowerToHIR(program: Program): HIRModule {
       span: c.span,
     })),
     isLibrary: program.isLibrary,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pattern lowering
+// ---------------------------------------------------------------------------
+
+function lowerMatchPattern(pat: MatchPattern): HIRMatchPattern {
+  switch (pat.kind) {
+    case 'PatSome': return pat
+    case 'PatNone': return pat
+    case 'PatInt':  return pat
+    case 'PatWild': return pat
+    case 'PatExpr': return { kind: 'PatExpr', expr: lowerExpr(pat.expr) }
   }
 }
 
@@ -263,7 +277,7 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
         kind: 'match',
         expr: lowerExpr(stmt.expr),
         arms: stmt.arms.map(arm => ({
-          pattern: arm.pattern ? lowerExpr(arm.pattern) : null,
+          pattern: lowerMatchPattern(arm.pattern),
           body: lowerBlock(arm.body),
         })),
         span: stmt.span,

@@ -223,6 +223,17 @@ export type ExecuteSubcommand =
   | { kind: 'store_result'; target: string; targetObj: string }
   | { kind: 'store_success'; target: string; targetObj: string }
 
+// ---------------------------------------------------------------------------
+// Match Patterns
+// ---------------------------------------------------------------------------
+
+export type MatchPattern =
+  | { kind: 'PatSome'; binding: string }   // Some(x)
+  | { kind: 'PatNone' }                    // None
+  | { kind: 'PatInt'; value: number }      // 1, 2, 3
+  | { kind: 'PatWild' }                    // _
+  | { kind: 'PatExpr'; expr: Expr }        // legacy: range_lit or other expr
+
 export type Stmt =
   | { kind: 'let';        name: string; type?: TypeNode; init: Expr; span?: Span }
   | { kind: 'let_destruct'; names: string[]; type?: TypeNode; init: Expr; span?: Span }
@@ -236,7 +247,7 @@ export type Stmt =
   | { kind: 'foreach';    binding: string; iterable: Expr; body: Block; executeContext?: string; span?: Span }
   | { kind: 'for_range';  varName: string; start: Expr; end: Expr; inclusive?: boolean; body: Block; span?: Span }
   | { kind: 'for_in_array'; binding: string; arrayName: string; lenExpr: Expr; body: Block; span?: Span }
-  | { kind: 'match';      expr: Expr; arms: { pattern: Expr | null; body: Block }[]; span?: Span }
+  | { kind: 'match';      expr: Expr; arms: { pattern: MatchPattern; body: Block }[]; span?: Span }
   | { kind: 'if_let_some'; binding: string; init: Expr; then: Block; else_?: Block; span?: Span }
   | { kind: 'as_block';   selector: EntitySelector; body: Block; span?: Span }
   | { kind: 'at_block';   selector: EntitySelector; body: Block; span?: Span }

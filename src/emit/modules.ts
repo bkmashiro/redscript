@@ -507,7 +507,8 @@ function rewriteStmt(stmt: Stmt, symbolMap: Map<string, string>): void {
     case 'match':
       rewriteExpr(stmt.expr, symbolMap)
       for (const arm of stmt.arms) {
-        if (arm.pattern) rewriteExpr(arm.pattern, symbolMap)
+        // PatExpr wraps a legacy Expr that may contain symbol refs
+        if (arm.pattern.kind === 'PatExpr') rewriteExpr(arm.pattern.expr, symbolMap)
         rewriteBlock(arm.body, symbolMap)
       }
       break

@@ -311,9 +311,9 @@ impl Point {
       expect(stmt.kind).toBe('match')
       expect((stmt as any).expr).toEqual({ kind: 'ident', name: 'choice' })
       expect((stmt as any).arms).toEqual([
-        { pattern: { kind: 'int_lit', value: 1 }, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'one' }] } }] },
-        { pattern: { kind: 'int_lit', value: 2 }, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'two' }] } }] },
-        { pattern: null, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'other' }] } }] },
+        { pattern: { kind: 'PatInt', value: 1 }, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'one' }] } }] },
+        { pattern: { kind: 'PatInt', value: 2 }, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'two' }] } }] },
+        { pattern: { kind: 'PatWild' }, body: [{ kind: 'expr', expr: { kind: 'call', fn: 'say', args: [{ kind: 'str_lit', value: 'other' }] } }] },
       ])
     })
 

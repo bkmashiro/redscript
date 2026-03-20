@@ -131,6 +131,17 @@ export type HIRExecuteSubcommand =
   | { kind: 'store_success'; target: string; targetObj: string }
 
 // ---------------------------------------------------------------------------
+// HIR Match Patterns
+// ---------------------------------------------------------------------------
+
+export type HIRMatchPattern =
+  | { kind: 'PatSome'; binding: string }   // Some(x)
+  | { kind: 'PatNone' }                    // None
+  | { kind: 'PatInt'; value: number }      // 1, 2, 3
+  | { kind: 'PatWild' }                    // _
+  | { kind: 'PatExpr'; expr: HIRExpr }     // legacy: range_lit or other expr
+
+// ---------------------------------------------------------------------------
 // HIR Statements
 // ---------------------------------------------------------------------------
 
@@ -146,7 +157,7 @@ export type HIRStmt =
   // foreach preserved (entity iteration is MC-specific, not just sugar)
   | { kind: 'foreach'; binding: string; iterable: HIRExpr; body: HIRBlock; executeContext?: string; span?: Span }
   // match preserved (not trivially desugarable)
-  | { kind: 'match'; expr: HIRExpr; arms: { pattern: HIRExpr | null; body: HIRBlock }[]; span?: Span }
+  | { kind: 'match'; expr: HIRExpr; arms: { pattern: HIRMatchPattern; body: HIRBlock }[]; span?: Span }
   // Unified execute block (absorbs as_block, at_block, as_at, execute)
   | { kind: 'execute'; subcommands: HIRExecuteSubcommand[]; body: HIRBlock; span?: Span }
   | { kind: 'raw'; cmd: string; span?: Span }

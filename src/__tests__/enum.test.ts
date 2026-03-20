@@ -126,14 +126,12 @@ describe('enum: parser', () => {
     if (matchStmt.kind === 'match') {
       expect(matchStmt.arms).toHaveLength(2)
       expect(matchStmt.arms[0].pattern).toMatchObject({
-        kind: 'path_expr',
-        enumName: 'Phase',
-        variant: 'Idle',
+        kind: 'PatExpr',
+        expr: { kind: 'path_expr', enumName: 'Phase', variant: 'Idle' },
       })
       expect(matchStmt.arms[1].pattern).toMatchObject({
-        kind: 'path_expr',
-        enumName: 'Phase',
-        variant: 'Moving',
+        kind: 'PatExpr',
+        expr: { kind: 'path_expr', enumName: 'Phase', variant: 'Moving' },
       })
     }
   })

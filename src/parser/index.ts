@@ -10,7 +10,7 @@ import type {
   Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, GlobalDecl, LiteralExpr, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Span, Stmt, TypeNode, AssignOp,
   StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr, ImplBlock,
-  CoordComponent, LambdaParam, EntityTypeName, ImportDecl
+  CoordComponent, LambdaParam, EntityTypeName, ImportDecl, MatchPattern
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ast/types'
 import { DiagnosticError } from '../diagnostics'
@@ -958,25 +958,62 @@ export class Parser {
     return this.withLoc({ kind: 'foreach', binding, iterable, body, executeContext }, foreachToken)
   }
 
+  private parseMatchPattern(): MatchPattern {
+    // Wildcard: _
+    if (this.check('ident') && this.peek().value === '_') {
+      this.advance()
+      return { kind: 'PatWild' }
+    }
+    // None
+    if (this.check('ident') && this.peek().value === 'None') {
+      this.advance()
+      return { kind: 'PatNone' }
+    }
+    // Some(x)
+    if (this.check('ident') && this.peek().value === 'Some') {
+      this.advance() // consume 'Some'
+      this.expect('(')
+      const binding = this.expect('ident').value
+      this.expect(')')
+      return { kind: 'PatSome', binding }
+    }
+    // Integer literal
+    if (this.check('int_lit')) {
+      const tok = this.advance()
+      return { kind: 'PatInt', value: parseInt(tok.value, 10) }
+    }
+    // Negative integer literal: -N
+    if (this.check('-') && this.peek(1).kind === 'int_lit') {
+      this.advance() // consume '-'
+      const tok = this.advance()
+      return { kind: 'PatInt', value: -parseInt(tok.value, 10) }
+    }
+    // Legacy: range_lit or any other expression (e.g. 0..59)
+    const e = this.parseExpr()
+    return { kind: 'PatExpr', expr: e }
+  }
+
   private parseMatchStmt(): Stmt {
     const matchToken = this.expect('match')
-    this.expect('(')
-    const expr = this.parseExpr()
-    this.expect(')')
+
+    // Support both `match (expr)` (legacy) and `match expr` (new syntax)
+    let expr: Expr
+    if (this.check('(')) {
+      // Peek ahead — if it looks like `(expr)` followed by `{`, consume parens
+      this.advance() // consume '('
+      expr = this.parseExpr()
+      this.expect(')')
+    } else {
+      expr = this.parseExpr()
+    }
     this.expect('{')
 
-    const arms: Array<{ pattern: Expr | null; body: Block }> = []
+    const arms: Array<{ pattern: MatchPattern; body: Block }> = []
     while (!this.check('}') && !this.check('eof')) {
-      let pattern: Expr | null
-      if (this.check('ident') && this.peek().value === '_') {
-        this.advance()
-        pattern = null
-      } else {
-        pattern = this.parseExpr()
-      }
-
+      const pattern = this.parseMatchPattern()
       this.expect('=>')
       const body = this.parseBlock()
+      this.match(',') // optional trailing comma
       arms.push({ pattern, body })
     }
 

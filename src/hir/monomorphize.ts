@@ -21,7 +21,7 @@
 
 import type {
   HIRModule, HIRFunction, HIRParam, HIRExpr, HIRStmt, HIRBlock,
-  TypeNode,
+  TypeNode, HIRMatchPattern,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -258,10 +258,15 @@ class Monomorphizer {
         return {
           ...stmt,
           expr: this.rewriteExpr(stmt.expr, ctx),
-          arms: stmt.arms.map(arm => ({
-            pattern: arm.pattern ? this.rewriteExpr(arm.pattern, ctx) : null,
-            body: this.rewriteBlock(arm.body, ctx),
-          })),
+          arms: stmt.arms.map(arm => {
+            let pattern: HIRMatchPattern
+            if (arm.pattern.kind === 'PatExpr') {
+              pattern = { kind: 'PatExpr', expr: this.rewriteExpr(arm.pattern.expr, ctx) }
+            } else {
+              pattern = arm.pattern
+            }
+            return { pattern, body: this.rewriteBlock(arm.body, ctx) }
+          }),
         }
       case 'execute':
         return { ...stmt, body: this.rewriteBlock(stmt.body, ctx) }
