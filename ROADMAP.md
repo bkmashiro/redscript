@@ -130,7 +130,7 @@ Priority order (dependencies first):
 
 #### P2 — Coroutine-Native Algorithms
 - [x] **`fft.mcrs`** — Fast Fourier Transform (O(n log n)) via @coroutine — done
-- [ ] **`sort.mcrs` v2** — merge sort via @coroutine for large n
+- [x] **`sort.mcrs` v2** — merge sort via @coroutine for large n
 
 #### P3 — Numerical Computing (double precision)
 - [x] **`ode.mcrs`** — Runge-Kutta 4 ODE solver — done
@@ -152,21 +152,21 @@ Priority order (dependencies first):
 #### Language Reference (redscript-docs)
 Current state: `en/reference/syntax.md`, `decorators.md`, `builtins.md`, `cli.md` exist but are incomplete.
 
-- [ ] **Language Spec completeness audit** — check syntax.md covers: f-string, for..in, range, impl blocks, Option<T>, generics, enums, all decorator args
+- [x] **Language Spec completeness audit** — check syntax.md covers: f-string, for..in, range, impl blocks, Option<T>, generics, enums, all decorator args
 - [ ] **Type system doc** — int/fixed/double/float distinction, explicit cast rules, when to use which
 - [ ] **Error messages guide** — common compiler errors + how to fix (StringConcat, FloatArithmetic, etc.)
-- [ ] **stdlib API completeness** — many stdlib/*.md files are stubs; fill in function signatures, params, return values, examples
+- [x] **stdlib API completeness** — many stdlib/*.md files are stubs; fill in function signatures, params, return values, examples
 
 #### stdlib Docs (Codex-assisted batch generation)
 Missing or incomplete stdlib docs:
-- [ ] `heap.md`, `sort.md`, `pathfind.md` — new modules, no docs yet
-- [ ] `matrix.md` — needs mat3_mul/mat4_mul entries
-- [ ] `bigint.md` — needs bigint_div entry
-- [ ] `graph.md`, `ecs.md` — will need docs when implemented
-- [ ] Chinese translations of all reference docs (en/ → zh/ sync)
+- [x] `heap.md`, `sort.md`, `pathfind.md` — new modules, no docs yet
+- [x] `matrix.md` — needs mat3_mul/mat4_mul entries
+- [x] `bigint.md` — needs bigint_div entry
+- [x] `graph.md`, `ecs.md` — will need docs when implemented
+- [x] Chinese translations of all reference docs (en/ → zh/ sync)
 
 #### Changelog
-- [ ] **v2.6.0 changelog** — document LSP improvements, f-string emit, string+var error, inlay hints, parser endLine, mat/bigint additions
+- [x] **v2.6.0 changelog** — document LSP improvements, f-string emit, string+var error, inlay hints, parser endLine, mat/bigint additions
 
 ---
 
