@@ -909,7 +909,16 @@ export class Parser {
     } else {
       // Dynamic range: expr..expr or expr..=expr
       // parseExpr stops before range_lit (not in BINARY_OPS), so this is safe
-      start = this.parseExpr()
+      const arrayOrStart = this.parseExpr()
+
+      // --- for_each detection: for item in arr { ... } ---
+      // If after parsing the expression there is no range_lit, it's a for_each (array iteration)
+      if (!this.check('range_lit')) {
+        const body = this.parseBlock()
+        return this.withLoc({ kind: 'for_each', binding: varName, array: arrayOrStart, body }, forToken)
+      }
+
+      start = arrayOrStart
       // Consume the range_lit token which should be ".." or "..="
       if (this.check('range_lit')) {
         const rangeOp = this.advance()

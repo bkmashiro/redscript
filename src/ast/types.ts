@@ -247,6 +247,7 @@ export type Stmt =
   | { kind: 'foreach';    binding: string; iterable: Expr; body: Block; executeContext?: string; span?: Span }
   | { kind: 'for_range';  varName: string; start: Expr; end: Expr; inclusive?: boolean; body: Block; span?: Span }
   | { kind: 'for_in_array'; binding: string; arrayName: string; lenExpr: Expr; body: Block; span?: Span }
+  | { kind: 'for_each';    binding: string; array: Expr; body: Block; span?: Span }
   | { kind: 'match';      expr: Expr; arms: { pattern: MatchPattern; body: Block }[]; span?: Span }
   | { kind: 'if_let_some'; binding: string; init: Expr; then: Block; else_?: Block; span?: Span }
   | { kind: 'as_block';   selector: EntitySelector; body: Block; span?: Span }

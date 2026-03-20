@@ -262,6 +262,83 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
       return [initStmt, whileStmt]
     }
 
+    // --- Desugaring: for_each → let __for_len = arr.len(); let __for_i = 0; while(__for_i < __for_len) { let item = arr[__for_i]; body; __for_i = __for_i + 1 } ---
+    case 'for_each': {
+      // Use a counter suffix to avoid collisions in nested for_each
+      const id = forEachCounter++
+      const idxName = `__foreach_i_${id}`
+      const lenName = `__foreach_len_${id}`
+      const arrExpr = lowerExpr(stmt.array)
+
+      // let __foreach_len_N = arr.len()
+      const lenInitStmt: HIRStmt = {
+        kind: 'let',
+        name: lenName,
+        type: { kind: 'named', name: 'int' },
+        init: {
+          kind: 'invoke',
+          callee: { kind: 'member', obj: arrExpr, field: 'len' },
+          args: [],
+        },
+        span: stmt.span,
+      }
+
+      // let __foreach_i_N = 0
+      const idxInitStmt: HIRStmt = {
+        kind: 'let',
+        name: idxName,
+        type: { kind: 'named', name: 'int' },
+        init: { kind: 'int_lit', value: 0 },
+        span: stmt.span,
+      }
+
+      // let item = arr[__foreach_i_N]
+      const bindingInit: HIRStmt = {
+        kind: 'let',
+        name: stmt.binding,
+        type: undefined,
+        init: {
+          kind: 'index',
+          obj: arrExpr,
+          index: { kind: 'ident', name: idxName },
+        },
+        span: stmt.span,
+      }
+
+      // __foreach_i_N = __foreach_i_N + 1
+      const stepStmt: HIRStmt = {
+        kind: 'expr',
+        expr: {
+          kind: 'assign',
+          target: idxName,
+          value: {
+            kind: 'binary',
+            op: '+',
+            left: { kind: 'ident', name: idxName },
+            right: { kind: 'int_lit', value: 1 },
+          },
+        },
+        span: stmt.span,
+      }
+
+      const body = [bindingInit, ...lowerBlock(stmt.body)]
+      const step: HIRStmt[] = [stepStmt]
+
+      const whileStmt: HIRStmt = {
+        kind: 'while',
+        cond: {
+          kind: 'binary',
+          op: '<',
+          left: { kind: 'ident', name: idxName },
+          right: { kind: 'ident', name: lenName },
+        },
+        body,
+        step,
+        span: stmt.span,
+      }
+      return [lenInitStmt, idxInitStmt, whileStmt]
+    }
+
     case 'foreach':
       return {
         kind: 'foreach',
@@ -353,6 +430,9 @@ function lowerExecuteSubcommand(sub: ExecuteSubcommand): HIRExecuteSubcommand {
 // ---------------------------------------------------------------------------
 // Expressions
 // ---------------------------------------------------------------------------
+
+/** Counter to generate unique variable names for for_each desugaring */
+let forEachCounter = 0
 
 /** Map compound assignment operator to its base binary op */
 const COMPOUND_TO_BINOP: Record<string, string> = {
