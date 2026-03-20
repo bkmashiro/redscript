@@ -2,6 +2,55 @@
 
 All notable changes to RedScript will be documented in this file.
 
+## [Unreleased] — v3.0.0
+
+> **Status:** Active development. All stdlib modules below are merged to `main`; language features are stabilised pending final integration tests.
+
+### Added
+
+#### stdlib
+- **`linalg.mcrs`** — double-precision linear algebra: `vec2_add/sub/scale/dot/length/normalize`, `vec3_cross`, `mat2x2 / mat3x3 / mat4x4` multiply, Cramer's rule solver for 2×2 and 3×3 systems
+- **`fft.mcrs`** — Discrete Fourier Transform with a `@coroutine` variant for in-game use; supports transforms up to n=64; quarter-wave symmetry test now enabled after related compiler fix
+- **`ecs.mcrs`** — Entity Component System: `register_component`, `get_component`, `has_component`; built-in Health and Velocity components; `@tick` system iteration via `foreach(entity[tag=has_<component>])`; fills the gap that Java datapacks have vs Bedrock's native component model
+- **`sort.mcrs` v2** — coroutine-based bottom-up merge sort for large arrays (n > 64); yields every 20 comparisons to stay within the 20 ms tick budget
+
+#### Language / Events
+- **`@on(EventType)` full compiler implementation** — compiler generates Minecraft function-tag JSON and wires an `events.mcrs` dispatcher automatically; supported events: `PlayerJoin`, `PlayerDeath`, `EntityKill`, `ItemUse` (each with correctly typed parameters)
+- **MC integration tests** for `@on(PlayerJoin)` and `@on(PlayerDeath)` added to the test suite
+
+#### Runtime
+- **`MCRuntime`** `storage_get_int` / `storage_set_array` builtins — allows `sin` / `cos` (which rely on NBT storage) to execute correctly in unit test environment without a running Minecraft instance
+
+### Fixed
+
+#### Compiler
+- **Dynamic array indexing on function parameters** — `arr[i]` inside a callee now resolves to the correct per-call-site monomorphized NBT path; previously the binding was shadowed and produced a wrong path
+- **`scoreboard_get` / `scoreboard_set` Player selector** — emits `@s` (not an empty string) when the Player argument resolves to the executing entity
+
+#### stdlib
+- **`linalg.mcrs`** — `double_sqrt` return-type cast corrected; prevents type mismatch in chained double-precision expressions
+
+#### Events
+- **`@on(BlockBreak)`** — constrained to `Player` parameter only; Minecraft does not expose block type at function-tag dispatch time and including it caused a compile error
+
+---
+
+## [2.6.1] - 2026-03-20
+
+### Fixed
+
+#### Compiler
+- **Dynamic array indexing on function parameters** — `arr[i]` in callee functions now correctly resolves the per-call-site monomorphized binding (regression introduced in v2.4.0 array-reference work)
+- **`scoreboard_get` / `scoreboard_set` Player param** — selector now correctly emits `@s` instead of an empty string when the Player argument is the executing entity
+
+#### stdlib
+- **`linalg.mcrs`** — `double_sqrt` return type cast fixed; avoids type error in chained double expressions
+
+#### Events
+- **`@on(BlockBreak)`** — removed block-type parameter; MC provides no runtime block type info at function-tag dispatch
+
+---
+
 ## [2.6.0] - 2026-03-19
 
 ### Compiler
