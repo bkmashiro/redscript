@@ -1,0 +1,65 @@
+// State machine helpers for Minecraft datapacks.
+// Usage: import "stdlib/state.mcrs"
+//
+// Provides scoreboard-backed state machine primitives. The `rs.state` objective
+// must be created at datapack load:
+//   scoreboard objectives add rs.state dummy
+//
+// Typical usage:
+//   // Define state constants in your own code:
+//   let STATE_IDLE: int = 0
+//   let STATE_COMBAT: int = 1
+//   let STATE_DEAD: int = 2
+//
+//   // Initialise entity state once on spawn:
+//   init_state(@s, STATE_IDLE)
+//
+//   // Transition on event:
+//   let ok: int = transition(@s, STATE_IDLE, STATE_COMBAT)
+//
+//   // Dispatch per-tick logic:
+//   if (is_state(@s, STATE_COMBAT) == 1) { ... }
+
+module library
+
+/// Read the current state of an entity.
+/// Returns -1 if the entity has not been initialised (score is 0 = unset in MC,
+/// but we reserve -1 as the sentinel for "never set via init_state").
+fn get_state(entity: selector) -> int {
+    return scoreboard_get(entity, "rs.state");
+}
+
+/// Write a state value to an entity.
+fn set_state(entity: selector, state: int) {
+    scoreboard_set(entity, "rs.state", state);
+}
+
+/// Check whether an entity is currently in the given state.
+/// Returns 1 if yes, 0 if no.
+fn is_state(entity: selector, state: int) -> int {
+    let cur: int = get_state(entity);
+    if (cur == state) {
+        return 1;
+    }
+    return 0;
+}
+
+/// Initialise an entity's state only if it has not been set yet (score == -1).
+/// Call once on spawn / load to avoid overwriting an in-progress state.
+fn init_state(entity: selector, initial: int) {
+    let cur: int = get_state(entity);
+    if (cur == -1) {
+        set_state(entity, initial);
+    }
+}
+
+/// Attempt a guarded transition from `from` to `to`.
+/// Only performs the transition when the entity is currently in `from`.
+/// Returns 1 on success, 0 if the entity was not in `from`.
+fn transition(entity: selector, from: int, to: int) -> int {
+    if (is_state(entity, from) == 1) {
+        set_state(entity, to);
+        return 1;
+    }
+    return 0;
+}
