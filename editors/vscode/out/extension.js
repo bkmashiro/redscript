@@ -19076,6 +19076,7 @@ var require_parser = __commonJS({
           returnType = this.parseType();
         }
         const body = this.parseBlock();
+        const closingBraceLine = this.tokens[this.pos - 1]?.line;
         const fn = this.withLoc({
           name,
           typeParams,
@@ -19086,6 +19087,8 @@ var require_parser = __commonJS({
           isLibraryFn: this.inLibraryMode || void 0,
           isExported
         }, fnToken);
+        if (fn.span && closingBraceLine)
+          fn.span.endLine = closingBraceLine;
         return fn;
       }
       /** Parse a `declare fn name(params): returnType;` stub — no body, just discard. */
@@ -22706,6 +22709,27 @@ var require_lower2 = __commonJS({
             ctx.emit({ kind: "const", dst: t2, value: 0 });
             return { kind: "temp", name: t2 };
           }
+          if (expr.fn === "storage_set_array" && expr.args.length >= 3) {
+            const storagePath = hirExprToStringLiteral(expr.args[0]);
+            const fieldName = hirExprToStringLiteral(expr.args[1]);
+            const nbtLiteral = hirExprToStringLiteral(expr.args[2]);
+            ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage ${storagePath} ${fieldName} set value ${nbtLiteral}`, args: [] });
+            const t2 = ctx.freshTemp();
+            ctx.emit({ kind: "const", dst: t2, value: 0 });
+            return { kind: "temp", name: t2 };
+          }
+          if (expr.fn === "storage_get_int" && expr.args.length >= 3) {
+            const storagePath = hirExprToStringLiteral(expr.args[0]);
+            const fieldName = hirExprToStringLiteral(expr.args[1]);
+            const indexOp = lowerExpr(expr.args[2], ctx, scope);
+            const t2 = ctx.freshTemp();
+            if (indexOp.kind === "const") {
+              ctx.emit({ kind: "nbt_read", dst: t2, ns: storagePath, path: `${fieldName}[${indexOp.value}]`, scale: 1 });
+            } else {
+              ctx.emit({ kind: "nbt_read_dynamic", dst: t2, ns: storagePath, pathPrefix: fieldName, indexSrc: indexOp });
+            }
+            return { kind: "temp", name: t2 };
+          }
           if (expr.fn === "__entity_tag" || expr.fn === "__entity_untag") {
             const selArg = expr.args[0];
             const tagArg = expr.args[1];
@@ -22844,7 +22868,7 @@ var require_lower2 = __commonJS({
             return { kind: "temp", name: t2 };
           }
           if (macro_1.BUILTIN_SET.has(expr.fn)) {
-            const cmd = formatBuiltinCall(expr.fn, expr.args, ctx.currentMacroParams);
+            const cmd = formatBuiltinCall(expr.fn, expr.args, ctx.currentMacroParams, ctx.getNamespace());
             ctx.emit({ kind: "call", dst: null, fn: `__raw:${cmd}`, args: [] });
             const t2 = ctx.freshTemp();
             ctx.emit({ kind: "const", dst: t2, value: 0 });
@@ -23304,7 +23328,39 @@ var require_lower2 = __commonJS({
       return `${sel.kind}[${parts.join(",")}]`;
     }
     var MACRO_SENTINEL = "";
-    function formatBuiltinCall(fn, args, macroParams) {
+    function fStringToJsonText(expr, namespace) {
+      if (expr.kind !== "f_string")
+        return JSON.stringify(expr.kind === "str_lit" ? { text: expr.value } : { text: "~" });
+      const objective = `__${namespace}`;
+      const extra = [];
+      for (const part of expr.parts) {
+        if (part.kind === "text") {
+          if (part.value)
+            extra.push({ text: part.value });
+        } else {
+          const inner = part.expr;
+          if (inner.kind === "ident") {
+            extra.push({ score: { name: `$${inner.name}`, objective } });
+          } else if (inner.kind === "int_lit") {
+            extra.push({ text: String(inner.value) });
+          } else {
+            extra.push({ text: "?" });
+          }
+        }
+      }
+      if (extra.length === 0)
+        return '{"text":""}';
+      if (extra.length === 1)
+        return JSON.stringify(extra[0]);
+      return JSON.stringify({ text: "", extra });
+    }
+    function formatBuiltinCall(fn, args, macroParams, namespace = "") {
+      const TEXT_BUILTINS = /* @__PURE__ */ new Set(["tell", "tellraw", "title", "subtitle", "actionbar", "announce"]);
+      const resolveTextArg = (arg) => {
+        if (arg.kind === "f_string")
+          return fStringToJsonText(arg, namespace);
+        return JSON.stringify({ text: exprToCommandArg(arg, macroParams).str });
+      };
       const fmtArgs = args.map((a) => exprToCommandArg(a, macroParams));
       const strs = fmtArgs.map((a) => a.str);
       const hasMacro = fmtArgs.some((a) => a.isMacro);
@@ -23358,24 +23414,34 @@ var require_lower2 = __commonJS({
           cmd = `say ${strs[0] ?? ""}`;
           break;
         case "tell":
-        case "tellraw":
-          cmd = `tellraw ${strs[0]} {"text":"${strs[1]}"}`;
+        case "tellraw": {
+          const msgJson = resolveTextArg(args[1]);
+          cmd = `tellraw ${strs[0]} ${msgJson}`;
           break;
-        case "title":
-          cmd = `title ${strs[0]} title {"text":"${strs[1]}"}`;
+        }
+        case "title": {
+          const msgJson = resolveTextArg(args[1]);
+          cmd = `title ${strs[0]} title ${msgJson}`;
           break;
-        case "actionbar":
-          cmd = `title ${strs[0]} actionbar {"text":"${strs[1]}"}`;
+        }
+        case "actionbar": {
+          const msgJson = resolveTextArg(args[1]);
+          cmd = `title ${strs[0]} actionbar ${msgJson}`;
           break;
-        case "subtitle":
-          cmd = `title ${strs[0]} subtitle {"text":"${strs[1]}"}`;
+        }
+        case "subtitle": {
+          const msgJson = resolveTextArg(args[1]);
+          cmd = `title ${strs[0]} subtitle ${msgJson}`;
           break;
+        }
         case "title_times":
           cmd = `title ${strs[0]} times ${strs[1]} ${strs[2]} ${strs[3]}`;
           break;
-        case "announce":
-          cmd = `tellraw @a {"text":"${strs[0]}"}`;
+        case "announce": {
+          const msgJson = resolveTextArg(args[0]);
+          cmd = `tellraw @a ${msgJson}`;
           break;
+        }
         case "give": {
           const nbt = strs[3] ? strs[3] : "";
           cmd = `give ${strs[0]} ${strs[1]}${nbt} ${strs[2] ?? "1"}`;
@@ -27197,6 +27263,11 @@ var require_typechecker = __commonJS({
             if (arithmeticOps.includes(expr.op)) {
               const leftType = this.inferType(expr.left);
               const rightType = this.inferType(expr.right);
+              const leftIsString = leftType.kind === "named" && (leftType.name === "string" || leftType.name === "format_string");
+              const rightIsString = rightType.kind === "named" && (rightType.name === "string" || rightType.name === "format_string");
+              if (leftIsString || rightIsString) {
+                this.report(`[StringConcat] String concatenation with '+' is not supported. Use f-strings instead: f"text{variable}" \u2014 e.g. f"Score: {score}"`, expr);
+              }
               const leftIsFloat = leftType.kind === "named" && leftType.name === "float";
               const rightIsFloat = rightType.kind === "named" && rightType.name === "float";
               if (leftIsFloat || rightIsFloat) {
@@ -27261,7 +27332,7 @@ var require_typechecker = __commonJS({
               this.checkExpr(part.expr);
               const partType = this.inferType(part.expr);
               const isUnknown = partType.kind === "named" && partType.name === "void";
-              if (!isUnknown && !(partType.kind === "named" && (partType.name === "int" || partType.name === "string" || partType.name === "format_string"))) {
+              if (!isUnknown && !(partType.kind === "named" && ["int", "string", "format_string", "fixed", "double", "bool", "byte", "short", "long"].includes(partType.name))) {
                 this.report(`f-string placeholder must be int or string, got ${this.typeToString(partType)}`, part.expr);
               }
             }

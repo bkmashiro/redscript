@@ -4,6 +4,7 @@
 //   insertion_sort(arr, len)      — O(n²) ascending, best for n≤64
 //   insertion_sort_desc(arr, len) — O(n²) descending
 //   sort_merge(a, la, b, lb)      — merge two sorted int[] arrays into one
+//   merge_sort_coro(arr, n)       — O(n log n) bottom-up merge sort, tick-spread via @coroutine
 //
 // All functions operate on int[] via index writes (requires RedScript ≥ 2.4.0).
 //
@@ -107,3 +108,87 @@ fn sort_merge(a: int[], la: int, b: int[], lb: int): int[] {
     }
     return result
 }
+
+// ─── Coroutine merge sort (bottom-up, iterative) ──────────────────────────────
+
+// merge_sort_coro(arr, n): sort arr[0..n-1] ascending in-place using bottom-up
+// merge sort, spread across server ticks via @coroutine.
+//
+// Each coroutine tick completes one full merge pass (doubling the sorted width).
+// After log₂(n) ticks, arr is fully sorted.
+//
+// @coroutine(onDone=merge_sort_noop) — replace onDone with your handler if you
+// need a callback once sorting is complete.
+//
+// Complexity: O(n log n) time, O(n) scratch space (temp[] for each merge pass).
+//
+// Usage:
+//   let data: int[] = [30, 10, 50, 20, 40]
+//   merge_sort_coro(data, 5)
+//   // several ticks later, data is [10, 20, 30, 40, 50]
+
+// @coroutine(batch=1) spreads the outer width-doubling loop: 1 pass per tick.
+// Each tick completes all merges for the current width, then doubles width.
+// After ceil(log₂(n)) ticks, onDone fires and arr is fully sorted.
+@coroutine(batch=1, onDone=merge_sort_noop)
+fn merge_sort_coro(arr: int[], n: int) {
+    let width: int = 1
+    // @coroutine(batch=1) yields here — one pass per tick
+    while (width < n) {
+        // One merge pass: process all adjacent run pairs of size `width`
+        let left: int = 0
+        while (left < n) {
+            // Clamp mid and right to n
+            let mid: int = left + width
+            if (mid > n) { mid = n }
+            let right: int = left + width * 2
+            if (right > n) { right = n }
+
+            // In-place merge of arr[left..mid) and arr[mid..right)
+            // via a temporary scratch array
+            if (mid < right) {
+                let tmp: int[] = []
+                let ia: int = left
+                let ib: int = mid
+                let merging: int = 1
+                while (merging == 1) {
+                    if (ia < mid) {
+                        if (ib < right) {
+                            if (arr[ia] <= arr[ib]) {
+                                tmp.push(arr[ia])
+                                ia = ia + 1
+                            } else {
+                                tmp.push(arr[ib])
+                                ib = ib + 1
+                            }
+                        } else {
+                            tmp.push(arr[ia])
+                            ia = ia + 1
+                        }
+                    } else {
+                        if (ib < right) {
+                            tmp.push(arr[ib])
+                            ib = ib + 1
+                        } else {
+                            merging = 0
+                        }
+                    }
+                }
+                // Write merged tmp back into arr[left..right)
+                let ti: int = 0
+                let tlen: int = tmp.len()
+                while (ti < tlen) {
+                    arr[left + ti] = tmp[ti]
+                    ti = ti + 1
+                }
+            }
+
+            left = left + width * 2
+        }
+        // Advance to next pass; @coroutine yields after this iteration
+        width = width * 2
+    }
+}
+
+// merge_sort_noop: default onDone callback — replace with your own handler
+fn merge_sort_noop() {}
