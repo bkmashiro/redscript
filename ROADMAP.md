@@ -126,18 +126,18 @@ Priority order (dependencies first):
 - [x] **`heap.mcrs`** — MinHeap / MaxHeap — done
 - [x] **`sort.mcrs`** — heapsort + mergesort — done
 - [x] **`pathfind.mcrs`** — A* pathfinding — done
-- [ ] **`graph.mcrs`** — adjacency list + BFS/DFS
+- [x] **`graph.mcrs`** — adjacency list + BFS/DFS — done
 
 #### P2 — Coroutine-Native Algorithms
-- [ ] **`fft.mcrs`** — Fast Fourier Transform (O(n log n)) via @coroutine
+- [x] **`fft.mcrs`** — Fast Fourier Transform (O(n log n)) via @coroutine — done
 - [ ] **`sort.mcrs` v2** — merge sort via @coroutine for large n
 
 #### P3 — Numerical Computing (double precision)
-- [ ] **`ode.mcrs`** — Runge-Kutta 4 ODE solver
-- [ ] **`linalg.mcrs`** — Linear algebra over double
+- [x] **`ode.mcrs`** — Runge-Kutta 4 ODE solver — done
+- [x] **`linalg.mcrs`** — Linear algebra over double — done
 
 #### P4 — ECS Framework
-- [ ] **`ecs.mcrs`** — Entity Component System
+- [x] **`ecs.mcrs`** — Entity Component System — done
   - Fill the gap that Bedrock's component system has but Java datapacks lack
   - `register_component(entity, Health { 100, 100 })` — attach struct-as-component to entity via NBT + tag
   - `get_component(entity, Health)` — read component fields back via scoreboard/storage
