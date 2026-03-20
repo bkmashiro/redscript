@@ -2,14 +2,14 @@
 
 <img src="./logo.png" alt="RedScript Logo" width="64" />
 
-<img src="https://img.shields.io/badge/RedScript-2.1.1-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+<img src="https://img.shields.io/badge/RedScript-2.6.1-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
 
 **A typed scripting language that compiles to Minecraft datapacks.**
 
 Write clean game logic. RedScript handles the scoreboard spaghetti.
 
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-1123%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
+[![Tests](https://img.shields.io/badge/tests-1901%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
@@ -84,21 +84,6 @@ let frame: int = 0;
 - ✅ Source maps: `--source-map` for debugging
 - ✅ Language Server Protocol: diagnostics, hover, go-to-def, completion
 - ✅ One file -> ready-to-use datapack
-
----
-
-### What's New in v2.1.x
-
-- **`enum` + `match` dispatch** — zero-runtime-overhead state machines; the compiler folds enum variants to integer constants and uses `execute if score` dispatch with no heap allocation
-- **Multi-return values** — `fn divmod(a: int, b: int): (int, int)` unpacks to separate scoreboard slots; no struct wrapper needed
-- **Generics** — `fn max<T>(a: T, b: T): T` is fully monomorphized at compile time; no boxing, no indirection
-- **`Option<T>` null safety** — `Some(x)` / `None` with `if let Some(x) = opt` pattern binding; safe access to optional values without sentinel integers
-- **`@coroutine(batch=N)`** — spreads a heavy loop across multiple ticks (`batch=50` means 50 iterations/tick), avoiding `maxCommandChainLength` hits on large workloads
-- **`@schedule(ticks=N)`** — delays a function call by N game ticks; compiles to `schedule function` with automatic namespace scoping
-- **Module system** — `module math;` declares a named module; consumers `import math::sin` to tree-shake individual symbols
-- **Multi-version targets** — `--mc-version 1.20.2` switches emit strategy (macro sub-functions vs. legacy scoreboards) for the target server version
-- **Source maps** — `--source-map` emits a `.mcrs.map` sidecar that maps each `.mcfunction` line back to the original source; enables in-editor debugging
-- **LSP: hover + completion for builtins & decorators** — 50+ builtin functions and all decorators (`@tick`/`@load`/`@coroutine`/`@schedule`/`@on_trigger`) now show inline docs on hover
 
 ---
 
@@ -325,38 +310,11 @@ import "stdlib/player"    // health, alive check, range
 import "stdlib/cooldown"  // per-player cooldown tracking
 ```
 
-Custom library paths can be added with `--include <dir>` so your own modules work the same way.
-
-### Standard Library
-
 All stdlib files use `module library;` — only the functions you actually call are compiled in.
 
 > Parts of the standard library are inspired by [kaer-3058/large_number](https://github.com/kaer-3058/large_number), a comprehensive math library for Minecraft datapacks.
 
-```rs
-import "stdlib/math"            // abs, sign, min, max, clamp, lerp, isqrt, sqrt_fixed,
-                                // pow_int, gcd, lcm, sin_fixed, cos_fixed, map, ceil_div,
-                                // log2_int, mulfix, divfix, smoothstep, smootherstep
-
-import "stdlib/vec"             // dot2d, cross2d, length2d_fixed, distance2d_fixed,
-                                // manhattan, chebyshev, atan2_fixed, normalize2d_x/y,
-                                // rotate2d_x/y, lerp2d_x/y, dot3d, cross3d_x/y/z,
-                                // length3d_fixed
-
-import "stdlib/advanced"        // fib, is_prime, collatz_steps, digit_sum, reverse_int,
-                                // mod_pow, hash_int, noise1d, bezier_quad,
-                                // mandelbrot_iter, julia_iter, angle_between,
-                                // clamp_circle_x/y, newton_sqrt, digital_root
-
-import "stdlib/bigint"          // bigint_init, bigint_from_int_a/b, bigint_add/sub/mul,
-                                // bigint_compare, bigint_mul_small, bigint_fib
-                                // — up to 32 decimal digits, runs on MC scoreboard
-
-import "stdlib/player"          // is_alive, in_range, get_health
-import "stdlib/timer"           // start_timer, tick_timer, has_elapsed
-import "stdlib/cooldown"        // set_cooldown, check_cooldown
-import "stdlib/mobs"            // ZOMBIE, SKELETON, CREEPER, ... (60+ constants)
-```
+Custom library paths can be added with `--include <dir>` so your own modules work the same way.
 
 **Example — computing Fibonacci(50) in-game:**
 
@@ -394,36 +352,6 @@ node dist/cli.js compile examples/coroutine-demo.mcrs -o ~/mc-server/datapacks/d
 ```
 
 ---
-
-### Further Reading
-
-| | |
-|---|---|
-| 📖 [Language Reference](docs/LANGUAGE_REFERENCE.md) | Full syntax & type system |
-| 🔧 [Builtins](https://redscript-docs.pages.dev/Builtins) | All 34+ MC builtin functions |
-| ⚡ [Optimizer](https://redscript-docs.pages.dev/Optimizer) | How the optimizer works |
-| 🧱 [Structure Target](docs/STRUCTURE_TARGET.md) | Compile to NBT command block structures |
-| 🧪 [Integration Testing](https://redscript-docs.pages.dev/Integration-Testing) | Test against a real Paper server |
-| 🏗 [Implementation Guide](docs/IMPLEMENTATION_GUIDE.md) | Compiler internals |
-
----
-
-### What's New in v1.2.27
-
-- **BigInt confirmed working in real Minecraft** (`bigint.mcrs`): arbitrary precision integers on MC scoreboard + NBT — base 10,000 × 8 limbs = up to 32 decimal digits; `bigint_add`, `bigint_sub`, `bigint_compare`, `bigint_mul`, `bigint_fib(50)` = 12,586,269,025 all verified on Paper 1.21.4
-- **`storage_set_int` macro fix**: dynamic NBT array writes now use `execute store result storage` instead of `data modify set value $(n)` — avoids a silent Minecraft macro substitution bug with integer values
-- **Full stdlib** (`math.mcrs`, `vec.mcrs`, `advanced.mcrs`, `bigint.mcrs`, `showcase.mcrs`): 18 math functions, 14 vector geometry functions, 20+ advanced number-theory and fractal functions
-- **`module library;` pragma**: tree-shaking for library files — stdlib never bloats your pack
-- **`storage_get_int` / `storage_set_int` builtins**: dynamic NBT int array read/write with runtime indices via MC 1.20.2+ macro sub-functions
-- **`@require_on_load(fn)` decorator**: declarative load-time dependency tracking for sin/cos/atan table initializers
-
-### What's New in v1.2.26
-
-- **Math stdlib** (`math.mcrs`): 18 fixed-point functions — `abs`, `sign`, `min`, `max`, `clamp`, `lerp`, `isqrt`, `sqrt_fixed`, `pow_int`, `gcd`, `lcm`, `sin_fixed`, `cos_fixed`, `map`, `ceil_div`, `log2_int`, `mulfix`, `divfix`, `smoothstep`, `smootherstep`
-- **Vector stdlib** (`vec.mcrs`): 2D and 3D geometry — dot/cross products, `length2d_fixed`, `atan2_fixed` (binary search, O(log 46)), `normalize2d`, `rotate2d`, `lerp2d`, full 3D cross product
-- **Advanced stdlib** (`advanced.mcrs`): number theory (`fib`, `is_prime`, `collatz_steps`, `gcd`, `mod_pow`), hash/noise (`hash_int` splitmix32, `noise1d`), curves (`bezier_quad`), fractals (`mandelbrot_iter`, `julia_iter`), geometry experiments
-- **BigInt** (`bigint.mcrs`): arbitrary precision integers — base 10,000 × 8 limbs = up to 32 decimal digits; `bigint_add/sub/compare/mul/fib` running on MC scoreboard + NBT storage
-- **Compiler fixes**: `isqrt` large-number convergence, optimizer copy propagation alias invalidation, cross-function variable collision, MCRuntime array-index regex
 
 ### Changelog Highlights
 
