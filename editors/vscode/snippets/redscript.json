@@ -9,24 +9,126 @@
     "description": "Define a function"
   },
   "Tick Function": {
-    "prefix": "fntick",
+    "prefix": ["fntick", "tick"],
     "body": [
       "@tick",
-      "fn ${1:name}(${2:params})${3: -> ${4:void}} {",
+      "fn ${1:name}() {",
       "    $0",
       "}"
     ],
-    "description": "Define an @tick function"
+    "description": "Define an @tick function (runs every game tick)"
+  },
+  "Tick Function with Rate": {
+    "prefix": "tickrate",
+    "body": [
+      "@tick(rate=${1:20})",
+      "fn ${2:name}() {",
+      "    $0",
+      "}"
+    ],
+    "description": "Define an @tick(rate=N) function (runs every N ticks)"
+  },
+  "Event Handler": {
+    "prefix": "on",
+    "body": [
+      "@on(${1:PlayerDeath})",
+      "fn ${2:handle_${1/(.*)/${1:/downcase}/}}(${3:player}: ${4:Player}) {",
+      "    $0",
+      "}"
+    ],
+    "description": "Define an @on(EventType) event handler"
   },
   "Load Function": {
-    "prefix": "fnload",
+    "prefix": ["fnload", "load"],
     "body": [
-      "@on_load",
-      "fn ${1:name}(${2:params})${3: -> ${4:void}} {",
+      "@load",
+      "fn ${1:on_load}() {",
       "    $0",
       "}"
     ],
-    "description": "Define an @on_load function"
+    "description": "Define an @load function (runs on datapack load/reload)"
+  },
+  "Schedule Function": {
+    "prefix": "schedule",
+    "body": [
+      "@schedule(ticks=${1:20})",
+      "fn ${2:name}()${3: -> void} {",
+      "    $0",
+      "}"
+    ],
+    "description": "Define an @schedule(ticks=N) delayed function (20 ticks = 1 second)"
+  },
+  "Coroutine Function": {
+    "prefix": "coroutine",
+    "body": [
+      "@coroutine(batch=${1:50}${2:, onDone=${3:on_done}})",
+      "fn ${4:name}()${5: -> void} {",
+      "    let ${6:i}: int = 0;",
+      "    while (${6:i} < ${7:1000}) {",
+      "        $0",
+      "        ${6:i} = ${6:i} + 1;",
+      "    }",
+      "}"
+    ],
+    "description": "Define an @coroutine function (spreads iterations across multiple ticks)"
+  },
+  "Struct Definition": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name} {",
+      "    ${2:field}: ${3:Type}$0",
+      "}"
+    ],
+    "description": "Define a struct"
+  },
+  "Impl Block": {
+    "prefix": "impl",
+    "body": [
+      "impl ${1:StructName} {",
+      "    fn ${2:method}(self${3:, ${4:param}: ${5:Type}})${6: -> ${7:ReturnType}} {",
+      "        $0",
+      "    }",
+      "}"
+    ],
+    "description": "Define an impl block for a struct"
+  },
+  "Import Statement": {
+    "prefix": "import",
+    "body": [
+      "import \"${1:path/to/module.mcrs}\""
+    ],
+    "description": "Import another RedScript module"
+  },
+  "Match Expression (Option)": {
+    "prefix": "match",
+    "body": [
+      "match (${1:value}) {",
+      "    Some(${2:inner}) => {",
+      "        ${3}",
+      "    }",
+      "    None => {",
+      "        $0",
+      "    }",
+      "}"
+    ],
+    "description": "match expression for Option (Some/None)"
+  },
+  "Match Expression (Integer)": {
+    "prefix": "matchint",
+    "body": [
+      "match (${1:value}) {",
+      "    ${2:0} => {",
+      "        ${3}",
+      "    }",
+      "    ${4:1} => {",
+      "        ${5}",
+      "    }",
+      "    _ => {",
+      "        $0",
+      "    }",
+      "}"
+    ],
+    "description": "match expression for integer values with wildcard"
   },
   "If Statement": {
     "prefix": "if",
@@ -47,20 +149,6 @@
       "}"
     ],
     "description": "Insert an if-else statement"
-  },
-  "Match Expression": {
-    "prefix": "match",
-    "body": [
-      "match (${1:value}) {",
-      "    ${2:pattern} => {",
-      "        ${3}",
-      "    }",
-      "    _ => {",
-      "        $0",
-      "    }",
-      "}"
-    ],
-    "description": "Insert a match expression"
   },
   "Foreach Selector": {
     "prefix": "foreach",
@@ -94,15 +182,6 @@
       "const ${1:NAME}: ${2:Type} = ${0:value}"
     ],
     "description": "Declare a constant"
-  },
-  "Struct Definition": {
-    "prefix": "struct",
-    "body": [
-      "struct ${1:Name} {",
-      "    ${2:field}: ${3:Type}",
-      "}"
-    ],
-    "description": "Define a struct"
   },
   "Enum Definition": {
     "prefix": "enum",
