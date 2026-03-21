@@ -282,6 +282,21 @@ export class Parser {
       const variantToken = this.expect('ident')
       const variant: EnumVariant = { name: variantToken.value }
 
+      // Payload fields: Variant(field: Type, ...)
+      if (this.check('(')) {
+        this.advance() // consume '('
+        const fields: { name: string; type: TypeNode }[] = []
+        while (!this.check(')') && !this.check('eof')) {
+          const fieldName = this.expect('ident').value
+          this.expect(':')
+          const fieldType = this.parseType()
+          fields.push({ name: fieldName, type: fieldType })
+          if (!this.match(',')) break
+        }
+        this.expect(')')
+        variant.fields = fields
+      }
+
       if (this.match('=')) {
         const valueToken = this.expect('int_lit')
         variant.value = parseInt(valueToken.value, 10)
@@ -986,6 +1001,22 @@ export class Parser {
       this.expect(')')
       return { kind: 'PatSome', binding }
     }
+    // Enum pattern: EnumName::Variant or EnumName::Variant(b1, b2, ...)
+    if (this.check('ident') && this.peek(1).kind === '::') {
+      const enumName = this.advance().value
+      this.expect('::')
+      const variant = this.expect('ident').value
+      const bindings: string[] = []
+      if (this.check('(')) {
+        this.advance() // consume '('
+        while (!this.check(')') && !this.check('eof')) {
+          bindings.push(this.expect('ident').value)
+          if (!this.match(',')) break
+        }
+        this.expect(')')
+      }
+      return { kind: 'PatEnum', enumName, variant, bindings }
+    }
     // Integer literal
     if (this.check('int_lit')) {
       const tok = this.advance()
@@ -1502,6 +1533,24 @@ export class Parser {
       this.expect('::')
       const memberToken = this.expect('ident')
       if (this.check('(')) {
+        // Peek inside: if first non-'(' token is `ident :` it's enum construction with named args.
+        // We only treat it as enum_construct when there are actual named args (not empty parens),
+        // because empty `()` is ambiguous and most commonly means a static method call.
+        const isNamedArgs = this.peek(1).kind === 'ident' && this.peek(2).kind === ':'
+        if (isNamedArgs) {
+          // Enum variant construction: EnumName::Variant(field: expr, ...)
+          this.advance() // consume '('
+          const args: { name: string; value: Expr }[] = []
+          while (!this.check(')') && !this.check('eof')) {
+            const fieldName = this.expect('ident').value
+            this.expect(':')
+            const value = this.parseExpr()
+            args.push({ name: fieldName, value })
+            if (!this.match(',')) break
+          }
+          this.expect(')')
+          return this.withLoc({ kind: 'enum_construct', enumName: typeToken.value, variant: memberToken.value, args }, typeToken)
+        }
         // Static method call: Type::method(args)
         this.advance() // consume '('
         const args = this.parseArgs()

@@ -133,6 +133,8 @@ export class TypeChecker {
   private implMethods: Map<string, Map<string, FnDecl>> = new Map()
   private structs: Map<string, Map<string, TypeNode>> = new Map()
   private enums: Map<string, Map<string, number>> = new Map()
+  // enumName → variantName → field list (for payload variants)
+  private enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map()
   private consts: Map<string, TypeNode> = new Map()
   private globals: Map<string, TypeNode> = new Map()
   private currentFn: FnDecl | null = null
@@ -231,10 +233,17 @@ export class TypeChecker {
 
     for (const enumDecl of program.enums ?? []) {
       const variants = new Map<string, number>()
+      const payloads = new Map<string, { name: string; type: TypeNode }[]>()
       for (const variant of enumDecl.variants) {
         variants.set(variant.name, variant.value ?? 0)
+        if (variant.fields && variant.fields.length > 0) {
+          payloads.set(variant.name, variant.fields)
+        }
       }
       this.enums.set(enumDecl.name, variants)
+      if (payloads.size > 0) {
+        this.enumPayloads.set(enumDecl.name, payloads)
+      }
     }
 
     for (const constDecl of program.consts ?? []) {
@@ -430,9 +439,23 @@ export class TypeChecker {
                 !this.typesMatch(subjectType, patternType)) {
               this.report('Match arm pattern type must match subject type', arm.pattern.expr)
             }
+            this.checkBlock(arm.body)
+          } else if (arm.pattern.kind === 'PatEnum') {
+            const pat = arm.pattern
+            const variantPayloads = this.enumPayloads.get(pat.enumName)?.get(pat.variant) ?? []
+            // Bind pattern variables to their declared field types in arm scope
+            const savedScope = new Map(this.scope)
+            for (let i = 0; i < pat.bindings.length; i++) {
+              const fieldDef = variantPayloads[i]
+              const bindingType: TypeNode = fieldDef ? fieldDef.type : { kind: 'named', name: 'int' }
+              this.scope.set(pat.bindings[i], { type: bindingType, mutable: false })
+            }
+            this.checkBlock(arm.body)
+            this.scope = savedScope
+          } else {
+            // PatSome / PatNone / PatInt / PatWild are structurally typed — no extra scope needed
+            this.checkBlock(arm.body)
           }
-          // PatSome / PatNone / PatInt / PatWild are structurally typed — no expr to check
-          this.checkBlock(arm.body)
         }
         break
       case 'as_block': {
@@ -753,6 +776,32 @@ export class TypeChecker {
           }
         }
         break
+
+      case 'enum_construct': {
+        if (!this.enums.has(expr.enumName)) {
+          this.report(`Unknown enum '${expr.enumName}'`, expr)
+          break
+        }
+        const variants = this.enums.get(expr.enumName)!
+        if (!variants.has(expr.variant)) {
+          this.report(`Enum '${expr.enumName}' has no variant '${expr.variant}'`, expr)
+          break
+        }
+        const variantPayloads = this.enumPayloads.get(expr.enumName)?.get(expr.variant) ?? []
+        if (variantPayloads.length === 0 && expr.args.length > 0) {
+          this.report(`Enum variant '${expr.enumName}::${expr.variant}' has no payload fields`, expr)
+          break
+        }
+        for (const arg of expr.args) {
+          const fieldDef = variantPayloads.find(f => f.name === arg.name)
+          if (!fieldDef) {
+            this.report(`Unknown field '${arg.name}' for enum variant '${expr.enumName}::${expr.variant}'`, expr)
+          } else {
+            this.checkExpr(arg.value, fieldDef.type)
+          }
+        }
+        break
+      }
 
       case 'blockpos':
         break
@@ -1205,6 +1254,11 @@ export class TypeChecker {
         return { kind: 'named', name: 'void' }
       }
       case 'path_expr':
+        if (this.enums.has(expr.enumName)) {
+          return { kind: 'enum', name: expr.enumName }
+        }
+        return { kind: 'named', name: 'void' }
+      case 'enum_construct':
         if (this.enums.has(expr.enumName)) {
           return { kind: 'enum', name: expr.enumName }
         }

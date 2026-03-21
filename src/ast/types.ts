@@ -175,6 +175,7 @@ export type Expr =
   | { kind: 'array_lit';  elements: Expr[]; span?: Span }
   | { kind: 'static_call'; type: string; method: string; args: Expr[]; span?: Span }
   | { kind: 'path_expr'; enumName: string; variant: string; span?: Span }
+  | { kind: 'enum_construct'; enumName: string; variant: string; args: { name: string; value: Expr }[]; span?: Span }
   | (LambdaExpr & { span?: Span })
   | { kind: 'tuple_lit'; elements: Expr[]; span?: Span }
   | { kind: 'some_lit'; value: Expr; span?: Span }  // Some(expr)
@@ -233,6 +234,7 @@ export type MatchPattern =
   | { kind: 'PatInt'; value: number }      // 1, 2, 3
   | { kind: 'PatWild' }                    // _
   | { kind: 'PatExpr'; expr: Expr }        // legacy: range_lit or other expr
+  | { kind: 'PatEnum'; enumName: string; variant: string; bindings: string[] }  // Color::RGB(r, g, b)
 
 export type Stmt =
   | { kind: 'let';        name: string; type?: TypeNode; init: Expr; span?: Span }
@@ -328,9 +330,16 @@ export interface ImplBlock {
   span?: Span
 }
 
+export interface EnumPayloadField {
+  name: string
+  type: TypeNode
+}
+
 export interface EnumVariant {
   name: string
   value?: number
+  /** Payload fields for tuple-like variants, e.g. RGB(r: int, g: int, b: int) */
+  fields?: EnumPayloadField[]
 }
 
 export interface EnumDecl {

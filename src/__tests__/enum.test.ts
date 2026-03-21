@@ -125,13 +125,18 @@ describe('enum: parser', () => {
     expect(matchStmt.kind).toBe('match')
     if (matchStmt.kind === 'match') {
       expect(matchStmt.arms).toHaveLength(2)
+      // Enum variant patterns now parse as PatEnum (previously PatExpr wrapping path_expr)
       expect(matchStmt.arms[0].pattern).toMatchObject({
-        kind: 'PatExpr',
-        expr: { kind: 'path_expr', enumName: 'Phase', variant: 'Idle' },
+        kind: 'PatEnum',
+        enumName: 'Phase',
+        variant: 'Idle',
+        bindings: [],
       })
       expect(matchStmt.arms[1].pattern).toMatchObject({
-        kind: 'PatExpr',
-        expr: { kind: 'path_expr', enumName: 'Phase', variant: 'Moving' },
+        kind: 'PatEnum',
+        enumName: 'Phase',
+        variant: 'Moving',
+        bindings: [],
       })
     }
   })

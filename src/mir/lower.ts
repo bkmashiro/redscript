@@ -7,7 +7,7 @@
 
 import type {
   HIRModule, HIRFunction, HIRStmt, HIRBlock, HIRExpr,
-  HIRExecuteSubcommand, HIRParam,
+  HIRExecuteSubcommand, HIRParam, TypeNode,
 } from '../hir/types'
 import type {
   MIRModule, MIRFunction, MIRBlock, MIRInstr, BlockId,
@@ -28,12 +28,21 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
 
   // Build enum definitions: enumName → variantName → integer value
   const enumDefs = new Map<string, Map<string, number>>()
+  // Build enum payload info: enumName → variantName → field list
+  const enumPayloads = new Map<string, Map<string, { name: string; type: TypeNode }[]>>()
   for (const e of hir.enums) {
     const variants = new Map<string, number>()
+    const payloads = new Map<string, { name: string; type: TypeNode }[]>()
     for (const v of e.variants) {
       variants.set(v.name, v.value ?? 0)
+      if (v.fields && v.fields.length > 0) {
+        payloads.set(v.name, v.fields)
+      }
     }
     enumDefs.set(e.name, variants)
+    if (payloads.size > 0) {
+      enumPayloads.set(e.name, payloads)
+    }
   }
 
   // Build impl method info: typeName → methodName → { hasSelf }
@@ -73,14 +82,14 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
 
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads)
     allFunctions.push(fn, ...helpers)
   }
 
   // Lower impl block methods
   for (const ib of hir.implBlocks) {
     for (const m of ib.methods) {
-      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter)
+      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads)
       allFunctions.push(fn, ...helpers)
     }
   }
@@ -130,6 +139,8 @@ class FnContext {
   readonly currentMacroParams: Set<string>
   /** Enum definitions: enumName → variantName → integer value */
   readonly enumDefs: Map<string, Map<string, number>>
+  /** Enum payload fields: enumName → variantName → field list */
+  readonly enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>>
   /** Current source location (set during statement lowering) */
   currentSourceLoc: SourceLoc | undefined = undefined
   /** Source file path for the module being compiled */
@@ -157,6 +168,7 @@ class FnContext {
     fnParamInfo: Map<string, HIRParam[]> = new Map(),
     enumDefs: Map<string, Map<string, number>> = new Map(),
     timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
+    enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map(),
   ) {
     this.namespace = namespace
     this.fnName = fnName
@@ -166,6 +178,7 @@ class FnContext {
     this.fnParamInfo = fnParamInfo
     this.currentMacroParams = macroInfo.get(fnName)?.macroParams ?? new Set()
     this.enumDefs = enumDefs
+    this.enumPayloads = enumPayloads
     this.timerCounter = timerCounter
     const entry = this.makeBlock('entry')
     this.currentBlock = entry
@@ -262,9 +275,10 @@ function lowerFunction(
   specializedFnsRegistry?: Map<string, MIRFunction[]>,
   /** Override the MIR function name (used when generating specialized versions) */
   overrideName?: string,
+  enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const mirFnName = overrideName ?? fn.name
-  const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter)
+  const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = sourceFile
   if (hirFnMap) ctx.hirFunctions = hirFnMap
   if (specializedFnsRegistry) ctx.specializedFnsRegistry = specializedFnsRegistry
@@ -336,9 +350,10 @@ function lowerImplMethod(
   enumDefs: Map<string, Map<string, number>> = new Map(),
   sourceFile?: string,
   timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
+  enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
-  const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter)
+  const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = sourceFile
   const fields = structDefs.get(typeName) ?? []
   const hasSelf = method.params.length > 0 && method.params[0].name === 'self'
@@ -1005,6 +1020,37 @@ function lowerStmt(
             ctx.terminate({ kind: 'jump', target: mergeBlock.id })
           }
           ctx.switchTo(nextArm)
+        } else if (pat.kind === 'PatEnum') {
+          // Enum pattern: check tag value matches, then bind payload fields via NBT reads
+          const tagValue = ctx.enumDefs.get(pat.enumName)?.get(pat.variant) ?? 0
+          const cmpTemp = ctx.freshTemp()
+          ctx.emit({ kind: 'cmp', dst: cmpTemp, op: 'eq', a: matchVal, b: { kind: 'const', value: tagValue } })
+          const armBody = ctx.newBlock('match_arm')
+          const nextArm = ctx.newBlock('match_next')
+          ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: cmpTemp }, then: armBody.id, else: nextArm.id })
+          ctx.switchTo(armBody)
+          const armScope = new Map(scope)
+          // Bind each pattern variable by reading the corresponding NBT payload field
+          const payloadFields = ctx.enumPayloads.get(pat.enumName)?.get(pat.variant) ?? []
+          for (let bi = 0; bi < pat.bindings.length; bi++) {
+            const binding = pat.bindings[bi]
+            const fieldDef = payloadFields[bi]
+            const fieldName = fieldDef ? fieldDef.name : binding
+            const bindTemp = ctx.freshTemp()
+            ctx.emit({
+              kind: 'nbt_read',
+              dst: bindTemp,
+              ns: 'rs:enums',
+              path: `${pat.enumName}_${fieldName}`,
+              scale: 1,
+            })
+            armScope.set(binding, bindTemp)
+          }
+          lowerBlock(arm.body, ctx, armScope)
+          if (isPlaceholderTerm(ctx.current().term)) {
+            ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+          }
+          ctx.switchTo(nextArm)
         } else if (pat.kind === 'PatExpr') {
           // Legacy: range_lit or other expression
           const expr = pat.expr
@@ -1344,6 +1390,36 @@ function lowerExpr(
       const variants = ctx.enumDefs.get(expr.enumName)
       const value = variants?.get(expr.variant) ?? 0
       return { kind: 'const', value }
+    }
+
+    case 'enum_construct': {
+      // Enum variant construction with payload:
+      //   Color::RGB(r: 10, g: 20, b: 30)
+      // → scoreboard set tag = variant int value
+      // → nbt_write rs:enums Color_r = 10, Color_g = 20, Color_b = 30
+      const variants = ctx.enumDefs.get(expr.enumName)
+      const tagValue = variants?.get(expr.variant) ?? 0
+      // Write tag to a temp (the result of the expression is the integer tag)
+      const tagTemp = ctx.freshTemp()
+      ctx.emit({ kind: 'const', dst: tagTemp, value: tagValue })
+      // Write payload fields to NBT storage rs:enums
+      const payloadFields = ctx.enumPayloads.get(expr.enumName)?.get(expr.variant) ?? []
+      for (const arg of expr.args) {
+        const fieldDef = payloadFields.find(f => f.name === arg.name)
+        const argOp = lowerExpr(arg.value, ctx, scope)
+        // Determine NBT type from field definition
+        const nbtType: NBTType = fieldDef && (fieldDef.type.kind === 'named') &&
+          (fieldDef.type.name === 'float' || fieldDef.type.name === 'fixed') ? 'float' : 'int'
+        ctx.emit({
+          kind: 'nbt_write',
+          ns: 'rs:enums',
+          path: `${expr.enumName}_${arg.name}`,
+          type: nbtType,
+          scale: 1,
+          src: argOp,
+        })
+      }
+      return { kind: 'temp', name: tagTemp }
     }
 
     case 'member': {
@@ -1818,6 +1894,7 @@ function lowerExpr(
                 ctx.hirFunctions,
                 ctx.specializedFnsRegistry,
                 specializedName,
+                ctx.enumPayloads,
               )
               ctx.specializedFnsRegistry.set(specializedName, [specFn, ...specHelpers])
             }

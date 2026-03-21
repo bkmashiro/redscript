@@ -88,6 +88,8 @@ export type HIRExpr =
   | { kind: 'static_call'; type: string; method: string; args: HIRExpr[]; span?: Span }
   // Enum variant path
   | { kind: 'path_expr'; enumName: string; variant: string; span?: Span }
+  // Enum variant construction with payload
+  | { kind: 'enum_construct'; enumName: string; variant: string; args: { name: string; value: HIRExpr }[]; span?: Span }
   // Lambda
   | { kind: 'lambda'; params: LambdaParam[]; returnType?: TypeNode; body: HIRExpr | HIRBlock; span?: Span }
   // Tuple literal
@@ -140,6 +142,7 @@ export type HIRMatchPattern =
   | { kind: 'PatInt'; value: number }      // 1, 2, 3
   | { kind: 'PatWild' }                    // _
   | { kind: 'PatExpr'; expr: HIRExpr }     // legacy: range_lit or other expr
+  | { kind: 'PatEnum'; enumName: string; variant: string; bindings: string[] }  // Color::RGB(r, g, b)
 
 // ---------------------------------------------------------------------------
 // HIR Statements
@@ -208,6 +211,7 @@ export interface HIRImplBlock {
 export interface HIREnumVariant {
   name: string
   value?: number
+  fields?: { name: string; type: TypeNode }[]
 }
 
 export interface HIREnum {

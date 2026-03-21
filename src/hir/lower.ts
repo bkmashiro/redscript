@@ -41,7 +41,7 @@ export function lowerToHIR(program: Program): HIRModule {
     })),
     enums: program.enums.map((e): HIREnum => ({
       name: e.name,
-      variants: e.variants.map(v => ({ name: v.name, value: v.value })),
+      variants: e.variants.map(v => ({ name: v.name, value: v.value, fields: v.fields })),
       span: e.span,
     })),
     consts: program.consts.map((c): HIRConst => ({
@@ -65,6 +65,7 @@ function lowerMatchPattern(pat: MatchPattern): HIRMatchPattern {
     case 'PatInt':  return pat
     case 'PatWild': return pat
     case 'PatExpr': return { kind: 'PatExpr', expr: lowerExpr(pat.expr) }
+    case 'PatEnum': return { kind: 'PatEnum', enumName: pat.enumName, variant: pat.variant, bindings: pat.bindings }
   }
 }
 
@@ -602,6 +603,15 @@ function lowerExpr(expr: Expr): HIRExpr {
 
     case 'path_expr':
       return { kind: 'path_expr', enumName: expr.enumName, variant: expr.variant, span: expr.span }
+
+    case 'enum_construct':
+      return {
+        kind: 'enum_construct',
+        enumName: expr.enumName,
+        variant: expr.variant,
+        args: expr.args.map(a => ({ name: a.name, value: lowerExpr(a.value) })),
+        span: expr.span,
+      }
 
     case 'tuple_lit':
       return { kind: 'tuple_lit', elements: expr.elements.map(lowerExpr), span: expr.span }
