@@ -1,0 +1,319 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  physics_sim.mcrs — 物理模拟（抛体轨迹可视化）                      ║
+// ║                                                                      ║
+// ║  演示：使用固定点数学计算抛体运动轨迹，并以粒子可视化               ║
+// ║                                                                      ║
+// ║  物理模型（全部使用 ×1000 固定点，避免浮点数）：                    ║
+// ║    • 位置 x, y（×1000 单位 = 实际 1 方块）                         ║
+// ║    • 速度 vx, vy（每 tick 变化量，×1000）                           ║
+// ║    • 重力 g = 20（每 tick vy -= 20，等效 1 m/s²）                   ║
+// ║    • 弹性碰撞：y < 0 时 vy 反转并衰减（×80%）                      ║
+// ║                                                                      ║
+// ║  用法：                                                              ║
+// ║    /function physics:launch     发射抛体（默认参数）                 ║
+// ║    /function physics:launch_45  45° 仰角发射                        ║
+// ║    /function physics:launch_v   垂直发射（90° 自由落体）            ║
+// ║    /function physics:stop       停止模拟                            ║
+// ║    /function physics:table      打印抛体轨迹数据表                  ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+import "../../src/stdlib/math.mcrs"
+
+// ── 抛体状态 ────────────────────────────────────────────────────────────
+
+struct Projectile {
+    // 位置（×1000 固定点，1000 = 1 方块）
+    px: int,
+    py: int,
+    // 速度（×1000 per tick）
+    vx: int,
+    vy: int,
+    // 初始条件（用于重新发射）
+    init_vx: int,
+    init_vy: int,
+    // 配置
+    gravity:   int,   // 每 tick 向下加速度（×1000），默认 20
+    bounce:    int,   // 弹性系数（×100），80 = 80%
+    max_x:    int,    // 最远飞行距离（×1000），超出时停止
+    // 状态
+    active:   bool,
+    bounces:  int,    // 弹跳次数
+    tick:     int
+}
+
+let proj: Projectile = {
+    px:       0,
+    py:       1000,   // 从 y=1 开始（地面以上 1 方块）
+    vx:       300,    // 初始水平速度：0.3 方块/tick
+    vy:       400,    // 初始垂直速度：0.4 方块/tick（向上）
+    init_vx:  300,
+    init_vy:  400,
+    gravity:  20,     // 重力：0.02 方块/tick²
+    bounce:   70,     // 70% 弹性
+    max_x:    50000,  // 50 方块最远距离
+    active:   false,
+    bounces:  0,
+    tick:     0
+};
+
+// ── 轨迹记录（最多 20 个采样点） ────────────────────────────────────────
+
+struct TracePoint {
+    px: int,
+    py: int,
+    t:  int,
+    valid: bool
+}
+
+let trace0:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace1:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace2:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace3:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace4:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace5:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace6:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace7:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace8:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace9:  TracePoint = { px: 0, py: 0, t: 0, valid: false };
+let trace_count: int = 0;
+
+// ── @load ───────────────────────────────────────────────────────────────
+
+@load
+fn physics_load() {
+    proj.active  = false;
+    proj.bounces = 0;
+    proj.tick    = 0;
+    trace_count  = 0;
+    say("§b[物理] 抛体模拟已加载。");
+    say("§7  /function physics:launch    — 发射抛体");
+    say("§7  /function physics:table     — 打印轨迹表");
+}
+
+// ── 固定点除法（带四舍五入） ────────────────────────────────────────────
+
+fn _fp_div(a: int, b: int) -> int {
+    return (a * 1000) / b;
+}
+
+// ── 记录轨迹点 ──────────────────────────────────────────────────────────
+
+fn _record_trace(px: int, py: int, t: int) {
+    match (trace_count) {
+        0 => { trace0 = { px: px, py: py, t: t, valid: true }; }
+        1 => { trace1 = { px: px, py: py, t: t, valid: true }; }
+        2 => { trace2 = { px: px, py: py, t: t, valid: true }; }
+        3 => { trace3 = { px: px, py: py, t: t, valid: true }; }
+        4 => { trace4 = { px: px, py: py, t: t, valid: true }; }
+        5 => { trace5 = { px: px, py: py, t: t, valid: true }; }
+        6 => { trace6 = { px: px, py: py, t: t, valid: true }; }
+        7 => { trace7 = { px: px, py: py, t: t, valid: true }; }
+        8 => { trace8 = { px: px, py: py, t: t, valid: true }; }
+        9 => { trace9 = { px: px, py: py, t: t, valid: true }; }
+    }
+    if (trace_count < 10) {
+        trace_count = trace_count + 1;
+    }
+}
+
+// ── 固定点→方块位置字符串 ───────────────────────────────────────────────
+
+fn _fp_str(v: int) -> string {
+    let integer: int = v / 1000;
+    let frac:    int = (v % 1000) / 100;  // 一位小数
+    if (v < 0) {
+        let abs_i: int = (-v) / 1000;
+        let abs_f: int = ((-v) % 1000) / 100;
+        return f"-{abs_i}.{abs_f}";
+    }
+    return f"{integer}.{frac}";
+}
+
+// ── 解析理论最大高度 ────────────────────────────────────────────────────
+// H_max = vy² / (2 * g)  （固定点：vy²/1000 / (2 * g) / 1000）
+
+fn _max_height() -> int {
+    // vy (×1000) → vy² / (2000 * g)
+    let vy_sq: int = (proj.init_vy / 10) * (proj.init_vy / 10);  // 避免溢出
+    return vy_sq / (2 * proj.gravity);  // 近似 ×100 的方块高度
+}
+
+// ── 物理步进 ────────────────────────────────────────────────────────────
+
+fn _physics_step() {
+    // 更新速度（重力向下）
+    proj.vy = proj.vy - proj.gravity;
+
+    // 更新位置
+    proj.px = proj.px + proj.vx;
+    proj.py = proj.py + proj.vy;
+
+    // 地面碰撞检测（py < 0 → 弹跳或停止）
+    if (proj.py < 0) {
+        proj.py = 0;
+        // 弹跳：vy 反转并乘以弹性系数
+        proj.vy  = -(proj.vy * proj.bounce) / 100;
+        proj.vx  = (proj.vx  * proj.bounce) / 100;   // 摩擦衰减
+        proj.bounces = proj.bounces + 1;
+        say(f"§e[物理] 弹跳 #{proj.bounces}！  x={_fp_str(proj.px)} m  vy 反转={_fp_str(proj.vy)}");
+
+        // 弹跳速度过低时停止
+        if (proj.vy < 20 && proj.vy > -20) {
+            proj.active = false;
+            say(f"§a[物理] 抛体停止。总弹跳: {proj.bounces} 次，最终 x = {_fp_str(proj.px)} m");
+        }
+    }
+
+    // 超出最远距离停止
+    if (proj.px > proj.max_x) {
+        proj.active = false;
+        say(f"§7[物理] 抛体飞出范围（x > {proj.max_x / 1000} m）。");
+    }
+}
+
+// ── 粒子可视化 ──────────────────────────────────────────────────────────
+
+fn _render_particle() {
+    // 将固定点位置转换为相对坐标（方块）
+    // px: 水平距离（沿 Z 轴）
+    // py: 垂直高度（Y 轴）
+    // 由于 raw 不支持动态坐标，用 actionbar 显示位置数据
+    let px_str: string = _fp_str(proj.px);
+    let py_str: string = _fp_str(proj.py);
+    let vx_str: string = _fp_str(proj.vx);
+    let vy_str: string = _fp_str(proj.vy);
+    foreach (p in @a[limit=1]) {
+        actionbar(p, f"§bx:{px_str}m  §dy:{py_str}m  §evx:{vx_str}  §fvy:{vy_str}  §7弹:{proj.bounces}");
+    }
+    // 在玩家位置偏移处生成粒子（简化：用相对偏移，实际项目中需要精确坐标映射）
+    // 每 3 tick 生成一个轨迹粒子
+    if (proj.tick % 3 == 0) {
+        raw("particle minecraft:flame ~0 ~2 ~0 0.05 0.05 0.05 0 1");
+    }
+}
+
+// ── @tick ────────────────────────────────────────────────────────────────
+
+@tick
+fn physics_tick() {
+    if (!proj.active) { return; }
+
+    proj.tick = proj.tick + 1;
+    _physics_step();
+
+    if (!proj.active) { return; }
+
+    // 每 5 tick 记录轨迹
+    if (proj.tick % 5 == 0) {
+        _record_trace(proj.px, proj.py, proj.tick);
+    }
+
+    _render_particle();
+}
+
+// ── 内部：初始化并发射 ──────────────────────────────────────────────────
+
+fn _launch(vx: int, vy: int) {
+    proj.px       = 0;
+    proj.py       = 1000;
+    proj.vx       = vx;
+    proj.vy       = vy;
+    proj.init_vx  = vx;
+    proj.init_vy  = vy;
+    proj.bounces  = 0;
+    proj.tick     = 0;
+    proj.active   = true;
+    trace_count   = 0;
+
+    let vx_str: string = _fp_str(vx);
+    let vy_str: string = _fp_str(vy);
+    let h:      int    = _max_height();
+
+    say(f"§b[物理] 发射！vx={vx_str} vy={vy_str}  重力={proj.gravity}  弹性={proj.bounce}%");
+    say(f"§7  理论最大高度（近似）: {h} 单位");
+    foreach (p in @a) {
+        title(p, "§b🚀 发射！");
+        subtitle(p, f"§7vx={vx_str}  vy={vy_str}");
+    }
+}
+
+// ── 公开命令 ────────────────────────────────────────────────────────────
+
+fn launch() {
+    // 默认：vx=300（0.3 m/tick）, vy=400（0.4 m/tick）
+    _launch(300, 400);
+}
+
+fn launch_45() {
+    // 45° 发射（vx = vy → 理论最远射程）
+    _launch(350, 350);
+}
+
+fn launch_v() {
+    // 垂直发射（vx=0, vy=600）
+    _launch(0, 600);
+}
+
+fn launch_fast() {
+    // 高速低角度（vx=800, vy=200）
+    _launch(800, 200);
+}
+
+fn stop() {
+    proj.active = false;
+    say("§7[物理] 模拟已停止。");
+}
+
+// ── 打印轨迹数据表 ──────────────────────────────────────────────────────
+
+fn table() {
+    say("§b§l═══ 抛体轨迹数据表 ═══");
+    say(f"  初始速度: vx={_fp_str(proj.init_vx)}  vy={_fp_str(proj.init_vy)}");
+    say(f"  重力: {proj.gravity}  弹性: {proj.bounce}%");
+    say("§7  tick  │    x (m)    │    y (m)");
+    say("§7  ──────┼─────────────┼───────────");
+
+    if (trace0.valid)  { say(f"  §f{trace0.t}§7  │  §b{_fp_str(trace0.px)}§7  │  §d{_fp_str(trace0.py)}"); }
+    if (trace1.valid)  { say(f"  §f{trace1.t}§7  │  §b{_fp_str(trace1.px)}§7  │  §d{_fp_str(trace1.py)}"); }
+    if (trace2.valid)  { say(f"  §f{trace2.t}§7  │  §b{_fp_str(trace2.px)}§7  │  §d{_fp_str(trace2.py)}"); }
+    if (trace3.valid)  { say(f"  §f{trace3.t}§7  │  §b{_fp_str(trace3.px)}§7  │  §d{_fp_str(trace3.py)}"); }
+    if (trace4.valid)  { say(f"  §f{trace4.t}§7  │  §b{_fp_str(trace4.px)}§7  │  §d{_fp_str(trace4.py)}"); }
+    if (trace5.valid)  { say(f"  §f{trace5.t}§7  │  §b{_fp_str(trace5.px)}§7  │  §d{_fp_str(trace5.py)}"); }
+    if (trace6.valid)  { say(f"  §f{trace6.t}§7  │  §b{_fp_str(trace6.px)}§7  │  §d{_fp_str(trace6.py)}"); }
+    if (trace7.valid)  { say(f"  §f{trace7.t}§7  │  §b{_fp_str(trace7.px)}§7  │  §d{_fp_str(trace7.py)}"); }
+    if (trace8.valid)  { say(f"  §f{trace8.t}§7  │  §b{_fp_str(trace8.px)}§7  │  §d{_fp_str(trace8.py)}"); }
+    if (trace9.valid)  { say(f"  §f{trace9.t}§7  │  §b{_fp_str(trace9.px)}§7  │  §d{_fp_str(trace9.py)}"); }
+
+    if (trace_count == 0) {
+        say("§8  （无数据 — 先运行 /function physics:launch）");
+    }
+    say(f"§7  共记录 {trace_count}/10 个轨迹点。");
+    say(f"  弹跳次数: §e{proj.bounces}");
+    say("§b§l═══════════════════════════");
+}
+
+// ── 纯数学演示：打印理论抛体轨迹（不需要运行 @tick） ────────────────────
+
+fn demo_table() {
+    // 用数学公式直接计算并打印
+    // x(t) = vx * t
+    // y(t) = vy * t - g * t * (t-1) / 2
+    let vx: int = 300;
+    let vy: int = 500;
+    let g:  int = 20;
+
+    say("§b§l═══ 理论抛体轨迹（数学计算）═══");
+    say(f"  vx={_fp_str(vx)} vy={_fp_str(vy)} g=0.02 m/t²");
+    say("§7  tick │    x (m)  │    y (m)");
+
+    let t: int = 0;
+    while (t <= 50) {
+        let x: int = vx * t;                           // ×1000
+        let y: int = vy * t - g * t * t / 2;          // ×1000（近似）
+        let x_str: string = _fp_str(x);
+        let y_str: string = _fp_str(y);
+        say(f"  §f{t}§7  │  §b{x_str}§7  │  §d{y_str}");
+        t = t + 5;
+    }
+    say("§b§l═══════════════════════════════");
+}

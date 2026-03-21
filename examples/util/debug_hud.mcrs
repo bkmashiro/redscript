@@ -1,0 +1,273 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  debug_hud.mcrs — 调试 HUD（F3 风格信息显示）                       ║
+// ║                                                                      ║
+// ║  演示：收集并显示游戏运行时调试信息，类似 Minecraft F3 调试屏       ║
+// ║                                                                      ║
+// ║  显示的信息面板包括：                                               ║
+// ║    • 当前 tick 和 TPS 估算                                          ║
+// ║    • 在线玩家数量                                                    ║
+// ║    • 当前时间（游戏内时间 → 转换为 HH:MM）                         ║
+// ║    • 计数器（可自定义，用于调试任意变量）                           ║
+// ║    • 报警条件（当某值超出阈值时高亮显示）                           ║
+// ║                                                                      ║
+// ║  用法：                                                              ║
+// ║    /function debug_hud:enable    开启 HUD                           ║
+// ║    /function debug_hud:disable   关闭 HUD                           ║
+// ║    /function debug_hud:dump      打印一次完整调试信息到 chat        ║
+// ║    /function debug_hud:set_watch 设置监视变量（演示）               ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+// ── 枚举：HUD 显示模式 ──────────────────────────────────────────────────
+
+enum HudMode {
+    Off,       // 0 — 关闭
+    Minimal,   // 1 — 仅 actionbar（单行）
+    Full,      // 2 — 完整多行 title + actionbar
+}
+
+// ── 调试变量监视器 ──────────────────────────────────────────────────────
+
+struct WatchVar {
+    name:      string,
+    value:     int,
+    threshold: int,    // 超出此值时显示警告（-1 = 不监控）
+    warn_high: bool    // true=超过阈值报警，false=低于阈值报警
+}
+
+// ── HUD 状态 ────────────────────────────────────────────────────────────
+
+struct HudState {
+    mode:         int,   // HudMode
+    tick:         int,   // 运行 tick 计数
+    update_rate:  int,   // 更新频率（tick/次，建议 4 = ~0.2s）
+    tps_sample:   int,   // TPS 样本（每秒重置）
+    tps_estimate: int,   // 当前 TPS 估算（×10，实际 TPS × 10）
+    sec_timer:    int,   // 秒计时器
+    warn_active:  bool   // 是否有活跃警告
+}
+
+let hud: HudState = {
+    mode:         0,
+    tick:         0,
+    update_rate:  4,
+    tps_sample:   0,
+    tps_estimate: 200,   // 初始假设 20.0 TPS（×10）
+    sec_timer:    0,
+    warn_active:  false
+};
+
+// 三个监视变量槽
+let watch0: WatchVar = { name: "mem_usage",  value: 0,  threshold: 80,  warn_high: true  };
+let watch1: WatchVar = { name: "entity_cnt", value: 0,  threshold: 200, warn_high: true  };
+let watch2: WatchVar = { name: "hp",         value: 100, threshold: 30,  warn_high: false };
+
+// ── @load ───────────────────────────────────────────────────────────────
+
+@load
+fn debug_hud_load() {
+    hud.mode         = HudMode.Off;
+    hud.tick         = 0;
+    hud.tps_sample   = 0;
+    hud.tps_estimate = 200;
+    hud.sec_timer    = 0;
+    hud.warn_active  = false;
+    say("§7[HUD] 调试 HUD 已加载。");
+    say("§7  /function debug_hud:enable   — 开启 HUD");
+    say("§7  /function debug_hud:disable  — 关闭 HUD");
+    say("§7  /function debug_hud:dump     — 打印调试信息");
+}
+
+// ── 游戏内时间 → HH:MM 格式 ────────────────────────────────────────────
+// Minecraft 游戏时间：0 = 06:00（早晨），6000 = 12:00，18000 = 00:00
+// 一天 = 24000 tick
+
+fn _game_time_str(game_ticks: int) -> string {
+    // 将游戏 tick 转为 HH:MM
+    // game_tick 0 → 6:00
+    let adjusted: int = (game_ticks + 6000) % 24000;
+    let hour:     int = (adjusted * 24) / 24000;
+    let minute:   int = ((adjusted * 24 * 60) / 24000) % 60;
+    let h_str:    string = "";
+    let m_str:    string = "";
+    if (hour   < 10) { h_str = f"0{hour}";   } else { h_str = f"{hour}"; }
+    if (minute < 10) { m_str = f"0{minute}"; } else { m_str = f"{minute}"; }
+    return f"{h_str}:{m_str}";
+}
+
+// ── TPS 格式化 ──────────────────────────────────────────────────────────
+// tps_estimate 是 TPS × 10，格式化为 "XX.X"
+
+fn _fmt_tps(tps10: int) -> string {
+    let integer: int = tps10 / 10;
+    let decimal: int = tps10 % 10;
+    return f"{integer}.{decimal}";
+}
+
+// ── 颜色化 TPS ──────────────────────────────────────────────────────────
+
+fn _tps_color(tps10: int) -> string {
+    if (tps10 >= 190)      { return "§a"; }   // ≥ 19.0 绿色
+    else if (tps10 >= 150) { return "§e"; }   // ≥ 15.0 黄色
+    else                   { return "§c"; }   // < 15.0 红色
+}
+
+// ── 检测监视变量报警 ───────────────────────────────────────────────────
+
+fn _check_warnings() {
+    hud.warn_active = false;
+
+    // watch0
+    if (watch0.threshold >= 0) {
+        if (watch0.warn_high && watch0.value > watch0.threshold) {
+            hud.warn_active = true;
+            say(f"§c[HUD ⚠] {watch0.name} = {watch0.value} 超过阈值 {watch0.threshold}！");
+        }
+        if (!watch0.warn_high && watch0.value < watch0.threshold) {
+            hud.warn_active = true;
+            say(f"§c[HUD ⚠] {watch0.name} = {watch0.value} 低于阈值 {watch0.threshold}！");
+        }
+    }
+
+    // watch2（HP 检测）
+    if (watch2.threshold >= 0) {
+        if (!watch2.warn_high && watch2.value < watch2.threshold) {
+            hud.warn_active = true;
+        }
+    }
+}
+
+// ── 构建单行 actionbar 摘要 ────────────────────────────────────────────
+
+fn _build_actionbar() -> string {
+    let tps_col: string = _tps_color(hud.tps_estimate);
+    let tps_str: string = _fmt_tps(hud.tps_estimate);
+    let warn_sfx: string = "";
+    if (hud.warn_active) {
+        warn_sfx = "  §c⚠ 警告！";
+    }
+    return f"§7T:{hud.tick}  §fTPS:{tps_col}{tps_str}§f  §7w0:{watch0.value} w2:{watch2.value}{warn_sfx}";
+}
+
+// ── 打印完整调试面板到 chat ────────────────────────────────────────────
+
+fn dump() {
+    let tps_col: string = _tps_color(hud.tps_estimate);
+    let tps_str: string = _fmt_tps(hud.tps_estimate);
+
+    say("§8§m══════════════════════════════════");
+    say("§f§l   DEBUG HUD  §7— RedScript");
+    say("§8§m══════════════════════════════════");
+    say(f"§7Tick:       §f{hud.tick}");
+    say(f"§7TPS:        {tps_col}{tps_str} §7(est)");
+
+    // 游戏内时间（使用固定值演示；实际需要 scoreboard 读取）
+    let sample_time: int = 6000;   // 示例：正午
+    let time_str:    string = _game_time_str(sample_time);
+    say(f"§7GameTime:   §f{time_str} §7(sample)");
+
+    say("§8§m──────────────────────────────────");
+    say("§7§l监视变量:");
+    // watch0
+    let w0_col: string = "§a";
+    if (watch0.warn_high && watch0.value > watch0.threshold) { w0_col = "§c"; }
+    say(f"  §7{watch0.name}: {w0_col}{watch0.value}  §8[阈值:{watch0.threshold}]");
+    // watch1
+    let w1_col: string = "§a";
+    if (watch1.warn_high && watch1.value > watch1.threshold) { w1_col = "§c"; }
+    say(f"  §7{watch1.name}: {w1_col}{watch1.value}  §8[阈值:{watch1.threshold}]");
+    // watch2
+    let w2_col: string = "§a";
+    if (!watch2.warn_high && watch2.value < watch2.threshold) { w2_col = "§c"; }
+    say(f"  §7{watch2.name}: {w2_col}{watch2.value}  §8[阈值:{watch2.threshold}]");
+
+    say("§8§m──────────────────────────────────");
+    if (hud.warn_active) {
+        say("§c§l  ⚠ 活跃警告！检查上方变量！");
+    } else {
+        say("§a  ✔ 所有变量正常");
+    }
+    say("§8§m══════════════════════════════════");
+}
+
+// ── @tick：HUD 更新 ─────────────────────────────────────────────────────
+
+@tick
+fn debug_hud_tick() {
+    if (hud.mode == HudMode.Off) { return; }
+
+    hud.tick        = hud.tick + 1;
+    hud.tps_sample  = hud.tps_sample + 1;
+    hud.sec_timer   = hud.sec_timer + 1;
+
+    // 每 20 tick（1 秒）更新 TPS 估算
+    if (hud.sec_timer >= 20) {
+        // tps_sample 应接近 20（如果服务器跑满速）
+        hud.tps_estimate = hud.tps_sample * 10;
+        if (hud.tps_estimate > 200) { hud.tps_estimate = 200; }
+        hud.tps_sample = 0;
+        hud.sec_timer  = 0;
+
+        // 检查报警（每秒检查一次）
+        _check_warnings();
+
+        // 模拟监视变量变化（实际游戏中从 scoreboard 读）
+        watch1.value = watch1.value + 3;
+        if (watch1.value > 300) { watch1.value = 0; }
+    }
+
+    // 每 update_rate tick 刷新 HUD
+    if (hud.tick % hud.update_rate == 0) {
+        match (hud.mode) {
+            HudMode.Minimal => {
+                let bar: string = _build_actionbar();
+                foreach (p in @a) {
+                    actionbar(p, bar);
+                }
+            }
+            HudMode.Full => {
+                let bar: string = _build_actionbar();
+                // actionbar 显示单行摘要
+                foreach (p in @a) {
+                    actionbar(p, bar);
+                }
+                // 每 5 秒在 title 显示报警（如有）
+                if (hud.tick % 100 == 0 && hud.warn_active) {
+                    foreach (p in @a) {
+                        title(p, "§c⚠ 调试警告！");
+                        subtitle(p, "§e请查看 /function debug_hud:dump");
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── 公开命令 ────────────────────────────────────────────────────────────
+
+fn enable() {
+    hud.mode = HudMode.Minimal;
+    say("§a[HUD] 调试 HUD 已开启（简洁模式）。");
+}
+
+fn enable_full() {
+    hud.mode = HudMode.Full;
+    say("§a[HUD] 调试 HUD 已开启（完整模式）。");
+}
+
+fn disable() {
+    hud.mode = HudMode.Off;
+    foreach (p in @a) {
+        actionbar(p, "");
+    }
+    say("§7[HUD] 调试 HUD 已关闭。");
+}
+
+// 演示：设置监视变量值
+fn set_watch() {
+    watch0.value = 85;   // 触发 mem_usage 超阈值报警（阈值 80）
+    watch2.value = 20;   // 触发 hp 低阈值报警（阈值 30）
+    say("§e[HUD] 已设置演示监视值：mem_usage=85, hp=20。");
+    say("§e  watch0 和 watch2 将触发报警。");
+    _check_warnings();
+    dump();
+}

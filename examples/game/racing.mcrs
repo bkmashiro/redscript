@@ -1,0 +1,299 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  racing.mcrs — 赛车计时系统                                          ║
+// ║                                                                      ║
+// ║  演示：圈次计时器、最佳圈速、记分牌显示                             ║
+// ║                                                                      ║
+// ║  功能：                                                              ║
+// ║    • 检测玩家经过起终点时开始/结束圈计时                            ║
+// ║    • 记录每圈时间（tick），转换为 MM:SS.ss 格式                     ║
+// ║    • 最多记录 5 圈，显示最佳圈速                                    ║
+// ║    • 记分牌（title/actionbar）实时更新                              ║
+// ║                                                                      ║
+// ║  用法：                                                              ║
+// ║    /function racing:start     开始比赛                              ║
+// ║    /function racing:lap       手动触发圈次（模拟过检查点）          ║
+// ║    /function racing:finish    完成比赛，显示结果                    ║
+// ║    /function racing:scoreboard 显示完整记分牌                       ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+// ── 圈次记录 ────────────────────────────────────────────────────────────
+
+struct LapRecord {
+    ticks: int,   // 该圈耗时（tick）
+    valid: bool   // 是否已完成
+}
+
+// 最多 5 圈
+let lap0: LapRecord = { ticks: 0, valid: false };
+let lap1: LapRecord = { ticks: 0, valid: false };
+let lap2: LapRecord = { ticks: 0, valid: false };
+let lap3: LapRecord = { ticks: 0, valid: false };
+let lap4: LapRecord = { ticks: 0, valid: false };
+
+// ── 赛车状态 ────────────────────────────────────────────────────────────
+
+struct RaceState {
+    current_lap:   int,   // 当前圈次（0-indexed）
+    max_laps:      int,   // 总圈数
+    lap_timer:     int,   // 当前圈计时（tick）
+    total_timer:   int,   // 总计时
+    best_lap:      int,   // 最佳圈速（tick），-1 表示未完成
+    race_active:   bool,
+    finished:      bool
+}
+
+let race: RaceState = {
+    current_lap: 0,
+    max_laps:    5,
+    lap_timer:   0,
+    total_timer: 0,
+    best_lap:    -1,
+    race_active: false,
+    finished:    false
+};
+
+// ── @load ───────────────────────────────────────────────────────────────
+
+@load
+fn racing_load() {
+    race.current_lap = 0;
+    race.max_laps    = 5;
+    race.lap_timer   = 0;
+    race.total_timer = 0;
+    race.best_lap    = -1;
+    race.race_active = false;
+    race.finished    = false;
+    say("§6[赛车] 计时系统已加载。/function racing:start 开始比赛！");
+}
+
+// ── tick → 时间字符串转换 ────────────────────────────────────────────────
+// 格式：MM:SS.tt（分:秒.十分之一秒）
+// 20 tick = 1 秒
+
+fn _fmt_time(ticks: int) -> string {
+    // 十分之一秒（每 2 tick）
+    let tenths:  int = (ticks % 20) / 2;
+    let seconds: int = ticks / 20;
+    let mins:    int = seconds / 60;
+    let secs:    int = seconds % 60;
+
+    // 手动补零（简化：只处理个位数的情况）
+    let min_s:  string = "";
+    let sec_s:  string = "";
+    let tent_s: string = "";
+
+    if (mins < 10)   { min_s  = f"0{mins}"; }  else { min_s  = f"{mins}"; }
+    if (secs < 10)   { sec_s  = f"0{secs}"; }  else { sec_s  = f"{secs}"; }
+    if (tenths < 10) { tent_s = f"{tenths}"; }  else { tent_s = f"{tenths}"; }
+
+    return f"{min_s}:{sec_s}.{tent_s}";
+}
+
+// ── 记录圈次时间 ─────────────────────────────────────────────────────────
+
+fn _record_lap(lap_idx: int, ticks: int) {
+    match (lap_idx) {
+        0 => { lap0.ticks = ticks; lap0.valid = true; }
+        1 => { lap1.ticks = ticks; lap1.valid = true; }
+        2 => { lap2.ticks = ticks; lap2.valid = true; }
+        3 => { lap3.ticks = ticks; lap3.valid = true; }
+        4 => { lap4.ticks = ticks; lap4.valid = true; }
+    }
+}
+
+fn _get_lap_ticks(lap_idx: int) -> int {
+    match (lap_idx) {
+        0 => { return lap0.ticks; }
+        1 => { return lap1.ticks; }
+        2 => { return lap2.ticks; }
+        3 => { return lap3.ticks; }
+        4 => { return lap4.ticks; }
+    }
+    return 0;
+}
+
+fn _get_lap_valid(lap_idx: int) -> bool {
+    match (lap_idx) {
+        0 => { return lap0.valid; }
+        1 => { return lap1.valid; }
+        2 => { return lap2.valid; }
+        3 => { return lap3.valid; }
+        4 => { return lap4.valid; }
+    }
+    return false;
+}
+
+// ── 更新最佳圈速 ────────────────────────────────────────────────────────
+
+fn _update_best(ticks: int) {
+    if (race.best_lap < 0 || ticks < race.best_lap) {
+        race.best_lap = ticks;
+    }
+}
+
+// ── 完成一圈 ────────────────────────────────────────────────────────────
+
+fn _complete_lap() {
+    let lap_ticks: int = race.lap_timer;
+    let lap_num:   int = race.current_lap;
+
+    _record_lap(lap_num, lap_ticks);
+    _update_best(lap_ticks);
+
+    let time_str:  string = _fmt_time(lap_ticks);
+    let is_best:   bool   = (lap_ticks == race.best_lap);
+
+    let best_mark: string = "";
+    if (is_best) {
+        best_mark = " §d★ 最快！";
+    }
+
+    say(f"§6[赛车] 圈 {lap_num + 1}/{race.max_laps}  时间: §e{time_str}{best_mark}");
+
+    if (is_best) {
+        foreach (p in @a) {
+            actionbar(p, f"§d★ 最快圈速！  §e{time_str}");
+        }
+        raw("playsound minecraft:entity.experience_orb.pickup master @a");
+    } else {
+        let best_str: string = _fmt_time(race.best_lap);
+        foreach (p in @a) {
+            actionbar(p, f"§6圈 {lap_num + 1}  §e{time_str}  §7最佳: §d{best_str}");
+        }
+    }
+
+    // 重置圈计时
+    race.lap_timer   = 0;
+    race.current_lap = race.current_lap + 1;
+
+    // 检查是否完赛
+    if (race.current_lap >= race.max_laps) {
+        _finish_race();
+    } else {
+        // 显示下一圈提示
+        foreach (p in @a) {
+            title(p, f"§6圈 {race.current_lap + 1}/{race.max_laps}");
+            subtitle(p, "§e继续！");
+        }
+    }
+}
+
+// ── 完赛 ────────────────────────────────────────────────────────────────
+
+fn _finish_race() {
+    race.race_active = false;
+    race.finished    = true;
+
+    let total_str: string = _fmt_time(race.total_timer);
+    let best_str:  string = _fmt_time(race.best_lap);
+
+    say("§6§l════ 比赛完成！════");
+    say(f"§e  总时间:   §f{total_str}");
+    say(f"§d  最佳圈速: §f{best_str}");
+    say("§e  各圈时间:");
+
+    let i: int = 0;
+    while (i < race.max_laps) {
+        if (_get_lap_valid(i)) {
+            let t:   int    = _get_lap_ticks(i);
+            let ts:  string = _fmt_time(t);
+            let mark: string = "";
+            if (t == race.best_lap) { mark = " §d★"; }
+            say(f"    圈 {i + 1}: §f{ts}{mark}");
+        }
+        i = i + 1;
+    }
+
+    foreach (p in @a) {
+        title(p, "§6§l完赛！");
+        subtitle(p, f"§e总时间: {total_str}  §d最快: {best_str}");
+    }
+    raw("playsound minecraft:ui.toast.challenge_complete master @a");
+    raw("particle minecraft:firework ~ ~2 ~ 2 2 2 0.05 50");
+}
+
+// ── @tick：计时 ──────────────────────────────────────────────────────────
+
+@tick
+fn racing_tick() {
+    if (!race.race_active) { return; }
+
+    race.lap_timer   = race.lap_timer   + 1;
+    race.total_timer = race.total_timer + 1;
+
+    // 每 2 tick 更新 actionbar 计时器
+    if (race.total_timer % 2 == 0) {
+        let lap_str:   string = _fmt_time(race.lap_timer);
+        let total_str: string = _fmt_time(race.total_timer);
+        foreach (p in @a) {
+            actionbar(p, f"§6圈 {race.current_lap + 1}/{race.max_laps}  §e当前圈: {lap_str}  §7总计: {total_str}");
+        }
+    }
+}
+
+// ── 公开命令 ────────────────────────────────────────────────────────────
+
+fn start() {
+    racing_load();
+    race.race_active = true;
+
+    foreach (p in @a) {
+        title(p, "§6§l准备！");
+        subtitle(p, f"§e{race.max_laps} 圈比赛开始！");
+    }
+    say(f"§6[赛车] 比赛开始！共 {race.max_laps} 圈。");
+    raw("playsound minecraft:block.note_block.pling master @a");
+}
+
+fn lap() {
+    if (!race.race_active) {
+        say("§c[赛车] 比赛未开始！");
+        return;
+    }
+    _complete_lap();
+}
+
+fn finish() {
+    if (!race.race_active) {
+        say("§c[赛车] 比赛未进行中。");
+        return;
+    }
+    // 完成剩余圈次
+    while (race.current_lap < race.max_laps) {
+        _record_lap(race.current_lap, race.lap_timer);
+        _update_best(race.lap_timer);
+        race.current_lap = race.current_lap + 1;
+        race.lap_timer   = 0;
+    }
+    _finish_race();
+}
+
+fn scoreboard() {
+    if (!race.finished && !race.race_active) {
+        say("§c[赛车] 还未开始比赛。");
+        return;
+    }
+    say("§6§l═══ 赛车记分牌 ═══");
+    say(f"  进度: §e圈 {race.current_lap}/{race.max_laps}");
+    let i: int = 0;
+    while (i < race.max_laps) {
+        if (_get_lap_valid(i)) {
+            let t:    int    = _get_lap_ticks(i);
+            let ts:   string = _fmt_time(t);
+            let mark: string = "";
+            if (race.best_lap > 0 && t == race.best_lap) { mark = " §d★"; }
+            say(f"  圈 {i + 1}: §f{ts}{mark}");
+        } else {
+            say(f"  圈 {i + 1}: §8—");
+        }
+        i = i + 1;
+    }
+    if (race.best_lap > 0) {
+        let best_str: string = _fmt_time(race.best_lap);
+        say(f"  §d最佳圈速: §f{best_str}");
+    }
+    if (race.finished) {
+        let total_str: string = _fmt_time(race.total_timer);
+        say(f"  §e总时间:   §f{total_str}");
+    }
+}

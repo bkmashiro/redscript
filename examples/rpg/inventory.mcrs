@@ -1,0 +1,265 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  inventory.mcrs — RPG 物品栏管理                                     ║
+// ║                                                                      ║
+// ║  演示：固定大小背包（6 格）、拾取/丢弃/查看/使用物品。               ║
+// ║  用枚举表示物品类型，用 struct 数组管理槽位。                        ║
+// ║                                                                      ║
+// ║  用法：                                                              ║
+// ║    /function inventory:list           显示背包                        ║
+// ║    /function inventory:pickup_sword   拾取铁剑                        ║
+// ║    /function inventory:pickup_potion  拾取生命药水                    ║
+// ║    /function inventory:use_potion     使用药水（消耗一个）            ║
+// ║    /function inventory:drop_sword     丢弃铁剑                        ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+// ── 枚举：物品类型 ──────────────────────────────────────────────────────
+
+enum ItemType {
+    Empty,        // 0 — 空槽
+    IronSword,    // 1 — 铁剑
+    HealthPotion, // 2 — 生命药水
+    Shield,       // 3 — 盾牌
+    Bow,          // 4 — 弓
+    Arrow,        // 5 — 箭（可堆叠）
+}
+
+// ── 物品槽数据结构 ──────────────────────────────────────────────────────
+
+struct Slot {
+    item:     int,   // ItemType 枚举值
+    quantity: int,   // 数量（Empty 时为 0）
+    durability: int  // 耐久度（0–100，非工具类固定 100）
+}
+
+// 背包：6 个固定槽位
+let slot0: Slot = { item: 0, quantity: 0, durability: 0 };
+let slot1: Slot = { item: 0, quantity: 0, durability: 0 };
+let slot2: Slot = { item: 0, quantity: 0, durability: 0 };
+let slot3: Slot = { item: 0, quantity: 0, durability: 0 };
+let slot4: Slot = { item: 0, quantity: 0, durability: 0 };
+let slot5: Slot = { item: 0, quantity: 0, durability: 0 };
+
+let inv_size:   int = 6;   // 背包容量
+let inv_used:   int = 0;   // 已占用槽数
+
+// ── @load ───────────────────────────────────────────────────────────────
+
+@load
+fn inv_load() {
+    inv_used = 0;
+    say("§a[背包] 物品栏系统已加载（6 个槽位）。");
+}
+
+// ── 内部：物品名称 ──────────────────────────────────────────────────────
+
+fn _item_name(item: int) -> string {
+    match (item) {
+        ItemType.Empty        => { return "（空）"; }
+        ItemType.IronSword    => { return "铁剑"; }
+        ItemType.HealthPotion => { return "生命药水"; }
+        ItemType.Shield       => { return "盾牌"; }
+        ItemType.Bow          => { return "弓"; }
+        ItemType.Arrow        => { return "箭"; }
+    }
+    return "未知物品";
+}
+
+fn _item_color(item: int) -> string {
+    match (item) {
+        ItemType.Empty        => { return "§8"; }
+        ItemType.IronSword    => { return "§7"; }
+        ItemType.HealthPotion => { return "§c"; }
+        ItemType.Shield       => { return "§b"; }
+        ItemType.Bow          => { return "§6"; }
+        ItemType.Arrow        => { return "§e"; }
+    }
+    return "§f";
+}
+
+// ── 内部：打印单个槽位 ──────────────────────────────────────────────────
+
+fn _print_slot(idx: int, slot: Slot) {
+    let col:  string = _item_color(slot.item);
+    let name: string = _item_name(slot.item);
+    if (slot.item == ItemType.Empty) {
+        say(f"  [{idx}] §8（空）");
+    } else {
+        say(f"  [{idx}] {col}{name}  ×{slot.quantity}  §7耐久: {slot.durability}/100");
+    }
+}
+
+// ── 公开命令：显示背包 ──────────────────────────────────────────────────
+
+fn list() {
+    say(f"§6§l═══ 背包 [{inv_used}/{inv_size}] ═══");
+    _print_slot(0, slot0);
+    _print_slot(1, slot1);
+    _print_slot(2, slot2);
+    _print_slot(3, slot3);
+    _print_slot(4, slot4);
+    _print_slot(5, slot5);
+    say("§6§l═══════════════════════════");
+}
+
+// ── 内部：查找空槽（返回 -1 表示背包已满） ─────────────────────────────
+
+fn _find_empty() -> int {
+    if (slot0.item == ItemType.Empty) { return 0; }
+    if (slot1.item == ItemType.Empty) { return 1; }
+    if (slot2.item == ItemType.Empty) { return 2; }
+    if (slot3.item == ItemType.Empty) { return 3; }
+    if (slot4.item == ItemType.Empty) { return 4; }
+    if (slot5.item == ItemType.Empty) { return 5; }
+    return -1;
+}
+
+// ── 内部：查找指定物品槽（返回 -1 表示没有） ───────────────────────────
+
+fn _find_item(item: int) -> int {
+    if (slot0.item == item) { return 0; }
+    if (slot1.item == item) { return 1; }
+    if (slot2.item == item) { return 2; }
+    if (slot3.item == item) { return 3; }
+    if (slot4.item == item) { return 4; }
+    if (slot5.item == item) { return 5; }
+    return -1;
+}
+
+// ── 内部：往指定槽位写入物品 ────────────────────────────────────────────
+
+fn _set_slot(idx: int, item: int, qty: int, dur: int) {
+    match (idx) {
+        0 => { slot0.item = item; slot0.quantity = qty; slot0.durability = dur; }
+        1 => { slot1.item = item; slot1.quantity = qty; slot1.durability = dur; }
+        2 => { slot2.item = item; slot2.quantity = qty; slot2.durability = dur; }
+        3 => { slot3.item = item; slot3.quantity = qty; slot3.durability = dur; }
+        4 => { slot4.item = item; slot4.quantity = qty; slot4.durability = dur; }
+        5 => { slot5.item = item; slot5.quantity = qty; slot5.durability = dur; }
+    }
+}
+
+fn _get_slot_qty(idx: int) -> int {
+    match (idx) {
+        0 => { return slot0.quantity; }
+        1 => { return slot1.quantity; }
+        2 => { return slot2.quantity; }
+        3 => { return slot3.quantity; }
+        4 => { return slot4.quantity; }
+        5 => { return slot5.quantity; }
+    }
+    return 0;
+}
+
+// ── 通用拾取逻辑 ────────────────────────────────────────────────────────
+
+fn _pickup(item: int, qty: int, dur: int) {
+    let name: string = _item_name(item);
+    let col:  string = _item_color(item);
+
+    // 可堆叠物品（箭/药水）：先找已有槽叠加
+    if (item == ItemType.HealthPotion || item == ItemType.Arrow) {
+        let existing: int = _find_item(item);
+        if (existing >= 0) {
+            let old_qty: int = _get_slot_qty(existing);
+            _set_slot(existing, item, old_qty + qty, dur);
+            say(f"§a[背包] 叠加 {col}{name} ×{qty}  →  槽 [{existing}] 共 {old_qty + qty}");
+            foreach (p in @a[limit=1]) {
+                actionbar(p, f"§a+ {col}{name} ×{qty}");
+            }
+            return;
+        }
+    }
+
+    // 否则找空槽
+    let slot_idx: int = _find_empty();
+    if (slot_idx < 0) {
+        say(f"§c[背包] 背包已满，无法拾取 {col}{name}！");
+        return;
+    }
+    _set_slot(slot_idx, item, qty, dur);
+    inv_used = inv_used + 1;
+    say(f"§a[背包] 拾取 {col}{name} ×{qty}  →  槽 [{slot_idx}]");
+    foreach (p in @a[limit=1]) {
+        actionbar(p, f"§a+ {col}{name} ×{qty}  [槽{slot_idx}]");
+    }
+}
+
+// ── 公开命令：拾取各类物品 ──────────────────────────────────────────────
+
+fn pickup_sword() {
+    _pickup(ItemType.IronSword, 1, 100);
+}
+
+fn pickup_potion() {
+    _pickup(ItemType.HealthPotion, 3, 100);
+}
+
+fn pickup_shield() {
+    _pickup(ItemType.Shield, 1, 80);
+}
+
+fn pickup_bow() {
+    _pickup(ItemType.Bow, 1, 100);
+}
+
+fn pickup_arrows() {
+    _pickup(ItemType.Arrow, 16, 100);
+}
+
+// ── 公开命令：使用药水 ──────────────────────────────────────────────────
+
+fn use_potion() {
+    let slot_idx: int = _find_item(ItemType.HealthPotion);
+    if (slot_idx < 0) {
+        say("§c[背包] 没有生命药水！");
+        return;
+    }
+    let old_qty: int = _get_slot_qty(slot_idx);
+    if (old_qty <= 0) {
+        say("§c[背包] 药水数量为 0？");
+        return;
+    }
+    let new_qty: int = old_qty - 1;
+    if (new_qty <= 0) {
+        // 药水用完，清空槽位
+        _set_slot(slot_idx, ItemType.Empty, 0, 0);
+        inv_used = inv_used - 1;
+        say("§d[背包] 使用了最后一瓶生命药水！槽位已清空。");
+    } else {
+        _set_slot(slot_idx, ItemType.HealthPotion, new_qty, 100);
+        say(f"§d[背包] 使用生命药水。剩余 {new_qty} 瓶。");
+    }
+    // 实际效果
+    raw("effect give @a minecraft:instant_health 1 1 true");
+    foreach (p in @a[limit=1]) {
+        actionbar(p, "§c❤ 生命药水 +4 HP");
+    }
+}
+
+// ── 公开命令：丢弃铁剑 ──────────────────────────────────────────────────
+
+fn drop_sword() {
+    let slot_idx: int = _find_item(ItemType.IronSword);
+    if (slot_idx < 0) {
+        say("§c[背包] 没有铁剑！");
+        return;
+    }
+    _set_slot(slot_idx, ItemType.Empty, 0, 0);
+    inv_used = inv_used - 1;
+    say(f"§7[背包] 丢弃了铁剑（槽 [{slot_idx}] 已清空）。");
+    // 在玩家脚下生成掉落物
+    raw("summon minecraft:item ~ ~ ~ {Item:{id:\"minecraft:iron_sword\",Count:1b}}");
+}
+
+// ── 公开命令：清空背包 ──────────────────────────────────────────────────
+
+fn clear_all() {
+    slot0 = { item: 0, quantity: 0, durability: 0 };
+    slot1 = { item: 0, quantity: 0, durability: 0 };
+    slot2 = { item: 0, quantity: 0, durability: 0 };
+    slot3 = { item: 0, quantity: 0, durability: 0 };
+    slot4 = { item: 0, quantity: 0, durability: 0 };
+    slot5 = { item: 0, quantity: 0, durability: 0 };
+    inv_used = 0;
+    say("§8[背包] 背包已清空。");
+}

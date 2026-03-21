@@ -1,0 +1,237 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  health_system.mcrs — RPG 血量系统                                   ║
+// ║                                                                      ║
+// ║  演示：玩家血量加减、上限夹值、死亡检测与复活延迟。                  ║
+// ║                                                                      ║
+// ║  用法：                                                              ║
+// ║    /function rpg_health:init          初始化血量系统                  ║
+// ║    /function rpg_health:heal          治疗玩家（+20 HP）              ║
+// ║    /function rpg_health:damage        伤害玩家（-15 HP）              ║
+// ║    /function rpg_health:status        显示当前血量                    ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+import "../../src/stdlib/math.mcrs"
+
+// ── 枚举：玩家状态 ──────────────────────────────────────────────────────
+
+enum PlayerStatus {
+    Alive,    // 0 — 存活
+    Wounded,  // 1 — 受伤（HP <= 30%）
+    Dead,     // 2 — 死亡
+}
+
+// ── 血量数据结构 ────────────────────────────────────────────────────────
+
+struct Health {
+    current:    int,   // 当前 HP
+    max_hp:     int,   // 最大 HP
+    status:     int,   // PlayerStatus 枚举值
+    regen_tick: int,   // 自然回血计时器（每 40 tick 回 1 HP）
+    dead_timer: int    // 死亡后重置计时器
+}
+
+let player_hp: Health = {
+    current:    100,
+    max_hp:     100,
+    status:     0,    // PlayerStatus.Alive
+    regen_tick: 0,
+    dead_timer: 0
+};
+
+// ── @load：系统启动 ─────────────────────────────────────────────────────
+
+@load
+fn health_load() {
+    player_hp.current    = 100;
+    player_hp.max_hp     = 100;
+    player_hp.status     = PlayerStatus.Alive;
+    player_hp.regen_tick = 0;
+    player_hp.dead_timer = 0;
+    say("§a[HP] 血量系统已加载。HP = 100/100");
+}
+
+// ── 工具函数：更新玩家状态 ──────────────────────────────────────────────
+
+fn _update_status() {
+    if (player_hp.current <= 0) {
+        player_hp.current = 0;
+        player_hp.status  = PlayerStatus.Dead;
+    } else {
+        // 计算 HP 百分比（×100 避免浮点）
+        let pct: int = (player_hp.current * 100) / player_hp.max_hp;
+        if (pct <= 30) {
+            player_hp.status = PlayerStatus.Wounded;
+        } else {
+            player_hp.status = PlayerStatus.Alive;
+        }
+    }
+}
+
+// HP 夹值到 [0, max_hp]
+fn _clamp_hp() {
+    if (player_hp.current < 0) {
+        player_hp.current = 0;
+    }
+    if (player_hp.current > player_hp.max_hp) {
+        player_hp.current = player_hp.max_hp;
+    }
+}
+
+// ── 获取状态颜色标签 ────────────────────────────────────────────────────
+
+fn _status_color() -> string {
+    match (player_hp.status) {
+        PlayerStatus.Alive   => { return "§a"; }
+        PlayerStatus.Wounded => { return "§e"; }
+        PlayerStatus.Dead    => { return "§c"; }
+    }
+    return "§f";
+}
+
+fn _status_label() -> string {
+    match (player_hp.status) {
+        PlayerStatus.Alive   => { return "存活"; }
+        PlayerStatus.Wounded => { return "危险"; }
+        PlayerStatus.Dead    => { return "死亡"; }
+    }
+    return "未知";
+}
+
+// ── 公开命令：治疗 ──────────────────────────────────────────────────────
+
+fn heal() {
+    if (player_hp.status == PlayerStatus.Dead) {
+        say("§c[HP] 玩家已死亡，无法治疗！");
+        return;
+    }
+    let amount: int = 20;
+    let old_hp: int = player_hp.current;
+    player_hp.current = player_hp.current + amount;
+    _clamp_hp();
+    _update_status();
+    let col: string = _status_color();
+    say(f"§a[HP] 治疗 +{amount}  {old_hp} → {col}{player_hp.current}§r / {player_hp.max_hp}");
+    foreach (p in @a[limit=1]) {
+        actionbar(p, f"§a❤ +{amount}  HP: {player_hp.current}/{player_hp.max_hp}");
+    }
+}
+
+// ── 公开命令：受伤 ──────────────────────────────────────────────────────
+
+fn damage() {
+    if (player_hp.status == PlayerStatus.Dead) {
+        say("§c[HP] 玩家已死亡，忽略伤害。");
+        return;
+    }
+    let amount: int = 15;
+    let old_hp: int = player_hp.current;
+    player_hp.current = player_hp.current - amount;
+    _clamp_hp();
+    _update_status();
+
+    match (player_hp.status) {
+        PlayerStatus.Dead => {
+            say(f"§c[HP] 致命伤害 -{amount}！玩家死亡！");
+            _on_death();
+        }
+        PlayerStatus.Wounded => {
+            say(f"§e[HP] 受伤 -{amount}  {old_hp} → §e{player_hp.current}§r / {player_hp.max_hp}  §c⚠ 血量危急！");
+        }
+        PlayerStatus.Alive => {
+            say(f"§c[HP] 受伤 -{amount}  {old_hp} → §a{player_hp.current}§r / {player_hp.max_hp}");
+        }
+    }
+    foreach (p in @a[limit=1]) {
+        actionbar(p, f"§c❤ -{amount}  HP: {player_hp.current}/{player_hp.max_hp}");
+    }
+}
+
+// ── 内部：死亡处理 ──────────────────────────────────────────────────────
+
+fn _on_death() {
+    player_hp.dead_timer = 0;
+    foreach (p in @a[limit=1]) {
+        title(p, "§c☠ 你死了！");
+        subtitle(p, "§75 秒后复活...");
+    }
+    // 给予死亡效果
+    raw("effect give @a minecraft:blindness 5 2 true");
+    raw("effect give @a minecraft:slowness 5 10 true");
+    say("§8[HP] 玩家已死亡。5 秒后自动复活。");
+}
+
+// ── 公开命令：显示状态 ──────────────────────────────────────────────────
+
+fn status() {
+    let col: string   = _status_color();
+    let label: string = _status_label();
+    // HP 条（20 格）
+    let filled: int = (player_hp.current * 20) / player_hp.max_hp;
+    say(f"§e[HP] 状态: {col}{label}");
+    say(f"§e[HP] 血量: {col}{player_hp.current} §r/ {player_hp.max_hp}");
+    // 简易文字血条
+    let bar_str: string = "";
+    let i: int = 0;
+    while (i < 20) {
+        if (i < filled) {
+            bar_str = bar_str + "§a█";
+        } else {
+            bar_str = bar_str + "§8░";
+        }
+        i = i + 1;
+    }
+    say(f"  [{bar_str}§r]");
+}
+
+// ── @tick：自然回血 + 死亡复活 ─────────────────────────────────────────
+
+@tick
+fn health_tick() {
+    // 死亡倒计时复活
+    if (player_hp.status == PlayerStatus.Dead) {
+        player_hp.dead_timer = player_hp.dead_timer + 1;
+        if (player_hp.dead_timer >= 100) {  // 100 ticks = 5 秒
+            _respawn();
+        }
+        return;
+    }
+
+    // 自然回血（每 40 tick 回 1 HP，不超过上限）
+    player_hp.regen_tick = player_hp.regen_tick + 1;
+    if (player_hp.regen_tick >= 40) {
+        player_hp.regen_tick = 0;
+        if (player_hp.current < player_hp.max_hp) {
+            player_hp.current = player_hp.current + 1;
+            _clamp_hp();
+            _update_status();
+        }
+    }
+
+    // 实时 actionbar 血量显示
+    if (player_hp.status == PlayerStatus.Wounded) {
+        foreach (p in @a[limit=1]) {
+            actionbar(p, f"§c❤ {player_hp.current}/{player_hp.max_hp}  §e⚠ 血量危急！");
+        }
+    }
+}
+
+// ── 内部：复活 ──────────────────────────────────────────────────────────
+
+fn _respawn() {
+    player_hp.current    = player_hp.max_hp / 2;  // 复活时恢复 50% HP
+    player_hp.dead_timer = 0;
+    player_hp.status     = PlayerStatus.Alive;
+    _update_status();
+    foreach (p in @a[limit=1]) {
+        title(p, "§a复活！");
+        subtitle(p, f"§7HP 恢复至 {player_hp.current}/{player_hp.max_hp}");
+    }
+    raw("effect clear @a");
+    say(f"§a[HP] 玩家复活！HP = {player_hp.current}/{player_hp.max_hp}");
+}
+
+// ── 公开命令：系统初始化 ────────────────────────────────────────────────
+
+fn init() {
+    health_load();
+}

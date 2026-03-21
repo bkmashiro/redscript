@@ -1,0 +1,311 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  tower_defense.mcrs — 塔防游戏逻辑                                   ║
+// ║                                                                      ║
+// ║  演示：炮塔实体追踪 + 伤害计算 + 波次管理                           ║
+// ║                                                                      ║
+// ║  核心机制：                                                          ║
+// ║    • 炮塔（塔数组）每 N tick 攻击范围内最近敌人                     ║
+// ║    • 敌人有护甲值，伤害公式：damage = base * 100 / (100 + armor)    ║
+// ║    • 波次管理：击败本波敌人后开始下一波（更强）                     ║
+// ║                                                                      ║
+// ║  用法：                                                              ║
+// ║    /function td:start         开始游戏                              ║
+// ║    /function td:status        显示塔防状态                          ║
+// ║    /function td:spawn_wave    手动召唤一波敌人                       ║
+// ║    /function td:stop          结束游戏                              ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+import "../../src/stdlib/math.mcrs"
+
+// ── 枚举：炮塔类型 ──────────────────────────────────────────────────────
+
+enum TowerType {
+    Arrow,    // 0 — 箭塔（快速，低伤）
+    Cannon,   // 1 — 炮塔（慢速，高伤，AOE）
+    Frost,    // 2 — 冰塔（减速，中伤）
+}
+
+// ── 枚举：敌人类型 ──────────────────────────────────────────────────────
+
+enum EnemyType {
+    Zombie,    // 0 — 普通僵尸
+    Skeleton,  // 1 — 骷髅（快速）
+    Giant,     // 2 — 巨型（高血量，高护甲）
+}
+
+// ── 炮塔数据结构 ────────────────────────────────────────────────────────
+
+struct Tower {
+    tower_type:   int,   // TowerType
+    attack_speed: int,   // 攻击间隔（tick）
+    damage:       int,   // 基础伤害
+    range:        int,   // 攻击范围（×1000 固定点，单位：方块）
+    atk_timer:    int,   // 攻击计时
+    total_kills:  int    // 击杀数
+}
+
+// ── 波次数据 ────────────────────────────────────────────────────────────
+
+struct WaveState {
+    wave_num:      int,   // 当前波次（从 1 开始）
+    enemies_alive: int,   // 本波存活敌人数
+    enemies_total: int,   // 本波总敌人数
+    spawn_timer:   int,   // 生成计时
+    wave_active:   bool
+}
+
+// ── 游戏状态 ────────────────────────────────────────────────────────────
+
+struct TDState {
+    lives:    int,   // 剩余生命
+    gold:     int,   // 金币
+    score:    int,   // 总分
+    tick:     int,
+    active:   bool
+}
+
+// 三座固定炮塔
+let tower0: Tower = { tower_type: 0, attack_speed: 10, damage: 8,  range: 8000, atk_timer: 0, total_kills: 0 };
+let tower1: Tower = { tower_type: 1, attack_speed: 40, damage: 40, range: 6000, atk_timer: 0, total_kills: 0 };
+let tower2: Tower = { tower_type: 2, attack_speed: 20, damage: 12, range: 7000, atk_timer: 0, total_kills: 0 };
+
+let wave: WaveState = {
+    wave_num:      1,
+    enemies_alive: 0,
+    enemies_total: 0,
+    spawn_timer:   0,
+    wave_active:   false
+};
+
+let td: TDState = {
+    lives:  20,
+    gold:   100,
+    score:  0,
+    tick:   0,
+    active: false
+};
+
+// ── @load ───────────────────────────────────────────────────────────────
+
+@load
+fn td_load() {
+    td.lives  = 20;
+    td.gold   = 100;
+    td.score  = 0;
+    td.tick   = 0;
+    td.active = false;
+    wave.wave_num    = 1;
+    wave.wave_active = false;
+    say("§2[TD] 塔防系统已加载。/function td:start 开始游戏。");
+}
+
+// ── 伤害计算公式 ────────────────────────────────────────────────────────
+// damage = base * 100 / (100 + armor)
+// 护甲越高，实际伤害越低；满甲情况（armor=100）伤害减半
+
+fn _calc_damage(base_dmg: int, armor: int) -> int {
+    if (armor <= 0) { return base_dmg; }
+    return (base_dmg * 100) / (100 + armor);
+}
+
+// ── 炮塔名称 ────────────────────────────────────────────────────────────
+
+fn _tower_name(t: int) -> string {
+    match (t) {
+        TowerType.Arrow  => { return "§e箭塔"; }
+        TowerType.Cannon => { return "§6炮塔"; }
+        TowerType.Frost  => { return "§b冰塔"; }
+    }
+    return "未知";
+}
+
+// ── 炮塔攻击逻辑 ────────────────────────────────────────────────────────
+
+fn _tower_attack(idx: int, t: Tower) {
+    let name: string = _tower_name(t.tower_type);
+
+    match (t.tower_type) {
+        TowerType.Arrow => {
+            // 箭塔：攻击最近单个敌人
+            say(f"§e[塔{idx} 箭塔] 射箭！基础伤害 {t.damage}");
+            // 假设目标护甲 = 10（普通僵尸）
+            let actual: int = _calc_damage(t.damage, 10);
+            say(f"  →  实际伤害 {actual}（对抗 10 点护甲）");
+            raw("execute at @e[type=minecraft:zombie,limit=1,sort=nearest] run particle minecraft:crit ~ ~1 ~ 0 0 0 0.1 3");
+        }
+        TowerType.Cannon => {
+            // 炮塔：AOE 爆炸，伤害周围所有敌人
+            say(f"§6[塔{idx} 炮塔] 炮击！基础伤害 {t.damage} (AOE)");
+            let actual: int = _calc_damage(t.damage, 20);
+            say(f"  →  实际伤害 {actual}（对抗 20 点护甲）");
+            raw("execute at @e[type=minecraft:zombie,limit=1,sort=nearest] run particle minecraft:explosion_emitter ~ ~1 ~ 1 1 1 0.1 1");
+        }
+        TowerType.Frost => {
+            // 冰塔：攻击 + 减速
+            say(f"§b[塔{idx} 冰塔] 冰冻！基础伤害 {t.damage} + 减速");
+            let actual: int = _calc_damage(t.damage, 5);
+            say(f"  →  实际伤害 {actual} + 缓速效果");
+            raw("execute at @e[type=minecraft:zombie,limit=1,sort=nearest] run effect give @s minecraft:slowness 3 2 true");
+            raw("execute at @e[type=minecraft:zombie,limit=1,sort=nearest] run particle minecraft:snowflake ~ ~1 ~ 0.5 0.5 0.5 0.1 10");
+        }
+    }
+}
+
+// ── 炮塔 tick（各炮塔独立计时） ────────────────────────────────────────
+
+fn _tick_towers() {
+    // 炮塔 0
+    tower0.atk_timer = tower0.atk_timer + 1;
+    if (tower0.atk_timer >= tower0.attack_speed) {
+        tower0.atk_timer = 0;
+        _tower_attack(0, tower0);
+        tower0.total_kills = tower0.total_kills + 1;
+    }
+
+    // 炮塔 1
+    tower1.atk_timer = tower1.atk_timer + 1;
+    if (tower1.atk_timer >= tower1.attack_speed) {
+        tower1.atk_timer = 0;
+        _tower_attack(1, tower1);
+        tower1.total_kills = tower1.total_kills + 1;
+    }
+
+    // 炮塔 2
+    tower2.atk_timer = tower2.atk_timer + 1;
+    if (tower2.atk_timer >= tower2.attack_speed) {
+        tower2.atk_timer = 0;
+        _tower_attack(2, tower2);
+        tower2.total_kills = tower2.total_kills + 1;
+    }
+}
+
+// ── 波次生成 ────────────────────────────────────────────────────────────
+
+fn _spawn_wave_enemies() {
+    let count: int = 5 + wave.wave_num * 2;   // 波次越高，敌人越多
+    wave.enemies_total = count;
+    wave.enemies_alive = count;
+    wave.wave_active   = true;
+    say(f"§c[TD] ！波次 {wave.wave_num} 开始！共 {count} 名敌人。");
+
+    // 根据波次选择敌人类型
+    if (wave.wave_num <= 2) {
+        // 前两波：只有僵尸
+        let i: int = 0;
+        while (i < count) {
+            raw("summon minecraft:zombie ~ ~1 ~ {Tags:[\"td_enemy\"],CustomName:'\"敌兵\"'}");
+            i = i + 1;
+        }
+    } else if (wave.wave_num <= 4) {
+        // 3–4 波：骷髅 + 僵尸
+        let i: int = 0;
+        while (i < count / 2) {
+            raw("summon minecraft:zombie ~ ~1 ~ {Tags:[\"td_enemy\"]}");
+            i = i + 1;
+        }
+        let j: int = 0;
+        while (j < count / 2) {
+            raw("summon minecraft:skeleton ~ ~1 ~ {Tags:[\"td_enemy\"]}");
+            j = j + 1;
+        }
+    } else {
+        // 5 波以上：混合 + 精英
+        let i: int = 0;
+        while (i < count - 1) {
+            raw("summon minecraft:zombie ~ ~1 ~ {Tags:[\"td_enemy\"]}");
+            i = i + 1;
+        }
+        // 精英 Giant（属性增强）
+        raw("summon minecraft:giant ~ ~1 ~ {Tags:[\"td_enemy\",\"td_elite\"],CustomName:'\"精英\"'}");
+    }
+
+    foreach (p in @a) {
+        title(p, f"§c波次 {wave.wave_num}！");
+        subtitle(p, f"§e{count} 名敌人正在逼近！");
+    }
+}
+
+// ── 检查波次是否结束 ────────────────────────────────────────────────────
+
+fn _check_wave_clear() {
+    // 统计存活敌人数量（tag 检测）
+    // 实际通过 count 命令实现，这里用计时模拟
+    // 每 60 tick 检查一次
+    if (td.tick % 60 == 0 && wave.wave_active) {
+        // 模拟：随时间减少存活数（实际游戏中用 execute if entity）
+        if (wave.enemies_alive > 0) {
+            wave.enemies_alive = wave.enemies_alive - 1;
+        }
+        if (wave.enemies_alive <= 0) {
+            wave.wave_active = false;
+            td.score  = td.score  + wave.wave_num * 50;
+            td.gold   = td.gold   + wave.wave_num * 20;
+            say(f"§a[TD] 波次 {wave.wave_num} 通关！+{wave.wave_num * 50} 分，+{wave.wave_num * 20} 金币");
+            wave.wave_num = wave.wave_num + 1;
+            foreach (p in @a) {
+                actionbar(p, f"§a✔ 波次通关！下一波准备中...  金币: {td.gold}");
+            }
+        }
+    }
+}
+
+// ── @tick ────────────────────────────────────────────────────────────────
+
+@tick
+fn td_tick() {
+    if (!td.active) { return; }
+
+    td.tick = td.tick + 1;
+
+    // 炮塔攻击
+    _tick_towers();
+
+    // 波次检测
+    _check_wave_clear();
+
+    // 每 20 tick 更新 HUD
+    if (td.tick % 20 == 0) {
+        foreach (p in @a) {
+            actionbar(p, f"§6波次:{wave.wave_num}  §e金币:{td.gold}  §c生命:{td.lives}  §a分数:{td.score}");
+        }
+    }
+}
+
+// ── 公开命令 ────────────────────────────────────────────────────────────
+
+fn start() {
+    td_load();
+    td.active = true;
+    say("§2[TD] 游戏开始！炮塔就位，召唤第一波敌人...");
+    _spawn_wave_enemies();
+}
+
+fn stop() {
+    td.active        = false;
+    wave.wave_active = false;
+    raw("kill @e[tag=td_enemy]");
+    say("§8[TD] 游戏已结束。");
+    say(f"§e  最终得分: {td.score}");
+    say(f"§e  通关波次: {wave.wave_num - 1}");
+}
+
+fn spawn_wave() {
+    if (wave.wave_active) {
+        say("§c[TD] 当前波次还未结束！");
+        return;
+    }
+    _spawn_wave_enemies();
+}
+
+fn status() {
+    say("§2§l═══ 塔防状态 ═══");
+    say(f"  波次: §e{wave.wave_num}  存活敌人: §c{wave.enemies_alive}/{wave.enemies_total}");
+    say(f"  生命: §c{td.lives}  金币: §e{td.gold}  分数: §a{td.score}");
+    say(f"  箭塔击杀: {tower0.total_kills}  炮塔击杀: {tower1.total_kills}  冰塔击杀: {tower2.total_kills}");
+    let t0_name: string = _tower_name(tower0.tower_type);
+    let t1_name: string = _tower_name(tower1.tower_type);
+    let t2_name: string = _tower_name(tower2.tower_type);
+    say(f"  {t0_name} 伤害:{tower0.damage} 攻速:{tower0.attack_speed}t");
+    say(f"  {t1_name} 伤害:{tower1.damage} 攻速:{tower1.attack_speed}t");
+    say(f"  {t2_name} 伤害:{tower2.damage} 攻速:{tower2.attack_speed}t");
+}

@@ -1,0 +1,313 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  boss_fight.mcrs — Boss 战系统                                       ║
+// ║                                                                      ║
+// ║  演示：Boss 状态机（多阶段）+ 技能调度器（@schedule / 周期攻击）     ║
+// ║                                                                      ║
+// ║  Boss 共三个阶段：                                                   ║
+// ║    Phase 1 (100%→60%): 普通攻击                                      ║
+// ║    Phase 2 (60%→30%):  AOE 冲击 + 召唤小怪                          ║
+// ║    Phase 3 (<30%):     狂暴模式，攻击速度翻倍                       ║
+// ║                                                                      ║
+// ║  用法：                                                              ║
+// ║    /function boss:start     开始 Boss 战                             ║
+// ║    /function boss:stop      结束 Boss 战                             ║
+// ║    /function boss:status    显示 Boss 状态                           ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+import "../../src/stdlib/math.mcrs"
+
+// ── 枚举：Boss 阶段 ─────────────────────────────────────────────────────
+
+enum BossPhase {
+    Idle,      // 0 — 等待开始
+    Phase1,    // 1 — 普通模式（HP 60–100%）
+    Phase2,    // 2 — 强化模式（HP 30–60%）
+    Phase3,    // 3 — 狂暴模式（HP < 30%）
+    Dead,      // 4 — 已击败
+}
+
+// ── Boss 数据结构 ────────────────────────────────────────────────────────
+
+struct Boss {
+    hp:           int,   // 当前 HP
+    max_hp:       int,   // 最大 HP（500）
+    phase:        int,   // BossPhase 枚举值
+    attack_timer: int,   // 攻击计时器（tick）
+    skill_timer:  int,   // 技能计时器（tick）
+    enrage_timer: int,   // 狂暴攻击计时器
+    tick:         int,   // 全局 tick
+    active:       bool
+}
+
+let boss: Boss = {
+    hp:           500,
+    max_hp:       500,
+    phase:        0,
+    attack_timer: 0,
+    skill_timer:  0,
+    enrage_timer: 0,
+    tick:         0,
+    active:       false
+};
+
+// ── @load ───────────────────────────────────────────────────────────────
+
+@load
+fn boss_load() {
+    boss.hp           = 500;
+    boss.max_hp       = 500;
+    boss.phase        = BossPhase.Idle;
+    boss.attack_timer = 0;
+    boss.skill_timer  = 0;
+    boss.enrage_timer = 0;
+    boss.tick         = 0;
+    boss.active       = false;
+    say("§4[Boss] 深渊领主已就位。/function boss:start 开始战斗！");
+}
+
+// ── 工具：HP 百分比（×100） ─────────────────────────────────────────────
+
+fn _hp_pct() -> int {
+    return (boss.hp * 100) / boss.max_hp;
+}
+
+// ── 工具：HP 条显示 ─────────────────────────────────────────────────────
+
+fn _hp_bar() -> string {
+    let filled: int = (boss.hp * 20) / boss.max_hp;
+    let bar: string = "";
+    let i: int = 0;
+    while (i < 20) {
+        if (i < filled) {
+            bar = bar + "§c█";
+        } else {
+            bar = bar + "§8░";
+        }
+        i = i + 1;
+    }
+    return bar;
+}
+
+// ── 阶段转换 ────────────────────────────────────────────────────────────
+
+fn _check_phase_transition() {
+    let pct: int = _hp_pct();
+
+    if (pct <= 0 && boss.phase != BossPhase.Dead) {
+        _enter_phase(BossPhase.Dead);
+        return;
+    }
+
+    if (pct <= 30 && boss.phase == BossPhase.Phase2) {
+        _enter_phase(BossPhase.Phase3);
+        return;
+    }
+
+    if (pct <= 60 && boss.phase == BossPhase.Phase1) {
+        _enter_phase(BossPhase.Phase2);
+        return;
+    }
+}
+
+fn _enter_phase(phase: int) {
+    boss.phase = phase;
+
+    match (phase) {
+        BossPhase.Phase1 => {
+            say("§4[Boss] 深渊领主 发动攻击！");
+            foreach (p in @a) {
+                title(p, "§4☠ Boss 出现！");
+                subtitle(p, "§c深渊领主已苏醒！");
+            }
+            raw("playsound minecraft:entity.wither.spawn master @a");
+        }
+        BossPhase.Phase2 => {
+            say("§c[Boss] ※ 阶段二：Boss 开始狂暴！召唤援军！");
+            foreach (p in @a) {
+                title(p, "§4☠ 阶段二！");
+                subtitle(p, "§e深渊领主呼唤爪牙...");
+            }
+            raw("playsound minecraft:entity.ender_dragon.growl master @a");
+            raw("effect give @a minecraft:darkness 3 1 true");
+            // 召唤小僵尸
+            raw("summon minecraft:zombie ~ ~1 ~ {CustomName:'\"\\\"爪牙\\\"\"',Tags:[\"boss_minion\"]}");
+            raw("summon minecraft:zombie ~3 ~1 ~ {CustomName:'\"\\\"爪牙\\\"\"',Tags:[\"boss_minion\"]}");
+            raw("summon minecraft:zombie ~-3 ~1 ~ {CustomName:'\"\\\"爪牙\\\"\"',Tags:[\"boss_minion\"]}");
+        }
+        BossPhase.Phase3 => {
+            say("§4§l[Boss] ！！深渊领主进入狂暴模式！！");
+            foreach (p in @a) {
+                title(p, "§4§l⚡ 狂暴！");
+                subtitle(p, "§c深渊领主的力量超出极限！");
+            }
+            raw("playsound minecraft:entity.wither.death master @a");
+            raw("effect give @a minecraft:weakness 5 1 true");
+            raw("particle minecraft:explosion_emitter ~ ~1 ~ 5 5 5 0.1 20");
+        }
+        BossPhase.Dead => {
+            boss.active = false;
+            boss.hp     = 0;
+            say("§a[Boss] 深渊领主已被击败！");
+            foreach (p in @a) {
+                title(p, "§a✔ 胜利！");
+                subtitle(p, "§6深渊领主已被消灭！");
+            }
+            raw("playsound minecraft:ui.toast.challenge_complete master @a");
+            raw("particle minecraft:firework ~ ~2 ~ 3 3 3 0.05 100");
+            raw("give @a minecraft:nether_star 1");
+            // 清理小怪
+            raw("kill @e[tag=boss_minion]");
+        }
+    }
+}
+
+// ── 技能：普通攻击 ──────────────────────────────────────────────────────
+
+fn _skill_normal_attack() {
+    say("§c[Boss] 普通攻击！");
+    raw("effect give @a minecraft:slowness 2 0 true");
+    foreach (p in @a[limit=1]) {
+        actionbar(p, "§c⚔ Boss 普通攻击！");
+    }
+    raw("particle minecraft:sweep_attack ~ ~1 ~ 2 1 2 0.1 5");
+}
+
+// ── 技能：AOE 冲击（阶段二） ────────────────────────────────────────────
+
+fn _skill_aoe_strike() {
+    say("§4[Boss] §l大地震！AOE 冲击！");
+    foreach (p in @a) {
+        actionbar(p, "§4⚡ 大地震！");
+    }
+    raw("particle minecraft:explosion ~ ~0.5 ~ 5 0.5 5 0.1 30");
+    raw("effect give @a minecraft:weakness 3 1 true");
+    raw("effect give @a minecraft:nausea 3 0 true");
+    raw("playsound minecraft:entity.generic.explode master @a");
+}
+
+// ── 技能：狂暴乱斩（阶段三） ───────────────────────────────────────────
+
+fn _skill_enrage_slash() {
+    say("§4§l[Boss] 乱斩！");
+    foreach (p in @a) {
+        actionbar(p, "§4§l💢 乱斩！");
+    }
+    raw("particle minecraft:crit ~ ~1 ~ 3 2 3 0.3 20");
+    raw("effect give @a minecraft:mining_fatigue 2 2 true");
+    raw("playsound minecraft:entity.player.attack.crit master @a");
+}
+
+// ── @tick：主循环 ────────────────────────────────────────────────────────
+
+@tick
+fn boss_tick() {
+    if (!boss.active) { return; }
+
+    boss.tick = boss.tick + 1;
+
+    // 检查阶段转换
+    _check_phase_transition();
+
+    if (boss.phase == BossPhase.Dead) { return; }
+
+    match (boss.phase) {
+        BossPhase.Phase1 => { _tick_phase1(); }
+        BossPhase.Phase2 => { _tick_phase2(); }
+        BossPhase.Phase3 => { _tick_phase3(); }
+    }
+
+    // 每 20 tick 更新 actionbar Boss 血量
+    if (boss.tick % 20 == 0) {
+        let bar: string = _hp_bar();
+        let pct: int    = _hp_pct();
+        foreach (p in @a) {
+            actionbar(p, f"§4☠ 深渊领主  [{bar}§4]  §c{boss.hp}/{boss.max_hp} ({pct}%)");
+        }
+    }
+}
+
+// ── 阶段一 tick：每 60 tick 普通攻击 ───────────────────────────────────
+
+fn _tick_phase1() {
+    boss.attack_timer = boss.attack_timer + 1;
+    if (boss.attack_timer >= 60) {
+        boss.attack_timer = 0;
+        _skill_normal_attack();
+        // 模拟玩家受到伤害（测试用，实际由碰撞/距离检测驱动）
+        boss.hp = boss.hp - 25;  // 演示：每次被攻击 Boss 扣血
+    }
+}
+
+// ── 阶段二 tick：攻击变快 + 每 100 tick AOE ────────────────────────────
+
+fn _tick_phase2() {
+    boss.attack_timer = boss.attack_timer + 1;
+    boss.skill_timer  = boss.skill_timer  + 1;
+
+    if (boss.attack_timer >= 40) {
+        boss.attack_timer = 0;
+        _skill_normal_attack();
+        boss.hp = boss.hp - 20;
+    }
+
+    if (boss.skill_timer >= 100) {
+        boss.skill_timer = 0;
+        _skill_aoe_strike();
+    }
+}
+
+// ── 阶段三 tick：极快攻击 + 乱斩 ───────────────────────────────────────
+
+fn _tick_phase3() {
+    boss.attack_timer = boss.attack_timer + 1;
+    boss.enrage_timer = boss.enrage_timer + 1;
+
+    if (boss.attack_timer >= 20) {
+        boss.attack_timer = 0;
+        _skill_normal_attack();
+        boss.hp = boss.hp - 15;
+    }
+
+    if (boss.enrage_timer >= 60) {
+        boss.enrage_timer = 0;
+        _skill_enrage_slash();
+    }
+}
+
+// ── 公开命令：开始 ──────────────────────────────────────────────────────
+
+fn start() {
+    boss_load();
+    boss.active = true;
+    boss.phase  = BossPhase.Phase1;
+    _enter_phase(BossPhase.Phase1);
+}
+
+// ── 公开命令：停止 ──────────────────────────────────────────────────────
+
+fn stop() {
+    boss.active = false;
+    boss.phase  = BossPhase.Idle;
+    raw("kill @e[tag=boss_minion]");
+    say("§8[Boss] 战斗已终止。");
+}
+
+// ── 公开命令：查看状态 ──────────────────────────────────────────────────
+
+fn status() {
+    let pct: int    = _hp_pct();
+    let bar: string = _hp_bar();
+    let phase_name: string = "";
+    match (boss.phase) {
+        BossPhase.Idle   => { phase_name = "等待"; }
+        BossPhase.Phase1 => { phase_name = "阶段一（普通）"; }
+        BossPhase.Phase2 => { phase_name = "阶段二（强化）"; }
+        BossPhase.Phase3 => { phase_name = "阶段三（狂暴）"; }
+        BossPhase.Dead   => { phase_name = "已击败"; }
+    }
+    say("§4§l═══ 深渊领主 状态 ═══");
+    say(f"  阶段: §e{phase_name}");
+    say(f"  HP:   §c{boss.hp} §r/ {boss.max_hp}  ({pct}%)");
+    say(f"  [{bar}§r]");
+    say(f"  Tick: §7{boss.tick}");
+}
