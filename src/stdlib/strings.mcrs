@@ -1,7 +1,125 @@
-// String helpers for RedScript datapacks.
-// Runtime string manipulation is still limited; `str_len` is compiler-assisted
-// and lowers to `data get storage rs:strings ...` for literal-backed strings.
+// strings.mcrs — String manipulation helpers for RedScript datapacks.
+//
+// ## MC 1.21.4 String Model
+//
+// Runtime string operations work via NBT storage (rs:strings).
+// Strings must be pre-written into rs:strings storage before calling
+// these functions. The storage layout convention is:
+//
+//   rs:strings { A: "...", B: "...", Result: "..." }
+//
+// The string parameters accepted by these functions represent the
+// NBT field name (key) within rs:strings, e.g. passing "A" means
+// the string is stored at `rs:strings.A`.
+//
+// ## Feasibility Summary (MC 1.21.4)
+//
+//   str_len      — PARTIAL: returns 1 for plain string NBT tags.
+//                  For true length, strings must be stored as char-lists.
+//   str_concat   — PARTIAL: produces an NBT list [A, B] usable in tellraw.
+//                  Single concatenated string requires a macro helper.
+//   str_contains — NOT FEASIBLE natively (no substring search command).
+//                  Always returns 0; workaround described in docs.
+//   str_slice    — FEASIBLE via `data modify ... set string` (MC 1.20.2+).
 
+module library;
+
+// ─── str_len ──────────────────────────────────────────────────────────────────
+
+/// Returns the length of the string stored at rs:strings.{s}.
+///
+/// LIMITATION (MC 1.21.4): `execute store result score ... run data get storage`
+/// returns 1 for any plain string NBT tag, not the character count. To get a
+/// true character count, the string must be stored as an NBT list of single-char
+/// strings (e.g. ["h","e","l","l","o"]), in which case data_get returns the list
+/// length correctly.
+///
+/// For literal strings whose length is known at compile time, prefer using
+/// the constant directly — the compiler will fold it.
+///
+/// @param s  NBT field name in rs:strings (e.g. "A")
+/// @returns  1 for plain string tags; list element count for char-list strings.
 fn str_len(s: string) -> int {
+    return data_get("storage", "rs:strings", s);
+}
+
+// ─── str_concat ───────────────────────────────────────────────────────────────
+
+/// Concatenates two strings from rs:strings and writes the result to
+/// rs:strings.Result as an NBT list [a_value, b_value].
+///
+/// The result list is suitable for use in tellraw JSON text components:
+///   tellraw @a {"nbt":"Result","storage":"rs:strings","interpret":false}
+///
+/// LIMITATION (MC 1.21.4): MC has no native string concatenation command.
+/// Single-string concatenation (e.g. "ab" from "a"+"b") requires a
+/// recursive macro helper function; this is out of scope for a pure stdlib.
+/// The NBT list representation works for display (tellraw) but cannot be
+/// passed back to further string operations without conversion.
+///
+/// ALTERNATIVE for display: use a tellraw JSON array directly:
+///   tellraw @a [{"storage":"rs:strings","nbt":"A"},{"storage":"rs:strings","nbt":"B"}]
+///
+/// @param a  NBT field name of the first string in rs:strings (e.g. "A")
+/// @param b  NBT field name of the second string in rs:strings (e.g. "B")
+/// @result   rs:strings.Result is set to an NBT list [valueA, valueB]
+fn str_concat(a: string, b: string) {
+    // Initialise Result as an empty list
+    raw("data modify storage rs:strings Result set value []");
+    // Append both strings as list elements (order-preserving concat)
+    raw("data modify storage rs:strings Result append from storage rs:strings {a}");
+    raw("data modify storage rs:strings Result append from storage rs:strings {b}");
+}
+
+// ─── str_contains ─────────────────────────────────────────────────────────────
+
+/// Checks whether the string at rs:strings.{s} contains the substring at
+/// rs:strings.{sub}. Returns 1 if found, 0 if not found.
+///
+/// NOT FEASIBLE (MC 1.21.4): Minecraft datapacks do not provide a native
+/// substring search command. There is no `execute if data` form that tests
+/// whether one string is contained within another.
+///
+/// THIS FUNCTION ALWAYS RETURNS 0.
+///
+/// WORKAROUNDS for datapack authors:
+///   1. If sub is a compile-time constant and the check position is known,
+///      use str_slice to extract a window and compare via scoreboard.
+///   2. Pre-process strings server-side and store a presence flag in NBT.
+///   3. Use a macro function (MC 1.20.2+) that iterates over character
+///      positions with `$(var)` substitution and returns early on match.
+///
+/// @param s    NBT field name of the haystack string in rs:strings
+/// @param sub  NBT field name of the needle string in rs:strings
+/// @returns    0 (always — not implemented due to MC limitation)
+fn str_contains(s: string, sub: string) -> int {
+    // NOT FEASIBLE in MC 1.21.4: no native substring search.
+    // Returns 0 as a safe default. See workaround section in docs above.
     return 0;
+}
+
+// ─── str_slice ────────────────────────────────────────────────────────────────
+
+/// Extracts a substring from rs:strings.{s} and writes it to rs:strings.Result.
+/// Uses the MC 1.20.2+ `data modify ... set string ... start end` feature.
+///
+/// Indices follow Java/Python slicing semantics:
+///   - start is inclusive, 0-based.
+///   - end is exclusive (end = start + length).
+///   - Negative end counts from the end of the string (e.g. -1 = all but last char).
+///   - Omitting end (use a very large positive int like 999999) copies to end of string.
+///
+/// Examples:
+///   str_slice("A", 0, 5)  → first 5 characters of rs:strings.A
+///   str_slice("A", 2, -1) → all but first 2 and last 1 characters
+///
+/// @param s      NBT field name of the source string in rs:strings (e.g. "A")
+/// @param start  Start index (inclusive, 0-based)
+/// @param end    End index (exclusive); negative counts from string end
+/// @result       rs:strings.Result contains the extracted substring
+/// @requires     MC 1.20.2+ for `data modify ... set string` syntax
+fn str_slice(s: string, start: int, end: int) {
+    // MC 1.20.2+ set-string command: copies a substring of the source string.
+    // {s}, {start}, {end} are interpolated by the RedScript compiler.
+    raw("data modify storage rs:strings Result set string storage rs:strings {s} {start} {end}");
 }
