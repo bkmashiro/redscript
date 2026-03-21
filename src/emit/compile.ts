@@ -4,6 +4,8 @@
  * Pipeline: source → Lexer → Parser → TypeCheck → HIR → MIR → optimize → LIR → emit
  */
 
+import * as fs from 'fs'
+import * as path from 'path'
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
 import { preprocessSourceWithMetadata } from '../compile'
@@ -60,6 +62,70 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const parser = new Parser(tokens, processedSource, filePath)
   const ast = parser.parse(namespace)
   warnings.push(...parser.warnings)
+
+  // Resolve whole-module file imports: `import player_utils;` (no `::` symbol)
+  // These are resolved from: relative path, stdlib dir, or extra includeDirs.
+  // Modules are merged like library imports (their fns are DCE-eligible).
+  const seenModuleImports = new Set<string>()
+  function resolveModuleFilePath(modName: string, fromFile?: string): string | null {
+    const candidates = [`${modName}.mcrs`, modName]
+    const stdlibDir = path.resolve(__dirname, '..', 'src', 'stdlib')
+    for (const candidate of candidates) {
+      if (fromFile) {
+        const rel = path.resolve(path.dirname(fromFile), candidate)
+        if (fs.existsSync(rel)) return rel
+      }
+      const stdlib = path.resolve(stdlibDir, candidate)
+      if (fs.existsSync(stdlib)) return stdlib
+      for (const dir of includeDirs ?? []) {
+        const extra = path.resolve(dir, candidate)
+        if (fs.existsSync(extra)) return extra
+      }
+    }
+    return null
+  }
+
+  function mergeWholeModuleImport(modFilePath: string): void {
+    if (seenModuleImports.has(modFilePath)) return
+    seenModuleImports.add(modFilePath)
+    const modSource = fs.readFileSync(modFilePath, 'utf-8')
+    const modPreprocessed = preprocessSourceWithMetadata(modSource, { filePath: modFilePath, includeDirs })
+    const modTokens = new Lexer(modPreprocessed.source, modFilePath).tokenize()
+    const modParser = new Parser(modTokens, modPreprocessed.source, modFilePath)
+    const modAst = modParser.parse(namespace)
+    warnings.push(...modParser.warnings)
+    // Mark all functions as library-eligible (DCE applies)
+    for (const fn of modAst.declarations) fn.isLibraryFn = true
+    // Recursively resolve nested whole-module imports
+    for (const imp of modAst.imports) {
+      if (imp.symbol !== undefined) continue // symbol import — handled at runtime
+      const nestedPath = resolveModuleFilePath(imp.moduleName, modFilePath)
+      if (!nestedPath) {
+        warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${modFilePath})`)
+        continue
+      }
+      mergeWholeModuleImport(nestedPath)
+    }
+    ast.declarations.push(...modAst.declarations)
+    ast.structs.push(...modAst.structs)
+    ast.implBlocks.push(...modAst.implBlocks)
+    ast.enums.push(...modAst.enums)
+    ast.consts.push(...modAst.consts)
+    ast.globals.push(...modAst.globals)
+  }
+
+  for (const imp of ast.imports) {
+    if (imp.symbol !== undefined) continue // symbol import — handled by compileModules
+    const resolved = resolveModuleFilePath(imp.moduleName, filePath)
+    if (!resolved) {
+      throw new DiagnosticError(
+        'ParseError',
+        `Module '${imp.moduleName}' not found. Make sure '${imp.moduleName}.mcrs' exists relative to this file or in the stdlib.`,
+        imp.span ?? { line: 1, col: 1 },
+      )
+    }
+    mergeWholeModuleImport(resolved)
+  }
 
   // Merge library imports (files with `module library;`) into AST
   for (const li of preprocessed.libraryImports ?? []) {

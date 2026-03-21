@@ -122,7 +122,12 @@ export function compileModules(
         )
       }
 
-      if (imp.symbol === '*') {
+      if (imp.symbol === undefined) {
+        // Whole-module file import (`import player_utils;`) — not a symbol import;
+        // this is resolved by the file-level compile() function, not compileModules.
+        // Skip here to avoid treating it as a cross-module symbol reference.
+        continue
+      } else if (imp.symbol === '*') {
         // Wildcard: import all exports
         for (const sym of sourceExports) {
           resolved.set(sym, `${imp.moduleName}/${sym}`)
@@ -153,6 +158,7 @@ export function compileModules(
 
   for (const ast of parsedModules.values()) {
     for (const imp of ast.imports) {
+      if (imp.symbol === undefined) continue // whole-module file import, skip
       const used = usedExports.get(imp.moduleName)
       if (!used) continue
       if (imp.symbol === '*') {

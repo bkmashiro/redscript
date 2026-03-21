@@ -223,21 +223,28 @@ export class Parser {
         this.parseDeclareStub()
       } else if (this.check('export')) {
         declarations.push(this.parseExportedFnDecl())
-      } else if (this.check('ident') && this.peek().value === 'import') {
-        // `import math::sin;` or `import math::*;`
-        this.advance() // consume 'import'
+      } else if (this.check('import') || (this.check('ident') && this.peek().value === 'import')) {
+        // `import math::sin;` or `import math::*;` or `import player_utils;` (whole-module file import)
+        this.advance() // consume 'import' (keyword or ident)
         const importToken = this.peek()
         const modName = this.expect('ident').value
-        this.expect('::')
-        let symbol: string
-        if (this.check('*')) {
-          this.advance()
-          symbol = '*'
+        // Check for `::` — if present, this is a symbol import; otherwise, whole-module import
+        if (this.check('::')) {
+          this.advance() // consume '::'
+          let symbol: string
+          if (this.check('*')) {
+            this.advance()
+            symbol = '*'
+          } else {
+            symbol = this.expect('ident').value
+          }
+          this.match(';')
+          imports.push(this.withLoc({ moduleName: modName, symbol }, importToken))
         } else {
-          symbol = this.expect('ident').value
+          // Whole-module import: `import player_utils;`
+          this.match(';')
+          imports.push(this.withLoc({ moduleName: modName, symbol: undefined }, importToken))
         }
-        this.match(';')
-        imports.push(this.withLoc({ moduleName: modName, symbol }, importToken))
       } else {
         declarations.push(this.parseFnDecl())
       }
@@ -836,6 +843,20 @@ export class Parser {
 
   private parseWhileStmt(): Stmt {
     const whileToken = this.expect('while')
+
+    // while let Some(x) = expr { ... }
+    if (this.check('let') && this.peek(1).kind === 'ident' && this.peek(1).value === 'Some') {
+      this.advance() // consume 'let'
+      this.advance() // consume 'Some'
+      this.expect('(')
+      const binding = this.expect('ident').value
+      this.expect(')')
+      this.expect('=')
+      const init = this.parseExpr()
+      const body = this.parseBlock()
+      return this.withLoc({ kind: 'while_let_some', binding, init, body }, whileToken)
+    }
+
     this.expect('(')
     const cond = this.parseExpr()
     this.expect(')')
@@ -1421,6 +1442,17 @@ export class Parser {
         // Member call: entity.tag("name") → __entity_tag(entity, "name")
         // Also handle arr.push(val) and arr.length
         if (expr.kind === 'member') {
+          // Option.unwrap_or(default) → unwrap_or AST node
+          if (expr.field === 'unwrap_or') {
+            const defaultExpr = this.parseExpr()
+            this.expect(')')
+            expr = this.withLoc(
+              { kind: 'unwrap_or', opt: expr.obj, default_: defaultExpr },
+              this.getLocToken(expr) ?? openParenToken
+            )
+            continue
+          }
+
           const methodMap: Record<string, string> = {
             'tag': '__entity_tag',
             'untag': '__entity_untag',

@@ -180,6 +180,7 @@ export type Expr =
   | { kind: 'tuple_lit'; elements: Expr[]; span?: Span }
   | { kind: 'some_lit'; value: Expr; span?: Span }  // Some(expr)
   | { kind: 'none_lit'; span?: Span }               // None
+  | { kind: 'unwrap_or'; opt: Expr; default_: Expr; span?: Span }  // opt.unwrap_or(default)
   | { kind: 'type_cast'; expr: Expr; targetType: TypeNode; span?: Span }  // expr as Type
 
 export type LiteralExpr =
@@ -252,6 +253,7 @@ export type Stmt =
   | { kind: 'for_each';    binding: string; array: Expr; body: Block; span?: Span }
   | { kind: 'match';      expr: Expr; arms: { pattern: MatchPattern; body: Block }[]; span?: Span }
   | { kind: 'if_let_some'; binding: string; init: Expr; then: Block; else_?: Block; span?: Span }
+  | { kind: 'while_let_some'; binding: string; init: Expr; body: Block; span?: Span }
   | { kind: 'as_block';   selector: EntitySelector; body: Block; span?: Span }
   | { kind: 'at_block';   selector: EntitySelector; body: Block; span?: Span }
   | { kind: 'as_at';      as_sel: EntitySelector; at_sel: EntitySelector; body: Block; span?: Span }
@@ -371,8 +373,9 @@ export interface GlobalDecl {
 export interface ImportDecl {
   /** The module being imported from, e.g. "math" in `import math::sin` */
   moduleName: string
-  /** The symbol being imported, or '*' for wildcard */
-  symbol: string   // '*' | identifier
+  /** The symbol being imported, or '*' for wildcard.
+   *  Undefined when this is a whole-module file import (`import player_utils`). */
+  symbol?: string   // '*' | identifier | undefined (whole-module import)
   span?: Span
 }
 

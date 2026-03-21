@@ -16,7 +16,7 @@ export type TokenKind =
   // Keywords
   | 'fn' | 'let' | 'const' | 'if' | 'else' | 'while' | 'for' | 'foreach' | 'match'
   | 'return' | 'break' | 'continue' | 'as' | 'at' | 'in' | 'is' | 'struct' | 'impl' | 'enum' | 'trigger' | 'namespace' | 'module'
-  | 'execute' | 'run' | 'unless' | 'declare' | 'export'
+  | 'execute' | 'run' | 'unless' | 'declare' | 'export' | 'import'
   // Types
   | 'int' | 'bool' | 'float' | 'fixed' | 'string' | 'void'
   | 'BlockPos'
@@ -92,6 +92,7 @@ const KEYWORDS: Record<string, TokenKind> = {
   unless: 'unless',
   declare: 'declare',
   export: 'export',
+  import: 'import',
   int: 'int',
   bool: 'bool',
   float: 'float',
