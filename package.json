@@ -14,6 +14,7 @@
     "test": "jest",
     "cli": "ts-node src/cli.ts",
     "lsp": "node dist/src/lsp/main.js",
+    "repl": "ts-node src/repl-server.ts",
     "validate-mc": "jest src/__tests__/mc-syntax.test.ts --verbose",
     "postbuild": "node scripts/postbuild.js"
   },
