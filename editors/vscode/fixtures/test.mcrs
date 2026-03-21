@@ -1,0 +1,7 @@
+// Fixture for VSCode extension integration tests
+fn example() {
+    scoreboard_set("@s", "score", 10);
+    say("hello");
+}
+
+// sc   <- cursor here for completion test (line 5, col 10)

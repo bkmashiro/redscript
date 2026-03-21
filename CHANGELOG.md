@@ -2,31 +2,40 @@
 
 All notable changes to RedScript will be documented in this file.
 
-## [Unreleased] — v3.0.0
+## [Unreleased]
 
-> **Status:** Active development. All stdlib modules below are merged to `main`; language features are stabilised pending final integration tests.
+## [3.0.0] - 2026-03-21
 
 ### Added
 
 #### Language / Compiler
 - **`match` expression** — pattern-match on int / enum values; compiles to `execute if score` chains with exhaustiveness checking
+- **`break` / `continue` statements** — structured loop control now lowers cleanly through HIR/MIR/LIR and is covered by unit, e2e, and MC integration tests
+- **`do { ... } while (...)` and `repeat N { ... }` loops** — post-test and fixed-count loop forms added to the parser, lowering pipeline, and compiler tests
+- **`const` declarations** — compile-time constants inline at use sites for simpler generated datapacks and cleaner constant propagation
+- **`@deprecated("message")` decorator** — compile-time warnings for deprecated APIs and migration guidance at call sites
 - **`for item in array` iteration** — `for x in arr { … }` syntax sugar; desugars to `while idx < arr.len() { let x = arr[idx]; idx++ }` in HIR; generates loop-header / loop-body / loop-exit mcfunction splits
 - **`arr.len()` — literal constant + dynamic runtime** — literal arrays (`[1,2,3].len()`) fold to a compile-time constant (`scoreboard players set`); function-parameter and heap arrays use the new `nbt_list_len` MIR instruction which lowers to `execute store result score … run data get storage`
+- **`@on(EventType)` full compiler implementation** — compiler generates Minecraft function-tag JSON and wires an `events.mcrs` dispatcher automatically; supported events: `PlayerJoin`, `PlayerDeath`, `EntityKill`, `ItemUse` (each with correctly typed parameters)
+
+#### Standard Library
+- **`Result<T>`** — new stdlib result type with `Ok` / `Err` variants and helper functions for explicit error handling
 - **`state.mcrs`** — persistent entity/global state management stdlib module
 - **`dialog.mcrs`** — NPC dialog trees with choice branching and callback support
 - **`scheduler.mcrs`** — tick-budget-aware task scheduler (coroutine-compatible)
-
-#### Tests
-- **Coverage: 80% → 85%** — new unit tests for builtins, runtime, emit pipeline, and stdlib modules; arr.len() compile-time and dynamic paths fully covered
-
-#### stdlib
 - **`linalg.mcrs`** — double-precision linear algebra: `vec2_add/sub/scale/dot/length/normalize`, `vec3_cross`, `mat2x2 / mat3x3 / mat4x4` multiply, Cramer's rule solver for 2×2 and 3×3 systems
 - **`fft.mcrs`** — Discrete Fourier Transform with a `@coroutine` variant for in-game use; supports transforms up to n=64; quarter-wave symmetry test now enabled after related compiler fix
 - **`ecs.mcrs`** — Entity Component System: `register_component`, `get_component`, `has_component`; built-in Health and Velocity components; `@tick` system iteration via `foreach(entity[tag=has_<component>])`; fills the gap that Java datapacks have vs Bedrock's native component model
 - **`sort.mcrs` v2** — coroutine-based bottom-up merge sort for large arrays (n > 64); yields every 20 comparisons to stay within the 20 ms tick budget
 
-#### Language / Events
-- **`@on(EventType)` full compiler implementation** — compiler generates Minecraft function-tag JSON and wires an `events.mcrs` dispatcher automatically; supported events: `PlayerJoin`, `PlayerDeath`, `EntityKill`, `ItemUse` (each with correctly typed parameters)
+#### Examples
+- **7 new example programs** — `rpg/health_system`, `rpg/boss_fight`, `rpg/inventory`, `game/tower_defense`, `game/racing`, `math/physics_sim`, and `util/debug_hud`
+
+#### Documentation
+- **Language reference expansion** — `docs/LANGUAGE_REFERENCE.md` now documents the current type system plus expression, statement, decorator, execute-context, selector, coordinate, and builtin semantics in one place
+
+#### Tests
+- **Coverage increased further across compiler subsystems** — `src/typechecker/index.ts` branch coverage reached **88.33%**, `src/optimizer/**` line coverage reached **96.21%** (~97%), and `src/optimizer/coroutine.ts` function coverage reached **94.23%**
 - **MC integration tests** for `@on(PlayerJoin)` and `@on(PlayerDeath)` added to the test suite
 
 #### Runtime
