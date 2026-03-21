@@ -2,11 +2,14 @@ import { compile, check } from '../index'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { execFileSync } from 'child_process'
+import { execFileSync, spawnSync } from 'child_process'
 
 // Note: watch command is tested manually as it's an interactive long-running process
 
 describe('CLI API', () => {
+  const cliPath = path.resolve(__dirname, '..', 'cli.ts')
+  const cliRunner = [require.resolve('ts-node/register/transpile-only')]
+
   describe('imports', () => {
     it('compiles a file with imported helpers', () => {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-imports-'))
@@ -79,6 +82,87 @@ describe('CLI API', () => {
       const source = 'fn test() { let x = ; }'  // Missing value
       const error = check(source)
       expect(error).toBeInstanceOf(Error)
+    })
+  })
+
+  describe('check CLI', () => {
+    it('returns exit code 1 and JSON diagnostics for warnings', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-check-cli-'))
+      const filePath = path.join(tempDir, 'warn.mcrs')
+      fs.writeFileSync(filePath, 'fn main(x: float) {\n  return;\n}\n')
+
+      const result = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, 'check', filePath, '--format', 'json'],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(result.status).toBe(1)
+      const payload = JSON.parse(result.stdout)
+      expect(payload.summary.warnings).toBeGreaterThan(0)
+      expect(payload.summary.errors).toBe(0)
+      expect(payload.diagnostics[0].severity).toBe('warning')
+    })
+
+    it('returns exit code 2 and human-readable output for errors', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-check-cli-'))
+      const filePath = path.join(tempDir, 'error.mcrs')
+      fs.writeFileSync(filePath, 'fn main( {\n  return;\n}\n')
+
+      const result = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, 'check', filePath],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(result.status).toBe(2)
+      expect(result.stderr).toContain(`${filePath}:`)
+      expect(result.stderr).toContain('error:')
+    })
+  })
+
+  describe('fmt CLI', () => {
+    it('formats files in place', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-fmt-cli-'))
+      const filePath = path.join(tempDir, 'format.mcrs')
+      fs.writeFileSync(filePath, 'fn main()\n{\nlet x: int = 1;\n}\n')
+
+      const result = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, 'fmt', filePath],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe('fn main() {\n  let x: int = 1;\n}\n')
+    })
+
+    it('supports --check mode', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-fmt-cli-'))
+      const filePath = path.join(tempDir, 'check.mcrs')
+      fs.writeFileSync(filePath, 'fn main()\n{\nlet x: int = 1;\n}\n')
+
+      const result = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, 'fmt', filePath, '--check'],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(result.status).toBe(1)
+      expect(result.stdout).toContain('Would format:')
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe('fn main()\n{\nlet x: int = 1;\n}\n')
     })
   })
 })

@@ -23,7 +23,12 @@ function compileWith(extra: string): { path: string; content: string }[] {
 }
 
 function getFn(files: { path: string; content: string }[], fnName: string): string {
+  // Match exact name or specialized variants (e.g. str_concat__const_0_0)
   const f = files.find(f => f.path.endsWith(`/${fnName}.mcfunction`))
+    ?? files.find(f => {
+      const base = f.path.split('/').pop()!
+      return base === `${fnName}.mcfunction` || base.startsWith(`${fnName}__`)
+    })
   if (!f) {
     const paths = files.map(f => f.path).join('\n')
     throw new Error(`Function '${fnName}' not found. Files:\n${paths}`)

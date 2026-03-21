@@ -9,7 +9,7 @@ import * as path from 'path'
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
 import { preprocessSourceWithMetadata } from '../compile'
-import { DiagnosticError, parseErrorMessage } from '../diagnostics'
+import { CheckFailedError, DiagnosticBundleError, DiagnosticError, parseErrorMessage } from '../diagnostics'
 import { lowerToHIR } from '../hir/lower'
 import { monomorphize } from '../hir/monomorphize'
 import { checkDeprecatedCalls } from '../hir/deprecated'
@@ -46,6 +46,8 @@ export interface CompileOptions {
    * e.g. { max_players: 10, difficulty: 3 }
    */
   config?: Record<string, number>
+  /** Internal: stop after parse + typecheck + HIR checks. */
+  stopAfterCheck?: boolean
 }
 
 export interface CompileResult {
@@ -107,109 +109,104 @@ function pruneLibraryFunctionFiles(
 }
 
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
-  const { namespace = 'redscript', filePath, generateSourceMap = false, mcVersion = DEFAULT_MC_VERSION, lenient = false, includeDirs } = options
+  const {
+    namespace = 'redscript',
+    filePath,
+    generateSourceMap = false,
+    mcVersion = DEFAULT_MC_VERSION,
+    lenient = false,
+    includeDirs,
+    stopAfterCheck = false,
+  } = options
   const warnings: string[] = []
 
   // Preprocess: resolve import directives, merge imported sources
   const preprocessed = preprocessSourceWithMetadata(source, { filePath, includeDirs })
   const processedSource = preprocessed.source
 
-  // Stage 1: Lex + Parse → AST
-  const lexer = new Lexer(processedSource)
-  const tokens = lexer.tokenize()
-  const parser = new Parser(tokens, processedSource, filePath)
-  const ast = parser.parse(namespace)
-  warnings.push(...parser.warnings)
-  // Check for parse errors collected during error recovery (multiple errors reported)
-  if (parser.parseErrors.length > 0) {
-    throw parser.parseErrors[0]
-  }
-
-  // Resolve whole-module file imports: `import player_utils;` (no `::` symbol)
-  // These are resolved from: relative path, stdlib dir, or extra includeDirs.
-  // Modules are merged like library imports (their fns are DCE-eligible).
-  const seenModuleImports = new Set<string>()
-  function resolveModuleFilePath(modName: string, fromFile?: string): string | null {
-    const candidates = [`${modName}.mcrs`, modName]
-    const stdlibDir = path.resolve(__dirname, '..', 'src', 'stdlib')
-    for (const candidate of candidates) {
-      if (fromFile) {
-        const rel = path.resolve(path.dirname(fromFile), candidate)
-        if (fs.existsSync(rel)) return rel
-      }
-      const stdlib = path.resolve(stdlibDir, candidate)
-      if (fs.existsSync(stdlib)) return stdlib
-      for (const dir of includeDirs ?? []) {
-        const extra = path.resolve(dir, candidate)
-        if (fs.existsSync(extra)) return extra
-      }
+  try {
+    // Stage 1: Lex + Parse → AST
+    const lexer = new Lexer(processedSource)
+    const tokens = lexer.tokenize()
+    const parser = new Parser(tokens, processedSource, filePath)
+    const ast = parser.parse(namespace)
+    warnings.push(...parser.warnings)
+    if (parser.parseErrors.length > 0) {
+      throw stopAfterCheck ? new DiagnosticBundleError(parser.parseErrors) : parser.parseErrors[0]
     }
-    return null
-  }
 
-  function mergeWholeModuleImport(modFilePath: string): void {
-    if (seenModuleImports.has(modFilePath)) return
-    seenModuleImports.add(modFilePath)
-    const modSource = fs.readFileSync(modFilePath, 'utf-8')
-    const modPreprocessed = preprocessSourceWithMetadata(modSource, { filePath: modFilePath, includeDirs })
-    const modTokens = new Lexer(modPreprocessed.source, modFilePath).tokenize()
-    const modParser = new Parser(modTokens, modPreprocessed.source, modFilePath)
-    const modAst = modParser.parse(namespace)
-    warnings.push(...modParser.warnings)
-    // Mark all functions as library-eligible (DCE applies)
-    for (const fn of modAst.declarations) fn.isLibraryFn = true
-    // Recursively resolve nested whole-module imports
-    for (const imp of modAst.imports) {
-      if (imp.symbol !== undefined) continue // symbol import — handled at runtime
-      const nestedPath = resolveModuleFilePath(imp.moduleName, modFilePath)
-      if (!nestedPath) {
-        warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${modFilePath})`)
-        continue
+    // Resolve whole-module file imports: `import player_utils;` (no `::` symbol)
+    const seenModuleImports = new Set<string>()
+    function resolveModuleFilePath(modName: string, fromFile?: string): string | null {
+      const candidates = [`${modName}.mcrs`, modName]
+      const stdlibDir = path.resolve(__dirname, '..', 'src', 'stdlib')
+      for (const candidate of candidates) {
+        if (fromFile) {
+          const rel = path.resolve(path.dirname(fromFile), candidate)
+          if (fs.existsSync(rel)) return rel
+        }
+        const stdlib = path.resolve(stdlibDir, candidate)
+        if (fs.existsSync(stdlib)) return stdlib
+        for (const dir of includeDirs ?? []) {
+          const extra = path.resolve(dir, candidate)
+          if (fs.existsSync(extra)) return extra
+        }
       }
-      mergeWholeModuleImport(nestedPath)
+      return null
     }
-    ast.declarations.push(...modAst.declarations)
-    ast.structs.push(...modAst.structs)
-    ast.implBlocks.push(...modAst.implBlocks)
-    ast.enums.push(...modAst.enums)
-    ast.consts.push(...modAst.consts)
-    ast.globals.push(...modAst.globals)
-  }
 
-  for (const imp of ast.imports) {
-    if (imp.symbol !== undefined) continue // symbol import — handled by compileModules
-    const resolved = resolveModuleFilePath(imp.moduleName, filePath)
-    if (!resolved) {
-      throw new DiagnosticError(
-        'ParseError',
-        `Module '${imp.moduleName}' not found. Make sure '${imp.moduleName}.mcrs' exists relative to this file or in the stdlib.`,
-        imp.span ?? { line: 1, col: 1 },
-      )
+    function mergeWholeModuleImport(modFilePath: string): void {
+      if (seenModuleImports.has(modFilePath)) return
+      seenModuleImports.add(modFilePath)
+      const modSource = fs.readFileSync(modFilePath, 'utf-8')
+      const modPreprocessed = preprocessSourceWithMetadata(modSource, { filePath: modFilePath, includeDirs })
+      const modTokens = new Lexer(modPreprocessed.source, modFilePath).tokenize()
+      const modParser = new Parser(modTokens, modPreprocessed.source, modFilePath)
+      const modAst = modParser.parse(namespace)
+      warnings.push(...modParser.warnings)
+      if (modParser.parseErrors.length > 0) {
+        throw stopAfterCheck ? new DiagnosticBundleError(modParser.parseErrors) : modParser.parseErrors[0]
+      }
+      for (const fn of modAst.declarations) fn.isLibraryFn = true
+      for (const imp of modAst.imports) {
+        if (imp.symbol !== undefined) continue
+        const nestedPath = resolveModuleFilePath(imp.moduleName, modFilePath)
+        if (!nestedPath) {
+          warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${modFilePath})`)
+          continue
+        }
+        mergeWholeModuleImport(nestedPath)
+      }
+      ast.declarations.push(...modAst.declarations)
+      ast.structs.push(...modAst.structs)
+      ast.implBlocks.push(...modAst.implBlocks)
+      ast.enums.push(...modAst.enums)
+      ast.consts.push(...modAst.consts)
+      ast.globals.push(...modAst.globals)
     }
-    mergeWholeModuleImport(resolved)
-  }
 
-  // Merge library imports (files with `module library;`) into AST
-  for (const li of preprocessed.libraryImports ?? []) {
-    const libPreprocessed = preprocessSourceWithMetadata(li.source, { filePath: li.filePath })
-    const libTokens = new Lexer(libPreprocessed.source, li.filePath).tokenize()
-    const libParser = new Parser(libTokens, libPreprocessed.source, li.filePath)
-    const libAst = libParser.parse(namespace)
-    warnings.push(...libParser.warnings)
-    for (const fn of libAst.declarations) fn.isLibraryFn = true
-    ast.declarations.push(...libAst.declarations)
-    ast.structs.push(...libAst.structs)
-    ast.implBlocks.push(...libAst.implBlocks)
-    ast.enums.push(...libAst.enums)
-    ast.consts.push(...libAst.consts)
-    ast.globals.push(...libAst.globals)
-  }
+    for (const imp of ast.imports) {
+      if (imp.symbol !== undefined) continue
+      const resolved = resolveModuleFilePath(imp.moduleName, filePath)
+      if (!resolved) {
+        throw new DiagnosticError(
+          'ParseError',
+          `Module '${imp.moduleName}' not found. Make sure '${imp.moduleName}.mcrs' exists relative to this file or in the stdlib.`,
+          imp.span ?? { line: 1, col: 1 },
+        )
+      }
+      mergeWholeModuleImport(resolved)
+    }
 
-  // Merge librarySources (v1 compat: inline library strings) before HIR
-  if (options.librarySources) {
-    for (const libSrc of options.librarySources) {
-      const libTokens = new Lexer(libSrc).tokenize()
-      const libAst = new Parser(libTokens, libSrc).parse(namespace)
+    for (const li of preprocessed.libraryImports ?? []) {
+      const libPreprocessed = preprocessSourceWithMetadata(li.source, { filePath: li.filePath })
+      const libTokens = new Lexer(libPreprocessed.source, li.filePath).tokenize()
+      const libParser = new Parser(libTokens, libPreprocessed.source, li.filePath)
+      const libAst = libParser.parse(namespace)
+      warnings.push(...libParser.warnings)
+      if (libParser.parseErrors.length > 0) {
+        throw stopAfterCheck ? new DiagnosticBundleError(libParser.parseErrors) : libParser.parseErrors[0]
+      }
       for (const fn of libAst.declarations) fn.isLibraryFn = true
       ast.declarations.push(...libAst.declarations)
       ast.structs.push(...libAst.structs)
@@ -218,58 +215,64 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       ast.consts.push(...libAst.consts)
       ast.globals.push(...libAst.globals)
     }
-  }
 
-  // Stage 1b: Resolve @config globals — inject compile-time config values (or defaults)
-  // Convert @config globals into module-level consts so MIR can inline them as literals.
-  // This must happen before type checking so the checker sees consts, not uninitialised globals.
-  {
-    const configValues = options.config ?? {}
-    const configGlobalNames = new Set<string>()
-    for (const g of ast.globals) {
-      if (g.configKey !== undefined) {
-        const resolvedValue = Object.prototype.hasOwnProperty.call(configValues, g.configKey)
-          ? configValues[g.configKey]
-          : (g.configDefault ?? 0)
-        const intValue = Math.round(resolvedValue)
-        // Add as a const so MIR constValues map can inline it
-        ast.consts.push({
-          name: g.name,
-          type: { kind: 'named', name: 'int' },
-          value: { kind: 'int_lit', value: intValue },
-          span: g.span,
-        })
-        configGlobalNames.add(g.name)
-      }
-    }
-    // Remove @config globals (they are now consts)
-    if (configGlobalNames.size > 0) {
-      ast.globals = ast.globals.filter(g => !configGlobalNames.has(g.name))
-    }
-  }
-
-  // Stage 1c: Type checking
-  // Run TypeChecker on the merged AST. In error-mode (default), throw on first type error.
-  // In lenient mode, demote type errors to warnings.
-  {
-    const checker = new TypeChecker(processedSource, filePath)
-    const typeErrors = checker.check(ast)
-    // Collect lint warnings (non-blocking — always added regardless of error mode)
-    warnings.push(...checker.getWarnings())
-    if (typeErrors.length > 0) {
-      if (lenient) {
-        for (const e of typeErrors) {
-          warnings.push(`[TypeError] line ${e.location.line}, col ${e.location.col}: ${e.message}`)
+    if (options.librarySources) {
+      for (const libSrc of options.librarySources) {
+        const libTokens = new Lexer(libSrc).tokenize()
+        const libParser = new Parser(libTokens, libSrc)
+        const libAst = libParser.parse(namespace)
+        warnings.push(...libParser.warnings)
+        if (libParser.parseErrors.length > 0) {
+          throw stopAfterCheck ? new DiagnosticBundleError(libParser.parseErrors) : libParser.parseErrors[0]
         }
-      } else {
-        throw typeErrors[0]
+        for (const fn of libAst.declarations) fn.isLibraryFn = true
+        ast.declarations.push(...libAst.declarations)
+        ast.structs.push(...libAst.structs)
+        ast.implBlocks.push(...libAst.implBlocks)
+        ast.enums.push(...libAst.enums)
+        ast.consts.push(...libAst.consts)
+        ast.globals.push(...libAst.globals)
       }
     }
-  }
 
-  // Stage 2–7: lower, optimize, emit
-  // Wrap non-DiagnosticError from later stages so CLI always gets structured errors.
-  try {
+    {
+      const configValues = options.config ?? {}
+      const configGlobalNames = new Set<string>()
+      for (const g of ast.globals) {
+        if (g.configKey !== undefined) {
+          const resolvedValue = Object.prototype.hasOwnProperty.call(configValues, g.configKey)
+            ? configValues[g.configKey]
+            : (g.configDefault ?? 0)
+          const intValue = Math.round(resolvedValue)
+          ast.consts.push({
+            name: g.name,
+            type: { kind: 'named', name: 'int' },
+            value: { kind: 'int_lit', value: intValue },
+            span: g.span,
+          })
+          configGlobalNames.add(g.name)
+        }
+      }
+      if (configGlobalNames.size > 0) {
+        ast.globals = ast.globals.filter(g => !configGlobalNames.has(g.name))
+      }
+    }
+
+    {
+      const checker = new TypeChecker(processedSource, filePath)
+      const typeErrors = checker.check(ast)
+      warnings.push(...checker.getWarnings())
+      if (typeErrors.length > 0) {
+        if (lenient) {
+          for (const e of typeErrors) {
+            warnings.push(`[TypeError] line ${e.location.line}, col ${e.location.col}: ${e.message}`)
+          }
+        } else {
+          throw stopAfterCheck ? new DiagnosticBundleError(typeErrors) : typeErrors[0]
+        }
+      }
+    }
+
     // Stage 2: AST → HIR
     const hirRaw = lowerToHIR(ast)
 
@@ -284,6 +287,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     // Stage 2c: Deprecated usage check — emit warnings for calls to @deprecated functions
     warnings.push(...checkDeprecatedCalls(hir))
+
+    if (stopAfterCheck) {
+      return { files: [], warnings, success: true as const }
+    }
 
     // Extract @tick, @load, @watch, @inline, @coroutine, @schedule, and @on handlers from HIR (before decorator info is lost)
     const tickFunctions: string[] = []
@@ -444,6 +451,20 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     return { files: prunedFiles, warnings, success: true as const }
   } catch (err) {
+    if (stopAfterCheck) {
+      if (err instanceof CheckFailedError) throw err
+      if (err instanceof DiagnosticBundleError) {
+        throw new CheckFailedError(err.diagnostics, warnings)
+      }
+      if (err instanceof DiagnosticError) {
+        throw new CheckFailedError([err], warnings)
+      }
+      const sourceLines = processedSource.split('\n')
+      throw new CheckFailedError(
+        [parseErrorMessage('LoweringError', (err as Error).message, sourceLines, filePath)],
+        warnings,
+      )
+    }
     if (err instanceof DiagnosticError) throw err
     const sourceLines = processedSource.split('\n')
     throw parseErrorMessage('LoweringError', (err as Error).message, sourceLines, filePath)

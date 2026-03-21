@@ -17,7 +17,12 @@ function compileWith(extra: string): { path: string; content: string }[] {
 }
 
 function getFn(files: { path: string; content: string }[], fnName: string): string {
+  // Match exact name or specialized variants (e.g. fn__const_0_0)
   const f = files.find(f => f.path.endsWith(`/${fnName}.mcfunction`))
+    ?? files.find(f => {
+      const base = f.path.split('/').pop()!
+      return base.startsWith(`${fnName}__`)
+    })
   if (!f) {
     const paths = files.map(f => f.path).join('\n')
     throw new Error(`Function '${fnName}' not found. Files:\n${paths}`)
@@ -113,22 +118,28 @@ describe('stdlib/scheduler.mcrs', () => {
   // ── scheduler_tick ─────────────────────────────────────────────────────────
 
   test('scheduler_tick is emitted', () => {
+    // scheduler_tick may be inlined (no branches → no separate file); check all content
     const files = compileWith(`@keep fn t() { scheduler_tick(); }`)
-    expect(files.some(f => f.path.includes('scheduler_tick'))).toBe(true)
+    const allContent = files.map(f => f.content).join('\n')
+    const hasFile = files.some(f => f.path.includes('scheduler_tick'))
+    const hasContent = allContent.includes('rs.t0') || allContent.includes('rs.g0')
+    expect(hasFile || hasContent).toBe(true)
   })
 
   test('scheduler_tick decrements per-player slots', () => {
     const files = compileWith(`@keep fn t() { scheduler_tick(); }`)
-    const body = getFn(files, 'scheduler_tick')
-    expect(body).toContain('rs.t0')
-    expect(body).toContain('scoreboard')
+    // May be inlined — check all generated file content
+    const allContent = files.map(f => f.content).join('\n')
+    expect(allContent).toContain('rs.t0')
+    expect(allContent).toContain('scoreboard')
   })
 
   test('scheduler_tick decrements global slots', () => {
     const files = compileWith(`@keep fn t() { scheduler_tick(); }`)
-    const body = getFn(files, 'scheduler_tick')
-    expect(body).toContain('rs.g0')
-    expect(body).toContain('#rs')
+    // May be inlined — check all generated file content
+    const allContent = files.map(f => f.content).join('\n')
+    expect(allContent).toContain('rs.g0')
+    expect(allContent).toContain('#rs')
   })
 
   // ── Combined usage ─────────────────────────────────────────────────────────

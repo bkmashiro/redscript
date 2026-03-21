@@ -7,6 +7,7 @@
 export const version = '2.0.0'
 
 import { compile } from './emit/compile'
+import { CheckFailedError, DiagnosticError, parseErrorMessage } from './diagnostics'
 
 // Re-export v2 compile API
 export { compile, CompileOptions, CompileResult } from './emit/compile'
@@ -34,6 +35,11 @@ export interface CheckResult {
   warnings: string[]
 }
 
+export interface DetailedCheckResult {
+  errors: DiagnosticError[]
+  warnings: string[]
+}
+
 /**
  * Check RedScript source code for errors without generating output.
  * Runs the full compile pipeline (lex → parse → HIR → MIR → LIR → emit)
@@ -51,10 +57,24 @@ export function check(source: string, namespace = 'redscript', filePath?: string
  * Like check(), but also returns warnings (e.g., tick budget analysis).
  */
 export function checkWithWarnings(source: string, namespace = 'redscript', filePath?: string): CheckResult {
+  const result = checkDetailed(source, namespace, filePath)
+  return { error: result.errors[0] ?? null, warnings: result.warnings }
+}
+
+export function checkDetailed(source: string, namespace = 'redscript', filePath?: string): DetailedCheckResult {
   try {
-    const result = compile(source, { namespace, filePath })
-    return { error: null, warnings: result.warnings }
+    const result = compile(source, { namespace, filePath, stopAfterCheck: true })
+    return { errors: [], warnings: result.warnings }
   } catch (err) {
-    return { error: err as Error, warnings: [] }
+    if (err instanceof CheckFailedError) {
+      return { errors: err.diagnostics, warnings: err.warnings }
+    }
+    if (err instanceof DiagnosticError) {
+      return { errors: [err], warnings: [] }
+    }
+    return {
+      errors: [parseErrorMessage('LoweringError', (err as Error).message, source.split('\n'), filePath)],
+      warnings: [],
+    }
   }
 }

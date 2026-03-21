@@ -9,8 +9,8 @@
  *   redscript version
  */
 
-import { compile, checkWithWarnings } from './index'
-import { formatError } from './diagnostics'
+import { compile, checkDetailed } from './index'
+import { DiagnosticError, formatError } from './diagnostics'
 import { parseMcVersion, DEFAULT_MC_VERSION } from './types/mc-version'
 import { startRepl } from './repl'
 import { generateDts } from './builtins/metadata'
@@ -163,6 +163,8 @@ function parseArgs(args: string[]): {
   mcVersionStr?: string
   lenient?: boolean
   includeDirs?: string[]
+  format?: 'human' | 'json'
+  fmtCheck?: boolean
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -194,6 +196,15 @@ function parseArgs(args: string[]): {
     } else if (arg === '--include') {
       if (!result.includeDirs) result.includeDirs = []
       result.includeDirs.push(args[++i])
+      i++
+    } else if (arg === '--format') {
+      const format = args[++i]
+      if (format === 'json' || format === 'human') {
+        result.format = format
+      }
+      i++
+    } else if (arg === '--check') {
+      result.fmtCheck = true
       i++
     } else if (!result.command) {
       result.command = arg
@@ -269,7 +280,68 @@ function compileCommand(
   }
 }
 
-function checkCommand(file: string, namespace?: string): void {
+interface CliDiagnostic {
+  severity: 'warning' | 'error'
+  kind: string
+  message: string
+  file?: string
+  line?: number
+  col?: number
+}
+
+function warningToDiagnostic(warning: string, defaultFile?: string): CliDiagnostic {
+  const located = warning.match(/^\[([^\]]+)\]\s+(?:(.*?):)?line (\d+), col (\d+): (.+)$/)
+  if (located) {
+    return {
+      severity: 'warning',
+      kind: located[1],
+      file: located[2] || defaultFile,
+      line: Number(located[3]),
+      col: Number(located[4]),
+      message: located[5],
+    }
+  }
+
+  const simple = warning.match(/^\[([^\]]+)\]\s+(.+)$/)
+  if (simple) {
+    return {
+      severity: 'warning',
+      kind: simple[1],
+      message: simple[2],
+      file: defaultFile,
+    }
+  }
+
+  return {
+    severity: 'warning',
+    kind: 'Warning',
+    message: warning,
+    file: defaultFile,
+  }
+}
+
+function errorToDiagnostic(error: DiagnosticError): CliDiagnostic {
+  return {
+    severity: 'error',
+    kind: error.kind,
+    message: error.message,
+    file: error.location.file,
+    line: error.location.line,
+    col: error.location.col,
+  }
+}
+
+function formatWarningHuman(diagnostic: CliDiagnostic): string {
+  if (diagnostic.file && diagnostic.line && diagnostic.col) {
+    return `${diagnostic.file}:${diagnostic.line}:${diagnostic.col}: warning: [${diagnostic.kind}] ${diagnostic.message}`
+  }
+  if (diagnostic.file) {
+    return `${diagnostic.file}: warning: [${diagnostic.kind}] ${diagnostic.message}`
+  }
+  return `warning: [${diagnostic.kind}] ${diagnostic.message}`
+}
+
+function checkCommand(file: string, namespace?: string, outputFormat: 'human' | 'json' = 'human'): void {
   // Read source file
   if (!fs.existsSync(file)) {
     console.error(`Error: File not found: ${file}`)
@@ -279,18 +351,37 @@ function checkCommand(file: string, namespace?: string): void {
   const source = fs.readFileSync(file, 'utf-8')
 
   const ns = namespace ?? deriveNamespace(file)
-  const result = checkWithWarnings(source, ns, file)
+  const result = checkDetailed(source, ns, file)
+  const warnings = result.warnings.map(w => warningToDiagnostic(w, file))
+  const errors = result.errors.map(errorToDiagnostic)
+  const diagnostics = [...warnings, ...errors]
+  const exitCode = errors.length > 0 ? 2 : warnings.length > 0 ? 1 : 0
 
-  for (const w of result.warnings) {
-    console.error(`Warning: ${w}`)
+  if (outputFormat === 'json') {
+    console.log(JSON.stringify({
+      file,
+      namespace: ns,
+      diagnostics,
+      summary: {
+        warnings: warnings.length,
+        errors: errors.length,
+      },
+    }, null, 2))
+  } else {
+    for (const warning of warnings) {
+      console.error(formatWarningHuman(warning))
+    }
+
+    for (const error of result.errors) {
+      console.error(formatError(error, source, file))
+    }
+
+    if (exitCode === 0) {
+      console.log('✓ No issues found')
+    }
   }
 
-  if (result.error) {
-    console.error(formatError(result.error, source, file))
-    process.exit(1)
-  }
-
-  console.log(`✓ No errors found`)
+  process.exit(exitCode)
 }
 
 async function hotReload(url: string): Promise<void> {
@@ -420,7 +511,7 @@ async function main(): Promise<void> {
   // Background update check — non-blocking, only shows notice if newer version exists
   // Skip for repl/upgrade/version to avoid double-printing
   const noCheckCmds = new Set(['upgrade', 'update', 'version', 'repl'])
-  if (!noCheckCmds.has(parsed.command ?? '')) {
+  if (!process.env.REDSCRIPT_NO_UPDATE_CHECK && !noCheckCmds.has(parsed.command ?? '')) {
     checkForUpdates().catch(() => { /* ignore */ })
   }
 
@@ -467,7 +558,7 @@ async function main(): Promise<void> {
         printUsage()
         process.exit(1)
       }
-      checkCommand(parsed.file, parsed.namespace)
+      checkCommand(parsed.file, parsed.namespace, parsed.format ?? 'human')
       break
 
     case 'fmt':
@@ -478,11 +569,27 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       const { format } = require('./formatter')
+      let changed = 0
       for (const file of files) {
         const content = fs.readFileSync(file, 'utf8')
         const formatted = format(content)
-        fs.writeFileSync(file, formatted)
-        console.log(`Formatted: ${file}`)
+        if (content !== formatted) {
+          changed++
+          if (!parsed.fmtCheck) {
+            fs.writeFileSync(file, formatted)
+            console.log(`Formatted: ${file}`)
+          } else {
+            console.log(`Would format: ${file}`)
+          }
+        } else if (!parsed.fmtCheck) {
+          console.log(`Already formatted: ${file}`)
+        }
+      }
+      if (parsed.fmtCheck) {
+        if (changed > 0) {
+          process.exit(1)
+        }
+        console.log('All files are formatted')
       }
       break
     }

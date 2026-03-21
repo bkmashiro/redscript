@@ -44,7 +44,10 @@ function parseSource(source: string): { program: Program | null; errors: Diagnos
   let program: Program | null = null
   try {
     const tokens = new Lexer(source).tokenize()
-    program = new Parser(tokens, source).parse('test')
+    const parser = new Parser(tokens, source)
+    program = parser.parse('test')
+    // Collect parse errors recorded during error-recovery (non-throwing) parsing
+    errors.push(...parser.parseErrors)
   } catch (err) {
     if (err instanceof DiagnosticError) errors.push(err)
     else errors.push(new DiagnosticError('ParseError', (err as Error).message, { line: 1, col: 1 }))

@@ -88,6 +88,28 @@ export class DiagnosticError extends Error {
   }
 }
 
+export class DiagnosticBundleError extends Error {
+  readonly diagnostics: DiagnosticError[]
+
+  constructor(diagnostics: DiagnosticError[]) {
+    super(diagnostics[0]?.message ?? 'Multiple diagnostics')
+    this.name = 'DiagnosticBundleError'
+    this.diagnostics = diagnostics
+  }
+}
+
+export class CheckFailedError extends Error {
+  readonly diagnostics: DiagnosticError[]
+  readonly warnings: string[]
+
+  constructor(diagnostics: DiagnosticError[], warnings: string[]) {
+    super(diagnostics[0]?.message ?? 'Check failed')
+    this.name = 'CheckFailedError'
+    this.diagnostics = diagnostics
+    this.warnings = warnings
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Diagnostic Collection
 // ---------------------------------------------------------------------------

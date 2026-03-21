@@ -143,6 +143,8 @@ class FnContext {
   readonly tupleVars = new Map<string, Temp[]>()
   /** Array variable tracking: varName → { ns, pathPrefix } for NBT-backed int[] */
   readonly arrayVars = new Map<string, { ns: string; pathPrefix: string; knownLen?: number }>()
+  /** String variable tracking: varName → storage path within rs:strings */
+  readonly stringVars = new Map<string, string>()
   /** Macro function info for all functions in the module */
   readonly macroInfo: Map<string, MacroFunctionInfo>
   /** Function parameter info for call_macro generation */
@@ -166,6 +168,7 @@ class FnContext {
   /** Tracks double variables: varName → NBT storage path (without "rs:d " prefix) */
   readonly doubleVars = new Map<string, string>()
   private doubleVarCount = 0
+  private stringVarCount = 0
   /** HIR function definitions for array-arg monomorphization */
   hirFunctions: Map<string, HIRFunction> = new Map()
   /** Shared registry of already-generated specialized (monomorphized) MIR functions */
@@ -267,6 +270,11 @@ class FnContext {
     this.doubleVars.set(varName, path)
     return path
   }
+
+  /** Allocate a unique NBT storage path for a string value */
+  freshStringVar(varName: string): string {
+    return `${this.namespace}_${this.fnName}_${varName}_${this.stringVarCount++}`
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -316,6 +324,7 @@ function lowerFunction(
   const params: { name: Temp; isMacroParam: boolean }[] = []
   const scope = new Map<string, Temp>()
   let doubleParamSlot = 0
+  let stringParamSlot = 0
   fn.params.forEach((p) => {
     if (p.type.kind === 'array' && arrayArgBindings?.has(p.name)) {
       // Array param already bound via arrayVars; no scoreboard slot needed
@@ -326,6 +335,10 @@ function lowerFunction(
       const path = `__dp${doubleParamSlot++}`
       ctx.doubleVars.set(p.name, path)
       // No scoreboard param slot; callee reads from rs:d __dp<i> via doubleVars
+      return
+    }
+    if (p.type.kind === 'named' && (p.type.name === 'string' || p.type.name === 'format_string')) {
+      ctx.stringVars.set(p.name, `__sp${stringParamSlot++}`)
       return
     }
     const t = ctx.freshTemp()
@@ -529,7 +542,13 @@ function lowerStmt(
 
   switch (stmt.kind) {
     case 'let': {
-      if (stmt.init.kind === 'some_lit') {
+      if (stmt.type?.kind === 'named' && (stmt.type.name === 'string' || stmt.type.name === 'format_string')) {
+        const path = lowerStringExprToPath(stmt.init, ctx, scope, stmt.name) ?? ctx.freshStringVar(stmt.name)
+        ctx.stringVars.set(stmt.name, path)
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        scope.set(stmt.name, t)
+      } else if (stmt.init.kind === 'some_lit') {
         // Some(expr) — create option struct vars: has=1, val=expr
         // Use __opt_ prefix so DCE treats these as side-effectful scoreboard writes
         const hasTemp: Temp = `__opt_${stmt.name}_has`
@@ -964,6 +983,53 @@ function lowerStmt(
     }
 
     case 'match': {
+      const hasStringPats = stmt.arms.some(a =>
+        a.pattern.kind === 'PatExpr' && a.pattern.expr.kind === 'str_lit'
+      )
+      if (hasStringPats) {
+        const matchPath = lowerStringExprToPath(stmt.expr, ctx, scope, 'match')
+        if (!matchPath) {
+          throw new Error('String match requires a string literal or tracked string variable')
+        }
+
+        const mergeBlock = ctx.newBlock('match_merge')
+        for (let i = 0; i < stmt.arms.length; i++) {
+          const arm = stmt.arms[i]
+          const pat = arm.pattern
+
+          if (pat.kind === 'PatWild') {
+            lowerBlock(arm.body, ctx, new Map(scope))
+            if (isPlaceholderTerm(ctx.current().term)) {
+              ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+            }
+            continue
+          }
+
+          if (pat.kind === 'PatExpr' && pat.expr.kind === 'str_lit') {
+            const cmpTemp = ctx.freshTemp()
+            ctx.emit({ kind: 'string_match', dst: cmpTemp, ns: 'rs:strings', path: matchPath, value: pat.expr.value })
+            const armBody = ctx.newBlock('match_arm')
+            const nextArm = ctx.newBlock('match_next')
+            ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: cmpTemp }, then: armBody.id, else: nextArm.id })
+            ctx.switchTo(armBody)
+            lowerBlock(arm.body, ctx, new Map(scope))
+            if (isPlaceholderTerm(ctx.current().term)) {
+              ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+            }
+            ctx.switchTo(nextArm)
+            continue
+          }
+
+          throw new Error(`Unsupported string match pattern: ${pat.kind}`)
+        }
+
+        if (isPlaceholderTerm(ctx.current().term)) {
+          ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+        }
+        ctx.switchTo(mergeBlock)
+        break
+      }
+
       // Lower match as chained if/else
       const mergeBlock = ctx.newBlock('match_merge')
 
@@ -2044,6 +2110,36 @@ function lowerExpr(
       {
         const targetParams = ctx.fnParamInfo.get(expr.fn)
         if (targetParams) {
+          const hasStringParam = targetParams.some(
+            p => p.type.kind === 'named' && (p.type.name === 'string' || p.type.name === 'format_string')
+          )
+          if (hasStringParam) {
+            const nonStringArgs: Operand[] = []
+            let stringSlot = 0
+            for (let i = 0; i < targetParams.length && i < expr.args.length; i++) {
+              const p = targetParams[i]
+              if (p.type.kind === 'named' && (p.type.name === 'string' || p.type.name === 'format_string')) {
+                const srcPath = lowerStringExprToPath(expr.args[i], ctx, scope, `arg${stringSlot}`)
+                if (srcPath) {
+                  ctx.emit({
+                    kind: 'call',
+                    dst: null,
+                    fn: `__raw:data modify storage rs:strings __sp${stringSlot} set from storage rs:strings ${srcPath}`,
+                    args: [],
+                  })
+                }
+                stringSlot++
+              } else {
+                nonStringArgs.push(lowerExpr(expr.args[i], ctx, scope))
+              }
+            }
+            for (let i = targetParams.length; i < expr.args.length; i++) {
+              nonStringArgs.push(lowerExpr(expr.args[i], ctx, scope))
+            }
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'call', dst: t, fn: expr.fn, args: nonStringArgs })
+            return { kind: 'temp', name: t }
+          }
           const hasDoubleParam = targetParams.some(
             p => p.type.kind === 'named' && p.type.name === 'double'
           )
@@ -2615,6 +2711,43 @@ function lowerExecuteSubcmd(sub: HIRExecuteSubcommand): ExecuteSubcmd {
       const _exhaustive: never = sub
       throw new Error(`Unknown execute subcommand kind: ${(_exhaustive as any).kind}`)
     }
+  }
+}
+
+function lowerStringExprToPath(
+  expr: HIRExpr,
+  ctx: FnContext,
+  scope: Map<string, Temp>,
+  hint = 'str',
+): string | null {
+  switch (expr.kind) {
+    case 'str_lit': {
+      const path = ctx.freshStringVar(hint)
+      ctx.emit({
+        kind: 'call',
+        dst: null,
+        fn: `__raw:data modify storage rs:strings ${path} set value ${JSON.stringify(expr.value)}`,
+        args: [],
+      })
+      return path
+    }
+    case 'ident':
+      return ctx.stringVars.get(expr.name) ?? null
+    case 'assign': {
+      if (!ctx.stringVars.has(expr.target)) return null
+      const dstPath = ctx.stringVars.get(expr.target)!
+      const srcPath = lowerStringExprToPath(expr.value, ctx, scope, expr.target)
+      if (!srcPath || srcPath === dstPath) return dstPath
+      ctx.emit({
+        kind: 'call',
+        dst: null,
+        fn: `__raw:data modify storage rs:strings ${dstPath} set from storage rs:strings ${srcPath}`,
+        args: [],
+      })
+      return dstPath
+    }
+    default:
+      return null
   }
 }
 

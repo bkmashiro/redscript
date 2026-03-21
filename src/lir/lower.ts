@@ -355,6 +355,18 @@ function lowerInstrInner(
       break
     }
 
+    case 'string_match': {
+      const dst = ctx.slot(instr.dst)
+      const dstStr = `${dst.player} ${dst.obj}`
+      const literal = JSON.stringify(instr.value)
+      instrs.push({ kind: 'score_set', dst, value: 0 })
+      instrs.push({
+        kind: 'raw',
+        cmd: `execute if data storage ${instr.ns} ${instr.path} matches ${literal} run scoreboard players set ${dstStr} 1`,
+      })
+      break
+    }
+
     case 'and': {
       // Bitwise/logical AND: both are 0/1, so multiply works
       // But more accurately: dst = (a != 0) && (b != 0)

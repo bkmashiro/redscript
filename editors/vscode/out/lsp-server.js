@@ -9474,7 +9474,13 @@ var Lexer = class {
       return;
     }
     if (char === '"') {
-      this.scanString(startLine, startCol);
+      if (this.peek() === '"' && this.peek(1) === '"') {
+        this.advance();
+        this.advance();
+        this.scanMultiLineString(startLine, startCol);
+      } else {
+        this.scanString(startLine, startCol);
+      }
       return;
     }
     if (char === "#") {
@@ -9541,6 +9547,26 @@ var Lexer = class {
       else if (c === "]" && braceDepth === 0) depth--;
     }
     return result;
+  }
+  scanMultiLineString(startLine, startCol) {
+    let value = "";
+    while (!this.isAtEnd()) {
+      if (this.peek() === '"' && this.peek(1) === '"' && this.peek(2) === '"') {
+        this.advance();
+        this.advance();
+        this.advance();
+        break;
+      }
+      if (this.peek() === "\\" && this.peek(1) === '"') {
+        this.advance();
+        value += this.advance();
+        continue;
+      }
+      value += this.advance();
+    }
+    if (value.startsWith("\n")) value = value.slice(1);
+    if (value.endsWith("\n")) value = value.slice(0, -1);
+    this.addToken("string_lit", value, startLine, startCol);
   }
   scanString(startLine, startCol) {
     let value = "";
@@ -9785,6 +9811,8 @@ var Parser = class _Parser {
     this.inLibraryMode = false;
     /** Warnings accumulated during parsing (e.g. deprecated keyword usage). */
     this.warnings = [];
+    /** Parse errors collected during error-recovery mode. */
+    this.parseErrors = [];
     this.tokens = tokens;
     this.sourceLines = source?.split("\n") ?? [];
     this.filePath = filePath;
@@ -9855,6 +9883,60 @@ var Parser = class _Parser {
     return { kind: "eof", value: "", line: span.line, col: span.col };
   }
   // -------------------------------------------------------------------------
+  // Error Recovery
+  // -------------------------------------------------------------------------
+  /**
+   * Synchronize to the next top-level declaration boundary after a parse error.
+   * Skips tokens until we find a keyword that starts a top-level declaration,
+   * or a `}` (end of a block), or EOF.
+   */
+  syncToNextDecl() {
+    const TOP_LEVEL_KEYWORDS = /* @__PURE__ */ new Set([
+      "fn",
+      "struct",
+      "impl",
+      "enum",
+      "const",
+      "let",
+      "export",
+      "declare",
+      "import",
+      "namespace",
+      "module"
+    ]);
+    while (!this.check("eof")) {
+      const kind = this.peek().kind;
+      if (kind === "}") {
+        this.advance();
+        return;
+      }
+      if (TOP_LEVEL_KEYWORDS.has(kind)) {
+        return;
+      }
+      if (kind === "ident" && this.peek().value === "import") {
+        return;
+      }
+      this.advance();
+    }
+  }
+  /**
+   * Synchronize to the next statement boundary inside a block after a parse error.
+   * Skips tokens until we reach `;`, `}`, or EOF.
+   */
+  syncToNextStmt() {
+    while (!this.check("eof")) {
+      const kind = this.peek().kind;
+      if (kind === ";") {
+        this.advance();
+        return;
+      }
+      if (kind === "}") {
+        return;
+      }
+      this.advance();
+    }
+  }
+  // -------------------------------------------------------------------------
   // Program
   // -------------------------------------------------------------------------
   parse(defaultNamespace = "redscript") {
@@ -9886,42 +9968,69 @@ var Parser = class _Parser {
       this.match(";");
     }
     while (!this.check("eof")) {
-      if (this.check("let")) {
-        globals.push(this.parseGlobalDecl(true));
-      } else if (this.check("struct")) {
-        structs.push(this.parseStructDecl());
-      } else if (this.check("impl")) {
-        implBlocks.push(this.parseImplBlock());
-      } else if (this.check("enum")) {
-        enums.push(this.parseEnumDecl());
-      } else if (this.check("const")) {
-        consts.push(this.parseConstDecl());
-      } else if (this.check("declare")) {
-        this.advance();
-        this.parseDeclareStub();
-      } else if (this.check("export")) {
-        declarations.push(this.parseExportedFnDecl());
-      } else if (this.check("import") || this.check("ident") && this.peek().value === "import") {
-        this.advance();
-        const importToken = this.peek();
-        const modName = this.expect("ident").value;
-        if (this.check("::")) {
-          this.advance();
-          let symbol;
-          if (this.check("*")) {
-            this.advance();
-            symbol = "*";
-          } else {
-            symbol = this.expect("ident").value;
+      try {
+        if (this.check("decorator") && this.peek().value.startsWith("@config")) {
+          const decorToken = this.advance();
+          const decorator = this.parseDecoratorValue(decorToken.value);
+          if (!this.check("let")) {
+            this.error("@config decorator must be followed by a let declaration");
           }
-          this.match(";");
-          imports.push(this.withLoc({ moduleName: modName, symbol }, importToken));
+          const g = this.parseGlobalDecl(true);
+          g.configKey = decorator.args?.configKey;
+          g.configDefault = decorator.args?.configDefault;
+          globals.push(g);
+        } else if (this.check("let")) {
+          globals.push(this.parseGlobalDecl(true));
+        } else if (this.check("decorator") && this.peek().value === "@singleton") {
+          this.advance();
+          if (!this.check("struct")) {
+            this.error("@singleton decorator must be followed by a struct declaration");
+          }
+          const s = this.parseStructDecl();
+          s.isSingleton = true;
+          structs.push(s);
+        } else if (this.check("struct")) {
+          structs.push(this.parseStructDecl());
+        } else if (this.check("impl")) {
+          implBlocks.push(this.parseImplBlock());
+        } else if (this.check("enum")) {
+          enums.push(this.parseEnumDecl());
+        } else if (this.check("const")) {
+          consts.push(this.parseConstDecl());
+        } else if (this.check("declare")) {
+          this.advance();
+          this.parseDeclareStub();
+        } else if (this.check("export")) {
+          declarations.push(this.parseExportedFnDecl());
+        } else if (this.check("import") || this.check("ident") && this.peek().value === "import") {
+          this.advance();
+          const importToken = this.peek();
+          const modName = this.expect("ident").value;
+          if (this.check("::")) {
+            this.advance();
+            let symbol;
+            if (this.check("*")) {
+              this.advance();
+              symbol = "*";
+            } else {
+              symbol = this.expect("ident").value;
+            }
+            this.match(";");
+            imports.push(this.withLoc({ moduleName: modName, symbol }, importToken));
+          } else {
+            this.match(";");
+            imports.push(this.withLoc({ moduleName: modName, symbol: void 0 }, importToken));
+          }
         } else {
-          this.match(";");
-          imports.push(this.withLoc({ moduleName: modName, symbol: void 0 }, importToken));
+          declarations.push(this.parseFnDecl());
         }
-      } else {
-        declarations.push(this.parseFnDecl());
+      } catch (err) {
+        if (err instanceof DiagnosticError) {
+          this.parseErrors.push(err);
+          this.syncToNextDecl();
+        } else {
+          throw err;
+        }
       }
     }
     return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, isLibrary };
@@ -9983,14 +10092,22 @@ var Parser = class _Parser {
   }
   parseImplBlock() {
     const implToken = this.expect("impl");
-    const typeName = this.expect("ident").value;
+    let traitName;
+    let typeName;
+    const firstName = this.expect("ident").value;
+    if (this.match("for")) {
+      traitName = firstName;
+      typeName = this.expect("ident").value;
+    } else {
+      typeName = firstName;
+    }
     this.expect("{");
     const methods = [];
     while (!this.check("}") && !this.check("eof")) {
       methods.push(this.parseFnDecl(typeName));
     }
     this.expect("}");
-    return this.withLoc({ kind: "impl_block", typeName, methods }, implToken);
+    return this.withLoc({ kind: "impl_block", traitName, typeName, methods }, implToken);
   }
   parseConstDecl() {
     const constToken = this.expect("const");
@@ -10010,8 +10127,12 @@ var Parser = class _Parser {
     const name = this.expect("ident").value;
     this.expect(":");
     const type = this.parseType();
-    this.expect("=");
-    const init = this.parseExpr();
+    let init;
+    if (this.match("=")) {
+      init = this.parseExpr();
+    } else {
+      init = { kind: "int_lit", value: 0 };
+    }
     this.match(";");
     return this.withLoc({ kind: "global", name, type, init, mutable }, token);
   }
@@ -10027,6 +10148,7 @@ var Parser = class _Parser {
   }
   parseFnDecl(implTypeName) {
     const decorators = this.parseDecorators();
+    const watchObjective = decorators.find((decorator) => decorator.name === "watch")?.args?.objective;
     let isExported;
     const filteredDecorators = decorators.filter((d) => {
       if (d.name === "keep") {
@@ -10064,7 +10186,8 @@ var Parser = class _Parser {
         decorators: filteredDecorators,
         body,
         isLibraryFn: this.inLibraryMode || void 0,
-        isExported
+        isExported,
+        watchObjective
       },
       fnToken
     );
@@ -10130,6 +10253,17 @@ var Parser = class _Parser {
         }
         return { name, args };
       }
+    }
+    if (name === "config") {
+      const configMatch = argsStr.match(/^"([^"]+)"\s*,\s*default\s*:\s*(-?\d+(?:\.\d+)?)$/);
+      if (configMatch) {
+        return { name, args: { configKey: configMatch[1], configDefault: parseFloat(configMatch[2]) } };
+      }
+      const keyOnlyMatch = argsStr.match(/^"([^"]+)"$/);
+      if (keyOnlyMatch) {
+        return { name, args: { configKey: keyOnlyMatch[1] } };
+      }
+      this.error(`Invalid @config syntax. Expected: @config("key", default: value) or @config("key")`);
     }
     if (name === "deprecated") {
       const strMatch = argsStr.match(/^"([^"]*)"$/);
@@ -10275,7 +10409,16 @@ var Parser = class _Parser {
     this.expect("{");
     const stmts = [];
     while (!this.check("}") && !this.check("eof")) {
-      stmts.push(this.parseStmt());
+      try {
+        stmts.push(this.parseStmt());
+      } catch (err) {
+        if (err instanceof DiagnosticError) {
+          this.parseErrors.push(err);
+          this.syncToNextStmt();
+        } else {
+          throw err;
+        }
+      }
     }
     this.expect("}");
     return stmts;
@@ -11822,6 +11965,14 @@ var BUILTIN_SIGNATURES = {
   clearInterval: {
     params: [INT_TYPE],
     return: VOID_TYPE
+  },
+  int_to_str: {
+    params: [INT_TYPE],
+    return: STRING_TYPE
+  },
+  bool_to_str: {
+    params: [{ kind: "named", name: "bool" }],
+    return: STRING_TYPE
   }
 };
 var TypeChecker = class _TypeChecker {
@@ -11913,6 +12064,33 @@ var TypeChecker = class _TypeChecker {
         fields.set(field.name, field.type);
       }
       this.structs.set(struct.name, fields);
+      if (struct.isSingleton) {
+        const structType = { kind: "struct", name: struct.name };
+        let singletonMethods = this.implMethods.get(struct.name);
+        if (!singletonMethods) {
+          singletonMethods = /* @__PURE__ */ new Map();
+          this.implMethods.set(struct.name, singletonMethods);
+        }
+        const voidType = { kind: "named", name: "void" };
+        singletonMethods.set("get", {
+          name: "get",
+          params: [],
+          returnType: structType,
+          decorators: [],
+          body: [],
+          typeParams: void 0,
+          isLibraryFn: true
+        });
+        singletonMethods.set("set", {
+          name: "set",
+          params: [{ name: "gs", type: structType }],
+          returnType: voidType,
+          decorators: [],
+          body: [],
+          typeParams: void 0,
+          isLibraryFn: true
+        });
+      }
     }
     for (const enumDecl of program.enums ?? []) {
       const variants = /* @__PURE__ */ new Map();

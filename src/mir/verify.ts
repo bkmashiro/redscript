@@ -167,6 +167,7 @@ function getDst(instr: MIRInstr): Temp | null {
     case 'add': case 'sub': case 'mul': case 'div': case 'mod':
     case 'neg':
     case 'cmp':
+    case 'string_match':
     case 'and': case 'or': case 'not':
     case 'nbt_read':
     case 'nbt_read_dynamic':
@@ -198,6 +199,8 @@ function getUsedTemps(instr: MIRInstr): Temp[] {
     case 'cmp':
     case 'and': case 'or':
       temps.push(...getOperandTemps(instr.a), ...getOperandTemps(instr.b))
+      break
+    case 'string_match':
       break
     case 'nbt_read':
     case 'nbt_list_len':

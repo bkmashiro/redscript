@@ -70,6 +70,7 @@ export type MIRInstr = MIRInstrBase & (
 
   // ── Comparison (result is 0 or 1) ────────────────────────────────────────
   | { kind: 'cmp'; dst: Temp; op: CmpOp; a: Operand; b: Operand }
+  | { kind: 'string_match'; dst: Temp; ns: string; path: string; value: string }
 
   // ── Boolean logic ────────────────────────────────────────────────────────
   | { kind: 'and'; dst: Temp; a: Operand; b: Operand }

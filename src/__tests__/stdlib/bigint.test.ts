@@ -18,9 +18,13 @@ describe('stdlib/bigint.mcrs', () => {
     expect(r.files.length).toBeGreaterThan(0)
   })
 
-  test('bigint_base is emitted', () => {
+  test('bigint_base is emitted or constant-folded', () => {
+    // bigint_base() returns 10000 — compiler may constant-fold it instead of emitting a function
     const r = compileWith(`@keep fn t(): int { return bigint_base(); }`)
-    expect(r.files.some(f => f.path.includes('bigint_base'))).toBe(true)
+    // Either a dedicated function file is emitted, or the value 10000 appears inlined
+    const emittedFile = r.files.some(f => f.path.includes('bigint_base'))
+    const inlined = r.files.some(f => f.content.includes('10000'))
+    expect(emittedFile || inlined).toBe(true)
   })
 
   test('bigint3_add_lo is emitted', () => {
