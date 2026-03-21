@@ -9,7 +9,10 @@ module.exports = {
       preset: 'ts-jest',
       testEnvironment: 'node',
       roots: ['<rootDir>/src'],
-      testMatch: ['**/__tests__/mc-integration.test.ts'],
+      testMatch: [
+        '**/__tests__/mc-integration.test.ts',
+        '**/__tests__/mc-integration/**/*.test.ts',
+      ],
       testEnvironmentOptions: {},
       retryTimes: 2,
     },
@@ -18,7 +21,7 @@ module.exports = {
       preset: 'ts-jest',
       testEnvironment: 'node',
       roots: ['<rootDir>/src'],
-      testPathIgnorePatterns: ['mc-integration'],
+      testPathIgnorePatterns: ['mc-integration.test.ts', 'mc-integration/'],
     },
   ],
 };
