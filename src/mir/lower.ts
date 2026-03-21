@@ -586,9 +586,18 @@ function lowerStmt(
         ctx.emit({ kind: 'copy', dst: valTemp, src: { kind: 'temp', name: '__rf_val' } })
         const fieldTemps = new Map<string, Temp>([['has', hasTemp], ['val', valTemp]])
         ctx.structVars.set(stmt.name, { typeName: '__option', fields: fieldTemps })
-      } else if (stmt.type?.kind === 'struct') {
+      } else if (
+        // Struct-typed let: explicit annotation OR inferred from @singleton::get() return
+        stmt.type?.kind === 'struct' ||
+        (stmt.init.kind === 'static_call' &&
+          ctx.singletonStructs.has((stmt.init as { kind: 'static_call'; type: string; method: string }).type) &&
+          (stmt.init as { kind: 'static_call'; method: string }).method === 'get')
+      ) {
         // Struct-typed let with non-literal init (e.g., call returning struct)
-        const fields = ctx.structDefs.get(stmt.type.name)
+        const inferredStructName = stmt.type?.kind === 'struct'
+          ? stmt.type.name
+          : (stmt.init as { kind: 'static_call'; type: string }).type
+        const fields = ctx.structDefs.get(inferredStructName)
         if (fields) {
           lowerExpr(stmt.init, ctx, scope)
           // Copy from return field slots into struct variable temps
@@ -604,7 +613,7 @@ function lowerStmt(
               ctx.constTemps.set(t, constVal)
             }
           }
-          ctx.structVars.set(stmt.name, { typeName: stmt.type.name, fields: fieldTemps })
+          ctx.structVars.set(stmt.name, { typeName: inferredStructName, fields: fieldTemps })
         } else {
           const valOp = lowerExpr(stmt.init, ctx, scope)
           const t = ctx.freshTemp()
