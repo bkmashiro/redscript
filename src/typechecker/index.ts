@@ -1390,6 +1390,20 @@ export class TypeChecker {
     return 'entity'
   }
 
+  // Reverse map: parser sometimes remaps method names (e.g. add→set_add) for builtins.
+  // When the receiver is a struct with an impl method matching the original name, use that.
+  private static readonly PARSER_METHOD_REMAP: Record<string, string> = {
+    'set_add': 'add',
+    'set_contains': 'contains',
+    'set_remove': 'remove',
+    'set_clear': 'clear',
+    '__array_push': 'push',
+    '__array_pop': 'pop',
+    '__entity_tag': 'tag',
+    '__entity_untag': 'untag',
+    '__entity_has_tag': 'has_tag',
+  }
+
   private resolveInstanceMethod(expr: Extract<Expr, { kind: 'call' }>): FnDecl | null {
     const receiver = expr.args[0]
     if (!receiver) {
@@ -1401,7 +1415,10 @@ export class TypeChecker {
       return null
     }
 
+    // Try the method name as-is first, then try the original (pre-remap) name
+    const methodName = TypeChecker.PARSER_METHOD_REMAP[expr.fn] ?? expr.fn
     const method = this.implMethods.get(receiverType.name)?.get(expr.fn)
+      ?? this.implMethods.get(receiverType.name)?.get(methodName)
     if (!method || method.params[0]?.name !== 'self') {
       return null
     }

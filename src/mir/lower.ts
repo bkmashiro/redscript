@@ -1834,6 +1834,13 @@ function lowerExpr(
       }
 
       // Check for struct instance method call: parser desugars v.method() → call('method', [v, ...])
+      // Some method names are remapped by the parser (e.g. add→set_add for set builtins).
+      // We reverse-map them here to support impl methods with those names.
+      const PARSER_METHOD_REMAP: Record<string, string> = {
+        'set_add': 'add', 'set_contains': 'contains', 'set_remove': 'remove', 'set_clear': 'clear',
+        '__array_push': 'push', '__array_pop': 'pop',
+        '__entity_tag': 'tag', '__entity_untag': 'untag', '__entity_has_tag': 'has_tag',
+      }
       if (expr.args.length > 0 && expr.args[0].kind === 'ident') {
         const sv = ctx.structVars.get(expr.args[0].name)
         if (sv) {
@@ -1845,7 +1852,10 @@ function lowerExpr(
               return lowerTimerMethod(expr.fn, timerId, sv, ctx, scope, expr.args.slice(1))
             }
           }
+          // Try direct name, then try reverse-mapped name (for parser-remapped builtins)
+          const originalMethodName = PARSER_METHOD_REMAP[expr.fn] ?? expr.fn
           const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.fn)
+            ?? ctx.implMethods.get(sv.typeName)?.get(originalMethodName)
           if (methodInfo?.hasSelf) {
             // Build args: self fields first, then remaining explicit args
             const fields = ctx.structDefs.get(sv.typeName) ?? []
@@ -1874,7 +1884,7 @@ function lowerExpr(
             }
             const allArgs = [...selfArgs, ...explicitArgs]
             const t = ctx.freshTemp()
-            ctx.emit({ kind: 'call', dst: t, fn: `${sv.typeName}::${expr.fn}`, args: allArgs })
+            ctx.emit({ kind: 'call', dst: t, fn: `${sv.typeName}::${originalMethodName}`, args: allArgs })
             return { kind: 'temp', name: t }
           }
         }
