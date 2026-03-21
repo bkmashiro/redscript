@@ -106,6 +106,11 @@ function verifyFunction(fn: MIRFunction): VerifyError[] {
   // Collect all defined temps: params + all dst fields in instructions
   const allDefs = new Set<Temp>()
   for (const p of fn.params) allDefs.add(p.name)
+  // __rf_* temps are "return frame" slots set by the callee at runtime.
+  // Pre-seed them so the verifier doesn't false-positive on caller reads.
+  for (let i = 0; i < 16; i++) allDefs.add(`__rf_${i}`)
+  allDefs.add('__rf_has')
+  allDefs.add('__rf_val')
   for (const block of fn.blocks) {
     for (const instr of block.instrs) {
       const dst = getDst(instr)
