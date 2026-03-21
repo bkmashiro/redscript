@@ -97,6 +97,7 @@ export type HIRExpr =
   // Option literals
   | { kind: 'some_lit'; value: HIRExpr; span?: Span }
   | { kind: 'none_lit'; span?: Span }
+  | { kind: 'unwrap_or'; opt: HIRExpr; default_: HIRExpr; span?: Span }
   // Type cast: expr as Type
   | { kind: 'type_cast'; expr: HIRExpr; targetType: TypeNode; span?: Span }
 
@@ -165,6 +166,7 @@ export type HIRStmt =
   | { kind: 'execute'; subcommands: HIRExecuteSubcommand[]; body: HIRBlock; span?: Span }
   | { kind: 'raw'; cmd: string; span?: Span }
   | { kind: 'if_let_some'; binding: string; init: HIRExpr; then: HIRBlock; else_?: HIRBlock; span?: Span }
+  | { kind: 'while_let_some'; binding: string; init: HIRExpr; body: HIRBlock; span?: Span }
 
 export type HIRBlock = HIRStmt[]
 

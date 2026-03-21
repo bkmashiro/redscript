@@ -45,13 +45,14 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
     }
   }
 
-  // Build impl method info: typeName → methodName → { hasSelf }
-  const implMethods = new Map<string, Map<string, { hasSelf: boolean }>>()
+  // Build impl method info: typeName → methodName → { hasSelf, returnStructName? }
+  const implMethods = new Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>>()
   for (const ib of hir.implBlocks) {
-    const methods = new Map<string, { hasSelf: boolean }>()
+    const methods = new Map<string, { hasSelf: boolean; returnStructName?: string }>()
     for (const m of ib.methods) {
       const hasSelf = m.params.length > 0 && m.params[0].name === 'self'
-      methods.set(m.name, { hasSelf })
+      const returnStructName = m.returnType.kind === 'struct' ? m.returnType.name : undefined
+      methods.set(m.name, { hasSelf, returnStructName })
     }
     implMethods.set(ib.typeName, methods)
   }
@@ -123,8 +124,8 @@ class FnContext {
   private readonly fnName: string
   /** Struct definitions: struct name → field names */
   readonly structDefs: Map<string, string[]>
-  /** Impl method info: typeName → methodName → { hasSelf } */
-  readonly implMethods: Map<string, Map<string, { hasSelf: boolean }>>
+  /** Impl method info: typeName → methodName → { hasSelf, returnStructName? } */
+  readonly implMethods: Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>>
   /** Struct variable tracking: varName → { typeName, fields: fieldName → temp } */
   readonly structVars = new Map<string, { typeName: string; fields: Map<string, Temp> }>()
   /** Tuple variable tracking: varName → array of element temps (index = slot) */
@@ -163,7 +164,7 @@ class FnContext {
     namespace: string,
     fnName: string,
     structDefs: Map<string, string[]> = new Map(),
-    implMethods: Map<string, Map<string, { hasSelf: boolean }>> = new Map(),
+    implMethods: Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>> = new Map(),
     macroInfo: Map<string, MacroFunctionInfo> = new Map(),
     fnParamInfo: Map<string, HIRParam[]> = new Map(),
     enumDefs: Map<string, Map<string, number>> = new Map(),
@@ -261,7 +262,7 @@ function lowerFunction(
   fn: HIRFunction,
   namespace: string,
   structDefs: Map<string, string[]> = new Map(),
-  implMethods: Map<string, Map<string, { hasSelf: boolean }>> = new Map(),
+  implMethods: Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>> = new Map(),
   macroInfo: Map<string, MacroFunctionInfo> = new Map(),
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
   enumDefs: Map<string, Map<string, number>> = new Map(),
@@ -344,7 +345,7 @@ function lowerImplMethod(
   typeName: string,
   namespace: string,
   structDefs: Map<string, string[]>,
-  implMethods: Map<string, Map<string, { hasSelf: boolean }>>,
+  implMethods: Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>>,
   macroInfo: Map<string, MacroFunctionInfo> = new Map(),
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
   enumDefs: Map<string, Map<string, number>> = new Map(),
@@ -1169,6 +1170,58 @@ function lowerStmt(
       }
 
       ctx.switchTo(mergeBlock)
+      break
+    }
+
+    case 'while_let_some': {
+      // while let Some(x) = init { body }
+      // Compiles to: loop { check opt.has; if 0 break; bind x = opt.val; body }
+      const headerBlock = ctx.newBlock('whl_header')
+      const bodyBlock = ctx.newBlock('whl_body')
+      const exitBlock = ctx.newBlock('whl_exit')
+
+      ctx.terminate({ kind: 'jump', target: headerBlock.id })
+
+      // Header: re-evaluate init and check has
+      ctx.switchTo(headerBlock)
+
+      let hasOp: Operand
+      let valTemp: Temp | undefined
+
+      const sv = (() => {
+        if (stmt.init.kind === 'ident') return ctx.structVars.get(stmt.init.name)
+        return undefined
+      })()
+
+      if (sv && sv.typeName === '__option') {
+        const hasT = sv.fields.get('has')!
+        const valT = sv.fields.get('val')!
+        hasOp = { kind: 'temp', name: hasT }
+        valTemp = valT
+      } else {
+        lowerExpr(stmt.init, ctx, scope)
+        const hasT = ctx.freshTemp()
+        const valT = ctx.freshTemp()
+        ctx.emit({ kind: 'copy', dst: hasT, src: { kind: 'temp', name: '__rf_has' } })
+        ctx.emit({ kind: 'copy', dst: valT, src: { kind: 'temp', name: '__rf_val' } })
+        hasOp = { kind: 'temp', name: hasT }
+        valTemp = valT
+      }
+
+      ctx.terminate({ kind: 'branch', cond: hasOp, then: bodyBlock.id, else: exitBlock.id })
+
+      // Body: bind x = val, run body
+      ctx.switchTo(bodyBlock)
+      const bodyScope = new Map(scope)
+      if (valTemp) bodyScope.set(stmt.binding, valTemp)
+      ctx.pushLoop(headerBlock.id, exitBlock.id, headerBlock.id)
+      lowerBlock(stmt.body, ctx, bodyScope)
+      ctx.popLoop()
+      if (isPlaceholderTerm(ctx.current().term)) {
+        ctx.terminate({ kind: 'jump', target: headerBlock.id })
+      }
+
+      ctx.switchTo(exitBlock)
       break
     }
 
@@ -2015,6 +2068,35 @@ function lowerExpr(
           }
         }
       }
+      // Method chaining: callee obj is not a simple ident (e.g. v.scale(2).add(...))
+      // Determine if the callee obj expression returns a struct via __rf_ slots
+      if (expr.callee.kind === 'member' && expr.callee.obj.kind !== 'ident') {
+        const returnedStructType = inferInvokeReturnStructType(expr.callee.obj, ctx)
+        if (returnedStructType) {
+          // Lower the inner call — result goes into __rf_ slots
+          lowerExpr(expr.callee.obj, ctx, scope)
+          // Read __rf_ slots into temps for this chained call
+          const chainFields = ctx.structDefs.get(returnedStructType) ?? []
+          const chainFieldTemps = new Map<string, Temp>()
+          for (const fieldName of chainFields) {
+            const ft = ctx.freshTemp()
+            ctx.emit({ kind: 'copy', dst: ft, src: { kind: 'temp', name: `__rf_${fieldName}` } })
+            chainFieldTemps.set(fieldName, ft)
+          }
+          const methodInfo = ctx.implMethods.get(returnedStructType)?.get(expr.callee.field)
+          if (methodInfo?.hasSelf) {
+            const selfArgs: Operand[] = chainFields.map(f => {
+              const temp = chainFieldTemps.get(f)
+              return temp ? { kind: 'temp' as const, name: temp } : { kind: 'const' as const, value: 0 }
+            })
+            const explicitArgs = expr.args.map(a => lowerExpr(a, ctx, scope))
+            const allArgs = [...selfArgs, ...explicitArgs]
+            const ct = ctx.freshTemp()
+            ctx.emit({ kind: 'call', dst: ct, fn: `${returnedStructType}::${expr.callee.field}`, args: allArgs })
+            return { kind: 'temp', name: ct }
+          }
+        }
+      }
       // Fallback: generic invoke
       const calleeOp = lowerExpr(expr.callee, ctx, scope)
       const args = expr.args.map(a => lowerExpr(a, ctx, scope))
@@ -2077,6 +2159,47 @@ function lowerExpr(
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'const', dst: t, value: 0 })
       return { kind: 'temp', name: t }
+    }
+
+    case 'unwrap_or': {
+      // opt.unwrap_or(default) → evaluate opt, if has=1 return val else return default
+      const resultTemp = ctx.freshTemp()
+      const defaultOp = lowerExpr(expr.default_, ctx, scope)
+      ctx.emit({ kind: 'copy', dst: resultTemp, src: defaultOp })
+
+      const sv = (() => {
+        if (expr.opt.kind === 'ident') return ctx.structVars.get(expr.opt.name)
+        return undefined
+      })()
+
+      let hasOp: Operand
+      let valTemp: Temp | undefined
+
+      if (sv && sv.typeName === '__option') {
+        const hasT = sv.fields.get('has')!
+        const valT = sv.fields.get('val')!
+        hasOp = { kind: 'temp', name: hasT }
+        valTemp = valT
+      } else {
+        lowerExpr(expr.opt, ctx, scope)
+        const hasT = ctx.freshTemp()
+        const valT = ctx.freshTemp()
+        ctx.emit({ kind: 'copy', dst: hasT, src: { kind: 'temp', name: '__rf_has' } })
+        ctx.emit({ kind: 'copy', dst: valT, src: { kind: 'temp', name: '__rf_val' } })
+        hasOp = { kind: 'temp', name: hasT }
+        valTemp = valT
+      }
+
+      const someBlock = ctx.newBlock('unwrap_some')
+      const mergeBlock = ctx.newBlock('unwrap_merge')
+      ctx.terminate({ kind: 'branch', cond: hasOp, then: someBlock.id, else: mergeBlock.id })
+
+      ctx.switchTo(someBlock)
+      if (valTemp) ctx.emit({ kind: 'copy', dst: resultTemp, src: { kind: 'temp', name: valTemp } })
+      ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+
+      ctx.switchTo(mergeBlock)
+      return { kind: 'temp', name: resultTemp }
     }
 
     case 'type_cast': {
@@ -2233,6 +2356,34 @@ function lowerShortCircuitOr(
 // ---------------------------------------------------------------------------
 // Timer method inlining
 // ---------------------------------------------------------------------------
+
+/**
+ * Infer the struct type name returned by a chained invoke/call expression.
+ * Used to support method chaining: v.scale(2).add(...) where scale() returns Vec2.
+ * Returns the struct type name if determinable, otherwise undefined.
+ */
+function inferInvokeReturnStructType(
+  expr: HIRExpr,
+  ctx: FnContext,
+): string | undefined {
+  if (expr.kind === 'invoke' && expr.callee.kind === 'member') {
+    // Find the receiver type via structVars
+    let receiverTypeName: string | undefined
+    if (expr.callee.obj.kind === 'ident') {
+      receiverTypeName = ctx.structVars.get(expr.callee.obj.name)?.typeName
+    } else {
+      // Recursively infer the type for deeper chains
+      receiverTypeName = inferInvokeReturnStructType(expr.callee.obj, ctx)
+    }
+    if (receiverTypeName) {
+      const methodInfo = ctx.implMethods.get(receiverTypeName)?.get(expr.callee.field)
+      if (methodInfo?.returnStructName) {
+        return methodInfo.returnStructName
+      }
+    }
+  }
+  return undefined
+}
 
 /**
  * Inline a Timer instance method call using the statically-assigned timer ID.

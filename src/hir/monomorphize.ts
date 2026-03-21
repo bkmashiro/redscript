@@ -277,6 +277,12 @@ class Monomorphizer {
           then: this.rewriteBlock(stmt.then, ctx),
           else_: stmt.else_ ? this.rewriteBlock(stmt.else_, ctx) : undefined,
         }
+      case 'while_let_some':
+        return {
+          ...stmt,
+          init: this.rewriteExpr(stmt.init, ctx),
+          body: this.rewriteBlock(stmt.body, ctx),
+        }
       case 'break':
       case 'continue':
       case 'raw':
@@ -344,6 +350,8 @@ class Monomorphizer {
         return { ...expr, value: this.rewriteExpr(expr.value, ctx) }
       case 'none_lit':
         return expr
+      case 'unwrap_or':
+        return { ...expr, opt: this.rewriteExpr(expr.opt, ctx), default_: this.rewriteExpr(expr.default_, ctx) }
       // Literals / terminals — pass through unchanged
       default:
         return expr

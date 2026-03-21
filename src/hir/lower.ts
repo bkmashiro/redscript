@@ -412,6 +412,15 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
         span: stmt.span,
       }
 
+    case 'while_let_some':
+      return {
+        kind: 'while_let_some',
+        binding: stmt.binding,
+        init: lowerExpr(stmt.init),
+        body: lowerBlock(stmt.body),
+        span: stmt.span,
+      }
+
     default: {
       const _exhaustive: never = stmt
       throw new Error(`Unknown statement kind: ${(_exhaustive as any).kind}`)
@@ -621,6 +630,9 @@ function lowerExpr(expr: Expr): HIRExpr {
 
     case 'none_lit':
       return { kind: 'none_lit', span: expr.span }
+
+    case 'unwrap_or':
+      return { kind: 'unwrap_or', opt: lowerExpr(expr.opt), default_: lowerExpr(expr.default_), span: expr.span }
 
     case 'type_cast':
       return { kind: 'type_cast', expr: lowerExpr(expr.expr), targetType: expr.targetType, span: expr.span }
