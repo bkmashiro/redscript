@@ -346,8 +346,13 @@ class Monomorphizer {
       case 'str_interp':
         return { ...expr, parts: expr.parts.map(p => typeof p === 'string' ? p : this.rewriteExpr(p, ctx)) }
       case 'f_string':
-        // FStringPart uses AST Expr (not HIRExpr) — pass through without rewriting
-        return expr
+        // HIRFStringPart uses HIRExpr — rewrite expr parts
+        return {
+          ...expr,
+          parts: expr.parts.map(p =>
+            p.kind === 'text' ? p : { kind: 'expr' as const, expr: this.rewriteExpr(p.expr, ctx) }
+          ),
+        }
       case 'some_lit':
         return { ...expr, value: this.rewriteExpr(expr.value, ctx) }
       case 'none_lit':

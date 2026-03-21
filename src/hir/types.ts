@@ -43,6 +43,8 @@ export type {
   AssignOp,
 }
 
+
+
 // ---------------------------------------------------------------------------
 // HIR Expressions
 // ---------------------------------------------------------------------------
@@ -68,7 +70,7 @@ export type HIRExpr =
   | { kind: 'selector'; raw: string; isSingle: boolean; sel: EntitySelector; span?: Span }
   // String interpolation
   | { kind: 'str_interp'; parts: Array<string | HIRExpr>; span?: Span }
-  | { kind: 'f_string'; parts: FStringPart[]; span?: Span }
+  | { kind: 'f_string'; parts: HIRFStringPart[]; span?: Span }
   // Identifiers
   | { kind: 'ident'; name: string; span?: Span }
   // Operators — && and || preserved (control-flow lowering happens in MIR)
@@ -100,6 +102,11 @@ export type HIRExpr =
   | { kind: 'unwrap_or'; opt: HIRExpr; default_: HIRExpr; span?: Span }
   // Type cast: expr as Type
   | { kind: 'type_cast'; expr: HIRExpr; targetType: TypeNode; span?: Span }
+
+/** HIR-level f-string part — uses HIRExpr instead of AST Expr */
+export type HIRFStringPart =
+  | { kind: 'text'; value: string }
+  | { kind: 'expr'; expr: HIRExpr }
 
 // ---------------------------------------------------------------------------
 // Execute Subcommands (unified — absorbs as_block, at_block, as_at)

@@ -180,7 +180,7 @@ function walkExpr(expr: HIRExpr, caller: string, deprecated: Map<string, string>
       break
     case 'f_string':
       for (const part of expr.parts) {
-        if (typeof part === 'object' && 'expr' in part) walkExpr(part.expr as HIRExpr, caller, deprecated, warnings)
+        if (part.kind === 'expr') walkExpr(part.expr, caller, deprecated, warnings)
       }
       break
     case 'some_lit':

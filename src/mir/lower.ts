@@ -7,7 +7,7 @@
 
 import type {
   HIRModule, HIRFunction, HIRStmt, HIRBlock, HIRExpr,
-  HIRExecuteSubcommand, HIRParam, TypeNode,
+  HIRExecuteSubcommand, HIRParam, TypeNode, HIRFStringPart,
 } from '../hir/types'
 import type {
   MIRModule, MIRFunction, MIRBlock, MIRInstr, BlockId,
@@ -2631,7 +2631,7 @@ function precomputeFStringParts(
 ): HIRExpr {
   if (expr.kind !== 'f_string') return expr
 
-  const newParts: Array<{ kind: 'text'; value: string } | { kind: 'expr'; expr: HIRExpr }> = []
+  const newParts: HIRFStringPart[] = []
 
   for (const part of expr.parts) {
     if (part.kind === 'text') {
@@ -2639,16 +2639,16 @@ function precomputeFStringParts(
       continue
     }
 
-    const inner = part.expr as HIRExpr
+    const inner: HIRExpr = part.expr
     // Simple cases that fStringToJsonText already handles
     if (inner.kind === 'ident' || inner.kind === 'int_lit' || inner.kind === 'bool_lit') {
       newParts.push({ kind: 'expr', expr: inner })
       continue
     }
 
-    // int_to_str(x) in f-string: pass through the inner arg as a scoreboard score ref
+    // int_to_str(x) / bool_to_str(x) in f-string: pass through the inner arg as a scoreboard score ref
     if (inner.kind === 'call' && (inner.fn === 'int_to_str' || inner.fn === 'bool_to_str') && inner.args.length === 1) {
-      const arg = inner.args[0] as HIRExpr
+      const arg: HIRExpr = inner.args[0]
       if (arg.kind === 'ident') {
         newParts.push({ kind: 'expr', expr: arg })
         continue
@@ -2676,7 +2676,7 @@ function precomputeFStringParts(
     }
   }
 
-  return { kind: 'f_string', parts: newParts as any }
+  return { kind: 'f_string', parts: newParts }
 }
 
 function fStringToJsonText(expr: HIRExpr, namespace: string): string {

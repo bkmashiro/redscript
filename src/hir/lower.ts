@@ -18,6 +18,7 @@ import type {
 import type {
   HIRModule, HIRFunction, HIRParam, HIRExpr, HIRStmt, HIRBlock,
   HIRExecuteSubcommand, HIRStruct, HIRImplBlock, HIREnum, HIRConst, HIRGlobal, HIRMatchPattern,
+  HIRFStringPart,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -556,8 +557,14 @@ function lowerExpr(expr: Expr): HIRExpr {
         span: expr.span,
       }
 
-    case 'f_string':
-      return { kind: 'f_string', parts: expr.parts, span: expr.span }
+    case 'f_string': {
+      const hirParts: HIRFStringPart[] = expr.parts.map(part =>
+        part.kind === 'text'
+          ? { kind: 'text' as const, value: part.value }
+          : { kind: 'expr' as const, expr: lowerExpr(part.expr) }
+      )
+      return { kind: 'f_string', parts: hirParts, span: expr.span }
+    }
 
     // Binary ops — && and || preserved as-is (short-circuit → control flow in MIR)
     case 'binary':
