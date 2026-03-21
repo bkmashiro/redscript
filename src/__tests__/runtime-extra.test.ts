@@ -692,3 +692,171 @@ describe('runtime — scoreboard players get', () => {
     expect(rt.getScore('result', 'rs')).toBe(55)
   })
 })
+
+// ── Storage path parsing ────────────────────────────────────────────────────
+
+describe('runtime — storage path edge cases', () => {
+  test('getStorage without colon returns raw storage key', () => {
+    const rt = new MCRuntime('test')
+    rt.execCommand('data modify storage simple-key field set value 42')
+    // Simple key (no colon) should work
+    expect(rt.execCommand('data get storage simple-key field')).toBe(true)
+  })
+
+  test('setStorage without colon', () => {
+    const rt = new MCRuntime('test')
+    rt.setStorage('simple-key', { x: 1 })
+    // Should not throw
+    expect(true).toBe(true)
+  })
+
+  test('getStorage with no dot after colon returns top-level ns', () => {
+    const rt = new MCRuntime('test')
+    rt.execCommand('data modify storage test:bucket field set value 42')
+    // getStorage returns the field
+    const val = rt.getStorage('test:bucket.field')
+    expect(val).toBe(42)
+  })
+
+  test('setStorage with dotted path sets nested field', () => {
+    const rt = new MCRuntime('test')
+    rt.setStorage('test:ns.field', 99)
+    expect(rt.getStorage('test:ns.field')).toBe(99)
+  })
+})
+
+// ── matchesRange ──────────────────────────────────────────────────────────
+
+describe('runtime — matchesRange / parseRange', () => {
+  test('matchesRange works for exact value', () => {
+    const rt = new MCRuntime('test')
+    rt.setScore('p', 'rs', 5)
+    rt.execCommand('execute if score p rs matches 5 run scoreboard players set exact rs 1')
+    expect(rt.getScore('exact', 'rs')).toBe(1)
+  })
+
+  test('matchesRange works for open-ended range ..N', () => {
+    const rt = new MCRuntime('test')
+    rt.setScore('p', 'rs', 3)
+    rt.execCommand('execute if score p rs matches ..5 run scoreboard players set open rs 1')
+    expect(rt.getScore('open', 'rs')).toBe(1)
+  })
+
+  test('matchesRange works for open-start range N..', () => {
+    const rt = new MCRuntime('test')
+    rt.setScore('p', 'rs', 10)
+    rt.execCommand('execute if score p rs matches 5.. run scoreboard players set start rs 1')
+    expect(rt.getScore('start', 'rs')).toBe(1)
+  })
+
+  test('matchesRange fails for out-of-range', () => {
+    const rt = new MCRuntime('test')
+    rt.setScore('p', 'rs', 20)
+    rt.execCommand('execute if score p rs matches 1..10 run scoreboard players set inrange rs 1')
+    expect(rt.getScore('inrange', 'rs')).toBe(0)
+  })
+})
+
+// ── execFunction with return value ────────────────────────────────────────
+
+describe('runtime — execFunction with return value', () => {
+  test('return value captured via store result', () => {
+    const rt = new MCRuntime('test')
+    rt.loadFunction('test:calc', [
+      'scoreboard players set __rs_return rs 77',
+      'return 77',
+    ])
+    rt.execCommand('execute store result score result rs run function test:calc')
+    expect(rt.getScore('result', 'rs')).toBe(77)
+  })
+
+  test('function called with execute as @s sets executor', () => {
+    const rt = new MCRuntime('test')
+    const p = rt.spawnEntity(['runner'], 'player', { x: 0, y: 0, z: 0 })
+    rt.loadFunction('test:tagme', ['tag @s add tagged'])
+    rt.execCommand('execute as @e[tag=runner] run function test:tagme')
+    expect(p.tags.has('tagged')).toBe(true)
+  })
+})
+
+// ── kill with @s ─────────────────────────────────────────────────────────
+
+describe('runtime — kill edge cases', () => {
+  test('kill @s does not crash without executor', () => {
+    const rt = new MCRuntime('test')
+    // kill @s without executor - should fail gracefully
+    const result = rt.execCommand('kill @s')
+    expect(typeof result).toBe('boolean')
+  })
+})
+
+// ── setblock / fill ────────────────────────────────────────────────────────
+
+describe('runtime — setblock and fill', () => {
+  test('setblock places block at coordinate in world map', () => {
+    const rt = new MCRuntime('test')
+    rt.execCommand('setblock 10 64 10 minecraft:stone')
+    expect(rt.world.get('10,64,10')).toBe('minecraft:stone')
+  })
+
+  test('fill region sets multiple blocks', () => {
+    const rt = new MCRuntime('test')
+    rt.execCommand('fill 0 64 0 2 64 2 minecraft:oak_planks')
+    expect(rt.world.get('1,64,1')).toBe('minecraft:oak_planks')
+    expect(rt.world.get('0,64,0')).toBe('minecraft:oak_planks')
+    expect(rt.world.get('2,64,2')).toBe('minecraft:oak_planks')
+  })
+
+  test('setblock with invalid coordinates returns false', () => {
+    const rt = new MCRuntime('test')
+    const result = rt.execCommand('setblock notacoord notacoord notacoord minecraft:stone')
+    expect(result).toBe(false)
+  })
+})
+
+// ── effect with duration and amplifier ────────────────────────────────────
+
+describe('runtime — effect with explicit duration/amplifier', () => {
+  test('effect give with duration and amplifier', () => {
+    const rt = new MCRuntime('test')
+    const p = rt.spawnEntity(['p'], 'player', { x: 0, y: 0, z: 0 })
+    rt.execCommand('effect give @e[tag=p] minecraft:strength 60 2')
+    const fx = rt.effects.get(p.id)!
+    expect(fx[0].duration).toBe(60)
+    expect(fx[0].amplifier).toBe(2)
+  })
+
+  test('multiple effect give stacks effects', () => {
+    const rt = new MCRuntime('test')
+    const p = rt.spawnEntity(['p'], 'player', { x: 0, y: 0, z: 0 })
+    rt.execCommand('effect give @e[tag=p] minecraft:speed 30 0')
+    rt.execCommand('effect give @e[tag=p] minecraft:strength 60 1')
+    const fx = rt.effects.get(p.id)!
+    expect(fx.length).toBe(2)
+    expect(fx[1].effect).toBe('minecraft:strength')
+  })
+})
+
+// ── compileAndLoad ─────────────────────────────────────────────────────────
+
+describe('runtime — compileAndLoad', () => {
+  test('compileAndLoad loads multiple functions', () => {
+    const rt = new MCRuntime('test')
+    rt.compileAndLoad(`
+      fn add(a: int, b: int): int { return a + b; }
+      fn sub(a: int, b: int): int { return a - b; }
+    `)
+    expect(rt.functions.size).toBeGreaterThan(1)
+  })
+
+  test('compileAndLoad allows calling compiled functions', () => {
+    const rt = new MCRuntime('test')
+    rt.compileAndLoad(`
+      fn set_score(): void {
+        scoreboard_set("player", "rs", 99);
+      }
+    `)
+    rt.execFunction('set_score')
+    expect(rt.getScore('player', 'rs')).toBe(99)
+  })
+})
