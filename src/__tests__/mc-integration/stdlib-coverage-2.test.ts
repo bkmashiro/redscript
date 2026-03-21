@@ -66,6 +66,11 @@ function readStdlib(name: string): string {
 // ---------------------------------------------------------------------------
 
 beforeAll(async () => {
+  if (process.env.MC_OFFLINE === 'true') {
+    console.warn('⚠ MC_OFFLINE=true — skipping stdlib-coverage-2 integration tests')
+    return
+  }
+
   mc = new MCTestClient(MC_HOST, MC_PORT)
 
   try {

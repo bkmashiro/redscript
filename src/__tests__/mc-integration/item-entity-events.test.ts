@@ -89,6 +89,11 @@ async function botGet(endpoint: string): Promise<any> {
 // ---------------------------------------------------------------------------
 
 beforeAll(async () => {
+  if (process.env.MC_OFFLINE === 'true') {
+    console.warn('⚠ MC_OFFLINE=true — skipping ItemUse/EntityKill integration tests')
+    return
+  }
+
   mc = new MCTestClient(MC_HOST, MC_PORT)
 
   // Check server availability (non-fatal — tests skip gracefully if offline)
