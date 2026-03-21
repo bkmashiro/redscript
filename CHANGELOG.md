@@ -8,6 +8,17 @@ All notable changes to RedScript will be documented in this file.
 
 ### Added
 
+#### Language / Compiler
+- **`match` expression** — pattern-match on int / enum values; compiles to `execute if score` chains with exhaustiveness checking
+- **`for item in array` iteration** — `for x in arr { … }` syntax sugar; desugars to `while idx < arr.len() { let x = arr[idx]; idx++ }` in HIR; generates loop-header / loop-body / loop-exit mcfunction splits
+- **`arr.len()` — literal constant + dynamic runtime** — literal arrays (`[1,2,3].len()`) fold to a compile-time constant (`scoreboard players set`); function-parameter and heap arrays use the new `nbt_list_len` MIR instruction which lowers to `execute store result score … run data get storage`
+- **`state.mcrs`** — persistent entity/global state management stdlib module
+- **`dialog.mcrs`** — NPC dialog trees with choice branching and callback support
+- **`scheduler.mcrs`** — tick-budget-aware task scheduler (coroutine-compatible)
+
+#### Tests
+- **Coverage: 80% → 85%** — new unit tests for builtins, runtime, emit pipeline, and stdlib modules; arr.len() compile-time and dynamic paths fully covered
+
 #### stdlib
 - **`linalg.mcrs`** — double-precision linear algebra: `vec2_add/sub/scale/dot/length/normalize`, `vec3_cross`, `mat2x2 / mat3x3 / mat4x4` multiply, Cramer's rule solver for 2×2 and 3×3 systems
 - **`fft.mcrs`** — Discrete Fourier Transform with a `@coroutine` variant for in-game use; supports transforms up to n=64; quarter-wave symmetry test now enabled after related compiler fix

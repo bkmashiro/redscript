@@ -111,11 +111,16 @@ Priority order (dependencies first):
 - [x] **f-string tell/subtitle/actionbar** — proper JSON text component emit ✅
 - [x] **Inlay hints** — shows inferred type next to unannotated `let` ✅
 - [x] **Parser: fn endLine in span** — accurate scope for LSP ✅
+- [x] **`match` expression** — pattern-match on int/enum; compiles to scoreboard if-chains ✅
+- [x] **`for item in array` (`for_each`) iteration** — HIR desugaring to while + dynamic index ✅
+- [x] **`arr.len()` dynamic support** — `nbt_list_len` MIR instruction; literal arrays fold to constant, params use `data get storage` at runtime ✅
 - [ ] **exp_fx / sin_fixed SA Tuner adapters** — further error reduction
 
-#### stdlib  
+#### stdlib
 - [x] **bigint ÷ bigint** — full arbitrary-precision long division ✅
 - [x] **mat3_mul / mat4_mul** — 3×3 and 4×4 matrix multiply (fixed ×10000) ✅
+- [x] **`dialog.mcrs`** — NPC dialog trees with choice branching ✅
+- [x] **`scheduler.mcrs`** — tick-budget-aware task scheduler ✅
 
 ---
 
