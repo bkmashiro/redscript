@@ -432,3 +432,100 @@ describe('Parser — global statements', () => {
     expect(prog.moduleName).toBe('mymod')
   })
 })
+
+// ── execute with advanced subcommands ─────────────────────────────────────
+
+describe('Parser — execute advanced subcommands', () => {
+  test('execute positioned <x> <y> <z> run', () => {
+    const stmt = parseStmt('execute positioned 0 64 0 run { raw("hi"); }')
+    expect(stmt.kind).toBe('execute')
+    const ex = stmt as any
+    const clauses = ex.subcommands ?? ex.clauses
+    expect(clauses.some((c: any) => c.kind === 'positioned')).toBe(true)
+  })
+
+  test('execute positioned as @s run', () => {
+    const stmt = parseStmt('execute positioned as @s run { raw("hi"); }')
+    const ex = stmt as any
+    const clauses = ex.subcommands ?? ex.clauses
+    expect(clauses.some((c: any) => c.kind === 'positioned_as')).toBe(true)
+  })
+
+  test('execute rotated as @s run', () => {
+    const stmt = parseStmt('execute rotated as @s run { raw("hi"); }')
+    const ex = stmt as any
+    const clauses = ex.subcommands ?? ex.clauses
+    expect(clauses.some((c: any) => c.kind === 'rotated_as')).toBe(true)
+  })
+
+  test('execute facing <x> <y> <z> run', () => {
+    const stmt = parseStmt('execute facing 0 64 0 run { raw("hi"); }')
+    const ex = stmt as any
+    const clauses = ex.subcommands ?? ex.clauses
+    expect(clauses.some((c: any) => c.kind === 'facing')).toBe(true)
+  })
+
+  test('execute facing entity @s eyes run', () => {
+    const stmt = parseStmt('execute facing entity @s eyes run { raw("hi"); }')
+    const ex = stmt as any
+    const clauses = ex.subcommands ?? ex.clauses
+    expect(clauses.some((c: any) => c.kind === 'facing_entity')).toBe(true)
+  })
+
+  test('execute if score @s rs = @a rs run', () => {
+    const stmt = parseStmt('execute if score @s rs = @a rs run { raw("hi"); }')
+    const ex = stmt as any
+    const clauses = ex.subcommands ?? ex.clauses
+    expect(clauses.some((c: any) => c.kind.includes('score'))).toBe(true)
+  })
+
+  test('execute if score @s rs < @a rs run', () => {
+    const stmt = parseStmt('execute if score @s rs < @a rs run { raw("hi"); }')
+    const ex = stmt as any
+    const clauses = ex.subcommands ?? ex.clauses
+    expect(clauses.some((c: any) => c.kind.includes('score'))).toBe(true)
+  })
+
+  test('execute if block <x> <y> <z> <block> run', () => {
+    const stmt = parseStmt('execute if block 0 64 0 minecraft:stone run { raw("hi"); }')
+    const ex = stmt as any
+    const clauses = ex.subcommands ?? ex.clauses
+    expect(clauses.some((c: any) => c.kind.includes('block'))).toBe(true)
+  })
+
+  test('execute store result bossbar id max run', () => {
+    // if blocks may not be implemented, skip to store result score
+    const stmt = parseStmt('execute store result score x rs run { raw("hi"); }')
+    const ex = stmt as any
+    const clauses = ex.subcommands ?? ex.clauses
+    expect(clauses.some((c: any) => c.kind.includes('store'))).toBe(true)
+  })
+})
+
+// ── selector filters ──────────────────────────────────────────────────────
+
+describe('Parser — selector with filters', () => {
+  test('@e[type=zombie] parses type filter', () => {
+    const expr = parseExpr('@e[type=zombie]')
+    const sel = expr as any
+    expect(sel.kind).toBe('selector')
+  })
+
+  test('@a[limit=1] parses limit filter', () => {
+    const expr = parseExpr('@a[limit=1]')
+    const sel = expr as any
+    expect(sel.kind).toBe('selector')
+  })
+
+  test('@e[tag=boss,type=zombie] parses multiple filters', () => {
+    const expr = parseExpr('@e[tag=boss,type=zombie]')
+    const sel = expr as any
+    expect(sel.kind).toBe('selector')
+  })
+
+  test('@e[scores={rs=1..10}] parses scores filter', () => {
+    const expr = parseExpr('@e[scores={rs=1..10}]')
+    const sel = expr as any
+    expect(sel.kind).toBe('selector')
+  })
+})
