@@ -2187,6 +2187,28 @@ function lowerExpr(
         ctx.emit({ kind: 'const', dst: t, value: 0 })
         return { kind: 'temp', name: t }
       }
+      // @singleton struct static calls: expand struct arg field-by-field for ::set
+      if (ctx.singletonStructs.has(expr.type)) {
+        if (expr.method === 'get') {
+          // GameState::get() — no struct args, our synthetic LIR fn writes to $__rf_<field> slots
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'call', dst: t, fn: `${expr.type}::${expr.method}`, args: [] })
+          return { kind: 'temp', name: t }
+        } else if (expr.method === 'set' && expr.args.length === 1 && expr.args[0].kind === 'ident') {
+          // GameState::set(gs) — flatten struct arg into individual field args ($p0, $p1, ...)
+          const sv = ctx.structVars.get(expr.args[0].name)
+          if (sv) {
+            const fields = ctx.structDefs.get(sv.typeName) ?? []
+            const fieldArgs: Operand[] = fields.map(f => {
+              const temp = sv.fields.get(f)
+              return temp ? { kind: 'temp' as const, name: temp } : { kind: 'const' as const, value: 0 }
+            })
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'call', dst: t, fn: `${expr.type}::${expr.method}`, args: fieldArgs })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
       const args = expr.args.map(a => lowerExpr(a, ctx, scope))
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'call', dst: t, fn: `${expr.type}::${expr.method}`, args })
