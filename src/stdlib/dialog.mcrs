@@ -1,0 +1,55 @@
+// MC tellraw dialog system — high-level wrapper for player messaging.
+// Usage: import "stdlib/dialog.mcrs"
+//
+// Provides tellraw-based chat messages, title/subtitle display, and
+// actionbar notifications. All text is sent as raw JSON chat components.
+
+module library
+
+/// Send a plain white message to a player.
+fn dialog_say(p: selector, msg: string) {
+    raw("tellraw {p} {\"text\":\"{msg}\"}");
+}
+
+/// Broadcast a plain white message to all players.
+fn dialog_broadcast(msg: string) {
+    raw("tellraw @a {\"text\":\"{msg}\"}");
+}
+
+/// Send a colored message to a player.
+/// color: 0=white, 1=red, 2=green, 3=gold, 4=aqua
+fn dialog_say_color(p: selector, msg: string, color: int) {
+    if (color == 1) {
+        raw("tellraw {p} {\"text\":\"{msg}\",\"color\":\"red\"}");
+    } else {
+        if (color == 2) {
+            raw("tellraw {p} {\"text\":\"{msg}\",\"color\":\"green\"}");
+        } else {
+            if (color == 3) {
+                raw("tellraw {p} {\"text\":\"{msg}\",\"color\":\"gold\"}");
+            } else {
+                if (color == 4) {
+                    raw("tellraw {p} {\"text\":\"{msg}\",\"color\":\"aqua\"}");
+                } else {
+                    raw("tellraw {p} {\"text\":\"{msg}\",\"color\":\"white\"}");
+                }
+            }
+        }
+    }
+}
+
+/// Display a large title and subtitle on a player's screen.
+fn dialog_title(p: selector, title: string, subtitle: string) {
+    raw("title {p} title {\"text\":\"{title}\"}");
+    raw("title {p} subtitle {\"text\":\"{subtitle}\"}");
+}
+
+/// Clear the title from a player's screen.
+fn dialog_title_clear(p: selector) {
+    raw("title {p} clear");
+}
+
+/// Display a message on the player's actionbar (above hotbar).
+fn dialog_actionbar(p: selector, msg: string) {
+    raw("title {p} actionbar {\"text\":\"{msg}\"}");
+}

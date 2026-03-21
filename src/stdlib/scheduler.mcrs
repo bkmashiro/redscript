@@ -1,0 +1,271 @@
+// Scoreboard-based task scheduler.
+// Usage: import "stdlib/scheduler.mcrs"
+//
+// Supports 8 named timer slots (t0..t7) per entity and 8 global slots.
+// Scoreboards used: rs.t0 .. rs.t7  (per-player)
+//                   rs.g0 .. rs.g7  (global, stored on #rs fake-player)
+//
+// Typical usage:
+//   task_schedule(@s, 0, 40)   // schedule slot 0 to fire in 40 ticks
+//   // in @tick function:
+//   scheduler_tick()
+//   if (task_ready(@s, 0) == 1) { /* fire */ }
+
+module library
+
+// ─── Per-player tasks ─────────────────────────────────────────────────────────
+
+/// Schedule slot task_id (0..7) to fire after `delay` ticks for player p.
+fn task_schedule(p: selector, task_id: int, delay: int) {
+    if (task_id == 0) {
+        scoreboard_set(p, "rs.t0", delay);
+    } else {
+        if (task_id == 1) {
+            scoreboard_set(p, "rs.t1", delay);
+        } else {
+            if (task_id == 2) {
+                scoreboard_set(p, "rs.t2", delay);
+            } else {
+                if (task_id == 3) {
+                    scoreboard_set(p, "rs.t3", delay);
+                } else {
+                    if (task_id == 4) {
+                        scoreboard_set(p, "rs.t4", delay);
+                    } else {
+                        if (task_id == 5) {
+                            scoreboard_set(p, "rs.t5", delay);
+                        } else {
+                            if (task_id == 6) {
+                                scoreboard_set(p, "rs.t6", delay);
+                            } else {
+                                scoreboard_set(p, "rs.t7", delay);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Cancel slot task_id for player p (zeroes the counter).
+fn task_cancel(p: selector, task_id: int) {
+    if (task_id == 0) {
+        scoreboard_set(p, "rs.t0", 0);
+    } else {
+        if (task_id == 1) {
+            scoreboard_set(p, "rs.t1", 0);
+        } else {
+            if (task_id == 2) {
+                scoreboard_set(p, "rs.t2", 0);
+            } else {
+                if (task_id == 3) {
+                    scoreboard_set(p, "rs.t3", 0);
+                } else {
+                    if (task_id == 4) {
+                        scoreboard_set(p, "rs.t4", 0);
+                    } else {
+                        if (task_id == 5) {
+                            scoreboard_set(p, "rs.t5", 0);
+                        } else {
+                            if (task_id == 6) {
+                                scoreboard_set(p, "rs.t6", 0);
+                            } else {
+                                scoreboard_set(p, "rs.t7", 0);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Returns 1 if slot task_id is ready (counter reached 1 on last tick), 0 otherwise.
+/// Automatically clears the slot when ready.
+fn task_ready(p: selector, task_id: int) -> int {
+    let val: int = 0;
+    if (task_id == 0) {
+        val = scoreboard_get(p, "rs.t0");
+    } else {
+        if (task_id == 1) {
+            val = scoreboard_get(p, "rs.t1");
+        } else {
+            if (task_id == 2) {
+                val = scoreboard_get(p, "rs.t2");
+            } else {
+                if (task_id == 3) {
+                    val = scoreboard_get(p, "rs.t3");
+                } else {
+                    if (task_id == 4) {
+                        val = scoreboard_get(p, "rs.t4");
+                    } else {
+                        if (task_id == 5) {
+                            val = scoreboard_get(p, "rs.t5");
+                        } else {
+                            if (task_id == 6) {
+                                val = scoreboard_get(p, "rs.t6");
+                            } else {
+                                val = scoreboard_get(p, "rs.t7");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (val == 1) {
+        task_cancel(p, task_id);
+        return 1;
+    }
+    return 0;
+}
+
+// ─── Global tasks (bound to #rs fake-player) ──────────────────────────────────
+
+/// Schedule global slot task_id (0..7) to fire after `delay` ticks.
+fn gtask_schedule(task_id: int, delay: int) {
+    if (task_id == 0) {
+        scoreboard_set("#rs", "rs.g0", delay);
+    } else {
+        if (task_id == 1) {
+            scoreboard_set("#rs", "rs.g1", delay);
+        } else {
+            if (task_id == 2) {
+                scoreboard_set("#rs", "rs.g2", delay);
+            } else {
+                if (task_id == 3) {
+                    scoreboard_set("#rs", "rs.g3", delay);
+                } else {
+                    if (task_id == 4) {
+                        scoreboard_set("#rs", "rs.g4", delay);
+                    } else {
+                        if (task_id == 5) {
+                            scoreboard_set("#rs", "rs.g5", delay);
+                        } else {
+                            if (task_id == 6) {
+                                scoreboard_set("#rs", "rs.g6", delay);
+                            } else {
+                                scoreboard_set("#rs", "rs.g7", delay);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Cancel global slot task_id.
+fn gtask_cancel(task_id: int) {
+    if (task_id == 0) {
+        scoreboard_set("#rs", "rs.g0", 0);
+    } else {
+        if (task_id == 1) {
+            scoreboard_set("#rs", "rs.g1", 0);
+        } else {
+            if (task_id == 2) {
+                scoreboard_set("#rs", "rs.g2", 0);
+            } else {
+                if (task_id == 3) {
+                    scoreboard_set("#rs", "rs.g3", 0);
+                } else {
+                    if (task_id == 4) {
+                        scoreboard_set("#rs", "rs.g4", 0);
+                    } else {
+                        if (task_id == 5) {
+                            scoreboard_set("#rs", "rs.g5", 0);
+                        } else {
+                            if (task_id == 6) {
+                                scoreboard_set("#rs", "rs.g6", 0);
+                            } else {
+                                scoreboard_set("#rs", "rs.g7", 0);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Returns 1 if global slot task_id is ready, 0 otherwise.
+/// Automatically clears the slot when ready.
+fn gtask_ready(task_id: int) -> int {
+    let val: int = 0;
+    if (task_id == 0) {
+        val = scoreboard_get("#rs", "rs.g0");
+    } else {
+        if (task_id == 1) {
+            val = scoreboard_get("#rs", "rs.g1");
+        } else {
+            if (task_id == 2) {
+                val = scoreboard_get("#rs", "rs.g2");
+            } else {
+                if (task_id == 3) {
+                    val = scoreboard_get("#rs", "rs.g3");
+                } else {
+                    if (task_id == 4) {
+                        val = scoreboard_get("#rs", "rs.g4");
+                    } else {
+                        if (task_id == 5) {
+                            val = scoreboard_get("#rs", "rs.g5");
+                        } else {
+                            if (task_id == 6) {
+                                val = scoreboard_get("#rs", "rs.g6");
+                            } else {
+                                val = scoreboard_get("#rs", "rs.g7");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (val == 1) {
+        gtask_cancel(task_id);
+        return 1;
+    }
+    return 0;
+}
+
+// ─── Tick driver ──────────────────────────────────────────────────────────────
+
+/// Decrement all active per-player timers by 1.
+/// Call this inside your @tick function (executed as @a).
+fn scheduler_tick() {
+    // Per-player slots
+    raw("execute as @a run scoreboard players remove @s rs.t0 1");
+    raw("execute as @a[scores={rs.t0=..-1}] run scoreboard players set @s rs.t0 0");
+    raw("execute as @a run scoreboard players remove @s rs.t1 1");
+    raw("execute as @a[scores={rs.t1=..-1}] run scoreboard players set @s rs.t1 0");
+    raw("execute as @a run scoreboard players remove @s rs.t2 1");
+    raw("execute as @a[scores={rs.t2=..-1}] run scoreboard players set @s rs.t2 0");
+    raw("execute as @a run scoreboard players remove @s rs.t3 1");
+    raw("execute as @a[scores={rs.t3=..-1}] run scoreboard players set @s rs.t3 0");
+    raw("execute as @a run scoreboard players remove @s rs.t4 1");
+    raw("execute as @a[scores={rs.t4=..-1}] run scoreboard players set @s rs.t4 0");
+    raw("execute as @a run scoreboard players remove @s rs.t5 1");
+    raw("execute as @a[scores={rs.t5=..-1}] run scoreboard players set @s rs.t5 0");
+    raw("execute as @a run scoreboard players remove @s rs.t6 1");
+    raw("execute as @a[scores={rs.t6=..-1}] run scoreboard players set @s rs.t6 0");
+    raw("execute as @a run scoreboard players remove @s rs.t7 1");
+    raw("execute as @a[scores={rs.t7=..-1}] run scoreboard players set @s rs.t7 0");
+    // Global slots
+    raw("scoreboard players remove #rs rs.g0 1");
+    raw("execute if score #rs rs.g0 matches ..-1 run scoreboard players set #rs rs.g0 0");
+    raw("scoreboard players remove #rs rs.g1 1");
+    raw("execute if score #rs rs.g1 matches ..-1 run scoreboard players set #rs rs.g1 0");
+    raw("scoreboard players remove #rs rs.g2 1");
+    raw("execute if score #rs rs.g2 matches ..-1 run scoreboard players set #rs rs.g2 0");
+    raw("scoreboard players remove #rs rs.g3 1");
+    raw("execute if score #rs rs.g3 matches ..-1 run scoreboard players set #rs rs.g3 0");
+    raw("scoreboard players remove #rs rs.g4 1");
+    raw("execute if score #rs rs.g4 matches ..-1 run scoreboard players set #rs rs.g4 0");
+    raw("scoreboard players remove #rs rs.g5 1");
+    raw("execute if score #rs rs.g5 matches ..-1 run scoreboard players set #rs rs.g5 0");
+    raw("scoreboard players remove #rs rs.g6 1");
+    raw("execute if score #rs rs.g6 matches ..-1 run scoreboard players set #rs rs.g6 0");
+    raw("scoreboard players remove #rs rs.g7 1");
+    raw("execute if score #rs rs.g7 matches ..-1 run scoreboard players set #rs rs.g7 0");
+}
