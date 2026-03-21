@@ -412,6 +412,62 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
         span: stmt.span,
       }
 
+    // --- Desugaring: do_while → body + while(cond) { body } ---
+    // Emits the body once unconditionally, then a while loop:
+    //   <body>
+    //   while (cond) { <body> }
+    case 'do_while': {
+      const firstBody = lowerBlock(stmt.body)
+      const loopBody = lowerBlock(stmt.body)
+      const whileStmt: HIRStmt = {
+        kind: 'while',
+        cond: lowerExpr(stmt.cond),
+        body: loopBody,
+        span: stmt.span,
+      }
+      return [...firstBody, whileStmt]
+    }
+
+    // --- Desugaring: repeat N → let __repeat_i = 0; while(__repeat_i < N) { body; __repeat_i = __repeat_i + 1 } ---
+    case 'repeat': {
+      const id = repeatCounter++
+      const idxName = `__repeat_i_${id}`
+      const initStmt: HIRStmt = {
+        kind: 'let',
+        name: idxName,
+        type: { kind: 'named', name: 'int' },
+        init: { kind: 'int_lit', value: 0 },
+        span: stmt.span,
+      }
+      const body = lowerBlock(stmt.body)
+      const step: HIRStmt[] = [{
+        kind: 'expr',
+        expr: {
+          kind: 'assign',
+          target: idxName,
+          value: {
+            kind: 'binary',
+            op: '+',
+            left: { kind: 'ident', name: idxName },
+            right: { kind: 'int_lit', value: 1 },
+          },
+        },
+      }]
+      const whileStmt: HIRStmt = {
+        kind: 'while',
+        cond: {
+          kind: 'binary',
+          op: '<',
+          left: { kind: 'ident', name: idxName },
+          right: { kind: 'int_lit', value: stmt.count },
+        },
+        body,
+        step,
+        span: stmt.span,
+      }
+      return [initStmt, whileStmt]
+    }
+
     case 'while_let_some':
       return {
         kind: 'while_let_some',
@@ -443,6 +499,9 @@ function lowerExecuteSubcommand(sub: ExecuteSubcommand): HIRExecuteSubcommand {
 
 /** Counter to generate unique variable names for for_each desugaring */
 let forEachCounter = 0
+
+/** Counter to generate unique variable names for repeat desugaring */
+let repeatCounter = 0
 
 /** Map compound assignment operator to its base binary op */
 const COMPOUND_TO_BINOP: Record<string, string> = {

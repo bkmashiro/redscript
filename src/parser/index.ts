@@ -501,6 +501,16 @@ export class Parser {
       }
     }
 
+    // Handle @deprecated("message")
+    if (name === 'deprecated') {
+      const strMatch = argsStr.match(/^"([^"]*)"$/)
+      if (strMatch) {
+        return { name, args: { message: strMatch[1] } }
+      }
+      // @deprecated with no message string
+      return { name, args: {} }
+    }
+
     // @require_on_load(fn_name) — when this fn is used, fn_name is called from __load.
     // Accepts bare identifiers (with optional leading _) or quoted strings.
     if (name === 'require_on_load') {
@@ -709,6 +719,16 @@ export class Parser {
       return this.parseWhileStmt()
     }
 
+    // Do-while statement
+    if (this.check('do')) {
+      return this.parseDoWhileStmt()
+    }
+
+    // Repeat N statement
+    if (this.check('repeat')) {
+      return this.parseRepeatStmt()
+    }
+
     // For statement
     if (this.check('for')) {
       return this.parseForStmt()
@@ -859,6 +879,23 @@ export class Parser {
     const body = this.parseBlock()
 
     return this.withLoc({ kind: 'while', cond, body }, whileToken)
+  }
+
+  private parseDoWhileStmt(): Stmt {
+    const doToken = this.expect('do')
+    const body = this.parseBlock()
+    this.expect('while')
+    const cond = this.parseParenOptionalCond()
+    this.match(';')
+    return this.withLoc({ kind: 'do_while', cond, body }, doToken)
+  }
+
+  private parseRepeatStmt(): Stmt {
+    const repeatToken = this.expect('repeat')
+    const countToken = this.expect('int_lit')
+    const count = parseInt(countToken.value, 10)
+    const body = this.parseBlock()
+    return this.withLoc({ kind: 'repeat', count, body }, repeatToken)
   }
 
   private parseParenOptionalCond(): Expr {

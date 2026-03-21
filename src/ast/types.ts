@@ -246,6 +246,8 @@ export type Stmt =
   | { kind: 'continue';   span?: Span }
   | { kind: 'if';         cond: Expr; then: Block; else_?: Block; span?: Span }
   | { kind: 'while';      cond: Expr; body: Block; span?: Span }
+  | { kind: 'do_while';   cond: Expr; body: Block; span?: Span }
+  | { kind: 'repeat';     count: number; body: Block; span?: Span }
   | { kind: 'for';        init?: Stmt; cond: Expr; step: Expr; body: Block; span?: Span }
   | { kind: 'foreach';    binding: string; iterable: Expr; body: Block; executeContext?: string; span?: Span }
   | { kind: 'for_range';  varName: string; start: Expr; end: Expr; inclusive?: boolean; body: Block; span?: Span }
@@ -267,7 +269,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'load' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule'
+  name: 'tick' | 'load' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated'
   args?: {
     rate?: number
     eventType?: string
@@ -278,6 +280,8 @@ export interface Decorator {
     batch?: number
     onDone?: string
     ticks?: number
+    /** @deprecated decorator message */
+    message?: string
   }
   /** Raw positional arguments (used by @requires and future generic decorators). */
   rawArgs?: Array<{ kind: 'string'; value: string } | { kind: 'number'; value: number }>
