@@ -148,6 +148,7 @@ fn merge_sort_coro(arr: int[], n: int) {
             // via a temporary scratch array
             if (mid < right) {
                 let tmp: int[] = []
+                let tlen: int = 0
                 let ia: int = left
                 let ib: int = mid
                 let merging: int = 1
@@ -156,18 +157,22 @@ fn merge_sort_coro(arr: int[], n: int) {
                         if (ib < right) {
                             if (arr[ia] <= arr[ib]) {
                                 tmp.push(arr[ia])
+                                tlen = tlen + 1
                                 ia = ia + 1
                             } else {
                                 tmp.push(arr[ib])
+                                tlen = tlen + 1
                                 ib = ib + 1
                             }
                         } else {
                             tmp.push(arr[ia])
+                            tlen = tlen + 1
                             ia = ia + 1
                         }
                     } else {
                         if (ib < right) {
                             tmp.push(arr[ib])
+                            tlen = tlen + 1
                             ib = ib + 1
                         } else {
                             merging = 0
@@ -176,7 +181,6 @@ fn merge_sort_coro(arr: int[], n: int) {
                 }
                 // Write merged tmp back into arr[left..right)
                 let ti: int = 0
-                let tlen: int = tmp.len()
                 while (ti < tlen) {
                     arr[left + ti] = tmp[ti]
                     ti = ti + 1

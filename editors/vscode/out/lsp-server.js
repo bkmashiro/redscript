@@ -9226,6 +9226,7 @@ var KEYWORDS = {
   unless: "unless",
   declare: "declare",
   export: "export",
+  import: "import",
   int: "int",
   bool: "bool",
   float: "float",
@@ -9898,20 +9899,25 @@ var Parser = class _Parser {
         this.parseDeclareStub();
       } else if (this.check("export")) {
         declarations.push(this.parseExportedFnDecl());
-      } else if (this.check("ident") && this.peek().value === "import") {
+      } else if (this.check("import") || this.check("ident") && this.peek().value === "import") {
         this.advance();
         const importToken = this.peek();
         const modName = this.expect("ident").value;
-        this.expect("::");
-        let symbol;
-        if (this.check("*")) {
+        if (this.check("::")) {
           this.advance();
-          symbol = "*";
+          let symbol;
+          if (this.check("*")) {
+            this.advance();
+            symbol = "*";
+          } else {
+            symbol = this.expect("ident").value;
+          }
+          this.match(";");
+          imports.push(this.withLoc({ moduleName: modName, symbol }, importToken));
         } else {
-          symbol = this.expect("ident").value;
+          this.match(";");
+          imports.push(this.withLoc({ moduleName: modName, symbol: void 0 }, importToken));
         }
-        this.match(";");
-        imports.push(this.withLoc({ moduleName: modName, symbol }, importToken));
       } else {
         declarations.push(this.parseFnDecl());
       }
@@ -9945,6 +9951,19 @@ var Parser = class _Parser {
     while (!this.check("}") && !this.check("eof")) {
       const variantToken = this.expect("ident");
       const variant = { name: variantToken.value };
+      if (this.check("(")) {
+        this.advance();
+        const fields = [];
+        while (!this.check(")") && !this.check("eof")) {
+          const fieldName = this.expect("ident").value;
+          this.expect(":");
+          const fieldType = this.parseType();
+          fields.push({ name: fieldName, type: fieldType });
+          if (!this.match(",")) break;
+        }
+        this.expect(")");
+        variant.fields = fields;
+      }
       if (this.match("=")) {
         const valueToken = this.expect("int_lit");
         variant.value = parseInt(valueToken.value, 10);
@@ -10373,6 +10392,17 @@ var Parser = class _Parser {
   }
   parseWhileStmt() {
     const whileToken = this.expect("while");
+    if (this.check("let") && this.peek(1).kind === "ident" && this.peek(1).value === "Some") {
+      this.advance();
+      this.advance();
+      this.expect("(");
+      const binding = this.expect("ident").value;
+      this.expect(")");
+      this.expect("=");
+      const init = this.parseExpr();
+      const body2 = this.parseBlock();
+      return this.withLoc({ kind: "while_let_some", binding, init, body: body2 }, whileToken);
+    }
     this.expect("(");
     const cond = this.parseExpr();
     this.expect(")");
@@ -10494,6 +10524,21 @@ var Parser = class _Parser {
       const binding = this.expect("ident").value;
       this.expect(")");
       return { kind: "PatSome", binding };
+    }
+    if (this.check("ident") && this.peek(1).kind === "::") {
+      const enumName = this.advance().value;
+      this.expect("::");
+      const variant = this.expect("ident").value;
+      const bindings = [];
+      if (this.check("(")) {
+        this.advance();
+        while (!this.check(")") && !this.check("eof")) {
+          bindings.push(this.expect("ident").value);
+          if (!this.match(",")) break;
+        }
+        this.expect(")");
+      }
+      return { kind: "PatEnum", enumName, variant, bindings };
     }
     if (this.check("int_lit")) {
       const tok = this.advance();
@@ -10838,6 +10883,15 @@ var Parser = class _Parser {
           continue;
         }
         if (expr.kind === "member") {
+          if (expr.field === "unwrap_or") {
+            const defaultExpr = this.parseExpr();
+            this.expect(")");
+            expr = this.withLoc(
+              { kind: "unwrap_or", opt: expr.obj, default_: defaultExpr },
+              this.getLocToken(expr) ?? openParenToken
+            );
+            continue;
+          }
           const methodMap = {
             "tag": "__entity_tag",
             "untag": "__entity_untag",
@@ -10930,6 +10984,20 @@ var Parser = class _Parser {
       this.expect("::");
       const memberToken = this.expect("ident");
       if (this.check("(")) {
+        const isNamedArgs = this.peek(1).kind === "ident" && this.peek(2).kind === ":";
+        if (isNamedArgs) {
+          this.advance();
+          const args2 = [];
+          while (!this.check(")") && !this.check("eof")) {
+            const fieldName = this.expect("ident").value;
+            this.expect(":");
+            const value = this.parseExpr();
+            args2.push({ name: fieldName, value });
+            if (!this.match(",")) break;
+          }
+          this.expect(")");
+          return this.withLoc({ kind: "enum_construct", enumName: typeToken.value, variant: memberToken.value, args: args2 }, typeToken);
+        }
         this.advance();
         const args = this.parseArgs();
         this.expect(")");
@@ -11708,13 +11776,15 @@ var BUILTIN_SIGNATURES = {
     return: VOID_TYPE
   }
 };
-var TypeChecker = class {
+var TypeChecker = class _TypeChecker {
   constructor(source, filePath) {
     this.lintWarnings = [];
     this.functions = /* @__PURE__ */ new Map();
     this.implMethods = /* @__PURE__ */ new Map();
     this.structs = /* @__PURE__ */ new Map();
     this.enums = /* @__PURE__ */ new Map();
+    // enumName → variantName → field list (for payload variants)
+    this.enumPayloads = /* @__PURE__ */ new Map();
     this.consts = /* @__PURE__ */ new Map();
     this.globals = /* @__PURE__ */ new Map();
     this.currentFn = null;
@@ -11798,10 +11868,17 @@ var TypeChecker = class {
     }
     for (const enumDecl of program.enums ?? []) {
       const variants = /* @__PURE__ */ new Map();
+      const payloads = /* @__PURE__ */ new Map();
       for (const variant of enumDecl.variants) {
         variants.set(variant.name, variant.value ?? 0);
+        if (variant.fields && variant.fields.length > 0) {
+          payloads.set(variant.name, variant.fields);
+        }
       }
       this.enums.set(enumDecl.name, variants);
+      if (payloads.size > 0) {
+        this.enumPayloads.set(enumDecl.name, payloads);
+      }
     }
     for (const constDecl of program.consts ?? []) {
       const constType = this.normalizeType(constDecl.type);
@@ -11968,8 +12045,21 @@ var TypeChecker = class {
             if (!isUnknown(subjectType) && !isUnknown(patternType) && !this.typesMatch(subjectType, patternType)) {
               this.report("Match arm pattern type must match subject type", arm.pattern.expr);
             }
+            this.checkBlock(arm.body);
+          } else if (arm.pattern.kind === "PatEnum") {
+            const pat = arm.pattern;
+            const variantPayloads = this.enumPayloads.get(pat.enumName)?.get(pat.variant) ?? [];
+            const savedScope = new Map(this.scope);
+            for (let i = 0; i < pat.bindings.length; i++) {
+              const fieldDef = variantPayloads[i];
+              const bindingType = fieldDef ? fieldDef.type : { kind: "named", name: "int" };
+              this.scope.set(pat.bindings[i], { type: bindingType, mutable: false });
+            }
+            this.checkBlock(arm.body);
+            this.scope = savedScope;
+          } else {
+            this.checkBlock(arm.body);
           }
-          this.checkBlock(arm.body);
         }
         break;
       case "as_block": {
@@ -12234,6 +12324,31 @@ var TypeChecker = class {
           }
         }
         break;
+      case "enum_construct": {
+        if (!this.enums.has(expr.enumName)) {
+          this.report(`Unknown enum '${expr.enumName}'`, expr);
+          break;
+        }
+        const variants = this.enums.get(expr.enumName);
+        if (!variants.has(expr.variant)) {
+          this.report(`Enum '${expr.enumName}' has no variant '${expr.variant}'`, expr);
+          break;
+        }
+        const variantPayloads = this.enumPayloads.get(expr.enumName)?.get(expr.variant) ?? [];
+        if (variantPayloads.length === 0 && expr.args.length > 0) {
+          this.report(`Enum variant '${expr.enumName}::${expr.variant}' has no payload fields`, expr);
+          break;
+        }
+        for (const arg of expr.args) {
+          const fieldDef = variantPayloads.find((f) => f.name === arg.name);
+          if (!fieldDef) {
+            this.report(`Unknown field '${arg.name}' for enum variant '${expr.enumName}::${expr.variant}'`, expr);
+          } else {
+            this.checkExpr(arg.value, fieldDef.type);
+          }
+        }
+        break;
+      }
       case "blockpos":
         break;
       // Literals don't need checking
@@ -12630,6 +12745,11 @@ var TypeChecker = class {
           return { kind: "enum", name: expr.enumName };
         }
         return { kind: "named", name: "void" };
+      case "enum_construct":
+        if (this.enums.has(expr.enumName)) {
+          return { kind: "enum", name: expr.enumName };
+        }
+        return { kind: "named", name: "void" };
       case "member":
         if (expr.obj.kind === "ident" && this.enums.has(expr.obj.name)) {
           return { kind: "enum", name: expr.obj.name };
@@ -12735,6 +12855,21 @@ var TypeChecker = class {
     }
     return "entity";
   }
+  static {
+    // Reverse map: parser sometimes remaps method names (e.g. add→set_add) for builtins.
+    // When the receiver is a struct with an impl method matching the original name, use that.
+    this.PARSER_METHOD_REMAP = {
+      "set_add": "add",
+      "set_contains": "contains",
+      "set_remove": "remove",
+      "set_clear": "clear",
+      "__array_push": "push",
+      "__array_pop": "pop",
+      "__entity_tag": "tag",
+      "__entity_untag": "untag",
+      "__entity_has_tag": "has_tag"
+    };
+  }
   resolveInstanceMethod(expr) {
     const receiver = expr.args[0];
     if (!receiver) {
@@ -12744,7 +12879,8 @@ var TypeChecker = class {
     if (receiverType.kind !== "struct") {
       return null;
     }
-    const method = this.implMethods.get(receiverType.name)?.get(expr.fn);
+    const methodName = _TypeChecker.PARSER_METHOD_REMAP[expr.fn] ?? expr.fn;
+    const method = this.implMethods.get(receiverType.name)?.get(expr.fn) ?? this.implMethods.get(receiverType.name)?.get(methodName);
     if (!method || method.params[0]?.name !== "self") {
       return null;
     }

@@ -181,10 +181,12 @@ fn pathfind_bfs(map: int[], sx: int, sz: int, gx: int, gz: int): int[] {
 
     // Reconstruct path: walk parent[] links from goal back to start
     let rev: int[] = []
+    let rlen: int = 0
     let node: int = goal
     let walking: int = 1
     while (walking == 1) {
         rev.push(node)
+        rlen = rlen + 1
         if (node == start) {
             walking = 0
         } else {
@@ -194,7 +196,6 @@ fn pathfind_bfs(map: int[], sx: int, sz: int, gx: int, gz: int): int[] {
 
     // Reverse rev[] into path[]
     let path: int[] = []
-    let rlen: int = rev.len
     let ri: int = rlen - 1
     while (ri >= 0) {
         path.push(rev[ri])
@@ -298,17 +299,18 @@ fn pathfind_bfs_coro(map: int[], sx: int, sz: int, gx: int, gz: int, out: int[])
 
     if (found == 1) {
         let rev: int[] = []
+        let rlen: int = 0
         let node: int = goal
         let walking: int = 1
         while (walking == 1) {
             rev.push(node)
+            rlen = rlen + 1
             if (node == start) {
                 walking = 0
             } else {
                 node = parent[node]
             }
         }
-        let rlen: int = rev.len
         let ri: int = rlen - 1
         while (ri >= 0) {
             out.push(rev[ri])

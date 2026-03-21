@@ -18260,6 +18260,7 @@ var require_lexer = __commonJS({
       unless: "unless",
       declare: "declare",
       export: "export",
+      import: "import",
       int: "int",
       bool: "bool",
       float: "float",
@@ -18941,20 +18942,25 @@ var require_parser = __commonJS({
             this.parseDeclareStub();
           } else if (this.check("export")) {
             declarations.push(this.parseExportedFnDecl());
-          } else if (this.check("ident") && this.peek().value === "import") {
+          } else if (this.check("import") || this.check("ident") && this.peek().value === "import") {
             this.advance();
             const importToken = this.peek();
             const modName = this.expect("ident").value;
-            this.expect("::");
-            let symbol;
-            if (this.check("*")) {
+            if (this.check("::")) {
               this.advance();
-              symbol = "*";
+              let symbol;
+              if (this.check("*")) {
+                this.advance();
+                symbol = "*";
+              } else {
+                symbol = this.expect("ident").value;
+              }
+              this.match(";");
+              imports.push(this.withLoc({ moduleName: modName, symbol }, importToken));
             } else {
-              symbol = this.expect("ident").value;
+              this.match(";");
+              imports.push(this.withLoc({ moduleName: modName, symbol: void 0 }, importToken));
             }
-            this.match(";");
-            imports.push(this.withLoc({ moduleName: modName, symbol }, importToken));
           } else {
             declarations.push(this.parseFnDecl());
           }
@@ -18988,6 +18994,20 @@ var require_parser = __commonJS({
         while (!this.check("}") && !this.check("eof")) {
           const variantToken = this.expect("ident");
           const variant = { name: variantToken.value };
+          if (this.check("(")) {
+            this.advance();
+            const fields = [];
+            while (!this.check(")") && !this.check("eof")) {
+              const fieldName = this.expect("ident").value;
+              this.expect(":");
+              const fieldType = this.parseType();
+              fields.push({ name: fieldName, type: fieldType });
+              if (!this.match(","))
+                break;
+            }
+            this.expect(")");
+            variant.fields = fields;
+          }
           if (this.match("=")) {
             const valueToken = this.expect("int_lit");
             variant.value = parseInt(valueToken.value, 10);
@@ -19414,6 +19434,17 @@ var require_parser = __commonJS({
       }
       parseWhileStmt() {
         const whileToken = this.expect("while");
+        if (this.check("let") && this.peek(1).kind === "ident" && this.peek(1).value === "Some") {
+          this.advance();
+          this.advance();
+          this.expect("(");
+          const binding = this.expect("ident").value;
+          this.expect(")");
+          this.expect("=");
+          const init = this.parseExpr();
+          const body2 = this.parseBlock();
+          return this.withLoc({ kind: "while_let_some", binding, init, body: body2 }, whileToken);
+        }
         this.expect("(");
         const cond = this.parseExpr();
         this.expect(")");
@@ -19535,6 +19566,22 @@ var require_parser = __commonJS({
           const binding = this.expect("ident").value;
           this.expect(")");
           return { kind: "PatSome", binding };
+        }
+        if (this.check("ident") && this.peek(1).kind === "::") {
+          const enumName = this.advance().value;
+          this.expect("::");
+          const variant = this.expect("ident").value;
+          const bindings = [];
+          if (this.check("(")) {
+            this.advance();
+            while (!this.check(")") && !this.check("eof")) {
+              bindings.push(this.expect("ident").value);
+              if (!this.match(","))
+                break;
+            }
+            this.expect(")");
+          }
+          return { kind: "PatEnum", enumName, variant, bindings };
         }
         if (this.check("int_lit")) {
           const tok = this.advance();
@@ -19868,6 +19915,12 @@ var require_parser = __commonJS({
               continue;
             }
             if (expr.kind === "member") {
+              if (expr.field === "unwrap_or") {
+                const defaultExpr = this.parseExpr();
+                this.expect(")");
+                expr = this.withLoc({ kind: "unwrap_or", opt: expr.obj, default_: defaultExpr }, this.getLocToken(expr) ?? openParenToken);
+                continue;
+              }
               const methodMap = {
                 "tag": "__entity_tag",
                 "untag": "__entity_untag",
@@ -19945,6 +19998,21 @@ var require_parser = __commonJS({
           this.expect("::");
           const memberToken = this.expect("ident");
           if (this.check("(")) {
+            const isNamedArgs = this.peek(1).kind === "ident" && this.peek(2).kind === ":";
+            if (isNamedArgs) {
+              this.advance();
+              const args2 = [];
+              while (!this.check(")") && !this.check("eof")) {
+                const fieldName = this.expect("ident").value;
+                this.expect(":");
+                const value = this.parseExpr();
+                args2.push({ name: fieldName, value });
+                if (!this.match(","))
+                  break;
+              }
+              this.expect(")");
+              return this.withLoc({ kind: "enum_construct", enumName: typeToken.value, variant: memberToken.value, args: args2 }, typeToken);
+            }
             this.advance();
             const args = this.parseArgs();
             this.expect(")");
@@ -20782,7 +20850,7 @@ var require_lower = __commonJS({
         })),
         enums: program.enums.map((e) => ({
           name: e.name,
-          variants: e.variants.map((v) => ({ name: v.name, value: v.value })),
+          variants: e.variants.map((v) => ({ name: v.name, value: v.value, fields: v.fields })),
           span: e.span
         })),
         consts: program.consts.map((c) => ({
@@ -20806,6 +20874,8 @@ var require_lower = __commonJS({
           return pat;
         case "PatExpr":
           return { kind: "PatExpr", expr: lowerExpr(pat.expr) };
+        case "PatEnum":
+          return { kind: "PatEnum", enumName: pat.enumName, variant: pat.variant, bindings: pat.bindings };
       }
     }
     function lowerGlobal(g) {
@@ -21106,6 +21176,14 @@ var require_lower = __commonJS({
             else_: stmt.else_ ? lowerBlock(stmt.else_) : void 0,
             span: stmt.span
           };
+        case "while_let_some":
+          return {
+            kind: "while_let_some",
+            binding: stmt.binding,
+            init: lowerExpr(stmt.init),
+            body: lowerBlock(stmt.body),
+            span: stmt.span
+          };
         default: {
           const _exhaustive = stmt;
           throw new Error(`Unknown statement kind: ${_exhaustive.kind}`);
@@ -21264,12 +21342,22 @@ var require_lower = __commonJS({
           };
         case "path_expr":
           return { kind: "path_expr", enumName: expr.enumName, variant: expr.variant, span: expr.span };
+        case "enum_construct":
+          return {
+            kind: "enum_construct",
+            enumName: expr.enumName,
+            variant: expr.variant,
+            args: expr.args.map((a) => ({ name: a.name, value: lowerExpr(a.value) })),
+            span: expr.span
+          };
         case "tuple_lit":
           return { kind: "tuple_lit", elements: expr.elements.map(lowerExpr), span: expr.span };
         case "some_lit":
           return { kind: "some_lit", value: lowerExpr(expr.value), span: expr.span };
         case "none_lit":
           return { kind: "none_lit", span: expr.span };
+        case "unwrap_or":
+          return { kind: "unwrap_or", opt: lowerExpr(expr.opt), default_: lowerExpr(expr.default_), span: expr.span };
         case "type_cast":
           return { kind: "type_cast", expr: lowerExpr(expr.expr), targetType: expr.targetType, span: expr.span };
         case "lambda": {
@@ -21502,6 +21590,12 @@ var require_monomorphize = __commonJS({
               then: this.rewriteBlock(stmt.then, ctx),
               else_: stmt.else_ ? this.rewriteBlock(stmt.else_, ctx) : void 0
             };
+          case "while_let_some":
+            return {
+              ...stmt,
+              init: this.rewriteExpr(stmt.init, ctx),
+              body: this.rewriteBlock(stmt.body, ctx)
+            };
           case "break":
           case "continue":
           case "raw":
@@ -21564,6 +21658,8 @@ var require_monomorphize = __commonJS({
             return { ...expr, value: this.rewriteExpr(expr.value, ctx) };
           case "none_lit":
             return expr;
+          case "unwrap_or":
+            return { ...expr, opt: this.rewriteExpr(expr.opt, ctx), default_: this.rewriteExpr(expr.default_, ctx) };
           // Literals / terminals — pass through unchanged
           default:
             return expr;
@@ -21836,19 +21932,28 @@ var require_lower2 = __commonJS({
         structDefs.set(s.name, s.fields.map((f) => f.name));
       }
       const enumDefs = /* @__PURE__ */ new Map();
+      const enumPayloads = /* @__PURE__ */ new Map();
       for (const e of hir.enums) {
         const variants = /* @__PURE__ */ new Map();
+        const payloads = /* @__PURE__ */ new Map();
         for (const v of e.variants) {
           variants.set(v.name, v.value ?? 0);
+          if (v.fields && v.fields.length > 0) {
+            payloads.set(v.name, v.fields);
+          }
         }
         enumDefs.set(e.name, variants);
+        if (payloads.size > 0) {
+          enumPayloads.set(e.name, payloads);
+        }
       }
       const implMethods = /* @__PURE__ */ new Map();
       for (const ib of hir.implBlocks) {
         const methods = /* @__PURE__ */ new Map();
         for (const m of ib.methods) {
           const hasSelf = m.params.length > 0 && m.params[0].name === "self";
-          methods.set(m.name, { hasSelf });
+          const returnStructName = m.returnType.kind === "struct" ? m.returnType.name : void 0;
+          methods.set(m.name, { hasSelf, returnStructName });
         }
         implMethods.set(ib.typeName, methods);
       }
@@ -21870,12 +21975,12 @@ var require_lower2 = __commonJS({
       const specializedFnsRegistry = /* @__PURE__ */ new Map();
       const allFunctions = [];
       for (const f of hir.functions) {
-        const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, void 0, hirFnMap, specializedFnsRegistry);
+        const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, void 0, hirFnMap, specializedFnsRegistry, void 0, enumPayloads);
         allFunctions.push(fn, ...helpers);
       }
       for (const ib of hir.implBlocks) {
         for (const m of ib.methods) {
-          const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter);
+          const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads);
           allFunctions.push(fn, ...helpers);
         }
       }
@@ -21889,7 +21994,7 @@ var require_lower2 = __commonJS({
       };
     }
     var FnContext = class {
-      constructor(namespace, fnName, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), timerCounter = { count: 0, timerId: 0 }) {
+      constructor(namespace, fnName, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), timerCounter = { count: 0, timerId: 0 }, enumPayloads = /* @__PURE__ */ new Map()) {
         this.tempCounter = 0;
         this.blockCounter = 0;
         this.blocks = [];
@@ -21914,6 +22019,7 @@ var require_lower2 = __commonJS({
         this.fnParamInfo = fnParamInfo;
         this.currentMacroParams = macroInfo.get(fnName)?.macroParams ?? /* @__PURE__ */ new Set();
         this.enumDefs = enumDefs;
+        this.enumPayloads = enumPayloads;
         this.timerCounter = timerCounter;
         const entry = this.makeBlock("entry");
         this.currentBlock = entry;
@@ -21975,9 +22081,9 @@ var require_lower2 = __commonJS({
         return path3;
       }
     };
-    function lowerFunction(fn, namespace, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }, arrayArgBindings, hirFnMap, specializedFnsRegistry, overrideName) {
+    function lowerFunction(fn, namespace, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }, arrayArgBindings, hirFnMap, specializedFnsRegistry, overrideName, enumPayloads = /* @__PURE__ */ new Map()) {
       const mirFnName = overrideName ?? fn.name;
-      const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter);
+      const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads);
       ctx.sourceFile = sourceFile;
       if (hirFnMap)
         ctx.hirFunctions = hirFnMap;
@@ -22022,9 +22128,9 @@ var require_lower2 = __commonJS({
       };
       return { fn: result, helpers: ctx.helperFunctions };
     }
-    function lowerImplMethod(method, typeName, namespace, structDefs, implMethods, macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }) {
+    function lowerImplMethod(method, typeName, namespace, structDefs, implMethods, macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }, enumPayloads = /* @__PURE__ */ new Map()) {
       const fnName = `${typeName}::${method.name}`;
-      const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter);
+      const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads);
       ctx.sourceFile = sourceFile;
       const fields = structDefs.get(typeName) ?? [];
       const hasSelf = method.params.length > 0 && method.params[0].name === "self";
@@ -22559,6 +22665,35 @@ var require_lower2 = __commonJS({
                 ctx.terminate({ kind: "jump", target: mergeBlock.id });
               }
               ctx.switchTo(nextArm);
+            } else if (pat.kind === "PatEnum") {
+              const tagValue = ctx.enumDefs.get(pat.enumName)?.get(pat.variant) ?? 0;
+              const cmpTemp = ctx.freshTemp();
+              ctx.emit({ kind: "cmp", dst: cmpTemp, op: "eq", a: matchVal, b: { kind: "const", value: tagValue } });
+              const armBody = ctx.newBlock("match_arm");
+              const nextArm = ctx.newBlock("match_next");
+              ctx.terminate({ kind: "branch", cond: { kind: "temp", name: cmpTemp }, then: armBody.id, else: nextArm.id });
+              ctx.switchTo(armBody);
+              const armScope = new Map(scope);
+              const payloadFields = ctx.enumPayloads.get(pat.enumName)?.get(pat.variant) ?? [];
+              for (let bi = 0; bi < pat.bindings.length; bi++) {
+                const binding = pat.bindings[bi];
+                const fieldDef = payloadFields[bi];
+                const fieldName = fieldDef ? fieldDef.name : binding;
+                const bindTemp = ctx.freshTemp();
+                ctx.emit({
+                  kind: "nbt_read",
+                  dst: bindTemp,
+                  ns: "rs:enums",
+                  path: `${pat.enumName}_${fieldName}`,
+                  scale: 1
+                });
+                armScope.set(binding, bindTemp);
+              }
+              lowerBlock(arm.body, ctx, armScope);
+              if (isPlaceholderTerm(ctx.current().term)) {
+                ctx.terminate({ kind: "jump", target: mergeBlock.id });
+              }
+              ctx.switchTo(nextArm);
             } else if (pat.kind === "PatExpr") {
               const expr = pat.expr;
               if (expr.kind === "range_lit") {
@@ -22659,6 +22794,47 @@ var require_lower2 = __commonJS({
             }
           }
           ctx.switchTo(mergeBlock);
+          break;
+        }
+        case "while_let_some": {
+          const headerBlock = ctx.newBlock("whl_header");
+          const bodyBlock = ctx.newBlock("whl_body");
+          const exitBlock = ctx.newBlock("whl_exit");
+          ctx.terminate({ kind: "jump", target: headerBlock.id });
+          ctx.switchTo(headerBlock);
+          let hasOp;
+          let valTemp;
+          const sv = (() => {
+            if (stmt.init.kind === "ident")
+              return ctx.structVars.get(stmt.init.name);
+            return void 0;
+          })();
+          if (sv && sv.typeName === "__option") {
+            const hasT = sv.fields.get("has");
+            const valT = sv.fields.get("val");
+            hasOp = { kind: "temp", name: hasT };
+            valTemp = valT;
+          } else {
+            lowerExpr(stmt.init, ctx, scope);
+            const hasT = ctx.freshTemp();
+            const valT = ctx.freshTemp();
+            ctx.emit({ kind: "copy", dst: hasT, src: { kind: "temp", name: "__rf_has" } });
+            ctx.emit({ kind: "copy", dst: valT, src: { kind: "temp", name: "__rf_val" } });
+            hasOp = { kind: "temp", name: hasT };
+            valTemp = valT;
+          }
+          ctx.terminate({ kind: "branch", cond: hasOp, then: bodyBlock.id, else: exitBlock.id });
+          ctx.switchTo(bodyBlock);
+          const bodyScope = new Map(scope);
+          if (valTemp)
+            bodyScope.set(stmt.binding, valTemp);
+          ctx.pushLoop(headerBlock.id, exitBlock.id, headerBlock.id);
+          lowerBlock(stmt.body, ctx, bodyScope);
+          ctx.popLoop();
+          if (isPlaceholderTerm(ctx.current().term)) {
+            ctx.terminate({ kind: "jump", target: headerBlock.id });
+          }
+          ctx.switchTo(exitBlock);
           break;
         }
         default: {
@@ -22840,6 +23016,27 @@ var require_lower2 = __commonJS({
           const variants = ctx.enumDefs.get(expr.enumName);
           const value = variants?.get(expr.variant) ?? 0;
           return { kind: "const", value };
+        }
+        case "enum_construct": {
+          const variants = ctx.enumDefs.get(expr.enumName);
+          const tagValue = variants?.get(expr.variant) ?? 0;
+          const tagTemp = ctx.freshTemp();
+          ctx.emit({ kind: "const", dst: tagTemp, value: tagValue });
+          const payloadFields = ctx.enumPayloads.get(expr.enumName)?.get(expr.variant) ?? [];
+          for (const arg of expr.args) {
+            const fieldDef = payloadFields.find((f) => f.name === arg.name);
+            const argOp = lowerExpr(arg.value, ctx, scope);
+            const nbtType = fieldDef && fieldDef.type.kind === "named" && (fieldDef.type.name === "float" || fieldDef.type.name === "fixed") ? "float" : "int";
+            ctx.emit({
+              kind: "nbt_write",
+              ns: "rs:enums",
+              path: `${expr.enumName}_${arg.name}`,
+              type: nbtType,
+              scale: 1,
+              src: argOp
+            });
+          }
+          return { kind: "temp", name: tagTemp };
         }
         case "member": {
           if (expr.obj.kind === "ident") {
@@ -23108,6 +23305,17 @@ var require_lower2 = __commonJS({
             ctx.emit({ kind: "const", dst: t2, value: 0 });
             return { kind: "temp", name: t2 };
           }
+          const PARSER_METHOD_REMAP = {
+            "set_add": "add",
+            "set_contains": "contains",
+            "set_remove": "remove",
+            "set_clear": "clear",
+            "__array_push": "push",
+            "__array_pop": "pop",
+            "__entity_tag": "tag",
+            "__entity_untag": "untag",
+            "__entity_has_tag": "has_tag"
+          };
           if (expr.args.length > 0 && expr.args[0].kind === "ident") {
             const sv = ctx.structVars.get(expr.args[0].name);
             if (sv) {
@@ -23118,7 +23326,8 @@ var require_lower2 = __commonJS({
                   return lowerTimerMethod(expr.fn, timerId, sv, ctx, scope, expr.args.slice(1));
                 }
               }
-              const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.fn);
+              const originalMethodName = PARSER_METHOD_REMAP[expr.fn] ?? expr.fn;
+              const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.fn) ?? ctx.implMethods.get(sv.typeName)?.get(originalMethodName);
               if (methodInfo?.hasSelf) {
                 const fields = ctx.structDefs.get(sv.typeName) ?? [];
                 const selfArgs = fields.map((f) => {
@@ -23142,7 +23351,7 @@ var require_lower2 = __commonJS({
                 }
                 const allArgs = [...selfArgs, ...explicitArgs];
                 const t2 = ctx.freshTemp();
-                ctx.emit({ kind: "call", dst: t2, fn: `${sv.typeName}::${expr.fn}`, args: allArgs });
+                ctx.emit({ kind: "call", dst: t2, fn: `${sv.typeName}::${originalMethodName}`, args: allArgs });
                 return { kind: "temp", name: t2 };
               }
             }
@@ -23188,7 +23397,7 @@ var require_lower2 = __commonJS({
                 const specializedName = `${expr.fn}__arr_${bindingKey}`;
                 if (!ctx.specializedFnsRegistry.has(specializedName)) {
                   ctx.specializedFnsRegistry.set(specializedName, []);
-                  const { fn: specFn, helpers: specHelpers } = lowerFunction(targetHirFn, ctx.getNamespace(), ctx.structDefs, ctx.implMethods, ctx.macroInfo, ctx.fnParamInfo, ctx.enumDefs, ctx.sourceFile, ctx.timerCounter, arrayArgBindings, ctx.hirFunctions, ctx.specializedFnsRegistry, specializedName);
+                  const { fn: specFn, helpers: specHelpers } = lowerFunction(targetHirFn, ctx.getNamespace(), ctx.structDefs, ctx.implMethods, ctx.macroInfo, ctx.fnParamInfo, ctx.enumDefs, ctx.sourceFile, ctx.timerCounter, arrayArgBindings, ctx.hirFunctions, ctx.specializedFnsRegistry, specializedName, ctx.enumPayloads);
                   ctx.specializedFnsRegistry.set(specializedName, [specFn, ...specHelpers]);
                 }
                 const nonArrayArgs = [];
@@ -23287,6 +23496,31 @@ var require_lower2 = __commonJS({
               }
             }
           }
+          if (expr.callee.kind === "member" && expr.callee.obj.kind !== "ident") {
+            const returnedStructType = inferInvokeReturnStructType(expr.callee.obj, ctx);
+            if (returnedStructType) {
+              lowerExpr(expr.callee.obj, ctx, scope);
+              const chainFields = ctx.structDefs.get(returnedStructType) ?? [];
+              const chainFieldTemps = /* @__PURE__ */ new Map();
+              for (const fieldName of chainFields) {
+                const ft = ctx.freshTemp();
+                ctx.emit({ kind: "copy", dst: ft, src: { kind: "temp", name: `__rf_${fieldName}` } });
+                chainFieldTemps.set(fieldName, ft);
+              }
+              const methodInfo = ctx.implMethods.get(returnedStructType)?.get(expr.callee.field);
+              if (methodInfo?.hasSelf) {
+                const selfArgs = chainFields.map((f) => {
+                  const temp = chainFieldTemps.get(f);
+                  return temp ? { kind: "temp", name: temp } : { kind: "const", value: 0 };
+                });
+                const explicitArgs = expr.args.map((a) => lowerExpr(a, ctx, scope));
+                const allArgs = [...selfArgs, ...explicitArgs];
+                const ct = ctx.freshTemp();
+                ctx.emit({ kind: "call", dst: ct, fn: `${returnedStructType}::${expr.callee.field}`, args: allArgs });
+                return { kind: "temp", name: ct };
+              }
+            }
+          }
           const calleeOp = lowerExpr(expr.callee, ctx, scope);
           const args = expr.args.map((a) => lowerExpr(a, ctx, scope));
           const t = ctx.freshTemp();
@@ -23336,6 +23570,41 @@ var require_lower2 = __commonJS({
           const t = ctx.freshTemp();
           ctx.emit({ kind: "const", dst: t, value: 0 });
           return { kind: "temp", name: t };
+        }
+        case "unwrap_or": {
+          const resultTemp = ctx.freshTemp();
+          const defaultOp = lowerExpr(expr.default_, ctx, scope);
+          ctx.emit({ kind: "copy", dst: resultTemp, src: defaultOp });
+          const sv = (() => {
+            if (expr.opt.kind === "ident")
+              return ctx.structVars.get(expr.opt.name);
+            return void 0;
+          })();
+          let hasOp;
+          let valTemp;
+          if (sv && sv.typeName === "__option") {
+            const hasT = sv.fields.get("has");
+            const valT = sv.fields.get("val");
+            hasOp = { kind: "temp", name: hasT };
+            valTemp = valT;
+          } else {
+            lowerExpr(expr.opt, ctx, scope);
+            const hasT = ctx.freshTemp();
+            const valT = ctx.freshTemp();
+            ctx.emit({ kind: "copy", dst: hasT, src: { kind: "temp", name: "__rf_has" } });
+            ctx.emit({ kind: "copy", dst: valT, src: { kind: "temp", name: "__rf_val" } });
+            hasOp = { kind: "temp", name: hasT };
+            valTemp = valT;
+          }
+          const someBlock = ctx.newBlock("unwrap_some");
+          const mergeBlock = ctx.newBlock("unwrap_merge");
+          ctx.terminate({ kind: "branch", cond: hasOp, then: someBlock.id, else: mergeBlock.id });
+          ctx.switchTo(someBlock);
+          if (valTemp)
+            ctx.emit({ kind: "copy", dst: resultTemp, src: { kind: "temp", name: valTemp } });
+          ctx.terminate({ kind: "jump", target: mergeBlock.id });
+          ctx.switchTo(mergeBlock);
+          return { kind: "temp", name: resultTemp };
         }
         case "type_cast": {
           const ns = ctx.getNamespace();
@@ -23437,6 +23706,23 @@ var require_lower2 = __commonJS({
       ctx.terminate({ kind: "jump", target: merge.id });
       ctx.switchTo(merge);
       return { kind: "temp", name: result };
+    }
+    function inferInvokeReturnStructType(expr, ctx) {
+      if (expr.kind === "invoke" && expr.callee.kind === "member") {
+        let receiverTypeName;
+        if (expr.callee.obj.kind === "ident") {
+          receiverTypeName = ctx.structVars.get(expr.callee.obj.name)?.typeName;
+        } else {
+          receiverTypeName = inferInvokeReturnStructType(expr.callee.obj, ctx);
+        }
+        if (receiverTypeName) {
+          const methodInfo = ctx.implMethods.get(receiverTypeName)?.get(expr.callee.field);
+          if (methodInfo?.returnStructName) {
+            return methodInfo.returnStructName;
+          }
+        }
+      }
+      return void 0;
     }
     function lowerTimerMethod(method, timerId, sv, ctx, scope, extraArgs) {
       const ns = ctx.getNamespace();
@@ -27162,13 +27448,14 @@ var require_typechecker = __commonJS({
         return: VOID_TYPE
       }
     };
-    var TypeChecker = class {
+    var TypeChecker = class _TypeChecker {
       constructor(source, filePath) {
         this.lintWarnings = [];
         this.functions = /* @__PURE__ */ new Map();
         this.implMethods = /* @__PURE__ */ new Map();
         this.structs = /* @__PURE__ */ new Map();
         this.enums = /* @__PURE__ */ new Map();
+        this.enumPayloads = /* @__PURE__ */ new Map();
         this.consts = /* @__PURE__ */ new Map();
         this.globals = /* @__PURE__ */ new Map();
         this.currentFn = null;
@@ -27248,10 +27535,17 @@ var require_typechecker = __commonJS({
         }
         for (const enumDecl of program.enums ?? []) {
           const variants = /* @__PURE__ */ new Map();
+          const payloads = /* @__PURE__ */ new Map();
           for (const variant of enumDecl.variants) {
             variants.set(variant.name, variant.value ?? 0);
+            if (variant.fields && variant.fields.length > 0) {
+              payloads.set(variant.name, variant.fields);
+            }
           }
           this.enums.set(enumDecl.name, variants);
+          if (payloads.size > 0) {
+            this.enumPayloads.set(enumDecl.name, payloads);
+          }
         }
         for (const constDecl of program.consts ?? []) {
           const constType = this.normalizeType(constDecl.type);
@@ -27408,8 +27702,21 @@ var require_typechecker = __commonJS({
                 if (!isUnknown(subjectType) && !isUnknown(patternType) && !this.typesMatch(subjectType, patternType)) {
                   this.report("Match arm pattern type must match subject type", arm.pattern.expr);
                 }
+                this.checkBlock(arm.body);
+              } else if (arm.pattern.kind === "PatEnum") {
+                const pat = arm.pattern;
+                const variantPayloads = this.enumPayloads.get(pat.enumName)?.get(pat.variant) ?? [];
+                const savedScope = new Map(this.scope);
+                for (let i = 0; i < pat.bindings.length; i++) {
+                  const fieldDef = variantPayloads[i];
+                  const bindingType = fieldDef ? fieldDef.type : { kind: "named", name: "int" };
+                  this.scope.set(pat.bindings[i], { type: bindingType, mutable: false });
+                }
+                this.checkBlock(arm.body);
+                this.scope = savedScope;
+              } else {
+                this.checkBlock(arm.body);
               }
-              this.checkBlock(arm.body);
             }
             break;
           case "as_block": {
@@ -27645,6 +27952,31 @@ var require_typechecker = __commonJS({
               }
             }
             break;
+          case "enum_construct": {
+            if (!this.enums.has(expr.enumName)) {
+              this.report(`Unknown enum '${expr.enumName}'`, expr);
+              break;
+            }
+            const variants = this.enums.get(expr.enumName);
+            if (!variants.has(expr.variant)) {
+              this.report(`Enum '${expr.enumName}' has no variant '${expr.variant}'`, expr);
+              break;
+            }
+            const variantPayloads = this.enumPayloads.get(expr.enumName)?.get(expr.variant) ?? [];
+            if (variantPayloads.length === 0 && expr.args.length > 0) {
+              this.report(`Enum variant '${expr.enumName}::${expr.variant}' has no payload fields`, expr);
+              break;
+            }
+            for (const arg of expr.args) {
+              const fieldDef = variantPayloads.find((f) => f.name === arg.name);
+              if (!fieldDef) {
+                this.report(`Unknown field '${arg.name}' for enum variant '${expr.enumName}::${expr.variant}'`, expr);
+              } else {
+                this.checkExpr(arg.value, fieldDef.type);
+              }
+            }
+            break;
+          }
           case "blockpos":
             break;
           // Literals don't need checking
@@ -27994,6 +28326,11 @@ var require_typechecker = __commonJS({
               return { kind: "enum", name: expr.enumName };
             }
             return { kind: "named", name: "void" };
+          case "enum_construct":
+            if (this.enums.has(expr.enumName)) {
+              return { kind: "enum", name: expr.enumName };
+            }
+            return { kind: "named", name: "void" };
           case "member":
             if (expr.obj.kind === "ident" && this.enums.has(expr.obj.name)) {
               return { kind: "enum", name: expr.obj.name };
@@ -28105,7 +28442,8 @@ var require_typechecker = __commonJS({
         if (receiverType.kind !== "struct") {
           return null;
         }
-        const method = this.implMethods.get(receiverType.name)?.get(expr.fn);
+        const methodName = _TypeChecker.PARSER_METHOD_REMAP[expr.fn] ?? expr.fn;
+        const method = this.implMethods.get(receiverType.name)?.get(expr.fn) ?? this.implMethods.get(receiverType.name)?.get(methodName);
         if (!method || method.params[0]?.name !== "self") {
           return null;
         }
@@ -28276,6 +28614,17 @@ var require_typechecker = __commonJS({
       }
     };
     exports2.TypeChecker = TypeChecker;
+    TypeChecker.PARSER_METHOD_REMAP = {
+      "set_add": "add",
+      "set_contains": "contains",
+      "set_remove": "remove",
+      "set_clear": "clear",
+      "__array_push": "push",
+      "__array_pop": "pop",
+      "__entity_tag": "tag",
+      "__entity_untag": "untag",
+      "__entity_has_tag": "has_tag"
+    };
   }
 });
 
@@ -28283,8 +28632,47 @@ var require_typechecker = __commonJS({
 var require_compile2 = __commonJS({
   "../../dist/src/emit/compile.js"(exports2) {
     "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        }
+        __setModuleDefault(result, mod);
+        return result;
+      };
+    })();
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.compile = compile;
+    var fs2 = __importStar(require("fs"));
+    var path3 = __importStar(require("path"));
     var lexer_1 = require_lexer();
     var parser_1 = require_parser();
     var compile_1 = require_compile();
@@ -28311,6 +28699,65 @@ var require_compile2 = __commonJS({
       const parser = new parser_1.Parser(tokens, processedSource, filePath);
       const ast = parser.parse(namespace);
       warnings.push(...parser.warnings);
+      const seenModuleImports = /* @__PURE__ */ new Set();
+      function resolveModuleFilePath(modName, fromFile) {
+        const candidates = [`${modName}.mcrs`, modName];
+        const stdlibDir = path3.resolve(__dirname, "..", "src", "stdlib");
+        for (const candidate of candidates) {
+          if (fromFile) {
+            const rel = path3.resolve(path3.dirname(fromFile), candidate);
+            if (fs2.existsSync(rel))
+              return rel;
+          }
+          const stdlib = path3.resolve(stdlibDir, candidate);
+          if (fs2.existsSync(stdlib))
+            return stdlib;
+          for (const dir of includeDirs ?? []) {
+            const extra = path3.resolve(dir, candidate);
+            if (fs2.existsSync(extra))
+              return extra;
+          }
+        }
+        return null;
+      }
+      function mergeWholeModuleImport(modFilePath) {
+        if (seenModuleImports.has(modFilePath))
+          return;
+        seenModuleImports.add(modFilePath);
+        const modSource = fs2.readFileSync(modFilePath, "utf-8");
+        const modPreprocessed = (0, compile_1.preprocessSourceWithMetadata)(modSource, { filePath: modFilePath, includeDirs });
+        const modTokens = new lexer_1.Lexer(modPreprocessed.source, modFilePath).tokenize();
+        const modParser = new parser_1.Parser(modTokens, modPreprocessed.source, modFilePath);
+        const modAst = modParser.parse(namespace);
+        warnings.push(...modParser.warnings);
+        for (const fn of modAst.declarations)
+          fn.isLibraryFn = true;
+        for (const imp of modAst.imports) {
+          if (imp.symbol !== void 0)
+            continue;
+          const nestedPath = resolveModuleFilePath(imp.moduleName, modFilePath);
+          if (!nestedPath) {
+            warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${modFilePath})`);
+            continue;
+          }
+          mergeWholeModuleImport(nestedPath);
+        }
+        ast.declarations.push(...modAst.declarations);
+        ast.structs.push(...modAst.structs);
+        ast.implBlocks.push(...modAst.implBlocks);
+        ast.enums.push(...modAst.enums);
+        ast.consts.push(...modAst.consts);
+        ast.globals.push(...modAst.globals);
+      }
+      for (const imp of ast.imports) {
+        if (imp.symbol !== void 0)
+          continue;
+        const resolved = resolveModuleFilePath(imp.moduleName, filePath);
+        if (!resolved) {
+          throw new diagnostics_1.DiagnosticError("ParseError", `Module '${imp.moduleName}' not found. Make sure '${imp.moduleName}.mcrs' exists relative to this file or in the stdlib.`, imp.span ?? { line: 1, col: 1 });
+        }
+        mergeWholeModuleImport(resolved);
+      }
       for (const li of preprocessed.libraryImports ?? []) {
         const libPreprocessed = (0, compile_1.preprocessSourceWithMetadata)(li.source, { filePath: li.filePath });
         const libTokens = new lexer_1.Lexer(libPreprocessed.source, li.filePath).tokenize();
@@ -28478,7 +28925,9 @@ var require_modules = __commonJS({
           if (!sourceExports) {
             throw new diagnostics_1.DiagnosticError("LoweringError", `Module '${imp.moduleName}' not found (imported in '${modName}')`, { file: ast.namespace, line: 1, col: 1 });
           }
-          if (imp.symbol === "*") {
+          if (imp.symbol === void 0) {
+            continue;
+          } else if (imp.symbol === "*") {
             for (const sym of sourceExports) {
               resolved.set(sym, `${imp.moduleName}/${sym}`);
             }
@@ -28497,6 +28946,8 @@ var require_modules = __commonJS({
       }
       for (const ast of parsedModules.values()) {
         for (const imp of ast.imports) {
+          if (imp.symbol === void 0)
+            continue;
           const used = usedExports.get(imp.moduleName);
           if (!used)
             continue;

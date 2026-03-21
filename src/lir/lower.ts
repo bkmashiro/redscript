@@ -399,9 +399,15 @@ function lowerInstrInner(
 
     case 'nbt_list_len': {
       // emit: execute store result score $dst_name __ns run data get storage ns path
+      // MC: `data get storage ns path` on an NBT list returns the element count
       const dst = ctx.slot(instr.dst)
-      const ns = ctx.namespace
-      instrs.push({ kind: 'raw', cmd: `execute store result score ${dst} __${ns} run data get storage ${instr.ns} ${instr.path}` })
+      instrs.push({
+        kind: 'store_nbt_to_score',
+        dst,
+        ns: instr.ns,
+        path: instr.path,
+        scale: 1,
+      })
       break
     }
 
