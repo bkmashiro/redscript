@@ -352,12 +352,16 @@ function compileSingleModule(
     // Extract decorator metadata
     const tickFunctions: string[] = []
     const loadFunctions: string[] = []
+    const watchFunctions: Array<{ name: string; objective: string }> = []
     const coroutineInfos: CoroutineInfo[] = []
     const scheduleFunctions: Array<{ name: string; ticks: number }> = []
     for (const fn of hir.functions) {
       for (const dec of fn.decorators) {
         if (dec.name === 'tick') tickFunctions.push(fn.name)
         if (dec.name === 'load') loadFunctions.push(fn.name)
+        if (dec.name === 'watch' && dec.args?.objective) {
+          watchFunctions.push({ name: fn.name, objective: dec.args.objective })
+        }
         if (dec.name === 'coroutine') {
           coroutineInfos.push({ fnName: fn.name, batch: dec.args?.batch ?? 10, onDone: dec.args?.onDone })
         }
@@ -380,7 +384,7 @@ function compileSingleModule(
     lir.objective = objective
     const lirOpt = lirOptimizeModule(lir)
 
-    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions })
+    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions })
 
     // For named modules: rename the load.mcfunction to avoid path collision.
     // Rename `data/${ns}/function/load.mcfunction` → `data/${ns}/function/${modName}/_load.mcfunction`

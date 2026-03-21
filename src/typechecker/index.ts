@@ -119,6 +119,14 @@ const BUILTIN_SIGNATURES: Record<string, BuiltinSignature> = {
     params: [INT_TYPE],
     return: VOID_TYPE,
   },
+  int_to_str: {
+    params: [INT_TYPE],
+    return: STRING_TYPE,
+  },
+  bool_to_str: {
+    params: [{ kind: 'named', name: 'bool' }],
+    return: STRING_TYPE,
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -319,6 +327,24 @@ export class TypeChecker {
   }
 
   private checkFunctionDecorators(fn: FnDecl): void {
+    const watchDecorators = fn.decorators.filter(decorator => decorator.name === 'watch')
+    if (watchDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @watch decorators`, fn)
+      return
+    }
+
+    if (watchDecorators.length === 1) {
+      const objective = watchDecorators[0].args?.objective
+      if (!objective) {
+        this.report(`Function '${fn.name}' is missing a scoreboard objective in @watch("...")`, fn)
+        return
+      }
+
+      if (fn.params.length > 0) {
+        this.report(`@watch handler '${fn.name}' cannot declare parameters`, fn)
+      }
+    }
+
     const eventDecorators = fn.decorators.filter(decorator => decorator.name === 'on')
     if (eventDecorators.length === 0) {
       return
@@ -652,8 +678,8 @@ export class TypeChecker {
         if (arithmeticOps.includes(expr.op)) {
           const leftType = this.inferType(expr.left)
           const rightType = this.inferType(expr.right)
-          const leftIsString = leftType.kind === 'named' && (leftType.name === 'string' || leftType.name === 'format_string')
-          const rightIsString = rightType.kind === 'named' && (rightType.name === 'string' || rightType.name === 'format_string')
+          const leftIsString = leftType.kind === 'named' && (leftType.name === 'string' || leftType.name === 'format_string')  // format_string kept for legacy type annotations
+          const rightIsString = rightType.kind === 'named' && (rightType.name === 'string' || rightType.name === 'format_string')  // format_string kept for legacy type annotations
           if (leftIsString || rightIsString) {
             // String concatenation with + is not supported. Use f-strings instead.
             this.report(
@@ -936,7 +962,7 @@ export class TypeChecker {
     const messageType = this.inferType(message)
     if (
       messageType.kind !== 'named' ||
-      (messageType.name !== 'string' && messageType.name !== 'format_string')
+      messageType.name !== 'string'
     ) {
       this.report(
         `Argument ${messageIndex + 1} of '${expr.fn}' expects string or format_string, got ${this.typeToString(messageType)}`,
@@ -1200,7 +1226,7 @@ export class TypeChecker {
             this.checkExpr(part.expr)
           }
         }
-        return FORMAT_STRING_TYPE
+        return STRING_TYPE
       case 'blockpos':
         return { kind: 'named', name: 'BlockPos' }
       case 'ident':

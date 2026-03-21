@@ -14,11 +14,17 @@ export interface DatapackFile {
   content: string
 }
 
+export interface WatchFunction {
+  name: string
+  objective: string
+}
+
 export interface EmitOptions {
   namespace: string
   tickFunctions?: string[]
   loadFunctions?: string[]
   scheduleFunctions?: Array<{ name: string; ticks: number }>
+  watchFunctions?: WatchFunction[]
   /** When true, generate a .sourcemap.json sidecar file for each .mcfunction */
   generateSourceMap?: boolean
   /** Target Minecraft version; controls which MC features are used in codegen */
@@ -36,6 +42,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const tickFns = options.tickFunctions ?? []
   const loadFns = options.loadFunctions ?? []
   const scheduleFns = options.scheduleFunctions ?? []
+  const watchFns = options.watchFunctions ?? []
   const objective = module.objective
   const genSourceMap = options.generateSourceMap ?? false
   const mcVersion = options.mcVersion ?? DEFAULT_MC_VERSION
@@ -50,7 +57,10 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   })
 
   // load.mcfunction — creates the scoreboard objective
-  const loadCmds = [`scoreboard objectives add ${objective} dummy`]
+  const loadCmds = [
+    `scoreboard objectives add ${objective} dummy`,
+    ...watchFns.map(watch => `scoreboard objectives add ${watchPrevObjective(watch.name)} dummy`),
+  ]
   files.push({
     path: `data/${namespace}/function/load.mcfunction`,
     content: loadCmds.join('\n') + '\n',
@@ -81,6 +91,20 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     })
   }
 
+  for (const watch of watchFns) {
+    const dispatcher = watchDispatcherName(watch.name)
+    const prevObjective = watchPrevObjective(watch.name)
+    const changedCondition = `unless score @s ${watch.objective} = @s ${prevObjective}`
+    files.push({
+      path: fnNameToPath(dispatcher, namespace),
+      content: [
+        `execute as @a unless score @s ${prevObjective} = @s ${prevObjective} run scoreboard players operation @s ${prevObjective} = @s ${watch.objective}`,
+        `execute as @a ${changedCondition} run function ${namespace}:${watch.name}`,
+        `execute as @a ${changedCondition} run scoreboard players operation @s ${prevObjective} = @s ${watch.objective}`,
+      ].join('\n') + '\n',
+    })
+  }
+
   // Tag files for tick/load
   if (loadFns.length > 0 || true) {
     // Always include load.json — it must reference the load.mcfunction
@@ -91,8 +115,9 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     })
   }
 
-  if (tickFns.length > 0) {
-    const tickValues = tickFns.map(fn => `${namespace}:${fn}`)
+  const allTickFns = [...tickFns, ...watchFns.map(watch => watchDispatcherName(watch.name))]
+  if (allTickFns.length > 0) {
+    const tickValues = allTickFns.map(fn => `${namespace}:${fn}`)
     files.push({
       path: 'data/minecraft/tags/function/tick.json',
       content: JSON.stringify({ values: tickValues }, null, 2) + '\n',
@@ -154,6 +179,14 @@ function fnNameToPath(name: string, namespace: string): string {
   // LIR function names may contain :: for methods — convert to /
   const mcName = name.replace(/::/g, '/').toLowerCase()
   return `data/${namespace}/function/${mcName}.mcfunction`
+}
+
+function watchDispatcherName(name: string): string {
+  return `__watch_${name}`
+}
+
+function watchPrevObjective(name: string): string {
+  return `__watch_${name}_prev`
 }
 
 // ---------------------------------------------------------------------------

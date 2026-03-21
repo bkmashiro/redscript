@@ -110,6 +110,13 @@ describe('Parser', () => {
         { name: 'on', args: { eventType: 'PlayerDeath' } },
       ])
     })
+
+    it('parses @watch decorator', () => {
+      const program = parse('@watch("rs.kills")\nfn handle_kills() {}')
+      expect(program.declarations[0].decorators).toEqual([
+        { name: 'watch', args: { objective: 'rs.kills' } },
+      ])
+    })
   })
 
   describe('types', () => {

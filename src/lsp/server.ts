@@ -236,6 +236,7 @@ function toDiagnostic(err: DiagnosticError): Diagnostic {
 const DECORATOR_DOCS: Record<string, string> = {
   tick:         'Runs every game tick.\n\n**Optional args:** `rate=N` (every N ticks, e.g. `@tick(rate=20)` = once per second)\n\nExample: `@tick fn every_tick() {}` or `@tick(rate=20) fn every_second() {}`',
   load:         'Runs once on `/reload`. Use for initialization.\n\nExample: `@load fn init() { scoreboard_create(...) }`',
+  watch:        'Runs when a scoreboard objective changes for a player.\n\n**Required arg:** objective name.\n\nExample: `@watch("rs.kills") fn on_kill_change() {}`',
   coroutine:    'Wraps a loop to spread execution across multiple ticks.\n\n**Required arg:** `batch=N` — iterations per tick.\n\nExample: `@coroutine(batch=10) fn scan_blocks() { for i in 0..1000 { ... } }`',
   schedule:     'Schedules the function to run after a delay.\n\n**Required arg:** `ticks=N`\n\nExample: `@schedule(ticks=100) fn delayed() {}`',
   on_trigger:   'Runs when a player executes `/trigger <name>`.\n\n**Required arg:** trigger objective name.\n\nExample: `@on_trigger("shop") fn open_shop() {}`',
@@ -399,6 +400,7 @@ const TYPE_COMPLETIONS: CompletionItem[] = [
 // VSCode will keep the completion open as user types more letters (filter by label).
 const DECORATOR_COMPLETIONS: CompletionItem[] = [
   { label: '@tick',           detail: 'Run every game tick (~20 Hz)',          insertText: 'tick' },
+  { label: '@watch',          detail: 'Run when a scoreboard objective changes', insertText: 'watch' },
   { label: '@load',           detail: 'Run on /reload (initialization)',        insertText: 'load' },
   { label: '@on_trigger',     detail: 'Run when a player uses /trigger',        insertText: 'on_trigger' },
   { label: '@schedule',       detail: 'Schedule function after N ticks',        insertText: 'schedule' },

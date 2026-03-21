@@ -133,14 +133,14 @@ fn test() {
       expect(errors).toHaveLength(0)
     })
 
-    it('rejects f-strings outside runtime output builtins', () => {
+    it('allows f-strings to be assigned to string variables', () => {
+      // f-strings now return string type, so assignment to string is valid
       const errors = typeCheck(`
 fn test() {
     let msg: string = f"Score";
 }
 `)
-      expect(errors.length).toBeGreaterThan(0)
-      expect(errors[0].message).toContain('expected string, got format_string')
+      expect(errors).toHaveLength(0)
     })
 
     it('rejects unsupported f-string placeholder types', () => {
@@ -666,4 +666,5 @@ fn handle_break() {}
       expect(errors[0].message).toContain('must declare 1 parameter(s)')
     })
   })
+
 })

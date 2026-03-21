@@ -9207,6 +9207,8 @@ var KEYWORDS = {
   while: "while",
   for: "for",
   foreach: "foreach",
+  do: "do",
+  repeat: "repeat",
   match: "match",
   return: "return",
   break: "break",
@@ -10095,7 +10097,7 @@ var Parser = class _Parser {
     return decorators;
   }
   parseDecoratorValue(value) {
-    const match = value.match(/^@(\w+)(?:\(([^)]*)\))?$/);
+    const match = value.match(/^@(\w+)(?:\((.*)\))?$/s);
     if (!match) {
       this.error(`Invalid decorator: ${value}`);
     }
@@ -10112,10 +10114,12 @@ var Parser = class _Parser {
         return { name, args };
       }
     }
-    if (name === "on_trigger" || name === "on_advancement" || name === "on_craft" || name === "on_join_team") {
+    if (name === "watch" || name === "on_trigger" || name === "on_advancement" || name === "on_craft" || name === "on_join_team") {
       const strMatch = argsStr.match(/^"([^"]*)"$/);
       if (strMatch) {
-        if (name === "on_trigger") {
+        if (name === "watch") {
+          args.objective = strMatch[1];
+        } else if (name === "on_trigger") {
           args.trigger = strMatch[1];
         } else if (name === "on_advancement") {
           args.advancement = strMatch[1];
@@ -10126,6 +10130,13 @@ var Parser = class _Parser {
         }
         return { name, args };
       }
+    }
+    if (name === "deprecated") {
+      const strMatch = argsStr.match(/^"([^"]*)"$/);
+      if (strMatch) {
+        return { name, args: { message: strMatch[1] } };
+      }
+      return { name, args: {} };
     }
     if (name === "require_on_load") {
       const rawArgs = [];
@@ -10273,6 +10284,9 @@ var Parser = class _Parser {
     if (this.check("let")) {
       return this.parseLetStmt();
     }
+    if (this.check("const")) {
+      return this.parseLocalConstDecl();
+    }
     if (this.check("return")) {
       return this.parseReturnStmt();
     }
@@ -10291,6 +10305,12 @@ var Parser = class _Parser {
     }
     if (this.check("while")) {
       return this.parseWhileStmt();
+    }
+    if (this.check("do")) {
+      return this.parseDoWhileStmt();
+    }
+    if (this.check("repeat")) {
+      return this.parseRepeatStmt();
     }
     if (this.check("for")) {
       return this.parseForStmt();
@@ -10346,6 +10366,16 @@ var Parser = class _Parser {
     this.match(";");
     return this.withLoc({ kind: "let", name, type, init }, letToken);
   }
+  parseLocalConstDecl() {
+    const constToken = this.expect("const");
+    const name = this.expect("ident").value;
+    this.expect(":");
+    const type = this.parseType();
+    this.expect("=");
+    const value = this.parseExpr();
+    this.match(";");
+    return this.withLoc({ kind: "const_decl", name, type, value }, constToken);
+  }
   parseReturnStmt() {
     const returnToken = this.expect("return");
     let value;
@@ -10376,9 +10406,7 @@ var Parser = class _Parser {
       }
       return this.withLoc({ kind: "if_let_some", binding, init, then: then2, else_: else_2 }, ifToken);
     }
-    this.expect("(");
-    const cond = this.parseExpr();
-    this.expect(")");
+    const cond = this.parseParenOptionalCond();
     const then = this.parseBlock();
     let else_;
     if (this.match("else")) {
@@ -10403,11 +10431,32 @@ var Parser = class _Parser {
       const body2 = this.parseBlock();
       return this.withLoc({ kind: "while_let_some", binding, init, body: body2 }, whileToken);
     }
-    this.expect("(");
-    const cond = this.parseExpr();
-    this.expect(")");
+    const cond = this.parseParenOptionalCond();
     const body = this.parseBlock();
     return this.withLoc({ kind: "while", cond, body }, whileToken);
+  }
+  parseDoWhileStmt() {
+    const doToken = this.expect("do");
+    const body = this.parseBlock();
+    this.expect("while");
+    const cond = this.parseParenOptionalCond();
+    this.match(";");
+    return this.withLoc({ kind: "do_while", cond, body }, doToken);
+  }
+  parseRepeatStmt() {
+    const repeatToken = this.expect("repeat");
+    const countToken = this.expect("int_lit");
+    const count = parseInt(countToken.value, 10);
+    const body = this.parseBlock();
+    return this.withLoc({ kind: "repeat", count, body }, repeatToken);
+  }
+  parseParenOptionalCond() {
+    if (this.match("(")) {
+      const cond = this.parseExpr();
+      this.expect(")");
+      return cond;
+    }
+    return this.parseExpr();
   }
   parseForStmt() {
     const forToken = this.expect("for");
@@ -11761,7 +11810,6 @@ var MC_TYPE_TO_ENTITY = {
 var VOID_TYPE = { kind: "named", name: "void" };
 var INT_TYPE = { kind: "named", name: "int" };
 var STRING_TYPE = { kind: "named", name: "string" };
-var FORMAT_STRING_TYPE = { kind: "named", name: "format_string" };
 var BUILTIN_SIGNATURES = {
   setTimeout: {
     params: [INT_TYPE, { kind: "function_type", params: [], return: VOID_TYPE }],
@@ -11936,6 +11984,21 @@ var TypeChecker = class _TypeChecker {
     this.currentReturnType = null;
   }
   checkFunctionDecorators(fn) {
+    const watchDecorators = fn.decorators.filter((decorator) => decorator.name === "watch");
+    if (watchDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @watch decorators`, fn);
+      return;
+    }
+    if (watchDecorators.length === 1) {
+      const objective = watchDecorators[0].args?.objective;
+      if (!objective) {
+        this.report(`Function '${fn.name}' is missing a scoreboard objective in @watch("...")`, fn);
+        return;
+      }
+      if (fn.params.length > 0) {
+        this.report(`@watch handler '${fn.name}' cannot declare parameters`, fn);
+      }
+    }
     const eventDecorators = fn.decorators.filter((decorator) => decorator.name === "on");
     if (eventDecorators.length === 0) {
       return;
@@ -12097,6 +12160,9 @@ var TypeChecker = class _TypeChecker {
         this.checkExpr(stmt.expr);
         break;
       case "raw":
+        break;
+      case "const_decl":
+        this.scope.set(stmt.name, { type: stmt.type, mutable: false });
         break;
     }
   }
@@ -12460,7 +12526,7 @@ var TypeChecker = class _TypeChecker {
       return;
     }
     const messageType = this.inferType(message);
-    if (messageType.kind !== "named" || messageType.name !== "string" && messageType.name !== "format_string") {
+    if (messageType.kind !== "named" || messageType.name !== "string") {
       this.report(
         `Argument ${messageIndex + 1} of '${expr.fn}' expects string or format_string, got ${this.typeToString(messageType)}`,
         message
@@ -12685,7 +12751,7 @@ var TypeChecker = class _TypeChecker {
             this.checkExpr(part.expr);
           }
         }
-        return FORMAT_STRING_TYPE;
+        return STRING_TYPE;
       case "blockpos":
         return { kind: "named", name: "BlockPos" };
       case "ident":
@@ -14097,6 +14163,7 @@ function toDiagnostic(err) {
 var DECORATOR_DOCS = {
   tick: "Runs every game tick.\n\n**Optional args:** `rate=N` (every N ticks, e.g. `@tick(rate=20)` = once per second)\n\nExample: `@tick fn every_tick() {}` or `@tick(rate=20) fn every_second() {}`",
   load: "Runs once on `/reload`. Use for initialization.\n\nExample: `@load fn init() { scoreboard_create(...) }`",
+  watch: 'Runs when a scoreboard objective changes for a player.\n\n**Required arg:** objective name.\n\nExample: `@watch("rs.kills") fn on_kill_change() {}`',
   coroutine: "Wraps a loop to spread execution across multiple ticks.\n\n**Required arg:** `batch=N` \u2014 iterations per tick.\n\nExample: `@coroutine(batch=10) fn scan_blocks() { for i in 0..1000 { ... } }`",
   schedule: "Schedules the function to run after a delay.\n\n**Required arg:** `ticks=N`\n\nExample: `@schedule(ticks=100) fn delayed() {}`",
   on_trigger: 'Runs when a player executes `/trigger <name>`.\n\n**Required arg:** trigger objective name.\n\nExample: `@on_trigger("shop") fn open_shop() {}`',
@@ -14243,6 +14310,7 @@ var TYPE_COMPLETIONS = [
 }));
 var DECORATOR_COMPLETIONS = [
   { label: "@tick", detail: "Run every game tick (~20 Hz)", insertText: "tick" },
+  { label: "@watch", detail: "Run when a scoreboard objective changes", insertText: "watch" },
   { label: "@load", detail: "Run on /reload (initialization)", insertText: "load" },
   { label: "@on_trigger", detail: "Run when a player uses /trigger", insertText: "on_trigger" },
   { label: "@schedule", detail: "Schedule function after N ticks", insertText: "schedule" },

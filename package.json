@@ -12,6 +12,7 @@
     "build": "tsc",
     "dev": "tsc -w",
     "test": "jest",
+    "bench": "npx ts-node benchmarks/compiler-perf.ts",
     "cli": "ts-node src/cli.ts",
     "lsp": "node dist/src/lsp/main.js",
     "repl": "ts-node src/repl-server.ts",

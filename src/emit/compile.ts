@@ -190,9 +190,11 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Stage 2c: Deprecated usage check — emit warnings for calls to @deprecated functions
     warnings.push(...checkDeprecatedCalls(hir))
 
-    // Extract @tick, @load, @coroutine, @schedule, and @on handlers from HIR (before decorator info is lost)
+    // Extract @tick, @load, @watch, @inline, @coroutine, @schedule, and @on handlers from HIR (before decorator info is lost)
     const tickFunctions: string[] = []
     const loadFunctions: string[] = []
+    const watchFunctions: Array<{ name: string; objective: string }> = []
+    const inlineFunctions = new Set<string>()
     const coroutineInfos: CoroutineInfo[] = []
     const scheduleFunctions: Array<{ name: string; ticks: number }> = []
     const eventHandlers = new Map<string, string[]>()
@@ -200,6 +202,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       for (const dec of fn.decorators) {
         if (dec.name === 'tick') tickFunctions.push(fn.name)
         if (dec.name === 'load') loadFunctions.push(fn.name)
+        if (dec.name === 'inline') inlineFunctions.add(fn.name)
+        if (dec.name === 'watch' && dec.args?.objective) {
+          watchFunctions.push({ name: fn.name, objective: dec.args.objective })
+        }
         if (dec.name === 'coroutine') {
           coroutineInfos.push({
             fnName: fn.name,
@@ -222,6 +228,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     // Stage 3: HIR → MIR
     const mir = lowerToMIR(hir, filePath)
+    if (inlineFunctions.size > 0) {
+      mir.inlineFunctions = inlineFunctions
+    }
 
     // Stage 4: MIR optimization
     const mirOpt = optimizeModule(mir)
@@ -268,7 +277,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     // Stage 7: LIR → .mcfunction
-    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions, generateSourceMap, mcVersion, eventHandlers })
+    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions, generateSourceMap, mcVersion, eventHandlers })
 
     return { files, warnings, success: true as const }
   } catch (err) {

@@ -18241,6 +18241,8 @@ var require_lexer = __commonJS({
       while: "while",
       for: "for",
       foreach: "foreach",
+      do: "do",
+      repeat: "repeat",
       match: "match",
       return: "return",
       break: "break",
@@ -19139,7 +19141,7 @@ var require_parser = __commonJS({
         return decorators;
       }
       parseDecoratorValue(value) {
-        const match = value.match(/^@(\w+)(?:\(([^)]*)\))?$/);
+        const match = value.match(/^@(\w+)(?:\((.*)\))?$/s);
         if (!match) {
           this.error(`Invalid decorator: ${value}`);
         }
@@ -19156,10 +19158,12 @@ var require_parser = __commonJS({
             return { name, args };
           }
         }
-        if (name === "on_trigger" || name === "on_advancement" || name === "on_craft" || name === "on_join_team") {
+        if (name === "watch" || name === "on_trigger" || name === "on_advancement" || name === "on_craft" || name === "on_join_team") {
           const strMatch = argsStr.match(/^"([^"]*)"$/);
           if (strMatch) {
-            if (name === "on_trigger") {
+            if (name === "watch") {
+              args.objective = strMatch[1];
+            } else if (name === "on_trigger") {
               args.trigger = strMatch[1];
             } else if (name === "on_advancement") {
               args.advancement = strMatch[1];
@@ -19170,6 +19174,13 @@ var require_parser = __commonJS({
             }
             return { name, args };
           }
+        }
+        if (name === "deprecated") {
+          const strMatch = argsStr.match(/^"([^"]*)"$/);
+          if (strMatch) {
+            return { name, args: { message: strMatch[1] } };
+          }
+          return { name, args: {} };
         }
         if (name === "require_on_load") {
           const rawArgs = [];
@@ -19315,6 +19326,9 @@ var require_parser = __commonJS({
         if (this.check("let")) {
           return this.parseLetStmt();
         }
+        if (this.check("const")) {
+          return this.parseLocalConstDecl();
+        }
         if (this.check("return")) {
           return this.parseReturnStmt();
         }
@@ -19333,6 +19347,12 @@ var require_parser = __commonJS({
         }
         if (this.check("while")) {
           return this.parseWhileStmt();
+        }
+        if (this.check("do")) {
+          return this.parseDoWhileStmt();
+        }
+        if (this.check("repeat")) {
+          return this.parseRepeatStmt();
         }
         if (this.check("for")) {
           return this.parseForStmt();
@@ -19388,6 +19408,16 @@ var require_parser = __commonJS({
         this.match(";");
         return this.withLoc({ kind: "let", name, type, init }, letToken);
       }
+      parseLocalConstDecl() {
+        const constToken = this.expect("const");
+        const name = this.expect("ident").value;
+        this.expect(":");
+        const type = this.parseType();
+        this.expect("=");
+        const value = this.parseExpr();
+        this.match(";");
+        return this.withLoc({ kind: "const_decl", name, type, value }, constToken);
+      }
       parseReturnStmt() {
         const returnToken = this.expect("return");
         let value;
@@ -19418,9 +19448,7 @@ var require_parser = __commonJS({
           }
           return this.withLoc({ kind: "if_let_some", binding, init, then: then2, else_: else_2 }, ifToken);
         }
-        this.expect("(");
-        const cond = this.parseExpr();
-        this.expect(")");
+        const cond = this.parseParenOptionalCond();
         const then = this.parseBlock();
         let else_;
         if (this.match("else")) {
@@ -19445,11 +19473,32 @@ var require_parser = __commonJS({
           const body2 = this.parseBlock();
           return this.withLoc({ kind: "while_let_some", binding, init, body: body2 }, whileToken);
         }
-        this.expect("(");
-        const cond = this.parseExpr();
-        this.expect(")");
+        const cond = this.parseParenOptionalCond();
         const body = this.parseBlock();
         return this.withLoc({ kind: "while", cond, body }, whileToken);
+      }
+      parseDoWhileStmt() {
+        const doToken = this.expect("do");
+        const body = this.parseBlock();
+        this.expect("while");
+        const cond = this.parseParenOptionalCond();
+        this.match(";");
+        return this.withLoc({ kind: "do_while", cond, body }, doToken);
+      }
+      parseRepeatStmt() {
+        const repeatToken = this.expect("repeat");
+        const countToken = this.expect("int_lit");
+        const count = parseInt(countToken.value, 10);
+        const body = this.parseBlock();
+        return this.withLoc({ kind: "repeat", count, body }, repeatToken);
+      }
+      parseParenOptionalCond() {
+        if (this.match("(")) {
+          const cond = this.parseExpr();
+          this.expect(")");
+          return cond;
+        }
+        return this.parseExpr();
       }
       parseForStmt() {
         const forToken = this.expect("for");
@@ -20925,6 +20974,8 @@ var require_lower = __commonJS({
           return { kind: "let", name: stmt.name, type: stmt.type, init: lowerExpr(stmt.init), span: stmt.span };
         case "let_destruct":
           return { kind: "let_destruct", names: stmt.names, type: stmt.type, init: lowerExpr(stmt.init), span: stmt.span };
+        case "const_decl":
+          return { kind: "const_decl", name: stmt.name, type: stmt.type, value: lowerExpr(stmt.value), span: stmt.span };
         case "expr":
           return { kind: "expr", expr: lowerExpr(stmt.expr), span: stmt.span };
         case "return":
@@ -21176,6 +21227,60 @@ var require_lower = __commonJS({
             else_: stmt.else_ ? lowerBlock(stmt.else_) : void 0,
             span: stmt.span
           };
+        // --- Desugaring: do_while → body + while(cond) { body } ---
+        // Emits the body once unconditionally, then a while loop:
+        //   <body>
+        //   while (cond) { <body> }
+        case "do_while": {
+          const firstBody = lowerBlock(stmt.body);
+          const loopBody = lowerBlock(stmt.body);
+          const whileStmt = {
+            kind: "while",
+            cond: lowerExpr(stmt.cond),
+            body: loopBody,
+            span: stmt.span
+          };
+          return [...firstBody, whileStmt];
+        }
+        // --- Desugaring: repeat N → let __repeat_i = 0; while(__repeat_i < N) { body; __repeat_i = __repeat_i + 1 } ---
+        case "repeat": {
+          const id = repeatCounter++;
+          const idxName = `__repeat_i_${id}`;
+          const initStmt = {
+            kind: "let",
+            name: idxName,
+            type: { kind: "named", name: "int" },
+            init: { kind: "int_lit", value: 0 },
+            span: stmt.span
+          };
+          const body = lowerBlock(stmt.body);
+          const step = [{
+            kind: "expr",
+            expr: {
+              kind: "assign",
+              target: idxName,
+              value: {
+                kind: "binary",
+                op: "+",
+                left: { kind: "ident", name: idxName },
+                right: { kind: "int_lit", value: 1 }
+              }
+            }
+          }];
+          const whileStmt = {
+            kind: "while",
+            cond: {
+              kind: "binary",
+              op: "<",
+              left: { kind: "ident", name: idxName },
+              right: { kind: "int_lit", value: stmt.count }
+            },
+            body,
+            step,
+            span: stmt.span
+          };
+          return [initStmt, whileStmt];
+        }
         case "while_let_some":
           return {
             kind: "while_let_some",
@@ -21194,6 +21299,7 @@ var require_lower = __commonJS({
       return sub;
     }
     var forEachCounter = 0;
+    var repeatCounter = 0;
     var COMPOUND_TO_BINOP = {
       "+=": "+",
       "-=": "-",
@@ -21596,6 +21702,8 @@ var require_monomorphize = __commonJS({
               init: this.rewriteExpr(stmt.init, ctx),
               body: this.rewriteBlock(stmt.body, ctx)
             };
+          case "const_decl":
+            return { ...stmt, value: this.rewriteExpr(stmt.value, ctx) };
           case "break":
           case "continue":
           case "raw":
@@ -21739,6 +21847,212 @@ var require_monomorphize = __commonJS({
         }
       }
     };
+  }
+});
+
+// ../../dist/src/hir/deprecated.js
+var require_deprecated = __commonJS({
+  "../../dist/src/hir/deprecated.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.checkDeprecatedCalls = checkDeprecatedCalls;
+    function buildDeprecatedMap(hir) {
+      const deprecated = /* @__PURE__ */ new Map();
+      for (const fn of hir.functions) {
+        const dep = getDeprecatedDecorator(fn.decorators);
+        if (dep !== null) {
+          deprecated.set(fn.name, dep);
+        }
+      }
+      for (const ib of hir.implBlocks) {
+        for (const m of ib.methods) {
+          const dep = getDeprecatedDecorator(m.decorators);
+          if (dep !== null) {
+            deprecated.set(`${ib.typeName}::${m.name}`, dep);
+          }
+        }
+      }
+      return deprecated;
+    }
+    function getDeprecatedDecorator(decorators) {
+      for (const dec of decorators) {
+        if (dec.name === "deprecated") {
+          return dec.args?.message ?? "";
+        }
+      }
+      return null;
+    }
+    function checkDeprecatedCalls(hir) {
+      const deprecated = buildDeprecatedMap(hir);
+      if (deprecated.size === 0)
+        return [];
+      const warnings = [];
+      for (const fn of hir.functions) {
+        walkBlock(fn.body, fn.name, deprecated, warnings);
+      }
+      for (const ib of hir.implBlocks) {
+        for (const m of ib.methods) {
+          walkBlock(m.body, `${ib.typeName}::${m.name}`, deprecated, warnings);
+        }
+      }
+      return warnings;
+    }
+    function walkBlock(block, caller, deprecated, warnings) {
+      for (const stmt of block) {
+        walkStmt(stmt, caller, deprecated, warnings);
+      }
+    }
+    function walkStmt(stmt, caller, deprecated, warnings) {
+      switch (stmt.kind) {
+        case "let":
+        case "let_destruct":
+          walkExpr(stmt.init, caller, deprecated, warnings);
+          break;
+        case "expr":
+          walkExpr(stmt.expr, caller, deprecated, warnings);
+          break;
+        case "return":
+          if (stmt.value)
+            walkExpr(stmt.value, caller, deprecated, warnings);
+          break;
+        case "if":
+          walkExpr(stmt.cond, caller, deprecated, warnings);
+          walkBlock(stmt.then, caller, deprecated, warnings);
+          if (stmt.else_)
+            walkBlock(stmt.else_, caller, deprecated, warnings);
+          break;
+        case "while":
+          walkExpr(stmt.cond, caller, deprecated, warnings);
+          walkBlock(stmt.body, caller, deprecated, warnings);
+          if (stmt.step)
+            walkBlock(stmt.step, caller, deprecated, warnings);
+          break;
+        case "foreach":
+          walkExpr(stmt.iterable, caller, deprecated, warnings);
+          walkBlock(stmt.body, caller, deprecated, warnings);
+          break;
+        case "match":
+          walkExpr(stmt.expr, caller, deprecated, warnings);
+          for (const arm of stmt.arms) {
+            walkBlock(arm.body, caller, deprecated, warnings);
+          }
+          break;
+        // break/continue/raw/execute: no sub-exprs to walk for deprecation purposes
+        default:
+          break;
+      }
+    }
+    function walkExpr(expr, caller, deprecated, warnings) {
+      switch (expr.kind) {
+        case "call": {
+          if (deprecated.has(expr.fn)) {
+            const msg = deprecated.get(expr.fn);
+            const location = expr.span ? `line ${expr.span.line}, col ${expr.span.col}: ` : "";
+            const detail = msg ? `: ${msg}` : "";
+            warnings.push(`[DeprecatedUsage] ${location}'${expr.fn}' is deprecated${detail} (called from '${caller}')`);
+          }
+          for (const arg of expr.args)
+            walkExpr(arg, caller, deprecated, warnings);
+          break;
+        }
+        case "static_call": {
+          const qualName = `${expr.type}::${expr.method}`;
+          if (deprecated.has(qualName)) {
+            const msg = deprecated.get(qualName);
+            const location = expr.span ? `line ${expr.span.line}, col ${expr.span.col}: ` : "";
+            const detail = msg ? `: ${msg}` : "";
+            warnings.push(`[DeprecatedUsage] ${location}'${qualName}' is deprecated${detail} (called from '${caller}')`);
+          }
+          for (const arg of expr.args)
+            walkExpr(arg, caller, deprecated, warnings);
+          break;
+        }
+        case "invoke":
+          walkExpr(expr.callee, caller, deprecated, warnings);
+          for (const arg of expr.args)
+            walkExpr(arg, caller, deprecated, warnings);
+          break;
+        case "binary":
+          walkExpr(expr.left, caller, deprecated, warnings);
+          walkExpr(expr.right, caller, deprecated, warnings);
+          break;
+        case "unary":
+          walkExpr(expr.operand, caller, deprecated, warnings);
+          break;
+        case "is_check":
+          walkExpr(expr.expr, caller, deprecated, warnings);
+          break;
+        case "type_cast":
+          walkExpr(expr.expr, caller, deprecated, warnings);
+          break;
+        case "assign":
+          walkExpr(expr.value, caller, deprecated, warnings);
+          break;
+        case "member_assign":
+          walkExpr(expr.obj, caller, deprecated, warnings);
+          walkExpr(expr.value, caller, deprecated, warnings);
+          break;
+        case "index_assign":
+          walkExpr(expr.obj, caller, deprecated, warnings);
+          walkExpr(expr.index, caller, deprecated, warnings);
+          walkExpr(expr.value, caller, deprecated, warnings);
+          break;
+        case "member":
+          walkExpr(expr.obj, caller, deprecated, warnings);
+          break;
+        case "index":
+          walkExpr(expr.obj, caller, deprecated, warnings);
+          walkExpr(expr.index, caller, deprecated, warnings);
+          break;
+        case "array_lit":
+          for (const el of expr.elements)
+            walkExpr(el, caller, deprecated, warnings);
+          break;
+        case "struct_lit":
+          for (const f of expr.fields)
+            walkExpr(f.value, caller, deprecated, warnings);
+          break;
+        case "str_interp":
+          for (const part of expr.parts) {
+            if (typeof part !== "string")
+              walkExpr(part, caller, deprecated, warnings);
+          }
+          break;
+        case "f_string":
+          for (const part of expr.parts) {
+            if (typeof part === "object" && "expr" in part)
+              walkExpr(part.expr, caller, deprecated, warnings);
+          }
+          break;
+        case "some_lit":
+          walkExpr(expr.value, caller, deprecated, warnings);
+          break;
+        case "unwrap_or":
+          walkExpr(expr.opt, caller, deprecated, warnings);
+          walkExpr(expr.default_, caller, deprecated, warnings);
+          break;
+        case "lambda": {
+          const body = expr.body;
+          if (Array.isArray(body)) {
+            walkBlock(body, caller, deprecated, warnings);
+          } else {
+            walkExpr(body, caller, deprecated, warnings);
+          }
+          break;
+        }
+        case "tuple_lit":
+          for (const el of expr.elements)
+            walkExpr(el, caller, deprecated, warnings);
+          break;
+        case "enum_construct":
+          for (const arg of expr.args)
+            walkExpr(arg.value, caller, deprecated, warnings);
+          break;
+        // Terminals: int_lit, float_lit, bool_lit, str_lit, ident, selector, etc.
+        default:
+          break;
+      }
+    }
   }
 });
 
@@ -21973,14 +22287,23 @@ var require_lower2 = __commonJS({
         hirFnMap.set(f.name, f);
       }
       const specializedFnsRegistry = /* @__PURE__ */ new Map();
+      const constValues = /* @__PURE__ */ new Map();
+      for (const c of hir.consts) {
+        if (c.value.kind === "int_lit")
+          constValues.set(c.name, c.value.value);
+        else if (c.value.kind === "bool_lit")
+          constValues.set(c.name, c.value.value ? 1 : 0);
+        else if (c.value.kind === "float_lit")
+          constValues.set(c.name, Math.round(c.value.value * 1e4));
+      }
       const allFunctions = [];
       for (const f of hir.functions) {
-        const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, void 0, hirFnMap, specializedFnsRegistry, void 0, enumPayloads);
+        const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, void 0, hirFnMap, specializedFnsRegistry, void 0, enumPayloads, constValues);
         allFunctions.push(fn, ...helpers);
       }
       for (const ib of hir.implBlocks) {
         for (const m of ib.methods) {
-          const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads);
+          const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads, constValues);
           allFunctions.push(fn, ...helpers);
         }
       }
@@ -22011,6 +22334,7 @@ var require_lower2 = __commonJS({
         this.doubleVarCount = 0;
         this.hirFunctions = /* @__PURE__ */ new Map();
         this.specializedFnsRegistry = /* @__PURE__ */ new Map();
+        this.constValues = /* @__PURE__ */ new Map();
         this.namespace = namespace;
         this.fnName = fnName;
         this.structDefs = structDefs;
@@ -22081,10 +22405,11 @@ var require_lower2 = __commonJS({
         return path3;
       }
     };
-    function lowerFunction(fn, namespace, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }, arrayArgBindings, hirFnMap, specializedFnsRegistry, overrideName, enumPayloads = /* @__PURE__ */ new Map()) {
+    function lowerFunction(fn, namespace, structDefs = /* @__PURE__ */ new Map(), implMethods = /* @__PURE__ */ new Map(), macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }, arrayArgBindings, hirFnMap, specializedFnsRegistry, overrideName, enumPayloads = /* @__PURE__ */ new Map(), constValues = /* @__PURE__ */ new Map()) {
       const mirFnName = overrideName ?? fn.name;
       const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads);
       ctx.sourceFile = sourceFile;
+      ctx.constValues = constValues;
       if (hirFnMap)
         ctx.hirFunctions = hirFnMap;
       if (specializedFnsRegistry)
@@ -22128,10 +22453,11 @@ var require_lower2 = __commonJS({
       };
       return { fn: result, helpers: ctx.helperFunctions };
     }
-    function lowerImplMethod(method, typeName, namespace, structDefs, implMethods, macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }, enumPayloads = /* @__PURE__ */ new Map()) {
+    function lowerImplMethod(method, typeName, namespace, structDefs, implMethods, macroInfo = /* @__PURE__ */ new Map(), fnParamInfo = /* @__PURE__ */ new Map(), enumDefs = /* @__PURE__ */ new Map(), sourceFile, timerCounter = { count: 0, timerId: 0 }, enumPayloads = /* @__PURE__ */ new Map(), constValues = /* @__PURE__ */ new Map()) {
       const fnName = `${typeName}::${method.name}`;
       const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads);
       ctx.sourceFile = sourceFile;
+      ctx.constValues = constValues;
       const fields = structDefs.get(typeName) ?? [];
       const hasSelf = method.params.length > 0 && method.params[0].name === "self";
       const params = [];
@@ -22420,6 +22746,12 @@ var require_lower2 = __commonJS({
               scope.set(stmt.names[i], t);
             }
           }
+          break;
+        }
+        case "const_decl": {
+          const op = lowerExpr(stmt.value, ctx, scope);
+          const numericValue = op.kind === "const" ? op.value : 0;
+          ctx.constValues.set(stmt.name, numericValue);
           break;
         }
         case "expr": {
@@ -22899,6 +23231,9 @@ var require_lower2 = __commonJS({
           const temp = scope.get(expr.name);
           if (temp)
             return { kind: "temp", name: temp };
+          if (ctx.constValues.has(expr.name)) {
+            return { kind: "const", value: ctx.constValues.get(expr.name) };
+          }
           const t = ctx.freshTemp();
           ctx.emit({ kind: "copy", dst: t, src: { kind: "const", value: 0 } });
           scope.set(expr.name, t);
@@ -25075,6 +25410,219 @@ var require_interprocedural = __commonJS({
   }
 });
 
+// ../../dist/src/optimizer/inline.js
+var require_inline = __commonJS({
+  "../../dist/src/optimizer/inline.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.inlinePass = inlinePass;
+    var _inlineCounter = 0;
+    function freshInlineId() {
+      return `__inline_${_inlineCounter++}`;
+    }
+    function inlinePass(mod) {
+      const inlineSet = mod.inlineFunctions;
+      if (!inlineSet || inlineSet.size === 0)
+        return mod;
+      const fnMap = new Map(mod.functions.map((f) => [f.name, f]));
+      const updatedFunctions = mod.functions.map((fn) => inlineCallsInFunction(fn, fnMap, inlineSet));
+      return { ...mod, functions: updatedFunctions };
+    }
+    function inlineCallsInFunction(fn, fnMap, inlineSet) {
+      let blocks = fn.blocks.map((b) => ({ ...b, instrs: [...b.instrs] }));
+      let changed = true;
+      while (changed) {
+        changed = false;
+        const nextBlocks = [];
+        for (const block of blocks) {
+          const callIdx = block.instrs.findIndex((instr) => {
+            if (instr.kind !== "call")
+              return false;
+            if (!inlineSet.has(instr.fn))
+              return false;
+            const callee2 = fnMap.get(instr.fn);
+            if (!callee2)
+              return false;
+            if (callee2.isMacro)
+              return false;
+            if (callee2.name === fn.name)
+              return false;
+            if (isSelfRecursive(callee2))
+              return false;
+            if (callee2.params.length !== instr.args.length)
+              return false;
+            return true;
+          });
+          if (callIdx === -1) {
+            nextBlocks.push(block);
+            continue;
+          }
+          changed = true;
+          const callInstr = block.instrs[callIdx];
+          const callee = fnMap.get(callInstr.fn);
+          const inlineId = freshInlineId();
+          const priorInstrs = block.instrs.slice(0, callIdx);
+          const afterInstrs = block.instrs.slice(callIdx + 1);
+          const contBlockId = `${block.id}${inlineId}_cont`;
+          const clonedBlocks = cloneCallee(callee, inlineId, callInstr.args, callInstr.dst, contBlockId);
+          const clonedEntryId = `${callee.entry}${inlineId}`;
+          const patchedCurrentBlock = {
+            ...block,
+            instrs: priorInstrs,
+            term: { kind: "jump", target: clonedEntryId }
+          };
+          const contBlock = {
+            id: contBlockId,
+            instrs: afterInstrs,
+            term: block.term,
+            preds: []
+          };
+          nextBlocks.push(patchedCurrentBlock, ...clonedBlocks, contBlock);
+        }
+        blocks = nextBlocks;
+      }
+      return { ...fn, blocks };
+    }
+    function cloneCallee(callee, inlineId, args, dst, contBlockId) {
+      const sub = /* @__PURE__ */ new Map();
+      for (let i = 0; i < callee.params.length; i++) {
+        sub.set(callee.params[i].name, args[i]);
+      }
+      const calleeTemps = /* @__PURE__ */ new Set();
+      for (const block of callee.blocks) {
+        collectDefinedTemps(block, calleeTemps);
+      }
+      const tempRename = /* @__PURE__ */ new Map();
+      for (const tmp of calleeTemps) {
+        if (!sub.has(tmp)) {
+          tempRename.set(tmp, `${tmp}${inlineId}`);
+        }
+      }
+      const fullSub = new Map([...sub]);
+      for (const [old, renamed] of tempRename) {
+        fullSub.set(old, { kind: "temp", name: renamed });
+      }
+      const blockRename = (id) => `${id}${inlineId}`;
+      return callee.blocks.map((block) => cloneBlock(block, inlineId, fullSub, blockRename, dst, contBlockId));
+    }
+    function collectDefinedTemps(block, out) {
+      const collect = (instr) => {
+        if ("dst" in instr && instr.dst !== null && instr.dst !== void 0) {
+          out.add(instr.dst);
+        }
+      };
+      block.instrs.forEach(collect);
+      collect(block.term);
+    }
+    function cloneBlock(block, inlineId, sub, blockRename, callDst, contBlockId) {
+      const newId = blockRename(block.id);
+      const newInstrs = block.instrs.map((instr) => subAndRenameInstr(instr, sub, blockRename));
+      let newTerm;
+      const term = block.term;
+      if (term.kind === "return") {
+        const retInstrs = [];
+        if (term.value !== null && callDst !== null) {
+          const subbed = substituteOp(term.value, sub);
+          retInstrs.push({ kind: "copy", dst: callDst, src: subbed });
+        }
+        return {
+          id: newId,
+          instrs: [...newInstrs, ...retInstrs],
+          term: { kind: "jump", target: contBlockId },
+          preds: block.preds.map(blockRename)
+        };
+      } else {
+        newTerm = subAndRenameInstr(term, sub, blockRename);
+      }
+      return {
+        id: newId,
+        instrs: newInstrs,
+        term: newTerm,
+        preds: block.preds.map(blockRename)
+      };
+    }
+    function substituteOp(op, sub) {
+      if (op.kind === "temp") {
+        const replacement = sub.get(op.name);
+        if (replacement !== void 0)
+          return replacement;
+      }
+      return op;
+    }
+    function renameBlockId(id, blockRename) {
+      return blockRename(id);
+    }
+    function subAndRenameInstr(instr, sub, blockRename) {
+      const renameDst = (dst) => {
+        if (dst === null)
+          return null;
+        const r = sub.get(dst);
+        if (r && r.kind === "temp")
+          return r.name;
+        return dst;
+      };
+      switch (instr.kind) {
+        case "const":
+          return { ...instr, dst: renameDst(instr.dst) };
+        case "copy":
+          return { ...instr, dst: renameDst(instr.dst), src: substituteOp(instr.src, sub) };
+        case "neg":
+        case "not":
+          return { ...instr, dst: renameDst(instr.dst), src: substituteOp(instr.src, sub) };
+        case "add":
+        case "sub":
+        case "mul":
+        case "div":
+        case "mod":
+        case "and":
+        case "or":
+          return { ...instr, dst: renameDst(instr.dst), a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) };
+        case "cmp":
+          return { ...instr, dst: renameDst(instr.dst), a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) };
+        case "nbt_read":
+          return { ...instr, dst: renameDst(instr.dst) };
+        case "nbt_read_dynamic":
+          return { ...instr, dst: renameDst(instr.dst), indexSrc: substituteOp(instr.indexSrc, sub) };
+        case "nbt_write":
+          return { ...instr, src: substituteOp(instr.src, sub) };
+        case "nbt_write_dynamic":
+          return { ...instr, indexSrc: substituteOp(instr.indexSrc, sub), valueSrc: substituteOp(instr.valueSrc, sub) };
+        case "nbt_list_len":
+          return { ...instr, dst: renameDst(instr.dst) };
+        case "score_read":
+          return { ...instr, dst: renameDst(instr.dst) };
+        case "score_write":
+          return { ...instr, src: substituteOp(instr.src, sub) };
+        case "call":
+          return { ...instr, dst: renameDst(instr.dst), args: instr.args.map((a) => substituteOp(a, sub)) };
+        case "call_macro":
+          return { ...instr, dst: renameDst(instr.dst), args: instr.args.map((a) => ({ ...a, value: substituteOp(a.value, sub) })) };
+        case "call_context":
+          return instr;
+        case "jump":
+          return { ...instr, target: renameBlockId(instr.target, blockRename) };
+        case "branch":
+          return { ...instr, cond: substituteOp(instr.cond, sub), then: renameBlockId(instr.then, blockRename), else: renameBlockId(instr.else, blockRename) };
+        case "return":
+          return { ...instr, value: instr.value ? substituteOp(instr.value, sub) : null };
+        default:
+          return instr;
+      }
+    }
+    function isSelfRecursive(fn) {
+      for (const block of fn.blocks) {
+        for (const instr of block.instrs) {
+          if (instr.kind === "call" && instr.fn === fn.name)
+            return true;
+          if (instr.kind === "call_macro" && instr.fn === fn.name)
+            return true;
+        }
+      }
+      return false;
+    }
+  }
+});
+
 // ../../dist/src/optimizer/selector-cache.js
 var require_selector_cache = __commonJS({
   "../../dist/src/optimizer/selector-cache.js"(exports2) {
@@ -25165,6 +25713,7 @@ var require_pipeline = __commonJS({
     var unroll_1 = require_unroll();
     var nbt_batch_1 = require_nbt_batch();
     var interprocedural_1 = require_interprocedural();
+    var inline_1 = require_inline();
     var selector_cache_1 = require_selector_cache();
     Object.defineProperty(exports2, "selectorCache", { enumerable: true, get: function() {
       return selector_cache_1.selectorCache;
@@ -25192,9 +25741,10 @@ var require_pipeline = __commonJS({
       return current;
     }
     function optimizeModule(mod, passes) {
+      const inlined = (0, inline_1.inlinePass)(mod);
       const perFnOptimized = {
-        ...mod,
-        functions: mod.functions.map((fn) => optimizeFunction(fn, passes))
+        ...inlined,
+        functions: inlined.functions.map((fn) => optimizeFunction(fn, passes))
       };
       return (0, interprocedural_1.interproceduralConstProp)(perFnOptimized);
     }
@@ -25484,8 +26034,13 @@ var require_lower3 = __commonJS({
         }
         case "nbt_list_len": {
           const dst = ctx.slot(instr.dst);
-          const ns = ctx.namespace;
-          instrs.push({ kind: "raw", cmd: `execute store result score ${dst} __${ns} run data get storage ${instr.ns} ${instr.path}` });
+          instrs.push({
+            kind: "store_nbt_to_score",
+            dst,
+            ns: instr.ns,
+            path: instr.path,
+            scale: 1
+          });
           break;
         }
         case "nbt_read_dynamic": {
@@ -26157,6 +26712,7 @@ var require_emit = __commonJS({
       const tickFns = options.tickFunctions ?? [];
       const loadFns = options.loadFunctions ?? [];
       const scheduleFns = options.scheduleFunctions ?? [];
+      const watchFns = options.watchFunctions ?? [];
       const objective = module3.objective;
       const genSourceMap = options.generateSourceMap ?? false;
       const mcVersion = options.mcVersion ?? mc_version_1.DEFAULT_MC_VERSION;
@@ -26167,7 +26723,10 @@ var require_emit = __commonJS({
           pack: { pack_format: 26, description: `RedScript datapack: ${namespace}` }
         }, null, 2) + "\n"
       });
-      const loadCmds = [`scoreboard objectives add ${objective} dummy`];
+      const loadCmds = [
+        `scoreboard objectives add ${objective} dummy`,
+        ...watchFns.map((watch) => `scoreboard objectives add ${watchPrevObjective(watch.name)} dummy`)
+      ];
       files.push({
         path: `data/${namespace}/function/load.mcfunction`,
         content: loadCmds.join("\n") + "\n"
@@ -26194,6 +26753,19 @@ var require_emit = __commonJS({
 `
         });
       }
+      for (const watch of watchFns) {
+        const dispatcher = watchDispatcherName(watch.name);
+        const prevObjective = watchPrevObjective(watch.name);
+        const changedCondition = `unless score @s ${watch.objective} = @s ${prevObjective}`;
+        files.push({
+          path: fnNameToPath(dispatcher, namespace),
+          content: [
+            `execute as @a unless score @s ${prevObjective} = @s ${prevObjective} run scoreboard players operation @s ${prevObjective} = @s ${watch.objective}`,
+            `execute as @a ${changedCondition} run function ${namespace}:${watch.name}`,
+            `execute as @a ${changedCondition} run scoreboard players operation @s ${prevObjective} = @s ${watch.objective}`
+          ].join("\n") + "\n"
+        });
+      }
       if (loadFns.length > 0 || true) {
         const loadValues = [`${namespace}:load`, ...loadFns.map((fn) => `${namespace}:${fn}`)];
         files.push({
@@ -26201,8 +26773,9 @@ var require_emit = __commonJS({
           content: JSON.stringify({ values: loadValues }, null, 2) + "\n"
         });
       }
-      if (tickFns.length > 0) {
-        const tickValues = tickFns.map((fn) => `${namespace}:${fn}`);
+      const allTickFns = [...tickFns, ...watchFns.map((watch) => watchDispatcherName(watch.name))];
+      if (allTickFns.length > 0) {
+        const tickValues = allTickFns.map((fn) => `${namespace}:${fn}`);
         files.push({
           path: "data/minecraft/tags/function/tick.json",
           content: JSON.stringify({ values: tickValues }, null, 2) + "\n"
@@ -26246,6 +26819,12 @@ var require_emit = __commonJS({
     function fnNameToPath(name, namespace) {
       const mcName = name.replace(/::/g, "/").toLowerCase();
       return `data/${namespace}/function/${mcName}.mcfunction`;
+    }
+    function watchDispatcherName(name) {
+      return `__watch_${name}`;
+    }
+    function watchPrevObjective(name) {
+      return `__watch_${name}_prev`;
     }
     function emitInstr(instr, ns, obj, mcVersion) {
       switch (instr.kind) {
@@ -27433,7 +28012,6 @@ var require_typechecker = __commonJS({
     var VOID_TYPE = { kind: "named", name: "void" };
     var INT_TYPE = { kind: "named", name: "int" };
     var STRING_TYPE = { kind: "named", name: "string" };
-    var FORMAT_STRING_TYPE = { kind: "named", name: "format_string" };
     var BUILTIN_SIGNATURES = {
       setTimeout: {
         params: [INT_TYPE, { kind: "function_type", params: [], return: VOID_TYPE }],
@@ -27598,6 +28176,21 @@ var require_typechecker = __commonJS({
         this.currentReturnType = null;
       }
       checkFunctionDecorators(fn) {
+        const watchDecorators = fn.decorators.filter((decorator) => decorator.name === "watch");
+        if (watchDecorators.length > 1) {
+          this.report(`Function '${fn.name}' cannot have multiple @watch decorators`, fn);
+          return;
+        }
+        if (watchDecorators.length === 1) {
+          const objective = watchDecorators[0].args?.objective;
+          if (!objective) {
+            this.report(`Function '${fn.name}' is missing a scoreboard objective in @watch("...")`, fn);
+            return;
+          }
+          if (fn.params.length > 0) {
+            this.report(`@watch handler '${fn.name}' cannot declare parameters`, fn);
+          }
+        }
         const eventDecorators = fn.decorators.filter((decorator) => decorator.name === "on");
         if (eventDecorators.length === 0) {
           return;
@@ -27754,6 +28347,9 @@ var require_typechecker = __commonJS({
             this.checkExpr(stmt.expr);
             break;
           case "raw":
+            break;
+          case "const_decl":
+            this.scope.set(stmt.name, { type: stmt.type, mutable: false });
             break;
         }
       }
@@ -28069,7 +28665,7 @@ var require_typechecker = __commonJS({
           return;
         }
         const messageType = this.inferType(message);
-        if (messageType.kind !== "named" || messageType.name !== "string" && messageType.name !== "format_string") {
+        if (messageType.kind !== "named" || messageType.name !== "string") {
           this.report(`Argument ${messageIndex + 1} of '${expr.fn}' expects string or format_string, got ${this.typeToString(messageType)}`, message);
         }
       }
@@ -28265,7 +28861,7 @@ var require_typechecker = __commonJS({
                 this.checkExpr(part.expr);
               }
             }
-            return FORMAT_STRING_TYPE;
+            return STRING_TYPE;
           case "blockpos":
             return { kind: "named", name: "BlockPos" };
           case "ident":
@@ -28679,6 +29275,7 @@ var require_compile2 = __commonJS({
     var diagnostics_1 = require_diagnostics();
     var lower_1 = require_lower();
     var monomorphize_1 = require_monomorphize();
+    var deprecated_1 = require_deprecated();
     var lower_2 = require_lower2();
     var pipeline_1 = require_pipeline();
     var lower_3 = require_lower3();
@@ -28804,8 +29401,11 @@ var require_compile2 = __commonJS({
       try {
         const hirRaw = (0, lower_1.lowerToHIR)(ast);
         const hir = (0, monomorphize_1.monomorphize)(hirRaw);
+        warnings.push(...(0, deprecated_1.checkDeprecatedCalls)(hir));
         const tickFunctions = [];
         const loadFunctions = [];
+        const watchFunctions = [];
+        const inlineFunctions = /* @__PURE__ */ new Set();
         const coroutineInfos = [];
         const scheduleFunctions = [];
         const eventHandlers = /* @__PURE__ */ new Map();
@@ -28815,6 +29415,11 @@ var require_compile2 = __commonJS({
               tickFunctions.push(fn.name);
             if (dec.name === "load")
               loadFunctions.push(fn.name);
+            if (dec.name === "inline")
+              inlineFunctions.add(fn.name);
+            if (dec.name === "watch" && dec.args?.objective) {
+              watchFunctions.push({ name: fn.name, objective: dec.args.objective });
+            }
             if (dec.name === "coroutine") {
               coroutineInfos.push({
                 fnName: fn.name,
@@ -28836,6 +29441,9 @@ var require_compile2 = __commonJS({
           }
         }
         const mir = (0, lower_2.lowerToMIR)(hir, filePath);
+        if (inlineFunctions.size > 0) {
+          mir.inlineFunctions = inlineFunctions;
+        }
         const mirOpt = (0, pipeline_1.optimizeModule)(mir);
         const coroResult = (0, coroutine_1.coroutineTransform)(mirOpt, coroutineInfos);
         const mirFinal = coroResult.module;
@@ -28860,7 +29468,7 @@ var require_compile2 = __commonJS({
             }
           }
         }
-        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions, generateSourceMap, mcVersion, eventHandlers });
+        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions, generateSourceMap, mcVersion, eventHandlers });
         return { files, warnings, success: true };
       } catch (err) {
         if (err instanceof diagnostics_1.DiagnosticError)
@@ -29069,6 +29677,7 @@ var require_modules = __commonJS({
         const hir = (0, monomorphize_1.monomorphize)(hirRaw);
         const tickFunctions = [];
         const loadFunctions = [];
+        const watchFunctions = [];
         const coroutineInfos = [];
         const scheduleFunctions = [];
         for (const fn of hir.functions) {
@@ -29077,6 +29686,9 @@ var require_modules = __commonJS({
               tickFunctions.push(fn.name);
             if (dec.name === "load")
               loadFunctions.push(fn.name);
+            if (dec.name === "watch" && dec.args?.objective) {
+              watchFunctions.push({ name: fn.name, objective: dec.args.objective });
+            }
             if (dec.name === "coroutine") {
               coroutineInfos.push({ fnName: fn.name, batch: dec.args?.batch ?? 10, onDone: dec.args?.onDone });
             }
@@ -29094,7 +29706,7 @@ var require_modules = __commonJS({
         const lir = (0, lower_3.lowerToLIR)(mirFinal);
         lir.objective = objective;
         const lirOpt = (0, pipeline_2.lirOptimizeModule)(lir);
-        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions });
+        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions });
         if (moduleName) {
           const loadPath = `data/${namespace}/function/load.mcfunction`;
           const newLoadPath = `data/${namespace}/function/${moduleName}/_load.mcfunction`;

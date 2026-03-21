@@ -1,0 +1,2816 @@
+{
+  "generatedAt": "2026-03-21T20:40:28.052Z",
+  "compilerPerf": {
+    "benchmark": "compiler-perf",
+    "generatedAt": "2026-03-21T20:40:12.299Z",
+    "host": {
+      "platform": "darwin",
+      "release": "24.6.0",
+      "arch": "arm64",
+      "cpuModel": "Apple M4",
+      "cpuCount": 10,
+      "totalMemoryMb": 16384
+    },
+    "iterations": 5,
+    "scales": [
+      {
+        "targetLines": 10,
+        "actualLines": 10,
+        "helperCount": 1,
+        "callCount": 0,
+        "output": {
+          "fileCount": 5,
+          "mcfunctionFileCount": 3,
+          "instructionCount": 12,
+          "totalBytes": 866,
+          "mcfunctionBytes": 731
+        },
+        "samples": [
+          {
+            "parseMs": 1.931,
+            "hirMs": 0.388,
+            "mirMs": 2.964,
+            "emitMs": 0.2,
+            "totalMs": 5.549
+          },
+          {
+            "parseMs": 0.182,
+            "hirMs": 0.02,
+            "mirMs": 1.004,
+            "emitMs": 0.117,
+            "totalMs": 1.332
+          },
+          {
+            "parseMs": 0.121,
+            "hirMs": 0.021,
+            "mirMs": 0.258,
+            "emitMs": 0.016,
+            "totalMs": 0.421
+          },
+          {
+            "parseMs": 0.105,
+            "hirMs": 0.016,
+            "mirMs": 0.133,
+            "emitMs": 0.012,
+            "totalMs": 0.272
+          },
+          {
+            "parseMs": 0.2,
+            "hirMs": 0.022,
+            "mirMs": 0.139,
+            "emitMs": 0.012,
+            "totalMs": 0.378
+          }
+        ],
+        "averages": {
+          "parseMs": 0.508,
+          "hirMs": 0.093,
+          "mirMs": 0.9,
+          "emitMs": 0.071,
+          "totalMs": 1.591
+        },
+        "medians": {
+          "parseMs": 0.182,
+          "hirMs": 0.021,
+          "mirMs": 0.258,
+          "emitMs": 0.016,
+          "totalMs": 0.421
+        }
+      },
+      {
+        "targetLines": 100,
+        "actualLines": 100,
+        "helperCount": 12,
+        "callCount": 35,
+        "output": {
+          "fileCount": 17,
+          "mcfunctionFileCount": 15,
+          "instructionCount": 292,
+          "totalBytes": 17645,
+          "mcfunctionBytes": 17508
+        },
+        "samples": [
+          {
+            "parseMs": 2.459,
+            "hirMs": 0.212,
+            "mirMs": 1.604,
+            "emitMs": 0.075,
+            "totalMs": 4.36
+          },
+          {
+            "parseMs": 0.466,
+            "hirMs": 0.05,
+            "mirMs": 1.583,
+            "emitMs": 0.06,
+            "totalMs": 2.165
+          },
+          {
+            "parseMs": 0.429,
+            "hirMs": 0.042,
+            "mirMs": 1.715,
+            "emitMs": 0.046,
+            "totalMs": 2.237
+          },
+          {
+            "parseMs": 3.443,
+            "hirMs": 0.047,
+            "mirMs": 0.845,
+            "emitMs": 0.061,
+            "totalMs": 4.406
+          },
+          {
+            "parseMs": 0.909,
+            "hirMs": 0.042,
+            "mirMs": 0.66,
+            "emitMs": 0.041,
+            "totalMs": 1.657
+          }
+        ],
+        "averages": {
+          "parseMs": 1.541,
+          "hirMs": 0.079,
+          "mirMs": 1.282,
+          "emitMs": 0.057,
+          "totalMs": 2.965
+        },
+        "medians": {
+          "parseMs": 0.909,
+          "hirMs": 0.047,
+          "mirMs": 1.583,
+          "emitMs": 0.06,
+          "totalMs": 2.237
+        }
+      },
+      {
+        "targetLines": 1000,
+        "actualLines": 1000,
+        "helperCount": 125,
+        "callCount": 370,
+        "output": {
+          "fileCount": 130,
+          "mcfunctionFileCount": 128,
+          "instructionCount": 2984,
+          "totalBytes": 182232,
+          "mcfunctionBytes": 182093
+        },
+        "samples": [
+          {
+            "parseMs": 3.663,
+            "hirMs": 1.1,
+            "mirMs": 29.995,
+            "emitMs": 0.446,
+            "totalMs": 35.235
+          },
+          {
+            "parseMs": 2.759,
+            "hirMs": 0.087,
+            "mirMs": 16.618,
+            "emitMs": 1.73,
+            "totalMs": 21.209
+          },
+          {
+            "parseMs": 2.112,
+            "hirMs": 0.086,
+            "mirMs": 12.813,
+            "emitMs": 0.277,
+            "totalMs": 15.294
+          },
+          {
+            "parseMs": 2.153,
+            "hirMs": 0.097,
+            "mirMs": 12.941,
+            "emitMs": 0.273,
+            "totalMs": 15.471
+          },
+          {
+            "parseMs": 2.348,
+            "hirMs": 0.077,
+            "mirMs": 12.889,
+            "emitMs": 0.239,
+            "totalMs": 15.561
+          }
+        ],
+        "averages": {
+          "parseMs": 2.607,
+          "hirMs": 0.289,
+          "mirMs": 17.051,
+          "emitMs": 0.593,
+          "totalMs": 20.554
+        },
+        "medians": {
+          "parseMs": 2.348,
+          "hirMs": 0.087,
+          "mirMs": 12.941,
+          "emitMs": 0.277,
+          "totalMs": 15.561
+        }
+      }
+    ]
+  },
+  "stdlibComplexity": {
+    "benchmark": "stdlib-complexity",
+    "generatedAt": "2026-03-21T20:40:12.486Z",
+    "host": {
+      "platform": "darwin",
+      "release": "24.6.0",
+      "arch": "arm64",
+      "cpuModel": "Apple M4",
+      "cpuCount": 10,
+      "totalMemoryMb": 16384
+    },
+    "modules": [
+      {
+        "module": "advanced.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/advanced.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 5.337,
+              "hir": 0.721,
+              "mir": 10.489,
+              "emit": 1.183,
+              "total": 17.842
+            },
+            "fileCount": 175,
+            "mcfunctionFileCount": 173,
+            "instructionCount": 1300,
+            "totalBytes": 107156,
+            "mcfunctionBytes": 107007,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 2.379,
+              "hir": 0.476,
+              "mir": 9.133,
+              "emit": 0.26,
+              "total": 12.27
+            },
+            "fileCount": 175,
+            "mcfunctionFileCount": 173,
+            "instructionCount": 1145,
+            "totalBytes": 94344,
+            "mcfunctionBytes": 94195,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 3.117,
+              "hir": 0.147,
+              "mir": 13.667,
+              "emit": 0.243,
+              "total": 17.188
+            },
+            "fileCount": 175,
+            "mcfunctionFileCount": 173,
+            "instructionCount": 1145,
+            "totalBytes": 94344,
+            "mcfunctionBytes": 94195,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "bigint.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/bigint.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 1.97,
+              "hir": 0.115,
+              "mir": 19.167,
+              "emit": 0.575,
+              "total": 21.855
+            },
+            "fileCount": 204,
+            "mcfunctionFileCount": 202,
+            "instructionCount": 1155,
+            "totalBytes": 109145,
+            "mcfunctionBytes": 109000,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 2.051,
+              "hir": 0.789,
+              "mir": 7.527,
+              "emit": 0.19,
+              "total": 10.572
+            },
+            "fileCount": 204,
+            "mcfunctionFileCount": 202,
+            "instructionCount": 879,
+            "totalBytes": 84994,
+            "mcfunctionBytes": 84849,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 1.158,
+              "hir": 0.099,
+              "mir": 7.107,
+              "emit": 0.189,
+              "total": 8.563
+            },
+            "fileCount": 204,
+            "mcfunctionFileCount": 202,
+            "instructionCount": 879,
+            "totalBytes": 84994,
+            "mcfunctionBytes": 84849,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "bits.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/bits.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.611,
+              "hir": 0.036,
+              "mir": 0.591,
+              "emit": 0.078,
+              "total": 1.321
+            },
+            "fileCount": 81,
+            "mcfunctionFileCount": 79,
+            "instructionCount": 456,
+            "totalBytes": 33179,
+            "mcfunctionBytes": 33038,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.377,
+              "hir": 0.028,
+              "mir": 1.041,
+              "emit": 0.075,
+              "total": 1.526
+            },
+            "fileCount": 81,
+            "mcfunctionFileCount": 79,
+            "instructionCount": 412,
+            "totalBytes": 30083,
+            "mcfunctionBytes": 29942,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.368,
+              "hir": 0.032,
+              "mir": 1.589,
+              "emit": 0.058,
+              "total": 2.053
+            },
+            "fileCount": 81,
+            "mcfunctionFileCount": 79,
+            "instructionCount": 412,
+            "totalBytes": 30083,
+            "mcfunctionBytes": 29942,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "bossbar.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/bossbar.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.515,
+              "hir": 0.036,
+              "mir": 0.162,
+              "emit": 0.025,
+              "total": 0.742
+            },
+            "fileCount": 17,
+            "mcfunctionFileCount": 15,
+            "instructionCount": 160,
+            "totalBytes": 12432,
+            "mcfunctionBytes": 12285,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.202,
+              "hir": 0.012,
+              "mir": 1.253,
+              "emit": 0.02,
+              "total": 1.493
+            },
+            "fileCount": 17,
+            "mcfunctionFileCount": 15,
+            "instructionCount": 118,
+            "totalBytes": 8417,
+            "mcfunctionBytes": 8270,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.226,
+              "hir": 0.015,
+              "mir": 0.426,
+              "emit": 0.015,
+              "total": 0.685
+            },
+            "fileCount": 17,
+            "mcfunctionFileCount": 15,
+            "instructionCount": 118,
+            "totalBytes": 8417,
+            "mcfunctionBytes": 8270,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "calculus.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/calculus.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.419,
+              "hir": 0.028,
+              "mir": 0.531,
+              "emit": 0.067,
+              "total": 1.047
+            },
+            "fileCount": 61,
+            "mcfunctionFileCount": 59,
+            "instructionCount": 445,
+            "totalBytes": 40921,
+            "mcfunctionBytes": 40772,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.365,
+              "hir": 0.028,
+              "mir": 1.036,
+              "emit": 0.048,
+              "total": 1.478
+            },
+            "fileCount": 61,
+            "mcfunctionFileCount": 59,
+            "instructionCount": 378,
+            "totalBytes": 34851,
+            "mcfunctionBytes": 34702,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.345,
+              "hir": 0.026,
+              "mir": 1.297,
+              "emit": 0.044,
+              "total": 1.714
+            },
+            "fileCount": 61,
+            "mcfunctionFileCount": 59,
+            "instructionCount": 378,
+            "totalBytes": 34851,
+            "mcfunctionBytes": 34702,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "color.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/color.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.498,
+              "hir": 0.038,
+              "mir": 1.207,
+              "emit": 0.13,
+              "total": 1.874
+            },
+            "fileCount": 184,
+            "mcfunctionFileCount": 182,
+            "instructionCount": 1095,
+            "totalBytes": 86328,
+            "mcfunctionBytes": 86185,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.556,
+              "hir": 0.036,
+              "mir": 2.215,
+              "emit": 0.112,
+              "total": 2.92
+            },
+            "fileCount": 184,
+            "mcfunctionFileCount": 182,
+            "instructionCount": 1005,
+            "totalBytes": 80166,
+            "mcfunctionBytes": 80023,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.458,
+              "hir": 0.037,
+              "mir": 2.788,
+              "emit": 0.104,
+              "total": 3.388
+            },
+            "fileCount": 184,
+            "mcfunctionFileCount": 182,
+            "instructionCount": 1005,
+            "totalBytes": 80166,
+            "mcfunctionBytes": 80023,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "combat.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/combat.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.069,
+              "hir": 0.005,
+              "mir": 0.031,
+              "emit": 0.007,
+              "total": 0.113
+            },
+            "fileCount": 10,
+            "mcfunctionFileCount": 8,
+            "instructionCount": 29,
+            "totalBytes": 2421,
+            "mcfunctionBytes": 2276,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.043,
+              "hir": 0.003,
+              "mir": 0.085,
+              "emit": 0.006,
+              "total": 0.138
+            },
+            "fileCount": 10,
+            "mcfunctionFileCount": 8,
+            "instructionCount": 27,
+            "totalBytes": 2293,
+            "mcfunctionBytes": 2148,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.048,
+              "hir": 0.003,
+              "mir": 0.103,
+              "emit": 0.005,
+              "total": 0.16
+            },
+            "fileCount": 10,
+            "mcfunctionFileCount": 8,
+            "instructionCount": 27,
+            "totalBytes": 2293,
+            "mcfunctionBytes": 2148,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "cooldown.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/cooldown.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.266,
+              "hir": 0.006,
+              "mir": 0.232,
+              "emit": 0.012,
+              "total": 0.517
+            },
+            "fileCount": 18,
+            "mcfunctionFileCount": 16,
+            "instructionCount": 62,
+            "totalBytes": 5230,
+            "mcfunctionBytes": 5081,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.12,
+              "hir": 0.006,
+              "mir": 0.195,
+              "emit": 0.008,
+              "total": 0.33
+            },
+            "fileCount": 18,
+            "mcfunctionFileCount": 16,
+            "instructionCount": 45,
+            "totalBytes": 3901,
+            "mcfunctionBytes": 3752,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.12,
+              "hir": 0.006,
+              "mir": 0.223,
+              "emit": 0.007,
+              "total": 0.357
+            },
+            "fileCount": 18,
+            "mcfunctionFileCount": 16,
+            "instructionCount": 45,
+            "totalBytes": 3901,
+            "mcfunctionBytes": 3752,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "dialog.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/dialog.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.183,
+              "hir": 0.009,
+              "mir": 0.107,
+              "emit": 0.01,
+              "total": 0.31
+            },
+            "fileCount": 21,
+            "mcfunctionFileCount": 19,
+            "instructionCount": 52,
+            "totalBytes": 3782,
+            "mcfunctionBytes": 3637,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.13,
+              "hir": 0.004,
+              "mir": 0.152,
+              "emit": 0.006,
+              "total": 0.293
+            },
+            "fileCount": 21,
+            "mcfunctionFileCount": 19,
+            "instructionCount": 37,
+            "totalBytes": 2552,
+            "mcfunctionBytes": 2407,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.119,
+              "hir": 0.004,
+              "mir": 0.197,
+              "emit": 0.006,
+              "total": 0.327
+            },
+            "fileCount": 21,
+            "mcfunctionFileCount": 19,
+            "instructionCount": 37,
+            "totalBytes": 2552,
+            "mcfunctionBytes": 2407,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "easing.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/easing.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.553,
+              "hir": 0.03,
+              "mir": 0.553,
+              "emit": 0.069,
+              "total": 1.205
+            },
+            "fileCount": 45,
+            "mcfunctionFileCount": 43,
+            "instructionCount": 517,
+            "totalBytes": 45601,
+            "mcfunctionBytes": 45456,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.466,
+              "hir": 0.029,
+              "mir": 1.166,
+              "emit": 0.05,
+              "total": 1.712
+            },
+            "fileCount": 45,
+            "mcfunctionFileCount": 43,
+            "instructionCount": 474,
+            "totalBytes": 41715,
+            "mcfunctionBytes": 41570,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.442,
+              "hir": 0.029,
+              "mir": 1.49,
+              "emit": 0.057,
+              "total": 2.022
+            },
+            "fileCount": 45,
+            "mcfunctionFileCount": 43,
+            "instructionCount": 474,
+            "totalBytes": 41715,
+            "mcfunctionBytes": 41570,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "ecs.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/ecs.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.781,
+              "hir": 0.046,
+              "mir": 0.416,
+              "emit": 0.051,
+              "total": 1.297
+            },
+            "fileCount": 47,
+            "mcfunctionFileCount": 45,
+            "instructionCount": 277,
+            "totalBytes": 22040,
+            "mcfunctionBytes": 21901,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.413,
+              "hir": 0.027,
+              "mir": 0.869,
+              "emit": 0.033,
+              "total": 1.343
+            },
+            "fileCount": 47,
+            "mcfunctionFileCount": 45,
+            "instructionCount": 195,
+            "totalBytes": 15416,
+            "mcfunctionBytes": 15277,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.42,
+              "hir": 0.028,
+              "mir": 1.045,
+              "emit": 0.031,
+              "total": 1.526
+            },
+            "fileCount": 47,
+            "mcfunctionFileCount": 45,
+            "instructionCount": 195,
+            "totalBytes": 15416,
+            "mcfunctionBytes": 15277,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "effects.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/effects.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.155,
+              "hir": 0.011,
+              "mir": 0.404,
+              "emit": 0.016,
+              "total": 0.587
+            },
+            "fileCount": 15,
+            "mcfunctionFileCount": 13,
+            "instructionCount": 75,
+            "totalBytes": 5835,
+            "mcfunctionBytes": 5688,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.123,
+              "hir": 0.008,
+              "mir": 0.228,
+              "emit": 0.008,
+              "total": 0.371
+            },
+            "fileCount": 15,
+            "mcfunctionFileCount": 13,
+            "instructionCount": 34,
+            "totalBytes": 2770,
+            "mcfunctionBytes": 2623,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.118,
+              "hir": 0.007,
+              "mir": 0.253,
+              "emit": 0.008,
+              "total": 0.387
+            },
+            "fileCount": 15,
+            "mcfunctionFileCount": 13,
+            "instructionCount": 34,
+            "totalBytes": 2770,
+            "mcfunctionBytes": 2623,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "events.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/events.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.189,
+              "hir": 0.009,
+              "mir": 0.025,
+              "emit": 0.02,
+              "total": 0.247
+            },
+            "fileCount": 6,
+            "mcfunctionFileCount": 3,
+            "instructionCount": 12,
+            "totalBytes": 885,
+            "mcfunctionBytes": 649,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.045,
+              "hir": 0.002,
+              "mir": 0.033,
+              "emit": 0.005,
+              "total": 0.087
+            },
+            "fileCount": 6,
+            "mcfunctionFileCount": 3,
+            "instructionCount": 12,
+            "totalBytes": 885,
+            "mcfunctionBytes": 649,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.034,
+              "hir": 0.002,
+              "mir": 0.042,
+              "emit": 0.003,
+              "total": 0.082
+            },
+            "fileCount": 6,
+            "mcfunctionFileCount": 3,
+            "instructionCount": 12,
+            "totalBytes": 885,
+            "mcfunctionBytes": 649,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "expr.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/expr.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.286,
+              "hir": 0.024,
+              "mir": 0.224,
+              "emit": 0.053,
+              "total": 0.588
+            },
+            "fileCount": 42,
+            "mcfunctionFileCount": 40,
+            "instructionCount": 343,
+            "totalBytes": 27937,
+            "mcfunctionBytes": 27796,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.264,
+              "hir": 0.025,
+              "mir": 0.738,
+              "emit": 0.82,
+              "total": 1.849
+            },
+            "fileCount": 42,
+            "mcfunctionFileCount": 40,
+            "instructionCount": 284,
+            "totalBytes": 23764,
+            "mcfunctionBytes": 23623,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.276,
+              "hir": 0.014,
+              "mir": 0.925,
+              "emit": 0.046,
+              "total": 1.263
+            },
+            "fileCount": 42,
+            "mcfunctionFileCount": 40,
+            "instructionCount": 284,
+            "totalBytes": 23764,
+            "mcfunctionBytes": 23623,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "fft.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/fft.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.321,
+              "hir": 0.01,
+              "mir": 1.329,
+              "emit": 0.047,
+              "total": 1.715
+            },
+            "fileCount": 39,
+            "mcfunctionFileCount": 36,
+            "instructionCount": 263,
+            "totalBytes": 23583,
+            "mcfunctionBytes": 23385,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.254,
+              "hir": 0.009,
+              "mir": 0.944,
+              "emit": 0.038,
+              "total": 1.249
+            },
+            "fileCount": 39,
+            "mcfunctionFileCount": 36,
+            "instructionCount": 217,
+            "totalBytes": 19530,
+            "mcfunctionBytes": 19332,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.252,
+              "hir": 0.011,
+              "mir": 1.171,
+              "emit": 0.039,
+              "total": 1.475
+            },
+            "fileCount": 39,
+            "mcfunctionFileCount": 36,
+            "instructionCount": 217,
+            "totalBytes": 19530,
+            "mcfunctionBytes": 19332,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "geometry.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/geometry.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.475,
+              "hir": 0.018,
+              "mir": 0.862,
+              "emit": 0.097,
+              "total": 1.456
+            },
+            "fileCount": 99,
+            "mcfunctionFileCount": 97,
+            "instructionCount": 547,
+            "totalBytes": 48354,
+            "mcfunctionBytes": 48205,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.43,
+              "hir": 0.017,
+              "mir": 1.58,
+              "emit": 0.084,
+              "total": 2.113
+            },
+            "fileCount": 99,
+            "mcfunctionFileCount": 97,
+            "instructionCount": 481,
+            "totalBytes": 42990,
+            "mcfunctionBytes": 42841,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.424,
+              "hir": 0.016,
+              "mir": 2.042,
+              "emit": 0.062,
+              "total": 2.545
+            },
+            "fileCount": 99,
+            "mcfunctionFileCount": 97,
+            "instructionCount": 481,
+            "totalBytes": 42990,
+            "mcfunctionBytes": 42841,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "graph.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/graph.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 1.001,
+              "hir": 0.035,
+              "mir": 1.005,
+              "emit": 0.097,
+              "total": 2.14
+            },
+            "fileCount": 126,
+            "mcfunctionFileCount": 124,
+            "instructionCount": 679,
+            "totalBytes": 62958,
+            "mcfunctionBytes": 62815,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 1.065,
+              "hir": 0.035,
+              "mir": 3.004,
+              "emit": 0.085,
+              "total": 4.194
+            },
+            "fileCount": 126,
+            "mcfunctionFileCount": 124,
+            "instructionCount": 519,
+            "totalBytes": 49848,
+            "mcfunctionBytes": 49705,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.986,
+              "hir": 0.097,
+              "mir": 3.358,
+              "emit": 0.071,
+              "total": 4.516
+            },
+            "fileCount": 126,
+            "mcfunctionFileCount": 124,
+            "instructionCount": 519,
+            "totalBytes": 49848,
+            "mcfunctionBytes": 49705,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "heap.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/heap.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.34,
+              "hir": 0.018,
+              "mir": 0.347,
+              "emit": 0.047,
+              "total": 0.753
+            },
+            "fileCount": 83,
+            "mcfunctionFileCount": 81,
+            "instructionCount": 326,
+            "totalBytes": 25073,
+            "mcfunctionBytes": 24932,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.309,
+              "hir": 0.012,
+              "mir": 0.749,
+              "emit": 0.031,
+              "total": 1.102
+            },
+            "fileCount": 83,
+            "mcfunctionFileCount": 81,
+            "instructionCount": 226,
+            "totalBytes": 16964,
+            "mcfunctionBytes": 16823,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.267,
+              "hir": 0.011,
+              "mir": 0.941,
+              "emit": 0.03,
+              "total": 1.249
+            },
+            "fileCount": 83,
+            "mcfunctionFileCount": 81,
+            "instructionCount": 226,
+            "totalBytes": 16964,
+            "mcfunctionBytes": 16823,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "interactions.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/interactions.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.82,
+              "hir": 0.043,
+              "mir": 0.628,
+              "emit": 0.079,
+              "total": 1.571
+            },
+            "fileCount": 41,
+            "mcfunctionFileCount": 39,
+            "instructionCount": 139,
+            "totalBytes": 12852,
+            "mcfunctionBytes": 12695,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.287,
+              "hir": 0.012,
+              "mir": 0.657,
+              "emit": 0.96,
+              "total": 1.918
+            },
+            "fileCount": 41,
+            "mcfunctionFileCount": 39,
+            "instructionCount": 98,
+            "totalBytes": 8763,
+            "mcfunctionBytes": 8606,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.341,
+              "hir": 0.016,
+              "mir": 0.803,
+              "emit": 0.031,
+              "total": 1.193
+            },
+            "fileCount": 41,
+            "mcfunctionFileCount": 39,
+            "instructionCount": 98,
+            "totalBytes": 8763,
+            "mcfunctionBytes": 8606,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "inventory.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/inventory.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.115,
+              "hir": 0.007,
+              "mir": 0.061,
+              "emit": 0.01,
+              "total": 0.194
+            },
+            "fileCount": 8,
+            "mcfunctionFileCount": 6,
+            "instructionCount": 45,
+            "totalBytes": 2717,
+            "mcfunctionBytes": 2566,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.102,
+              "hir": 0.004,
+              "mir": 0.125,
+              "emit": 0.005,
+              "total": 0.237
+            },
+            "fileCount": 8,
+            "mcfunctionFileCount": 6,
+            "instructionCount": 20,
+            "totalBytes": 960,
+            "mcfunctionBytes": 809,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.107,
+              "hir": 0.004,
+              "mir": 0.152,
+              "emit": 0.005,
+              "total": 0.268
+            },
+            "fileCount": 8,
+            "mcfunctionFileCount": 6,
+            "instructionCount": 20,
+            "totalBytes": 960,
+            "mcfunctionBytes": 809,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "linalg.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/linalg.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.748,
+              "hir": 0.072,
+              "mir": 1.173,
+              "emit": 0.119,
+              "total": 2.116
+            },
+            "fileCount": 38,
+            "mcfunctionFileCount": 36,
+            "instructionCount": 694,
+            "totalBytes": 57002,
+            "mcfunctionBytes": 56857,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.672,
+              "hir": 0.036,
+              "mir": 2.373,
+              "emit": 0.079,
+              "total": 3.163
+            },
+            "fileCount": 38,
+            "mcfunctionFileCount": 36,
+            "instructionCount": 500,
+            "totalBytes": 38914,
+            "mcfunctionBytes": 38769,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.66,
+              "hir": 0.037,
+              "mir": 2.982,
+              "emit": 0.039,
+              "total": 3.721
+            },
+            "fileCount": 38,
+            "mcfunctionFileCount": 36,
+            "instructionCount": 500,
+            "totalBytes": 38914,
+            "mcfunctionBytes": 38769,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "list.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/list.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.756,
+              "hir": 0.064,
+              "mir": 3.752,
+              "emit": 0.234,
+              "total": 4.811
+            },
+            "fileCount": 382,
+            "mcfunctionFileCount": 380,
+            "instructionCount": 1458,
+            "totalBytes": 110325,
+            "mcfunctionBytes": 110184,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.778,
+              "hir": 0.064,
+              "mir": 4.473,
+              "emit": 0.158,
+              "total": 5.476
+            },
+            "fileCount": 382,
+            "mcfunctionFileCount": 380,
+            "instructionCount": 1221,
+            "totalBytes": 93929,
+            "mcfunctionBytes": 93788,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.67,
+              "hir": 0.061,
+              "mir": 6.494,
+              "emit": 0.158,
+              "total": 7.386
+            },
+            "fileCount": 382,
+            "mcfunctionFileCount": 380,
+            "instructionCount": 1221,
+            "totalBytes": 93929,
+            "mcfunctionBytes": 93788,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "math.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/math.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 1.387,
+              "hir": 0.536,
+              "mir": 4.009,
+              "emit": 0.218,
+              "total": 6.154
+            },
+            "fileCount": 240,
+            "mcfunctionFileCount": 238,
+            "instructionCount": 1605,
+            "totalBytes": 123457,
+            "mcfunctionBytes": 123316,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 1.279,
+              "hir": 0.186,
+              "mir": 5.921,
+              "emit": 0.214,
+              "total": 7.605
+            },
+            "fileCount": 240,
+            "mcfunctionFileCount": 238,
+            "instructionCount": 1456,
+            "totalBytes": 112721,
+            "mcfunctionBytes": 112580,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 1.185,
+              "hir": 0.186,
+              "mir": 8.272,
+              "emit": 0.182,
+              "total": 9.83
+            },
+            "fileCount": 240,
+            "mcfunctionFileCount": 238,
+            "instructionCount": 1456,
+            "totalBytes": 112721,
+            "mcfunctionBytes": 112580,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "math_hp.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/math_hp.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.792,
+              "hir": 0.031,
+              "mir": 0.786,
+              "emit": 0.061,
+              "total": 1.673
+            },
+            "fileCount": 42,
+            "mcfunctionFileCount": 40,
+            "instructionCount": 441,
+            "totalBytes": 37330,
+            "mcfunctionBytes": 37183,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.695,
+              "hir": 0.025,
+              "mir": 1.291,
+              "emit": 0.044,
+              "total": 2.058
+            },
+            "fileCount": 42,
+            "mcfunctionFileCount": 40,
+            "instructionCount": 382,
+            "totalBytes": 32762,
+            "mcfunctionBytes": 32615,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.623,
+              "hir": 0.023,
+              "mir": 1.571,
+              "emit": 0.041,
+              "total": 2.26
+            },
+            "fileCount": 42,
+            "mcfunctionFileCount": 40,
+            "instructionCount": 382,
+            "totalBytes": 32762,
+            "mcfunctionBytes": 32615,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "matrix.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/matrix.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.55,
+              "hir": 0.022,
+              "mir": 1.109,
+              "emit": 0.173,
+              "total": 1.856
+            },
+            "fileCount": 139,
+            "mcfunctionFileCount": 137,
+            "instructionCount": 1388,
+            "totalBytes": 124088,
+            "mcfunctionBytes": 123943,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.511,
+              "hir": 0.022,
+              "mir": 2.305,
+              "emit": 0.126,
+              "total": 2.965
+            },
+            "fileCount": 139,
+            "mcfunctionFileCount": 137,
+            "instructionCount": 1297,
+            "totalBytes": 116865,
+            "mcfunctionBytes": 116720,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.502,
+              "hir": 0.02,
+              "mir": 2.922,
+              "emit": 0.119,
+              "total": 3.564
+            },
+            "fileCount": 139,
+            "mcfunctionFileCount": 137,
+            "instructionCount": 1297,
+            "totalBytes": 116865,
+            "mcfunctionBytes": 116720,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "mobs.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/mobs.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.206,
+              "hir": 0.016,
+              "mir": 0.006,
+              "emit": 0.005,
+              "total": 0.235
+            },
+            "fileCount": 3,
+            "mcfunctionFileCount": 1,
+            "instructionCount": 1,
+            "totalBytes": 187,
+            "mcfunctionBytes": 46,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.176,
+              "hir": 0.005,
+              "mir": 0.017,
+              "emit": 0.002,
+              "total": 0.2
+            },
+            "fileCount": 3,
+            "mcfunctionFileCount": 1,
+            "instructionCount": 1,
+            "totalBytes": 187,
+            "mcfunctionBytes": 46,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.139,
+              "hir": 0.004,
+              "mir": 0.006,
+              "emit": 0.001,
+              "total": 0.152
+            },
+            "fileCount": 3,
+            "mcfunctionFileCount": 1,
+            "instructionCount": 1,
+            "totalBytes": 187,
+            "mcfunctionBytes": 46,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "noise.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/noise.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.35,
+              "hir": 0.014,
+              "mir": 0.334,
+              "emit": 0.056,
+              "total": 0.755
+            },
+            "fileCount": 33,
+            "mcfunctionFileCount": 31,
+            "instructionCount": 549,
+            "totalBytes": 45898,
+            "mcfunctionBytes": 45755,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.315,
+              "hir": 0.013,
+              "mir": 0.889,
+              "emit": 0.044,
+              "total": 1.261
+            },
+            "fileCount": 33,
+            "mcfunctionFileCount": 31,
+            "instructionCount": 503,
+            "totalBytes": 41837,
+            "mcfunctionBytes": 41694,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.297,
+              "hir": 0.014,
+              "mir": 1.345,
+              "emit": 0.053,
+              "total": 1.711
+            },
+            "fileCount": 33,
+            "mcfunctionFileCount": 31,
+            "instructionCount": 503,
+            "totalBytes": 41837,
+            "mcfunctionBytes": 41694,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "ode.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/ode.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.491,
+              "hir": 0.028,
+              "mir": 1.065,
+              "emit": 0.053,
+              "total": 1.639
+            },
+            "fileCount": 55,
+            "mcfunctionFileCount": 53,
+            "instructionCount": 566,
+            "totalBytes": 40615,
+            "mcfunctionBytes": 40476,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.412,
+              "hir": 0.016,
+              "mir": 2.015,
+              "emit": 0.048,
+              "total": 2.497
+            },
+            "fileCount": 57,
+            "mcfunctionFileCount": 55,
+            "instructionCount": 502,
+            "totalBytes": 35783,
+            "mcfunctionBytes": 35644,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.44,
+              "hir": 0.018,
+              "mir": 4.189,
+              "emit": 0.05,
+              "total": 4.7
+            },
+            "fileCount": 57,
+            "mcfunctionFileCount": 55,
+            "instructionCount": 502,
+            "totalBytes": 35783,
+            "mcfunctionBytes": 35644,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "parabola.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/parabola.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.273,
+              "hir": 0.012,
+              "mir": 0.418,
+              "emit": 0.031,
+              "total": 0.736
+            },
+            "fileCount": 38,
+            "mcfunctionFileCount": 36,
+            "instructionCount": 239,
+            "totalBytes": 21403,
+            "mcfunctionBytes": 21254,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.219,
+              "hir": 0.007,
+              "mir": 0.621,
+              "emit": 0.023,
+              "total": 0.872
+            },
+            "fileCount": 38,
+            "mcfunctionFileCount": 36,
+            "instructionCount": 222,
+            "totalBytes": 19868,
+            "mcfunctionBytes": 19719,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.201,
+              "hir": 0.008,
+              "mir": 0.784,
+              "emit": 0.021,
+              "total": 1.015
+            },
+            "fileCount": 38,
+            "mcfunctionFileCount": 36,
+            "instructionCount": 222,
+            "totalBytes": 19868,
+            "mcfunctionBytes": 19719,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "particles.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/particles.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.22,
+              "hir": 0.007,
+              "mir": 0.258,
+              "emit": 0.026,
+              "total": 0.513
+            },
+            "fileCount": 27,
+            "mcfunctionFileCount": 25,
+            "instructionCount": 237,
+            "totalBytes": 20520,
+            "mcfunctionBytes": 20369,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.195,
+              "hir": 0.006,
+              "mir": 0.541,
+              "emit": 0.016,
+              "total": 0.759
+            },
+            "fileCount": 27,
+            "mcfunctionFileCount": 25,
+            "instructionCount": 159,
+            "totalBytes": 13761,
+            "mcfunctionBytes": 13610,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.19,
+              "hir": 0.007,
+              "mir": 0.663,
+              "emit": 0.015,
+              "total": 0.875
+            },
+            "fileCount": 27,
+            "mcfunctionFileCount": 25,
+            "instructionCount": 159,
+            "totalBytes": 13761,
+            "mcfunctionBytes": 13610,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "pathfind.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/pathfind.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.606,
+              "hir": 0.07,
+              "mir": 1.812,
+              "emit": 0.151,
+              "total": 2.641
+            },
+            "fileCount": 196,
+            "mcfunctionFileCount": 193,
+            "instructionCount": 1370,
+            "totalBytes": 132582,
+            "mcfunctionBytes": 132360,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.617,
+              "hir": 0.019,
+              "mir": 2.968,
+              "emit": 0.114,
+              "total": 3.72
+            },
+            "fileCount": 196,
+            "mcfunctionFileCount": 193,
+            "instructionCount": 1190,
+            "totalBytes": 117308,
+            "mcfunctionBytes": 117086,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.62,
+              "hir": 0.019,
+              "mir": 4.052,
+              "emit": 0.109,
+              "total": 4.803
+            },
+            "fileCount": 195,
+            "mcfunctionFileCount": 192,
+            "instructionCount": 1187,
+            "totalBytes": 117067,
+            "mcfunctionBytes": 116845,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "physics.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/physics.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.257,
+              "hir": 0.01,
+              "mir": 0.382,
+              "emit": 0.029,
+              "total": 0.681
+            },
+            "fileCount": 37,
+            "mcfunctionFileCount": 35,
+            "instructionCount": 228,
+            "totalBytes": 20051,
+            "mcfunctionBytes": 19904,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.21,
+              "hir": 0.007,
+              "mir": 0.582,
+              "emit": 0.022,
+              "total": 0.823
+            },
+            "fileCount": 37,
+            "mcfunctionFileCount": 35,
+            "instructionCount": 218,
+            "totalBytes": 19259,
+            "mcfunctionBytes": 19112,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.195,
+              "hir": 0.006,
+              "mir": 0.774,
+              "emit": 0.021,
+              "total": 0.998
+            },
+            "fileCount": 37,
+            "mcfunctionFileCount": 35,
+            "instructionCount": 218,
+            "totalBytes": 19259,
+            "mcfunctionBytes": 19112,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "player.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/player.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.149,
+              "hir": 0.004,
+              "mir": 0.059,
+              "emit": 0.007,
+              "total": 0.22
+            },
+            "fileCount": 10,
+            "mcfunctionFileCount": 8,
+            "instructionCount": 30,
+            "totalBytes": 2264,
+            "mcfunctionBytes": 2119,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.063,
+              "hir": 0.002,
+              "mir": 0.103,
+              "emit": 0.004,
+              "total": 0.174
+            },
+            "fileCount": 10,
+            "mcfunctionFileCount": 8,
+            "instructionCount": 21,
+            "totalBytes": 1751,
+            "mcfunctionBytes": 1606,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.054,
+              "hir": 0.002,
+              "mir": 0.112,
+              "emit": 0.003,
+              "total": 0.171
+            },
+            "fileCount": 10,
+            "mcfunctionFileCount": 8,
+            "instructionCount": 21,
+            "totalBytes": 1751,
+            "mcfunctionBytes": 1606,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "quaternion.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/quaternion.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.547,
+              "hir": 0.017,
+              "mir": 1.092,
+              "emit": 0.1,
+              "total": 1.758
+            },
+            "fileCount": 46,
+            "mcfunctionFileCount": 44,
+            "instructionCount": 1000,
+            "totalBytes": 89458,
+            "mcfunctionBytes": 89305,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.555,
+              "hir": 0.016,
+              "mir": 2.054,
+              "emit": 0.083,
+              "total": 2.71
+            },
+            "fileCount": 46,
+            "mcfunctionFileCount": 44,
+            "instructionCount": 937,
+            "totalBytes": 83123,
+            "mcfunctionBytes": 82970,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.527,
+              "hir": 0.017,
+              "mir": 3.72,
+              "emit": 0.091,
+              "total": 4.358
+            },
+            "fileCount": 46,
+            "mcfunctionFileCount": 44,
+            "instructionCount": 937,
+            "totalBytes": 83123,
+            "mcfunctionBytes": 82970,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "random.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/random.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.303,
+              "hir": 0.011,
+              "mir": 0.291,
+              "emit": 0.036,
+              "total": 0.644
+            },
+            "fileCount": 41,
+            "mcfunctionFileCount": 39,
+            "instructionCount": 297,
+            "totalBytes": 24409,
+            "mcfunctionBytes": 24264,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.213,
+              "hir": 0.007,
+              "mir": 0.636,
+              "emit": 0.027,
+              "total": 0.884
+            },
+            "fileCount": 41,
+            "mcfunctionFileCount": 39,
+            "instructionCount": 276,
+            "totalBytes": 22819,
+            "mcfunctionBytes": 22674,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.202,
+              "hir": 0.007,
+              "mir": 0.825,
+              "emit": 0.025,
+              "total": 1.06
+            },
+            "fileCount": 41,
+            "mcfunctionFileCount": 39,
+            "instructionCount": 276,
+            "totalBytes": 22819,
+            "mcfunctionBytes": 22674,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "result.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/result.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.465,
+              "hir": 0.083,
+              "mir": 0.235,
+              "emit": 0.016,
+              "total": 0.801
+            },
+            "fileCount": 28,
+            "mcfunctionFileCount": 26,
+            "instructionCount": 101,
+            "totalBytes": 8446,
+            "mcfunctionBytes": 8301,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.208,
+              "hir": 0.015,
+              "mir": 0.341,
+              "emit": 0.011,
+              "total": 0.576
+            },
+            "fileCount": 28,
+            "mcfunctionFileCount": 26,
+            "instructionCount": 84,
+            "totalBytes": 7004,
+            "mcfunctionBytes": 6859,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.185,
+              "hir": 0.011,
+              "mir": 0.392,
+              "emit": 0.009,
+              "total": 0.598
+            },
+            "fileCount": 28,
+            "mcfunctionFileCount": 26,
+            "instructionCount": 84,
+            "totalBytes": 7004,
+            "mcfunctionBytes": 6859,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "scheduler.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/scheduler.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.688,
+              "hir": 0.032,
+              "mir": 0.749,
+              "emit": 0.048,
+              "total": 1.518
+            },
+            "fileCount": 140,
+            "mcfunctionFileCount": 138,
+            "instructionCount": 461,
+            "totalBytes": 35080,
+            "mcfunctionBytes": 34929,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.477,
+              "hir": 0.03,
+              "mir": 1.43,
+              "emit": 0.034,
+              "total": 1.971
+            },
+            "fileCount": 140,
+            "mcfunctionFileCount": 138,
+            "instructionCount": 381,
+            "totalBytes": 29645,
+            "mcfunctionBytes": 29494,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.44,
+              "hir": 0.029,
+              "mir": 1.683,
+              "emit": 0.031,
+              "total": 2.184
+            },
+            "fileCount": 140,
+            "mcfunctionFileCount": 138,
+            "instructionCount": 381,
+            "totalBytes": 29645,
+            "mcfunctionBytes": 29494,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "sets.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/sets.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.017,
+              "hir": 0.001,
+              "mir": 0.002,
+              "emit": 0.001,
+              "total": 0.022
+            },
+            "fileCount": 3,
+            "mcfunctionFileCount": 1,
+            "instructionCount": 1,
+            "totalBytes": 187,
+            "mcfunctionBytes": 46,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.013,
+              "hir": 0.001,
+              "mir": 0.003,
+              "emit": 0.001,
+              "total": 0.017
+            },
+            "fileCount": 3,
+            "mcfunctionFileCount": 1,
+            "instructionCount": 1,
+            "totalBytes": 187,
+            "mcfunctionBytes": 46,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.012,
+              "hir": 0.001,
+              "mir": 0.002,
+              "emit": 0.001,
+              "total": 0.016
+            },
+            "fileCount": 3,
+            "mcfunctionFileCount": 1,
+            "instructionCount": 1,
+            "totalBytes": 187,
+            "mcfunctionBytes": 46,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "signal.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/signal.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.984,
+              "hir": 0.077,
+              "mir": 2.453,
+              "emit": 0.321,
+              "total": 3.836
+            },
+            "fileCount": 327,
+            "mcfunctionFileCount": 325,
+            "instructionCount": 3461,
+            "totalBytes": 296003,
+            "mcfunctionBytes": 295858,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.945,
+              "hir": 0.072,
+              "mir": 4.72,
+              "emit": 0.257,
+              "total": 5.997
+            },
+            "fileCount": 328,
+            "mcfunctionFileCount": 326,
+            "instructionCount": 3165,
+            "totalBytes": 271431,
+            "mcfunctionBytes": 271286,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.881,
+              "hir": 0.073,
+              "mir": 7.324,
+              "emit": 0.238,
+              "total": 8.518
+            },
+            "fileCount": 328,
+            "mcfunctionFileCount": 326,
+            "instructionCount": 3164,
+            "totalBytes": 271328,
+            "mcfunctionBytes": 271183,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "sort.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/sort.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.42,
+              "hir": 0.033,
+              "mir": 0.963,
+              "emit": 0.085,
+              "total": 1.503
+            },
+            "fileCount": 172,
+            "mcfunctionFileCount": 169,
+            "instructionCount": 767,
+            "totalBytes": 80920,
+            "mcfunctionBytes": 80712,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.326,
+              "hir": 0.027,
+              "mir": 1.57,
+              "emit": 0.065,
+              "total": 1.99
+            },
+            "fileCount": 171,
+            "mcfunctionFileCount": 168,
+            "instructionCount": 636,
+            "totalBytes": 68722,
+            "mcfunctionBytes": 68514,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.317,
+              "hir": 0.028,
+              "mir": 2.378,
+              "emit": 0.07,
+              "total": 2.794
+            },
+            "fileCount": 171,
+            "mcfunctionFileCount": 168,
+            "instructionCount": 636,
+            "totalBytes": 68722,
+            "mcfunctionBytes": 68514,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "spawn.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/spawn.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.212,
+              "hir": 0.008,
+              "mir": 0.08,
+              "emit": 0.008,
+              "total": 0.309
+            },
+            "fileCount": 10,
+            "mcfunctionFileCount": 8,
+            "instructionCount": 61,
+            "totalBytes": 4214,
+            "mcfunctionBytes": 4071,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.105,
+              "hir": 0.005,
+              "mir": 0.176,
+              "emit": 0.017,
+              "total": 0.304
+            },
+            "fileCount": 10,
+            "mcfunctionFileCount": 8,
+            "instructionCount": 44,
+            "totalBytes": 2862,
+            "mcfunctionBytes": 2719,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.101,
+              "hir": 0.005,
+              "mir": 0.187,
+              "emit": 0.008,
+              "total": 0.303
+            },
+            "fileCount": 10,
+            "mcfunctionFileCount": 8,
+            "instructionCount": 44,
+            "totalBytes": 2862,
+            "mcfunctionBytes": 2719,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "state.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/state.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.143,
+              "hir": 0.007,
+              "mir": 0.084,
+              "emit": 0.011,
+              "total": 0.25
+            },
+            "fileCount": 14,
+            "mcfunctionFileCount": 12,
+            "instructionCount": 60,
+            "totalBytes": 4511,
+            "mcfunctionBytes": 4368,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.128,
+              "hir": 0.005,
+              "mir": 0.156,
+              "emit": 0.008,
+              "total": 0.297
+            },
+            "fileCount": 14,
+            "mcfunctionFileCount": 12,
+            "instructionCount": 47,
+            "totalBytes": 3572,
+            "mcfunctionBytes": 3429,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.122,
+              "hir": 0.005,
+              "mir": 0.182,
+              "emit": 0.007,
+              "total": 0.316
+            },
+            "fileCount": 14,
+            "mcfunctionFileCount": 12,
+            "instructionCount": 47,
+            "totalBytes": 3572,
+            "mcfunctionBytes": 3429,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "strings.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/strings.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.125,
+              "hir": 0.003,
+              "mir": 0.029,
+              "emit": 0.005,
+              "total": 0.163
+            },
+            "fileCount": 7,
+            "mcfunctionFileCount": 5,
+            "instructionCount": 23,
+            "totalBytes": 1831,
+            "mcfunctionBytes": 1684,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.117,
+              "hir": 0.002,
+              "mir": 0.054,
+              "emit": 0.003,
+              "total": 0.179
+            },
+            "fileCount": 7,
+            "mcfunctionFileCount": 5,
+            "instructionCount": 14,
+            "totalBytes": 1064,
+            "mcfunctionBytes": 917,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.109,
+              "hir": 0.006,
+              "mir": 0.063,
+              "emit": 0.003,
+              "total": 0.182
+            },
+            "fileCount": 7,
+            "mcfunctionFileCount": 5,
+            "instructionCount": 14,
+            "totalBytes": 1064,
+            "mcfunctionBytes": 917,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "tags.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/tags.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 1.034,
+              "hir": 0.015,
+              "mir": 0.011,
+              "emit": 0.002,
+              "total": 1.062
+            },
+            "fileCount": 3,
+            "mcfunctionFileCount": 1,
+            "instructionCount": 1,
+            "totalBytes": 187,
+            "mcfunctionBytes": 46,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.989,
+              "hir": 0.005,
+              "mir": 0.015,
+              "emit": 0.002,
+              "total": 1.012
+            },
+            "fileCount": 3,
+            "mcfunctionFileCount": 1,
+            "instructionCount": 1,
+            "totalBytes": 187,
+            "mcfunctionBytes": 46,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.855,
+              "hir": 0.005,
+              "mir": 0.012,
+              "emit": 0.002,
+              "total": 0.874
+            },
+            "fileCount": 3,
+            "mcfunctionFileCount": 1,
+            "instructionCount": 1,
+            "totalBytes": 187,
+            "mcfunctionBytes": 46,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "teams.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/teams.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.11,
+              "hir": 0.005,
+              "mir": 0.149,
+              "emit": 0.015,
+              "total": 0.281
+            },
+            "fileCount": 13,
+            "mcfunctionFileCount": 11,
+            "instructionCount": 130,
+            "totalBytes": 9075,
+            "mcfunctionBytes": 8932,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.092,
+              "hir": 0.004,
+              "mir": 0.23,
+              "emit": 0.008,
+              "total": 0.334
+            },
+            "fileCount": 13,
+            "mcfunctionFileCount": 11,
+            "instructionCount": 71,
+            "totalBytes": 3442,
+            "mcfunctionBytes": 3299,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.09,
+              "hir": 0.004,
+              "mir": 0.258,
+              "emit": 0.007,
+              "total": 0.359
+            },
+            "fileCount": 13,
+            "mcfunctionFileCount": 11,
+            "instructionCount": 71,
+            "totalBytes": 3442,
+            "mcfunctionBytes": 3299,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "timer.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/timer.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.361,
+              "hir": 0.059,
+              "mir": 0.482,
+              "emit": 0.019,
+              "total": 0.921
+            },
+            "fileCount": 24,
+            "mcfunctionFileCount": 22,
+            "instructionCount": 105,
+            "totalBytes": 8491,
+            "mcfunctionBytes": 8348,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.184,
+              "hir": 0.016,
+              "mir": 0.372,
+              "emit": 0.022,
+              "total": 0.594
+            },
+            "fileCount": 24,
+            "mcfunctionFileCount": 22,
+            "instructionCount": 80,
+            "totalBytes": 6608,
+            "mcfunctionBytes": 6465,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.208,
+              "hir": 0.013,
+              "mir": 0.408,
+              "emit": 0.012,
+              "total": 0.641
+            },
+            "fileCount": 24,
+            "mcfunctionFileCount": 22,
+            "instructionCount": 80,
+            "totalBytes": 6608,
+            "mcfunctionBytes": 6465,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "vec.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/vec.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.755,
+              "hir": 0.044,
+              "mir": 2.831,
+              "emit": 0.114,
+              "total": 3.745
+            },
+            "fileCount": 166,
+            "mcfunctionFileCount": 164,
+            "instructionCount": 891,
+            "totalBytes": 68740,
+            "mcfunctionBytes": 68601,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.727,
+              "hir": 0.044,
+              "mir": 4.51,
+              "emit": 0.099,
+              "total": 5.384
+            },
+            "fileCount": 166,
+            "mcfunctionFileCount": 164,
+            "instructionCount": 820,
+            "totalBytes": 63881,
+            "mcfunctionBytes": 63742,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.781,
+              "hir": 0.05,
+              "mir": 3.979,
+              "emit": 0.111,
+              "total": 4.924
+            },
+            "fileCount": 166,
+            "mcfunctionFileCount": 164,
+            "instructionCount": 820,
+            "totalBytes": 63881,
+            "mcfunctionBytes": 63742,
+            "warnings": 0
+          }
+        ]
+      },
+      {
+        "module": "world.mcrs",
+        "path": "/Users/yuzhe/projects/redscript/src/stdlib/world.mcrs",
+        "results": [
+          {
+            "optLevel": "O0",
+            "timingsMs": {
+              "parse": 0.195,
+              "hir": 0.014,
+              "mir": 0.205,
+              "emit": 0.012,
+              "total": 0.428
+            },
+            "fileCount": 23,
+            "mcfunctionFileCount": 21,
+            "instructionCount": 80,
+            "totalBytes": 5055,
+            "mcfunctionBytes": 4912,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O1",
+            "timingsMs": {
+              "parse": 0.148,
+              "hir": 0.01,
+              "mir": 0.32,
+              "emit": 0.008,
+              "total": 0.487
+            },
+            "fileCount": 23,
+            "mcfunctionFileCount": 21,
+            "instructionCount": 42,
+            "totalBytes": 2423,
+            "mcfunctionBytes": 2280,
+            "warnings": 0
+          },
+          {
+            "optLevel": "O2",
+            "timingsMs": {
+              "parse": 0.14,
+              "hir": 0.009,
+              "mir": 0.703,
+              "emit": 0.013,
+              "total": 0.867
+            },
+            "fileCount": 23,
+            "mcfunctionFileCount": 21,
+            "instructionCount": 42,
+            "totalBytes": 2423,
+            "mcfunctionBytes": 2280,
+            "warnings": 0
+          }
+        ]
+      }
+    ]
+  }
+}

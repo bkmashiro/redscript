@@ -121,4 +121,6 @@ export interface MIRModule {
   functions: MIRFunction[]
   namespace: string
   objective: string      // scoreboard objective (default: __<namespace>)
+  /** Set of fully-qualified function names marked @inline. */
+  inlineFunctions?: Set<string>
 }

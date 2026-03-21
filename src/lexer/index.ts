@@ -373,9 +373,15 @@ export class Lexer {
       return
     }
 
-    // String literal
+    // String literal (triple-quoted multi-line or regular)
     if (char === '"') {
-      this.scanString(startLine, startCol)
+      if (this.peek() === '"' && this.peek(1) === '"') {
+        this.advance() // consume second "
+        this.advance() // consume third "
+        this.scanMultiLineString(startLine, startCol)
+      } else {
+        this.scanString(startLine, startCol)
+      }
       return
     }
 
@@ -466,6 +472,34 @@ export class Lexer {
     }
 
     return result
+  }
+
+  private scanMultiLineString(startLine: number, startCol: number): void {
+    let value = ''
+
+    while (!this.isAtEnd()) {
+      // Check for closing """
+      if (this.peek() === '"' && this.peek(1) === '"' && this.peek(2) === '"') {
+        this.advance() // consume first "
+        this.advance() // consume second "
+        this.advance() // consume third "
+        break
+      }
+
+      if (this.peek() === '\\' && this.peek(1) === '"') {
+        this.advance() // skip backslash
+        value += this.advance() // add escaped quote
+        continue
+      }
+
+      value += this.advance()
+    }
+
+    // Trim leading/trailing newline for cleaner multi-line strings
+    if (value.startsWith('\n')) value = value.slice(1)
+    if (value.endsWith('\n')) value = value.slice(0, -1)
+
+    this.addToken('string_lit', value, startLine, startCol)
   }
 
   private scanString(startLine: number, startCol: number): void {

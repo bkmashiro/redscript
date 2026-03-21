@@ -1850,9 +1850,29 @@ function lowerExpr(
         return { kind: 'temp', name: t }
       }
 
+      // Handle int_to_str / bool_to_str — identity functions for scoreboard int/bool → string
+      // In f-string context these are handled by precomputeFStringParts; outside that, just
+      // evaluate the argument and return it (integer stays as integer for scoreboard purposes).
+      if (expr.fn === 'int_to_str' || expr.fn === 'bool_to_str') {
+        if (expr.args.length === 1) {
+          return lowerExpr(expr.args[0], ctx, scope)
+        }
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+
       // Handle builtin calls → raw MC commands
       if (BUILTIN_SET.has(expr.fn)) {
-        const cmd = formatBuiltinCall(expr.fn, expr.args, ctx.currentMacroParams, ctx.getNamespace())
+        // For text builtins with f-string args, precompute complex expressions to temp vars
+        const TEXT_BUILTINS_SET = new Set(['tell', 'tellraw', 'title', 'subtitle', 'actionbar', 'announce'])
+        let resolvedArgs = expr.args
+        if (TEXT_BUILTINS_SET.has(expr.fn)) {
+          resolvedArgs = expr.args.map(arg =>
+            arg.kind === 'f_string' ? precomputeFStringParts(arg, ctx, scope) : arg
+          )
+        }
+        const cmd = formatBuiltinCall(expr.fn, resolvedArgs, ctx.currentMacroParams, ctx.getNamespace())
         ctx.emit({ kind: 'call', dst: null, fn: `__raw:${cmd}`, args: [] })
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'const', dst: t, value: 0 })
@@ -2600,6 +2620,65 @@ const MACRO_SENTINEL = '\x01'
  * Convert an f_string HIRExpr to a Minecraft JSON text component string.
  * Each interpolated variable becomes a {"score":{"name":"$var","objective":"__ns"}} component.
  */
+/**
+ * Pre-evaluate complex f-string expression parts to MIR temp vars,
+ * returning a rewritten HIRExpr where each complex part is replaced by a simple ident.
+ */
+function precomputeFStringParts(
+  expr: HIRExpr,
+  ctx: FnContext,
+  scope: Map<string, Temp>,
+): HIRExpr {
+  if (expr.kind !== 'f_string') return expr
+
+  const newParts: Array<{ kind: 'text'; value: string } | { kind: 'expr'; expr: HIRExpr }> = []
+
+  for (const part of expr.parts) {
+    if (part.kind === 'text') {
+      newParts.push(part)
+      continue
+    }
+
+    const inner = part.expr as HIRExpr
+    // Simple cases that fStringToJsonText already handles
+    if (inner.kind === 'ident' || inner.kind === 'int_lit' || inner.kind === 'bool_lit') {
+      newParts.push({ kind: 'expr', expr: inner })
+      continue
+    }
+
+    // int_to_str(x) in f-string: pass through the inner arg as a scoreboard score ref
+    if (inner.kind === 'call' && (inner.fn === 'int_to_str' || inner.fn === 'bool_to_str') && inner.args.length === 1) {
+      const arg = inner.args[0] as HIRExpr
+      if (arg.kind === 'ident') {
+        newParts.push({ kind: 'expr', expr: arg })
+        continue
+      }
+      // If arg is complex, lower it first
+      const argOp = lowerExpr(arg, ctx, scope)
+      if (argOp.kind === 'temp') {
+        newParts.push({ kind: 'expr', expr: { kind: 'ident', name: argOp.name } })
+      } else if (argOp.kind === 'const') {
+        newParts.push({ kind: 'expr', expr: { kind: 'int_lit', value: argOp.value } })
+      } else {
+        newParts.push(part)
+      }
+      continue
+    }
+
+    // Complex expression: lower to a temp var, then reference it as ident
+    const tempOp = lowerExpr(inner, ctx, scope)
+    if (tempOp.kind === 'temp') {
+      newParts.push({ kind: 'expr', expr: { kind: 'ident', name: tempOp.name } })
+    } else if (tempOp.kind === 'const') {
+      newParts.push({ kind: 'expr', expr: { kind: 'int_lit', value: tempOp.value } })
+    } else {
+      newParts.push(part)
+    }
+  }
+
+  return { kind: 'f_string', parts: newParts as any }
+}
+
 function fStringToJsonText(expr: HIRExpr, namespace: string): string {
   if (expr.kind !== 'f_string') return JSON.stringify(expr.kind === 'str_lit' ? { text: expr.value } : { text: '~' })
   const objective = `__${namespace}`
@@ -2608,12 +2687,14 @@ function fStringToJsonText(expr: HIRExpr, namespace: string): string {
     if (part.kind === 'text') {
       if (part.value) extra.push({ text: part.value })
     } else {
-      // expr part — must be a scoreboard variable (ident)
-      const inner = part.expr
+      // expr part — must be a scoreboard variable (ident) or literal
+      const inner = part.expr as HIRExpr
       if (inner.kind === 'ident') {
         extra.push({ score: { name: `$${inner.name}`, objective } })
       } else if (inner.kind === 'int_lit') {
         extra.push({ text: String(inner.value) })
+      } else if (inner.kind === 'bool_lit') {
+        extra.push({ text: inner.value ? 'true' : 'false' })
       } else {
         extra.push({ text: '?' })
       }

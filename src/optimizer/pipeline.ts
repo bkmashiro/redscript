@@ -17,6 +17,7 @@ import { branchSimplify } from './branch_simplify'
 import { loopUnroll } from './unroll'
 import { nbtBatchRead } from './nbt-batch'
 import { interproceduralConstProp } from './interprocedural'
+import { inlinePass } from './inline'
 
 // selectorCache is intentionally excluded from the default pipeline:
 // it emits synthetic __sel_cleanup_* / __sel_tag_* call_context instructions
@@ -50,9 +51,11 @@ export function optimizeFunction(fn: MIRFunction, passes: Pass[] = defaultPasses
 }
 
 export function optimizeModule(mod: MIRModule, passes?: Pass[]): MIRModule {
+  // Module-level pass: inline @inline-marked functions before per-function opts
+  const inlined = inlinePass(mod)
   const perFnOptimized = {
-    ...mod,
-    functions: mod.functions.map(fn => optimizeFunction(fn, passes)),
+    ...inlined,
+    functions: inlined.functions.map(fn => optimizeFunction(fn, passes)),
   }
   // Module-level pass: interprocedural constant propagation
   return interproceduralConstProp(perFnOptimized)

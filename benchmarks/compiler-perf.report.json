@@ -1,0 +1,207 @@
+{
+  "benchmark": "compiler-perf",
+  "generatedAt": "2026-03-21T20:40:12.299Z",
+  "host": {
+    "platform": "darwin",
+    "release": "24.6.0",
+    "arch": "arm64",
+    "cpuModel": "Apple M4",
+    "cpuCount": 10,
+    "totalMemoryMb": 16384
+  },
+  "iterations": 5,
+  "scales": [
+    {
+      "targetLines": 10,
+      "actualLines": 10,
+      "helperCount": 1,
+      "callCount": 0,
+      "output": {
+        "fileCount": 5,
+        "mcfunctionFileCount": 3,
+        "instructionCount": 12,
+        "totalBytes": 866,
+        "mcfunctionBytes": 731
+      },
+      "samples": [
+        {
+          "parseMs": 1.931,
+          "hirMs": 0.388,
+          "mirMs": 2.964,
+          "emitMs": 0.2,
+          "totalMs": 5.549
+        },
+        {
+          "parseMs": 0.182,
+          "hirMs": 0.02,
+          "mirMs": 1.004,
+          "emitMs": 0.117,
+          "totalMs": 1.332
+        },
+        {
+          "parseMs": 0.121,
+          "hirMs": 0.021,
+          "mirMs": 0.258,
+          "emitMs": 0.016,
+          "totalMs": 0.421
+        },
+        {
+          "parseMs": 0.105,
+          "hirMs": 0.016,
+          "mirMs": 0.133,
+          "emitMs": 0.012,
+          "totalMs": 0.272
+        },
+        {
+          "parseMs": 0.2,
+          "hirMs": 0.022,
+          "mirMs": 0.139,
+          "emitMs": 0.012,
+          "totalMs": 0.378
+        }
+      ],
+      "averages": {
+        "parseMs": 0.508,
+        "hirMs": 0.093,
+        "mirMs": 0.9,
+        "emitMs": 0.071,
+        "totalMs": 1.591
+      },
+      "medians": {
+        "parseMs": 0.182,
+        "hirMs": 0.021,
+        "mirMs": 0.258,
+        "emitMs": 0.016,
+        "totalMs": 0.421
+      }
+    },
+    {
+      "targetLines": 100,
+      "actualLines": 100,
+      "helperCount": 12,
+      "callCount": 35,
+      "output": {
+        "fileCount": 17,
+        "mcfunctionFileCount": 15,
+        "instructionCount": 292,
+        "totalBytes": 17645,
+        "mcfunctionBytes": 17508
+      },
+      "samples": [
+        {
+          "parseMs": 2.459,
+          "hirMs": 0.212,
+          "mirMs": 1.604,
+          "emitMs": 0.075,
+          "totalMs": 4.36
+        },
+        {
+          "parseMs": 0.466,
+          "hirMs": 0.05,
+          "mirMs": 1.583,
+          "emitMs": 0.06,
+          "totalMs": 2.165
+        },
+        {
+          "parseMs": 0.429,
+          "hirMs": 0.042,
+          "mirMs": 1.715,
+          "emitMs": 0.046,
+          "totalMs": 2.237
+        },
+        {
+          "parseMs": 3.443,
+          "hirMs": 0.047,
+          "mirMs": 0.845,
+          "emitMs": 0.061,
+          "totalMs": 4.406
+        },
+        {
+          "parseMs": 0.909,
+          "hirMs": 0.042,
+          "mirMs": 0.66,
+          "emitMs": 0.041,
+          "totalMs": 1.657
+        }
+      ],
+      "averages": {
+        "parseMs": 1.541,
+        "hirMs": 0.079,
+        "mirMs": 1.282,
+        "emitMs": 0.057,
+        "totalMs": 2.965
+      },
+      "medians": {
+        "parseMs": 0.909,
+        "hirMs": 0.047,
+        "mirMs": 1.583,
+        "emitMs": 0.06,
+        "totalMs": 2.237
+      }
+    },
+    {
+      "targetLines": 1000,
+      "actualLines": 1000,
+      "helperCount": 125,
+      "callCount": 370,
+      "output": {
+        "fileCount": 130,
+        "mcfunctionFileCount": 128,
+        "instructionCount": 2984,
+        "totalBytes": 182232,
+        "mcfunctionBytes": 182093
+      },
+      "samples": [
+        {
+          "parseMs": 3.663,
+          "hirMs": 1.1,
+          "mirMs": 29.995,
+          "emitMs": 0.446,
+          "totalMs": 35.235
+        },
+        {
+          "parseMs": 2.759,
+          "hirMs": 0.087,
+          "mirMs": 16.618,
+          "emitMs": 1.73,
+          "totalMs": 21.209
+        },
+        {
+          "parseMs": 2.112,
+          "hirMs": 0.086,
+          "mirMs": 12.813,
+          "emitMs": 0.277,
+          "totalMs": 15.294
+        },
+        {
+          "parseMs": 2.153,
+          "hirMs": 0.097,
+          "mirMs": 12.941,
+          "emitMs": 0.273,
+          "totalMs": 15.471
+        },
+        {
+          "parseMs": 2.348,
+          "hirMs": 0.077,
+          "mirMs": 12.889,
+          "emitMs": 0.239,
+          "totalMs": 15.561
+        }
+      ],
+      "averages": {
+        "parseMs": 2.607,
+        "hirMs": 0.289,
+        "mirMs": 17.051,
+        "emitMs": 0.593,
+        "totalMs": 20.554
+      },
+      "medians": {
+        "parseMs": 2.348,
+        "hirMs": 0.087,
+        "mirMs": 12.941,
+        "emitMs": 0.277,
+        "totalMs": 15.561
+      }
+    }
+  ]
+}

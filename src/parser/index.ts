@@ -485,11 +485,13 @@ export class Parser {
       }
     }
 
-    // Handle @on_trigger("name"), @on_advancement("id"), @on_craft("item"), @on_join_team("team")
-    if (name === 'on_trigger' || name === 'on_advancement' || name === 'on_craft' || name === 'on_join_team') {
+    // Handle @watch("objective"), @on_trigger("name"), @on_advancement("id"), @on_craft("item"), @on_join_team("team")
+    if (name === 'watch' || name === 'on_trigger' || name === 'on_advancement' || name === 'on_craft' || name === 'on_join_team') {
       const strMatch = argsStr.match(/^"([^"]*)"$/)
       if (strMatch) {
-        if (name === 'on_trigger') {
+        if (name === 'watch') {
+          args.objective = strMatch[1]
+        } else if (name === 'on_trigger') {
           args.trigger = strMatch[1]
         } else if (name === 'on_advancement') {
           args.advancement = strMatch[1]
