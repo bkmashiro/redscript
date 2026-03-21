@@ -270,7 +270,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'config'
+  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'config' | 'singleton'
   args?: {
     rate?: number
     objective?: string
@@ -310,6 +310,8 @@ export interface FnDecl {
   isLibraryFn?: boolean
   /** True when declared with `export fn` or `@keep fn` — survives DCE. */
   isExported?: boolean
+  /** Scoreboard objective watched by @watch("..."), if present. */
+  watchObjective?: string
   name: string
   /** Generic type parameter names, e.g. ['T'] for fn foo<T>(...) */
   typeParams?: string[]
@@ -332,12 +334,16 @@ export interface StructField {
 export interface StructDecl {
   name: string
   fields: StructField[]
+  /** True when the struct was declared with `@singleton` */
+  isSingleton?: boolean
   span?: Span
 }
 
 export interface ImplBlock {
   kind: 'impl_block'
   typeName: string
+  /** Trait name when declared as `impl TraitName for TypeName` (e.g. "Display") */
+  traitName?: string
   methods: FnDecl[]
   span?: Span
 }

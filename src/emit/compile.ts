@@ -296,6 +296,12 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     for (const fn of hir.functions) {
       if (fn.watchObjective) {
         watchFunctions.push({ name: fn.name, objective: fn.watchObjective })
+      } else {
+        // Fallback: extract from decorator if watchObjective not propagated
+        const watchDec = fn.decorators?.find(d => d.name === 'watch' && d.args?.objective)
+        if (watchDec?.args?.objective) {
+          watchFunctions.push({ name: fn.name, objective: watchDec.args.objective })
+        }
       }
       for (const dec of fn.decorators) {
         if (dec.name === 'tick') tickFunctions.push(fn.name)
@@ -442,4 +448,19 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const sourceLines = processedSource.split('\n')
     throw parseErrorMessage('LoweringError', (err as Error).message, sourceLines, filePath)
   }
+}
+
+/**
+ * Compute a scoreboard objective name for a @singleton struct field.
+ * Format: _s_<struct>_<field>, truncated so total length ≤ 16 chars.
+ * If struct+field combined (with _s_ and _) exceeds 16:
+ *   use first 4 chars of struct, first 8 chars of field.
+ */
+function singletonObjectiveName(structName: string, fieldName: string): string {
+  const overhead = 5 // "_s_" (3) + "_" (1) = 4, +1 for safety  -- actually "_s_" + "_" = 4
+  // Budget: 16 - 4 = 12 chars for struct + field combined
+  if (structName.length + fieldName.length <= 12) {
+    return `_s_${structName}_${fieldName}`
+  }
+  return `_s_${structName.slice(0, 4)}_${fieldName.slice(0, 8)}`
 }

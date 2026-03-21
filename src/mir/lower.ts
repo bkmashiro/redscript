@@ -22,8 +22,11 @@ import { detectMacroFunctions, BUILTIN_SET, type MacroFunctionInfo } from './mac
 export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
   // Build struct definitions: name → field names
   const structDefs = new Map<string, string[]>()
+  // Track @singleton struct names for special expansion of GameState::set(gs) calls
+  const singletonStructs = new Set<string>()
   for (const s of hir.structs) {
     structDefs.set(s.name, s.fields.map(f => f.name))
+    if (s.isSingleton) singletonStructs.add(s.name)
   }
 
   // Build enum definitions: enumName → variantName → integer value
@@ -91,7 +94,7 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
 
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues, singletonStructs)
     allFunctions.push(fn, ...helpers)
   }
 
@@ -169,6 +172,8 @@ class FnContext {
   specializedFnsRegistry: Map<string, MIRFunction[]> = new Map()
   /** Module-level const values: name → integer value (inlined at use sites) */
   constValues: Map<string, number> = new Map()
+  /** @singleton struct names — static_call GameState::set(gs) expands struct fields */
+  singletonStructs: Set<string> = new Set()
 
   constructor(
     namespace: string,
@@ -288,11 +293,13 @@ function lowerFunction(
   overrideName?: string,
   enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map(),
   constValues: Map<string, number> = new Map(),
+  singletonStructs: Set<string> = new Set(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const mirFnName = overrideName ?? fn.name
   const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = sourceFile
   ctx.constValues = constValues
+  ctx.singletonStructs = singletonStructs
   if (hirFnMap) ctx.hirFunctions = hirFnMap
   if (specializedFnsRegistry) ctx.specializedFnsRegistry = specializedFnsRegistry
   const fnMacroInfo = macroInfo.get(fn.name)

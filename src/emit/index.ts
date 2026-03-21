@@ -31,6 +31,8 @@ export interface EmitOptions {
   mcVersion?: McVersion
   /** Map of EventTypeName → list of fully-qualified function references for @on handlers */
   eventHandlers?: Map<string, string[]>
+  /** Scoreboard objective names for @singleton struct fields — added to load.mcfunction */
+  singletonObjectives?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -56,10 +58,13 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     }, null, 2) + '\n',
   })
 
+  const singletonObjectives = options.singletonObjectives ?? []
+
   // load.mcfunction — creates the scoreboard objective
   const loadCmds = [
     `scoreboard objectives add ${objective} dummy`,
     ...watchFns.map(watch => `scoreboard objectives add ${watchPrevObjective(watch.name)} dummy`),
+    ...singletonObjectives.map(obj => `scoreboard objectives add ${obj} dummy`),
   ]
   files.push({
     path: `data/${namespace}/function/load.mcfunction`,

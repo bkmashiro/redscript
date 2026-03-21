@@ -199,6 +199,8 @@ export interface HIRFunction {
   isLibraryFn?: boolean
   isExported?: boolean
   span?: Span
+  /** Set when the function is decorated with @watch("objective") — the scoreboard objective to watch. */
+  watchObjective?: string
 }
 
 export interface HIRStructField {
@@ -209,11 +211,15 @@ export interface HIRStructField {
 export interface HIRStruct {
   name: string
   fields: HIRStructField[]
+  /** True when the struct was declared with `@singleton` */
+  isSingleton?: boolean
   span?: Span
 }
 
 export interface HIRImplBlock {
   typeName: string
+  /** Trait name when declared as `impl TraitName for TypeName` (e.g. "Display") */
+  traitName?: string
   methods: HIRFunction[]
   span?: Span
 }

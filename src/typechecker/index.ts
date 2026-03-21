@@ -237,6 +237,37 @@ export class TypeChecker {
         fields.set(field.name, field.type)
       }
       this.structs.set(struct.name, fields)
+
+      // @singleton structs get synthetic static get() and set(gs) methods
+      if (struct.isSingleton) {
+        const structType: TypeNode = { kind: 'struct', name: struct.name }
+        let singletonMethods = this.implMethods.get(struct.name)
+        if (!singletonMethods) {
+          singletonMethods = new Map()
+          this.implMethods.set(struct.name, singletonMethods)
+        }
+        const voidType: TypeNode = { kind: 'named', name: 'void' }
+        // Synthetic get() — no params, returns struct
+        singletonMethods.set('get', {
+          name: 'get',
+          params: [],
+          returnType: structType,
+          decorators: [],
+          body: [],
+          typeParams: undefined,
+          isLibraryFn: true,
+        })
+        // Synthetic set(gs: StructName) — takes struct, returns void
+        singletonMethods.set('set', {
+          name: 'set',
+          params: [{ name: 'gs', type: structType }],
+          returnType: voidType,
+          decorators: [],
+          body: [],
+          typeParams: undefined,
+          isLibraryFn: true,
+        })
+      }
     }
 
     for (const enumDecl of program.enums ?? []) {

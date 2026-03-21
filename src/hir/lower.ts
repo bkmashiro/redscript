@@ -33,10 +33,12 @@ export function lowerToHIR(program: Program): HIRModule {
     structs: program.structs.map((s): HIRStruct => ({
       name: s.name,
       fields: s.fields.map(f => ({ name: f.name, type: f.type })),
+      isSingleton: s.isSingleton,
       span: s.span,
     })),
     implBlocks: program.implBlocks.map((ib): HIRImplBlock => ({
       typeName: ib.typeName,
+      traitName: ib.traitName,
       methods: ib.methods.map(lowerFunction),
       span: ib.span,
     })),
@@ -95,6 +97,7 @@ function lowerFunction(fn: FnDecl): HIRFunction {
     isLibraryFn: fn.isLibraryFn,
     isExported: fn.isExported,
     span: fn.span,
+    watchObjective: fn.watchObjective,
   }
 }
 
