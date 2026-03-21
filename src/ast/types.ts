@@ -270,7 +270,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline'
+  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'config'
   args?: {
     rate?: number
     objective?: string
@@ -284,6 +284,10 @@ export interface Decorator {
     ticks?: number
     /** @deprecated decorator message */
     message?: string
+    /** @config decorator: config key name */
+    configKey?: string
+    /** @config decorator: default value */
+    configDefault?: number
   }
   /** Raw positional arguments (used by @requires and future generic decorators). */
   rawArgs?: Array<{ kind: 'string'; value: string } | { kind: 'number'; value: number }>
@@ -369,6 +373,10 @@ export interface GlobalDecl {
   type: TypeNode
   init: Expr
   mutable: boolean  // let = true, const = false
+  /** Present when the global was declared with @config("key", default: value) */
+  configKey?: string
+  /** Default value for @config globals */
+  configDefault?: number
   span?: Span
 }
 
