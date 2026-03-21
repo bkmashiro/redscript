@@ -69,6 +69,9 @@ export function compileModules(
     const tokens = lexer.tokenize()
     const parser = new Parser(tokens, mod.source, mod.filePath)
     const ast = parser.parse(namespace)
+    if (parser.parseErrors.length > 0) {
+      throw parser.parseErrors[0]
+    }
 
     // Verify declared module name matches provided name
     const declaredName = ast.moduleName

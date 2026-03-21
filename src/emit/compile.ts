@@ -40,6 +40,12 @@ export interface CompileOptions {
   lenient?: boolean
   /** Extra directories to search when resolving imports (in addition to relative and stdlib). */
   includeDirs?: string[]
+  /**
+   * Compile-time configuration values injected via @config decorator.
+   * Values provided here override the @config default values.
+   * e.g. { max_players: 10, difficulty: 3 }
+   */
+  config?: Record<string, number>
 }
 
 export interface CompileResult {
@@ -47,6 +53,57 @@ export interface CompileResult {
   warnings: string[]
   /** Always true — v1 compat shim (compile() throws on error) */
   readonly success: true
+}
+
+function pruneLibraryFunctionFiles(
+  files: DatapackFile[],
+  libraryPaths: Set<string>,
+): DatapackFile[] {
+  if (libraryPaths.size === 0) return files
+
+  const fnPathToFilePath = new Map<string, string>()
+  for (const file of files) {
+    const match = file.path.match(/^data\/([^/]+)\/function\/(.+)\.mcfunction$/)
+    if (match) {
+      fnPathToFilePath.set(`${match[1]}:${match[2]}`, file.path)
+    }
+  }
+
+  const callGraph = new Map<string, Set<string>>()
+  const callPattern = /\bfunction\s+([\w\-]+:[\w\-./]+)/g
+  for (const file of files) {
+    if (!file.path.endsWith('.mcfunction')) continue
+    const called = new Set<string>()
+    let match: RegExpExecArray | null
+    callPattern.lastIndex = 0
+    while ((match = callPattern.exec(file.content)) !== null) {
+      called.add(match[1])
+    }
+    callGraph.set(file.path, called)
+  }
+
+  const reachableFiles = new Set<string>()
+  const queue: string[] = []
+  for (const file of files) {
+    if (!file.path.endsWith('.mcfunction')) continue
+    if (libraryPaths.has(file.path)) continue
+    queue.push(file.path)
+    reachableFiles.add(file.path)
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    const called = callGraph.get(current) ?? new Set<string>()
+    for (const fnPath of called) {
+      const filePath = fnPathToFilePath.get(fnPath)
+      if (filePath && !reachableFiles.has(filePath)) {
+        reachableFiles.add(filePath)
+        queue.push(filePath)
+      }
+    }
+  }
+
+  return files.filter(file => !libraryPaths.has(file.path) || reachableFiles.has(file.path))
 }
 
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
@@ -63,6 +120,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const parser = new Parser(tokens, processedSource, filePath)
   const ast = parser.parse(namespace)
   warnings.push(...parser.warnings)
+  // Check for parse errors collected during error recovery (multiple errors reported)
+  if (parser.parseErrors.length > 0) {
+    throw parser.parseErrors[0]
+  }
 
   // Resolve whole-module file imports: `import player_utils;` (no `::` symbol)
   // These are resolved from: relative path, stdlib dir, or extra includeDirs.
@@ -159,7 +220,35 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
   }
 
-  // Stage 1b: Type checking
+  // Stage 1b: Resolve @config globals — inject compile-time config values (or defaults)
+  // Convert @config globals into module-level consts so MIR can inline them as literals.
+  // This must happen before type checking so the checker sees consts, not uninitialised globals.
+  {
+    const configValues = options.config ?? {}
+    const configGlobalNames = new Set<string>()
+    for (const g of ast.globals) {
+      if (g.configKey !== undefined) {
+        const resolvedValue = Object.prototype.hasOwnProperty.call(configValues, g.configKey)
+          ? configValues[g.configKey]
+          : (g.configDefault ?? 0)
+        const intValue = Math.round(resolvedValue)
+        // Add as a const so MIR constValues map can inline it
+        ast.consts.push({
+          name: g.name,
+          type: { kind: 'named', name: 'int' },
+          value: { kind: 'int_lit', value: intValue },
+          span: g.span,
+        })
+        configGlobalNames.add(g.name)
+      }
+    }
+    // Remove @config globals (they are now consts)
+    if (configGlobalNames.size > 0) {
+      ast.globals = ast.globals.filter(g => !configGlobalNames.has(g.name))
+    }
+  }
+
+  // Stage 1c: Type checking
   // Run TypeChecker on the merged AST. In error-mode (default), throw on first type error.
   // In lenient mode, demote type errors to warnings.
   {
@@ -187,6 +276,12 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Stage 2b: Monomorphize generic functions
     const hir = monomorphize(hirRaw)
 
+    const libraryFilePaths = new Set(
+      hir.functions
+        .filter(fn => fn.isLibraryFn && fn.decorators.length === 0)
+        .map(fn => `data/${namespace}/function/${fn.name}.mcfunction`)
+    )
+
     // Stage 2c: Deprecated usage check — emit warnings for calls to @deprecated functions
     warnings.push(...checkDeprecatedCalls(hir))
 
@@ -199,13 +294,13 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const scheduleFunctions: Array<{ name: string; ticks: number }> = []
     const eventHandlers = new Map<string, string[]>()
     for (const fn of hir.functions) {
+      if (fn.watchObjective) {
+        watchFunctions.push({ name: fn.name, objective: fn.watchObjective })
+      }
       for (const dec of fn.decorators) {
         if (dec.name === 'tick') tickFunctions.push(fn.name)
         if (dec.name === 'load') loadFunctions.push(fn.name)
         if (dec.name === 'inline') inlineFunctions.add(fn.name)
-        if (dec.name === 'watch' && dec.args?.objective) {
-          watchFunctions.push({ name: fn.name, objective: dec.args.objective })
-        }
         if (dec.name === 'coroutine') {
           coroutineInfos.push({
             fnName: fn.name,
@@ -276,10 +371,72 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       }
     }
 
-    // Stage 7: LIR → .mcfunction
-    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions, generateSourceMap, mcVersion, eventHandlers })
+    // Stage 6.9: Inject synthetic LIR functions for @singleton structs
+    // Each @singleton struct gets:
+    //   - A "<StructName>_get" function that reads all fields from scoreboard
+    //   - A "<StructName>_set" function that writes all fields back to scoreboard
+    // Fields are stored in scoreboard objectives named "_sng_<StructName>_<fieldName>"
+    // (max 16 chars for objective name — truncated with hash suffix if needed)
+    const singletonObjectives: string[] = []
+    for (const s of hir.structs) {
+      if (!s.isSingleton) continue
+      const structName = s.name
+      const objective = lirOpt.objective  // the main ns objective for return values
 
-    return { files, warnings, success: true as const }
+      // Build _get function: reads each field from its own scoreboard objective
+      // Return struct fields via __rf_<field> slots in the main objective
+      const getInstrs: import('../lir/types').LIRInstr[] = []
+      for (const field of s.fields) {
+        const fieldObj = singletonObjectiveName(structName, field.name)
+        if (!singletonObjectives.includes(fieldObj)) {
+          singletonObjectives.push(fieldObj)
+        }
+        // copy: scoreboard players operation $__rf_<field> <obj> = __sng_<S>_<f> <fieldObj>
+        getInstrs.push({
+          kind: 'score_copy',
+          dst: { player: `$__rf_${field.name}`, obj: objective },
+          src: { player: `__sng`, obj: fieldObj },
+        })
+      }
+      // Return value placeholder
+      getInstrs.push({ kind: 'score_set', dst: { player: '$ret', obj: objective }, value: 0 })
+
+      // Use `::` naming so it matches how static_call `GameState::get` is qualified
+      // fnNameToPath converts `GameState::get` → `data/<ns>/function/gamestate/get.mcfunction`
+      lirOpt.functions.push({
+        name: `${structName}::get`,
+        instructions: getInstrs,
+        isMacro: false,
+        macroParams: [],
+      })
+
+      // Build _set function: writes each field back to its scoreboard objective
+      // Parameters come in via $p0..$pN slots (one per field)
+      const setInstrs: import('../lir/types').LIRInstr[] = []
+      for (let i = 0; i < s.fields.length; i++) {
+        const field = s.fields[i]
+        const fieldObj = singletonObjectiveName(structName, field.name)
+        setInstrs.push({
+          kind: 'score_copy',
+          dst: { player: `__sng`, obj: fieldObj },
+          src: { player: `$p${i}`, obj: objective },
+        })
+      }
+      setInstrs.push({ kind: 'score_set', dst: { player: '$ret', obj: objective }, value: 0 })
+
+      lirOpt.functions.push({
+        name: `${structName}::set`,
+        instructions: setInstrs,
+        isMacro: false,
+        macroParams: [],
+      })
+    }
+
+    // Stage 7: LIR → .mcfunction
+    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions, generateSourceMap, mcVersion, eventHandlers, singletonObjectives })
+    const prunedFiles = pruneLibraryFunctionFiles(files, libraryFilePaths)
+
+    return { files: prunedFiles, warnings, success: true as const }
   } catch (err) {
     if (err instanceof DiagnosticError) throw err
     const sourceLines = processedSource.split('\n')

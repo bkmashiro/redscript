@@ -83,6 +83,8 @@ export class Parser {
   private inLibraryMode: boolean = false
   /** Warnings accumulated during parsing (e.g. deprecated keyword usage). */
   readonly warnings: string[] = []
+  /** Parse errors collected during error-recovery mode. */
+  readonly parseErrors: DiagnosticError[] = []
 
   constructor(tokens: Token[], source?: string, filePath?: string) {
     this.tokens = tokens
@@ -165,6 +167,54 @@ export class Parser {
   }
 
   // -------------------------------------------------------------------------
+  // Error Recovery
+  // -------------------------------------------------------------------------
+
+  /**
+   * Synchronize to the next top-level declaration boundary after a parse error.
+   * Skips tokens until we find a keyword that starts a top-level declaration,
+   * or a `}` (end of a block), or EOF.
+   */
+  private syncToNextDecl(): void {
+    const TOP_LEVEL_KEYWORDS = new Set([
+      'fn', 'struct', 'impl', 'enum', 'const', 'let', 'export', 'declare', 'import', 'namespace', 'module'
+    ])
+    while (!this.check('eof')) {
+      const kind = this.peek().kind
+      if (kind === '}') {
+        this.advance() // consume the stray `}`
+        return
+      }
+      if (TOP_LEVEL_KEYWORDS.has(kind)) {
+        return
+      }
+      // Also recover on a plain ident that could be 'import' keyword used as ident
+      if (kind === 'ident' && this.peek().value === 'import') {
+        return
+      }
+      this.advance()
+    }
+  }
+
+  /**
+   * Synchronize to the next statement boundary inside a block after a parse error.
+   * Skips tokens until we reach `;`, `}`, or EOF.
+   */
+  private syncToNextStmt(): void {
+    while (!this.check('eof')) {
+      const kind = this.peek().kind
+      if (kind === ';') {
+        this.advance() // consume the `;`
+        return
+      }
+      if (kind === '}') {
+        return // leave `}` for parseBlock to consume
+      }
+      this.advance()
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Program
   // -------------------------------------------------------------------------
 
@@ -207,46 +257,75 @@ export class Parser {
 
     // Parse struct, function, and import declarations
     while (!this.check('eof')) {
-      if (this.check('let')) {
-        globals.push(this.parseGlobalDecl(true))
-      } else if (this.check('struct')) {
-        structs.push(this.parseStructDecl())
-      } else if (this.check('impl')) {
-        implBlocks.push(this.parseImplBlock())
-      } else if (this.check('enum')) {
-        enums.push(this.parseEnumDecl())
-      } else if (this.check('const')) {
-        consts.push(this.parseConstDecl())
-      } else if (this.check('declare')) {
-        // Declaration-only stub (e.g. from builtins.d.mcrs) — parse and discard
-        this.advance() // consume 'declare'
-        this.parseDeclareStub()
-      } else if (this.check('export')) {
-        declarations.push(this.parseExportedFnDecl())
-      } else if (this.check('import') || (this.check('ident') && this.peek().value === 'import')) {
-        // `import math::sin;` or `import math::*;` or `import player_utils;` (whole-module file import)
-        this.advance() // consume 'import' (keyword or ident)
-        const importToken = this.peek()
-        const modName = this.expect('ident').value
-        // Check for `::` — if present, this is a symbol import; otherwise, whole-module import
-        if (this.check('::')) {
-          this.advance() // consume '::'
-          let symbol: string
-          if (this.check('*')) {
-            this.advance()
-            symbol = '*'
-          } else {
-            symbol = this.expect('ident').value
+      try {
+        if (this.check('decorator') && this.peek().value.startsWith('@config')) {
+          // @config decorator on a global let
+          const decorToken = this.advance()
+          const decorator = this.parseDecoratorValue(decorToken.value)
+          if (!this.check('let')) {
+            this.error('@config decorator must be followed by a let declaration')
           }
-          this.match(';')
-          imports.push(this.withLoc({ moduleName: modName, symbol }, importToken))
+          const g = this.parseGlobalDecl(true)
+          g.configKey = decorator.args?.configKey
+          g.configDefault = decorator.args?.configDefault
+          globals.push(g)
+        } else if (this.check('let')) {
+          globals.push(this.parseGlobalDecl(true))
+        } else if (this.check('decorator') && this.peek().value === '@singleton') {
+          // @singleton decorator on a struct
+          this.advance() // consume '@singleton'
+          if (!this.check('struct')) {
+            this.error('@singleton decorator must be followed by a struct declaration')
+          }
+          const s = this.parseStructDecl()
+          s.isSingleton = true
+          structs.push(s)
+        } else if (this.check('struct')) {
+          structs.push(this.parseStructDecl())
+        } else if (this.check('impl')) {
+          implBlocks.push(this.parseImplBlock())
+        } else if (this.check('enum')) {
+          enums.push(this.parseEnumDecl())
+        } else if (this.check('const')) {
+          consts.push(this.parseConstDecl())
+        } else if (this.check('declare')) {
+          // Declaration-only stub (e.g. from builtins.d.mcrs) — parse and discard
+          this.advance() // consume 'declare'
+          this.parseDeclareStub()
+        } else if (this.check('export')) {
+          declarations.push(this.parseExportedFnDecl())
+        } else if (this.check('import') || (this.check('ident') && this.peek().value === 'import')) {
+          // `import math::sin;` or `import math::*;` or `import player_utils;` (whole-module file import)
+          this.advance() // consume 'import' (keyword or ident)
+          const importToken = this.peek()
+          const modName = this.expect('ident').value
+          // Check for `::` — if present, this is a symbol import; otherwise, whole-module import
+          if (this.check('::')) {
+            this.advance() // consume '::'
+            let symbol: string
+            if (this.check('*')) {
+              this.advance()
+              symbol = '*'
+            } else {
+              symbol = this.expect('ident').value
+            }
+            this.match(';')
+            imports.push(this.withLoc({ moduleName: modName, symbol }, importToken))
+          } else {
+            // Whole-module import: `import player_utils;`
+            this.match(';')
+            imports.push(this.withLoc({ moduleName: modName, symbol: undefined }, importToken))
+          }
         } else {
-          // Whole-module import: `import player_utils;`
-          this.match(';')
-          imports.push(this.withLoc({ moduleName: modName, symbol: undefined }, importToken))
+          declarations.push(this.parseFnDecl())
         }
-      } else {
-        declarations.push(this.parseFnDecl())
+      } catch (err) {
+        if (err instanceof DiagnosticError) {
+          this.parseErrors.push(err)
+          this.syncToNextDecl()
+        } else {
+          throw err
+        }
       }
     }
 
@@ -325,7 +404,15 @@ export class Parser {
 
   private parseImplBlock(): ImplBlock {
     const implToken = this.expect('impl')
-    const typeName = this.expect('ident').value
+    let traitName: string | undefined
+    let typeName: string
+    const firstName = this.expect('ident').value
+    if (this.match('for')) {
+      traitName = firstName
+      typeName = this.expect('ident').value
+    } else {
+      typeName = firstName
+    }
     this.expect('{')
 
     const methods: FnDecl[] = []
@@ -334,7 +421,7 @@ export class Parser {
     }
 
     this.expect('}')
-    return this.withLoc({ kind: 'impl_block', typeName, methods }, implToken)
+    return this.withLoc({ kind: 'impl_block', traitName, typeName, methods }, implToken)
   }
 
   private parseConstDecl(): ConstDecl {
@@ -362,8 +449,14 @@ export class Parser {
     const name = this.expect('ident').value
     this.expect(':')
     const type = this.parseType()
-    this.expect('=')
-    const init = this.parseExpr()
+    let init: Expr
+    if (this.match('=')) {
+      init = this.parseExpr()
+    } else {
+      // No init — valid only for @config-decorated globals (resolved later)
+      // Use a placeholder zero literal; will be replaced in compile step
+      init = { kind: 'int_lit', value: 0 }
+    }
     this.match(';')
     return this.withLoc({ kind: 'global', name, type, init, mutable }, token)
   }
@@ -382,6 +475,7 @@ export class Parser {
 
   private parseFnDecl(implTypeName?: string): FnDecl {
     const decorators = this.parseDecorators()
+    const watchObjective = decorators.find(decorator => decorator.name === 'watch')?.args?.objective
 
     // Map @keep decorator to isExported flag (backward compat)
     let isExported: boolean | undefined
@@ -422,7 +516,7 @@ export class Parser {
 
     const fn: import('../ast/types').FnDecl = this.withLoc(
       { name, typeParams, params, returnType, decorators: filteredDecorators, body,
-        isLibraryFn: this.inLibraryMode || undefined, isExported },
+        isLibraryFn: this.inLibraryMode || undefined, isExported, watchObjective },
       fnToken,
     )
     if (fn.span && closingBraceLine) fn.span.endLine = closingBraceLine
@@ -502,6 +596,21 @@ export class Parser {
         }
         return { name, args }
       }
+    }
+
+    // Handle @config("key", default: value)
+    if (name === 'config') {
+      // Format: @config("key_name", default: 42)
+      const configMatch = argsStr.match(/^"([^"]+)"\s*,\s*default\s*:\s*(-?\d+(?:\.\d+)?)$/)
+      if (configMatch) {
+        return { name, args: { configKey: configMatch[1], configDefault: parseFloat(configMatch[2]) } }
+      }
+      // Format: @config("key_name") — no default
+      const keyOnlyMatch = argsStr.match(/^"([^"]+)"$/)
+      if (keyOnlyMatch) {
+        return { name, args: { configKey: keyOnlyMatch[1] } }
+      }
+      this.error(`Invalid @config syntax. Expected: @config("key", default: value) or @config("key")`)
     }
 
     // Handle @deprecated("message")
@@ -680,7 +789,16 @@ export class Parser {
     const stmts: Stmt[] = []
 
     while (!this.check('}') && !this.check('eof')) {
-      stmts.push(this.parseStmt())
+      try {
+        stmts.push(this.parseStmt())
+      } catch (err) {
+        if (err instanceof DiagnosticError) {
+          this.parseErrors.push(err)
+          this.syncToNextStmt()
+        } else {
+          throw err
+        }
+      }
     }
 
     this.expect('}')
