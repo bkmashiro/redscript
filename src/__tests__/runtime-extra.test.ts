@@ -581,3 +581,114 @@ describe('runtime — MCRuntime misc', () => {
     expect(rt.functions.size).toBeGreaterThan(0)
   })
 })
+
+// ── Additional tp coverage ────────────────────────────────────────────────
+
+describe('runtime — tp additional variants', () => {
+  test('tp self to absolute coords (3 args)', () => {
+    const rt = new MCRuntime('test')
+    const p = rt.spawnEntity(['p'], 'player', { x: 0, y: 0, z: 0 })
+    rt.execCommand('tp 5 10 15', p)
+    expect(p.position).toEqual({ x: 5, y: 10, z: 15 })
+  })
+
+  test('tp entity to entity', () => {
+    const rt = new MCRuntime('test')
+    const src = rt.spawnEntity(['mover'], 'player', { x: 10, y: 64, z: 10 })
+    const dst = rt.spawnEntity(['target'], 'player', { x: 50, y: 70, z: 50 })
+    rt.execCommand('execute as @e[tag=mover] run tp @s @e[tag=target]', src)
+    expect(src.position).toEqual({ x: 50, y: 70, z: 50 })
+  })
+
+  test('tp selector to coords', () => {
+    const rt = new MCRuntime('test')
+    rt.spawnEntity(['mob'], 'zombie', { x: 0, y: 64, z: 0 })
+    rt.execCommand('tp @e[tag=mob] 100 64 100')
+    const mobs = rt.getEntities('@e[tag=mob]')
+    expect(mobs[0].position).toEqual({ x: 100, y: 64, z: 100 })
+  })
+})
+
+// ── Kill command ──────────────────────────────────────────────────────────
+
+describe('runtime — kill command', () => {
+  test('kill self entity removes from entities list', () => {
+    const rt = new MCRuntime('test')
+    const p = rt.spawnEntity(['victim'], 'player', { x: 0, y: 0, z: 0 })
+    rt.execCommand('kill @s', p)
+    expect(rt.getEntities('@e[tag=victim]')).toHaveLength(0)
+  })
+
+  test('kill by selector removes matching entities', () => {
+    const rt = new MCRuntime('test')
+    rt.spawnEntity(['dead1'], 'zombie', { x: 0, y: 0, z: 0 })
+    rt.spawnEntity(['dead2'], 'zombie', { x: 1, y: 0, z: 0 })
+    rt.spawnEntity(['alive'], 'player', { x: 2, y: 0, z: 0 })
+    rt.execCommand('kill @e[type=zombie]')
+    expect(rt.getEntities('@e[type=zombie]')).toHaveLength(0)
+    expect(rt.getEntities('@e[tag=alive]')).toHaveLength(1)
+  })
+})
+
+// ── xp and effect edge cases ──────────────────────────────────────────────
+
+describe('runtime — xp edge cases', () => {
+  test('xp add to @s executor', () => {
+    const rt = new MCRuntime('test')
+    const p = rt.spawnEntity(['p'], 'player', { x: 0, y: 0, z: 0 })
+    rt.execCommand('xp add @s 100 points', p)
+    expect(rt.xp.get(p.id)).toBe(100)
+  })
+
+  test('xp set with selector', () => {
+    const rt = new MCRuntime('test')
+    const p = rt.spawnEntity(['p'], 'player', { x: 0, y: 0, z: 0 })
+    rt.execCommand('xp set @e[tag=p] 50 points')
+    expect(rt.xp.get(p.id)).toBe(50)
+  })
+})
+
+// ── tellraw extractJsonText edge cases ────────────────────────────────────
+
+describe('runtime — tellraw extractJsonText', () => {
+  test('tellraw with text component', () => {
+    const rt = new MCRuntime('test')
+    rt.execCommand('tellraw @a {"text":"hello"}')
+    expect(rt.getChatLog()).toContain('hello')
+  })
+
+  test('tellraw with plain string JSON', () => {
+    const rt = new MCRuntime('test')
+    rt.execCommand('tellraw @a "plain text"')
+    expect(rt.getChatLog()).toContain('plain text')
+  })
+
+  test('tellraw with array of text parts', () => {
+    const rt = new MCRuntime('test')
+    rt.execCommand('tellraw @a [{"text":"hello"},{"text":" world"}]')
+    expect(rt.getChatLog().some(m => m.includes('hello'))).toBe(true)
+  })
+
+  test('title with subtitle', () => {
+    const rt = new MCRuntime('test')
+    rt.execCommand('title @a title {"text":"big title"}')
+    expect(rt.getChatLog().some(m => m.includes('[TITLE]'))).toBe(true)
+  })
+
+  test('title with subtitle kind', () => {
+    const rt = new MCRuntime('test')
+    rt.execCommand('title @a subtitle {"text":"small title"}')
+    expect(rt.getChatLog().some(m => m.includes('[SUBTITLE]'))).toBe(true)
+  })
+})
+
+// ── scoreboard players get ────────────────────────────────────────────────
+
+describe('runtime — scoreboard players get', () => {
+  test('scoreboard players get returns score via store result', () => {
+    const rt = new MCRuntime('test')
+    rt.setScore('player1', 'rs', 55)
+    rt.execCommand('execute store result score result rs run scoreboard players get player1 rs')
+    expect(rt.getScore('result', 'rs')).toBe(55)
+  })
+})
