@@ -500,6 +500,10 @@ export class TypeChecker {
       case 'raw':
         // Raw commands are not type checked
         break
+      case 'const_decl':
+        // Local const: register in scope as immutable with its declared type
+        this.scope.set(stmt.name, { type: stmt.type, mutable: false })
+        break
     }
   }
 

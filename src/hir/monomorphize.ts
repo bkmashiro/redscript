@@ -283,6 +283,8 @@ class Monomorphizer {
           init: this.rewriteExpr(stmt.init, ctx),
           body: this.rewriteBlock(stmt.body, ctx),
         }
+      case 'const_decl':
+        return { ...stmt, value: this.rewriteExpr(stmt.value, ctx) }
       case 'break':
       case 'continue':
       case 'raw':
