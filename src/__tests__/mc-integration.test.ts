@@ -1596,7 +1596,7 @@ describe('MC Integration - entity tag methods (@s.tag/untag/has_tag)', () => {
   })
 
   test('@s.tag adds tag, has_tag returns 1; @s.untag removes tag, has_tag returns 0', async () => {
-    if (!serverOnline) return
+    if (!serverOnline || !botOnline) return  // requires TestBot as @s context
 
     // Must run as TestBot so @s is an actual player entity
     await mc.command(`/execute as TestBot run function ${NS}:test_tag_ops`)
