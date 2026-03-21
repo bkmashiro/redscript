@@ -10436,7 +10436,12 @@ var Parser = class _Parser {
         end = this.parseUnaryExpr();
       }
     } else {
-      start = this.parseExpr();
+      const arrayOrStart = this.parseExpr();
+      if (!this.check("range_lit")) {
+        const body2 = this.parseBlock();
+        return this.withLoc({ kind: "for_each", binding: varName, array: arrayOrStart, body: body2 }, forToken);
+      }
+      start = arrayOrStart;
       if (this.check("range_lit")) {
         const rangeOp = this.advance();
         inclusive = rangeOp.value.includes("=");
@@ -10474,23 +10479,51 @@ var Parser = class _Parser {
     const body = this.parseBlock();
     return this.withLoc({ kind: "foreach", binding, iterable, body, executeContext }, foreachToken);
   }
+  parseMatchPattern() {
+    if (this.check("ident") && this.peek().value === "_") {
+      this.advance();
+      return { kind: "PatWild" };
+    }
+    if (this.check("ident") && this.peek().value === "None") {
+      this.advance();
+      return { kind: "PatNone" };
+    }
+    if (this.check("ident") && this.peek().value === "Some") {
+      this.advance();
+      this.expect("(");
+      const binding = this.expect("ident").value;
+      this.expect(")");
+      return { kind: "PatSome", binding };
+    }
+    if (this.check("int_lit")) {
+      const tok = this.advance();
+      return { kind: "PatInt", value: parseInt(tok.value, 10) };
+    }
+    if (this.check("-") && this.peek(1).kind === "int_lit") {
+      this.advance();
+      const tok = this.advance();
+      return { kind: "PatInt", value: -parseInt(tok.value, 10) };
+    }
+    const e = this.parseExpr();
+    return { kind: "PatExpr", expr: e };
+  }
   parseMatchStmt() {
     const matchToken = this.expect("match");
-    this.expect("(");
-    const expr = this.parseExpr();
-    this.expect(")");
+    let expr;
+    if (this.check("(")) {
+      this.advance();
+      expr = this.parseExpr();
+      this.expect(")");
+    } else {
+      expr = this.parseExpr();
+    }
     this.expect("{");
     const arms = [];
     while (!this.check("}") && !this.check("eof")) {
-      let pattern;
-      if (this.check("ident") && this.peek().value === "_") {
-        this.advance();
-        pattern = null;
-      } else {
-        pattern = this.parseExpr();
-      }
+      const pattern = this.parseMatchPattern();
       this.expect("=>");
       const body = this.parseBlock();
+      this.match(",");
       arms.push({ pattern, body });
     }
     this.expect("}");
@@ -11534,8 +11567,11 @@ var EVENT_TYPES = {
   },
   BlockBreak: {
     tag: "rs.just_broke_block",
-    params: ["player: Player", "block: string"],
+    params: ["player: Player"],
     detection: "advancement"
+    // Note: block type is NOT available as a runtime parameter — MC has no mechanism
+    // to pass event data to function tags. Use minecraft.mined:<block> scoreboard
+    // stats for per-block detection, or check the block at player's position in handler.
   },
   EntityKill: {
     tag: "rs.just_killed",
@@ -11924,13 +11960,13 @@ var TypeChecker = class {
       case "match":
         this.checkExpr(stmt.expr);
         for (const arm of stmt.arms) {
-          if (arm.pattern) {
-            this.checkExpr(arm.pattern);
+          if (arm.pattern.kind === "PatExpr") {
+            this.checkExpr(arm.pattern.expr);
             const subjectType = this.inferType(stmt.expr);
-            const patternType = this.inferType(arm.pattern);
+            const patternType = this.inferType(arm.pattern.expr);
             const isUnknown = (t) => t.kind === "named" && t.name === "void";
             if (!isUnknown(subjectType) && !isUnknown(patternType) && !this.typesMatch(subjectType, patternType)) {
-              this.report("Match arm pattern type must match subject type", arm.pattern);
+              this.report("Match arm pattern type must match subject type", arm.pattern.expr);
             }
           }
           this.checkBlock(arm.body);

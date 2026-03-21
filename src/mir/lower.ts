@@ -121,7 +121,7 @@ class FnContext {
   /** Tuple variable tracking: varName → array of element temps (index = slot) */
   readonly tupleVars = new Map<string, Temp[]>()
   /** Array variable tracking: varName → { ns, pathPrefix } for NBT-backed int[] */
-  readonly arrayVars = new Map<string, { ns: string; pathPrefix: string }>()
+  readonly arrayVars = new Map<string, { ns: string; pathPrefix: string; knownLen?: number }>()
   /** Macro function info for all functions in the module */
   readonly macroInfo: Map<string, MacroFunctionInfo>
   /** Function parameter info for call_macro generation */
@@ -515,10 +515,29 @@ function lowerStmt(
         const typeName = (stmt.type?.kind === 'struct') ? stmt.type.name : '__anon'
         const fieldTemps = new Map<string, Temp>()
         for (const field of stmt.init.fields) {
-          const val = lowerExpr(field.value, ctx, scope)
-          const t = ctx.freshTemp()
-          ctx.emit({ kind: 'copy', dst: t, src: val })
-          fieldTemps.set(field.name, t)
+          if (field.value.kind === 'struct_lit') {
+            // Nested struct literal: register it as a synthetic var "${parentName}.${fieldName}"
+            // so that chained access like r.pos.x can be resolved
+            const nestedVarName = `${stmt.name}.${field.name}`
+            const nestedTypeName = '__anon'
+            const nestedFieldTemps = new Map<string, Temp>()
+            for (const nestedField of field.value.fields) {
+              const nval = lowerExpr(nestedField.value, ctx, scope)
+              const nt = ctx.freshTemp()
+              ctx.emit({ kind: 'copy', dst: nt, src: nval })
+              nestedFieldTemps.set(nestedField.name, nt)
+            }
+            ctx.structVars.set(nestedVarName, { typeName: nestedTypeName, fields: nestedFieldTemps })
+            // Store a placeholder temp (0) for the field itself in the parent struct
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: 0 })
+            fieldTemps.set(field.name, t)
+          } else {
+            const val = lowerExpr(field.value, ctx, scope)
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'copy', dst: t, src: val })
+            fieldTemps.set(field.name, t)
+          }
         }
         ctx.structVars.set(stmt.name, { typeName, fields: fieldTemps })
       } else if (stmt.type?.kind === 'option') {
@@ -578,7 +597,7 @@ function lowerStmt(
         // Array literal: write to NBT storage, track the var for index access
         const ns = `${ctx.getNamespace()}:arrays`
         const pathPrefix = stmt.name
-        ctx.arrayVars.set(stmt.name, { ns, pathPrefix })
+        ctx.arrayVars.set(stmt.name, { ns, pathPrefix, knownLen: stmt.init.elements.length })
         const elems = stmt.init.elements
         // Check if all elements are pure integer literals (no side-effects)
         const allConst = elems.every(e => e.kind === 'int_lit')
@@ -1343,6 +1362,15 @@ function lowerExpr(
           if (fieldTemp) return { kind: 'temp', name: fieldTemp }
         }
       }
+      // Chained struct field access: v.pos.x → look up synthetic var "v.pos" in structVars
+      if (expr.obj.kind === 'member' && expr.obj.obj.kind === 'ident') {
+        const syntheticName = `${expr.obj.obj.name}.${expr.obj.field}`
+        const nestedSv = ctx.structVars.get(syntheticName)
+        if (nestedSv) {
+          const fieldTemp = nestedSv.fields.get(expr.field)
+          if (fieldTemp) return { kind: 'temp', name: fieldTemp }
+        }
+      }
       // Fallback: opaque
       const obj = lowerExpr(expr.obj, ctx, scope)
       const t = ctx.freshTemp()
@@ -1838,6 +1866,32 @@ function lowerExpr(
     }
 
     case 'invoke': {
+      // Check for array.len() call: arr.len() → compile-time constant or NBT length
+      if (expr.callee.kind === 'member' && expr.callee.field === 'len' && expr.callee.obj.kind === 'ident') {
+        const arrInfo = ctx.arrayVars.get((expr.callee.obj as { kind: 'ident'; name: string }).name)
+        if (arrInfo) {
+          if (arrInfo.knownLen !== undefined) {
+            // Compile-time constant length (literal array)
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: arrInfo.knownLen })
+            return { kind: 'temp', name: t }
+          }
+          // Dynamic array: use scoreboard length tracking temp from scope
+          const lenTemp = scope.get((expr.callee.obj as { kind: 'ident'; name: string }).name)
+          if (lenTemp !== undefined) {
+            return { kind: 'temp', name: lenTemp }
+          }
+          // Fallback: 0 (unknown length)
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'const', dst: t, value: 0 })
+          return { kind: 'temp', name: t }
+        }
+        // Also check scope-tracked length temp for literal arrays
+        const lenTemp = scope.get((expr.callee.obj as { kind: 'ident'; name: string }).name)
+        if (lenTemp !== undefined) {
+          return { kind: 'temp', name: lenTemp }
+        }
+      }
       // Check for struct method call: v.method(args)
       if (expr.callee.kind === 'member' && expr.callee.obj.kind === 'ident') {
         const sv = ctx.structVars.get(expr.callee.obj.name)

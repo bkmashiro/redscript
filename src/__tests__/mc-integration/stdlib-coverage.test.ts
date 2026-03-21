@@ -254,13 +254,17 @@ beforeAll(async () => {
     }
 
     fn test_apply_damage() {
-      scoreboard_set("#enemy1", #health, 100);
-      apply_damage("enemy1", 30);
+      raw("scoreboard objectives add health dummy")
+      let hp: int = 100
+      let new_hp: int = take_damage(hp, 30)
+      scoreboard_set("#enemy1", "health", new_hp)
     }
 
     fn test_apply_damage_clamp() {
-      scoreboard_set("#enemy2", #health, 20);
-      apply_damage("enemy2", 50);
+      raw("scoreboard objectives add health dummy")
+      let hp: int = 20
+      let new_hp: int = take_damage(hp, 50)
+      scoreboard_set("#enemy2", "health", new_hp)
     }
   `, 'stdlib_combat_test', [MATH_SRC, COMBAT_SRC])
 

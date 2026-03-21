@@ -133,14 +133,14 @@ beforeAll(async () => {
     // which then calls this handler. We forward to a test-specific objective.
     @on(ItemUse)
     fn on_item_use(p: Player) {
-      scoreboard_add(p, rs.item_use, 1)
+      scoreboard_add(p, "rs.item_use", 1)
     }
 
     // EntityKill: every time the player kills any entity,
     // rs.kills (totalKillCount) increments, dispatcher calls this handler.
     @on(EntityKill)
     fn on_entity_kill(p: Player) {
-      scoreboard_add(p, rs.kills, 1)
+      scoreboard_add(p, "rs.kills", 1)
     }
   `
 

@@ -19477,7 +19477,12 @@ var require_parser = __commonJS({
             end = this.parseUnaryExpr();
           }
         } else {
-          start = this.parseExpr();
+          const arrayOrStart = this.parseExpr();
+          if (!this.check("range_lit")) {
+            const body2 = this.parseBlock();
+            return this.withLoc({ kind: "for_each", binding: varName, array: arrayOrStart, body: body2 }, forToken);
+          }
+          start = arrayOrStart;
           if (this.check("range_lit")) {
             const rangeOp = this.advance();
             inclusive = rangeOp.value.includes("=");
@@ -19515,23 +19520,51 @@ var require_parser = __commonJS({
         const body = this.parseBlock();
         return this.withLoc({ kind: "foreach", binding, iterable, body, executeContext }, foreachToken);
       }
+      parseMatchPattern() {
+        if (this.check("ident") && this.peek().value === "_") {
+          this.advance();
+          return { kind: "PatWild" };
+        }
+        if (this.check("ident") && this.peek().value === "None") {
+          this.advance();
+          return { kind: "PatNone" };
+        }
+        if (this.check("ident") && this.peek().value === "Some") {
+          this.advance();
+          this.expect("(");
+          const binding = this.expect("ident").value;
+          this.expect(")");
+          return { kind: "PatSome", binding };
+        }
+        if (this.check("int_lit")) {
+          const tok = this.advance();
+          return { kind: "PatInt", value: parseInt(tok.value, 10) };
+        }
+        if (this.check("-") && this.peek(1).kind === "int_lit") {
+          this.advance();
+          const tok = this.advance();
+          return { kind: "PatInt", value: -parseInt(tok.value, 10) };
+        }
+        const e = this.parseExpr();
+        return { kind: "PatExpr", expr: e };
+      }
       parseMatchStmt() {
         const matchToken = this.expect("match");
-        this.expect("(");
-        const expr = this.parseExpr();
-        this.expect(")");
+        let expr;
+        if (this.check("(")) {
+          this.advance();
+          expr = this.parseExpr();
+          this.expect(")");
+        } else {
+          expr = this.parseExpr();
+        }
         this.expect("{");
         const arms = [];
         while (!this.check("}") && !this.check("eof")) {
-          let pattern;
-          if (this.check("ident") && this.peek().value === "_") {
-            this.advance();
-            pattern = null;
-          } else {
-            pattern = this.parseExpr();
-          }
+          const pattern = this.parseMatchPattern();
           this.expect("=>");
           const body = this.parseBlock();
+          this.match(",");
           arms.push({ pattern, body });
         }
         this.expect("}");
@@ -20761,6 +20794,20 @@ var require_lower = __commonJS({
         isLibrary: program.isLibrary
       };
     }
+    function lowerMatchPattern(pat) {
+      switch (pat.kind) {
+        case "PatSome":
+          return pat;
+        case "PatNone":
+          return pat;
+        case "PatInt":
+          return pat;
+        case "PatWild":
+          return pat;
+        case "PatExpr":
+          return { kind: "PatExpr", expr: lowerExpr(pat.expr) };
+      }
+    }
     function lowerGlobal(g) {
       return {
         name: g.name,
@@ -20930,6 +20977,71 @@ var require_lower = __commonJS({
           };
           return [initStmt, whileStmt];
         }
+        // --- Desugaring: for_each → let __for_len = arr.len(); let __for_i = 0; while(__for_i < __for_len) { let item = arr[__for_i]; body; __for_i = __for_i + 1 } ---
+        case "for_each": {
+          const id = forEachCounter++;
+          const idxName = `__foreach_i_${id}`;
+          const lenName = `__foreach_len_${id}`;
+          const arrExpr = lowerExpr(stmt.array);
+          const lenInitStmt = {
+            kind: "let",
+            name: lenName,
+            type: { kind: "named", name: "int" },
+            init: {
+              kind: "invoke",
+              callee: { kind: "member", obj: arrExpr, field: "len" },
+              args: []
+            },
+            span: stmt.span
+          };
+          const idxInitStmt = {
+            kind: "let",
+            name: idxName,
+            type: { kind: "named", name: "int" },
+            init: { kind: "int_lit", value: 0 },
+            span: stmt.span
+          };
+          const bindingInit = {
+            kind: "let",
+            name: stmt.binding,
+            type: void 0,
+            init: {
+              kind: "index",
+              obj: arrExpr,
+              index: { kind: "ident", name: idxName }
+            },
+            span: stmt.span
+          };
+          const stepStmt = {
+            kind: "expr",
+            expr: {
+              kind: "assign",
+              target: idxName,
+              value: {
+                kind: "binary",
+                op: "+",
+                left: { kind: "ident", name: idxName },
+                right: { kind: "int_lit", value: 1 }
+              }
+            },
+            span: stmt.span
+          };
+          const body = [bindingInit, ...lowerBlock(stmt.body)];
+          const step = [stepStmt];
+          const whileStmt = {
+            kind: "while",
+            cond: {
+              kind: "binary",
+              op: "<",
+              left: { kind: "ident", name: idxName },
+              right: { kind: "ident", name: lenName }
+            },
+            body,
+            step,
+            span: stmt.span
+          };
+          return [lenInitStmt, idxInitStmt, whileStmt];
+        }
         case "foreach":
           return {
             kind: "foreach",
@@ -20944,7 +21056,7 @@ var require_lower = __commonJS({
             kind: "match",
             expr: lowerExpr(stmt.expr),
             arms: stmt.arms.map((arm) => ({
-              pattern: arm.pattern ? lowerExpr(arm.pattern) : null,
+              pattern: lowerMatchPattern(arm.pattern),
               body: lowerBlock(arm.body)
             })),
             span: stmt.span
@@ -21003,6 +21115,7 @@ var require_lower = __commonJS({
     function lowerExecuteSubcommand(sub) {
       return sub;
     }
+    var forEachCounter = 0;
     var COMPOUND_TO_BINOP = {
       "+=": "+",
       "-=": "-",
@@ -21370,10 +21483,15 @@ var require_monomorphize = __commonJS({
             return {
               ...stmt,
               expr: this.rewriteExpr(stmt.expr, ctx),
-              arms: stmt.arms.map((arm) => ({
-                pattern: arm.pattern ? this.rewriteExpr(arm.pattern, ctx) : null,
-                body: this.rewriteBlock(arm.body, ctx)
-              }))
+              arms: stmt.arms.map((arm) => {
+                let pattern;
+                if (arm.pattern.kind === "PatExpr") {
+                  pattern = { kind: "PatExpr", expr: this.rewriteExpr(arm.pattern.expr, ctx) };
+                } else {
+                  pattern = arm.pattern;
+                }
+                return { pattern, body: this.rewriteBlock(arm.body, ctx) };
+              })
             };
           case "execute":
             return { ...stmt, body: this.rewriteBlock(stmt.body, ctx) };
@@ -22110,13 +22228,13 @@ var require_lower2 = __commonJS({
               const vals = elems.map((e) => e.value).join(", ");
               ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${vals}]`, args: [] });
             } else {
-              const zeros = elems.map(() => "0").join(", ");
-              ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${zeros}]`, args: [] });
+              const initVals = elems.map((e) => e.kind === "int_lit" ? String(e.value) : "0").join(", ");
+              ctx.emit({ kind: "call", dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${initVals}]`, args: [] });
               for (let i = 0; i < elems.length; i++) {
+                if (elems[i].kind === "int_lit")
+                  continue;
                 const elemOp = lowerExpr(elems[i], ctx, scope);
-                if (elemOp.kind !== "const" || elems[i].kind !== "int_lit") {
-                  ctx.emit({ kind: "nbt_write", ns, path: `${pathPrefix}[${i}]`, type: "int", scale: 1, src: elemOp });
-                }
+                ctx.emit({ kind: "nbt_write", ns, path: `${pathPrefix}[${i}]`, type: "int", scale: 1, src: elemOp });
               }
             }
             const lenTemp = ctx.freshTemp();
@@ -22348,47 +22466,47 @@ var require_lower2 = __commonJS({
           break;
         }
         case "match": {
-          const matchVal = lowerExpr(stmt.expr, ctx, scope);
           const mergeBlock = ctx.newBlock("match_merge");
+          const hasOptionPats = stmt.arms.some((a) => a.pattern.kind === "PatSome" || a.pattern.kind === "PatNone");
+          let optHasOp;
+          let optValTemp;
+          if (hasOptionPats) {
+            if (stmt.expr.kind === "ident") {
+              const sv = ctx.structVars.get(stmt.expr.name);
+              if (sv && sv.typeName === "__option") {
+                optHasOp = { kind: "temp", name: sv.fields.get("has") };
+                optValTemp = sv.fields.get("val");
+              } else {
+                lowerExpr(stmt.expr, ctx, scope);
+                const hasT = ctx.freshTemp();
+                const valT = ctx.freshTemp();
+                ctx.emit({ kind: "copy", dst: hasT, src: { kind: "temp", name: "__rf_has" } });
+                ctx.emit({ kind: "copy", dst: valT, src: { kind: "temp", name: "__rf_val" } });
+                optHasOp = { kind: "temp", name: hasT };
+                optValTemp = valT;
+              }
+            } else {
+              lowerExpr(stmt.expr, ctx, scope);
+              const hasT = ctx.freshTemp();
+              const valT = ctx.freshTemp();
+              ctx.emit({ kind: "copy", dst: hasT, src: { kind: "temp", name: "__rf_has" } });
+              ctx.emit({ kind: "copy", dst: valT, src: { kind: "temp", name: "__rf_val" } });
+              optHasOp = { kind: "temp", name: hasT };
+              optValTemp = valT;
+            }
+          }
+          const matchVal = hasOptionPats ? optHasOp : lowerExpr(stmt.expr, ctx, scope);
           for (let i = 0; i < stmt.arms.length; i++) {
             const arm = stmt.arms[i];
-            if (arm.pattern === null) {
+            const pat = arm.pattern;
+            if (pat.kind === "PatWild") {
               lowerBlock(arm.body, ctx, new Map(scope));
               if (isPlaceholderTerm(ctx.current().term)) {
                 ctx.terminate({ kind: "jump", target: mergeBlock.id });
               }
-            } else if (arm.pattern.kind === "range_lit") {
-              const range = arm.pattern.range;
-              const armBody = ctx.newBlock("match_arm");
-              const nextArm = ctx.newBlock("match_next");
-              const checks = [];
-              if (range.min !== void 0)
-                checks.push({ op: "ge", bound: range.min });
-              if (range.max !== void 0)
-                checks.push({ op: "le", bound: range.max });
-              if (checks.length === 0) {
-                ctx.terminate({ kind: "jump", target: armBody.id });
-              } else {
-                for (let ci = 0; ci < checks.length; ci++) {
-                  const { op, bound } = checks[ci];
-                  const cmpTemp = ctx.freshTemp();
-                  ctx.emit({ kind: "cmp", dst: cmpTemp, op, a: matchVal, b: { kind: "const", value: bound } });
-                  const passBlock = ci === checks.length - 1 ? armBody : ctx.newBlock("match_range_check");
-                  ctx.terminate({ kind: "branch", cond: { kind: "temp", name: cmpTemp }, then: passBlock.id, else: nextArm.id });
-                  if (ci < checks.length - 1)
-                    ctx.switchTo(passBlock);
-                }
-              }
-              ctx.switchTo(armBody);
-              lowerBlock(arm.body, ctx, new Map(scope));
-              if (isPlaceholderTerm(ctx.current().term)) {
-                ctx.terminate({ kind: "jump", target: mergeBlock.id });
-              }
-              ctx.switchTo(nextArm);
-            } else {
-              const patOp = lowerExpr(arm.pattern, ctx, scope);
+            } else if (pat.kind === "PatNone") {
               const cmpTemp = ctx.freshTemp();
-              ctx.emit({ kind: "cmp", dst: cmpTemp, op: "eq", a: matchVal, b: patOp });
+              ctx.emit({ kind: "cmp", dst: cmpTemp, op: "eq", a: optHasOp, b: { kind: "const", value: 0 } });
               const armBody = ctx.newBlock("match_arm");
               const nextArm = ctx.newBlock("match_next");
               ctx.terminate({ kind: "branch", cond: { kind: "temp", name: cmpTemp }, then: armBody.id, else: nextArm.id });
@@ -22398,6 +22516,77 @@ var require_lower2 = __commonJS({
                 ctx.terminate({ kind: "jump", target: mergeBlock.id });
               }
               ctx.switchTo(nextArm);
+            } else if (pat.kind === "PatSome") {
+              const cmpTemp = ctx.freshTemp();
+              ctx.emit({ kind: "cmp", dst: cmpTemp, op: "eq", a: optHasOp, b: { kind: "const", value: 1 } });
+              const armBody = ctx.newBlock("match_arm");
+              const nextArm = ctx.newBlock("match_next");
+              ctx.terminate({ kind: "branch", cond: { kind: "temp", name: cmpTemp }, then: armBody.id, else: nextArm.id });
+              ctx.switchTo(armBody);
+              const armScope = new Map(scope);
+              if (optValTemp)
+                armScope.set(pat.binding, optValTemp);
+              lowerBlock(arm.body, ctx, armScope);
+              if (isPlaceholderTerm(ctx.current().term)) {
+                ctx.terminate({ kind: "jump", target: mergeBlock.id });
+              }
+              ctx.switchTo(nextArm);
+            } else if (pat.kind === "PatInt") {
+              const cmpTemp = ctx.freshTemp();
+              ctx.emit({ kind: "cmp", dst: cmpTemp, op: "eq", a: matchVal, b: { kind: "const", value: pat.value } });
+              const armBody = ctx.newBlock("match_arm");
+              const nextArm = ctx.newBlock("match_next");
+              ctx.terminate({ kind: "branch", cond: { kind: "temp", name: cmpTemp }, then: armBody.id, else: nextArm.id });
+              ctx.switchTo(armBody);
+              lowerBlock(arm.body, ctx, new Map(scope));
+              if (isPlaceholderTerm(ctx.current().term)) {
+                ctx.terminate({ kind: "jump", target: mergeBlock.id });
+              }
+              ctx.switchTo(nextArm);
+            } else if (pat.kind === "PatExpr") {
+              const expr = pat.expr;
+              if (expr.kind === "range_lit") {
+                const range = expr.range;
+                const armBody = ctx.newBlock("match_arm");
+                const nextArm = ctx.newBlock("match_next");
+                const checks = [];
+                if (range.min !== void 0)
+                  checks.push({ op: "ge", bound: range.min });
+                if (range.max !== void 0)
+                  checks.push({ op: "le", bound: range.max });
+                if (checks.length === 0) {
+                  ctx.terminate({ kind: "jump", target: armBody.id });
+                } else {
+                  for (let ci = 0; ci < checks.length; ci++) {
+                    const { op, bound } = checks[ci];
+                    const cmpTemp = ctx.freshTemp();
+                    ctx.emit({ kind: "cmp", dst: cmpTemp, op, a: matchVal, b: { kind: "const", value: bound } });
+                    const passBlock = ci === checks.length - 1 ? armBody : ctx.newBlock("match_range_check");
+                    ctx.terminate({ kind: "branch", cond: { kind: "temp", name: cmpTemp }, then: passBlock.id, else: nextArm.id });
+                    if (ci < checks.length - 1)
+                      ctx.switchTo(passBlock);
+                  }
+                }
+                ctx.switchTo(armBody);
+                lowerBlock(arm.body, ctx, new Map(scope));
+                if (isPlaceholderTerm(ctx.current().term)) {
+                  ctx.terminate({ kind: "jump", target: mergeBlock.id });
+                }
+                ctx.switchTo(nextArm);
+              } else {
+                const patOp = lowerExpr(expr, ctx, scope);
+                const cmpTemp = ctx.freshTemp();
+                ctx.emit({ kind: "cmp", dst: cmpTemp, op: "eq", a: matchVal, b: patOp });
+                const armBody = ctx.newBlock("match_arm");
+                const nextArm = ctx.newBlock("match_next");
+                ctx.terminate({ kind: "branch", cond: { kind: "temp", name: cmpTemp }, then: armBody.id, else: nextArm.id });
+                ctx.switchTo(armBody);
+                lowerBlock(arm.body, ctx, new Map(scope));
+                if (isPlaceholderTerm(ctx.current().term)) {
+                  ctx.terminate({ kind: "jump", target: mergeBlock.id });
+                }
+                ctx.switchTo(nextArm);
+              }
             }
           }
           if (isPlaceholderTerm(ctx.current().term)) {
@@ -22694,14 +22883,16 @@ var require_lower2 = __commonJS({
         }
         case "call": {
           if (expr.fn === "scoreboard_get" || expr.fn === "score") {
-            const player = hirExprToStringLiteral(expr.args[0]);
+            const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams);
+            const player = !playerArg.isMacro && expr.args[0].kind === "ident" ? "@s" : playerArg.str || "@s";
             const obj = hirExprToStringLiteral(expr.args[1]);
             const t2 = ctx.freshTemp();
             ctx.emit({ kind: "score_read", dst: t2, player, obj });
             return { kind: "temp", name: t2 };
           }
           if (expr.fn === "scoreboard_set") {
-            const player = hirExprToStringLiteral(expr.args[0]);
+            const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams);
+            const player = !playerArg.isMacro && expr.args[0].kind === "ident" ? "@s" : playerArg.str || "@s";
             const obj = hirExprToStringLiteral(expr.args[1]);
             const src = lowerExpr(expr.args[2], ctx, scope);
             ctx.emit({ kind: "score_write", player, obj, src });
@@ -24485,6 +24676,10 @@ var require_interprocedural = __commonJS({
           return { ...instr, a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) };
         case "nbt_write":
           return { ...instr, src: substituteOp(instr.src, sub) };
+        case "nbt_read_dynamic":
+          return { ...instr, indexSrc: substituteOp(instr.indexSrc, sub) };
+        case "nbt_write_dynamic":
+          return { ...instr, indexSrc: substituteOp(instr.indexSrc, sub), valueSrc: substituteOp(instr.valueSrc, sub) };
         case "call":
           return { ...instr, args: instr.args.map((a) => substituteOp(a, sub)) };
         case "call_macro":
@@ -25661,6 +25856,24 @@ var require_emit = __commonJS({
           content: JSON.stringify({ values: tickValues }, null, 2) + "\n"
         });
       }
+      const EVENT_TAG_NAMES = {
+        PlayerJoin: "on_player_join",
+        PlayerDeath: "on_player_death",
+        EntityKill: "on_entity_kill",
+        ItemUse: "on_item_use",
+        BlockBreak: "on_block_break"
+      };
+      if (options.eventHandlers) {
+        for (const [evType, handlers] of options.eventHandlers) {
+          const tagName = EVENT_TAG_NAMES[evType];
+          if (tagName && handlers.length > 0) {
+            files.push({
+              path: `data/rs/tags/function/${tagName}.json`,
+              content: JSON.stringify({ values: handlers }, null, 2) + "\n"
+            });
+          }
+        }
+      }
       return files;
     }
     function emitFunction(fn, namespace, objective, mcVersion) {
@@ -26733,8 +26946,11 @@ var require_types = __commonJS({
       },
       BlockBreak: {
         tag: "rs.just_broke_block",
-        params: ["player: Player", "block: string"],
+        params: ["player: Player"],
         detection: "advancement"
+        // Note: block type is NOT available as a runtime parameter — MC has no mechanism
+        // to pass event data to function tags. Use minecraft.mined:<block> scoreboard
+        // stats for per-block detection, or check the block at player's position in handler.
       },
       EntityKill: {
         tag: "rs.just_killed",
@@ -27118,13 +27334,13 @@ var require_typechecker = __commonJS({
           case "match":
             this.checkExpr(stmt.expr);
             for (const arm of stmt.arms) {
-              if (arm.pattern) {
-                this.checkExpr(arm.pattern);
+              if (arm.pattern.kind === "PatExpr") {
+                this.checkExpr(arm.pattern.expr);
                 const subjectType = this.inferType(stmt.expr);
-                const patternType = this.inferType(arm.pattern);
+                const patternType = this.inferType(arm.pattern.expr);
                 const isUnknown = (t) => t.kind === "named" && t.name === "void";
                 if (!isUnknown(subjectType) && !isUnknown(patternType) && !this.typesMatch(subjectType, patternType)) {
-                  this.report("Match arm pattern type must match subject type", arm.pattern);
+                  this.report("Match arm pattern type must match subject type", arm.pattern.expr);
                 }
               }
               this.checkBlock(arm.body);
@@ -28018,6 +28234,7 @@ var require_compile2 = __commonJS({
     var budget_1 = require_budget();
     var mc_version_1 = require_mc_version();
     var typechecker_1 = require_typechecker();
+    var types_1 = require_types();
     function compile(source, options = {}) {
       const { namespace = "redscript", filePath, generateSourceMap = false, mcVersion = mc_version_1.DEFAULT_MC_VERSION, lenient = false, includeDirs } = options;
       const warnings = [];
@@ -28078,6 +28295,7 @@ var require_compile2 = __commonJS({
         const loadFunctions = [];
         const coroutineInfos = [];
         const scheduleFunctions = [];
+        const eventHandlers = /* @__PURE__ */ new Map();
         for (const fn of hir.functions) {
           for (const dec of fn.decorators) {
             if (dec.name === "tick")
@@ -28093,6 +28311,14 @@ var require_compile2 = __commonJS({
             }
             if (dec.name === "schedule") {
               scheduleFunctions.push({ name: fn.name, ticks: dec.args?.ticks ?? 1 });
+            }
+            if (dec.name === "on" && dec.args?.eventType) {
+              const evType = dec.args.eventType;
+              if ((0, types_1.isEventTypeName)(evType)) {
+                if (!eventHandlers.has(evType))
+                  eventHandlers.set(evType, []);
+                eventHandlers.get(evType).push(`${namespace}:${fn.name}`);
+              }
             }
           }
         }
@@ -28121,7 +28347,7 @@ var require_compile2 = __commonJS({
             }
           }
         }
-        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions, generateSourceMap, mcVersion });
+        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, scheduleFunctions, generateSourceMap, mcVersion, eventHandlers });
         return { files, warnings, success: true };
       } catch (err) {
         if (err instanceof diagnostics_1.DiagnosticError)
@@ -28462,8 +28688,8 @@ var require_modules = __commonJS({
         case "match":
           rewriteExpr(stmt.expr, symbolMap);
           for (const arm of stmt.arms) {
-            if (arm.pattern)
-              rewriteExpr(arm.pattern, symbolMap);
+            if (arm.pattern.kind === "PatExpr")
+              rewriteExpr(arm.pattern.expr, symbolMap);
             rewriteBlock(arm.body, symbolMap);
           }
           break;
