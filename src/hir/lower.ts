@@ -131,6 +131,9 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
     case 'let_destruct':
       return { kind: 'let_destruct', names: stmt.names, type: stmt.type, init: lowerExpr(stmt.init), span: stmt.span }
 
+    case 'const_decl':
+      return { kind: 'const_decl', name: stmt.name, type: stmt.type, value: lowerExpr(stmt.value), span: stmt.span }
+
     case 'expr':
       return { kind: 'expr', expr: lowerExpr(stmt.expr), span: stmt.span }
 

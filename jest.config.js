@@ -15,6 +15,11 @@ module.exports = {
       ],
       testEnvironmentOptions: {},
       retryTimes: 2,
+      globals: {
+        'ts-jest': {
+          diagnostics: false,
+        },
+      },
     },
     {
       displayName: 'unit',
@@ -22,6 +27,11 @@ module.exports = {
       testEnvironment: 'node',
       roots: ['<rootDir>/src'],
       testPathIgnorePatterns: ['mc-integration.test.ts', 'mc-integration/'],
+      globals: {
+        'ts-jest': {
+          diagnostics: false,
+        },
+      },
     },
   ],
 };

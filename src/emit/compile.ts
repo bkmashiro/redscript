@@ -12,6 +12,7 @@ import { preprocessSourceWithMetadata } from '../compile'
 import { DiagnosticError, parseErrorMessage } from '../diagnostics'
 import { lowerToHIR } from '../hir/lower'
 import { monomorphize } from '../hir/monomorphize'
+import { checkDeprecatedCalls } from '../hir/deprecated'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
 import { lowerToLIR } from '../lir/lower'
@@ -185,6 +186,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     // Stage 2b: Monomorphize generic functions
     const hir = monomorphize(hirRaw)
+
+    // Stage 2c: Deprecated usage check — emit warnings for calls to @deprecated functions
+    warnings.push(...checkDeprecatedCalls(hir))
 
     // Extract @tick, @load, @coroutine, @schedule, and @on handlers from HIR (before decorator info is lost)
     const tickFunctions: string[] = []

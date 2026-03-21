@@ -461,8 +461,9 @@ export class Parser {
   }
 
   private parseDecoratorValue(value: string): Decorator {
-    // Parse @tick, @on(PlayerDeath), or @on_trigger("name")
-    const match = value.match(/^@(\w+)(?:\(([^)]*)\))?$/)
+    // Parse @tick, @on(PlayerDeath), @on_trigger("name"), or @deprecated("msg with ) parens")
+    // Use a greedy match for args that allows any content inside the outermost parens.
+    const match = value.match(/^@(\w+)(?:\((.*)\))?$/s)
     if (!match) {
       this.error(`Invalid decorator: ${value}`)
     }
@@ -690,6 +691,11 @@ export class Parser {
       return this.parseLetStmt()
     }
 
+    // Const declaration (local)
+    if (this.check('const')) {
+      return this.parseLocalConstDecl()
+    }
+
     // Return statement
     if (this.check('return')) {
       return this.parseReturnStmt()
@@ -803,6 +809,17 @@ export class Parser {
     this.match(';')
 
     return this.withLoc({ kind: 'let', name, type, init }, letToken)
+  }
+
+  private parseLocalConstDecl(): Stmt {
+    const constToken = this.expect('const')
+    const name = this.expect('ident').value
+    this.expect(':')
+    const type = this.parseType()
+    this.expect('=')
+    const value = this.parseExpr()
+    this.match(';')
+    return this.withLoc({ kind: 'const_decl', name, type, value }, constToken)
   }
 
   private parseReturnStmt(): Stmt {

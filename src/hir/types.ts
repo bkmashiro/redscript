@@ -152,6 +152,7 @@ export type HIRMatchPattern =
 export type HIRStmt =
   | { kind: 'let'; name: string; type?: TypeNode; init: HIRExpr; span?: Span }
   | { kind: 'let_destruct'; names: string[]; type?: TypeNode; init: HIRExpr; span?: Span }
+  | { kind: 'const_decl'; name: string; type: TypeNode; value: HIRExpr; span?: Span }
   | { kind: 'expr'; expr: HIRExpr; span?: Span }
   | { kind: 'return'; value?: HIRExpr; span?: Span }
   | { kind: 'break'; span?: Span }

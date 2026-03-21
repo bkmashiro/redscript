@@ -240,6 +240,7 @@ export type MatchPattern =
 export type Stmt =
   | { kind: 'let';        name: string; type?: TypeNode; init: Expr; span?: Span }
   | { kind: 'let_destruct'; names: string[]; type?: TypeNode; init: Expr; span?: Span }
+  | { kind: 'const_decl'; name: string; type: TypeNode; value: Expr; span?: Span }
   | { kind: 'expr';       expr: Expr; span?: Span }
   | { kind: 'return';     value?: Expr; span?: Span }
   | { kind: 'break';      span?: Span }

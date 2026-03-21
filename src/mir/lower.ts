@@ -81,16 +81,24 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
   // Shared registry: specializedName → [mirFn, ...helpers]
   const specializedFnsRegistry = new Map<string, MIRFunction[]>()
 
+  // Build module-level const map: name → integer value (for inlining at use sites)
+  const constValues = new Map<string, number>()
+  for (const c of hir.consts) {
+    if (c.value.kind === 'int_lit') constValues.set(c.name, c.value.value)
+    else if (c.value.kind === 'bool_lit') constValues.set(c.name, c.value.value ? 1 : 0)
+    else if (c.value.kind === 'float_lit') constValues.set(c.name, Math.round(c.value.value * 10000))
+  }
+
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues)
     allFunctions.push(fn, ...helpers)
   }
 
   // Lower impl block methods
   for (const ib of hir.implBlocks) {
     for (const m of ib.methods) {
-      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads)
+      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads, constValues)
       allFunctions.push(fn, ...helpers)
     }
   }
@@ -159,6 +167,8 @@ class FnContext {
   hirFunctions: Map<string, HIRFunction> = new Map()
   /** Shared registry of already-generated specialized (monomorphized) MIR functions */
   specializedFnsRegistry: Map<string, MIRFunction[]> = new Map()
+  /** Module-level const values: name → integer value (inlined at use sites) */
+  constValues: Map<string, number> = new Map()
 
   constructor(
     namespace: string,
@@ -277,10 +287,12 @@ function lowerFunction(
   /** Override the MIR function name (used when generating specialized versions) */
   overrideName?: string,
   enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map(),
+  constValues: Map<string, number> = new Map(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const mirFnName = overrideName ?? fn.name
   const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = sourceFile
+  ctx.constValues = constValues
   if (hirFnMap) ctx.hirFunctions = hirFnMap
   if (specializedFnsRegistry) ctx.specializedFnsRegistry = specializedFnsRegistry
   const fnMacroInfo = macroInfo.get(fn.name)
@@ -352,10 +364,12 @@ function lowerImplMethod(
   sourceFile?: string,
   timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
   enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map(),
+  constValues: Map<string, number> = new Map(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
   const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = sourceFile
+  ctx.constValues = constValues
   const fields = structDefs.get(typeName) ?? []
   const hasSelf = method.params.length > 0 && method.params[0].name === 'self'
 
@@ -714,6 +728,14 @@ function lowerStmt(
           scope.set(stmt.names[i], t)
         }
       }
+      break
+    }
+
+    case 'const_decl': {
+      // Evaluate the literal at compile time and store in constValues for inlining at use sites
+      const op = lowerExpr(stmt.value, ctx, scope)
+      const numericValue = op.kind === 'const' ? op.value : 0
+      ctx.constValues.set(stmt.name, numericValue)
       break
     }
 
@@ -1312,6 +1334,10 @@ function lowerExpr(
       }
       const temp = scope.get(expr.name)
       if (temp) return { kind: 'temp', name: temp }
+      // Module-level const: inline the literal value directly (no scoreboard slot)
+      if (ctx.constValues.has(expr.name)) {
+        return { kind: 'const', value: ctx.constValues.get(expr.name)! }
+      }
       // Unresolved ident — could be a global or external reference
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'copy', dst: t, src: { kind: 'const', value: 0 } })
