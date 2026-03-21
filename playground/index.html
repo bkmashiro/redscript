@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RedScript Playground</title>
+
+  <!-- CodeMirror 5 via CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #1e1e1e;
+      --bg-panel:   #252526;
+      --bg-header:  #2d2d30;
+      --bg-sidebar: #333333;
+      --border:     #3e3e42;
+      --accent:     #569cd6;
+      --accent2:    #4ec9b0;
+      --success:    #4ec9b0;
+      --error:      #f44747;
+      --warning:    #dcdcaa;
+      --text:       #d4d4d4;
+      --text-muted: #858585;
+      --font-mono:  'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      overflow: hidden;
+    }
+
+    /* ── Layout ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 16px;
+      height: 48px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    #toolbar .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #ff6b6b;
+      letter-spacing: 0.5px;
+      margin-right: 8px;
+    }
+    #toolbar .logo span { color: var(--text); font-weight: 400; font-size: 13px; }
+
+    #toolbar select {
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+    }
+    #toolbar select:hover { border-color: var(--accent); }
+
+    #toolbar .btn {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      padding: 5px 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #toolbar .btn:hover { background: #6aaddd; }
+    #toolbar .btn.secondary {
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    #toolbar .btn.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    #status-indicator {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    #status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s;
+    }
+    #status-dot.ok      { background: var(--success); box-shadow: 0 0 6px var(--success); }
+    #status-dot.error   { background: var(--error);   box-shadow: 0 0 6px var(--error); }
+    #status-dot.loading { background: var(--warning);
+      animation: pulse 1s ease-in-out infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+
+    /* ── Main panes ── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .pane {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #editor-pane {
+      flex: 1;
+      border-right: 2px solid var(--border);
+      min-width: 0;
+    }
+
+    #output-pane {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .pane-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .pane-header .icon { font-size: 13px; }
+    .pane-header .badge {
+      margin-left: auto;
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+    }
+
+    /* ── CodeMirror overrides ── */
+    .CodeMirror {
+      height: 100%;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.6;
+      background: var(--bg);
+    }
+    .CodeMirror-scroll { overflow: auto !important; }
+
+    #editor-wrapper {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Output panels ── */
+    #output-pane {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .output-section {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #output-section-top    { flex: 3; border-bottom: 2px solid var(--border); }
+    #output-section-bottom { flex: 1; }
+
+    .output-body {
+      flex: 1;
+      overflow: auto;
+      padding: 12px 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.6;
+      background: var(--bg);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .output-body::-webkit-scrollbar { width: 8px; height: 8px; }
+    .output-body::-webkit-scrollbar-track { background: var(--bg-panel); }
+    .output-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── File tabs in output ── */
+    #file-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 4px 8px 0;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    #file-tabs::-webkit-scrollbar { height: 4px; }
+    #file-tabs::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .file-tab {
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: var(--font-mono);
+      transition: color 0.15s;
+    }
+    .file-tab:hover { color: var(--text); }
+    .file-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+    /* placeholder states */
+    .placeholder {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 16px;
+      font-family: -apple-system, sans-serif;
+    }
+
+    /* error messages */
+    .error-line  { color: var(--error); }
+    .warn-line   { color: var(--warning); }
+    .info-line   { color: var(--accent2); }
+    .ok-line     { color: var(--success); }
+
+    /* line numbers in output */
+    .output-body .ln {
+      color: var(--text-muted);
+      margin-right: 12px;
+      user-select: none;
+    }
+
+    /* ── Resize handle ── */
+    #resize-handle {
+      width: 4px;
+      background: var(--border);
+      cursor: col-resize;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    #resize-handle:hover, #resize-handle.dragging { background: var(--accent); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      #main { flex-direction: column; }
+      #editor-pane { border-right: none; border-bottom: 2px solid var(--border); }
+      #resize-handle { display: none; }
+      #output-section-top { flex: 2; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <div class="logo">🔴 RedScript <span>Playground</span></div>
+
+    <label for="example-select" style="color:var(--text-muted);font-size:12px;">Example:</label>
+    <select id="example-select">
+      <option value="">— choose —</option>
+      <option value="hello">Hello World</option>
+      <option value="counter">Counter</option>
+      <option value="enum">Enum &amp; Match</option>
+      <option value="foreach">For-Each Players</option>
+      <option value="struct">Struct</option>
+    </select>
+
+    <button class="btn secondary" id="btn-clear">Clear</button>
+    <button class="btn" id="btn-compile">▶ Compile</button>
+
+    <div id="status-indicator">
+      <div id="status-dot"></div>
+      <span id="status-text">Ready</span>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <!-- Editor -->
+    <div class="pane" id="editor-pane">
+      <div class="pane-header">
+        <span class="icon">📝</span> Editor
+        <span class="badge" id="char-count">0 chars</span>
+      </div>
+      <div id="editor-wrapper">
+        <textarea id="editor"></textarea>
+      </div>
+    </div>
+
+    <div id="resize-handle"></div>
+
+    <!-- Output -->
+    <div class="pane" id="output-pane">
+      <!-- Compiled output -->
+      <div class="output-section" id="output-section-top">
+        <div class="pane-header">
+          <span class="icon">⚙️</span> Compiled Output
+          <span id="file-count" class="badge">0 files</span>
+        </div>
+        <div id="file-tabs"></div>
+        <div class="output-body" id="output-body">
+          <span class="placeholder">← Write RedScript code, then click ▶ Compile</span>
+        </div>
+      </div>
+
+      <!-- Errors / Warnings -->
+      <div class="output-section" id="output-section-bottom">
+        <div class="pane-header">
+          <span class="icon">🔔</span> Diagnostics
+          <span id="diag-count" class="badge">0</span>
+        </div>
+        <div class="output-body" id="diag-body">
+          <span class="placeholder">No issues.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ────────────────────────────────────────────────────────────────
+// Examples
+// ────────────────────────────────────────────────────────────────
+const EXAMPLES = {
+  hello: `// Hello World — the simplest RedScript program
+// Runs a command when the datapack loads.
+
+@load
+fn greet() {
+    say("Hello, Minecraft World!");
+    title(@a, "§6Hello, World!", "§7from RedScript");
+}
+`,
+
+  counter: `// Counter — scoreboard-based counter with tick and reset
+let count: int = 0;
+
+@load
+fn init() {
+    count = 0;
+    say("§aCounter initialised. /function rs:tick will increment.");
+}
+
+@tick
+fn auto_tick() {
+    count = count + 1;
+    if (count % 20 == 0) {
+        // every second (20 ticks)
+        actionbar(@a, "Tick " + count);
+    }
+}
+
+fn reset() {
+    count = 0;
+    say("§cCounter reset.");
+}
+`,
+
+  enum: `// Enum & Match — NPC state machine
+enum Phase {
+    Idle,       // 0
+    Moving,     // 1
+    Attacking,  // 2
+}
+
+let phase: int = 0;
+let ticks: int = 0;
+
+@load
+fn npc_load() {
+    phase = Phase.Idle;
+    ticks = 0;
+}
+
+@tick
+fn npc_tick() {
+    ticks = ticks + 1;
+
+    match phase {
+        Phase.Idle => {
+            if (ticks > 60) {
+                phase = Phase.Moving;
+                ticks = 0;
+                actionbar(@a, "[NPC] §eMoving...");
+            }
+        },
+        Phase.Moving => {
+            if (ticks > 40) {
+                phase = Phase.Attacking;
+                ticks = 0;
+                actionbar(@a, "[NPC] §cAttacking!");
+            }
+        },
+        Phase.Attacking => {
+            if (ticks > 20) {
+                phase = Phase.Idle;
+                ticks = 0;
+                actionbar(@a, "[NPC] §7Idle.");
+            }
+        },
+    }
+}
+`,
+
+  foreach: `// For-Each Players — iterate over all players
+let total: int = 0;
+
+@tick
+fn count_players() {
+    total = 0;
+    foreach (p in @a) {
+        total = total + 1;
+    }
+}
+
+fn greet_all() {
+    foreach (p in @a) at @s {
+        title(@s, "§bHello!", "§7You are one of " + total + " players.");
+        playsound(@s, "entity.experience_orb.pickup", "master", @s, 1.0, 1.2, 0.0);
+    }
+}
+`,
+
+  struct: `// Struct — player stats stored in a struct
+struct Stats {
+    health:  int,
+    mana:    int,
+    level:   int,
+}
+
+let player_stats: Stats = {
+    health: 100,
+    mana:   50,
+    level:  1,
+};
+
+@load
+fn init_stats() {
+    player_stats.health = 100;
+    player_stats.mana   = 50;
+    player_stats.level  = 1;
+    say("§aStats initialised.");
+}
+
+fn level_up() {
+    player_stats.level  = player_stats.level + 1;
+    player_stats.health = player_stats.health + 10;
+    player_stats.mana   = player_stats.mana   + 5;
+    title(@a, "§6Level Up!", "§eLv." + player_stats.level);
+}
+`,
+};
+
+// ────────────────────────────────────────────────────────────────
+// CodeMirror setup with RedScript-flavoured C-like mode
+// ────────────────────────────────────────────────────────────────
+CodeMirror.defineMIME('text/x-redscript', {
+  name: 'clike',
+  keywords: CodeMirror.wordRegexp([
+    'fn', 'let', 'const', 'if', 'else', 'while', 'for', 'foreach', 'in',
+    'return', 'match', 'enum', 'struct', 'import', 'true', 'false',
+    'as', 'at', 'break', 'continue',
+  ]),
+  types: CodeMirror.wordRegexp([
+    'int', 'float', 'bool', 'string', 'void',
+    '@a', '@s', '@e', '@p', '@r',
+  ]),
+  builtin: CodeMirror.wordRegexp([
+    'say', 'title', 'actionbar', 'playsound', 'particle', 'teleport',
+    'kill', 'give', 'summon', 'effect',
+  ]),
+  atoms: CodeMirror.wordRegexp(['true', 'false', 'null']),
+  hooks: {
+    '@': function(stream) {
+      stream.eatWhile(/[\w]/);
+      return 'attribute';
+    },
+  },
+  blockCommentStart: '/*',
+  blockCommentEnd: '*/',
+  lineComment: '//',
+});
+
+const editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+  mode: 'text/x-redscript',
+  theme: 'dracula',
+  lineNumbers: true,
+  matchBrackets: true,
+  autoCloseBrackets: true,
+  styleActiveLine: true,
+  indentUnit: 4,
+  tabSize: 4,
+  indentWithTabs: false,
+  extraKeys: {
+    'Tab': cm => cm.execCommand('indentMore'),
+    'Shift-Tab': cm => cm.execCommand('indentLess'),
+    'Ctrl-Enter': () => compile(),
+    'Cmd-Enter':  () => compile(),
+  },
+});
+
+// ────────────────────────────────────────────────────────────────
+// State
+// ────────────────────────────────────────────────────────────────
+let compiledFiles = [];
+let activeTab = 0;
+let debounceTimer = null;
+
+const REPL_URL = 'http://localhost:3000';
+
+// ────────────────────────────────────────────────────────────────
+// DOM refs
+// ────────────────────────────────────────────────────────────────
+const outputBody  = document.getElementById('output-body');
+const diagBody    = document.getElementById('diag-body');
+const fileTabs    = document.getElementById('file-tabs');
+const fileCount   = document.getElementById('file-count');
+const diagCount   = document.getElementById('diag-count');
+const statusDot   = document.getElementById('status-dot');
+const statusText  = document.getElementById('status-text');
+const charCount   = document.getElementById('char-count');
+
+// ────────────────────────────────────────────────────────────────
+// Status helpers
+// ────────────────────────────────────────────────────────────────
+function setStatus(state, text) {
+  statusDot.className = state; // 'ok' | 'error' | 'loading' | ''
+  statusText.textContent = text;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Compile
+// ────────────────────────────────────────────────────────────────
+async function compile() {
+  const code = editor.getValue();
+  if (!code.trim()) {
+    showPlaceholder();
+    return;
+  }
+
+  setStatus('loading', 'Compiling…');
+
+  try {
+    const resp = await fetch(`${REPL_URL}/compile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, namespace: 'playground' }),
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const data = await resp.json();
+    compiledFiles = data.files ?? [];
+
+    if (data.error) {
+      showError(data.error);
+    } else {
+      renderOutput(compiledFiles);
+      clearDiag();
+      setStatus('ok', `OK — ${compiledFiles.length} file${compiledFiles.length !== 1 ? 's' : ''}`);
+    }
+  } catch (err) {
+    showNetworkError(err);
+  }
+}
+
+function showPlaceholder() {
+  fileTabs.innerHTML = '';
+  outputBody.innerHTML = '<span class="placeholder">← Write RedScript code, then click ▶ Compile</span>';
+  diagBody.innerHTML   = '<span class="placeholder">No issues.</span>';
+  fileCount.textContent = '0 files';
+  diagCount.textContent = '0';
+  setStatus('', 'Ready');
+}
+
+function showError(msg) {
+  fileTabs.innerHTML = '';
+  outputBody.innerHTML = `<span class="error-line">Compilation error</span>`;
+  fileCount.textContent = '0 files';
+
+  // Parse and display error lines
+  const lines = msg.split('\n');
+  diagBody.innerHTML = lines.map(l => {
+    if (/error/i.test(l))   return `<span class="error-line">✖ ${esc(l)}</span>`;
+    if (/warn/i.test(l))    return `<span class="warn-line">⚠ ${esc(l)}</span>`;
+    if (/note|hint/i.test(l)) return `<span class="info-line">ℹ ${esc(l)}</span>`;
+    return `<span>${esc(l)}</span>`;
+  }).join('\n');
+  diagCount.textContent = lines.filter(l => l.trim()).length;
+
+  setStatus('error', 'Compile error');
+}
+
+function showNetworkError(err) {
+  fileTabs.innerHTML = '';
+  outputBody.innerHTML = `<span class="placeholder">Cannot connect to REPL server.</span>`;
+  diagBody.innerHTML = `<span class="error-line">✖ ${esc(String(err))}\n</span>` +
+    `<span class="warn-line">Make sure the server is running:\n</span>` +
+    `<span class="info-line">  npm run repl</span>`;
+  diagCount.textContent = '1';
+  setStatus('error', 'Server offline');
+}
+
+function clearDiag() {
+  diagBody.innerHTML = '<span class="ok-line ok-line">✔ No errors or warnings.</span>';
+  diagCount.textContent = '0';
+}
+
+// ────────────────────────────────────────────────────────────────
+// Render compiled files
+// ────────────────────────────────────────────────────────────────
+function renderOutput(files) {
+  fileCount.textContent = `${files.length} file${files.length !== 1 ? 's' : ''}`;
+
+  if (files.length === 0) {
+    fileTabs.innerHTML = '';
+    outputBody.innerHTML = '<span class="placeholder">(no output files generated)</span>';
+    return;
+  }
+
+  // Build tabs
+  fileTabs.innerHTML = files.map((f, i) => {
+    const name = f.path.split('/').pop();
+    return `<button class="file-tab${i === activeTab ? ' active' : ''}" data-idx="${i}">${esc(name)}</button>`;
+  }).join('');
+
+  fileTabs.querySelectorAll('.file-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTab = parseInt(btn.dataset.idx, 10);
+      fileTabs.querySelectorAll('.file-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderFileContent(files[activeTab]);
+    });
+  });
+
+  if (activeTab >= files.length) activeTab = 0;
+  renderFileContent(files[activeTab]);
+}
+
+function renderFileContent(file) {
+  const lines = (file.content ?? '').split('\n');
+  const html = lines.map((line, i) => {
+    const num = String(i + 1).padStart(4, ' ');
+    return `<span class="ln">${num}</span>${esc(line)}`;
+  }).join('\n');
+  outputBody.innerHTML = html;
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// ────────────────────────────────────────────────────────────────
+// Live compile (debounced 600ms)
+// ────────────────────────────────────────────────────────────────
+editor.on('change', () => {
+  const len = editor.getValue().length;
+  charCount.textContent = `${len} char${len !== 1 ? 's' : ''}`;
+
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(compile, 600);
+});
+
+// ────────────────────────────────────────────────────────────────
+// Example selector
+// ────────────────────────────────────────────────────────────────
+document.getElementById('example-select').addEventListener('change', function() {
+  const key = this.value;
+  if (key && EXAMPLES[key]) {
+    editor.setValue(EXAMPLES[key]);
+    editor.clearHistory();
+    activeTab = 0;
+    this.value = '';
+  }
+});
+
+// ────────────────────────────────────────────────────────────────
+// Buttons
+// ────────────────────────────────────────────────────────────────
+document.getElementById('btn-compile').addEventListener('click', compile);
+document.getElementById('btn-clear').addEventListener('click', () => {
+  editor.setValue('');
+  editor.clearHistory();
+  showPlaceholder();
+});
+
+// ────────────────────────────────────────────────────────────────
+// Resize handle (drag)
+// ────────────────────────────────────────────────────────────────
+(function() {
+  const handle = document.getElementById('resize-handle');
+  const editorPane = document.getElementById('editor-pane');
+  const outputPane = document.getElementById('output-pane');
+  const main = document.getElementById('main');
+  let dragging = false;
+  let startX, startEditorW;
+
+  handle.addEventListener('mousedown', e => {
+    dragging = true;
+    startX = e.clientX;
+    startEditorW = editorPane.getBoundingClientRect().width;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const totalW = main.getBoundingClientRect().width - 4; // minus handle
+    const newEditorW = Math.max(200, Math.min(totalW - 200, startEditorW + dx));
+    const ratio = newEditorW / totalW;
+    editorPane.style.flex = `0 0 ${ratio * 100}%`;
+    outputPane.style.flex = `0 0 ${(1 - ratio) * 100}%`;
+    editor.refresh();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    editor.refresh();
+  });
+})();
+
+// ────────────────────────────────────────────────────────────────
+// Health check on load
+// ────────────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const resp = await fetch(`${REPL_URL}/health`, { signal: AbortSignal.timeout(2000) });
+    if (resp.ok) {
+      setStatus('ok', 'Server ready');
+    } else {
+      setStatus('error', 'Server error');
+    }
+  } catch {
+    setStatus('error', 'Server offline — run: npm run repl');
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// Init — load Hello World example
+// ────────────────────────────────────────────────────────────────
+editor.setValue(EXAMPLES.hello);
+editor.clearHistory();
+charCount.textContent = `${EXAMPLES.hello.length} chars`;
+checkHealth();
+</script>
+</body>
+</html>
