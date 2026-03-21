@@ -2,7 +2,7 @@
 
 <img src="./logo.png" alt="RedScript Logo" width="64" />
 
-<img src="https://img.shields.io/badge/RedScript-2.6.1-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+<img src="https://img.shields.io/badge/RedScript-2.6.2-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
 
 **A typed scripting language that compiles to Minecraft datapacks.**
 

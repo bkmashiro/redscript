@@ -22168,10 +22168,26 @@ var require_lower2 = __commonJS({
             const typeName = stmt.type?.kind === "struct" ? stmt.type.name : "__anon";
             const fieldTemps = /* @__PURE__ */ new Map();
             for (const field of stmt.init.fields) {
-              const val = lowerExpr(field.value, ctx, scope);
-              const t = ctx.freshTemp();
-              ctx.emit({ kind: "copy", dst: t, src: val });
-              fieldTemps.set(field.name, t);
+              if (field.value.kind === "struct_lit") {
+                const nestedVarName = `${stmt.name}.${field.name}`;
+                const nestedTypeName = "__anon";
+                const nestedFieldTemps = /* @__PURE__ */ new Map();
+                for (const nestedField of field.value.fields) {
+                  const nval = lowerExpr(nestedField.value, ctx, scope);
+                  const nt = ctx.freshTemp();
+                  ctx.emit({ kind: "copy", dst: nt, src: nval });
+                  nestedFieldTemps.set(nestedField.name, nt);
+                }
+                ctx.structVars.set(nestedVarName, { typeName: nestedTypeName, fields: nestedFieldTemps });
+                const t = ctx.freshTemp();
+                ctx.emit({ kind: "const", dst: t, value: 0 });
+                fieldTemps.set(field.name, t);
+              } else {
+                const val = lowerExpr(field.value, ctx, scope);
+                const t = ctx.freshTemp();
+                ctx.emit({ kind: "copy", dst: t, src: val });
+                fieldTemps.set(field.name, t);
+              }
             }
             ctx.structVars.set(stmt.name, { typeName, fields: fieldTemps });
           } else if (stmt.type?.kind === "option") {
@@ -22221,7 +22237,7 @@ var require_lower2 = __commonJS({
           } else if (stmt.init.kind === "array_lit") {
             const ns = `${ctx.getNamespace()}:arrays`;
             const pathPrefix = stmt.name;
-            ctx.arrayVars.set(stmt.name, { ns, pathPrefix });
+            ctx.arrayVars.set(stmt.name, { ns, pathPrefix, knownLen: stmt.init.elements.length });
             const elems = stmt.init.elements;
             const allConst = elems.every((e) => e.kind === "int_lit");
             if (allConst) {
@@ -22840,6 +22856,15 @@ var require_lower2 = __commonJS({
                 return { kind: "temp", name: fieldTemp };
             }
           }
+          if (expr.obj.kind === "member" && expr.obj.obj.kind === "ident") {
+            const syntheticName = `${expr.obj.obj.name}.${expr.obj.field}`;
+            const nestedSv = ctx.structVars.get(syntheticName);
+            if (nestedSv) {
+              const fieldTemp = nestedSv.fields.get(expr.field);
+              if (fieldTemp)
+                return { kind: "temp", name: fieldTemp };
+            }
+          }
           const obj = lowerExpr(expr.obj, ctx, scope);
           const t = ctx.freshTemp();
           ctx.emit({ kind: "copy", dst: t, src: obj });
@@ -22882,6 +22907,24 @@ var require_lower2 = __commonJS({
           return valOp;
         }
         case "call": {
+          if (expr.fn === "len" && expr.args.length === 1 && expr.args[0].kind === "ident") {
+            const arrName = expr.args[0].name;
+            const arrInfo = ctx.arrayVars.get(arrName);
+            if (arrInfo) {
+              if (arrInfo.knownLen !== void 0) {
+                const t3 = ctx.freshTemp();
+                ctx.emit({ kind: "const", dst: t3, value: arrInfo.knownLen });
+                return { kind: "temp", name: t3 };
+              }
+              const t2 = ctx.freshTemp();
+              ctx.emit({ kind: "nbt_list_len", dst: t2, ns: arrInfo.ns, path: arrInfo.pathPrefix });
+              return { kind: "temp", name: t2 };
+            }
+            const lenTemp = scope.get(arrName);
+            if (lenTemp !== void 0) {
+              return { kind: "temp", name: lenTemp };
+            }
+          }
           if (expr.fn === "scoreboard_get" || expr.fn === "score") {
             const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams);
             const player = !playerArg.isMacro && expr.args[0].kind === "ident" ? "@s" : playerArg.str || "@s";
@@ -23202,6 +23245,23 @@ var require_lower2 = __commonJS({
           return { kind: "temp", name: t };
         }
         case "invoke": {
+          if (expr.callee.kind === "member" && expr.callee.field === "len" && expr.callee.obj.kind === "ident") {
+            const arrInfo = ctx.arrayVars.get(expr.callee.obj.name);
+            if (arrInfo) {
+              if (arrInfo.knownLen !== void 0) {
+                const t3 = ctx.freshTemp();
+                ctx.emit({ kind: "const", dst: t3, value: arrInfo.knownLen });
+                return { kind: "temp", name: t3 };
+              }
+              const t2 = ctx.freshTemp();
+              ctx.emit({ kind: "nbt_list_len", dst: t2, ns: arrInfo.ns, path: arrInfo.pathPrefix });
+              return { kind: "temp", name: t2 };
+            }
+            const lenTemp = scope.get(expr.callee.obj.name);
+            if (lenTemp !== void 0) {
+              return { kind: "temp", name: lenTemp };
+            }
+          }
           if (expr.callee.kind === "member" && expr.callee.obj.kind === "ident") {
             const sv = ctx.structVars.get(expr.callee.obj.name);
             if (sv) {
@@ -25134,6 +25194,12 @@ var require_lower3 = __commonJS({
             path: instr.path,
             scale: instr.scale
           });
+          break;
+        }
+        case "nbt_list_len": {
+          const dst = ctx.slot(instr.dst);
+          const ns = ctx.namespace;
+          instrs.push({ kind: "raw", cmd: `execute store result score ${dst} __${ns} run data get storage ${instr.ns} ${instr.path}` });
           break;
         }
         case "nbt_read_dynamic": {
