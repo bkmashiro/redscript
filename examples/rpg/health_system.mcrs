@@ -174,9 +174,9 @@ fn status() {
     let i: int = 0;
     while (i < 20) {
         if (i < filled) {
-            bar_str = bar_str + "§a█";
+            bar_str = f"{bar_str}§a█";
         } else {
-            bar_str = bar_str + "§8░";
+            bar_str = f"{bar_str}§8░";
         }
         i = i + 1;
     }

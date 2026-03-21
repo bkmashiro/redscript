@@ -79,9 +79,9 @@ fn _hp_bar() -> string {
     let i: int = 0;
     while (i < 20) {
         if (i < filled) {
-            bar = bar + "§c█";
+            bar = f"{bar}§c█";
         } else {
-            bar = bar + "§8░";
+            bar = f"{bar}§8░";
         }
         i = i + 1;
     }

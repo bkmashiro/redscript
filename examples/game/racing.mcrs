@@ -86,7 +86,9 @@ fn _fmt_time(ticks: int) -> string {
     if (secs < 10)   { sec_s  = f"0{secs}"; }  else { sec_s  = f"{secs}"; }
     if (tenths < 10) { tent_s = f"{tenths}"; }  else { tent_s = f"{tenths}"; }
 
-    return f"{min_s}:{sec_s}.{tent_s}";
+    let result: string = "";
+    result = f"{min_s}:{sec_s}.{tent_s}";
+    return result;
 }
 
 // ── 记录圈次时间 ─────────────────────────────────────────────────────────

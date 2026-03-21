@@ -121,12 +121,15 @@ fn _record_trace(px: int, py: int, t: int) {
 fn _fp_str(v: int) -> string {
     let integer: int = v / 1000;
     let frac:    int = (v % 1000) / 100;  // 一位小数
+    let result: string = "";
     if (v < 0) {
         let abs_i: int = (-v) / 1000;
         let abs_f: int = ((-v) % 1000) / 100;
-        return f"-{abs_i}.{abs_f}";
+        result = f"-{abs_i}.{abs_f}";
+        return result;
     }
-    return f"{integer}.{frac}";
+    result = f"{integer}.{frac}";
+    return result;
 }
 
 // ── 解析理论最大高度 ────────────────────────────────────────────────────

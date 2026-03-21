@@ -91,7 +91,9 @@ fn _game_time_str(game_ticks: int) -> string {
     let m_str:    string = "";
     if (hour   < 10) { h_str = f"0{hour}";   } else { h_str = f"{hour}"; }
     if (minute < 10) { m_str = f"0{minute}"; } else { m_str = f"{minute}"; }
-    return f"{h_str}:{m_str}";
+    let result: string = "";
+    result = f"{h_str}:{m_str}";
+    return result;
 }
 
 // ── TPS 格式化 ──────────────────────────────────────────────────────────
@@ -100,7 +102,9 @@ fn _game_time_str(game_ticks: int) -> string {
 fn _fmt_tps(tps10: int) -> string {
     let integer: int = tps10 / 10;
     let decimal: int = tps10 % 10;
-    return f"{integer}.{decimal}";
+    let result: string = "";
+    result = f"{integer}.{decimal}";
+    return result;
 }
 
 // ── 颜色化 TPS ──────────────────────────────────────────────────────────
@@ -145,7 +149,9 @@ fn _build_actionbar() -> string {
     if (hud.warn_active) {
         warn_sfx = "  §c⚠ 警告！";
     }
-    return f"§7T:{hud.tick}  §fTPS:{tps_col}{tps_str}§f  §7w0:{watch0.value} w2:{watch2.value}{warn_sfx}";
+    let result: string = "";
+    result = f"§7T:{hud.tick}  §fTPS:{tps_col}{tps_str}§f  §7w0:{watch0.value} w2:{watch2.value}{warn_sfx}";
+    return result;
 }
 
 // ── 打印完整调试面板到 chat ────────────────────────────────────────────
