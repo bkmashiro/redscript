@@ -1,0 +1,91 @@
+// result.mcrs — Result<T> type for error handling in RedScript datapacks.
+//
+// Result<T> wraps either a successful value (Ok) or an error code (Err).
+// This is useful in Minecraft datapacks for operations that may fail,
+// such as division, inventory checks, or entity lookups.
+//
+// Usage:
+//   let r = divide(10, 2)
+//   match r {
+//     Result::Ok(value) => { /* use value */ }
+//     Result::Err(code) => { /* handle error code */ }
+//   }
+//
+// Error codes are integers; use negative values for errors by convention:
+//   -1 = generic error
+//   -2 = division by zero
+//   -3 = not found
+//   etc.
+
+module library;
+
+// ─── Result<T> enum ───────────────────────────────────────────────────────────
+
+enum Result {
+  Ok(value: int),
+  Err(code: int),
+}
+
+// ─── Constructor helpers ──────────────────────────────────────────────────────
+
+/// Construct a successful Result with the given value.
+fn result_ok(value: int): Result {
+  return Result::Ok(value: value);
+}
+
+/// Construct a failed Result with the given error code.
+fn result_err(code: int): Result {
+  return Result::Err(code: code);
+}
+
+// ─── Query helpers ────────────────────────────────────────────────────────────
+
+/// Returns 1 if the Result is Ok, 0 otherwise.
+fn result_is_ok(r: Result): int {
+  match r {
+    Result::Ok(value) => { return 1; }
+    Result::Err(code) => { return 0; }
+  }
+  return 0;
+}
+
+/// Returns 1 if the Result is Err, 0 otherwise.
+fn result_is_err(r: Result): int {
+  match r {
+    Result::Ok(value) => { return 0; }
+    Result::Err(code) => { return 1; }
+  }
+  return 0;
+}
+
+// ─── Extraction helpers ───────────────────────────────────────────────────────
+
+/// Extract the value from an Ok result.
+/// Returns 0 if the Result is Err (check result_is_ok first).
+fn result_value(r: Result): int {
+  match r {
+    Result::Ok(value) => { return value; }
+    Result::Err(code) => { return 0; }
+  }
+  return 0;
+}
+
+/// Extract the error code from an Err result.
+/// Returns 0 if the Result is Ok (check result_is_err first).
+fn result_code(r: Result): int {
+  match r {
+    Result::Ok(value) => { return 0; }
+    Result::Err(code) => { return code; }
+  }
+  return 0;
+}
+
+// ─── Example: safe division ───────────────────────────────────────────────────
+
+/// Divide a by b; returns Err(-2) on division by zero.
+fn result_divide(a: int, b: int): Result {
+  if (b == 0) {
+    return Result::Err(code: -2);
+  }
+  return Result::Ok(value: a / b);
+}
