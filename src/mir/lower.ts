@@ -1422,6 +1422,28 @@ function lowerExpr(
     }
 
     case 'call': {
+      // Handle arr.len() — parser desugars obj.len() → call { fn: 'len', args: [obj] }
+      if (expr.fn === 'len' && expr.args.length === 1 && expr.args[0].kind === 'ident') {
+        const arrName = (expr.args[0] as { kind: 'ident'; name: string }).name
+        const arrInfo = ctx.arrayVars.get(arrName)
+        if (arrInfo) {
+          if (arrInfo.knownLen !== undefined) {
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: arrInfo.knownLen })
+            return { kind: 'temp', name: t }
+          }
+          // Dynamic array: read length at runtime via data get
+          const t = ctx.freshTemp()
+          ctx.emit({ kind: 'nbt_list_len', dst: t, ns: arrInfo.ns, path: arrInfo.pathPrefix })
+          return { kind: 'temp', name: t }
+        }
+        // Also check scope (literal array length temp)
+        const lenTemp = scope.get(arrName)
+        if (lenTemp !== undefined) {
+          return { kind: 'temp', name: lenTemp }
+        }
+      }
+
       // Handle scoreboard_get / score — read from vanilla MC scoreboard
       if (expr.fn === 'scoreboard_get' || expr.fn === 'score') {
         const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams)
@@ -1876,14 +1898,10 @@ function lowerExpr(
             ctx.emit({ kind: 'const', dst: t, value: arrInfo.knownLen })
             return { kind: 'temp', name: t }
           }
-          // Dynamic array: use scoreboard length tracking temp from scope
-          const lenTemp = scope.get((expr.callee.obj as { kind: 'ident'; name: string }).name)
-          if (lenTemp !== undefined) {
-            return { kind: 'temp', name: lenTemp }
-          }
-          // Fallback: 0 (unknown length)
+          // Dynamic array (function parameter, heap_new, etc.): read length at runtime
+          // emit: execute store result score $t __ns run data get storage ns:arrays path
           const t = ctx.freshTemp()
-          ctx.emit({ kind: 'const', dst: t, value: 0 })
+          ctx.emit({ kind: 'nbt_list_len', dst: t, ns: arrInfo.ns, path: arrInfo.pathPrefix })
           return { kind: 'temp', name: t }
         }
         // Also check scope-tracked length temp for literal arrays

@@ -397,6 +397,14 @@ function lowerInstrInner(
       break
     }
 
+    case 'nbt_list_len': {
+      // emit: execute store result score $dst_name __ns run data get storage ns path
+      const dst = ctx.slot(instr.dst)
+      const ns = ctx.namespace
+      instrs.push({ kind: 'raw', cmd: `execute store result score ${dst} __${ns} run data get storage ${instr.ns} ${instr.path}` })
+      break
+    }
+
     case 'nbt_read_dynamic': {
       // Strategy:
       // 1. Store the index value into rs:macro_args __arr_idx (int)

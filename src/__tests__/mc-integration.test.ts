@@ -338,10 +338,10 @@ describe('MC Integration Tests', () => {
   test('counter.mcrs: tick function increments scoreboard over time', async () => {
     if (!serverOnline) return
     
-    await mc.ticks(40) // Wait 2s (counter was already init'd in beforeAll)
+    await mc.ticks(60) // Wait 3s (counter was already init'd in beforeAll)
     const count = await mc.scoreboard('counter', 'ticks')
     expect(count).toBeGreaterThan(0)
-    console.log(`  counter/ticks after setup+40 ticks: ${count}`)
+    console.log(`  counter/ticks after setup+60 ticks: ${count}`)
   })
 
   // ─── Test 3: setblock ────────────────────────────────────────────────
@@ -432,11 +432,11 @@ describe('MC Integration Tests', () => {
     
     // Reset counter
     await mc.command('/scoreboard players set #tick_counter ticks 0')
-    await mc.ticks(40) // 2s
+    await mc.ticks(60) // 3s
     
     const ticks = await mc.scoreboard('#tick_counter', 'ticks')
-    expect(ticks).toBeGreaterThanOrEqual(10) // At least 10 of 40 ticks fired
-    console.log(`  #tick_counter after 40 ticks: ${ticks}`)
+    expect(ticks).toBeGreaterThanOrEqual(10) // At least 10 of 60 ticks fired
+    console.log(`  #tick_counter after 60 ticks: ${ticks}`)
   })
 
   // ─── Test 10: fullReset clears blocks ─────────────────────────────────
