@@ -823,9 +823,7 @@ export class Parser {
       return this.withLoc({ kind: 'if_let_some', binding, init, then, else_ }, ifToken)
     }
 
-    this.expect('(')
-    const cond = this.parseExpr()
-    this.expect(')')
+    const cond = this.parseParenOptionalCond()
     const then = this.parseBlock()
 
     let else_: Block | undefined
@@ -857,12 +855,19 @@ export class Parser {
       return this.withLoc({ kind: 'while_let_some', binding, init, body }, whileToken)
     }
 
-    this.expect('(')
-    const cond = this.parseExpr()
-    this.expect(')')
+    const cond = this.parseParenOptionalCond()
     const body = this.parseBlock()
 
     return this.withLoc({ kind: 'while', cond, body }, whileToken)
+  }
+
+  private parseParenOptionalCond(): Expr {
+    if (this.match('(')) {
+      const cond = this.parseExpr()
+      this.expect(')')
+      return cond
+    }
+    return this.parseExpr()
   }
 
   private parseForStmt(): Stmt {

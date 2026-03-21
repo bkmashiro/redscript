@@ -280,6 +280,13 @@ impl Point {
       expect((stmt as any).body).toHaveLength(1)
     })
 
+    it('parses while statement without parentheses', () => {
+      const stmt = parseStmt('while i > 0 { i = i - 1; }')
+      expect(stmt.kind).toBe('while')
+      expect((stmt as any).cond.kind).toBe('binary')
+      expect((stmt as any).body).toHaveLength(1)
+    })
+
     it('parses for statement', () => {
       const stmt = parseStmt('for (let i: int = 0; i < 10; i = i + 1) { say("loop"); }')
       expect(stmt.kind).toBe('for')
