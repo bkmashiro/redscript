@@ -10,6 +10,7 @@
 
 import type { MIRFunction, MIRModule } from '../mir/types'
 import { constantFold } from './constant_fold'
+import { strengthReduction } from './strength_reduction'
 import { copyProp } from './copy_prop'
 import { dce } from './dce'
 import { blockMerge } from './block_merge'
@@ -19,6 +20,7 @@ import { licm } from './licm'
 import { nbtBatchRead } from './nbt-batch'
 import { interproceduralConstProp } from './interprocedural'
 import { inlinePass } from './inline'
+import { cse } from './cse'
 
 // selectorCache is intentionally excluded from the default pipeline:
 // it emits synthetic __sel_cleanup_* / __sel_tag_* call_context instructions
@@ -32,6 +34,8 @@ const defaultPasses: Pass[] = [
   licm,
   nbtBatchRead,
   constantFold,
+  strengthReduction,
+  cse,
   copyProp,
   branchSimplify,
   dce,
