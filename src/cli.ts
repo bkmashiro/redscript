@@ -25,6 +25,7 @@ import * as https from 'https'
 import { execSync } from 'child_process'
 import archiver from 'archiver'
 import { loadProjectConfig, buildTomlTemplate } from './config/project-config'
+import { docsCommand } from './docs'
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -43,6 +44,7 @@ Usage:
   redscript init [project-name]
   redscript fmt <file.mcrs> [file2.mcrs ...]
   redscript generate-dts [-o <file>]
+  redscript docs [module] [--list]
   redscript repl
   redscript version
 
@@ -56,6 +58,7 @@ Commands:
   init          Scaffold a new RedScript datapack project
   fmt           Auto-format RedScript source files
   generate-dts  Generate builtin function declaration file (builtins.d.mcrs)
+  docs          Open the stdlib documentation website in your browser
   repl          Start an interactive RedScript REPL
   version       Print the RedScript version
   upgrade       Upgrade to the latest version (npm install -g redscript-mc@latest)
@@ -185,6 +188,7 @@ function parseArgs(args: string[]): {
   description?: string
   dryRun?: boolean
   mcUrl?: string
+  list?: boolean
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -237,6 +241,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--dry-run') {
       result.dryRun = true
+      i++
+    } else if (arg === '--list') {
+      result.list = true
       i++
     } else if (arg === '--mc-url') {
       result.mcUrl = args[++i]
@@ -787,7 +794,7 @@ async function main(): Promise<void> {
 
   // Background update check — non-blocking, only shows notice if newer version exists
   // Skip for repl/upgrade/version to avoid double-printing
-  const noCheckCmds = new Set(['upgrade', 'update', 'version', 'repl'])
+  const noCheckCmds = new Set(['upgrade', 'update', 'version', 'repl', 'docs'])
   if (!process.env.REDSCRIPT_NO_UPDATE_CHECK && !noCheckCmds.has(parsed.command ?? '')) {
     checkForUpdates().catch(() => { /* ignore */ })
   }
@@ -1005,6 +1012,11 @@ async function main(): Promise<void> {
     case 'upgrade':
     case 'update':
       upgradeCommand()
+      break
+
+    case 'docs':
+      // parsed.file holds the positional argument after the command (module name)
+      docsCommand(parsed.file, parsed.list ?? false)
       break
 
     default:
