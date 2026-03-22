@@ -12,21 +12,41 @@
 
 module library;
 
-// next_lcg(seed): advance LCG state, return next pseudo-random int32.
-// The returned value is also the new seed for the next call.
+/// Advance the LCG state by one step, returning the next pseudo-random int32.
+/// The returned value is also the new seed for the next call.
+/// @since 1.0.0
+/// @param seed  Current LCG state (any non-zero integer to start)
+/// @returns  Next pseudo-random int32 (also serves as next seed)
+/// @example
+/// let seed: int = 12345
+/// seed = next_lcg(seed)
+/// seed = next_lcg(seed)  // advance two steps
 fn next_lcg(seed: int): int {
     return seed * 1664525 + 1013904223;
 }
 
-// random_range(seed, lo, hi): return integer in [lo, hi).
-// seed should already be the output of next_lcg.
+/// Generate a pseudo-random integer in the range [lo, hi).
+/// @since 1.0.0
+/// @param seed  LCG output value (result of next_lcg)
+/// @param lo    Inclusive lower bound
+/// @param hi    Exclusive upper bound (must be > lo)
+/// @returns  Integer in [lo, hi)
+/// @example
+/// seed = next_lcg(seed)
+/// let roll: int = random_range(seed, 1, 7)  // dice roll: 1-6
 fn random_range(seed: int, lo: int, hi: int): int {
     let r: int = seed;
     if (r < 0) { r = 0 - r; }
     return lo + r % (hi - lo);
 }
 
-// random_bool(seed): return 0 or 1 with equal probability.
+/// Generate a pseudo-random boolean (0 or 1) with equal probability.
+/// @since 1.0.0
+/// @param seed  LCG output value (result of next_lcg)
+/// @returns  0 or 1 with ~50% probability each
+/// @example
+/// seed = next_lcg(seed)
+/// let coin: int = random_bool(seed)  // 0 or 1
 fn random_bool(seed: int): int {
     let r: int = seed;
     if (r < 0) { r = 0 - r; }
@@ -44,19 +64,34 @@ fn random_bool(seed: int): int {
 //
 // Usage: maintain two state variables (hi, lo); update both each call.
 
-// pcg_next_lo(state_lo, state_hi): advance PCG state (low word).
-// Returns new low word. Use with pcg_next_hi.
+/// Advance the PCG low-word state by one step.
+/// Call together with pcg_next_hi; use pcg_output to extract the random value.
+/// @since 1.0.0
+/// @param state_lo  Current low word of PCG state
+/// @returns  New low word
+/// @example
+/// let lo: int = pcg_next_lo(state_lo)
 fn pcg_next_lo(state_lo: int): int {
     return state_lo * 747796405 + -1403630843;
 }
 
-// pcg_next_hi(state_lo, state_hi): advance PCG state (high word).
+/// Advance the PCG high-word state by one step.
+/// @since 1.0.0
+/// @param state_hi  Current high word of PCG state
+/// @param state_lo  Current low word of PCG state (previous, before pcg_next_lo)
+/// @returns  New high word
+/// @example
+/// let hi: int = pcg_next_hi(state_hi, state_lo)
 fn pcg_next_hi(state_hi: int, state_lo: int): int {
     return state_hi * 747796405 + state_lo;
 }
 
-// pcg_output(state_lo): extract output value from PCG low word.
-// Applies XSH-RR output permutation (simplified to XOR-shift).
+/// Extract an output value from the PCG low word using XSH-RR permutation.
+/// @since 1.0.0
+/// @param state_lo  Current low word of PCG state (after pcg_next_lo)
+/// @returns  Pseudo-random output value (unsigned, any int)
+/// @example
+/// let rng: int = pcg_output(state_lo)
 fn pcg_output(state_lo: int): int {
     let xsh: int = state_lo;
     // xsh = ((state >> 18) ^ state) >> 27   (simplified: use single xor-shift)
@@ -79,10 +114,14 @@ fn _binom_loop(n: int, p: int, seed: int, acc: int): int {
     return _binom_loop(n - 1, p, s2, acc + hit);
 }
 
-// binomial_sample(n, p_x10000, seed): count successes in n Bernoulli trials
-// p_x10000: probability ×10000 (e.g. 5000 = 0.5 = 50%)
-// seed: LCG seed (any non-zero int)
-// Returns: number of successes ∈ [0, n]
+/// Simulate n Bernoulli trials and count the number of successes (binomial distribution).
+/// @since 1.0.0
+/// @param n          Number of trials
+/// @param p_x10000   Success probability ×10000 (e.g. 5000 = 50%, 3000 = 30%)
+/// @param seed       LCG seed (any non-zero integer)
+/// @returns  Number of successes in [0, n]
+/// @example
+/// let hits: int = binomial_sample(10, 5000, 99999)  // ~5 successes on average
 fn binomial_sample(n: int, p_x10000: int, seed: int): int {
     return _binom_loop(n, p_x10000, seed, 0);
 }
@@ -103,10 +142,16 @@ fn _hyper_loop(rem_pop: int, rem_succ: int, draws: int, seed: int, acc: int): in
     return _hyper_loop(rem_pop - 1, rem_succ - success, draws - 1, s2, acc + success);
 }
 
-// hypergeometric_sample(pop_size, success_states, draws, seed):
-// Simulate drawing `draws` items without replacement from a population of `pop_size`
-// items of which `success_states` are successes.
-// seed: LCG seed. Returns: number of successes drawn ∈ [0, min(draws, success_states)].
+/// Draw `draws` items without replacement from a population and count successes (hypergeometric distribution).
+/// @since 1.0.0
+/// @param pop_size       Total population size
+/// @param success_states Number of "success" items in the population
+/// @param draws          Number of items to draw
+/// @param seed           LCG seed (any non-zero integer)
+/// @returns  Number of successes drawn, in [0, min(draws, success_states)]
+/// @example
+/// // 52-card deck, 4 aces, draw 5 cards
+/// let aces: int = hypergeometric_sample(52, 4, 5, 42)
 fn hypergeometric_sample(pop_size: int, success_states: int, draws: int, seed: int): int {
     return _hyper_loop(pop_size, success_states, draws, seed, 0);
 }

@@ -1,0 +1,112 @@
+// map.mcrs — NBT compound-backed map helpers for RedScript datapacks.
+//
+// Maps are stored in `storage rs:maps` using a compound per map:
+//
+//   rs:maps { Stats: { kills: 12, deaths: 3 } }
+//
+// `map_name` selects the top-level compound field. `key` selects the child
+// field within that compound. Both values are interpolated directly into the
+// NBT path, so callers should use path-safe identifiers (for example
+// `Stats`, `kills`, `player_01`) rather than arbitrary user text.
+
+module library;
+
+fn __map_set_apply() {
+    raw("$execute store result storage rs:maps $(map_name).$(key) int 1 run data get storage rs:macro_args value");
+}
+
+fn __map_get_apply() {
+    raw("$execute store result score $ret __OBJ__ run data get storage rs:maps $(map_name).$(key)");
+}
+
+fn __map_has_apply() {
+    raw("$execute store success score $ret __OBJ__ if data storage rs:maps $(map_name).$(key)");
+}
+
+fn __map_delete_apply() {
+    raw("$data remove storage rs:maps $(map_name).$(key)");
+}
+
+fn __map_clear_apply() {
+    raw("$data remove storage rs:maps $(map_name)");
+}
+
+/// Stores an integer value in `storage rs:maps.{map_name}.{key}`.
+///
+/// This creates the parent compound on demand if it does not already exist.
+/// Both `map_name` and `key` are inserted directly into the NBT path, so they
+/// must be valid path segments.
+///
+/// @since 3.0.0
+/// @param map_name  Top-level map name under `storage rs:maps`
+/// @param key       Key name inside the selected map compound
+/// @param value     Integer value to write
+/// @example
+/// map_set("Stats", "kills", 7)
+fn map_set(map_name: string, key: string, value: int) {
+    raw("data modify storage rs:macro_args map_name set from storage rs:strings __sp0");
+    raw("data modify storage rs:macro_args key set from storage rs:strings __sp1");
+    raw("execute store result storage rs:macro_args value int 1 run scoreboard players get $p0 __OBJ__");
+    raw("function __NS__:__map_set_apply with storage rs:macro_args");
+}
+
+/// Reads an integer value from `storage rs:maps.{map_name}.{key}`.
+///
+/// If the path does not exist, this function returns `0`.
+///
+/// @since 3.0.0
+/// @param map_name  Top-level map name under `storage rs:maps`
+/// @param key       Key name inside the selected map compound
+/// @returns         Stored integer value, or `0` if the key is missing
+/// @example
+/// let kills: int = map_get("Stats", "kills")
+fn map_get(map_name: string, key: string): int {
+    raw("scoreboard players set $ret __OBJ__ 0");
+    raw("data modify storage rs:macro_args map_name set from storage rs:strings __sp0");
+    raw("data modify storage rs:macro_args key set from storage rs:strings __sp1");
+    raw("function __NS__:__map_get_apply with storage rs:macro_args");
+    raw("return 1");
+    return 0;
+}
+
+/// Checks whether `storage rs:maps.{map_name}.{key}` exists.
+///
+/// @since 3.0.0
+/// @param map_name  Top-level map name under `storage rs:maps`
+/// @param key       Key name inside the selected map compound
+/// @returns         `1` if the key exists, otherwise `0`
+/// @example
+/// if (map_has("Stats", "kills") == 1) { }
+fn map_has(map_name: string, key: string): int {
+    raw("data modify storage rs:macro_args map_name set from storage rs:strings __sp0");
+    raw("data modify storage rs:macro_args key set from storage rs:strings __sp1");
+    raw("function __NS__:__map_has_apply with storage rs:macro_args");
+    raw("return 1");
+    return 0;
+}
+
+/// Removes a key from the selected map compound.
+///
+/// Removing a missing key is a no-op in Minecraft.
+///
+/// @since 3.0.0
+/// @param map_name  Top-level map name under `storage rs:maps`
+/// @param key       Key name inside the selected map compound
+/// @example
+/// map_delete("Stats", "kills")
+fn map_delete(map_name: string, key: string) {
+    raw("data modify storage rs:macro_args map_name set from storage rs:strings __sp0");
+    raw("data modify storage rs:macro_args key set from storage rs:strings __sp1");
+    raw("function __NS__:__map_delete_apply with storage rs:macro_args");
+}
+
+/// Removes the entire map compound from `storage rs:maps`.
+///
+/// @since 3.0.0
+/// @param map_name  Top-level map name under `storage rs:maps`
+/// @example
+/// map_clear("Stats")
+fn map_clear(map_name: string) {
+    raw("data modify storage rs:macro_args map_name set from storage rs:strings __sp0");
+    raw("function __NS__:__map_clear_apply with storage rs:macro_args");
+}

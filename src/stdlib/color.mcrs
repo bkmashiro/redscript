@@ -9,30 +9,58 @@ module library;
 
 // ─── Pack / Unpack ────────────────────────────────────────────────────────────
 
-// rgb_pack(r, g, b): pack RGB into a single int (0xRRGGBB)
+/// Pack RGB components into a single integer (0xRRGGBB format).
+/// @since 1.0.0
+/// @param r  Red channel, range [0, 255]
+/// @param g  Green channel, range [0, 255]
+/// @param b  Blue channel, range [0, 255]
+/// @returns  r*65536 + g*256 + b
+/// @example
+/// let red: int = rgb_pack(255, 0, 0)  // result: 16711680 (0xFF0000)
 fn rgb_pack(r: int, g: int, b: int): int {
     return r * 65536 + g * 256 + b;
 }
 
-// rgb_r(packed): extract red component
+/// Extract the red component from a packed RGB integer.
+/// @since 1.0.0
+/// @param packed  Packed color integer (0xRRGGBB)
+/// @returns  Red channel value in [0, 255]
+/// @example
+/// let r: int = rgb_r(16711680)  // result: 255
 fn rgb_r(packed: int): int {
     return packed / 65536 % 256;
 }
 
-// rgb_g(packed): extract green component
+/// Extract the green component from a packed RGB integer.
+/// @since 1.0.0
+/// @param packed  Packed color integer (0xRRGGBB)
+/// @returns  Green channel value in [0, 255]
+/// @example
+/// let g: int = rgb_g(65280)  // result: 255 (0x00FF00)
 fn rgb_g(packed: int): int {
     return packed / 256 % 256;
 }
 
-// rgb_b(packed): extract blue component
+/// Extract the blue component from a packed RGB integer.
+/// @since 1.0.0
+/// @param packed  Packed color integer (0xRRGGBB)
+/// @returns  Blue channel value in [0, 255]
+/// @example
+/// let b: int = rgb_b(255)  // result: 255 (0x0000FF)
 fn rgb_b(packed: int): int {
     return packed % 256;
 }
 
 // ─── Blending ─────────────────────────────────────────────────────────────────
 
-// rgb_lerp(a, b, t): linear blend between two packed colors, t ∈ [0, 1000]
-// t=0 → a, t=1000 → b
+/// Linear interpolation between two packed RGB colors.
+/// @since 1.0.0
+/// @param a  Start color (packed 0xRRGGBB)
+/// @param b  End color (packed 0xRRGGBB)
+/// @param t  Blend factor in [0, 1000] (0 = a, 1000 = b)
+/// @returns  Packed RGB interpolated between a and b
+/// @example
+/// let mid: int = rgb_lerp(0xFF0000, 0x0000FF, 500)  // halfway between red and blue
 fn rgb_lerp(a: int, b: int, t: int): int {
     let ra: int = a / 65536 % 256;
     let ga: int = a / 256 % 256;
@@ -53,7 +81,14 @@ fn rgb_lerp(a: int, b: int, t: int): int {
 //   H ∈ [0, 3600000]        (360° × 10000)
 //   S, L ∈ [0, 10000]       (1.0 × 10000)
 
-// rgb_to_l(r, g, b): lightness ×10000, range [0, 10000]
+/// Compute the HSL lightness from RGB components (×10000 scale).
+/// @since 1.0.0
+/// @param r  Red ×10000, range [0, 2550000]
+/// @param g  Green ×10000, range [0, 2550000]
+/// @param b  Blue ×10000, range [0, 2550000]
+/// @returns  Lightness in [0, 10000] (0 = black, 10000 = white)
+/// @example
+/// let l: int = rgb_to_l(2550000, 2550000, 2550000)  // result: 10000 (white)
 fn rgb_to_l(r: int, g: int, b: int): int {
     let mx: int = r;
     if (g > mx) { mx = g; }
@@ -64,7 +99,14 @@ fn rgb_to_l(r: int, g: int, b: int): int {
     return (mx + mn) / 510;
 }
 
-// rgb_to_s(r, g, b): saturation ×10000, range [0, 10000]
+/// Compute the HSL saturation from RGB components (×10000 scale).
+/// @since 1.0.0
+/// @param r  Red ×10000, range [0, 2550000]
+/// @param g  Green ×10000, range [0, 2550000]
+/// @param b  Blue ×10000, range [0, 2550000]
+/// @returns  Saturation in [0, 10000] (0 = grey, 10000 = fully saturated)
+/// @example
+/// let s: int = rgb_to_s(2550000, 0, 0)  // result: 10000 (pure red is fully saturated)
 fn rgb_to_s(r: int, g: int, b: int): int {
     let mx: int = r;
     if (g > mx) { mx = g; }
@@ -81,7 +123,14 @@ fn rgb_to_s(r: int, g: int, b: int): int {
     return d * 10000 / (255 * denom);
 }
 
-// rgb_to_h(r, g, b): hue ×10000, range [0, 3600000]
+/// Compute the HSL hue from RGB components (×10000 scale).
+/// @since 1.0.0
+/// @param r  Red ×10000, range [0, 2550000]
+/// @param g  Green ×10000, range [0, 2550000]
+/// @param b  Blue ×10000, range [0, 2550000]
+/// @returns  Hue in [0, 3600000] (degrees × 10000; 0=red, 1200000=green, 2400000=blue)
+/// @example
+/// let h: int = rgb_to_h(0, 2550000, 0)  // result: 1200000 (120°, pure green)
 fn rgb_to_h(r: int, g: int, b: int): int {
     let mx: int = r;
     if (g > mx) { mx = g; }
@@ -120,7 +169,14 @@ fn _hsl10k_chroma(s: int, l: int): int {
     return (10000 - abs2l1) * s / 10000;
 }
 
-// hsl_to_r(h, s, l): H×10000, S×10000, L×10000 → R ∈ [0, 2550000]
+/// Convert HSL to the red channel of RGB (×10000 scale).
+/// @since 1.0.0
+/// @param h  Hue ×10000, range [0, 3600000]
+/// @param s  Saturation ×10000, range [0, 10000]
+/// @param l  Lightness ×10000, range [0, 10000]
+/// @returns  Red channel ×10000, range [0, 2550000]; divide by 10000 for 0-255
+/// @example
+/// let r: int = hsl_to_r(0, 10000, 5000)  // pure red → 2550000
 fn hsl_to_r(h: int, s: int, l: int): int {
     let c: int = _hsl10k_chroma(s, l);
     let x: int = _hsl10k_chroma_x(h, c);
@@ -134,7 +190,14 @@ fn hsl_to_r(h: int, s: int, l: int): int {
     return (r1 + m) * 255;
 }
 
-// hsl_to_g(h, s, l): H×10000, S×10000, L×10000 → G ∈ [0, 2550000]
+/// Convert HSL to the green channel of RGB (×10000 scale).
+/// @since 1.0.0
+/// @param h  Hue ×10000, range [0, 3600000]
+/// @param s  Saturation ×10000, range [0, 10000]
+/// @param l  Lightness ×10000, range [0, 10000]
+/// @returns  Green channel ×10000, range [0, 2550000]
+/// @example
+/// let g: int = hsl_to_g(1200000, 10000, 5000)  // pure green → 2550000
 fn hsl_to_g(h: int, s: int, l: int): int {
     let c: int = _hsl10k_chroma(s, l);
     let x: int = _hsl10k_chroma_x(h, c);
@@ -148,7 +211,14 @@ fn hsl_to_g(h: int, s: int, l: int): int {
     return (g1 + m) * 255;
 }
 
-// hsl_to_b(h, s, l): H×10000, S×10000, L×10000 → B ∈ [0, 2550000]
+/// Convert HSL to the blue channel of RGB (×10000 scale).
+/// @since 1.0.0
+/// @param h  Hue ×10000, range [0, 3600000]
+/// @param s  Saturation ×10000, range [0, 10000]
+/// @param l  Lightness ×10000, range [0, 10000]
+/// @returns  Blue channel ×10000, range [0, 2550000]
+/// @example
+/// let b: int = hsl_to_b(2400000, 10000, 5000)  // pure blue → 2550000
 fn hsl_to_b(h: int, s: int, l: int): int {
     let c: int = _hsl10k_chroma(s, l);
     let x: int = _hsl10k_chroma_x(h, c);
@@ -162,7 +232,14 @@ fn hsl_to_b(h: int, s: int, l: int): int {
     return (b1 + m) * 255;
 }
 
-// hsl_to_packed(h, s, l): HSL (×10000 scale) → packed RGB int (0xRRGGBB)
+/// Convert HSL (×10000 scale) to a packed RGB integer (0xRRGGBB).
+/// @since 1.0.0
+/// @param h  Hue ×10000, range [0, 3600000]
+/// @param s  Saturation ×10000, range [0, 10000]
+/// @param l  Lightness ×10000, range [0, 10000]
+/// @returns  Packed RGB integer (0xRRGGBB), each channel 0-255
+/// @example
+/// let col: int = hsl_to_packed(0, 10000, 5000)  // pure red → 0xFF0000
 fn hsl_to_packed(h: int, s: int, l: int): int {
     let r: int = hsl_to_r(h, s, l) / 10000;
     let g: int = hsl_to_g(h, s, l) / 10000;
@@ -172,9 +249,14 @@ fn hsl_to_packed(h: int, s: int, l: int): int {
 
 // ─── rgb_to_hex ───────────────────────────────────────────────────────────────
 
-// rgb_to_hex(r, g, b): pack RGB into 0xRRGGBB integer
-// Equivalent to rgb_pack; provided as an explicit named alias.
-// r, g, b ∈ [0, 255]; no fixed-point — simple integer arithmetic.
+/// Pack RGB into a 0xRRGGBB integer (alias for rgb_pack with explicit naming).
+/// @since 1.0.0
+/// @param r  Red channel, range [0, 255]
+/// @param g  Green channel, range [0, 255]
+/// @param b  Blue channel, range [0, 255]
+/// @returns  r*65536 + g*256 + b (same as rgb_pack)
+/// @example
+/// let hex: int = rgb_to_hex(0, 128, 255)  // result: 32895 (0x0080FF)
 fn rgb_to_hex(r: int, g: int, b: int): int {
     return r * 65536 + g * 256 + b;
 }

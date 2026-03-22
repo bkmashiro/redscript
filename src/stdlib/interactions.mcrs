@@ -11,14 +11,16 @@
 // SETUP - Call once on @load
 // =============================================
 
-/// Initialize interaction scoreboards
+/// Initializes the scoreboard objectives used by this module.
+/// Call once during pack setup before any per-tick interaction checks.
+/// Creates `rs.click`, `rs.sneak`, and `rs.attack`.
 fn interactions_init() {
     // Right click detection (carrot on a stick)
     scoreboard_add_objective("rs.click", "minecraft.used:minecraft.carrot_on_a_stick");
-    
+
     // Sneak time tracking
     scoreboard_add_objective("rs.sneak", "minecraft.custom:minecraft.sneak_time");
-    
+
     // Attack detection (left click on entity)
     scoreboard_add_objective("rs.attack", "minecraft.custom:minecraft.damage_dealt");
 }
@@ -29,8 +31,11 @@ fn interactions_init() {
 // Uses Carrot on a Stick item
 // Give players: /give @p carrot_on_a_stick{CustomModelData:1234}
 
-/// Check if player right-clicked (carrot on stick)
-/// Call this in @tick, resets after detection
+/// Detects right-click input using the `rs.click` scoreboard.
+/// Players with a positive click count are reset and tagged with `rs.clicked`.
+/// The `callback_fn` parameter is reserved for future callback dispatch and is
+/// not used by the current implementation.
+/// @param callback_fn  Reserved callback identifier, currently unused
 fn on_right_click(callback_fn: string) {
     // Players with click score > 0 have clicked
     foreach (p in @a) {
@@ -44,7 +49,8 @@ fn on_right_click(callback_fn: string) {
     }
 }
 
-/// Example: detect right click and do something
+/// Demonstrates how to consume `rs.click` directly.
+/// Broadcasts a message when a player right-clicks and resets the click count.
 fn example_right_click() {
     foreach (p in @a) {
         let clicks: int = scoreboard_get(p, "rs.click");
@@ -57,11 +63,13 @@ fn example_right_click() {
 }
 
 // =============================================
-// SNEAK DETECTION  
+// SNEAK DETECTION
 // =============================================
 
-/// Check if player just started sneaking
-/// Returns 1 if sneaking, 0 otherwise
+/// Returns whether the target is currently sneaking.
+/// This checks whether `rs.sneak` is greater than zero.
+/// @param target  Player selector to inspect
+/// @returns       `1` if sneaking, otherwise `0`
 fn is_sneaking(target: selector) -> int {
     let sneak_time: int = scoreboard_get(target, "rs.sneak");
     if (sneak_time > 0) {
@@ -70,7 +78,9 @@ fn is_sneaking(target: selector) -> int {
     return 0;
 }
 
-/// Detect sneak start (first tick of sneaking)
+/// Tags players who started sneaking on the current tick.
+/// Players with `rs.sneak == 1` receive the `rs.sneak_start` tag, and the tag
+/// is removed from everyone else.
 fn on_sneak_start() {
     foreach (p in @a) {
         let sneak_time: int = scoreboard_get(p, "rs.sneak");
@@ -88,7 +98,8 @@ fn on_sneak_start() {
 // =============================================
 // Uses execute with rotation checks
 
-/// Check if player is looking up (pitch < -45)
+/// Tags players currently looking upward.
+/// Players with pitch from `-90` to `-45` receive the `rs.look_up` tag.
 fn check_look_up() {
     // Now supports p[filters] syntax sugar!
     foreach (p in @a) {
@@ -101,7 +112,8 @@ fn check_look_up() {
     }
 }
 
-/// Check if player is looking down (pitch > 45)
+/// Tags players currently looking downward.
+/// Players with pitch from `45` to `90` receive the `rs.look_down` tag.
 fn check_look_down() {
     foreach (p in @a) {
         execute if entity p[x_rotation=45..90] run {
@@ -113,7 +125,8 @@ fn check_look_down() {
     }
 }
 
-/// Check if player is looking straight (pitch -45 to 45)
+/// Tags players currently looking roughly straight ahead.
+/// Players with pitch from `-45` to `45` receive the `rs.look_straight` tag.
 fn check_look_straight() {
     foreach (p in @a) {
         execute if entity p[x_rotation=-45..45] run {
@@ -130,15 +143,17 @@ fn check_look_straight() {
 // =============================================
 // Use execute if data or predicates
 
-/// Check if holding specific item (by tag)
-/// Usage: check_holding_tag("my_wand") checks for tag rs.holding.my_wand
+/// Placeholder helper for item-in-hand checks.
+/// The current implementation only prints guidance because robust item checks
+/// require predicates or explicit NBT checks.
+/// @param item_id  Expected item identifier or logical item key
 fn check_holding_item(item_id: string) {
     // This requires predicate files in datapack
     // Example predicate: data/ns/predicates/holding_diamond_sword.json
-    // { "condition": "minecraft:entity_properties", 
+    // { "condition": "minecraft:entity_properties",
     //   "entity": "this",
     //   "predicate": { "equipment": { "mainhand": { "items": ["minecraft:diamond_sword"] }}}}
-    
+
     // For now, use NBT check via execute
     say("Use execute if data for item checks");
 }
@@ -148,12 +163,14 @@ fn check_holding_item(item_id: string) {
 // =============================================
 // Common pattern: Sneak + Use for special ability
 
-/// Detect sneak + right click combo
+/// Detects a sneak-plus-right-click combo.
+/// Players who click while sneaking receive `rs.sneak_click`; otherwise they
+/// receive the normal `rs.clicked` tag. Click counters are reset in both cases.
 fn on_sneak_click() {
     foreach (p in @a) {
         let clicks: int = scoreboard_get(p, "rs.click");
         let sneak: int = scoreboard_get(p, "rs.sneak");
-        
+
         if (clicks > 0) {
             if (sneak > 0) {
                 // Sneak + Click!
@@ -174,14 +191,20 @@ fn on_sneak_click() {
 // Detect double-tap sneak (toggle fly, etc)
 
 let last_sneak_tick: int = 0;
+
+/// Double-sneak detection window in ticks.
+/// A second sneak start within this many ticks counts as a double tap.
 const DOUBLE_TAP_WINDOW: int = 10;  // 0.5 second
 
+/// Detects a double-tap sneak pattern.
+/// Requires external scoreboards `rs.last_sneak` and `rs.tick` to be updated by
+/// the caller. Players who qualify receive the `rs.double_sneak` tag.
 fn on_double_sneak() {
     foreach (p in @a) {
         let sneak: int = scoreboard_get(p, "rs.sneak");
         let last: int = scoreboard_get(p, "rs.last_sneak");
         let now: int = scoreboard_get(p, "rs.tick");
-        
+
         // Just started sneaking
         if (sneak == 1) {
             let diff: int = now - last;

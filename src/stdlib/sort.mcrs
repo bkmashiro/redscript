@@ -19,8 +19,15 @@ module library
 
 // ─── Insertion sort (ascending) ───────────────────────────────────────────────
 
-// insertion_sort(arr, len): sort arr[0..len-1] ascending in-place
-// Time: O(n²); excellent for small n (≤64) and nearly-sorted data
+/// Sort an integer array ascending in-place using insertion sort.
+/// @since 1.0.0
+/// @param arr  Integer array to sort (mutated in-place)
+/// @param len  Number of elements to sort (arr[0..len-1])
+/// @returns  void — arr is sorted ascending after this call
+/// @example
+/// let data: int[] = [30, 10, 50, 20]
+/// insertion_sort(data, 4)
+/// // data is now [10, 20, 30, 50]
 fn insertion_sort(arr: int[], len: int) {
     let i: int = 1
     while (i < len) {
@@ -46,7 +53,15 @@ fn insertion_sort(arr: int[], len: int) {
 
 // ─── Insertion sort (descending) ──────────────────────────────────────────────
 
-// insertion_sort_desc(arr, len): sort arr[0..len-1] descending in-place
+/// Sort an integer array descending in-place using insertion sort.
+/// @since 1.0.0
+/// @param arr  Integer array to sort (mutated in-place)
+/// @param len  Number of elements to sort (arr[0..len-1])
+/// @returns  void — arr is sorted descending after this call
+/// @example
+/// let scores: int[] = [30, 10, 50, 20]
+/// insertion_sort_desc(scores, 4)
+/// // scores is now [50, 30, 20, 10]
 fn insertion_sort_desc(arr: int[], len: int) {
     let i: int = 1
     while (i < len) {
@@ -72,9 +87,16 @@ fn insertion_sort_desc(arr: int[], len: int) {
 
 // ─── Merge two sorted arrays ──────────────────────────────────────────────────
 
-// sort_merge(a, la, b, lb): merge sorted a[0..la-1] and b[0..lb-1]
-// Returns a new sorted int[] of length la+lb
-// Useful as the merge step of merge sort when caller handles recursion manually
+/// Merge two sorted integer arrays into a new sorted array.
+/// @since 1.0.0
+/// @param a   First sorted array
+/// @param la  Number of elements in a (a[0..la-1])
+/// @param b   Second sorted array
+/// @param lb  Number of elements in b (b[0..lb-1])
+/// @returns  New sorted int[] of length la+lb containing all elements of a and b
+/// @example
+/// let merged: int[] = sort_merge([1, 3, 5], 3, [2, 4, 6], 3)
+/// // result: [1, 2, 3, 4, 5, 6]
 fn sort_merge(a: int[], la: int, b: int[], lb: int): int[] {
     let result: int[] = []
     let i: int = 0
@@ -111,22 +133,15 @@ fn sort_merge(a: int[], la: int, b: int[], lb: int): int[] {
 
 // ─── Coroutine merge sort (bottom-up, iterative) ──────────────────────────────
 
-// merge_sort_coro(arr, n): sort arr[0..n-1] ascending in-place using bottom-up
-// merge sort, spread across server ticks via @coroutine.
-//
-// Each coroutine tick completes one full merge pass (doubling the sorted width).
-// After log₂(n) ticks, arr is fully sorted.
-//
-// @coroutine(onDone=merge_sort_noop) — replace onDone with your handler if you
-// need a callback once sorting is complete.
-//
-// Complexity: O(n log n) time, O(n) scratch space (temp[] for each merge pass).
-//
-// Usage:
-//   let data: int[] = [30, 10, 50, 20, 40]
-//   merge_sort_coro(data, 5)
-//   // several ticks later, data is [10, 20, 30, 40, 50]
-
+/// Sort an array ascending using bottom-up merge sort, spread across server ticks.
+/// @since 1.0.0
+/// @param arr  Integer array to sort (mutated in-place)
+/// @param n    Number of elements in arr
+/// @returns  void — arr is sorted after ceil(log₂(n)) ticks; onDone fires when complete
+/// @example
+/// let data: int[] = [30, 10, 50, 20, 40]
+/// merge_sort_coro(data, 5)
+/// // several ticks later, data is [10, 20, 30, 40, 50]
 // @coroutine(batch=1) spreads the outer width-doubling loop: 1 pass per tick.
 // Each tick completes all merges for the current width, then doubles width.
 // After ceil(log₂(n)) ticks, onDone fires and arr is fully sorted.
@@ -194,5 +209,6 @@ fn merge_sort_coro(arr: int[], n: int) {
     }
 }
 
-// merge_sort_noop: default onDone callback — replace with your own handler
+/// Default no-op callback for merge_sort_coro. Replace with your own handler to react when sorting completes.
+/// @since 1.0.0
 fn merge_sort_noop() {}

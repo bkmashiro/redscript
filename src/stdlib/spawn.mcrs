@@ -1,40 +1,63 @@
 // Spawn point and teleport helpers
 // Usage: import "stdlib/spawn.mcrs"
 
-/// Teleport player to coordinates
+/// Teleports the target selector to fixed world coordinates.
+/// @param target  Target selector to move
+/// @param x       Destination X coordinate
+/// @param y       Destination Y coordinate
+/// @param z       Destination Z coordinate
+/// @example
+/// teleport_to(@p, 0, 64, 0)
 fn teleport_to(target: selector, x: int, y: int, z: int) {
     tp(target, x, y, z);
 }
 
-/// Teleport player to another entity
+/// Teleports the target selector to another entity.
+/// @param target  Selector to teleport
+/// @param dest    Selector whose current position is used as the destination
 fn teleport_to_entity(target: selector, dest: selector) {
     tp(target, dest);
 }
 
-/// Spread players randomly in area
+/// Placeholder helper for spreading all players randomly in an area.
+/// The raw `spreadplayers` command is noted here but not emitted yet.
+/// Current behavior only broadcasts a status message.
+/// @param x       Center X coordinate
+/// @param z       Center Z coordinate
+/// @param radius  Maximum spread radius in blocks
 fn spread_players(x: int, z: int, radius: int) {
     // Use raw command for spreadplayers
     // spreadplayers(x, z, 0, radius, false, @a);
     say("Spreading players...");
 }
 
-/// Teleport all players to one location
+/// Teleports all players to one location.
+/// @param x  Destination X coordinate
+/// @param y  Destination Y coordinate
+/// @param z  Destination Z coordinate
 fn gather_all(x: int, y: int, z: int) {
     tp(@a, x, y, z);
 }
 
-/// Teleport player up (for launching)
+/// Teleports the target upward relative to its current position.
+/// Useful for launch pads or scripted knock-up effects.
+/// @param target  Selector to move
+/// @param height  Relative Y offset in blocks
 fn launch_up(target: selector, height: int) {
     tp(target, ~0, ~height, ~0);
 }
 
-/// Teleport to lobby (customize coordinates)
+/// Teleports the target to the hard-coded lobby position.
+/// This helper also shows a welcome title and should be customized per map.
+/// @param target  Selector to move to the lobby
 fn goto_lobby(target: selector) {
     tp(target, 0, 64, 0);
     title(target, "Welcome to Lobby!");
 }
 
-/// Teleport to arena (customize coordinates)
+/// Teleports the target to the hard-coded arena position.
+/// This helper also shows a fight title and should be customized per map.
+/// @param target  Selector to move to the arena
 fn goto_arena(target: selector) {
     tp(target, 100, 64, 100);
     title(target, "Fight!");

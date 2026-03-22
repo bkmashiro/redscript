@@ -1,52 +1,82 @@
 // Particle effect helpers
 // Usage: import "stdlib/particles.mcrs"
 
-/// Spawn heart particles at position
+/// Spawns heart particles at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn hearts_at(x: int, y: int, z: int) {
     particle("heart", x, y, z);
 }
 
-/// Spawn flame particles at position
+/// Spawns flame particles at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn flames(x: int, y: int, z: int) {
     particle("flame", x, y, z);
 }
 
-/// Spawn smoke effect
+/// Spawns large smoke particles at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn smoke(x: int, y: int, z: int) {
     particle("large_smoke", x, y, z);
 }
 
-/// Spawn explosion effect
+/// Spawns an explosion particle at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn explosion_effect(x: int, y: int, z: int) {
     particle("explosion", x, y, z);
 }
 
-/// Spawn magic sparkles at position
+/// Spawns enchantment sparkles at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn sparkles_at(x: int, y: int, z: int) {
     particle("enchant", x, y, z);
 }
 
-/// Spawn angry villager particles
+/// Spawns angry villager particles at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn angry_at(x: int, y: int, z: int) {
     particle("angry_villager", x, y, z);
 }
 
-/// Spawn happy villager particles
+/// Spawns happy villager particles at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn happy_at(x: int, y: int, z: int) {
     particle("happy_villager", x, y, z);
 }
 
-/// Spawn portal effect
+/// Spawns portal particles at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn portal_effect(x: int, y: int, z: int) {
     particle("portal", x, y, z);
 }
 
-/// Spawn totem particles at position
+/// Spawns totem particles at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn totem_at(x: int, y: int, z: int) {
     particle("totem_of_undying", x, y, z);
 }
 
-/// Spawn end rod sparkles
+/// Spawns end rod particles at a block position.
+/// @param x  X coordinate
+/// @param y  Y coordinate
+/// @param z  Z coordinate
 fn end_sparkles_at(x: int, y: int, z: int) {
     particle("end_rod", x, y, z);
 }
@@ -65,8 +95,12 @@ fn end_sparkles_at(x: int, y: int, z: int) {
 //       t = t + step;
 //   }
 
-// particle_at_fx(x_fx, y_fx, z_fx, particle): spawn particle at fixed-point position
-// Coordinates: ×100 (1 block = 100 units)
+/// Spawns a particle at a fixed-point position expressed as blocks ×100.
+/// This helper emits a raw command so sub-block coordinates are preserved.
+/// @param x_fx      X coordinate in blocks ×100
+/// @param y_fx      Y coordinate in blocks ×100
+/// @param z_fx      Z coordinate in blocks ×100
+/// @param particle  Particle ID such as `minecraft:flame`
 fn particle_at_fx(x_fx: int, y_fx: int, z_fx: int, particle: string) {
     let bx: int = x_fx / 100;
     let by: int = y_fx / 100;
@@ -74,9 +108,15 @@ fn particle_at_fx(x_fx: int, y_fx: int, z_fx: int, particle: string) {
     raw("particle {particle} {bx}.{x_fx%100} {by}.{y_fx%100} {bz}.{z_fx%100} 0 0 0 0 1 force");
 }
 
-// draw_line_2d(x0, y0, x1, y1, steps, z, particle):
-// Draw a straight line from (x0,y0) to (x1,y1) with given number of steps
-// All coords ×100
+/// Draws a straight 2D particle line using linear interpolation.
+/// Coordinates are fixed-point blocks ×100; `z` is also passed in ×100.
+/// @param x0        Start X in blocks ×100
+/// @param y0        Start Y in blocks ×100
+/// @param x1        End X in blocks ×100
+/// @param y1        End Y in blocks ×100
+/// @param steps     Number of interpolation steps
+/// @param z         Z plane in blocks ×100
+/// @param particle  Particle ID such as `minecraft:dust`
 fn draw_line_2d(x0: int, y0: int, x1: int, y1: int, steps: int, z: int, particle: string) {
     let i: int = 0;
     while (i <= steps) {
@@ -87,9 +127,14 @@ fn draw_line_2d(x0: int, y0: int, x1: int, y1: int, steps: int, z: int, particle
     }
 }
 
-// draw_circle(cx, cy, cz, r, steps, particle):
-// Draw a circle in the XZ plane
-// cx,cy,cz: center in blocks, r: radius ×100, steps: number of particles
+/// Draws a circle in the XZ plane using `cos_fixed` and `sin_fixed`.
+/// Center coordinates are whole blocks; radius is blocks ×100.
+/// @param cx        Center X in blocks
+/// @param cy        Center Y in blocks
+/// @param cz        Center Z in blocks
+/// @param r         Radius in blocks ×100
+/// @param steps     Number of particle samples around the circle
+/// @param particle  Particle ID such as `minecraft:end_rod`
 fn draw_circle(cx: int, cy: int, cz: int, r: int, steps: int, particle: string) {
     let i: int = 0;
     while (i < steps) {
@@ -101,8 +146,16 @@ fn draw_circle(cx: int, cy: int, cz: int, r: int, steps: int, particle: string) 
     }
 }
 
-// draw_helix(cx, cy_start, cz, r, height, rotations, steps, particle):
-// Draw a helix spiral
+/// Draws a helix spiral with configurable radius, height, and turns.
+/// Center coordinates are whole blocks; radius is blocks ×100.
+/// @param cx          Center X in blocks
+/// @param cy_start    Starting Y coordinate in blocks
+/// @param cz          Center Z in blocks
+/// @param r           Radius in blocks ×100
+/// @param height      Total helix height in blocks
+/// @param rotations   Number of full turns
+/// @param steps       Number of particle samples
+/// @param particle    Particle ID such as `minecraft:portal`
 fn draw_helix(cx: int, cy_start: int, cz: int, r: int, height: int, rotations: int, steps: int, particle: string) {
     let i: int = 0;
     while (i < steps) {
@@ -115,7 +168,11 @@ fn draw_helix(cx: int, cy_start: int, cz: int, r: int, height: int, rotations: i
     }
 }
 
-// particle_dot(x, y, z, particle): helper — single particle at integer block coords
+/// Spawns exactly one particle at integer block coordinates.
+/// @param x         X coordinate in whole blocks
+/// @param y         Y coordinate in whole blocks
+/// @param z         Z coordinate in whole blocks
+/// @param particle  Particle ID such as `minecraft:flame`
 fn particle_dot(x: int, y: int, z: int, particle: string) {
     raw("particle {particle} {x} {y} {z} 0 0 0 0 1 force");
 }

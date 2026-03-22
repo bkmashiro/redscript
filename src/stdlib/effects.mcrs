@@ -1,61 +1,137 @@
 // Effect helper functions
 
-/// Give speed boost
+/// Give a speed boost to the target entity.
+/// @since 1.0.0
+/// @param target    Entity selector (e.g. @p, @a, @e[...])
+/// @param duration  Effect duration in ticks (20 ticks = 1 second)
+/// @param level     Amplifier level (0 = Speed I, 1 = Speed II, ...)
+/// @returns  void — applies minecraft:speed effect
+/// @example
+/// speed(@p, 200, 1)  // Speed II for 10 seconds
 fn speed(target: selector, duration: int, level: int) {
     effect(target, "minecraft:speed", duration, level);
 }
 
-/// Give jump boost
+/// Give a jump boost to the target entity.
+/// @since 1.0.0
+/// @param target    Entity selector
+/// @param duration  Effect duration in ticks
+/// @param level     Amplifier level (0 = Jump Boost I, 1 = Jump Boost II, ...)
+/// @returns  void — applies minecraft:jump_boost effect
+/// @example
+/// jump(@p, 100, 0)  // Jump Boost I for 5 seconds
 fn jump(target: selector, duration: int, level: int) {
     effect(target, "minecraft:jump_boost", duration, level);
 }
 
-/// Give regeneration
+/// Give regeneration to the target entity.
+/// @since 1.0.0
+/// @param target    Entity selector
+/// @param duration  Effect duration in ticks
+/// @param level     Amplifier level (0 = Regeneration I, ...)
+/// @returns  void — applies minecraft:regeneration effect
+/// @example
+/// regen(@p, 60, 0)  // Regeneration I for 3 seconds
 fn regen(target: selector, duration: int, level: int) {
     effect(target, "minecraft:regeneration", duration, level);
 }
 
-/// Give resistance
+/// Give damage resistance to the target entity.
+/// @since 1.0.0
+/// @param target    Entity selector
+/// @param duration  Effect duration in ticks
+/// @param level     Amplifier level (0 = Resistance I, ...)
+/// @returns  void — applies minecraft:resistance effect
+/// @example
+/// resistance(@p, 400, 0)  // Resistance I for 20 seconds
 fn resistance(target: selector, duration: int, level: int) {
     effect(target, "minecraft:resistance", duration, level);
 }
 
-/// Give strength
+/// Give strength to the target entity.
+/// @since 1.0.0
+/// @param target    Entity selector
+/// @param duration  Effect duration in ticks
+/// @param level     Amplifier level (0 = Strength I, 1 = Strength II, ...)
+/// @returns  void — applies minecraft:strength effect
+/// @example
+/// strength(@p, 200, 1)  // Strength II for 10 seconds
 fn strength(target: selector, duration: int, level: int) {
     effect(target, "minecraft:strength", duration, level);
 }
 
-/// Give invisibility
+/// Make the target entity invisible.
+/// @since 1.0.0
+/// @param target    Entity selector
+/// @param duration  Effect duration in ticks
+/// @returns  void — applies minecraft:invisibility at amplifier 0
+/// @example
+/// invisible(@p, 300)  // invisibility for 15 seconds
 fn invisible(target: selector, duration: int) {
     effect(target, "minecraft:invisibility", duration, 0);
 }
 
-/// Give night vision
+/// Give night vision to the target entity.
+/// @since 1.0.0
+/// @param target    Entity selector
+/// @param duration  Effect duration in ticks
+/// @returns  void — applies minecraft:night_vision at amplifier 0
+/// @example
+/// night_vision(@p, 6000)  // night vision for 5 minutes
 fn night_vision(target: selector, duration: int) {
     effect(target, "minecraft:night_vision", duration, 0);
 }
 
-/// Give slow falling
+/// Give slow falling to the target entity.
+/// @since 1.0.0
+/// @param target    Entity selector
+/// @param duration  Effect duration in ticks
+/// @returns  void — applies minecraft:slow_falling at amplifier 0
+/// @example
+/// slow_fall(@p, 200)  // slow falling for 10 seconds
 fn slow_fall(target: selector, duration: int) {
     effect(target, "minecraft:slow_falling", duration, 0);
 }
 
-/// Give glowing effect
+/// Give the glowing outline effect to the target entity.
+/// @since 1.0.0
+/// @param target    Entity selector
+/// @param duration  Effect duration in ticks
+/// @returns  void — applies minecraft:glowing at amplifier 0
+/// @example
+/// glow(@e[type=zombie], 100)  // make all zombies glow for 5 seconds
 fn glow(target: selector, duration: int) {
     effect(target, "minecraft:glowing", duration, 0);
 }
 
-/// Clear all effects from target
+/// Clear all active effects from the target entity.
+/// @since 1.0.0
+/// @param target  Entity selector
+/// @returns  void — removes all potion effects via effect_clear
+/// @example
+/// clear_effects(@p)  // remove all effects from nearest player
 fn clear_effects(target: selector) {
     effect_clear(target);
 }
 
-/// Clear specific effect from target
+/// Clear a specific effect from the target entity.
+/// @since 1.0.0
+/// @param target  Entity selector
+/// @param eff     Effect resource location string (e.g. "minecraft:speed")
+/// @returns  void — removes the specified potion effect
+/// @example
+/// clear_effect(@p, "minecraft:poison")  // cure poison
 fn clear_effect(target: selector, eff: string) {
     effect_clear(target, eff);
 }
 
-/// Full buff package (speed, strength, regen)
+/// Apply a full buff package (Speed I, Strength I, Regeneration I, Resistance I).
+/// @since 1.0.0
+/// @param target    Entity selector
+/// @param duration  Duration in ticks for all four effects
+/// @returns  void — applies speed, strength, regen, and resistance at level 1 (or 0 for resistance)
+/// @example
+/// buff_all(@p, 600)  // full buff for 30 seconds
 fn buff_all(target: selector, duration: int) {
     speed(target, duration, 1);
     strength(target, duration, 1);

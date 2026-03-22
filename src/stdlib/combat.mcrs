@@ -1,14 +1,25 @@
 // module library
 // Combat helpers for simple RPG-style datapacks.
 
-// Returns base + bonus damage.
+/// Calculate total weapon damage from a base value plus a bonus.
+/// @since 1.0.0
+/// @param base   Base weapon damage value
+/// @param bonus  Additional damage modifier (e.g. from enchantments or buffs)
+/// @returns  base + bonus
+/// @example
+/// let dmg: int = weapon_damage(10, 5)  // result: 15
 fn weapon_damage(base: int, bonus: int): int {
     return base + bonus
 }
 
-// Applies damage to a health value, clamping to 0.
-// Usage: let new_hp: int = take_damage(current_hp, amount)
-// Then: scoreboard_set(player, objective, new_hp)
+/// Apply damage to a health value, clamping the result to a minimum of 0.
+/// @since 1.0.0
+/// @param health  Current health value (e.g. from scoreboard)
+/// @param amount  Damage amount to subtract
+/// @returns  health - amount, clamped to 0; use scoreboard_set after calling
+/// @example
+/// let new_hp: int = take_damage(current_hp, 8)
+/// scoreboard_set(@p, #health, new_hp)
 fn take_damage(health: int, amount: int): int {
     let next: int = health - amount
     if (next < 0) {
@@ -17,7 +28,14 @@ fn take_damage(health: int, amount: int): int {
     return next
 }
 
-// Returns 1 if health <= 0 (dead), else 0.
+/// Check whether an entity is dead (health at or below zero).
+/// @since 1.0.0
+/// @param health  Current health value to test
+/// @returns  1 if health <= 0 (dead), 0 otherwise (alive)
+/// @example
+/// if (is_dead(current_hp) == 1) {
+///     // trigger death logic
+/// }
 fn is_dead(health: int): int {
     if (health <= 0) {
         return 1

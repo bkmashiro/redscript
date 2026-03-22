@@ -1,12 +1,24 @@
 // Player helpers built on scoreboard/tag patterns.
 // These helpers target the nearest player via @p.
 
+/// Heal the nearest player by adding `amount` to their #health scoreboard.
+/// @since 1.0.0
+/// @param amount  Number of health points to restore (positive integer)
+/// @returns  void — modifies the #health scoreboard objective of @p
+/// @example
+/// heal(10)  // restore 10 HP to nearest player
 fn heal(amount: int) {
     let health: int = scoreboard_get(@p, #health);
     let next: int = health + amount;
     scoreboard_set(@p, #health, next);
 }
 
+/// Deal damage to the nearest player, clamping health to a minimum of 0.
+/// @since 1.0.0
+/// @param amount  Number of damage points to apply (positive integer)
+/// @returns  void — modifies the #health scoreboard objective of @p; will not go below 0
+/// @example
+/// damage(5)  // deal 5 damage to nearest player
 fn damage(amount: int) {
     let health: int = scoreboard_get(@p, #health);
     let next: int = health - amount;
@@ -18,6 +30,12 @@ fn damage(amount: int) {
     }
 }
 
+/// Check whether the nearest player has the `op` tag (operator status).
+/// @since 1.0.0
+/// @returns  1 if @p has the `op` entity tag, 0 otherwise
+/// @example
+/// let admin: int = is_op()
+/// // if (admin == 1) { ... }
 fn is_op() -> int {
     let result: int = 0;
 

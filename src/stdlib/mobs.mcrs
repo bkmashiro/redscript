@@ -2,98 +2,185 @@
 // Copy the names you need into your own project until RedScript gets imports.
 
 // Hostile mobs
+/// Entity type ID for zombie.
 const ZOMBIE ="minecraft:zombie"
+/// Entity type ID for skeleton.
 const SKELETON ="minecraft:skeleton"
+/// Entity type ID for creeper.
 const CREEPER ="minecraft:creeper"
+/// Entity type ID for spider.
 const SPIDER ="minecraft:spider"
+/// Entity type ID for cave spider.
 const CAVE_SPIDER ="minecraft:cave_spider"
+/// Entity type ID for enderman.
 const ENDERMAN ="minecraft:enderman"
+/// Entity type ID for witch.
 const WITCH ="minecraft:witch"
+/// Entity type ID for phantom.
 const PHANTOM ="minecraft:phantom"
+/// Entity type ID for drowned.
 const DROWNED ="minecraft:drowned"
+/// Entity type ID for husk.
 const HUSK ="minecraft:husk"
+/// Entity type ID for stray.
 const STRAY ="minecraft:stray"
+/// Entity type ID for warden.
 const WARDEN ="minecraft:warden"
+/// Entity type ID for pillager.
 const PILLAGER ="minecraft:pillager"
+/// Entity type ID for ravager.
 const RAVAGER ="minecraft:ravager"
+/// Entity type ID for vindicator.
 const VINDICATOR ="minecraft:vindicator"
+/// Entity type ID for evoker.
 const EVOKER ="minecraft:evoker"
+/// Entity type ID for vex.
 const VEXE ="minecraft:vex"
+/// Entity type ID for zombie villager.
 const ZOMBIE_VILLAGER ="minecraft:zombie_villager"
+/// Entity type ID for blaze.
 const BLAZE ="minecraft:blaze"
+/// Entity type ID for ghast.
 const GHAST ="minecraft:ghast"
+/// Entity type ID for magma cube.
 const MAGMA_CUBE ="minecraft:magma_cube"
+/// Entity type ID for slime.
 const SLIME ="minecraft:slime"
+/// Entity type ID for piglin brute.
 const PIGLIN_BRUTE ="minecraft:piglin_brute"
+/// Entity type ID for hoglin.
 const HOGLIN ="minecraft:hoglin"
+/// Entity type ID for zoglin.
 const ZOGLIN ="minecraft:zoglin"
+/// Entity type ID for endermite.
 const ENDERMITE ="minecraft:endermite"
+/// Entity type ID for silverfish.
 const SILVERFISH ="minecraft:silverfish"
+/// Entity type ID for shulker.
 const SHULKER ="minecraft:shulker"
+/// Entity type ID for guardian.
 const GUARDIAN ="minecraft:guardian"
+/// Entity type ID for elder guardian.
 const ELDER_GUARDIAN ="minecraft:elder_guardian"
+/// Entity type ID for bogged.
 const BOGGED ="minecraft:bogged"
+/// Entity type ID for breeze.
 const BREEZE ="minecraft:breeze"
 
 // Passive mobs
+/// Entity type ID for pig.
 const PIG ="minecraft:pig"
+/// Entity type ID for cow.
 const COW ="minecraft:cow"
+/// Entity type ID for sheep.
 const SHEEP ="minecraft:sheep"
+/// Entity type ID for chicken.
 const CHICKEN ="minecraft:chicken"
+/// Entity type ID for horse.
 const HORSE ="minecraft:horse"
+/// Entity type ID for donkey.
 const DONKEY ="minecraft:donkey"
+/// Entity type ID for mule.
 const MULE ="minecraft:mule"
+/// Entity type ID for rabbit.
 const RABBIT ="minecraft:rabbit"
+/// Entity type ID for cod.
 const COD ="minecraft:cod"
+/// Entity type ID for salmon.
 const SALMON ="minecraft:salmon"
+/// Entity type ID for tropical fish.
 const TROPICAL_FISH ="minecraft:tropical_fish"
+/// Entity type ID for pufferfish.
 const PUFFERFISH ="minecraft:pufferfish"
+/// Entity type ID for squid.
 const SQUID ="minecraft:squid"
+/// Entity type ID for glow squid.
 const GLOW_SQUID ="minecraft:glow_squid"
+/// Entity type ID for bat.
 const BAT ="minecraft:bat"
+/// Entity type ID for villager.
 const VILLAGER ="minecraft:villager"
+/// Entity type ID for wandering trader.
 const WANDERING_TRADER ="minecraft:wandering_trader"
+/// Entity type ID for snow golem.
 const SNOW_GOLEM ="minecraft:snow_golem"
+/// Entity type ID for strider.
 const STRIDER ="minecraft:strider"
+/// Entity type ID for axolotl.
 const AXOLOTL ="minecraft:axolotl"
+/// Entity type ID for frog.
 const FROG ="minecraft:frog"
+/// Entity type ID for tadpole.
 const TADPOLE ="minecraft:tadpole"
+/// Entity type ID for allay.
 const ALLAY ="minecraft:allay"
+/// Entity type ID for sniffer.
 const SNIFFER ="minecraft:sniffer"
+/// Entity type ID for armadillo.
 const ARMADILLO ="minecraft:armadillo"
+/// Entity type ID for turtle.
 const TURTLE ="minecraft:turtle"
 
 // Neutral mobs
+/// Entity type ID for wolf.
 const WOLF ="minecraft:wolf"
+/// Entity type ID for bee.
 const BEE ="minecraft:bee"
+/// Entity type ID for polar bear.
 const POLAR_BEAR ="minecraft:polar_bear"
+/// Entity type ID for dolphin.
 const DOLPHIN ="minecraft:dolphin"
+/// Entity type ID for iron golem.
 const IRON_GOLEM ="minecraft:iron_golem"
+/// Entity type ID for piglin.
 const PIGLIN ="minecraft:piglin"
+/// Entity type ID for zombified piglin.
 const ZOMBIFIED_PIGLIN ="minecraft:zombified_piglin"
+/// Entity type ID for panda.
 const PANDA ="minecraft:panda"
+/// Entity type ID for llama.
 const LLAMA ="minecraft:llama"
+/// Entity type ID for trader llama.
 const TRADER_LLAMA ="minecraft:trader_llama"
+/// Entity type ID for cat.
 const CAT ="minecraft:cat"
+/// Entity type ID for ocelot.
 const OCELOT ="minecraft:ocelot"
+/// Entity type ID for fox.
 const FOX ="minecraft:fox"
+/// Entity type ID for goat.
 const GOAT ="minecraft:goat"
+/// Entity type ID for camel.
 const CAMEL ="minecraft:camel"
 
 // Bosses
+/// Entity type ID for ender dragon.
 const ENDER_DRAGON ="minecraft:ender_dragon"
+/// Entity type ID for wither.
 const WITHER ="minecraft:wither"
 
 // Special / misc
+/// Entity type ID for armor stand.
 const ARMOR_STAND ="minecraft:armor_stand"
+/// Entity type ID for item frame.
 const ITEM_FRAME ="minecraft:item_frame"
+/// Entity type ID for glow item frame.
 const GLOW_ITEM_FRAME ="minecraft:glow_item_frame"
+/// Entity type ID for painting.
 const PAINTING ="minecraft:painting"
+/// Entity type ID for boat.
 const BOAT ="minecraft:boat"
+/// Entity type ID for minecart.
 const MINECART ="minecraft:minecart"
+/// Entity type ID for primed TNT.
 const TNT ="minecraft:tnt"
+/// Entity type ID for falling block.
 const FALLING_BLOCK ="minecraft:falling_block"
+/// Entity type ID for dropped item.
 const ITEM ="minecraft:item"
+/// Entity type ID for experience orb.
 const XP_ORB ="minecraft:experience_orb"
+/// Entity type ID for fireball.
 const FIREBALL ="minecraft:fireball"
+/// Entity type ID for player.
 const PLAYER ="minecraft:player"

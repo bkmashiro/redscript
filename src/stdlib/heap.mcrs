@@ -25,7 +25,11 @@ module library
 
 // ─── Construction ─────────────────────────────────────────────────────────────
 
-// heap_new(): allocate a heap array with size=0 and 64 pre-filled slots
+/// Allocate a new empty heap with capacity for 64 elements.
+/// @since 1.0.0
+/// @returns  int[] with h[0]=0 (size) and h[1..64] pre-allocated as zeros
+/// @example
+/// let h: int[] = heap_new()
 fn heap_new(): int[] {
     let h: int[] = []
     h.push(0)
@@ -39,20 +43,37 @@ fn heap_new(): int[] {
 
 // ─── Common helpers ───────────────────────────────────────────────────────────
 
-// heap_size(h): number of elements currently in the heap
+/// Return the number of elements currently stored in the heap.
+/// @since 1.0.0
+/// @param h  Heap array (created with heap_new)
+/// @returns  Current element count (h[0])
+/// @example
+/// let sz: int = heap_size(h)
 fn heap_size(h: int[]): int {
     return h[0]
 }
 
-// heap_peek(h): return the root (minimum for MinHeap, maximum for MaxHeap)
-// Precondition: heap_size(h) > 0
+/// Return the root element without removing it (min for MinHeap, max for MaxHeap).
+/// @since 1.0.0
+/// @param h  Non-empty heap array; precondition: heap_size(h) > 0
+/// @returns  The root element (h[1])
+/// @example
+/// let top: int = heap_peek(h)  // peek min without modifying heap
 fn heap_peek(h: int[]): int {
     return h[1]
 }
 
 // ─── MinHeap ──────────────────────────────────────────────────────────────────
 
-// heap_push(h, val): insert val into MinHeap; returns updated heap
+/// Insert a value into a MinHeap (smallest element at root).
+/// @since 1.0.0
+/// @param h    Heap array (from heap_new)
+/// @param val  Value to insert
+/// @returns  Updated heap array with val inserted and heap property maintained
+/// @example
+/// h = heap_push(h, 42)
+/// h = heap_push(h, 7)
+/// // heap_peek(h) == 7
 fn heap_push(h: int[], val: int): int[] {
     let sz: int = h[0] + 1
     h[0] = sz
@@ -78,7 +99,13 @@ fn heap_push(h: int[], val: int): int[] {
     return h
 }
 
-// heap_pop(h): remove and discard the minimum element; returns updated heap
+/// Remove and discard the minimum element from a MinHeap.
+/// @since 1.0.0
+/// @param h  Non-empty MinHeap array; precondition: heap_size(h) > 0
+/// @returns  Updated heap array with minimum removed and heap property restored
+/// @example
+/// let min_val: int = heap_peek(h)
+/// h = heap_pop(h)  // remove the minimum
 fn heap_pop(h: int[]): int[] {
     let sz: int = h[0]
     h[1] = h[sz]
@@ -114,7 +141,15 @@ fn heap_pop(h: int[]): int[] {
 
 // ─── MaxHeap ──────────────────────────────────────────────────────────────────
 
-// max_heap_push(h, val): insert val into MaxHeap; returns updated heap
+/// Insert a value into a MaxHeap (largest element at root).
+/// @since 1.0.0
+/// @param h    Heap array (from heap_new)
+/// @param val  Value to insert
+/// @returns  Updated heap array with val inserted and max-heap property maintained
+/// @example
+/// h = max_heap_push(h, 5)
+/// h = max_heap_push(h, 99)
+/// // heap_peek(h) == 99
 fn max_heap_push(h: int[], val: int): int[] {
     let sz: int = h[0] + 1
     h[0] = sz
@@ -140,7 +175,13 @@ fn max_heap_push(h: int[], val: int): int[] {
     return h
 }
 
-// max_heap_pop(h): remove and discard the maximum element; returns updated heap
+/// Remove and discard the maximum element from a MaxHeap.
+/// @since 1.0.0
+/// @param h  Non-empty MaxHeap array; precondition: heap_size(h) > 0
+/// @returns  Updated heap array with maximum removed and max-heap property restored
+/// @example
+/// let max_val: int = heap_peek(h)
+/// h = max_heap_pop(h)  // remove the maximum
 fn max_heap_pop(h: int[]): int[] {
     let sz: int = h[0]
     h[1] = h[sz]

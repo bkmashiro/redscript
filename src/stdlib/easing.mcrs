@@ -11,22 +11,43 @@ module library;
 
 // ─── Linear ──────────────────────────────────────────────────────────────────
 
+/// Linear easing — no acceleration or deceleration.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  t (identity function)
+/// @example
+/// let v: int = ease_linear(5000)  // result: 5000 (50%)
 fn ease_linear(t: int): int { return t; }
 
 // ─── Quadratic ───────────────────────────────────────────────────────────────
 
-// ease_in_quad: slow start, fast end
+/// Quadratic ease-in — slow start, fast end.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  t² / 10000
+/// @example
+/// let v: int = ease_in_quad(5000)  // result: 2500 (25%)
 fn ease_in_quad(t: int): int {
     return t * t / 10000;
 }
 
-// ease_out_quad: fast start, slow end
+/// Quadratic ease-out — fast start, slow end.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  1 - (1-t)²
+/// @example
+/// let v: int = ease_out_quad(5000)  // result: 7500 (75%)
 fn ease_out_quad(t: int): int {
     let inv: int = 10000 - t;
     return 10000 - inv * inv / 10000;
 }
 
-// ease_in_out_quad: slow start and end, fast middle
+/// Quadratic ease-in-out — slow start and end, fast middle.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  2t² for t < 0.5, else 1 - 2*(1-t)²
+/// @example
+/// let v: int = ease_in_out_quad(2500)  // result: 1250 (12.5%)
 fn ease_in_out_quad(t: int): int {
     if (t < 5000) {
         return 2 * t * t / 10000;
@@ -37,15 +58,33 @@ fn ease_in_out_quad(t: int): int {
 
 // ─── Cubic ───────────────────────────────────────────────────────────────────
 
+/// Cubic ease-in — slow start, accelerates to fast end (stronger than quadratic).
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  t³
+/// @example
+/// let v: int = ease_in_cubic(5000)  // result: 1250 (12.5%)
 fn ease_in_cubic(t: int): int {
     return t * t / 10000 * t / 10000;
 }
 
+/// Cubic ease-out — fast start, decelerates to slow end.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  1 - (1-t)³
+/// @example
+/// let v: int = ease_out_cubic(5000)  // result: 8750 (87.5%)
 fn ease_out_cubic(t: int): int {
     let inv: int = 10000 - t;
     return 10000 - inv * inv / 10000 * inv / 10000;
 }
 
+/// Cubic ease-in-out — slow start and end, fast middle (stronger than quadratic).
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  4t³ for t < 0.5, else 1 - 4*(1-t)³
+/// @example
+/// let v: int = ease_in_out_cubic(5000)  // result: 5000 (50%)
 fn ease_in_out_cubic(t: int): int {
     if (t < 5000) {
         return 4 * t * t / 10000 * t / 10000;
@@ -56,11 +95,23 @@ fn ease_in_out_cubic(t: int): int {
 
 // ─── Quartic ──────────────────────────────────────────────────────────────────
 
+/// Quartic ease-in — very slow start, very fast end (t⁴).
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  t⁴
+/// @example
+/// let v: int = ease_in_quart(5000)  // result: 625 (6.25%)
 fn ease_in_quart(t: int): int {
     let t2: int = t * t / 10000;
     return t2 * t2 / 10000;
 }
 
+/// Quartic ease-out — very fast start, very slow end (1 - (1-t)⁴).
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  1 - (1-t)⁴
+/// @example
+/// let v: int = ease_out_quart(5000)  // result: 9375 (93.75%)
 fn ease_out_quart(t: int): int {
     let inv: int = 10000 - t;
     let inv2: int = inv * inv / 10000;
@@ -70,7 +121,12 @@ fn ease_out_quart(t: int): int {
 // ─── Sine approximation ───────────────────────────────────────────────────────
 // Approximated using polynomial — no actual trig needed for easing
 
-// ease_in_sine: t ∈ [0,10000] → starts slow, accelerates
+/// Sinusoidal ease-in — starts slow, accelerates (approximated with polynomial).
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  Approximate 1 - cos(t*π/2)
+/// @example
+/// let v: int = ease_in_sine(5000)  // ≈ 2929 (sin curve at 50%)
 fn ease_in_sine(t: int): int {
     // ≈ 1 - cos(t*π/2) using polynomial: 1 - (1 - t²/2 + t⁴/24)
     let t2: int = t * t / 10000;
@@ -79,10 +135,22 @@ fn ease_in_sine(t: int): int {
     return 10000 - cos_approx;
 }
 
+/// Sinusoidal ease-out — fast start, decelerates gently (approximated).
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  Approximate sin(t*π/2)
+/// @example
+/// let v: int = ease_out_sine(5000)  // ≈ 7071
 fn ease_out_sine(t: int): int {
     return 10000 - ease_in_sine(10000 - t);
 }
 
+/// Sinusoidal ease-in-out — smooth start and end via sine wave.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  Approximate -(cos(π*t) - 1) / 2
+/// @example
+/// let v: int = ease_in_out_sine(5000)  // result: 5000 (symmetrical)
 fn ease_in_out_sine(t: int): int {
     if (t < 5000) {
         return ease_in_sine(t * 2) / 2;
@@ -92,7 +160,12 @@ fn ease_in_out_sine(t: int): int {
 
 // ─── Exponential ─────────────────────────────────────────────────────────────
 
-// ease_in_expo: very slow start, explosive end
+/// Exponential ease-in — nearly zero at start, explosive at end.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  Approximate 2^(10t-10) (uses cubic proxy)
+/// @example
+/// let v: int = ease_in_expo(8000)  // very small until close to the end
 fn ease_in_expo(t: int): int {
     if (t <= 0) { return 0; }
     // Approximate 2^(10t-10) ≈ exp_fx((10*t-100000)*693/10000)
@@ -101,6 +174,12 @@ fn ease_in_expo(t: int): int {
     return t3;
 }
 
+/// Exponential ease-out — explosive start, slows to near-zero at end.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  1 - ease_in_expo(1 - t)
+/// @example
+/// let v: int = ease_out_expo(2000)  // large value even early
 fn ease_out_expo(t: int): int {
     if (t >= 10000) { return 10000; }
     return 10000 - ease_in_expo(10000 - t);
@@ -108,8 +187,12 @@ fn ease_out_expo(t: int): int {
 
 // ─── Back (overshoot) ─────────────────────────────────────────────────────────
 
-// ease_in_back: slight pullback before moving forward
-// c1 = 1.70158 × 10000 = 17015
+/// Back ease-in — slight pullback before accelerating forward (overshoot anticipation).
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  t³*(c3) - t²*(c1) where c1 ≈ 1.70158 (may briefly go below 0)
+/// @example
+/// let v: int = ease_in_back(2000)  // negative briefly, then rises
 fn ease_in_back(t: int): int {
     let c1: int = 17015;   // 1.70158
     let c3: int = c1 + 10000;  // c1 + 1
@@ -119,10 +202,22 @@ fn ease_in_back(t: int): int {
     return t3 * c3 / 10000 - t2 * c1 / 10000;
 }
 
+/// Back ease-out — overshoots target then settles back.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  Mirrored ease_in_back (may briefly exceed 10000)
+/// @example
+/// let v: int = ease_out_back(8000)  // overshoots near the end
 fn ease_out_back(t: int): int {
     return 10000 - ease_in_back(10000 - t);
 }
 
+/// Back ease-in-out — pullback on entry, overshoot on exit.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  Combined back ease, symmetric around t=5000
+/// @example
+/// let v: int = ease_in_out_back(5000)  // result: 5000 (midpoint)
 fn ease_in_out_back(t: int): int {
     if (t < 5000) {
         return ease_in_back(t * 2) / 2;
@@ -132,7 +227,12 @@ fn ease_in_out_back(t: int): int {
 
 // ─── Bounce ───────────────────────────────────────────────────────────────────
 
-// ease_out_bounce: bounces at the end (ball dropping)
+/// Bounce ease-out — simulates a ball dropping and bouncing at the end.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  Piecewise bounce curve, always in [0, 10000]
+/// @example
+/// let v: int = ease_out_bounce(8000)  // bouncing near the end
 fn ease_out_bounce(t: int): int {
     let n1: int = 75625;  // 7.5625 × 10000
     let d1: int = 27500;  // 2.75 × 10000
@@ -152,10 +252,22 @@ fn ease_out_bounce(t: int): int {
     return n1 * t2 / 10000 * t2 / 10000 + 9844;
 }
 
+/// Bounce ease-in — bounces at the start before settling into forward motion.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  Mirrored ease_out_bounce
+/// @example
+/// let v: int = ease_in_bounce(2000)  // bouncing at the start
 fn ease_in_bounce(t: int): int {
     return 10000 - ease_out_bounce(10000 - t);
 }
 
+/// Bounce ease-in-out — bounce on both entry and exit.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  Symmetric bounce easing
+/// @example
+/// let v: int = ease_in_out_bounce(5000)  // result: 5000 (midpoint)
 fn ease_in_out_bounce(t: int): int {
     if (t < 5000) {
         return ease_in_bounce(t * 2) / 2;
@@ -165,14 +277,22 @@ fn ease_in_out_bounce(t: int): int {
 
 // ─── Smoothstep family ────────────────────────────────────────────────────────
 
-// smoothstep already in math.mcrs — re-exported here for convenience
-// smoothstep(t) = 3t² - 2t³
+/// Smoothstep easing — cubic Hermite curve (3t² - 2t³), smooth start and end.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  3t² - 2t³ (Ken Perlin's smooth interpolation)
+/// @example
+/// let v: int = ease_smooth(5000)  // result: 5000 (symmetric)
 fn ease_smooth(t: int): int {
     return 3 * t * t / 10000 - 2 * t * t / 10000 * t / 10000;
 }
 
-// smootherstep: even smoother (Ken Perlin)
-// 6t⁵ - 15t⁴ + 10t³
+/// Smootherstep easing — quintic curve (6t⁵ - 15t⁴ + 10t³), zero first and second derivatives at endpoints.
+/// @since 1.0.0
+/// @param t  Progress ×10000, range [0, 10000]
+/// @returns  6t⁵ - 15t⁴ + 10t³ (Ken Perlin's improved noise smoothstep)
+/// @example
+/// let v: int = ease_smoother(5000)  // result: 5000 (symmetric)
 fn ease_smoother(t: int): int {
     let t2: int = t * t / 10000;
     let t3: int = t2 * t / 10000;

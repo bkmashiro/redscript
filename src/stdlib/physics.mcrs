@@ -11,69 +11,134 @@ module library;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+/// Minecraft gravity constant in fixed-point units (0.08 blocks/tick² × 100 = 8).
+/// @since 1.0.0
+/// @returns  8 (gravity acceleration per tick in ×100 units)
 fn gravity_fx(): int { return 8; }      // 0.08 blocks/tick² × 100
+
+/// Air drag factor in ×10000 scale (0.98 per tick).
+/// @since 1.0.0
+/// @returns  9800 (multiply velocity by this / 10000 each tick)
 fn air_drag_fx(): int { return 9800; }  // 0.98 drag factor × 10000 (per tick)
+
+/// Water drag factor in ×10000 scale (0.80 per tick, stronger than air).
+/// @since 1.0.0
+/// @returns  8000 (multiply velocity by this / 10000 each tick while in water)
 fn water_drag_fx(): int { return 8000; } // 0.80 drag (in water)
 
 // ─── Projectile motion ────────────────────────────────────────────────────────
 
-// projectile_pos(p0, v0, t): position after t ticks with initial velocity v0
-// p0, v0: ×100 (blocks × 100), t: ticks
-// No drag, constant gravity
+/// Compute Y position of a projectile after t ticks (no drag, constant gravity).
+/// @since 1.0.0
+/// @param p0  Initial Y position ×100 (blocks × 100)
+/// @param v0  Initial Y velocity ×100 (blocks/tick × 100)
+/// @param t   Time in ticks
+/// @returns  Y position at tick t: p0 + v0*t - gravity*t²/2
+/// @example
+/// let y: int = projectile_y(0, 200, 5)  // height after 5 ticks, launched at 2 blocks/tick
 fn projectile_y(p0: int, v0: int, t: int): int {
     return p0 + v0 * t - gravity_fx() * t * t / 2;
 }
 
+/// Compute horizontal X position of a projectile after t ticks (constant velocity, no drag).
+/// @since 1.0.0
+/// @param p0  Initial X position ×100
+/// @param v0  Horizontal X velocity ×100
+/// @param t   Time in ticks
+/// @returns  X position at tick t: p0 + v0*t
+/// @example
+/// let x: int = projectile_x(0, 100, 10)  // 10 blocks/tick for 10 ticks = 1000 units
 fn projectile_x(p0: int, v0: int, t: int): int {
     return p0 + v0 * t;
 }
 
-// projectile_vy(v0, t): Y velocity after t ticks (with gravity)
+/// Compute Y velocity of a projectile after t ticks (accounting for gravity).
+/// @since 1.0.0
+/// @param v0  Initial Y velocity ×100
+/// @param t   Time in ticks
+/// @returns  v0 - gravity*t
+/// @example
+/// let vy: int = projectile_vy(200, 5)  // velocity after 5 ticks
 fn projectile_vy(v0: int, t: int): int {
     return v0 - gravity_fx() * t;
 }
 
-// projectile_land_t(v0y): approximate tick when Y returns to 0
-// t = 2*v0y / gravity
+/// Estimate the tick at which a projectile launched upward returns to Y=0.
+/// @since 1.0.0
+/// @param v0y  Initial upward Y velocity ×100 (must be positive)
+/// @returns  2*v0y / gravity; returns 0 if v0y <= 0
+/// @example
+/// let land_t: int = projectile_land_t(160)  // ticks until landing
 fn projectile_land_t(v0y: int): int {
     if (v0y <= 0) { return 0; }
     return 2 * v0y / gravity_fx();
 }
 
-// projectile_max_height(v0y): maximum height reached ×100
-// h = v0y² / (2*gravity)
+/// Compute the maximum height reached by a projectile launched upward.
+/// @since 1.0.0
+/// @param v0y  Initial upward Y velocity ×100
+/// @returns  v0y² / (2*gravity) in ×100 units
+/// @example
+/// let max_h: int = projectile_max_height(160)  // peak height in units×100
 fn projectile_max_height(v0y: int): int {
     return v0y * v0y / (2 * gravity_fx());
 }
 
 // ─── Velocity with drag ───────────────────────────────────────────────────────
 
-// apply_drag(v_fx, drag_fx): apply drag to velocity
-// v_fx: velocity ×100, drag_fx: drag factor ×10000
+/// Apply a drag factor to a velocity (one tick of drag).
+/// @since 1.0.0
+/// @param v_fx     Velocity ×100
+/// @param drag_fx  Drag factor ×10000 (9800 for air, 8000 for water)
+/// @returns  v_fx * drag_fx / 10000
+/// @example
+/// let v: int = apply_drag(500, air_drag_fx())  // 500 * 0.98 = 490
 fn apply_drag(v_fx: int, drag_fx: int): int {
     return v_fx * drag_fx / 10000;
 }
 
-// apply_gravity(vy_fx): apply one tick of gravity to Y velocity
+/// Apply one tick of gravity to a Y velocity component.
+/// @since 1.0.0
+/// @param vy_fx  Current Y velocity ×100
+/// @returns  vy_fx - gravity_fx()
+/// @example
+/// vy = apply_gravity(vy)  // call each tick in your physics loop
 fn apply_gravity(vy_fx: int): int {
     return vy_fx - gravity_fx();
 }
 
-// update_pos(p_fx, v_fx): update position by one tick
+/// Update a position component by one tick of velocity.
+/// @since 1.0.0
+/// @param p_fx  Current position ×100
+/// @param v_fx  Velocity ×100
+/// @returns  p_fx + v_fx
+/// @example
+/// px = update_pos(px, vx)  // advance X each tick
 fn update_pos(p_fx: int, v_fx: int): int {
     return p_fx + v_fx;
 }
 
 // ─── Collision / bounce ───────────────────────────────────────────────────────
 
-// bounce_v(v_fx, restitution_fx): reflect velocity with energy loss
-// restitution_fx ×10000: 10000=elastic, 5000=half energy, 0=inelastic
+/// Reflect a velocity component with energy loss (bounce).
+/// @since 1.0.0
+/// @param v_fx            Velocity ×100 to reflect
+/// @param restitution_fx  Energy retention ×10000 (10000=elastic, 5000=half, 0=inelastic)
+/// @returns  Negated and scaled velocity: -v_fx * restitution / 10000
+/// @example
+/// vy = bounce_v(vy, 7000)  // 70% energy retained on bounce
 fn bounce_v(v_fx: int, restitution_fx: int): int {
     let neg: int = 0 - v_fx;
     return neg * restitution_fx / 10000;
 }
 
-// clamp_velocity(v_fx, max_fx): clamp speed to max
+/// Clamp a velocity component to a maximum absolute speed.
+/// @since 1.0.0
+/// @param v_fx    Velocity ×100 to clamp
+/// @param max_fx  Maximum absolute velocity ×100 (terminal velocity)
+/// @returns  v_fx clamped to [-max_fx, max_fx]
+/// @example
+/// vx = clamp_velocity(vx, 500)  // cap horizontal speed at 5 blocks/tick
 fn clamp_velocity(v_fx: int, max_fx: int): int {
     if (v_fx > max_fx) { return max_fx; }
     if (v_fx < 0 - max_fx) { return 0 - max_fx; }
@@ -82,14 +147,28 @@ fn clamp_velocity(v_fx: int, max_fx: int): int {
 
 // ─── Spring physics ───────────────────────────────────────────────────────────
 
-// spring_force(pos_fx, target_fx, k_fx): Hooke's law F = -k(x - target)
-// k_fx: spring constant ×10000
+/// Compute spring force toward a target position (Hooke's law: F = -k*(x - target)).
+/// @since 1.0.0
+/// @param pos_fx     Current position ×100
+/// @param target_fx  Rest/target position ×100
+/// @param k_fx       Spring constant ×10000 (higher = stiffer spring)
+/// @returns  (target - pos) * k / 10000
+/// @example
+/// let f: int = spring_force(pos, 500, 2000)  // spring toward position 500 with k=0.2
 fn spring_force(pos_fx: int, target_fx: int, k_fx: int): int {
     return (target_fx - pos_fx) * k_fx / 10000;
 }
 
-// spring_update_v(v_fx, pos_fx, target_fx, k_fx, damping_fx):
-// update velocity with spring force and damping
+/// Update velocity with spring force and damping (one tick).
+/// @since 1.0.0
+/// @param v_fx       Current velocity ×100
+/// @param pos_fx     Current position ×100
+/// @param target_fx  Spring rest position ×100
+/// @param k_fx       Spring constant ×10000
+/// @param damping_fx Damping factor ×10000 (10000=no damping, 8000=some damping)
+/// @returns  New velocity after applying spring force and damping
+/// @example
+/// vx = spring_update_v(vx, px, target_px, 1000, 9000)
 fn spring_update_v(v_fx: int, pos_fx: int, target_fx: int, k_fx: int, damping_fx: int): int {
     let force: int = spring_force(pos_fx, target_fx, k_fx);
     let damped: int = v_fx * damping_fx / 10000;
@@ -98,20 +177,39 @@ fn spring_update_v(v_fx: int, pos_fx: int, target_fx: int, k_fx: int, damping_fx
 
 // ─── Circular motion ─────────────────────────────────────────────────────────
 
-// circular_x(cx, r, angle_deg): X position on circle
-// cx: center X ×100, r: radius ×100, angle_deg: degrees (NOT ×10000)
+/// Compute X position on a circle given center, radius, and angle.
+/// @since 1.0.0
+/// @param cx        Circle center X ×100
+/// @param r         Radius ×100
+/// @param angle_deg Angle in whole degrees (NOT ×10000)
+/// @returns  cx + r * cos(angle_deg) / 1000
+/// @example
+/// let x: int = circular_x(500, 200, 45)  // point at 45° on radius-2 circle
 fn circular_x(cx: int, r: int, angle_deg: int): int {
     return cx + r * cos_fixed(angle_deg) / 1000;
 }
 
+/// Compute Z position on a circle given center, radius, and angle.
+/// @since 1.0.0
+/// @param cz        Circle center Z ×100
+/// @param r         Radius ×100
+/// @param angle_deg Angle in whole degrees (NOT ×10000)
+/// @returns  cz + r * sin(angle_deg) / 1000
+/// @example
+/// let z: int = circular_z(500, 200, 45)
 fn circular_z(cz: int, r: int, angle_deg: int): int {
     return cz + r * sin_fixed(angle_deg) / 1000;
 }
 
 // ─── Friction ────────────────────────────────────────────────────────────────
 
-// friction_decel(v_fx, friction_fx): reduce velocity toward zero by friction
-// friction_fx ×100: amount subtracted per tick (absolute)
+/// Apply friction to reduce a velocity component toward zero.
+/// @since 1.0.0
+/// @param v_fx        Current velocity ×100
+/// @param friction_fx Friction deceleration per tick ×100 (absolute amount subtracted)
+/// @returns  Velocity reduced toward 0 by friction; stops at 0 rather than reversing
+/// @example
+/// vx = friction_decel(vx, 10)  // slow down by 0.1 blocks/tick per tick
 fn friction_decel(v_fx: int, friction_fx: int): int {
     if (v_fx > friction_fx) { return v_fx - friction_fx; }
     if (v_fx < 0 - friction_fx) { return v_fx + friction_fx; }
@@ -120,14 +218,24 @@ fn friction_decel(v_fx: int, friction_fx: int): int {
 
 // ─── Impact detection ────────────────────────────────────────────────────────
 
-// is_grounded(y_fx, ground_y_fx): returns 1 if at or below ground
+/// Check whether a position has reached or fallen below the ground level.
+/// @since 1.0.0
+/// @param y_fx       Current Y position ×100
+/// @param ground_y_fx Ground Y level ×100
+/// @returns  1 if y_fx <= ground_y_fx (grounded), 0 otherwise
+/// @example
+/// if (is_grounded(py, 0) == 1) { py = 0; vy = bounce_v(vy, 7000); }
 fn is_grounded(y_fx: int, ground_y_fx: int): int {
     if (y_fx <= ground_y_fx) { return 1; }
     return 0;
 }
 
-// impact_velocity(h_fx): velocity after falling from height h (blocks ×100)
-// v = sqrt(2*g*h), approximated
+/// Estimate the impact velocity after falling from a given height.
+/// @since 1.0.0
+/// @param h_fx  Fall height ×100 (blocks × 100, must be positive)
+/// @returns  Approximate impact speed ×100 via integer square root of 2*g*h
+/// @example
+/// let impact_v: int = impact_velocity(400)  // falling from 4 blocks
 fn impact_velocity(h_fx: int): int {
     if (h_fx <= 0) { return 0; }
     return isqrt(2 * gravity_fx() * h_fx / 100) * 10;

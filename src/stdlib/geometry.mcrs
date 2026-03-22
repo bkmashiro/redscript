@@ -9,15 +9,33 @@ module library;
 
 // ─── Midpoint ─────────────────────────────────────────────────────────────────
 
-// midpoint_x/y/z(a, b): integer midpoint of two coordinates
+/// Compute the integer midpoint of two coordinates.
+/// @since 1.0.0
+/// @param a  First coordinate (any unit)
+/// @param b  Second coordinate (any unit)
+/// @returns  (a + b) / 2 (integer truncation)
+/// @example
+/// let m: int = midpoint(100, 300)  // result: 200
 fn midpoint(a: int, b: int): int {
     return (a + b) / 2;
 }
 
 // ─── Bounding box ─────────────────────────────────────────────────────────────
 
-// aabb_contains(px, py, pz, minx, miny, minz, maxx, maxy, maxz):
-// Returns 1 if point (px,py,pz) is inside axis-aligned bounding box, 0 otherwise.
+/// Test whether a 3D point is inside an axis-aligned bounding box (AABB).
+/// @since 1.0.0
+/// @param px    Point X coordinate
+/// @param py    Point Y coordinate
+/// @param pz    Point Z coordinate
+/// @param minx  AABB minimum X (inclusive)
+/// @param miny  AABB minimum Y (inclusive)
+/// @param minz  AABB minimum Z (inclusive)
+/// @param maxx  AABB maximum X (inclusive)
+/// @param maxy  AABB maximum Y (inclusive)
+/// @param maxz  AABB maximum Z (inclusive)
+/// @returns  1 if point is inside or on the boundary of the AABB, 0 otherwise
+/// @example
+/// let inside: int = aabb_contains(50, 64, 50, 0, 60, 0, 100, 70, 100)
 fn aabb_contains(px: int, py: int, pz: int,
                  minx: int, miny: int, minz: int,
                  maxx: int, maxy: int, maxz: int): int {
@@ -30,9 +48,18 @@ fn aabb_contains(px: int, py: int, pz: int,
     return 1;
 }
 
-// sphere_contains(px, py, pz, cx, cy, cz, r):
-// Returns 1 if point is inside sphere (all coords in same unit, r is radius).
-// Avoids sqrt by comparing squared distances.
+/// Test whether a 3D point is inside a sphere (using squared distance, avoids sqrt).
+/// @since 1.0.0
+/// @param px  Point X
+/// @param py  Point Y
+/// @param pz  Point Z
+/// @param cx  Sphere center X
+/// @param cy  Sphere center Y
+/// @param cz  Sphere center Z
+/// @param r   Sphere radius (same unit as coordinates)
+/// @returns  1 if point is within the sphere, 0 otherwise
+/// @example
+/// let hit: int = sphere_contains(10, 64, 10, 0, 64, 0, 15)
 fn sphere_contains(px: int, py: int, pz: int,
                    cx: int, cy: int, cz: int,
                    r: int): int {
@@ -44,8 +71,16 @@ fn sphere_contains(px: int, py: int, pz: int,
     return 0;
 }
 
-// cylinder_contains(px, pz, cx, cz, r):
-// Returns 1 if point is inside vertical cylinder (ignores Y). 2D circle check.
+/// Test whether a 2D point (XZ plane) is inside a vertical cylinder (ignores Y).
+/// @since 1.0.0
+/// @param px  Point X
+/// @param pz  Point Z
+/// @param cx  Cylinder center X
+/// @param cz  Cylinder center Z
+/// @param r   Cylinder radius
+/// @returns  1 if (px, pz) is within the cylinder's cross-section, 0 otherwise
+/// @example
+/// let in_zone: int = cylinder_contains(5, 5, 0, 0, 8)
 fn cylinder_contains(px: int, pz: int, cx: int, cz: int, r: int): int {
     let dx: int = px - cx;
     let dz: int = pz - cz;
@@ -61,28 +96,49 @@ fn cylinder_contains(px: int, pz: int, cx: int, cz: int, r: int): int {
 //
 // All values × 100 (1 block = 100 units), time in ticks.
 
-// parabola_y(y0, vy0, t): Y position at tick t.
-// y0: initial Y × 100, vy0: initial Y velocity × 100 (blocks/tick × 100)
-// gravity: 5 units/tick² (= 0.05 blocks/tick² × 100)
+/// Compute Y position of a projectile along a parabolic arc at tick t.
+/// @since 1.0.0
+/// @param y0   Initial Y ×100
+/// @param vy0  Initial Y velocity ×100 (blocks/tick × 100)
+/// @param t    Tick index
+/// @returns  y0 + vy0*t - 5*t²/2 (gravity = 5 units/tick² = 0.05 blocks/tick²×100)
+/// @example
+/// let y: int = parabola_y(6400, 100, 10)  // at tick 10, v0=1 block/tick
 fn parabola_y(y0: int, vy0: int, t: int): int {
     return y0 + vy0 * t - 5 * t * t / 2;
 }
 
-// parabola_x(x0, vx0, t): horizontal X position at tick t (no drag, constant).
+/// Compute horizontal X position along a parabolic path (constant velocity).
+/// @since 1.0.0
+/// @param x0   Initial X ×100
+/// @param vx0  Horizontal X velocity ×100
+/// @param t    Tick index
+/// @returns  x0 + vx0*t
+/// @example
+/// let x: int = parabola_x(0, 50, 10)  // 0 + 50*10 = 500
 fn parabola_x(x0: int, vx0: int, t: int): int {
     return x0 + vx0 * t;
 }
 
-// parabola_land_t(vy0): approximate tick when projectile returns to Y=0.
-// t_land ≈ 2 * vy0 / gravity = 2 * vy0 / 5 (in fixed-point units)
+/// Estimate the tick when a projectile launched upward returns to Y=0.
+/// @since 1.0.0
+/// @param vy0  Initial upward Y velocity ×100
+/// @returns  Approximate landing tick: 2 * vy0 / 5
+/// @example
+/// let land: int = parabola_land_t(100)  // tick when projectile lands
 fn parabola_land_t(vy0: int): int {
     return 2 * vy0 / 5;
 }
 
 // ─── Grid / tile math ────────────────────────────────────────────────────────
 
-// tile_of(coord): which tile a coordinate belongs to (floor division).
-// tile_of(250, 100) = 2 (block 2 when tile size = 100)
+/// Compute which tile a coordinate falls in (floor division, handles negatives).
+/// @since 1.0.0
+/// @param coord      Coordinate value (any unit)
+/// @param tile_size  Size of each tile in the same unit
+/// @returns  Floor-divided tile index (correct for negative coordinates)
+/// @example
+/// let tile: int = tile_of(250, 100)  // result: 2 (tile index 2)
 fn tile_of(coord: int, tile_size: int): int {
     if (coord >= 0) {
         return coord / tile_size;
@@ -90,14 +146,25 @@ fn tile_of(coord: int, tile_size: int): int {
     return (coord - tile_size + 1) / tile_size;
 }
 
-// tile_center(tile, tile_size): center coordinate of a tile
+/// Compute the center coordinate of a tile.
+/// @since 1.0.0
+/// @param tile       Tile index
+/// @param tile_size  Size of each tile
+/// @returns  tile * tile_size + tile_size / 2
+/// @example
+/// let c: int = tile_center(2, 100)  // result: 250 (center of tile 2)
 fn tile_center(tile: int, tile_size: int): int {
     return tile * tile_size + tile_size / 2;
 }
 
 // ─── Angle helpers ────────────────────────────────────────────────────────────
 
-// angle_normalize(deg): normalize angle to [0, 3600000) (degrees × 10000)
+/// Normalize an angle (degrees ×10000) to the range [0, 3600000).
+/// @since 1.0.0
+/// @param deg  Angle in degrees ×10000 (may be negative or >= 360°)
+/// @returns  Equivalent angle in [0, 3600000)
+/// @example
+/// let a: int = angle_normalize(-900000)  // result: 2700000 (270°)
 fn angle_normalize(deg: int): int {
     let a: int = deg;
     while (a < 0) { a = a + 3600000; }
@@ -105,8 +172,13 @@ fn angle_normalize(deg: int): int {
     return a;
 }
 
-// angle_diff(a, b): signed shortest angular difference (degrees × 10000)
-// Result in (-1800000, 1800000]
+/// Compute the signed shortest angular difference between two angles (degrees ×10000).
+/// @since 1.0.0
+/// @param a  Starting angle ×10000
+/// @param b  Target angle ×10000
+/// @returns  Signed difference in (-1800000, 1800000] (shortest arc b - a)
+/// @example
+/// let diff: int = angle_diff(3500000, 100000)  // ≈ -3400000 → wraps to short arc
 fn angle_diff(a: int, b: int): int {
     let d: int = angle_normalize(b - a);
     if (d > 1800000) { d = d - 3600000; }
@@ -115,8 +187,12 @@ fn angle_diff(a: int, b: int): int {
 
 // ─── Sun angle helper ────────────────────────────────────────────────────────
 
-// mc_day_angle(daytime): MC sun angle × 10000 from /time query daytime
-// Daytime 0 = dawn (sun at east = 90°), 6000 = noon (sun at south = 180°)
+/// Convert Minecraft daytime ticks to sun angle in degrees ×10000.
+/// @since 1.0.0
+/// @param daytime  /time query daytime value (0-23999; 0=dawn, 6000=noon)
+/// @returns  Sun angle in [0, 3600000) degrees ×10000
+/// @example
+/// let sun: int = mc_day_angle(6000)  // noon → 1800000 (180°)
 fn mc_day_angle(daytime: int): int {
     // MC daytime: 0-24000 ticks per day
     // Sun angle = (daytime * 360 / 24000 + 90) mod 360
@@ -128,11 +204,19 @@ fn mc_day_angle(daytime: int): int {
 // All coordinates in ×10000 fixed-point units (1.0 block = 10000 units).
 // Angles for in_sector_2d in ×10000 radians (2π ≈ 628318).
 
-// in_cylinder(px,py,pz, cx,cz, radius, y_lo,y_hi):
-// Returns 1 if (px,py,pz) is inside a vertical cylinder centred at (cx,*,cz).
-// Condition: dx²+dz² <= r²  AND  y_lo <= py <= y_hi
-// Note: radius up to ~46340 (×10000 units ≈ 4.6 blocks) avoids overflow.
-// For larger radii, divide all coords by 10 first.
+/// Test whether a point is inside a vertical cylinder (XZ circle with Y bounds).
+/// @since 1.0.0
+/// @param px      Point X ×10000
+/// @param py      Point Y ×10000
+/// @param pz      Point Z ×10000
+/// @param cx      Cylinder center X ×10000
+/// @param cz      Cylinder center Z ×10000
+/// @param radius  Cylinder radius ×10000 (keep ≤ 46340 to avoid overflow)
+/// @param y_lo    Y lower bound ×10000 (inclusive)
+/// @param y_hi    Y upper bound ×10000 (inclusive)
+/// @returns  1 if point is inside the cylinder, 0 otherwise
+/// @example
+/// let hit: int = in_cylinder(100000, 640000, 100000, 0, 0, 80000, 600000, 800000)
 fn in_cylinder(px: int, py: int, pz: int,
                cx: int, cz: int,
                radius: int,
@@ -145,12 +229,20 @@ fn in_cylinder(px: int, py: int, pz: int,
     return 0;
 }
 
-// in_cone(px,py,pz, apex_x,apex_y,apex_z, dir_y, half_angle_tan, height):
-// Returns 1 if point is inside an upright cone (axis along +Y from apex).
-// half_angle_tan = tan(half-angle) × 10000  (e.g. 45° → 10000, 30° → 5773).
-// Condition: 0 <= dy <= height  AND  horiz_dist <= dy * half_angle_tan / 10000
-// Both sides are compared squared to avoid sqrt:
-//   (dx²+dz²) * 10000² <= (dy * half_angle_tan)²
+/// Test whether a point is inside an upright cone (axis along +Y or -Y from apex).
+/// @since 1.0.0
+/// @param px              Point X ×10000
+/// @param py              Point Y ×10000
+/// @param pz              Point Z ×10000
+/// @param apex_x          Cone apex X ×10000
+/// @param apex_y          Cone apex Y ×10000
+/// @param apex_z          Cone apex Z ×10000
+/// @param dir_y           Cone direction: positive = upward, negative = downward
+/// @param half_angle_tan  tan(half-angle) ×10000 (45° = 10000, 30° = 5773)
+/// @param height          Cone height ×10000
+/// @returns  1 if point is inside the cone, 0 otherwise
+/// @example
+/// let hit: int = in_cone(px, py, pz, apex_x, apex_y, apex_z, 1, 10000, 50000)
 fn in_cone(px: int, py: int, pz: int,
            apex_x: int, apex_y: int, apex_z: int,
            dir_y: int, half_angle_tan: int, height: int): int {
@@ -178,12 +270,18 @@ fn in_cone(px: int, py: int, pz: int,
     return 0;
 }
 
-// in_sector_2d(px,pz, cx,cz, dir_angle, half_angle, radius):
-// Returns 1 if (px,pz) is inside a 2D fan (sector) in the XZ plane.
-// dir_angle: centre direction in ×10000 radians (0 = +X axis, 628318 = 2π).
-// half_angle: half-width of sector in ×10000 radians.
-// radius: maximum distance in same units as px/pz/cx/cz.
-// Uses atan2_fixed (returns integer degrees) converted to ×10000 radians.
+/// Test whether a 2D point is inside a sector (pie-slice) in the XZ plane.
+/// @since 1.0.0
+/// @param px         Point X ×10000
+/// @param pz         Point Z ×10000
+/// @param cx         Sector center X ×10000
+/// @param cz         Sector center Z ×10000
+/// @param dir_angle  Sector center direction in ×10000 radians (0 = +X, 628318 = 2π)
+/// @param half_angle Half-width of sector in ×10000 radians
+/// @param radius     Maximum radius (same units as px, pz)
+/// @returns  1 if point is within the sector, 0 otherwise
+/// @example
+/// let hit: int = in_sector_2d(px, pz, 0, 0, 0, 157079, 100000)  // quarter-circle facing +X
 fn in_sector_2d(px: int, pz: int,
                 cx: int, cz: int,
                 dir_angle: int, half_angle: int,

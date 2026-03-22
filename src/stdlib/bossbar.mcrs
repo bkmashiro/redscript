@@ -1,7 +1,14 @@
 // Bossbar helpers for progress bars and timers
 // Usage: import "stdlib/bossbar.mcrs"
 
-/// Create and show a timer bossbar
+/// Creates a visible timer bossbar for all players.
+/// The bossbar max and current value are initialized to `max_seconds * 20`
+/// so callers can update it directly in game ticks.
+/// @param id           Bossbar identifier, usually `<namespace>:<name>`
+/// @param name         Display name shown on the bossbar
+/// @param max_seconds  Duration in seconds; converted to ticks internally
+/// @example
+/// create_timer_bar("game:round", "Round Timer", 90)
 fn create_timer_bar(id: string, name: string, max_seconds: int) {
     bossbar_add(id, name);
     bossbar_set_max(id, max_seconds * 20);
@@ -12,7 +19,13 @@ fn create_timer_bar(id: string, name: string, max_seconds: int) {
     bossbar_set_visible(id, 1);
 }
 
-/// Create a health-style bossbar (red)
+/// Creates a visible red bossbar initialized at full value.
+/// Useful for boss HP or shared health objectives.
+/// @param id       Bossbar identifier, usually `<namespace>:<name>`
+/// @param name     Display name shown on the bossbar
+/// @param max_val  Maximum value and initial value of the bar
+/// @example
+/// create_health_bar("raid:boss_hp", "Warden", 500)
 fn create_health_bar(id: string, name: string, max_val: int) {
     bossbar_add(id, name);
     bossbar_set_max(id, max_val);
@@ -23,7 +36,13 @@ fn create_health_bar(id: string, name: string, max_val: int) {
     bossbar_set_visible(id, 1);
 }
 
-/// Create a progress bossbar (blue)
+/// Creates a visible blue progress bossbar starting at zero.
+/// Useful for charge bars, capture progress, or phase tracking.
+/// @param id       Bossbar identifier, usually `<namespace>:<name>`
+/// @param name     Display name shown on the bossbar
+/// @param max_val  Maximum progress value
+/// @example
+/// create_progress_bar("game:capture", "Capture", 100)
 fn create_progress_bar(id: string, name: string, max_val: int) {
     bossbar_add(id, name);
     bossbar_set_max(id, max_val);
@@ -34,27 +53,37 @@ fn create_progress_bar(id: string, name: string, max_val: int) {
     bossbar_set_visible(id, 1);
 }
 
-/// Update bossbar value
+/// Sets the current value of an existing bossbar.
+/// RedScript does not clamp the value; Minecraft handles display behavior.
+/// @param id     Bossbar identifier
+/// @param value  New current value
 fn update_bar(id: string, value: int) {
     bossbar_set_value(id, value);
 }
 
-/// Hide bossbar
+/// Hides an existing bossbar from all assigned players.
+/// @param id  Bossbar identifier
 fn hide_bar(id: string) {
     bossbar_set_visible(id, 0);
 }
 
-/// Show bossbar
+/// Shows an existing bossbar to all assigned players.
+/// @param id  Bossbar identifier
 fn show_bar(id: string) {
     bossbar_set_visible(id, 1);
 }
 
-/// Remove bossbar
+/// Removes an existing bossbar entirely.
+/// After removal, the same `id` must be recreated before reuse.
+/// @param id  Bossbar identifier
 fn remove_bar(id: string) {
     bossbar_remove(id);
 }
 
-/// Set bossbar color based on percentage
+/// Updates the bossbar color from a percentage threshold.
+/// Values above 66 use green, above 33 use yellow, otherwise red.
+/// @param id       Bossbar identifier
+/// @param percent  Percentage in the expected 0-100 range
 fn update_bar_color(id: string, percent: int) {
     if (percent > 66) {
         bossbar_set_color(id, "green");

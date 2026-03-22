@@ -16,7 +16,13 @@ module library;
 
 // ─── Core: single-bit operations ─────────────────────────────────────────────
 
-// bit_get(x, n): return 1 if bit n is set, 0 otherwise. n ∈ [0, 30]
+/// Test whether bit n of x is set.
+/// @since 1.0.0
+/// @param x  Integer value to test
+/// @param n  Bit index (0 = least significant), range [0, 30]
+/// @returns  1 if bit n is set, 0 otherwise
+/// @example
+/// let b: int = bit_get(0b1010, 1)  // result: 1 (bit 1 of 10 is set)
 fn bit_get(x: int, n: int): int {
     let mask: int = 1;
     let i: int = 0;
@@ -24,7 +30,13 @@ fn bit_get(x: int, n: int): int {
     return (x / mask) % 2;
 }
 
-// bit_set(x, n): set bit n to 1. n ∈ [0, 30]
+/// Set bit n of x to 1 (idempotent if already set).
+/// @since 1.0.0
+/// @param x  Integer value to modify
+/// @param n  Bit index to set, range [0, 30]
+/// @returns  x with bit n set to 1
+/// @example
+/// let v: int = bit_set(0b0100, 0)  // result: 0b0101 = 5
 fn bit_set(x: int, n: int): int {
     let mask: int = 1;
     let i: int = 0;
@@ -33,7 +45,13 @@ fn bit_set(x: int, n: int): int {
     return x;
 }
 
-// bit_clear(x, n): clear bit n to 0. n ∈ [0, 30]
+/// Clear bit n of x to 0 (idempotent if already clear).
+/// @since 1.0.0
+/// @param x  Integer value to modify
+/// @param n  Bit index to clear, range [0, 30]
+/// @returns  x with bit n set to 0
+/// @example
+/// let v: int = bit_clear(0b0111, 1)  // result: 0b0101 = 5
 fn bit_clear(x: int, n: int): int {
     let mask: int = 1;
     let i: int = 0;
@@ -42,7 +60,13 @@ fn bit_clear(x: int, n: int): int {
     return x;
 }
 
-// bit_toggle(x, n): toggle bit n. n ∈ [0, 30]
+/// Toggle bit n of x (flip 0→1 or 1→0).
+/// @since 1.0.0
+/// @param x  Integer value to modify
+/// @param n  Bit index to toggle, range [0, 30]
+/// @returns  x with bit n flipped
+/// @example
+/// let v: int = bit_toggle(0b0101, 1)  // result: 0b0111 = 7
 fn bit_toggle(x: int, n: int): int {
     let mask: int = 1;
     let i: int = 0;
@@ -53,7 +77,13 @@ fn bit_toggle(x: int, n: int): int {
 
 // ─── Shift operations ────────────────────────────────────────────────────────
 
-// bit_shl(x, n): left shift x by n bits (x << n). n ∈ [0, 30]
+/// Left-shift x by n bits (equivalent to x * 2^n).
+/// @since 1.0.0
+/// @param x  Integer to shift
+/// @param n  Number of bit positions to shift left, range [0, 30]
+/// @returns  x << n
+/// @example
+/// let v: int = bit_shl(1, 4)  // result: 16 (1 << 4)
 fn bit_shl(x: int, n: int): int {
     let result: int = x;
     let i: int = 0;
@@ -61,8 +91,13 @@ fn bit_shl(x: int, n: int): int {
     return result;
 }
 
-// bit_shr(x, n): logical right shift x by n bits (x >> n). n ∈ [0, 30]
-// Note: divides by 2^n, truncating toward zero.
+/// Logical right-shift x by n bits (equivalent to x / 2^n, truncating toward zero).
+/// @since 1.0.0
+/// @param x  Integer to shift
+/// @param n  Number of bit positions to shift right, range [0, 30]
+/// @returns  x >> n (logical, not arithmetic for positive values)
+/// @example
+/// let v: int = bit_shr(256, 3)  // result: 32 (256 >> 3)
 fn bit_shr(x: int, n: int): int {
     let result: int = x;
     let i: int = 0;
@@ -73,7 +108,13 @@ fn bit_shr(x: int, n: int): int {
 // ─── Bitwise AND / OR / XOR ──────────────────────────────────────────────────
 // These iterate over 31 bits (signed int32, bit 31 is sign).
 
-// bit_and(a, b): bitwise AND
+/// Bitwise AND of two integers (all 31 non-sign bits).
+/// @since 1.0.0
+/// @param a  First operand
+/// @param b  Second operand
+/// @returns  a & b (bits set in both a and b)
+/// @example
+/// let v: int = bit_and(0b1100, 0b1010)  // result: 0b1000 = 8
 fn bit_and(a: int, b: int): int {
     let result: int = 0;
     let mask: int = 1;
@@ -90,7 +131,13 @@ fn bit_and(a: int, b: int): int {
     return result;
 }
 
-// bit_or(a, b): bitwise OR
+/// Bitwise OR of two integers (all 31 non-sign bits).
+/// @since 1.0.0
+/// @param a  First operand
+/// @param b  Second operand
+/// @returns  a | b (bits set in either a or b)
+/// @example
+/// let v: int = bit_or(0b1100, 0b1010)  // result: 0b1110 = 14
 fn bit_or(a: int, b: int): int {
     let result: int = 0;
     let mask: int = 1;
@@ -110,7 +157,13 @@ fn bit_or(a: int, b: int): int {
     return result;
 }
 
-// bit_xor(a, b): bitwise XOR
+/// Bitwise XOR of two integers (all 31 non-sign bits).
+/// @since 1.0.0
+/// @param a  First operand
+/// @param b  Second operand
+/// @returns  a ^ b (bits set in exactly one of a or b)
+/// @example
+/// let v: int = bit_xor(0b1100, 0b1010)  // result: 0b0110 = 6
 fn bit_xor(a: int, b: int): int {
     let result: int = 0;
     let mask: int = 1;
@@ -127,7 +180,12 @@ fn bit_xor(a: int, b: int): int {
     return result;
 }
 
-// bit_not(x): bitwise NOT (inverts all 31 bits, sign bit excluded)
+/// Bitwise NOT — inverts all 31 non-sign bits of x.
+/// @since 1.0.0
+/// @param x  Integer to invert
+/// @returns  ~x (all 31 lower bits flipped; sign bit excluded)
+/// @example
+/// let v: int = bit_not(0)  // result: 2147483647 (all 31 bits set)
 fn bit_not(x: int): int {
     let result: int = 0;
     let mask: int = 1;
@@ -144,7 +202,12 @@ fn bit_not(x: int): int {
 
 // ─── Popcount ────────────────────────────────────────────────────────────────
 
-// popcount(x): count number of set bits (0-31)
+/// Count the number of set bits in x (population count / Hamming weight).
+/// @since 1.0.0
+/// @param x  Integer value (uses 31 lower bits; sign bit excluded)
+/// @returns  Number of bits set to 1, in [0, 31]
+/// @example
+/// let n: int = popcount(255)  // result: 8 (0xFF has 8 bits set)
 fn popcount(x: int): int {
     let count: int = 0;
     let v: int = x;

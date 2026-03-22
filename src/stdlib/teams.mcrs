@@ -1,57 +1,68 @@
 // Team management helpers
 // Usage: import "stdlib/teams.mcrs"
 
-/// Create a team with color
+/// Creates a team and applies a display color.
+/// @param name   Team name used by the scoreboard team system
+/// @param color  Minecraft team color string such as `red` or `blue`
+/// @example
+/// create_team("spectator", "gray")
 fn create_team(name: string, color: string) {
     team_add(name);
     team_option(name, "color", color);
 }
 
-/// Create red team
+/// Creates the standard red team with friendly fire disabled.
+/// @example
+/// create_red_team()
 fn create_red_team() {
     team_add("red");
     team_option("red", "color", "red");
     team_option("red", "friendlyFire", "false");
 }
 
-/// Create blue team
+/// Creates the standard blue team with friendly fire disabled.
 fn create_blue_team() {
     team_add("blue");
     team_option("blue", "color", "blue");
     team_option("blue", "friendlyFire", "false");
 }
 
-/// Create green team
+/// Creates the standard green team with friendly fire disabled.
 fn create_green_team() {
     team_add("green");
     team_option("green", "color", "green");
     team_option("green", "friendlyFire", "false");
 }
 
-/// Create yellow team
+/// Creates the standard yellow team with friendly fire disabled.
 fn create_yellow_team() {
     team_add("yellow");
     team_option("yellow", "color", "yellow");
     team_option("yellow", "friendlyFire", "false");
 }
 
-/// Add player to team
+/// Adds an entity or player selector to a team.
+/// @param target     Target selector to join the team
+/// @param team_name  Existing team name
 fn add_to_team(target: selector, team_name: string) {
     team_join(target, team_name);
 }
 
-/// Remove player from all teams
+/// Removes an entity or player selector from all teams.
+/// @param target  Target selector to remove from teams
 fn remove_from_teams(target: selector) {
     team_leave(target);
 }
 
-/// Setup standard 2-team game
+/// Creates the default two-team setup used by many arena games.
+/// This creates `red` and `blue`.
 fn setup_two_teams() {
     create_red_team();
     create_blue_team();
 }
 
-/// Setup 4-team game
+/// Creates the default four-team setup.
+/// This creates `red`, `blue`, `green`, and `yellow`.
 fn setup_four_teams() {
     create_red_team();
     create_blue_team();
@@ -59,7 +70,8 @@ fn setup_four_teams() {
     create_yellow_team();
 }
 
-/// Cleanup all teams
+/// Removes the default team set created by this module.
+/// Safe to call during cleanup even if some teams were unused.
 fn cleanup_teams() {
     team_remove("red");
     team_remove("blue");

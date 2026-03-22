@@ -136,6 +136,74 @@ strings:
       end: 结束索引（不含，负数从末尾计）
     returns: rs:strings.Result 包含提取的子串
 
+map:
+  map_set:
+    desc: 将整数值写入 storage rs:maps.{map_name}.{key}
+    params:
+      map_name: rs:maps 下的顶层 map 名称
+      key: map compound 内的键名
+      value: 要写入的整数值
+  map_get:
+    desc: 读取 storage rs:maps.{map_name}.{key} 中的整数值
+    params:
+      map_name: rs:maps 下的顶层 map 名称
+      key: map compound 内的键名
+    returns: 已存储的整数值；若键不存在则返回 0
+  map_has:
+    desc: 检查 storage rs:maps.{map_name}.{key} 是否存在
+    params:
+      map_name: rs:maps 下的顶层 map 名称
+      key: map compound 内的键名
+    returns: 键存在返回 1，否则返回 0
+  map_delete:
+    desc: 删除指定 map 中的一个键
+    params:
+      map_name: rs:maps 下的顶层 map 名称
+      key: map compound 内的键名
+  map_clear:
+    desc: 删除整个 storage rs:maps.{map_name} compound
+    params:
+      map_name: rs:maps 下的顶层 map 名称
+
+set_int:
+  set_add:
+    desc: 向 storage rs:set_int.{set_name} 中插入一个整数；若已存在则不会重复添加
+    params:
+      set_name: rs:set_int 下的集合名称
+      value: 要插入的整数值
+  set_has:
+    desc: 检查整数是否存在于 storage rs:set_int.{set_name} 中
+    params:
+      set_name: rs:set_int 下的集合名称
+      value: 要检测的整数值
+    returns: 元素存在返回 1，否则返回 0
+  set_remove:
+    desc: 从 storage rs:set_int.{set_name} 中删除一个整数
+    params:
+      set_name: rs:set_int 下的集合名称
+      value: 要删除的整数值
+  set_size:
+    desc: 返回 storage rs:set_int.{set_name} 中当前元素数量
+    params:
+      set_name: rs:set_int 下的集合名称
+    returns: 集合中的整数个数；若集合不存在则返回 0
+  set_clear:
+    desc: 将 storage rs:set_int.{set_name} 重置为空整数列表
+    params:
+      set_name: rs:set_int 下的集合名称
+  set_union:
+    desc: 计算两个整数集合的并集，并将结果写入目标集合
+    params:
+      a: 左侧输入集合名称
+      b: 右侧输入集合名称
+      result: 目标集合名称
+  set_intersect:
+    desc: 计算两个整数集合的交集，并将结果写入目标集合
+    params:
+      a: 左侧输入集合名称
+      b: 右侧输入集合名称
+      result: 目标集合名称
+
 result:
   result_ok:
     desc: 构造一个携带成功值的 Result
@@ -227,3 +295,1107 @@ timer:
     returns: 剩余刻数，不足时为 0
   Timer.tick:
     desc: 在计时器激活时手动推进一刻
+
+bossbar:
+  create_timer_bar:
+    desc: 创建一个对所有玩家可见的计时器 Bossbar，并以秒数初始化最大值和当前值
+    params:
+      id: Bossbar 标识符，通常使用 `<namespace>:<name>`
+      name: Bossbar 显示名称
+      max_seconds: 持续秒数，内部会转换为游戏刻
+  create_health_bar:
+    desc: 创建一个红色血量风格 Bossbar，并以满值显示
+    params:
+      id: Bossbar 标识符
+      name: Bossbar 显示名称
+      max_val: 最大值，同时也是初始值
+  create_progress_bar:
+    desc: 创建一个蓝色进度 Bossbar，初始值为 0
+    params:
+      id: Bossbar 标识符
+      name: Bossbar 显示名称
+      max_val: 进度最大值
+  update_bar:
+    desc: 设置已有 Bossbar 的当前值
+    params:
+      id: Bossbar 标识符
+      value: 新的当前值
+  hide_bar:
+    desc: 将已有 Bossbar 设为不可见
+    params:
+      id: Bossbar 标识符
+  show_bar:
+    desc: 将已有 Bossbar 重新显示给已分配的玩家
+    params:
+      id: Bossbar 标识符
+  remove_bar:
+    desc: 彻底移除一个 Bossbar
+    params:
+      id: Bossbar 标识符
+  update_bar_color:
+    desc: 根据百分比阈值更新 Bossbar 颜色
+    params:
+      id: Bossbar 标识符
+      percent: 预期为 0-100 的百分比值
+
+teams:
+  create_team:
+    desc: 创建一个队伍并设置显示颜色
+    params:
+      name: 计分板队伍名称
+      color: Minecraft 队伍颜色字符串，如 `red` 或 `blue`
+  create_red_team:
+    desc: 创建默认红队，并关闭队友伤害
+  create_blue_team:
+    desc: 创建默认蓝队，并关闭队友伤害
+  create_green_team:
+    desc: 创建默认绿队，并关闭队友伤害
+  create_yellow_team:
+    desc: 创建默认黄队，并关闭队友伤害
+  add_to_team:
+    desc: 将目标选择器加入指定队伍
+    params:
+      target: 要加入队伍的目标选择器
+      team_name: 已存在的队伍名称
+  remove_from_teams:
+    desc: 将目标选择器从所有队伍中移除
+    params:
+      target: 要移除的目标选择器
+  setup_two_teams:
+    desc: 创建默认的双队配置（红队和蓝队）
+  setup_four_teams:
+    desc: 创建默认的四队配置（红蓝绿黄）
+  cleanup_teams:
+    desc: 删除本模块默认创建的四个标准队伍
+
+spawn:
+  teleport_to:
+    desc: 将目标选择器传送到固定坐标
+    params:
+      target: 要传送的目标选择器
+      x: 目标 X 坐标
+      y: 目标 Y 坐标
+      z: 目标 Z 坐标
+  teleport_to_entity:
+    desc: 将目标选择器传送到另一个实体当前位置
+    params:
+      target: 要传送的目标选择器
+      dest: 作为目的地的实体选择器
+  spread_players:
+    desc: 预留的随机分散玩家辅助函数；当前仅输出提示消息，尚未真正执行 spreadplayers
+    params:
+      x: 中心点 X 坐标
+      z: 中心点 Z 坐标
+      radius: 最大分散半径（方块）
+  gather_all:
+    desc: 将所有玩家传送到同一位置
+    params:
+      x: 目标 X 坐标
+      y: 目标 Y 坐标
+      z: 目标 Z 坐标
+  launch_up:
+    desc: 按相对坐标将目标向上抬升
+    params:
+      target: 要传送的目标选择器
+      height: 相对 Y 偏移（方块）
+  goto_lobby:
+    desc: 将目标传送到内置大厅坐标，并显示欢迎标题
+    params:
+      target: 要传送到大厅的目标选择器
+  goto_arena:
+    desc: 将目标传送到内置竞技场坐标，并显示开战标题
+    params:
+      target: 要传送到竞技场的目标选择器
+
+world:
+  set_day:
+    desc: 将世界时间设置为白天（tick 1000）
+  set_night:
+    desc: 将世界时间设置为夜晚（tick 13000）
+  set_noon:
+    desc: 将世界时间设置为正午（tick 6000）
+  set_midnight:
+    desc: 将世界时间设置为午夜（tick 18000）
+  weather_clear:
+    desc: 将天气设置为晴天
+  weather_rain:
+    desc: 将天气设置为下雨
+  weather_thunder:
+    desc: 将天气设置为雷暴
+  enable_keep_inventory:
+    desc: 启用 `keepInventory` 游戏规则
+  disable_keep_inventory:
+    desc: 关闭 `keepInventory` 游戏规则
+  disable_mob_griefing:
+    desc: 将 `mobGriefing` 设为 false，禁止生物破坏方块
+  disable_fire_spread:
+    desc: 将 `doFireTick` 设为 false，禁止火焰蔓延
+  set_peaceful:
+    desc: 将难度设置为和平
+  set_easy:
+    desc: 将难度设置为简单
+  set_normal:
+    desc: 将难度设置为普通
+  set_hard:
+    desc: 将难度设置为困难
+  barrier_wall:
+    desc: 用屏障方块填充一个长方体区域
+    params:
+      x1: 第一个角点 X 坐标
+      y1: 第一个角点 Y 坐标
+      z1: 第一个角点 Z 坐标
+      x2: 对角点 X 坐标
+      y2: 对角点 Y 坐标
+      z2: 对角点 Z 坐标
+  clear_area:
+    desc: 用空气填充一个长方体区域，以清空该区域
+    params:
+      x1: 第一个角点 X 坐标
+      y1: 第一个角点 Y 坐标
+      z1: 第一个角点 Z 坐标
+      x2: 对角点 X 坐标
+      y2: 对角点 Y 坐标
+      z2: 对角点 Z 坐标
+  glass_box:
+    desc: 构建一个中空玻璃盒，先填满外壳再挖空内部
+    params:
+      x1: 第一个角点 X 坐标
+      y1: 第一个角点 Y 坐标
+      z1: 第一个角点 Z 坐标
+      x2: 对角点 X 坐标
+      y2: 对角点 Y 坐标
+      z2: 对角点 Z 坐标
+  sun_altitude:
+    desc: 根据世界时间计算太阳高度角，结果为角度 ×10000 定点数
+    params:
+      ticks: Minecraft 世界时间（游戏刻）
+    returns: 太阳高度角，单位为角度 ×10000
+  sun_azimuth:
+    desc: 根据世界时间计算太阳方位角，结果为角度 ×10000 定点数
+    params:
+      ticks: Minecraft 世界时间（游戏刻）
+    returns: 方位角，范围为 `[0, 3600000)`
+
+interactions:
+  interactions_init:
+    desc: 初始化本模块所需的计分板目标 `rs.click`、`rs.sneak` 和 `rs.attack`
+  on_right_click:
+    desc: 使用 `rs.click` 计分板检测右键，并给检测到的玩家添加 `rs.clicked` 标签
+    params:
+      callback_fn: 预留的回调标识，当前实现尚未使用
+  example_right_click:
+    desc: 演示如何直接消费 `rs.click` 计分板并在右键时广播消息
+  is_sneaking:
+    desc: 检查目标当前是否处于潜行状态
+    params:
+      target: 要检查的玩家选择器
+    returns: 潜行时返回 `1`，否则返回 `0`
+  on_sneak_start:
+    desc: 检测玩家是否在当前 tick 开始潜行，并维护 `rs.sneak_start` 标签
+  check_look_up:
+    desc: 检测玩家是否抬头，并为满足条件者添加 `rs.look_up` 标签
+  check_look_down:
+    desc: 检测玩家是否低头，并为满足条件者添加 `rs.look_down` 标签
+  check_look_straight:
+    desc: 检测玩家是否平视，并为满足条件者添加 `rs.look_straight` 标签
+  check_holding_item:
+    desc: 预留的手持物检测辅助函数；当前仅输出提示，真实检测需配合谓词或 NBT 检查
+    params:
+      item_id: 期望的物品 ID 或逻辑键名
+  on_sneak_click:
+    desc: 检测“潜行 + 右键”组合输入，并添加 `rs.sneak_click` 或 `rs.clicked` 标签
+  DOUBLE_TAP_WINDOW:
+    desc: 双击潜行判定窗口，单位为游戏刻
+  on_double_sneak:
+    desc: 检测双击潜行；要求调用方自行维护 `rs.last_sneak` 和 `rs.tick`
+
+inventory:
+  clear_inventory:
+    desc: 清空目标选择器的全部背包内容
+    params:
+      target: 要清空背包的玩家或实体选择器
+  give_kit_warrior:
+    desc: 给目标发放战士套装，包含铁甲、近战武器、盾牌和食物
+    params:
+      target: 接收套装的玩家或实体选择器
+  give_kit_archer:
+    desc: 给目标发放弓箭手套装，包含弓箭、轻甲和食物
+    params:
+      target: 接收套装的玩家或实体选择器
+  give_kit_mage:
+    desc: 给目标发放法师套装，包含位移、消耗品和范围伤害道具
+    params:
+      target: 接收套装的玩家或实体选择器
+  remove_item:
+    desc: 从目标背包中移除指定物品的全部副本
+    params:
+      target: 要移除物品的玩家或实体选择器
+      item: 传给 `clear` 命令的物品参数，可包含 NBT
+
+particles:
+  hearts_at:
+    desc: 在指定坐标生成爱心粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  flames:
+    desc: 在指定坐标生成火焰粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  smoke:
+    desc: 在指定坐标生成大烟雾粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  explosion_effect:
+    desc: 在指定坐标生成爆炸粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  sparkles_at:
+    desc: 在指定坐标生成附魔闪烁粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  angry_at:
+    desc: 在指定坐标生成愤怒村民粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  happy_at:
+    desc: 在指定坐标生成开心村民粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  portal_effect:
+    desc: 在指定坐标生成传送门粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  totem_at:
+    desc: 在指定坐标生成不死图腾粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  end_sparkles_at:
+    desc: 在指定坐标生成末地烛粒子
+    params:
+      x: X 坐标
+      y: Y 坐标
+      z: Z 坐标
+  particle_at_fx:
+    desc: 在以方块 ×100 表示的定点坐标上生成粒子
+    params:
+      x_fx: X 坐标（方块 ×100）
+      y_fx: Y 坐标（方块 ×100）
+      z_fx: Z 坐标（方块 ×100）
+      particle: 粒子 ID，如 `minecraft:flame`
+  draw_line_2d:
+    desc: 使用线性插值绘制二维粒子直线
+    params:
+      x0: 起点 X（方块 ×100）
+      y0: 起点 Y（方块 ×100）
+      x1: 终点 X（方块 ×100）
+      y1: 终点 Y（方块 ×100）
+      steps: 插值步数
+      z: 所在 Z 平面（方块 ×100）
+      particle: 粒子 ID
+  draw_circle:
+    desc: 在 XZ 平面绘制粒子圆环
+    params:
+      cx: 圆心 X（方块）
+      cy: 圆心 Y（方块）
+      cz: 圆心 Z（方块）
+      r: 半径（方块 ×100）
+      steps: 采样点数量
+      particle: 粒子 ID
+  draw_helix:
+    desc: 绘制可配置半径、高度和圈数的粒子螺旋
+    params:
+      cx: 中心 X（方块）
+      cy_start: 起始 Y（方块）
+      cz: 中心 Z（方块）
+      r: 半径（方块 ×100）
+      height: 总高度（方块）
+      rotations: 完整旋转圈数
+      steps: 采样点数量
+      particle: 粒子 ID
+  particle_dot:
+    desc: 在整数方块坐标生成单个粒子
+    params:
+      x: X 坐标（整数方块）
+      y: Y 坐标（整数方块）
+      z: Z 坐标（整数方块）
+      particle: 粒子 ID
+
+dialog:
+  dialog_say:
+    desc: 向玩家或选择器发送一条纯白色聊天消息
+    params:
+      p: 接收者选择器
+      msg: 纯文本消息内容
+  dialog_broadcast:
+    desc: 向所有玩家广播一条纯白色聊天消息
+    params:
+      msg: 纯文本消息内容
+  dialog_say_color:
+    desc: 向玩家或选择器发送带颜色的聊天消息，未知颜色值会回退为白色
+    params:
+      p: 接收者选择器
+      msg: 纯文本消息内容
+      color: 颜色编号（0=white, 1=red, 2=green, 3=gold, 4=aqua）
+  dialog_title:
+    desc: 在玩家屏幕上显示标题和副标题
+    params:
+      p: 接收者选择器
+      title: 主标题文本
+      subtitle: 副标题文本
+  dialog_title_clear:
+    desc: 清除目标当前显示的标题
+    params:
+      p: 接收者选择器
+  dialog_actionbar:
+    desc: 在玩家动作栏显示一条短消息
+    params:
+      p: 接收者选择器
+      msg: 纯文本消息内容
+
+player:
+  heal:
+    desc: 通过给 #health 计分板加值来治疗最近的玩家
+    params:
+      amount: 要恢复的生命值点数（正整数）
+    returns: void — 修改 @p 的 #health 计分板目标值
+    example_note: heal(10) — 恢复 10 点生命值
+  damage:
+    desc: 对最近的玩家造成伤害，生命值最低降至 0
+    params:
+      amount: 造成的伤害点数（正整数）
+    returns: void — 修改 @p 的 #health 计分板目标值，不低于 0
+    example_note: damage(5) — 对最近玩家造成 5 点伤害
+  is_op:
+    desc: 检查最近的玩家是否拥有 op 实体标签（管理员权限）
+    returns: 若 @p 有 op 标签则返回 1，否则返回 0
+    example_note: let admin = is_op()
+
+effects:
+  speed:
+    desc: 给目标实体施加速度提升效果
+    params:
+      target: 实体选择器（如 @p, @a, @e[...]）
+      duration: 效果持续时间（刻，20 刻 = 1 秒）
+      level: 效果等级（0 = 速度 I，1 = 速度 II，...）
+    returns: void — 应用 minecraft:speed 效果
+  jump:
+    desc: 给目标实体施加跳跃提升效果
+    params:
+      target: 实体选择器
+      duration: 效果持续时间（刻）
+      level: 效果等级（0 = 跳跃 I，...）
+    returns: void — 应用 minecraft:jump_boost 效果
+  regen:
+    desc: 给目标实体施加生命恢复效果
+    params:
+      target: 实体选择器
+      duration: 效果持续时间（刻）
+      level: 效果等级
+    returns: void — 应用 minecraft:regeneration 效果
+  resistance:
+    desc: 给目标实体施加伤害抵抗效果
+    params:
+      target: 实体选择器
+      duration: 效果持续时间（刻）
+      level: 效果等级
+    returns: void — 应用 minecraft:resistance 效果
+  strength:
+    desc: 给目标实体施加力量提升效果
+    params:
+      target: 实体选择器
+      duration: 效果持续时间（刻）
+      level: 效果等级（0 = 力量 I，1 = 力量 II，...）
+    returns: void — 应用 minecraft:strength 效果
+  invisible:
+    desc: 使目标实体隐身
+    params:
+      target: 实体选择器
+      duration: 效果持续时间（刻）
+    returns: void — 应用 minecraft:invisibility（等级 0）
+  night_vision:
+    desc: 给目标实体施加夜视效果
+    params:
+      target: 实体选择器
+      duration: 效果持续时间（刻）
+    returns: void — 应用 minecraft:night_vision
+  slow_fall:
+    desc: 给目标实体施加缓降效果
+    params:
+      target: 实体选择器
+      duration: 效果持续时间（刻）
+    returns: void — 应用 minecraft:slow_falling
+  glow:
+    desc: 使目标实体发光轮廓
+    params:
+      target: 实体选择器
+      duration: 效果持续时间（刻）
+    returns: void — 应用 minecraft:glowing
+  clear_effects:
+    desc: 清除目标实体的所有药水效果
+    params:
+      target: 实体选择器
+    returns: void
+  clear_effect:
+    desc: 清除目标实体的特定效果
+    params:
+      target: 实体选择器
+      eff: 效果资源位置字符串（如 "minecraft:speed"）
+    returns: void
+  buff_all:
+    desc: 给目标施加完整增益套餐（速度 I、力量 I、生命恢复 I、抵抗 I）
+    params:
+      target: 实体选择器
+      duration: 所有效果的持续时间（刻）
+    returns: void
+
+combat:
+  weapon_damage:
+    desc: 计算武器基础伤害加上加成的总伤害
+    params:
+      base: 武器基础伤害值
+      bonus: 额外伤害修饰（如附魔或增益）
+    returns: base + bonus
+    example_note: weapon_damage(10, 5) → 15
+  take_damage:
+    desc: 对生命值应用伤害，结果最低为 0
+    params:
+      health: 当前生命值（如来自计分板）
+      amount: 要扣减的伤害量
+    returns: health - amount，最低为 0；调用后用 scoreboard_set 写回
+    example_note: let new_hp = take_damage(current_hp, 8)
+  is_dead:
+    desc: 判断实体是否已死亡（生命值 <= 0）
+    params:
+      health: 要判断的当前生命值
+    returns: 若 health <= 0 则返回 1（已死亡），否则返回 0（存活）
+
+physics:
+  gravity_fx:
+    desc: Minecraft 重力常数（定点数，0.08 方块/刻² × 100 = 8）
+    returns: 8
+  air_drag_fx:
+    desc: 空气阻力因子（×10000，每刻乘以 0.98）
+    returns: 9800
+  water_drag_fx:
+    desc: 水中阻力因子（×10000，每刻乘以 0.80）
+    returns: 8000
+  projectile_y:
+    desc: 计算抛体在 t 刻后的 Y 轴位置（无阻力，恒定重力）
+    params:
+      p0: 初始 Y 位置 ×100
+      v0: 初始 Y 速度 ×100（方块/刻 × 100）
+      t: 时间（刻）
+    returns: p0 + v0*t - gravity*t²/2
+  projectile_x:
+    desc: 计算抛体在 t 刻后的水平 X 位置（匀速，无阻力）
+    params:
+      p0: 初始 X 位置 ×100
+      v0: 水平 X 速度 ×100
+      t: 时间（刻）
+    returns: p0 + v0*t
+  projectile_vy:
+    desc: 计算抛体在 t 刻后的 Y 轴速度（含重力）
+    params:
+      v0: 初始 Y 速度 ×100
+      t: 时间（刻）
+    returns: v0 - gravity*t
+  apply_drag:
+    desc: 对速度应用一刻的阻力
+    params:
+      v_fx: 速度 ×100
+      drag_fx: 阻力因子 ×10000（空气 9800，水 8000）
+    returns: v_fx * drag_fx / 10000
+  apply_gravity:
+    desc: 对 Y 速度分量应用一刻重力
+    params:
+      vy_fx: 当前 Y 速度 ×100
+    returns: vy_fx - gravity_fx()
+  bounce_v:
+    desc: 对速度分量进行弹跳反射（含能量损耗）
+    params:
+      v_fx: 速度 ×100
+      restitution_fx: 弹性系数 ×10000（10000=完全弹性，0=完全非弹性）
+    returns: 反向并缩放后的速度
+  spring_force:
+    desc: 计算弹簧力（胡克定律：F = -k*(x-目标)）
+    params:
+      pos_fx: 当前位置 ×100
+      target_fx: 弹簧平衡位置 ×100
+      k_fx: 弹簧常数 ×10000
+    returns: (target - pos) * k / 10000
+
+easing:
+  ease_linear:
+    desc: 线性缓动，无加速或减速
+    params:
+      t: 进度 ×10000，范围 [0, 10000]
+    returns: t（恒等函数）
+  ease_in_quad:
+    desc: 二次方缓入，慢开始快结束
+    params:
+      t: 进度 ×10000
+    returns: t²
+  ease_out_quad:
+    desc: 二次方缓出，快开始慢结束
+    params:
+      t: 进度 ×10000
+    returns: 1 - (1-t)²
+  ease_in_out_quad:
+    desc: 二次方缓入缓出，两端慢中间快
+    params:
+      t: 进度 ×10000
+    returns: 前半段 2t²，后半段 1 - 2*(1-t)²
+  ease_in_cubic:
+    desc: 三次方缓入（比二次方更强烈）
+    params:
+      t: 进度 ×10000
+    returns: t³
+  ease_out_cubic:
+    desc: 三次方缓出
+    params:
+      t: 进度 ×10000
+    returns: 1 - (1-t)³
+  ease_smooth:
+    desc: 平滑步进缓动（Hermite 三次曲线：3t² - 2t³）
+    params:
+      t: 进度 ×10000
+    returns: 3t² - 2t³
+  ease_smoother:
+    desc: 更平滑步进（Ken Perlin 五次曲线：6t⁵ - 15t⁴ + 10t³）
+    params:
+      t: 进度 ×10000
+    returns: 6t⁵ - 15t⁴ + 10t³
+  ease_in_back:
+    desc: 后退缓入，运动前先轻微后退（过冲预备）
+    params:
+      t: 进度 ×10000
+    returns: 可能短暂低于 0
+  ease_out_bounce:
+    desc: 弹跳缓出，结尾模拟球落地弹跳
+    params:
+      t: 进度 ×10000
+    returns: 分段弹跳曲线，范围 [0, 10000]
+
+geometry:
+  midpoint:
+    desc: 计算两个坐标的整数中点
+    params:
+      a: 第一个坐标
+      b: 第二个坐标
+    returns: (a + b) / 2（整数截断）
+  aabb_contains:
+    desc: 检测三维点是否在轴对齐包围盒（AABB）内
+    params:
+      px: 点 X 坐标
+      py: 点 Y 坐标
+      pz: 点 Z 坐标
+      minx: 包围盒最小 X（含）
+      miny: 包围盒最小 Y（含）
+      minz: 包围盒最小 Z（含）
+      maxx: 包围盒最大 X（含）
+      maxy: 包围盒最大 Y（含）
+      maxz: 包围盒最大 Z（含）
+    returns: 点在包围盒内或边界上返回 1，否则返回 0
+  sphere_contains:
+    desc: 检测三维点是否在球体内（用平方距离避免 sqrt）
+    params:
+      px: 点 X
+      py: 点 Y
+      pz: 点 Z
+      cx: 球心 X
+      cy: 球心 Y
+      cz: 球心 Z
+      r: 球半径（与坐标同单位）
+    returns: 点在球内返回 1，否则返回 0
+  cylinder_contains:
+    desc: 检测二维点（XZ 平面）是否在竖直圆柱截面内（忽略 Y 轴）
+    params:
+      px: 点 X
+      pz: 点 Z
+      cx: 圆柱中心 X
+      cz: 圆柱中心 Z
+      r: 圆柱半径
+    returns: 点在圆柱截面内返回 1，否则返回 0
+  angle_normalize:
+    desc: 将角度（度×10000）归一化到 [0, 3600000) 范围
+    params:
+      deg: 输入角度 ×10000（可为负数或超过 360°）
+    returns: 等效角度在 [0, 3600000) 范围内
+  angle_diff:
+    desc: 计算两角度之间的有符号最短角度差（度×10000）
+    params:
+      a: 起始角 ×10000
+      b: 目标角 ×10000
+    returns: 有符号差值在 (-1800000, 1800000]
+
+random:
+  next_lcg:
+    desc: 推进 LCG 状态一步，返回下一个伪随机 int32
+    params:
+      seed: 当前 LCG 状态（任意非零整数）
+    returns: 下一个伪随机 int32（同时作为下次调用的种子）
+    example_note: seed = next_lcg(seed)
+  random_range:
+    desc: 生成 [lo, hi) 范围内的伪随机整数
+    params:
+      seed: next_lcg 的输出值
+      lo: 下界（含）
+      hi: 上界（不含，必须 > lo）
+    returns: 范围 [lo, hi) 内的整数
+    example_note: let roll = random_range(seed, 1, 7) — 骰子 1-6
+  random_bool:
+    desc: 以相等概率生成 0 或 1 的伪随机布尔值
+    params:
+      seed: next_lcg 的输出值
+    returns: 0 或 1，各约 50% 概率
+  binomial_sample:
+    desc: 模拟 n 次伯努利试验并统计成功次数（二项分布）
+    params:
+      n: 试验次数
+      p_x10000: 成功概率 ×10000（如 5000 = 50%）
+      seed: LCG 种子（任意非零整数）
+    returns: 成功次数，范围 [0, n]
+  hypergeometric_sample:
+    desc: 无放回抽样并统计成功项数（超几何分布）
+    params:
+      pop_size: 总体大小
+      success_states: 总体中成功项数量
+      draws: 抽取数量
+      seed: LCG 种子
+    returns: 抽中的成功项数，范围 [0, min(draws, success_states)]
+
+bits:
+  bit_get:
+    desc: 检测 x 的第 n 位是否为 1
+    params:
+      x: 要检测的整数
+      n: 位索引（0 = 最低位），范围 [0, 30]
+    returns: 第 n 位为 1 则返回 1，否则返回 0
+  bit_set:
+    desc: 将 x 的第 n 位设为 1（幂等）
+    params:
+      x: 要修改的整数
+      n: 要置 1 的位索引，范围 [0, 30]
+    returns: 第 n 位置为 1 后的 x
+  bit_clear:
+    desc: 将 x 的第 n 位清零（幂等）
+    params:
+      x: 要修改的整数
+      n: 要清零的位索引，范围 [0, 30]
+    returns: 第 n 位置为 0 后的 x
+  bit_toggle:
+    desc: 翻转 x 的第 n 位（0→1 或 1→0）
+    params:
+      x: 要修改的整数
+      n: 要翻转的位索引，范围 [0, 30]
+    returns: 第 n 位翻转后的 x
+  bit_shl:
+    desc: 左移 x n 位（等效于 x * 2^n）
+    params:
+      x: 要移位的整数
+      n: 左移位数，范围 [0, 30]
+    returns: x << n
+  bit_shr:
+    desc: 逻辑右移 x n 位（等效于 x / 2^n，向零截断）
+    params:
+      x: 要移位的整数
+      n: 右移位数，范围 [0, 30]
+    returns: x >> n
+  bit_and:
+    desc: 两个整数的按位与（31 个非符号位）
+    params:
+      a: 第一个操作数
+      b: 第二个操作数
+    returns: a & b（两者均为 1 的位）
+  bit_or:
+    desc: 两个整数的按位或（31 个非符号位）
+    params:
+      a: 第一个操作数
+      b: 第二个操作数
+    returns: a | b（至少一个为 1 的位）
+  bit_xor:
+    desc: 两个整数的按位异或（31 个非符号位）
+    params:
+      a: 第一个操作数
+      b: 第二个操作数
+    returns: a ^ b（恰好一个为 1 的位）
+  bit_not:
+    desc: 按位非 — 翻转 x 的所有 31 个非符号位
+    params:
+      x: 要取反的整数
+    returns: ~x（所有 31 个低位翻转；符号位不变）
+  popcount:
+    desc: 统计 x 中置 1 的位数（汉明重量）
+    params:
+      x: 整数值（使用 31 个低位；符号位不计）
+    returns: 置 1 的位数，范围 [0, 31]
+
+color:
+  rgb_pack:
+    desc: 将 RGB 分量打包为单个整数（0xRRGGBB 格式）
+    params:
+      r: 红色通道，范围 [0, 255]
+      g: 绿色通道，范围 [0, 255]
+      b: 蓝色通道，范围 [0, 255]
+    returns: r*65536 + g*256 + b
+  rgb_r:
+    desc: 从打包 RGB 整数中提取红色分量
+    params:
+      packed: 打包颜色整数（0xRRGGBB）
+    returns: 红色通道值，范围 [0, 255]
+  rgb_g:
+    desc: 从打包 RGB 整数中提取绿色分量
+    params:
+      packed: 打包颜色整数（0xRRGGBB）
+    returns: 绿色通道值，范围 [0, 255]
+  rgb_b:
+    desc: 从打包 RGB 整数中提取蓝色分量
+    params:
+      packed: 打包颜色整数（0xRRGGBB）
+    returns: 蓝色通道值，范围 [0, 255]
+  rgb_lerp:
+    desc: 两个打包 RGB 颜色之间的线性插值
+    params:
+      a: 起始颜色（打包 0xRRGGBB）
+      b: 结束颜色（打包 0xRRGGBB）
+      t: 混合因子，范围 [0, 1000]（0=a，1000=b）
+    returns: a 和 b 之间插值得到的打包 RGB 颜色
+  rgb_to_l:
+    desc: 从 RGB 分量计算 HSL 亮度（×10000 精度）
+    params:
+      r: 红色 ×10000，范围 [0, 2550000]
+      g: 绿色 ×10000
+      b: 蓝色 ×10000
+    returns: 亮度，范围 [0, 10000]（0=黑，10000=白）
+  rgb_to_s:
+    desc: 从 RGB 分量计算 HSL 饱和度（×10000 精度）
+    params:
+      r: 红色 ×10000
+      g: 绿色 ×10000
+      b: 蓝色 ×10000
+    returns: 饱和度，范围 [0, 10000]（0=灰，10000=全饱和）
+  rgb_to_h:
+    desc: 从 RGB 分量计算 HSL 色相（×10000 精度）
+    params:
+      r: 红色 ×10000
+      g: 绿色 ×10000
+      b: 蓝色 ×10000
+    returns: 色相，范围 [0, 3600000]（度×10000；0=红，1200000=绿，2400000=蓝）
+  hsl_to_packed:
+    desc: 将 HSL（×10000 精度）转换为打包 RGB 整数（0xRRGGBB）
+    params:
+      h: 色相 ×10000，范围 [0, 3600000]
+      s: 饱和度 ×10000，范围 [0, 10000]
+      l: 亮度 ×10000，范围 [0, 10000]
+    returns: 打包 RGB 整数，每通道 0-255
+
+noise:
+  hash_1d:
+    desc: 从一维整数坐标生成伪随机整数
+    params:
+      x: 输入坐标（任意整数）
+    returns: 伪随机整数（任意值；用 % 限制范围）
+  hash_2d:
+    desc: 从二维整数坐标对生成伪随机整数
+    params:
+      x: 第一个坐标
+      z: 第二个坐标
+    returns: 确定性组合两个输入的伪随机整数
+  value_noise_1d:
+    desc: 定点数位置处的平滑一维值噪声
+    params:
+      x_fx: 位置 ×10000（如 10000 = 坐标 1.0）
+    returns: 噪声值，范围 [0, 10000]，整数坐标间平滑插值
+  value_noise_2d:
+    desc: 定点数位置处的平滑二维值噪声
+    params:
+      x_fx: X 位置 ×10000
+      z_fx: Z 位置 ×10000
+    returns: 噪声值，范围 [0, 10000]，双线性平滑插值
+  fbm_1d:
+    desc: 一维分形布朗运动（fBm）— 叠加多组八度值噪声
+    params:
+      x_fx: 位置 ×10000
+      octaves: 噪声层数（1–6；越多细节越丰富但越慢）
+      persistence_fx: 每八度振幅衰减因子 ×10000（5000 = 0.5 推荐）
+    returns: 归一化噪声值，约在 [0, 10000]
+  fbm_2d:
+    desc: 二维分形布朗运动 — 叠加多组二维值噪声
+    params:
+      x_fx: X 位置 ×10000
+      z_fx: Z 位置 ×10000
+      octaves: 噪声层数（1–6）
+      persistence_fx: 振幅衰减因子 ×10000
+    returns: 归一化噪声值，约在 [0, 10000]
+  terrain_height:
+    desc: 使用 3 组八度 fBm 噪声生成地形高度
+    params:
+      x: 方块 X 坐标（整数，非定点数）
+      z: 方块 Z 坐标（整数，非定点数）
+      base_y: 基础高度（方块）
+      amplitude: 最大高度变化（方块）
+    returns: 坐标 (x, z) 处的方块高度
+
+sort:
+  insertion_sort:
+    desc: 就地升序排序整数数组（插入排序，O(n²)，适合 n≤64）
+    params:
+      arr: 要排序的整数数组（就地修改）
+      len: 要排序的元素数量（arr[0..len-1]）
+    returns: void — 调用后 arr 升序排列
+  insertion_sort_desc:
+    desc: 就地降序排序整数数组（插入排序）
+    params:
+      arr: 要排序的整数数组（就地修改）
+      len: 要排序的元素数量
+    returns: void — 调用后 arr 降序排列
+  sort_merge:
+    desc: 将两个已排序数组合并为一个新的排序数组
+    params:
+      a: 第一个已排序数组
+      la: a 的元素数量
+      b: 第二个已排序数组
+      lb: b 的元素数量
+    returns: 包含 a 和 b 所有元素的新排序 int[]，长度 la+lb
+  merge_sort_coro:
+    desc: 使用协程将归并排序分散到多个 tick 执行（O(n log n)，适合大数组）
+    params:
+      arr: 要排序的整数数组（就地修改）
+      n: arr 的元素数量
+    returns: void — ceil(log₂(n)) 个 tick 后完成排序，onDone 触发
+
+bigint:
+  bigint_add:
+    desc: 将两个等长大整数相加，结果写入预分配数组
+    params:
+      a: 第一个加数大整数
+      b: 第二个加数大整数
+      result: 输出大整数数组（长度需 >= len）
+      len: 分块数量
+    returns: 进位：0 或 1（非零表示溢出）
+  bigint_sub:
+    desc: 大整数 b 从 a 中减去，结果写入 result（要求 a >= b）
+    params:
+      a: 被减数大整数
+      b: 减数大整数（必须 <= a）
+      result: 输出大整数数组
+      len: 分块数量
+    returns: void — result = a - b
+  bigint_mul_small:
+    desc: 大整数乘以小整数（1 ≤ n ≤ 9999）
+    params:
+      a: 被乘数大整数
+      n: 小整数乘数（范围 [1, 9999]）
+      result: 输出数组
+      len: 分块数量
+    returns: void — result = a × n
+  bigint_mul:
+    desc: 两个大整数相乘（朴素 O(n²) 学校算法）
+    params:
+      a: 第一个大整数（la 个分块）
+      b: 第二个大整数（lb 个分块）
+      result: 输出数组（需 la+lb 个分块，预置为 0）
+      la: a 的分块数
+      lb: b 的分块数
+    returns: void — result = a × b
+  bigint_div_small:
+    desc: 大整数除以小整数，返回商和余数
+    params:
+      a: 被除数大整数
+      divisor: 小整数除数（范围 [1, 9999]）
+      result: 商输出数组
+      len: 分块数量
+    returns: 余数（范围 0..divisor-1）
+  bigint_div:
+    desc: 任意精度整数除法，计算商和余数
+    params:
+      a: 被除数大整数（la 个分块）
+      b: 除数大整数（lb 个分块）
+      quotient: 商输出数组（la 个分块，预置为 0）
+      remainder: 余数输出数组（lb 个分块，预置为 0）
+      la: a 的分块数（需 >= lb）
+      lb: b 的分块数
+    returns: void — quotient = a/b, remainder = a%b
+  bigint_cmp:
+    desc: 比较两个等长大整数
+    params:
+      a: 第一个大整数（最高有效分块在索引 0）
+      b: 第二个大整数
+      len: 分块数量（两者相同）
+    returns: a > b 返回 1，a < b 返回 -1，相等返回 0
+
+heap:
+  heap_new:
+    desc: 分配一个可容纳 64 个元素的新空堆
+    returns: int[]，h[0]=0（大小），h[1..64] 预分配为零
+  heap_size:
+    desc: 返回堆中当前存储的元素数量
+    params:
+      h: 由 heap_new 创建的堆数组
+    returns: 当前元素数量（h[0]）
+  heap_peek:
+    desc: 查看堆顶元素但不移除（最小堆返回最小值，最大堆返回最大值）
+    params:
+      h: 非空堆数组；前置条件：heap_size(h) > 0
+    returns: 堆顶元素（h[1]）
+  heap_push:
+    desc: 向最小堆插入一个值
+    params:
+      h: 由 heap_new 创建的堆数组
+      val: 要插入的值
+    returns: 保持堆属性的更新堆数组
+  heap_pop:
+    desc: 移除并丢弃最小堆的最小元素
+    params:
+      h: 非空最小堆；前置条件：heap_size(h) > 0
+    returns: 移除最小值并恢复堆属性的更新堆数组
+  max_heap_push:
+    desc: 向最大堆插入一个值
+    params:
+      h: 由 heap_new 创建的堆数组
+      val: 要插入的值
+    returns: 保持最大堆属性的更新堆数组
+  max_heap_pop:
+    desc: 移除并丢弃最大堆的最大元素
+    params:
+      h: 非空最大堆；前置条件：heap_size(h) > 0
+    returns: 移除最大值并恢复最大堆属性的更新堆数组
+
+graph:
+  graph_new:
+    desc: 创建含 n 个节点、最多 256 条有向边的新空图
+    params:
+      n: 节点数量（限制在 [0, 64]）
+    returns: 初始化的图 int[]，g[0]=0（边数），g[1]=n（节点数）
+  graph_add_edge:
+    desc: 向图中添加一条有向加权边
+    params:
+      g: 图数组
+      src: 源节点索引
+      dst: 目标节点索引
+      weight: 边权重（无权图使用 1）
+    returns: 更新后的图数组；节点无效或边数已满时静默忽略
+  graph_add_undirected:
+    desc: 添加无向加权边（同时添加 a→b 和 b→a 两条有向边）
+    params:
+      g: 图数组
+      a: 第一个节点索引
+      b: 第二个节点索引
+      weight: 边权重
+    returns: 添加了两条有向边的更新图数组
+  graph_bfs:
+    desc: 从起始节点广度优先搜索，返回访问顺序
+    params:
+      g: 图数组
+      start: 起始节点索引
+      out_visited: 长度 >= node_count 的 int[]；已访问节点对应格设为 1
+    returns: BFS 访问顺序的节点索引 int[]；起始节点无效时返回空数组
+  graph_dfs:
+    desc: 从起始节点深度优先搜索，返回访问顺序（迭代实现，基于栈）
+    params:
+      g: 图数组
+      start: 起始节点索引
+      out_visited: 长度 >= node_count 的 int[]
+    returns: DFS 访问顺序的节点索引 int[]
+  graph_has_path:
+    desc: 使用 BFS 检测两节点之间是否存在有向路径
+    params:
+      g: 图数组
+      src: 源节点索引
+      dst: 目标节点索引
+    returns: 存在从 src 到 dst 的有向路径返回 1，否则返回 0
+  graph_shortest_path:
+    desc: 使用 Dijkstra 算法计算从源节点到所有节点的最短加权路径
+    params:
+      g: 图数组
+      src: 源节点索引
+      dst: 目标节点索引（用于返回值）
+      out_dist: 长度 >= node_count 的 int[]；填入最短距离（不可达为 -1）
+    returns: src 到 dst 的最短距离，不可达返回 -1
+
+pathfind:
+  pf_pack:
+    desc: 将 (x, z) 网格坐标编码为单个打包整数
+    params:
+      x: 网格 X 坐标 [0, 15]
+      z: 网格 Z 坐标 [0, 15]
+    returns: x * 16 + z（范围 [0, 255] 内的唯一索引）
+  pf_unpack_x:
+    desc: 从打包网格索引中提取 X 坐标
+    params:
+      packed: 来自 pf_pack 的打包坐标
+    returns: X 分量：packed / 16
+  pf_unpack_z:
+    desc: 从打包网格索引中提取 Z 坐标
+    params:
+      packed: 来自 pf_pack 的打包坐标
+    returns: Z 分量：packed % 16
+  pf_new_map:
+    desc: 分配一个新的 16×16 网格障碍物地图，所有格子初始可通行
+    returns: 包含 256 个零的 int[]；0=可通行，1=阻塞
+  pf_set_blocked:
+    desc: 将网格格子标记为不可通行（阻塞）
+    params:
+      map: 来自 pf_new_map 的障碍物地图
+      x: 格子 X 坐标 [0, 15]
+      z: 格子 Z 坐标 [0, 15]
+    returns: void — 设置 map[pf_pack(x,z)] = 1
+  pf_set_open:
+    desc: 将网格格子标记为可通行（开放）
+    params:
+      map: 来自 pf_new_map 的障碍物地图
+      x: 格子 X 坐标 [0, 15]
+      z: 格子 Z 坐标 [0, 15]
+    returns: void — 设置 map[pf_pack(x,z)] = 0
+  pf_is_blocked:
+    desc: 检查网格格子是否被阻塞或超出边界
+    params:
+      map: 来自 pf_new_map 的障碍物地图
+      x: 格子 X 坐标
+      z: 格子 Z 坐标
+    returns: 超出边界或不可通行返回 1，可通行返回 0
+  pf_heuristic:
+    desc: 计算两个网格格子之间的曼哈顿距离（×10000 精度）
+    params:
+      x1: 第一个格子 X
+      z1: 第一个格子 Z
+      x2: 第二个格子 X
+      z2: 第二个格子 Z
+    returns: (|x1-x2| + |z1-z2|) × 10000，可用作 A* 启发函数
+  pathfind_bfs:
+    desc: 使用 BFS 在 16×16 网格上寻找两格子之间的最短路径
+    params:
+      map: 来自 pf_new_map 的障碍物地图（已设置阻塞）
+      sx: 起始格子 X [0, 15]
+      sz: 起始格子 Z [0, 15]
+      gx: 目标格子 X [0, 15]
+      gz: 目标格子 Z [0, 15]
+    returns: 从起点到终点（含）的打包坐标 int[]，无路径时返回空数组
+  pathfind_bfs_coro:
+    desc: 跨 tick 分散执行的 BFS 寻路（协程版本，避免卡顿）
+    params:
+      map: 来自 pf_new_map 的障碍物地图
+      sx: 起始格子 X [0, 15]
+      sz: 起始格子 Z [0, 15]
+      gx: 目标格子 X [0, 15]
+      gz: 目标格子 Z [0, 15]
+      out: 调用方提供的 int[]，完成时接收打包路径坐标
+    returns: void — 结果异步推入 out[]；替换 pf_noop 可设置完成回调

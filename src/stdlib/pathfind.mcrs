@@ -33,18 +33,38 @@ module library
 
 // ─── Coordinate utilities ─────────────────────────────────────────────────────
 
-// pf_pack(x, z): encode (x, z) as a single int (x*16+z)
+/// Encode a (x, z) grid coordinate pair as a single packed integer.
+/// @since 1.0.0
+/// @param x  Grid X coordinate [0, 15]
+/// @param z  Grid Z coordinate [0, 15]
+/// @returns  x * 16 + z (unique index in [0, 255])
+/// @example
+/// let p: int = pf_pack(3, 7)  // result: 55
 fn pf_pack(x: int, z: int): int { return x * 16 + z }
 
-// pf_unpack_x(packed): recover the x component
+/// Extract the X coordinate from a packed grid index.
+/// @since 1.0.0
+/// @param packed  Packed coordinate from pf_pack
+/// @returns  X component: packed / 16
+/// @example
+/// let x: int = pf_unpack_x(55)  // result: 3
 fn pf_unpack_x(packed: int): int { return packed / 16 }
 
-// pf_unpack_z(packed): recover the z component
+/// Extract the Z coordinate from a packed grid index.
+/// @since 1.0.0
+/// @param packed  Packed coordinate from pf_pack
+/// @returns  Z component: packed % 16
+/// @example
+/// let z: int = pf_unpack_z(55)  // result: 7
 fn pf_unpack_z(packed: int): int { return packed % 16 }
 
 // ─── Obstacle map ─────────────────────────────────────────────────────────────
 
-// pf_new_map(): allocate a 256-element map, all cells passable (value 0)
+/// Allocate a new 16×16 grid obstacle map with all cells passable.
+/// @since 1.0.0
+/// @returns  int[] of 256 zeros; index = pf_pack(x, z), 0=passable, 1=blocked
+/// @example
+/// let map: int[] = pf_new_map()
 fn pf_new_map(): int[] {
     let map: int[] = []
     let i: int = 0
@@ -55,19 +75,40 @@ fn pf_new_map(): int[] {
     return map
 }
 
-// pf_set_blocked(map, x, z): mark cell (x, z) as impassable
+/// Mark a grid cell as impassable (blocked).
+/// @since 1.0.0
+/// @param map  Obstacle map from pf_new_map
+/// @param x    Cell X coordinate [0, 15]
+/// @param z    Cell Z coordinate [0, 15]
+/// @returns  void — sets map[pf_pack(x,z)] = 1
+/// @example
+/// pf_set_blocked(map, 5, 3)  // block cell (5, 3)
 fn pf_set_blocked(map: int[], x: int, z: int) {
     let idx: int = pf_pack(x, z)
     map[idx] = 1
 }
 
-// pf_set_open(map, x, z): mark cell (x, z) as passable
+/// Mark a grid cell as passable (open).
+/// @since 1.0.0
+/// @param map  Obstacle map from pf_new_map
+/// @param x    Cell X coordinate [0, 15]
+/// @param z    Cell Z coordinate [0, 15]
+/// @returns  void — sets map[pf_pack(x,z)] = 0
+/// @example
+/// pf_set_open(map, 5, 3)  // re-open previously blocked cell (5, 3)
 fn pf_set_open(map: int[], x: int, z: int) {
     let idx: int = pf_pack(x, z)
     map[idx] = 0
 }
 
-// pf_is_blocked(map, x, z): 1 if out-of-bounds or impassable, 0 otherwise
+/// Check whether a grid cell is blocked or out of bounds.
+/// @since 1.0.0
+/// @param map  Obstacle map from pf_new_map
+/// @param x    Cell X coordinate
+/// @param z    Cell Z coordinate
+/// @returns  1 if out of bounds (x or z outside [0,15]) or cell is blocked, 0 if passable
+/// @example
+/// let blocked: int = pf_is_blocked(map, 5, 3)
 fn pf_is_blocked(map: int[], x: int, z: int): int {
     if (x < 0) { return 1 }
     if (z < 0) { return 1 }
@@ -78,8 +119,15 @@ fn pf_is_blocked(map: int[], x: int, z: int): int {
 
 // ─── Manhattan heuristic ──────────────────────────────────────────────────────
 
-// pf_heuristic(x1, z1, x2, z2): Manhattan distance ×10000 (fixed-point)
-// Informational — not used by BFS, but useful if you extend to A*.
+/// Compute Manhattan distance between two grid cells, scaled ×10000.
+/// @since 1.0.0
+/// @param x1  First cell X
+/// @param z1  First cell Z
+/// @param x2  Second cell X
+/// @param z2  Second cell Z
+/// @returns  (|x1-x2| + |z1-z2|) * 10000 — useful as A* heuristic
+/// @example
+/// let h: int = pf_heuristic(0, 0, 3, 4)  // result: 70000 (7 Manhattan steps × 10000)
 fn pf_heuristic(x1: int, z1: int, x2: int, z2: int): int {
     let dx: int = x1 - x2
     let dz: int = z1 - z2
@@ -90,14 +138,19 @@ fn pf_heuristic(x1: int, z1: int, x2: int, z2: int): int {
 
 // ─── BFS pathfinding (synchronous) ───────────────────────────────────────────
 
-// pathfind_bfs(map, sx, sz, gx, gz): find shortest path via BFS
-//
-// Returns int[] of packed coords start→goal (inclusive), or [] if unreachable.
-//
-// Internal arrays (size 256):
-//   visited[] — 1 = cell was enqueued; 0 = not yet seen
-//   parent[]  — packed coord of predecessor (-1 = no parent / unvisited)
-//   queue[]   — BFS frontier; consumed via qhead index (no front-dequeue needed)
+/// Find the shortest path between two cells on a 16×16 grid using BFS.
+/// @since 1.0.0
+/// @param map  Obstacle map from pf_new_map (with pf_set_blocked applied)
+/// @param sx   Start cell X [0, 15]
+/// @param sz   Start cell Z [0, 15]
+/// @param gx   Goal cell X [0, 15]
+/// @param gz   Goal cell Z [0, 15]
+/// @returns  int[] of packed coords (pf_pack) from start to goal inclusive, or [] if no path
+/// @example
+/// let map: int[] = pf_new_map()
+/// pf_set_blocked(map, 3, 5)
+/// let path: int[] = pathfind_bfs(map, 0, 0, 7, 7)
+/// let x0: int = pf_unpack_x(path[0])
 fn pathfind_bfs(map: int[], sx: int, sz: int, gx: int, gz: int): int[] {
     // Allocate visited and parent arrays (256 cells each)
     let visited: int[] = []
@@ -207,21 +260,19 @@ fn pathfind_bfs(map: int[], sx: int, sz: int, gx: int, gz: int): int[] {
 
 // ─── Coroutine BFS (tick-spread for server-friendly operation) ────────────────
 
-// pathfind_bfs_coro: identical BFS logic, spread across ticks via @coroutine.
-//
-// @coroutine(batch=16) processes 16 BFS iterations per server tick, preventing
-// lag spikes on busy grids. Results are pushed into caller-supplied out[] when done.
-//
-// Limitations:
-//   - @coroutine functions cannot return values; use the out[] ref pattern instead.
-//   - Replace pf_noop with your own handler if you need a done callback.
-//   - The out[] array must outlive the coroutine; store it in a scoreboard-backed var.
-//
-// Usage:
-//   let out: int[] = []
-//   pathfind_bfs_coro(map, 0, 0, 7, 7, out)
-//   // … several ticks later, out[] contains the packed-coord path
-
+/// BFS pathfinder spread across server ticks to avoid lag spikes (coroutine variant).
+/// @since 1.0.0
+/// @param map  Obstacle map from pf_new_map
+/// @param sx   Start cell X [0, 15]
+/// @param sz   Start cell Z [0, 15]
+/// @param gx   Goal cell X [0, 15]
+/// @param gz   Goal cell Z [0, 15]
+/// @param out  Caller-supplied int[] that receives packed path coords when done
+/// @returns  void — results are pushed into out[] asynchronously; replace pf_noop for callback
+/// @example
+/// let out: int[] = []
+/// pathfind_bfs_coro(map, 0, 0, 7, 7, out)
+/// // several ticks later, out[] contains the path
 @coroutine(batch=16, onDone=pf_noop)
 fn pathfind_bfs_coro(map: int[], sx: int, sz: int, gx: int, gz: int, out: int[]) {
     let visited: int[] = []
@@ -319,5 +370,6 @@ fn pathfind_bfs_coro(map: int[], sx: int, sz: int, gx: int, gz: int, out: int[])
     }
 }
 
-// pf_noop: default onDone callback — replace with your own handler
+/// Default no-op onDone callback for pathfind_bfs_coro. Replace with your own handler.
+/// @since 1.0.0
 fn pf_noop() {}

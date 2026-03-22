@@ -1,0 +1,240 @@
+// set_int.mcrs — Integer set helpers backed by NBT int lists.
+//
+// Sets are stored in `storage rs:set_int` under a caller-provided field name:
+//
+//   rs:set_int { MySet: [1, 4, 9] }
+//
+// `set_name`, `a`, `b`, and `result` are interpolated directly into the NBT
+// path, so callers should use path-safe identifiers such as `MySet`,
+// `enemy_ids`, or `tmp_union`.
+
+module library;
+
+fn __set_int_load_items_apply() {
+    raw("$data modify storage __NS__:arrays items set from storage rs:set_int $(set_name)");
+}
+
+fn __set_int_store_items_apply() {
+    raw("$data modify storage rs:set_int $(set_name) set from storage __NS__:arrays items");
+}
+
+fn __set_int_store_kept_apply() {
+    raw("$data modify storage rs:set_int $(set_name) set from storage __NS__:arrays kept");
+}
+
+fn __set_int_size_apply() {
+    raw("$execute store result score $ret __OBJ__ run data get storage rs:set_int $(set_name)");
+}
+
+fn __set_int_clear_apply() {
+    raw("$data modify storage rs:set_int $(set_name) set value []");
+}
+
+fn __set_int_load_left_apply() {
+    raw("$data modify storage __NS__:arrays left set from storage rs:set_int $(a)");
+}
+
+fn __set_int_load_right_apply() {
+    raw("$data modify storage __NS__:arrays right set from storage rs:set_int $(b)");
+}
+
+fn __set_int_store_merged_apply() {
+    raw("$data modify storage rs:set_int $(result) set from storage __NS__:arrays merged");
+}
+
+fn __set_int_store_shared_apply() {
+    raw("$data modify storage rs:set_int $(result) set from storage __NS__:arrays shared");
+}
+
+/// Returns 1 if `value` exists in the given temporary array, otherwise 0.
+///
+/// @param arr    Temporary array to scan
+/// @param value  Integer value to look for
+/// @returns      1 if found, otherwise 0
+fn _set_int_array_has(arr: int[], value: int): int {
+    let n: int = list_len(arr);
+    let i: int = 0;
+    while (i < n) {
+        if (arr[i] == value) { return 1; }
+        i = i + 1;
+    }
+    return 0;
+}
+
+/// Appends `value` to `arr` only when it is not already present.
+///
+/// @param arr    Temporary array used as a working set
+/// @param value  Integer value to append
+fn _set_int_array_add_unique(arr: int[], value: int) {
+    if (_set_int_array_has(arr, value) == 0) {
+        arr.push(value);
+    }
+}
+
+/// Adds an integer to `storage rs:set_int.{set_name}` if it is not already present.
+///
+/// Missing sets are created automatically as empty lists before insertion.
+///
+/// @since 3.0.0
+/// @param set_name  Set name under `storage rs:set_int`
+/// @param value     Integer value to insert
+/// @example
+/// set_add("Visited", 42)
+fn set_add(set_name: string, value: int) {
+    let items: int[] = [];
+    raw("data modify storage __NS__:arrays items set value []");
+    raw("data modify storage rs:macro_args set_name set from storage rs:strings __sp0");
+    raw("function __NS__:__set_int_load_items_apply with storage rs:macro_args");
+    _set_int_array_add_unique(items, value);
+    raw("function __NS__:__set_int_store_items_apply with storage rs:macro_args");
+}
+
+/// Checks whether an integer exists in `storage rs:set_int.{set_name}`.
+///
+/// @since 3.0.0
+/// @param set_name  Set name under `storage rs:set_int`
+/// @param value     Integer value to test
+/// @returns         1 if the value exists, otherwise 0
+/// @example
+/// if (set_has("Visited", 42) == 1) { }
+fn set_has(set_name: string, value: int): int {
+    let items: int[] = [];
+    raw("data modify storage __NS__:arrays items set value []");
+    raw("data modify storage rs:macro_args set_name set from storage rs:strings __sp0");
+    raw("function __NS__:__set_int_load_items_apply with storage rs:macro_args");
+    return _set_int_array_has(items, value);
+}
+
+/// Removes an integer from `storage rs:set_int.{set_name}`.
+///
+/// Removing a missing value is a no-op.
+///
+/// @since 3.0.0
+/// @param set_name  Set name under `storage rs:set_int`
+/// @param value     Integer value to remove
+/// @example
+/// set_remove("Visited", 42)
+fn set_remove(set_name: string, value: int) {
+    let items: int[] = [];
+    let kept: int[] = [];
+    raw("data modify storage __NS__:arrays items set value []");
+    raw("data modify storage __NS__:arrays kept set value []");
+    raw("data modify storage rs:macro_args set_name set from storage rs:strings __sp0");
+    raw("function __NS__:__set_int_load_items_apply with storage rs:macro_args");
+
+    let n: int = list_len(items);
+    let i: int = 0;
+    while (i < n) {
+        let cur: int = items[i];
+        if (cur != value) {
+            kept.push(cur);
+        }
+        i = i + 1;
+    }
+
+    raw("function __NS__:__set_int_store_kept_apply with storage rs:macro_args");
+}
+
+/// Returns the number of elements in `storage rs:set_int.{set_name}`.
+///
+/// Missing sets return `0`.
+///
+/// @since 3.0.0
+/// @param set_name  Set name under `storage rs:set_int`
+/// @returns         Current element count
+/// @example
+/// let count: int = set_size("Visited")
+fn set_size(set_name: string): int {
+    raw("scoreboard players set $ret __OBJ__ 0");
+    raw("data modify storage rs:macro_args set_name set from storage rs:strings __sp0");
+    raw("function __NS__:__set_int_size_apply with storage rs:macro_args");
+    raw("return 1");
+    return 0;
+}
+
+/// Clears all elements from `storage rs:set_int.{set_name}`.
+///
+/// @since 3.0.0
+/// @param set_name  Set name under `storage rs:set_int`
+/// @example
+/// set_clear("Visited")
+fn set_clear(set_name: string) {
+    raw("data modify storage rs:macro_args set_name set from storage rs:strings __sp0");
+    raw("function __NS__:__set_int_clear_apply with storage rs:macro_args");
+}
+
+/// Computes `result = a ∪ b`.
+///
+/// The destination set is overwritten with a deduplicated list.
+///
+/// @since 3.0.0
+/// @param a       Left-hand input set name
+/// @param b       Right-hand input set name
+/// @param result  Destination set name
+/// @example
+/// set_union("SeenA", "SeenB", "SeenAll")
+fn set_union(a: string, b: string, result: string) {
+    let left: int[] = [];
+    let right: int[] = [];
+    let merged: int[] = [];
+    raw("data modify storage __NS__:arrays left set value []");
+    raw("data modify storage __NS__:arrays right set value []");
+    raw("data modify storage __NS__:arrays merged set value []");
+    raw("data modify storage rs:macro_args a set from storage rs:strings __sp0");
+    raw("data modify storage rs:macro_args b set from storage rs:strings __sp1");
+    raw("data modify storage rs:macro_args result set from storage rs:strings __sp2");
+    raw("function __NS__:__set_int_load_left_apply with storage rs:macro_args");
+    raw("function __NS__:__set_int_load_right_apply with storage rs:macro_args");
+
+    let left_n: int = list_len(left);
+    let i: int = 0;
+    while (i < left_n) {
+        _set_int_array_add_unique(merged, left[i]);
+        i = i + 1;
+    }
+
+    let right_n: int = list_len(right);
+    let j: int = 0;
+    while (j < right_n) {
+        _set_int_array_add_unique(merged, right[j]);
+        j = j + 1;
+    }
+
+    raw("function __NS__:__set_int_store_merged_apply with storage rs:macro_args");
+}
+
+/// Computes `result = a ∩ b`.
+///
+/// The destination set is overwritten with a deduplicated list.
+///
+/// @since 3.0.0
+/// @param a       Left-hand input set name
+/// @param b       Right-hand input set name
+/// @param result  Destination set name
+/// @example
+/// set_intersect("SeenA", "SeenB", "SeenBoth")
+fn set_intersect(a: string, b: string, result: string) {
+    let left: int[] = [];
+    let right: int[] = [];
+    let shared: int[] = [];
+    raw("data modify storage __NS__:arrays left set value []");
+    raw("data modify storage __NS__:arrays right set value []");
+    raw("data modify storage __NS__:arrays shared set value []");
+    raw("data modify storage rs:macro_args a set from storage rs:strings __sp0");
+    raw("data modify storage rs:macro_args b set from storage rs:strings __sp1");
+    raw("data modify storage rs:macro_args result set from storage rs:strings __sp2");
+    raw("function __NS__:__set_int_load_left_apply with storage rs:macro_args");
+    raw("function __NS__:__set_int_load_right_apply with storage rs:macro_args");
+
+    let left_n: int = list_len(left);
+    let i: int = 0;
+    while (i < left_n) {
+        let cur: int = left[i];
+        if (_set_int_array_has(right, cur) == 1) {
+            _set_int_array_add_unique(shared, cur);
+        }
+        i = i + 1;
+    }
+
+    raw("function __NS__:__set_int_store_shared_apply with storage rs:macro_args");
+}
