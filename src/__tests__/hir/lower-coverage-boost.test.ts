@@ -25,6 +25,8 @@ function makeProgram(overrides?: Partial<Program>): Program {
     enums: [],
     globals: [],
     consts: [],
+    imports: [],
+    interfaces: [],
     isLibrary: false,
     ...overrides,
   }

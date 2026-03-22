@@ -268,13 +268,13 @@ function buildRenameIndex(source: string, program: Program): RenameSymbol[] {
     return symbol
   }
 
-  function walkPattern(pattern: MatchPattern, scope: Scope): void {
+  function walkPattern(pattern: MatchPattern, scope: Scope, currentFn: FnDecl | null): void {
     if (pattern.kind === 'PatSome') {
       bindLocal(pattern.binding, undefined, null, scope)
     } else if (pattern.kind === 'PatEnum') {
       for (const binding of pattern.bindings) bindLocal(binding, undefined, null, scope)
     } else if (pattern.kind === 'PatExpr') {
-      walkExpr(pattern.expr, scope, null, null)
+      walkExpr(pattern.expr, scope, null, currentFn!)
     }
   }
 
@@ -361,7 +361,7 @@ function buildRenameIndex(source: string, program: Program): RenameSymbol[] {
         walkExpr(stmt.expr, scope, null, currentFn)
         for (const arm of stmt.arms) {
           const armScope = makeScope(scope)
-          walkPattern(arm.pattern, armScope)
+          walkPattern(arm.pattern, armScope, currentFn)
           walkBlock(arm.body, armScope, currentFn)
         }
         return

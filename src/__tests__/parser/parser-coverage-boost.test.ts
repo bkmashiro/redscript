@@ -673,19 +673,24 @@ describe('Parser — const literal expressions', () => {
 
 describe('Parser — string interpolation', () => {
   test('f-string with nested braces', () => {
-    // Uses the f-string path with `${...}` expressions
-    const stmt = parseStmt(`
-      let msg = "hello ${name}";
-    `)
+    // Uses the f-string path with ${...} expressions
+    // Use String.raw or direct string with escaped dollar
+    const src = 'fn _t() { let name = "world"; let msg = f"hello {name}"; }'
+    const tokens = new Lexer(src).tokenize()
+    const parser = new Parser(tokens)
+    const prog = parser.parse('test')
+    const stmt = prog.declarations[0].body[0]
     expect(stmt.kind).toBe('let')
     const init = (stmt as any).value
     expect(init.kind).toBe('f_string')
   })
 
   test('f-string with multiple interpolations', () => {
-    const stmt = parseStmt(`
-      let msg = "${a} and ${b}";
-    `)
+    const src = 'fn _t() { let a = 1; let b = 2; let msg = f"{a} and {b}"; }'
+    const tokens = new Lexer(src).tokenize()
+    const parser = new Parser(tokens)
+    const prog = parser.parse('test')
+    const stmt = prog.declarations[0].body[0]
     expect(stmt.kind).toBe('let')
     const init = (stmt as any).value
     expect(init.kind).toBe('f_string')
@@ -693,11 +698,22 @@ describe('Parser — string interpolation', () => {
   })
 
   test('f-string with plain text only (no interpolation)', () => {
-    const stmt = parseStmt(`
-      let msg = "plain text";
-    `)
+    const src = 'fn _t() { let msg = "plain text"; }'
+    const tokens = new Lexer(src).tokenize()
+    const parser = new Parser(tokens)
+    const prog = parser.parse('test')
+    const stmt = prog.declarations[0].body[0]
     expect(stmt.kind).toBe('let')
     const init = (stmt as any).value
+    expect(init.kind).toBe('str_lit')
+  })
+
+  test('string with escaped interpolation markers', () => {
+    // Verify that strings without ${ are treated as str_lit
+    const src = 'fn _t() { let msg = "no interp here"; }'
+    const tokens = new Lexer(src).tokenize()
+    const prog = new Parser(tokens).parse('test')
+    const init = (prog.declarations[0].body[0] as any).value
     expect(init.kind).toBe('str_lit')
   })
 })
@@ -759,9 +775,9 @@ describe('Parser — execute positioned / rotated with coords', () => {
 // ── execute aligned / on / summon ──────────────────────────────────────────
 
 describe('Parser — execute aligned/on/summon', () => {
-  test('execute aligned', () => {
+  test('execute align', () => {
     const stmt = parseStmt(`
-      execute aligned xyz run {
+      execute align xyz run {
         let x = 1;
       }
     `)

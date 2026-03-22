@@ -201,7 +201,7 @@ fn main(): void {
     const imports: ImportDecl[] = [
       { moduleName: 'mylib', symbol: undefined as unknown as string },
     ]
-    const hir: HIRModule = { functions: [], structs: [], enums: [], interfaces: [] }
+    const hir: HIRModule = { namespace: 'test', globals: [], functions: [], structs: [], implBlocks: [], enums: [], consts: [] }
     const { lintSource } = require('../../lint/index')
     const w = lintSource('', imports, hir)
     expect(w.filter((x: any) => x.rule === 'unused-import')).toHaveLength(0)
@@ -578,7 +578,7 @@ describe('lintFile', () => {
 
 describe('lintSource — direct HIR', () => {
   it('handles empty module with no warnings', () => {
-    const hir: HIRModule = { functions: [], structs: [], enums: [], interfaces: [] }
+    const hir: HIRModule = { namespace: 'test', globals: [], functions: [], structs: [], implBlocks: [], enums: [], consts: [] }
     const { lintSource } = require('../../lint/index')
     const w = lintSource('', [], hir)
     expect(w).toHaveLength(0)

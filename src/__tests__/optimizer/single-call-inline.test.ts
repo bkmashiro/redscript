@@ -1,6 +1,5 @@
 import { optimizeModule } from '../../optimizer/pipeline'
 import { inlineSingleCallFunctions } from '../../optimizer/single-call-inline'
-import { inlineSingleCallFunctions } from '../../optimizer/single-call-inline'
 import type { MIRBlock, MIRFunction, MIRInstr, MIRModule, Operand } from '../../mir/types'
 
 function mkFn(
