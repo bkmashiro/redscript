@@ -1,195 +1,159 @@
-# RedScript Roadmap
+# RedScript ROADMAP
 
-Last updated: 2026-03-19
+> Last updated: 2026-03-22
+> Current version: 3.0.0
 
----
-
-## Current State (v2.6.0)
-
-### Compiler
-- v2 pipeline: HIR → MIR → LIR → mcfunction
-- Type system: int / fixed (×10000) / double (NBT IEEE 754) / float (deprecated)
-- `double` type: NBT storage `rs:d`, explicit `as` cast, binary ops auto-lower to stdlib intrinsics
-- Module system, generics, enum, Option<T>
-- @coroutine (back-edge yield, batch/onDone), @schedule, @on_trigger, @tick
-- Optional semicolons
-- `for i in 0..n` range syntax sugar ✅
-- Incremental compilation, source maps
-- DCE, peephole optimizer, int32 overflow-safe constant folding
-- Compiler intrinsics: `double + double` → `double_add`, etc.
-- `__NS__` / `__OBJ__` placeholders in raw()
-- `nbt_read` MIR instruction (fixes as-fixed temp rename bug)
-- `impl TypeName {}` struct methods with field-by-field param expansion ✅
-- `let h: int[] = heap_new()` — int[] var from function call monomorphized ✅
-
-### stdlib (35 modules, complete)
-| Module | Contents |
-|--------|----------|
-| `math` | abs/sign/min/max/clamp/lerp/sqrt/sin/cos/atan2/ln/exp/cbrt/bezier + SA-tuned |
-| `math_hp` | double_add/sub/mul/div, ln_hp, double_sqrt, pow_real, pow_fast |
-| `list` | sum/avg/min/max/contains/index_of/shuffle/dedup_count |
-| `random` | LCG/PCG, distributions: normal/binomial/hypergeometric/gamma/poisson/geometric |
-| `signal` | DFT (n≤8), distributions |
-| `geometry` | in_cylinder/cone/sector_2d/sphere/aabb |
-| `bits` | bit_and/or/xor/shl/shr/popcount |
-| `bigint` | 96-bit + arbitrary-length array API |
-| `matrix` | 2D/3D rotation, scale, quaternion |
-| `vec` | dot/cross/length/normalize/atan2_fixed |
-| `quaternion` | quat_mul/slerp/euler/axis-angle |
-| `color` | RGB↔HSL, pack/unpack, lerp, rgb_to_hex |
-| `noise` | value noise 1D/2D, fractal Brownian motion |
-| `easing` | quad/cubic/quartic/sine/expo/back/bounce/smoothstep |
-| `parabola` | ballistic trajectory, launch angle |
-| `advanced` | bezier_n, Mandelbrot/Julia, modular exponentiation |
-| `calculus` | trapezoid/Simpson integration, Welford statistics |
-| `expr` | RPN expression evaluator |
-| `world` | sun_altitude, sun_azimuth |
-| `heap` | MinHeap / MaxHeap (priority queue) ✅ |
-| `sort` | heapsort + mergesort over int[] ✅ |
-| `pathfind` | A* (coroutine-based, 20 nodes/tick) ✅ |
-| `physics/particles/combat/effects/player/mobs/...` | 13 more game mechanic modules |
-
-### Tests
-- Unit/e2e: **1679** passing
-- MC integration: **88** passing
-
-### Tooling
-- SA + Nelder-Mead tuner (`redscript tune --adapter <name>`)
-- VSCode extension v1.3.14 — full LSP: hover (builtins/fn/struct/var/selector/decorator), goto-def, completion (imported modules, @decorators, @selectors, locals), signature help, references, rename
-- VitePress docs site with stdlib reference + zh tutorials 01-10
+## Legend
+- ✅ Done
+- 🔄 In Progress
+- 📋 Planned
+- 💡 Idea
 
 ---
 
-## Today's Sprint (2026-03-19)
+## Compiler Optimizations
 
-Priority order (dependencies first):
-
-### ① Parser: add `span.endLine` to fn declarations
-- **Status**: ✅ done (commit `eded998`)
-- **Why**: LSP currently uses "next fn start - 1" as implicit endLine. This works but is fragile.
-  Proper fix: parser emits `endLine` when it sees the closing `}`.
-- **Impact**: hover/F12/completion scope all improve
-
-### ② Compiler: `string + var` type error
-- **Status**: ✅ done (commit `8ce5955`)
-- **Why**: `"text" + 5` silently compiles to broken `tellraw @a {"text":"~"}`. 
-  Should be a compile error directing user to f-strings.
-- **Change**: in HIR binary op lowering, if either operand is string type, throw DiagnosticError.
-
-### ③ f-string in tell/subtitle/actionbar/title
-- **Status**: ✅ done (commit `8ce5955`)
-- **Why**: f-string emit for builtins doesn't interpolate scoreboard values into JSON text component.
-  Need to emit `{"score":{"name":"$var","objective":"..."}}` or `{"text":"","extra":[...]}` form.
-- **Impact**: `tell(@a, f"Score: {score}")` actually works
-
-### ④ LSP: Inlay hints
-- **Status**: ✅ done (commit `80fe229`)
-- **Why**: `let x = some_fn()` — type shown next to variable name
-- **Needs**: type inference info from TypeChecker or from collectLocals result
-
-### ⑤ stdlib: mat3_mul / mat4_mul
-- **Status**: ✅ done (commit `c44e581`)
-- **Where**: `src/stdlib/matrix.mcrs`
-- **Notes**: pure fixed-point arithmetic, no new compiler features needed
-
-### ⑥ stdlib: bigint ÷ bigint
-- **Status**: ✅ done (commit `c44e581`)
-- **Where**: `src/stdlib/bigint.mcrs`  
-- **Notes**: algorithm: long division on int[] representation
+| Pass | Status | Description |
+|------|--------|-------------|
+| Dead Code Elimination (DCE) | ✅ | Remove unreachable code |
+| Constant Folding | ✅ | Evaluate constant expressions at compile time |
+| Copy Propagation | ✅ | Replace variable copies with original |
+| Loop Invariant Code Motion (LICM) | ✅ | Hoist invariants out of loops |
+| Loop Unrolling | ✅ | Unroll small loops |
+| NBT Batch Read | ✅ | Merge consecutive NBT reads |
+| Function Inlining (`@inline`) | ✅ | Manual inline annotation |
+| Partial Evaluation | ✅ | Fold dead branches with constant conditions |
+| Tail Call Optimization (TCO) | 📋 | Convert tail recursion to loops (MC depth limit ~512) |
+| Common Subexpression Elimination (CSE) | 📋 | Cache repeated expressions |
+| Auto-Inline Small Functions | 📋 | Auto-inline functions < 5 statements |
+| Execute Chain Optimization | 📋 | Merge `execute if A run execute if B` → `execute if A if B` |
+| Strength Reduction | 📋 | `x * 2` → `x + x`, cheaper operations |
+| Scoreboard Read Batching | 📋 | Merge multiple reads of same scoreboard var in one tick |
+| NBT Write Coalescing | 📋 | Merge consecutive writes to same NBT path |
 
 ---
 
-## Roadmap
+## Language Features
 
-### v2.6 — Language Polish (in progress)
-
-#### Compiler
-- [x] **`for i in 0..n` syntax sugar** — implemented
-- [x] **Array literal type inference** — `let a = [1, 2, 3]` → `int[]` without annotation (already worked)
-- [x] **Struct methods** — `impl Vec3 { fn dot(self, other) }` with field-by-field expansion
-- [x] **`string + var` type error** — errors with clear f-string hint ✅
-- [x] **f-string tell/subtitle/actionbar** — proper JSON text component emit ✅
-- [x] **Inlay hints** — shows inferred type next to unannotated `let` ✅
-- [x] **Parser: fn endLine in span** — accurate scope for LSP ✅
-- [x] **`match` expression** — pattern-match on int/enum; compiles to scoreboard if-chains ✅
-- [x] **`for item in array` (`for_each`) iteration** — HIR desugaring to while + dynamic index ✅
-- [x] **`arr.len()` dynamic support** — `nbt_list_len` MIR instruction; literal arrays fold to constant, params use `data get storage` at runtime ✅
-- [ ] **exp_fx / sin_fixed SA Tuner adapters** — further error reduction
-
-#### stdlib
-- [x] **bigint ÷ bigint** — full arbitrary-precision long division ✅
-- [x] **mat3_mul / mat4_mul** — 3×3 and 4×4 matrix multiply (fixed ×10000) ✅
-- [x] **`dialog.mcrs`** — NPC dialog trees with choice branching ✅
-- [x] **`scheduler.mcrs`** — tick-budget-aware task scheduler ✅
-
----
-
-### v3.0 — Compiler-Native stdlib Advantage
-> These use features unique to RedScript (coroutine, struct, type system) that raw mcfunction cannot replicate.
-
-#### P1 — Data Structures (leverages struct + int[] backend)
-- [x] **`heap.mcrs`** — MinHeap / MaxHeap — done
-- [x] **`sort.mcrs`** — heapsort + mergesort — done
-- [x] **`pathfind.mcrs`** — A* pathfinding — done
-- [x] **`graph.mcrs`** — adjacency list + BFS/DFS — done
-
-#### P2 — Coroutine-Native Algorithms
-- [x] **`fft.mcrs`** — Fast Fourier Transform (O(n log n)) via @coroutine — done
-- [x] **`sort.mcrs` v2** — merge sort via @coroutine for large n
-
-#### P3 — Numerical Computing (double precision)
-- [x] **`ode.mcrs`** — Runge-Kutta 4 ODE solver — done
-- [x] **`linalg.mcrs`** — Linear algebra over double — done
-
-#### P4 — ECS Framework
-- [x] **`ecs.mcrs`** — Entity Component System — done
-  - Fill the gap that Bedrock's component system has but Java datapacks lack
-  - `register_component(entity, Health { 100, 100 })` — attach struct-as-component to entity via NBT + tag
-  - `get_component(entity, Health)` — read component fields back via scoreboard/storage
-  - `@tick fn health_system()` + `foreach(e: entity[tag=has_health])` — system iteration
-  - Advantage: kaer has nothing like this; raw mcfunction requires 100+ lines of manual NBT management per component type
-  - Implementation: tags for component presence, NBT storage for data, struct field expansion for reads/writes
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Basic types (int, bool, string) | ✅ | |
+| Structs | ✅ | |
+| Struct extends | ✅ | Compile-time field inheritance |
+| Enums with payload | ✅ | Tag + NBT payload |
+| Arrays (static + dynamic) | ✅ | |
+| Tuples | ✅ | Scoreboard-backed |
+| match expression | ✅ | Pattern matching incl. string |
+| Option<T> | ✅ | Algebraic option type |
+| Result<T, E> | ✅ | Error handling |
+| Interfaces / Traits | ✅ | Compile-time impl check |
+| Module import | ✅ | Three import forms |
+| Format strings (f-string) | ✅ | |
+| Multi-line strings | ✅ | |
+| `while let Some(x)` | ✅ | |
+| `for item in array` | ✅ | |
+| Labeled break/continue | ✅ | Nested loop control |
+| Generics | 💡 | Low ROI for MC target |
+| Closures / lambdas | 💡 | MC has no closures natively |
 
 ---
 
-### v3.1 — Documentation & Tooling
+## Decorators
 
-#### Language Reference (redscript-docs)
-Current state: `en/reference/syntax.md`, `decorators.md`, `builtins.md`, `cli.md` exist but are incomplete.
-
-- [x] **Language Spec completeness audit** — check syntax.md covers: f-string, for..in, range, impl blocks, Option<T>, generics, enums, all decorator args
-- [ ] **Type system doc** — int/fixed/double/float distinction, explicit cast rules, when to use which
-- [ ] **Error messages guide** — common compiler errors + how to fix (StringConcat, FloatArithmetic, etc.)
-- [x] **stdlib API completeness** — many stdlib/*.md files are stubs; fill in function signatures, params, return values, examples
-
-#### stdlib Docs (Codex-assisted batch generation)
-Missing or incomplete stdlib docs:
-- [x] `heap.md`, `sort.md`, `pathfind.md` — new modules, no docs yet
-- [x] `matrix.md` — needs mat3_mul/mat4_mul entries
-- [x] `bigint.md` — needs bigint_div entry
-- [x] `graph.md`, `ecs.md` — will need docs when implemented
-- [x] Chinese translations of all reference docs (en/ → zh/ sync)
-
-#### Changelog
-- [x] **v2.6.0 changelog** — document LSP improvements, f-string emit, string+var error, inlay hints, parser endLine, mat/bigint additions
+| Decorator | Status | Description |
+|-----------|--------|-------------|
+| `@on(EventType)` | ✅ | Event handler |
+| `@tick` | ✅ | Run every game tick |
+| `@load` | ✅ | Run on datapack load |
+| `@inline` | ✅ | Force function inlining |
+| `@deprecated` | ✅ | Compile-time warning |
+| `@singleton` | ✅ | Global state singleton |
+| `@watch` | ✅ | Scoreboard change listener |
+| `@config` | ✅ | Compile-time config injection |
+| `@profile` | ✅ | Performance profiling |
+| `@throttle(ticks)` | ✅ | Rate limit execution |
+| `@retry(max)` | ✅ | Auto-retry on failure |
+| `@memoize` | 🔄 | Cache function results |
+| `@benchmark` | 📋 | Tick-level benchmarking |
+| `@test` | 🔄 | Mark test functions |
 
 ---
 
-### Long-term 🌱
+## CLI Commands
 
-- [ ] **Generic containers** — needs compiler generics instantiation  
-- [ ] **Cross-file incremental tests** — only rerun affected modules
-- ~~**REPL / playground**~~ — removed, not worth the effort
+| Command | Status | Description |
+|---------|--------|-------------|
+| `redscript compile` | ✅ | Compile .mcrs files |
+| `redscript build` | ✅ | Build with optimization |
+| `redscript check` | ✅ | Type check only |
+| `redscript fmt` | ✅ | Format source code |
+| `redscript lint` | ✅ | Static analysis (5 rules) |
+| `redscript init` | ✅ | Project scaffold |
+| `redscript watch` | ✅ | Watch mode + hot reload |
+| `redscript publish` | ✅ | Package as .zip datapack |
+| `redscript test` | 🔄 | Run @test functions |
+| `redscript upgrade` | ✅ | Check for updates |
+| `redscript repl` | ✅ | HTTP REPL server |
+| `redscript docs` | 📋 | Open stdlib docs in browser |
 
 ---
 
-## Architecture Notes
+## Stdlib Modules (50 total)
 
-- **double parameter passing**: callee sees `rs:d __dp0`, `__dp1` (NBT copy, not scoreboard)
-- **double_mul_fixed macro**: `rs:math_hp __dmul_args.scale` (dot notation, not space)
-- **marker entity UUID**: `b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4` (double_add/sub entity trick)
-- **`__NS__` / `__OBJ__`**: replaced at compile time in raw() strings
-- **mulfix(a,b) = a×b/1000** (correction divisor for ×10000 fixed multiply)
-- **Coroutine yield mechanism**: loop back-edges, NOT a `yield` keyword
-- **@coroutine constraint**: cannot contain macro calls (continuations called via `function`, not macro)
-- **f-string tell emit**: must generate `{"text":"","extra":[{"text":"prefix"},{"score":...},...]}` JSON
+All 50 modules documented with `///` annotations and en+zh generated docs.
+
+| Category | Modules |
+|----------|---------|
+| Math | math ✅ math_hp ✅ vec ✅ linalg ✅ matrix ✅ quaternion ✅ |
+| DSP / Simulation | fft ✅ ode ✅ signal ✅ easing ✅ noise ✅ |
+| Geometry | geometry ✅ parabola ✅ physics ✅ |
+| Data Structures | sort ✅ heap ✅ bigint ✅ map ✅ set_int ✅ sets ✅ queue ✅ list ✅ |
+| AI / Graph | graph ✅ pathfind ✅ |
+| Game Systems | player ✅ effects ✅ combat ✅ scheduler ✅ state ✅ dialog ✅ timer ✅ cooldown ✅ |
+| MC Specific | bossbar ✅ tags ✅ teams ✅ mobs ✅ spawn ✅ world ✅ interactions ✅ inventory ✅ particles ✅ |
+| ECS | ecs ✅ |
+| Utility | strings ✅ result ✅ bits ✅ color ✅ random ✅ |
+| Advanced | advanced ✅ calculus ✅ expr ✅ events ✅ |
+
+---
+
+## Tooling
+
+| Tool | Status | Description |
+|------|--------|-------------|
+| VSCode Extension | ✅ v1.3.74 | Syntax highlighting, snippets |
+| LSP Server | ✅ | Hover, completion, goto-def, diagnostics |
+| LSP hover docs | ✅ | Shows `///` comments on hover |
+| LSP lint diagnostics | ✅ | Real-time lint warnings in Problems panel |
+| Playground | ✅ | Web IDE with examples |
+| Playground share | 📋 | URL-encoded shareable links |
+| REPL server | ✅ | HTTP POST /compile |
+| Doc generator | ✅ | `npm run docs:gen` — 50 modules |
+| CI docs:check | ✅ | PR fails if docs out of sync |
+| Benchmarks suite | ✅ | `benchmarks/` |
+| Source map | 🔄 | Trace mcfunction → .mcrs line |
+
+---
+
+## Documentation
+
+| Doc | Status |
+|-----|--------|
+| Getting started guide (en+zh) | ✅ |
+| Advanced docs (optimization/modules/decorators/cli) | ✅ |
+| Stdlib reference — all 50 modules (en+zh) | ✅ |
+| Type system reference | ✅ |
+| Error reference | ✅ |
+| Blog posts (3) | ✅ |
+| Tutorials | 📋 |
+
+---
+
+## Release
+
+| Item | Status |
+|------|--------|
+| redscript-mc v3.0.0 npm publish | 📋 |
+| VSCode marketplace v3.0.0 description update | 📋 |
+| nest-faster-crud npm publish | 📋 |
+| GitHub Release notes | 📋 |
