@@ -60,6 +60,21 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
     implMethods.set(ib.typeName, methods)
   }
 
+  // Build Display impl registry: typeName → f-string parts from to_string body
+  // Used to inline Display::to_string() calls at call sites instead of generating a function.
+  const displayImpls = new Map<string, HIRFStringPart[]>()
+  for (const ib of hir.implBlocks) {
+    if (ib.traitName === 'Display') {
+      const toStringMethod = ib.methods.find(m => m.name === 'to_string')
+      if (toStringMethod && toStringMethod.body.length > 0) {
+        const firstStmt = toStringMethod.body[0]
+        if (firstStmt.kind === 'return' && firstStmt.value && firstStmt.value.kind === 'f_string') {
+          displayImpls.set(ib.typeName, firstStmt.value.parts)
+        }
+      }
+    }
+  }
+
   // Pre-scan for macro functions
   const macroInfo = detectMacroFunctions(hir)
 
@@ -94,12 +109,13 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
 
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues, singletonStructs)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues, singletonStructs, displayImpls)
     allFunctions.push(fn, ...helpers)
   }
 
-  // Lower impl block methods
+  // Lower impl block methods (skip Display::to_string — inlined at call sites instead)
   for (const ib of hir.implBlocks) {
+    if (ib.traitName === 'Display') continue  // Display impls are inlined, not emitted as functions
     for (const m of ib.methods) {
       const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads, constValues)
       allFunctions.push(fn, ...helpers)
@@ -177,6 +193,8 @@ class FnContext {
   constValues: Map<string, number> = new Map()
   /** @singleton struct names — static_call GameState::set(gs) expands struct fields */
   singletonStructs: Set<string> = new Set()
+  /** Display trait impls: typeName → f-string parts from to_string body (inlined at call sites) */
+  displayImpls: Map<string, HIRFStringPart[]> = new Map()
 
   constructor(
     namespace: string,
@@ -302,12 +320,14 @@ function lowerFunction(
   enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map(),
   constValues: Map<string, number> = new Map(),
   singletonStructs: Set<string> = new Set(),
+  displayImpls: Map<string, HIRFStringPart[]> = new Map(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const mirFnName = overrideName ?? fn.name
   const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = sourceFile
   ctx.constValues = constValues
   ctx.singletonStructs = singletonStructs
+  ctx.displayImpls = displayImpls
   if (hirFnMap) ctx.hirFunctions = hirFnMap
   if (specializedFnsRegistry) ctx.specializedFnsRegistry = specializedFnsRegistry
   const fnMacroInfo = macroInfo.get(fn.name)
@@ -1972,6 +1992,14 @@ function lowerExpr(
       if (expr.args.length > 0 && expr.args[0].kind === 'ident') {
         const sv = ctx.structVars.get(expr.args[0].name)
         if (sv) {
+          // Intercept Display::to_string() calls — inlined at f-string call sites; return 0 otherwise
+          if (expr.fn === 'to_string' && ctx.displayImpls.has(sv.typeName)) {
+            // Display::to_string() is expanded inline in f-string context (precomputeFStringParts).
+            // Outside of that context, return a dummy 0 (the call is not valid standalone).
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: 0 })
+            return { kind: 'temp', name: t }
+          }
           // Intercept Timer method calls when _id is a known compile-time constant
           if (sv.typeName === 'Timer') {
             const idTemp = sv.fields.get('_id')
@@ -2086,6 +2114,9 @@ function lowerExpr(
                 ctx.specializedFnsRegistry,
                 specializedName,
                 ctx.enumPayloads,
+                ctx.constValues,
+                ctx.singletonStructs,
+                ctx.displayImpls,
               )
               ctx.specializedFnsRegistry.set(specializedName, [specFn, ...specHelpers])
             }
@@ -2212,6 +2243,12 @@ function lowerExpr(
       if (expr.callee.kind === 'member' && expr.callee.obj.kind === 'ident') {
         const sv = ctx.structVars.get(expr.callee.obj.name)
         if (sv) {
+          // Intercept Display::to_string() — inlined in f-string context; return 0 otherwise
+          if (expr.callee.field === 'to_string' && ctx.displayImpls.has(sv.typeName)) {
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: 0 })
+            return { kind: 'temp', name: t }
+          }
           // Intercept Timer method calls when _id is a known compile-time constant
           if (sv.typeName === 'Timer') {
             const idTemp = sv.fields.get('_id')
@@ -2815,6 +2852,46 @@ function precomputeFStringParts(
     if (inner.kind === 'ident' || inner.kind === 'int_lit' || inner.kind === 'bool_lit') {
       newParts.push({ kind: 'expr', expr: inner })
       continue
+    }
+
+    // Display::to_string() inline expansion in f-string context:
+    // v.to_string() (desugared as call{fn:'to_string', args:[v]}) → inline the Display impl's f-string
+    if (inner.kind === 'call' && inner.fn === 'to_string' && inner.args.length === 1 && inner.args[0].kind === 'ident') {
+      const argName = (inner.args[0] as { kind: 'ident'; name: string }).name
+      const sv = ctx.structVars.get(argName)
+      if (sv && ctx.displayImpls.has(sv.typeName)) {
+        const displayParts = ctx.displayImpls.get(sv.typeName)!
+        // Expand Display impl parts, substituting self.<field> with the actual struct field temps
+        for (const dp of displayParts) {
+          if (dp.kind === 'text') {
+            newParts.push(dp)
+          } else {
+            const dpExpr = dp.expr
+            // member(ident('self'), field) → lookup struct field temp
+            if (dpExpr.kind === 'member' && dpExpr.obj.kind === 'ident' && dpExpr.obj.name === 'self') {
+              const fieldTemp = sv.fields.get(dpExpr.field)
+              if (fieldTemp) {
+                newParts.push({ kind: 'expr', expr: { kind: 'ident', name: fieldTemp } })
+              } else {
+                newParts.push({ kind: 'expr', expr: { kind: 'int_lit', value: 0 } })
+              }
+            } else {
+              // Other expressions: lower them with self fields in scope
+              const selfScope = new Map(scope)
+              for (const [fieldName, fieldTemp] of sv.fields) {
+                selfScope.set(`self.${fieldName}`, fieldTemp)
+              }
+              const tempOp = lowerExpr(dpExpr, ctx, selfScope)
+              if (tempOp.kind === 'temp') {
+                newParts.push({ kind: 'expr', expr: { kind: 'ident', name: tempOp.name } })
+              } else if (tempOp.kind === 'const') {
+                newParts.push({ kind: 'expr', expr: { kind: 'int_lit', value: tempOp.value } })
+              }
+            }
+          }
+        }
+        continue
+      }
     }
 
     // int_to_str(x) / bool_to_str(x) in f-string: pass through the inner arg as a scoreboard score ref

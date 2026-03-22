@@ -19345,6 +19345,9 @@ var require_parser = __commonJS({
         if (!argsStr) {
           return { name };
         }
+        if (name === "profile") {
+          this.error("@profile decorator does not accept arguments");
+        }
         const args = {};
         if (name === "on") {
           const eventTypeMatch = argsStr.match(/^([A-Za-z_][A-Za-z0-9_]*)$/);

@@ -1,0 +1,64 @@
+// display-demo.mcrs — Display trait: fmt-like to_string() for structs
+//
+// Demonstrates impl Display for Struct { fn to_string(self): string { ... } }
+// The compiler inlines to_string() calls into f-strings (no function call emitted).
+//
+// Usage:
+//   redscript compile examples/display-demo.mcrs --namespace display -o <datapack>
+//   In game: /function display:demo
+
+// ── Vec2 with Display ────────────────────────────────────────────────────────
+
+struct Vec2 {
+    x: int,
+    y: int
+}
+
+impl Display for Vec2 {
+    fn to_string(self): string {
+        return f"Vec2({self.x}, {self.y})"
+    }
+}
+
+impl Vec2 {
+    fn add(self, other: Vec2): Vec2 {
+        return Vec2 { x: self.x + other.x, y: self.y + other.y }
+    }
+    fn scale(self, factor: int): Vec2 {
+        return Vec2 { x: self.x * factor, y: self.y * factor }
+    }
+}
+
+// ── Player with Display ───────────────────────────────────────────────────────
+
+struct Player {
+    level:  int,
+    score:  int,
+    health: int
+}
+
+impl Display for Player {
+    fn to_string(self): string {
+        return f"Player[lv={self.level} hp={self.health} score={self.score}]"
+    }
+}
+
+// ── Demo functions ────────────────────────────────────────────────────────────
+
+@keep fn demo() {
+    let a: Vec2 = Vec2 { x: 3, y: 4 }
+    let b: Vec2 = Vec2 { x: 1, y: 2 }
+
+    // to_string() is inlined into the f-string — no separate function call
+    announce(f"a = {a.to_string()}")
+    announce(f"b = {b.to_string()}")
+
+    let c: Vec2 = a.add(b)
+    announce(f"a + b = {c.to_string()}")
+
+    let scaled: Vec2 = a.scale(2)
+    announce(f"a × 2 = {scaled.to_string()}")
+
+    let hero: Player = Player { level: 10, score: 9999, health: 20 }
+    announce(f"Hero: {hero.to_string()}")
+}

@@ -40,5 +40,30 @@ describe('struct Display trait', () => {
     expect(hir.implBlocks[0].typeName).toBe('Vec2')
   })
 
-  it.todo('expands struct to_string() into tellraw text without generating impl function')
+  test('expands struct to_string() into tellraw text without generating impl function', () => {
+    const src = `
+      struct Vec2 { x: int, y: int }
+      impl Display for Vec2 {
+        fn to_string(self): string {
+          return f"Vec2({self.x}, {self.y})"
+        }
+      }
+      @keep fn demo(): void {
+        let v: Vec2 = Vec2 { x: 3, y: 4 }
+        announce(f"Position: {v.to_string()}")
+      }
+    `
+    const result = compile(src, { namespace: 'test' })
+    const allContent = result.files.map(f => f.content).join('\n')
+    const allPaths = result.files.map(f => f.path).join('\n')
+
+    // Should expand to_string() inline — no generated Vec2::to_string impl function
+    expect(allPaths).not.toMatch(/Vec2.*to_string|to_string.*Vec2/)
+
+    // The tellraw output should contain the f-string structure for Vec2 inline:
+    // "Vec2(" text + x score + ", " text + y score + ")" text
+    expect(allContent).toMatch(/tellraw @a/)
+    expect(allContent).toMatch(/Vec2\(/)
+    expect(allContent).toMatch(/score/)
+  })
 })

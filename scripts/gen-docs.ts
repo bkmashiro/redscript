@@ -27,7 +27,24 @@ const ZH_OUT     = path.join(DOCS_ROOT, 'zh', 'stdlib');
 const CHECK_MODE = process.argv.includes('--check');
 
 // Modules to process (filename without .mcrs → output basename)
-const TARGET_MODULES = ['math', 'vec', 'strings', 'result', 'timer'];
+const TARGET_MODULES = [
+  'math',
+  'vec',
+  'strings',
+  'map',
+  'result',
+  'timer',
+  'bossbar',
+  'tags',
+  'teams',
+  'mobs',
+  'spawn',
+  'world',
+  'interactions',
+  'inventory',
+  'particles',
+  'dialog',
+];
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +63,7 @@ interface FnEntry {
   doc: DocComment | null;
   isMethod: boolean;       // true for impl methods
   receiver?: string;       // struct name for methods
+  kind: 'fn' | 'const';
 }
 
 interface ModuleDoc {
@@ -155,6 +173,25 @@ function parseModule(src: string, moduleName: string): ModuleDoc {
         doc,
         isMethod: inImpl,
         receiver: inImpl ? implName : undefined,
+        kind: 'fn',
+      });
+
+      docLines = [];
+      continue;
+    }
+
+    // Constant declaration
+    const simpleConstMatch = line.match(/^(\s*)const\s+(\w+)/);
+    if (simpleConstMatch) {
+      const constName = simpleConstMatch[2];
+      const doc = docLines.length > 0 ? parseDocComment(docLines) : null;
+      fns.push({
+        name: constName,
+        signature: line.trim(),
+        doc,
+        isMethod: false,
+        receiver: undefined,
+        kind: 'const',
       });
 
       docLines = [];
@@ -195,7 +232,7 @@ function renderEnDoc(modDoc: ModuleDoc): string {
   // Table of contents
   const withDoc = modDoc.fns.filter(f => f.doc);
   if (withDoc.length > 0) {
-    lines.push('## Functions');
+    lines.push('## API');
     lines.push('');
     for (const fn of withDoc) {
       const anchor = fn.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
@@ -282,7 +319,7 @@ function renderZhDoc(modDoc: ModuleDoc, zh: Record<string, any>): string {
 
   const withDoc = modDoc.fns.filter(f => f.doc);
   if (withDoc.length > 0) {
-    lines.push('## 函数列表');
+    lines.push('## API 列表');
     lines.push('');
     for (const fn of withDoc) {
       const anchor = fn.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
@@ -418,7 +455,7 @@ function main() {
     }
 
     const docCount = modDoc.fns.filter(f => f.doc).length;
-    console.log(`  ${mod}: ${modDoc.fns.length} functions, ${docCount} documented`);
+    console.log(`  ${mod}: ${modDoc.fns.length} entries, ${docCount} documented`);
     processed++;
   }
 

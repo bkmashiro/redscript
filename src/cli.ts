@@ -5,6 +5,7 @@
  * Usage:
  *   redscript compile <file> [-o <out>] [--namespace <ns>]
  *   redscript check <file>
+ *   redscript init [project-name]
  *   redscript repl
  *   redscript version
  */
@@ -33,6 +34,7 @@ Usage:
   redscript compile <file> [-o <out>] [--namespace <ns>] [--incremental]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
+  redscript init [project-name]
   redscript fmt <file.mcrs> [file2.mcrs ...]
   redscript generate-dts [-o <file>]
   redscript repl
@@ -42,6 +44,7 @@ Commands:
   compile       Compile a RedScript file to a Minecraft datapack
   watch         Watch a directory for .mcrs file changes, recompile, and hot reload
   check         Check a RedScript file for errors without generating output
+  init          Scaffold a new RedScript datapack project
   fmt           Auto-format RedScript source files
   generate-dts  Generate builtin function declaration file (builtins.d.mcrs)
   repl          Start an interactive RedScript REPL
@@ -229,6 +232,91 @@ function deriveNamespace(filePath: string): string {
   const basename = path.basename(filePath, path.extname(filePath))
   // Convert to valid identifier: lowercase, replace non-alphanumeric with underscore
   return basename.toLowerCase().replace(/[^a-z0-9]/g, '_')
+}
+
+function sanitizeProjectName(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')
+}
+
+function buildInitFiles(namespace: string): Record<string, string> {
+  return {
+    'src/main.mcrs': `@load
+fn setup(): void {
+  say("Loaded ${namespace}");
+}
+
+@tick(rate=20)
+fn heartbeat(): void {
+  say("Tick from ${namespace}");
+}
+`,
+    'redscript.config.json': `${JSON.stringify({
+      namespace,
+      entry: 'src/main.mcrs',
+      outDir: 'dist/',
+      mcVersion: '1.21.4',
+    }, null, 2)}
+`,
+    '.gitignore': `dist/
+.redscript-cache/
+`,
+    'README.md': `# ${namespace}
+
+Minimal RedScript datapack scaffold.
+
+## Quick Start
+
+\`\`\`bash
+redscript compile src/main.mcrs -o dist --namespace ${namespace}
+\`\`\`
+
+Then copy \`dist/\` into your world's datapacks folder and run \`/reload\`.
+
+## Files
+
+- \`src/main.mcrs\` contains \`@load\` and \`@tick\` examples.
+- \`redscript.config.json\` stores the default project settings.
+`,
+  }
+}
+
+function initCommand(projectName?: string): void {
+  const explicitName = projectName?.trim()
+  const targetDir = explicitName
+    ? path.resolve(process.cwd(), explicitName)
+    : process.cwd()
+  const namespaceSource = explicitName ? path.basename(targetDir) : path.basename(targetDir)
+  const namespace = sanitizeProjectName(namespaceSource)
+
+  if (!namespace) {
+    console.error('Error: Project name must contain at least one letter or number')
+    process.exit(1)
+  }
+
+  if (fs.existsSync(targetDir)) {
+    const stat = fs.statSync(targetDir)
+    if (!stat.isDirectory()) {
+      console.error(`Error: Target path is not a directory: ${targetDir}`)
+      process.exit(1)
+    }
+    if (explicitName && fs.readdirSync(targetDir).length > 0) {
+      console.error(`Error: Target directory is not empty: ${targetDir}`)
+      process.exit(1)
+    }
+  } else {
+    fs.mkdirSync(targetDir, { recursive: true })
+  }
+
+  const files = buildInitFiles(namespace)
+  for (const [relativePath, content] of Object.entries(files)) {
+    const fullPath = path.join(targetDir, relativePath)
+    fs.mkdirSync(path.dirname(fullPath), { recursive: true })
+    fs.writeFileSync(fullPath, content, 'utf-8')
+  }
+
+  console.log(`✓ Initialized RedScript project in ${targetDir}`)
+  console.log(`  Namespace: ${namespace}`)
+  console.log('  Entry: src/main.mcrs')
 }
 
 function compileCommand(
@@ -645,6 +733,10 @@ async function main(): Promise<void> {
       console.log(`Generated ${output}`)
       break
     }
+
+    case 'init':
+      initCommand(parsed.file)
+      break
 
     case 'repl':
       await startRepl(parsed.namespace ?? 'repl')
