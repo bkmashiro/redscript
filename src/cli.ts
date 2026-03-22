@@ -37,6 +37,7 @@ Usage:
   redscript compile <file> [-o <out>] [--namespace <ns>] [--incremental]
   redscript publish <file> [-o <out.zip>] [--namespace <ns>] [--mc-version <ver>]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
+  redscript test <file> [--dry-run] [--mc-url <url>]
   redscript check <file>
   redscript lint <file> [--max-function-lines <n>]
   redscript init [project-name]
@@ -49,6 +50,7 @@ Commands:
   compile       Compile a RedScript file to a Minecraft datapack
   publish       Compile and package the datapack as a .zip (ready to install in Minecraft)
   watch         Watch a directory for .mcrs file changes, recompile, and hot reload
+  test          Compile and run @test-annotated functions as tests
   check         Check a RedScript file for errors without generating output
   lint          Statically analyze a RedScript file for potential issues (warnings)
   init          Scaffold a new RedScript datapack project
@@ -69,6 +71,8 @@ Options:
   --lenient              Treat type errors as warnings instead of blocking compilation
   --include <dir>        Add a directory to the import search path (repeatable)
   --incremental          Enable file-level incremental compilation cache
+  --dry-run              (test) Verify compilation only — no MC server connection needed
+  --mc-url <url>         (test) MC server HTTP API URL for running tests live
   -h, --help             Show this help message
 `)
 }
@@ -179,6 +183,8 @@ function parseArgs(args: string[]): {
   incremental?: boolean
   maxFunctionLines?: number
   description?: string
+  dryRun?: boolean
+  mcUrl?: string
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -228,6 +234,12 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--description') {
       result.description = args[++i]
+      i++
+    } else if (arg === '--dry-run') {
+      result.dryRun = true
+      i++
+    } else if (arg === '--mc-url') {
+      result.mcUrl = args[++i]
       i++
     } else if (!result.command) {
       result.command = arg
@@ -874,6 +886,25 @@ async function main(): Promise<void> {
         parsed.hotReload,
       )
       break
+
+    case 'test': {
+      if (!parsed.file) {
+        console.error('Error: No input file specified\nUsage: redscript test <file> [--dry-run] [--mc-url <url>]')
+        process.exit(1)
+      }
+      {
+        const { runTests } = require('./testing/runner')
+        const namespace = parsed.namespace ?? deriveNamespace(parsed.file)
+        await runTests({
+          filePath: parsed.file,
+          outputDir: parsed.output,
+          dryRun: parsed.dryRun ?? !parsed.mcUrl,
+          mcUrl: parsed.mcUrl,
+          namespace,
+        })
+      }
+      break
+    }
 
     case 'check':
       if (!parsed.file) {

@@ -15,6 +15,35 @@ import type {
 } from './types'
 import { detectMacroFunctions, BUILTIN_SET, type MacroFunctionInfo } from './macro'
 
+function formatTypeNode(type: TypeNode): string {
+  switch (type.kind) {
+    case 'named':
+      return type.name
+    case 'array':
+      return `${formatTypeNode(type.elem)}[]`
+    case 'struct':
+    case 'enum':
+      return type.name
+    case 'function_type':
+      return `fn(${type.params.map(formatTypeNode).join(', ')}) -> ${formatTypeNode(type.return)}`
+    case 'entity':
+      return type.entityType
+    case 'selector':
+      return type.entityType ? `selector<${type.entityType}>` : 'selector'
+    case 'tuple':
+      return `(${type.elements.map(formatTypeNode).join(', ')})`
+    case 'option':
+      return `Option<${formatTypeNode(type.inner)}>`
+  }
+}
+
+function formatFunctionSignature(fn: HIRFunction): string {
+  const params = fn.params
+    .map(param => `${param.name}: ${formatTypeNode(param.type)}`)
+    .join(', ')
+  return `fn ${fn.name}(${params}) -> ${formatTypeNode(fn.returnType)}`
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -143,8 +172,10 @@ class FnContext {
   private blockCounter = 0
   readonly blocks: MIRBlock[] = []
   private currentBlock: MIRBlock
-  /** Stack of (loopHeader, loopExit, continueTo) for break/continue */
-  private loopStack: { header: BlockId; exit: BlockId; continueTo: BlockId }[] = []
+  /** Stack of (loopHeader, loopExit, continueTo, label?) for break/continue */
+  private loopStack: { header: BlockId; exit: BlockId; continueTo: BlockId; label?: string }[] = []
+  /** Pending label to attach to the next pushLoop call (set by labeled_loop lowering) */
+  private pendingLoopLabel: string | undefined = undefined
   /** Extracted helper functions for execute blocks */
   readonly helperFunctions: MIRFunction[] = []
   private readonly namespace: string
@@ -262,16 +293,30 @@ class FnContext {
     return this.currentBlock
   }
 
-  pushLoop(header: BlockId, exit: BlockId, continueTo?: BlockId): void {
-    this.loopStack.push({ header, exit, continueTo: continueTo ?? header })
+  setPendingLoopLabel(label: string): void {
+    this.pendingLoopLabel = label
+  }
+
+  pushLoop(header: BlockId, exit: BlockId, continueTo?: BlockId, label?: string): void {
+    const effectiveLabel = label ?? this.pendingLoopLabel
+    this.pendingLoopLabel = undefined
+    this.loopStack.push({ header, exit, continueTo: continueTo ?? header, label: effectiveLabel })
   }
 
   popLoop(): void {
     this.loopStack.pop()
   }
 
-  currentLoop(): { header: BlockId; exit: BlockId; continueTo: BlockId } | undefined {
+  currentLoop(): { header: BlockId; exit: BlockId; continueTo: BlockId; label?: string } | undefined {
     return this.loopStack[this.loopStack.length - 1]
+  }
+
+  /** Find loop by label — searches from innermost to outermost */
+  findLoopByLabel(label: string): { header: BlockId; exit: BlockId; continueTo: BlockId } | undefined {
+    for (let i = this.loopStack.length - 1; i >= 0; i--) {
+      if (this.loopStack[i].label === label) return this.loopStack[i]
+    }
+    return undefined
   }
 
   getNamespace(): string {
@@ -324,7 +369,7 @@ function lowerFunction(
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const mirFnName = overrideName ?? fn.name
   const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
-  ctx.sourceFile = sourceFile
+  ctx.sourceFile = fn.sourceFile ?? sourceFile
   ctx.constValues = constValues
   ctx.singletonStructs = singletonStructs
   ctx.displayImpls = displayImpls
@@ -387,6 +432,8 @@ function lowerFunction(
     blocks: liveBlocks,
     entry: 'entry',
     isMacro: fnMacroInfo != null,
+    sourceLoc: fn.span && (fn.sourceFile ?? sourceFile) ? { file: fn.sourceFile ?? sourceFile!, line: fn.span.line, col: fn.span.col } : undefined,
+    sourceSnippet: formatFunctionSignature(fn),
   }
 
   return { fn: result, helpers: ctx.helperFunctions }
@@ -408,7 +455,7 @@ function lowerImplMethod(
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
   const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
-  ctx.sourceFile = sourceFile
+  ctx.sourceFile = method.sourceFile ?? sourceFile
   ctx.constValues = constValues
   const fields = structDefs.get(typeName) ?? []
   const hasSelf = method.params.length > 0 && method.params[0].name === 'self'
@@ -485,6 +532,8 @@ function lowerImplMethod(
     blocks: liveBlocks,
     entry: 'entry',
     isMacro: macroInfo.has(fnName),
+    sourceLoc: method.span && (method.sourceFile ?? sourceFile) ? { file: method.sourceFile ?? sourceFile!, line: method.span.line, col: method.span.col } : undefined,
+    sourceSnippet: formatFunctionSignature(method),
   }
 
   return { fn: result, helpers: ctx.helperFunctions }
@@ -866,6 +915,33 @@ function lowerStmt(
       break
     }
 
+    case 'break_label': {
+      const loop = ctx.findLoopByLabel(stmt.label)
+      if (!loop) throw new Error(`break: label '${stmt.label}' not found`)
+      ctx.terminate({ kind: 'jump', target: loop.exit })
+      const dead = ctx.newBlock('post_break_label')
+      ctx.switchTo(dead)
+      break
+    }
+
+    case 'continue_label': {
+      const loop = ctx.findLoopByLabel(stmt.label)
+      if (!loop) throw new Error(`continue: label '${stmt.label}' not found`)
+      ctx.terminate({ kind: 'jump', target: loop.continueTo })
+      const dead = ctx.newBlock('post_continue_label')
+      ctx.switchTo(dead)
+      break
+    }
+
+    case 'labeled_loop': {
+      // The body is a while/foreach stmt; we need to push the label into the loop stack.
+      // We do this by injecting the label into the next pushLoop call by temporarily
+      // storing the pending label in ctx, then letting the inner loop case handle it.
+      ctx.setPendingLoopLabel(stmt.label)
+      lowerStmt(stmt.body, ctx, scope)
+      break
+    }
+
     case 'if': {
       const condOp = lowerExpr(stmt.cond, ctx, scope)
       const thenBlock = ctx.newBlock('then')
@@ -969,6 +1045,8 @@ function lowerStmt(
         blocks: helperBlocks,
         entry: 'entry',
         isMacro: false,
+        sourceLoc: stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : undefined,
+        sourceSnippet: 'foreach helper',
       })
 
       ctx.emit({ kind: 'call_context', fn: helperName, subcommands })
@@ -996,6 +1074,8 @@ function lowerStmt(
         blocks: execBlocks,
         entry: 'entry',
         isMacro: false,
+        sourceLoc: stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : undefined,
+        sourceSnippet: 'execute helper',
       })
 
       ctx.emit({ kind: 'call_context', fn: helperName, subcommands })
@@ -1959,6 +2039,34 @@ function lowerExpr(
         if (expr.args.length === 1) {
           return lowerExpr(expr.args[0], ctx, scope)
         }
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+
+      // Handle assert(cond[, message]) — test framework builtin
+      if (expr.fn === 'assert') {
+        const condArg = expr.args[0]
+        const msgArg = expr.args[1]
+        const condOp = condArg ? lowerExpr(condArg, ctx, scope) : { kind: 'const' as const, value: 0 }
+        // Evaluate condition to a temp
+        let condTemp: string
+        if (condOp.kind === 'temp') {
+          condTemp = condOp.name
+        } else {
+          condTemp = ctx.freshTemp()
+          ctx.emit({ kind: 'const', dst: condTemp, value: condOp.value })
+        }
+        // Get message string
+        let msgStr = 'assert failed'
+        if (msgArg && msgArg.kind === 'str_lit') {
+          msgStr = msgArg.value
+        }
+        const obj = `__${ctx.getNamespace()}`
+        // emit: execute unless score $condTemp <obj> matches 1 run tellraw @a "FAIL: <msg>"
+        const failMsg = JSON.stringify({ text: `FAIL: ${msgStr}`, color: 'red' })
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute unless score $${ctx.getFnName()}_${condTemp} ${obj} matches 1 run tellraw @a ${failMsg}`, args: [] })
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute unless score $${ctx.getFnName()}_${condTemp} ${obj} matches 1 run scoreboard players add rs.test_failed rs.meta 1`, args: [] })
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'const', dst: t, value: 0 })
         return { kind: 'temp', name: t }
