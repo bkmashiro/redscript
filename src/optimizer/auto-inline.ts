@@ -1,7 +1,7 @@
 import type { MIRFunction, MIRModule } from '../mir/types'
 import { inlinePass } from './inline'
 
-const SMALL_FUNCTION_INSTR_LIMIT = 5
+export const SMALL_FUNCTION_INSTR_LIMIT = 5
 
 export function autoInlineSmallFunctions(mod: MIRModule): MIRModule {
   const recursiveFns = findRecursiveFunctions(mod.functions)
@@ -29,7 +29,7 @@ export function autoInlineSmallFunctions(mod: MIRModule): MIRModule {
   return inlinePass({ ...mod, inlineFunctions, keepInOutput })
 }
 
-function containsRawCall(fn: MIRFunction): boolean {
+export function containsRawCall(fn: MIRFunction): boolean {
   for (const block of fn.blocks) {
     for (const instr of block.instrs) {
       if (instr.kind === 'call' && instr.fn.startsWith('__raw:')) return true
@@ -38,7 +38,7 @@ function containsRawCall(fn: MIRFunction): boolean {
   return false
 }
 
-function countFunctionInstrs(fn: MIRFunction): number {
+export function countFunctionInstrs(fn: MIRFunction): number {
   let count = 0
   for (const block of fn.blocks) {
     count += block.instrs.length + 1
