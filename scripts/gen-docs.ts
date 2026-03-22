@@ -95,6 +95,8 @@ const TARGET_MODULES = [
   'list',
   'events',
   'sets',
+  // Data structures (queue)
+  'queue',
 ];
 
 // ─── Types ───────────────────────────────────────────────────────────────────

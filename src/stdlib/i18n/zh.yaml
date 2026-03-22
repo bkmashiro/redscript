@@ -2869,3 +2869,23 @@ sets:
     params:
       set: 集合 ID
     returns: 无返回值
+
+queue:
+  queue_push:
+    desc: 将一个整数入队到 storage rs:arrays Queue 末尾。
+    params:
+      val: 要入队的整数值
+  queue_pop:
+    desc: 出队并返回队头元素；队列为空时返回 -1。
+    returns: 队头整数值，若为空则返回 -1
+  queue_peek:
+    desc: 查看队头元素但不移除；队列为空时返回 -1。
+    returns: 队头整数值，若为空则返回 -1
+  queue_size:
+    desc: 返回队列中尚未出队的元素数量。
+    returns: 队列长度（整数）
+  queue_empty:
+    desc: 检查队列是否为空。
+    returns: 队列为空返回 1，否则返回 0
+  queue_clear:
+    desc: "清空队列：将 storage rs:arrays Queue 重置为空列表并将头指针归零。"

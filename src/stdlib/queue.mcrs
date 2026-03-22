@@ -1,0 +1,123 @@
+// queue.mcrs — NBT-backed FIFO queue for RedScript datapacks.
+//
+// The queue is stored in `storage rs:arrays Queue` as an int list.
+// A scoreboard objective `rs.q_head` tracks the logical head index so that
+// dequeue is O(1) (we never physically shift elements; the head pointer just
+// advances).  queue_clear resets both the list and the head pointer to 0.
+//
+// Storage layout:
+//   rs:arrays { Queue: [10, 20, 30] }   ← raw backing list
+//   scoreboard rs.q_head <global>        ← index of the next element to pop
+
+module library;
+
+// ─── Internal macro helpers ──────────────────────────────────────────────────
+
+fn __queue_append_apply() {
+    raw("$data modify storage rs:arrays Queue append value $(val)");
+}
+
+fn __queue_peek_apply() {
+    raw("$execute store result score $ret __OBJ__ run data get storage rs:arrays Queue[$(idx)]");
+}
+
+fn __queue_size_raw_apply() {
+    raw("$execute store result score $ret __OBJ__ run data get storage rs:arrays Queue");
+}
+
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+/// Enqueue a value into the queue.
+///
+/// The value is appended to the end of `storage rs:arrays Queue`.
+///
+/// @since 3.0.0
+/// @param val  Value to enqueue
+/// @example
+/// queue_push(42)
+fn queue_push(val: int) {
+    raw("execute store result storage rs:macro_args val int 1 run scoreboard players get $p0 __OBJ__");
+    raw("function __NS__:__queue_append_apply with storage rs:macro_args");
+}
+
+/// Dequeue and return the front value.
+///
+/// Advances the head pointer by one. If the queue is empty, returns `-1`.
+///
+/// @since 3.0.0
+/// @returns Front value, or -1 if empty
+/// @example
+/// let v: int = queue_pop()
+fn queue_pop(): int {
+    // Check empty
+    let empty: int = queue_empty();
+    if (empty == 1) { return -1; }
+
+    // Read front element
+    raw("scoreboard players set $ret __OBJ__ 0");
+    raw("execute store result storage rs:macro_args idx int 1 run scoreboard players get rs.q_head __RS__");
+    raw("function __NS__:__queue_peek_apply with storage rs:macro_args");
+    // Advance head pointer
+    raw("scoreboard players add rs.q_head __RS__ 1");
+    raw("return 1");
+    return 0;
+}
+
+/// Peek at the front value without removing it.
+///
+/// If the queue is empty, returns `-1`.
+///
+/// @since 3.0.0
+/// @returns Front value, or -1 if empty
+/// @example
+/// let front: int = queue_peek()
+fn queue_peek(): int {
+    let empty: int = queue_empty();
+    if (empty == 1) { return -1; }
+
+    raw("scoreboard players set $ret __OBJ__ 0");
+    raw("execute store result storage rs:macro_args idx int 1 run scoreboard players get rs.q_head __RS__");
+    raw("function __NS__:__queue_peek_apply with storage rs:macro_args");
+    raw("return 1");
+    return 0;
+}
+
+/// Get the number of elements in the queue.
+///
+/// This is the count of un-popped elements: `raw_size - head`.
+///
+/// @since 3.0.0
+/// @returns Queue size
+/// @example
+/// let n: int = queue_size()
+fn queue_size(): int {
+    raw("scoreboard players set $ret __OBJ__ 0");
+    raw("function __NS__:__queue_size_raw_apply with storage rs:macro_args");
+    raw("scoreboard players operation $ret __OBJ__ -= rs.q_head __RS__");
+    raw("return 1");
+    return 0;
+}
+
+/// Check if the queue is empty.
+///
+/// @since 3.0.0
+/// @returns 1 if empty, 0 otherwise
+/// @example
+/// if (queue_empty() == 1) { }
+fn queue_empty(): int {
+    let sz: int = queue_size();
+    if (sz <= 0) { return 1; }
+    return 0;
+}
+
+/// Clear all elements from the queue.
+///
+/// Resets `storage rs:arrays Queue` to an empty list and the head pointer to 0.
+///
+/// @since 3.0.0
+/// @example
+/// queue_clear()
+fn queue_clear() {
+    raw("data modify storage rs:arrays Queue set value []");
+    raw("scoreboard players set rs.q_head __RS__ 0");
+}
