@@ -343,6 +343,7 @@ export class Parser {
   private parseStructDecl(): StructDecl {
     const structToken = this.expect('struct')
     const name = this.expect('ident').value
+    const extendsName = this.match('extends') ? this.expect('ident').value : undefined
     this.expect('{')
 
     const fields: StructField[] = []
@@ -357,7 +358,7 @@ export class Parser {
     }
 
     this.expect('}')
-    return this.withLoc({ name, fields }, structToken)
+    return this.withLoc({ name, extends: extendsName, fields }, structToken)
   }
 
   private parseEnumDecl(): EnumDecl {
@@ -629,8 +630,8 @@ export class Parser {
       return { name }
     }
 
-    if (name === 'profile') {
-      this.error('@profile decorator does not accept arguments')
+    if (name === 'profile' || name === 'memoize') {
+      this.error(`@${name} decorator does not accept arguments`)
     }
 
     const args: Decorator['args'] = {}
@@ -685,6 +686,16 @@ export class Parser {
       }
       // @deprecated with no message string
       return { name, args: {} }
+    }
+
+    // @test("label") — marks a test function with a human-readable label
+    if (name === 'test') {
+      const strMatch = argsStr.match(/^"([^"]*)"$/)
+      if (strMatch) {
+        return { name, args: { testLabel: strMatch[1] } }
+      }
+      // @test with no label — use empty string
+      return { name, args: { testLabel: '' } }
     }
 
     // @require_on_load(fn_name) — when this fn is used, fn_name is called from __load.
@@ -887,16 +898,28 @@ export class Parser {
       return this.parseReturnStmt()
     }
 
-    // Break statement
+    // Break statement (with optional label: break outer)
     if (this.check('break')) {
       const token = this.advance()
+      // Check if next token is an identifier (label name)
+      if (this.check('ident')) {
+        const labelToken = this.advance()
+        this.match(';')
+        return this.withLoc({ kind: 'break_label', label: labelToken.value }, token)
+      }
       this.match(';')
       return this.withLoc({ kind: 'break' }, token)
     }
 
-    // Continue statement
+    // Continue statement (with optional label: continue outer)
     if (this.check('continue')) {
       const token = this.advance()
+      // Check if next token is an identifier (label name)
+      if (this.check('ident')) {
+        const labelToken = this.advance()
+        this.match(';')
+        return this.withLoc({ kind: 'continue_label', label: labelToken.value }, token)
+      }
       this.match(';')
       return this.withLoc({ kind: 'continue' }, token)
     }
@@ -904,6 +927,30 @@ export class Parser {
     // If statement
     if (this.check('if')) {
       return this.parseIfStmt()
+    }
+
+    // Labeled loop: ident ':' (while|for|foreach|repeat)
+    if (this.check('ident') && this.peek(1).kind === ':') {
+      const labelToken = this.advance() // consume ident
+      const colonToken = this.advance() // consume ':'
+      // Now parse the loop body
+      let loopStmt: Stmt
+      if (this.check('while')) {
+        loopStmt = this.parseWhileStmt()
+      } else if (this.check('for')) {
+        loopStmt = this.parseForStmt()
+      } else if (this.check('foreach')) {
+        loopStmt = this.parseForeachStmt()
+      } else if (this.check('repeat')) {
+        loopStmt = this.parseRepeatStmt()
+      } else {
+        throw new DiagnosticError(
+          'ParseError',
+          `Expected loop statement after label '${labelToken.value}:', found '${this.peek().kind}'`,
+          { line: labelToken.line, col: labelToken.col },
+        )
+      }
+      return this.withLoc({ kind: 'labeled_loop', label: labelToken.value, body: loopStmt }, labelToken)
     }
 
     // While statement

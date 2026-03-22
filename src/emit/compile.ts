@@ -59,6 +59,20 @@ export interface CompileResult {
   readonly success: true
 }
 
+function annotateFunctionSourceFiles(
+  program: {
+    declarations: Array<{ sourceFile?: string }>
+    implBlocks: Array<{ methods: Array<{ sourceFile?: string }> }>
+  },
+  sourceFile?: string,
+): void {
+  if (!sourceFile) return
+  for (const fn of program.declarations) fn.sourceFile = sourceFile
+  for (const impl of program.implBlocks) {
+    for (const method of impl.methods) method.sourceFile = sourceFile
+  }
+}
+
 function pruneLibraryFunctionFiles(
   files: DatapackFile[],
   libraryPaths: Set<string>,
@@ -133,6 +147,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const tokens = lexer.tokenize()
     const parser = new Parser(tokens, processedSource, filePath)
     const ast = parser.parse(namespace)
+    annotateFunctionSourceFiles(ast, filePath)
     warnings.push(...parser.warnings)
     if (parser.parseErrors.length > 0) {
       throw stopAfterCheck ? new DiagnosticBundleError(parser.parseErrors) : parser.parseErrors[0]
@@ -166,6 +181,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       const modTokens = new Lexer(modPreprocessed.source, modFilePath).tokenize()
       const modParser = new Parser(modTokens, modPreprocessed.source, modFilePath)
       const modAst = modParser.parse(namespace)
+      annotateFunctionSourceFiles(modAst, modFilePath)
       warnings.push(...modParser.warnings)
       if (modParser.parseErrors.length > 0) {
         throw stopAfterCheck ? new DiagnosticBundleError(modParser.parseErrors) : modParser.parseErrors[0]
@@ -206,6 +222,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       const libTokens = new Lexer(libPreprocessed.source, li.filePath).tokenize()
       const libParser = new Parser(libTokens, libPreprocessed.source, li.filePath)
       const libAst = libParser.parse(namespace)
+      annotateFunctionSourceFiles(libAst, li.filePath)
       warnings.push(...libParser.warnings)
       if (libParser.parseErrors.length > 0) {
         throw stopAfterCheck ? new DiagnosticBundleError(libParser.parseErrors) : libParser.parseErrors[0]
@@ -295,7 +312,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       return { files: [], warnings, success: true as const }
     }
 
-    // Extract @tick, @load, @watch, @inline, @coroutine, @schedule, and @on handlers from HIR (before decorator info is lost)
+    // Extract @tick, @load, @watch, @inline, @coroutine, @schedule, @on, and @memoize handlers from HIR (before decorator info is lost)
     const tickFunctions: string[] = []
     const loadFunctions: string[] = []
     const watchFunctions: Array<{ name: string; objective: string }> = []
@@ -305,6 +322,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const profiledFunctions: string[] = []
     const throttleFunctions: Array<{ name: string; ticks: number }> = []
     const retryFunctions: Array<{ name: string; max: number }> = []
+    const memoizeFunctions: string[] = []
     const eventHandlers = new Map<string, string[]>()
     for (const fn of hir.functions) {
       if (fn.watchObjective) {
@@ -338,6 +356,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
         }
         if (dec.name === 'retry' && dec.args?.max) {
           retryFunctions.push({ name: fn.name, max: dec.args.max })
+        }
+        if (dec.name === 'memoize') {
+          memoizeFunctions.push(fn.name)
         }
         if (dec.name === 'on' && dec.args?.eventType) {
           const evType = dec.args.eventType as string
@@ -460,6 +481,21 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       })
     }
 
+    // Stage 6.95: Rename @memoize functions to <fn>_impl in LIR,
+    // rewriting recursive self-calls so the wrapper becomes the public entry point.
+    for (const fnName of memoizeFunctions) {
+      const lirFn = lirOpt.functions.find(f => f.name === fnName)
+      if (!lirFn) continue
+      const implName = `${fnName}_impl`
+      lirFn.name = implName
+      // Rewrite recursive calls: any call to fnName inside this function → implName
+      for (const instr of lirFn.instructions) {
+        if ('fn' in instr && instr.fn === fnName) {
+          ;(instr as { fn: string }).fn = implName
+        }
+      }
+    }
+
     // Stage 7: LIR → .mcfunction
     const files = emit(lirOpt, {
       namespace,
@@ -475,6 +511,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       enableProfiling: debug,
       throttleFunctions,
       retryFunctions,
+      memoizeFunctions,
     })
     const prunedFiles = pruneLibraryFunctionFiles(files, libraryFilePaths)
 

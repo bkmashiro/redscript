@@ -245,6 +245,9 @@ export type Stmt =
   | { kind: 'return';     value?: Expr; span?: Span }
   | { kind: 'break';      span?: Span }
   | { kind: 'continue';   span?: Span }
+  | { kind: 'break_label'; label: string; span?: Span }
+  | { kind: 'continue_label'; label: string; span?: Span }
+  | { kind: 'labeled_loop'; label: string; body: Stmt; span?: Span }
   | { kind: 'if';         cond: Expr; then: Block; else_?: Block; span?: Span }
   | { kind: 'while';      cond: Expr; body: Block; span?: Span }
   | { kind: 'do_while';   cond: Expr; body: Block; span?: Span }
@@ -270,7 +273,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'config' | 'singleton' | 'profile' | 'throttle' | 'retry'
+  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'config' | 'singleton' | 'profile' | 'throttle' | 'retry' | 'memoize' | 'test'
   args?: {
     rate?: number
     objective?: string
@@ -290,6 +293,8 @@ export interface Decorator {
     configDefault?: number
     /** @retry decorator: max retry count */
     max?: number
+    /** @test decorator: human-readable test label */
+    testLabel?: string
   }
   /** Raw positional arguments (used by @requires and future generic decorators). */
   rawArgs?: Array<{ kind: 'string'; value: string } | { kind: 'number'; value: number }>
@@ -322,6 +327,7 @@ export interface FnDecl {
   decorators: Decorator[]
   body: Block
   span?: Span
+  sourceFile?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -335,6 +341,7 @@ export interface StructField {
 
 export interface StructDecl {
   name: string
+  extends?: string
   fields: StructField[]
   /** True when the struct was declared with `@singleton` */
   isSingleton?: boolean

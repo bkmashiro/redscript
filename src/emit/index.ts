@@ -6,7 +6,13 @@
  */
 
 import type { LIRModule, LIRFunction, LIRInstr, Slot, CmpOp, ExecuteSubcmd } from '../lir/types'
-import { SourceMapBuilder, serializeSourceMap, sourceMapPath } from './sourcemap'
+import {
+  NamespaceSourceMapBuilder,
+  SourceMapBuilder,
+  namespaceSourceMapPath,
+  serializeSourceMap,
+  sourceMapPath,
+} from './sourcemap'
 import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 
 export interface DatapackFile {
@@ -41,6 +47,8 @@ export interface EmitOptions {
   throttleFunctions?: Array<{ name: string; ticks: number }>
   /** Functions decorated with @retry. */
   retryFunctions?: Array<{ name: string; max: number }>
+  /** Functions decorated with @memoize — single-arg int result caching (LRU-1). */
+  memoizeFunctions?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -57,10 +65,12 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const enableProfiling = options.enableProfiling ?? false
   const throttleFns = options.throttleFunctions ?? []
   const retryFns = options.retryFunctions ?? []
+  const memoizeFns = options.memoizeFunctions ?? []
   const objective = module.objective
   const genSourceMap = options.generateSourceMap ?? false
   const mcVersion = options.mcVersion ?? DEFAULT_MC_VERSION
   const files: DatapackFile[] = []
+  const namespaceMapBuilder = genSourceMap ? new NamespaceSourceMapBuilder() : null
 
   // pack.mcmeta
   files.push({
@@ -85,6 +95,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
       : []),
     ...throttleFns.map(t => `scoreboard objectives add ${throttleObjective(t.name)} dummy`),
     ...retryFns.map(r => `scoreboard objectives add ${retryObjective(r.name)} dummy`),
+    ...(memoizeFns.length > 0 ? [`scoreboard objectives add __memo dummy`] : []),
   ]
   files.push({
     path: `data/${namespace}/function/load.mcfunction`,
@@ -94,9 +105,10 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   // Each LIR function → .mcfunction file
   for (const fn of module.functions) {
     const fnPath = fnNameToPath(fn.name, namespace)
+    namespaceMapBuilder?.addFunctionMapping(qualifiedFunctionRef(fn.name, namespace), fn.sourceLoc, humanFunctionName(fn))
     if (genSourceMap) {
       const builder = new SourceMapBuilder(fnPath)
-      const lines = emitFunctionWithSourceMap(fn, namespace, objective, builder, mcVersion, enableProfiling && profiledFns.includes(fn.name))
+      const lines = emitFunction(fn, namespace, objective, mcVersion, enableProfiling && profiledFns.includes(fn.name), builder)
       files.push({ path: fnPath, content: lines.join('\n') + '\n' })
       const map = builder.build()
       if (map) {
@@ -106,6 +118,14 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
       const lines = emitFunction(fn, namespace, objective, mcVersion, enableProfiling && profiledFns.includes(fn.name))
       files.push({ path: fnPath, content: lines.join('\n') + '\n' })
     }
+  }
+
+  const namespaceMap = namespaceMapBuilder?.build()
+  if (namespaceMap) {
+    files.push({
+      path: namespaceSourceMapPath(namespace),
+      content: serializeSourceMap(namespaceMap),
+    })
   }
 
   if (enableProfiling && profiledFns.length > 0) {
@@ -212,6 +232,37 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     })
   }
 
+  // @memoize wrapper functions (LRU-1 cache: last call arg/result)
+  // The original compiled function has been renamed to <name>_impl.
+  // We generate <name>.mcfunction as the public entry point with cache logic:
+  //   Players in __memo objective:
+  //     __memo_<name>_key  — cached argument value
+  //     __memo_<name>_val  — cached return value
+  //     __memo_<name>_hit  — 1 if a cached result is available
+  //   On call ($p0 = argument):
+  //     1. If __memo_<name>_hit == 1 AND __memo_<name>_key == $p0 → copy cached val to $ret, return
+  //     2. Otherwise: call <name>_impl, store $p0 → key, $ret → val, set hit=1
+  for (const name of memoizeFns) {
+    const keyPlayer = `__memo_${name}_key`
+    const valPlayer = `__memo_${name}_val`
+    const hitPlayer = `__memo_${name}_hit`
+    const implName = `${name}_impl`
+    files.push({
+      path: fnNameToPath(name, namespace),
+      content: [
+        `# @memoize wrapper for ${name} (LRU-1 cache)`,
+        `# Cache hit: valid flag set AND key matches current arg`,
+        `execute if score ${hitPlayer} __memo matches 1 if score ${keyPlayer} __memo = $p0 ${objective} run scoreboard players operation $ret ${objective} = ${valPlayer} __memo`,
+        `execute if score ${hitPlayer} __memo matches 1 if score ${keyPlayer} __memo = $p0 ${objective} run return 0`,
+        `# Cache miss: call implementation, store result`,
+        `function ${namespace}:${implName}`,
+        `scoreboard players operation ${keyPlayer} __memo = $p0 ${objective}`,
+        `scoreboard players operation ${valPlayer} __memo = $ret ${objective}`,
+        `scoreboard players set ${hitPlayer} __memo 1`,
+      ].join('\n') + '\n',
+    })
+  }
+
   // Tag files for tick/load
   if (loadFns.length > 0 || true) {
     // Always include load.json — it must reference the load.mcfunction
@@ -270,41 +321,30 @@ function emitFunction(
   objective: string,
   mcVersion: McVersion,
   isProfiled = false,
-): string[] {
-  const lines: string[] = isProfiled ? profilerStartLines(fn.name) : []
-  for (const instr of fn.instructions) {
-    lines.push(emitInstr(instr, namespace, objective, mcVersion))
-  }
-  if (isProfiled) {
-    lines.push(...profilerEndLines(fn.name))
-  }
-  return lines
-}
-
-function emitFunctionWithSourceMap(
-  fn: LIRFunction,
-  namespace: string,
-  objective: string,
-  builder: SourceMapBuilder,
-  mcVersion: McVersion,
-  isProfiled = false,
+  builder?: SourceMapBuilder,
 ): string[] {
   const lines: string[] = []
-  if (isProfiled) {
-    for (const line of profilerStartLines(fn.name)) {
-      lines.push(line)
-      builder.addLine(undefined)
-    }
+  const pushLine = (line: string, sourceLoc?: LIRFunction['sourceLoc']): void => {
+    lines.push(line)
+    builder?.addLine(sourceLoc)
   }
+
+  for (const line of emitFunctionHeader(fn)) pushLine(line)
+  if (isProfiled) {
+    for (const line of profilerStartLines(fn.name)) pushLine(line)
+  }
+
+  let lastSourceMarker: string | undefined
   for (const instr of fn.instructions) {
-    lines.push(emitInstr(instr, namespace, objective, mcVersion))
-    builder.addLine(instr.sourceLoc)
+    const marker = instr.sourceLoc ? formatSourceMarker(instr.sourceLoc) : undefined
+    if (marker && marker !== lastSourceMarker) {
+      pushLine(`# src: ${marker}`)
+      lastSourceMarker = marker
+    }
+    pushLine(emitInstr(instr, namespace, objective, mcVersion), instr.sourceLoc)
   }
   if (isProfiled) {
-    for (const line of profilerEndLines(fn.name)) {
-      lines.push(line)
-      builder.addLine(undefined)
-    }
+    for (const line of profilerEndLines(fn.name)) pushLine(line)
   }
   return lines
 }
@@ -313,6 +353,29 @@ function fnNameToPath(name: string, namespace: string): string {
   // LIR function names may contain :: for methods — convert to /
   const mcName = name.replace(/::/g, '/').toLowerCase()
   return `data/${namespace}/function/${mcName}.mcfunction`
+}
+
+function qualifiedFunctionRef(name: string, namespace: string): string {
+  return `${namespace}:${name.replace(/::/g, '/').toLowerCase()}`
+}
+
+function humanFunctionName(fn: LIRFunction): string {
+  const match = fn.sourceSnippet?.match(/^fn\s+([^(]+)/)
+  return match?.[1] ?? fn.name.split('::').pop() ?? fn.name
+}
+
+function emitFunctionHeader(fn: LIRFunction): string[] {
+  if (!fn.sourceLoc) return []
+  const lines: string[] = []
+  lines.push(`# Generated from: ${fn.sourceLoc.file}:${fn.sourceLoc.line} (fn ${humanFunctionName(fn)})`)
+  if (fn.sourceSnippet) {
+    lines.push(`# Source: ${fn.sourceSnippet}`)
+  }
+  return lines
+}
+
+function formatSourceMarker(sourceLoc: NonNullable<LIRInstr['sourceLoc']>): string {
+  return `${sourceLoc.file}:${sourceLoc.line}`
 }
 
 function watchDispatcherName(name: string): string {

@@ -8,6 +8,7 @@
 import type { Program, FnDecl, Stmt, Expr, TypeNode, Block, EntityTypeName, EntitySelector, InterfaceDecl, InterfaceMethod } from '../ast/types'
 import { DiagnosticError, DiagnosticCollector } from '../diagnostics'
 import { getEventParamSpecs, isEventTypeName } from '../events/types'
+import { expandStructDeclarations } from '../structs/expand'
 
 interface ScopeSymbol {
   type: TypeNode
@@ -107,6 +108,10 @@ const STRING_TYPE: TypeNode = { kind: 'named', name: 'string' }
 const FORMAT_STRING_TYPE: TypeNode = { kind: 'named', name: 'format_string' }
 
 const BUILTIN_SIGNATURES: Record<string, BuiltinSignature> = {
+  assert: {
+    params: [{ kind: 'named', name: 'bool' }],
+    return: VOID_TYPE,
+  },
   setTimeout: {
     params: [INT_TYPE, { kind: 'function_type', params: [], return: VOID_TYPE }],
     return: VOID_TYPE,
@@ -239,7 +244,11 @@ export class TypeChecker {
       }
     }
 
-    for (const struct of program.structs ?? []) {
+    const expandedStructs = expandStructDeclarations(program.structs ?? [], ({ message, node }) => {
+      this.report(message, node)
+    })
+
+    for (const struct of expandedStructs) {
       const fields = new Map<string, TypeNode>()
       for (const field of struct.fields) {
         fields.set(field.name, field.type)
@@ -437,6 +446,23 @@ export class TypeChecker {
       return
     }
 
+    const memoizeDecorators = fn.decorators.filter(decorator => decorator.name === 'memoize')
+    if (memoizeDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @memoize decorators`, fn)
+      return
+    }
+    if (memoizeDecorators.length === 1) {
+      if (fn.params.length !== 1) {
+        this.report(`@memoize on '${fn.name}' requires exactly one parameter`, fn)
+      } else {
+        const paramType = fn.params[0].type
+        const isInt = paramType.kind === 'named' && paramType.name === 'int'
+        if (!isInt) {
+          this.report(`@memoize on '${fn.name}' only supports int parameters (got '${paramType.kind === 'named' ? paramType.name : paramType.kind}')`, fn)
+        }
+      }
+    }
+
     const eventDecorators = fn.decorators.filter(decorator => decorator.name === 'on')
     if (eventDecorators.length === 0) {
       return
@@ -617,6 +643,18 @@ export class TypeChecker {
         break
       case 'raw':
         // Raw commands are not type checked
+        break
+      case 'break':
+      case 'continue':
+      case 'break_label':
+      case 'continue_label':
+        // Control flow — no sub-expressions to check
+        break
+      case 'labeled_loop':
+        // Recurse into the labeled loop body
+        this.loopDepth++
+        this.checkStmt(stmt.body)
+        this.loopDepth--
         break
       case 'const_decl':
         // Local const: register in scope as immutable with its declared type
