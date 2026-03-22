@@ -341,7 +341,7 @@ function emitFunction(
       pushLine(`# src: ${marker}`)
       lastSourceMarker = marker
     }
-    pushLine(emitInstr(instr, namespace, objective, mcVersion), instr.sourceLoc)
+    pushLine(flattenExecute(emitInstr(instr, namespace, objective, mcVersion)), instr.sourceLoc)
   }
   if (isProfiled) {
     for (const line of profilerEndLines(fn.name)) pushLine(line)
@@ -579,6 +579,56 @@ function cmpToMC(op: CmpOp): string {
 function macroLineCompat(template: string): string {
   // Replace $(param) with data-get-style substitution marker
   return template.replace(/\$\((\w+)\)/g, (_m, p) => `{storage:rs:macro_args,path:${p}}`)
+}
+
+// ---------------------------------------------------------------------------
+// Execute Chain Optimization
+// ---------------------------------------------------------------------------
+
+/**
+ * Flatten nested execute-if chains into a single execute with multiple conditions.
+ *
+ * MC allows chaining conditions:
+ *   execute if A run execute if B run X
+ * can be written as:
+ *   execute if A if B run X
+ *
+ * This reduces command-parsing overhead and improves TPS.
+ *
+ * Rules:
+ * - Only merges when the inner `run` clause is itself `execute if ...`
+ * - Does NOT merge `if ... run execute unless ...` — semantics differ
+ *   (unless negates, changing behavior in chain context)
+ * - Recursively flattens deeper nesting (3+ levels)
+ */
+export function flattenExecute(cmd: string): string {
+  // Match: execute <conditions> run execute if <rest>
+  // We only flatten when the inner execute starts with "if" (not "unless", "as", "at", etc.)
+  // Pattern: "execute <prefix> run execute if <suffix>"
+  const RUN_EXECUTE_IF = / run execute if /
+  if (!RUN_EXECUTE_IF.test(cmd)) {
+    return cmd
+  }
+
+  // Find the " run execute if " boundary
+  const idx = cmd.indexOf(' run execute if ')
+  if (idx === -1) return cmd
+
+  const outer = cmd.slice(0, idx)           // "execute if A"
+  const inner = cmd.slice(idx + ' run '.length) // "execute if B run X"
+
+  // The outer must start with "execute"
+  if (!outer.startsWith('execute ')) return cmd
+
+  // Inner starts with "execute if ..."
+  // Strip the "execute" prefix from inner to get the conditions + run tail
+  // Result: outer + " " + inner_conditions_and_tail
+  const innerWithoutExecute = inner.slice('execute '.length) // "if B run X"
+
+  const merged = `${outer} ${innerWithoutExecute}`
+
+  // Recurse to handle 3+ levels
+  return flattenExecute(merged)
 }
 
 function emitSubcmd(sub: ExecuteSubcmd): string {
