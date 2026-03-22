@@ -15,8 +15,15 @@ module library;
 
 // ─── Phase 1: 2D geometry ────────────────────────────────────────────────────
 
-// Dot product of two 2D integer vectors.
-// dot2d(3, 4, 3, 4) == 25
+/// Dot product of two 2D integer vectors.
+/// @since 1.0.0
+/// @param ax  X component of vector A
+/// @param ay  Y component of vector A
+/// @param bx  X component of vector B
+/// @param by  Y component of vector B
+/// @returns   ax*bx + ay*by
+/// @example
+/// let d = dot2d(3, 4, 3, 4)  // result: 25
 fn dot2d(ax: int, ay: int, bx: int, by: int) -> int {
     return ax * bx + ay * by;
 }
@@ -28,9 +35,13 @@ fn cross2d(ax: int, ay: int, bx: int, by: int) -> int {
     return ax * by - ay * bx;
 }
 
-// Euclidean length of a 2D integer vector, result in fixed-point (×1000).
-// length2d_fixed(3, 4) == 5000   (√25 × 1000)
-// Note: |x|, |y| ≤ ~1000 to avoid overflow; scale larger vectors down first.
+/// Euclidean length of a 2D vector, returned as ×1000 fixed-point.
+/// @since 1.0.0
+/// @param x  X component (raw integer; keep |x|,|y| ≤ ~1000 to avoid overflow)
+/// @param y  Y component
+/// @returns  sqrt(x²+y²) × 1000
+/// @example
+/// let l = length2d_fixed(3, 4)  // result: 5000
 fn length2d_fixed(x: int, y: int) -> int {
     return sqrt_fixed((x * x + y * y) * 1000);
 }
@@ -183,22 +194,46 @@ fn rotate2d_y(x: int, y: int, deg: int) -> int {
 
 // ─── Phase 3: 3D geometry ────────────────────────────────────────────────────
 
-// Dot product of two 3D integer vectors.
+/// Dot product of two 3D integer vectors.
+/// @since 1.0.0
+/// @param ax  X component of vector A
+/// @param ay  Y component of vector A
+/// @param az  Z component of vector A
+/// @param bx  X component of vector B
+/// @param by  Y component of vector B
+/// @param bz  Z component of vector B
+/// @returns   ax*bx + ay*by + az*bz
+/// @example
+/// let d = dot3d(1, 0, 0, 1, 0, 0)  // result: 1
 fn dot3d(ax: int, ay: int, az: int, bx: int, by: int, bz: int) -> int {
     return ax * bx + ay * by + az * bz;
 }
 
-// Cross product X component: ay*bz − az*by
+/// X component of the cross product A×B (ay*bz − az*by).
+/// @since 1.0.0
+/// @param ax  X of A  @param ay  Y of A  @param az  Z of A
+/// @param bx  X of B  @param by  Y of B  @param bz  Z of B
+/// @returns   ay*bz - az*by
 fn cross3d_x(ax: int, ay: int, az: int, bx: int, by: int, bz: int) -> int {
     return ay * bz - az * by;
 }
 
-// Cross product Y component: az*bx − ax*bz
+/// Y component of the cross product A×B (az*bx − ax*bz).
+/// @since 1.0.0
+/// @param ax  X of A  @param ay  Y of A  @param az  Z of A
+/// @param bx  X of B  @param by  Y of B  @param bz  Z of B
+/// @returns   az*bx - ax*bz
 fn cross3d_y(ax: int, ay: int, az: int, bx: int, by: int, bz: int) -> int {
     return az * bx - ax * bz;
 }
 
-// Cross product Z component: ax*by − ay*bx
+/// Z component of the cross product A×B (ax*by − ay*bx).
+/// @since 1.0.0
+/// @param ax  X of A  @param ay  Y of A  @param az  Z of A
+/// @param bx  X of B  @param by  Y of B  @param bz  Z of B
+/// @returns   ax*by - ay*bx
+/// @example
+/// let z = cross3d_z(1, 0, 0, 0, 1, 0)  // result: 1
 fn cross3d_z(ax: int, ay: int, az: int, bx: int, by: int, bz: int) -> int {
     return ax * by - ay * bx;
 }

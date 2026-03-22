@@ -29,11 +29,21 @@ enum Result {
 // ─── Constructor helpers ──────────────────────────────────────────────────────
 
 /// Construct a successful Result with the given value.
+/// @since 1.0.0
+/// @param value  The success value (any integer)
+/// @returns      Result::Ok(value)
+/// @example
+/// let r = result_ok(42)  // Ok result carrying 42
 fn result_ok(value: int): Result {
   return Result::Ok(value: value);
 }
 
 /// Construct a failed Result with the given error code.
+/// @since 1.0.0
+/// @param code  Error code (use negative by convention: -1 generic, -2 div/zero)
+/// @returns     Result::Err(code)
+/// @example
+/// let r = result_err(-2)  // division-by-zero error
 fn result_err(code: int): Result {
   return Result::Err(code: code);
 }
@@ -41,6 +51,11 @@ fn result_err(code: int): Result {
 // ─── Query helpers ────────────────────────────────────────────────────────────
 
 /// Returns 1 if the Result is Ok, 0 otherwise.
+/// @since 1.0.0
+/// @param r  The Result to test
+/// @returns  1 if Ok, 0 if Err
+/// @example
+/// let ok = result_is_ok(result_ok(5))  // result: 1
 fn result_is_ok(r: Result): int {
   match r {
     Result::Ok(value) => { return 1; }
@@ -62,6 +77,11 @@ fn result_is_err(r: Result): int {
 
 /// Extract the value from an Ok result.
 /// Returns 0 if the Result is Err (check result_is_ok first).
+/// @since 1.0.0
+/// @param r  The Result to unwrap
+/// @returns  The Ok value, or 0 if Err
+/// @example
+/// let v = result_value(result_ok(99))  // result: 99
 fn result_value(r: Result): int {
   match r {
     Result::Ok(value) => { return value; }

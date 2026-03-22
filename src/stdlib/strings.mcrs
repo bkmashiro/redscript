@@ -37,8 +37,11 @@ module library;
 /// For literal strings whose length is known at compile time, prefer using
 /// the constant directly — the compiler will fold it.
 ///
+/// @since 1.0.0
 /// @param s  NBT field name in rs:strings (e.g. "A")
 /// @returns  1 for plain string tags; list element count for char-list strings.
+/// @example
+/// str_len("A")  // result: 1 (plain string) or char count (char-list)
 fn str_len(s: string) -> int {
     return data_get("storage", "rs:strings", s);
 }
@@ -60,9 +63,12 @@ fn str_len(s: string) -> int {
 /// ALTERNATIVE for display: use a tellraw JSON array directly:
 ///   tellraw @a [{"storage":"rs:strings","nbt":"A"},{"storage":"rs:strings","nbt":"B"}]
 ///
+/// @since 1.0.0
 /// @param a  NBT field name of the first string in rs:strings (e.g. "A")
 /// @param b  NBT field name of the second string in rs:strings (e.g. "B")
-/// @result   rs:strings.Result is set to an NBT list [valueA, valueB]
+/// @returns  rs:strings.Result is set to an NBT list [valueA, valueB]
+/// @example
+/// str_concat("A", "B")  // rs:strings.Result = ["hello", "world"]
 fn str_concat(a: string, b: string) {
     // Initialise Result as an empty list
     raw("data modify storage rs:strings Result set value []");
@@ -89,6 +95,7 @@ fn str_concat(a: string, b: string) {
 ///   3. Use a macro function (MC 1.20.2+) that iterates over character
 ///      positions with `$(var)` substitution and returns early on match.
 ///
+/// @since 1.0.0
 /// @param s    NBT field name of the haystack string in rs:strings
 /// @param sub  NBT field name of the needle string in rs:strings
 /// @returns    0 (always — not implemented due to MC limitation)
@@ -113,11 +120,14 @@ fn str_contains(s: string, sub: string) -> int {
 ///   str_slice("A", 0, 5)  → first 5 characters of rs:strings.A
 ///   str_slice("A", 2, -1) → all but first 2 and last 1 characters
 ///
+/// @since 2.2.0
 /// @param s      NBT field name of the source string in rs:strings (e.g. "A")
 /// @param start  Start index (inclusive, 0-based)
 /// @param end    End index (exclusive); negative counts from string end
-/// @result       rs:strings.Result contains the extracted substring
-/// @requires     MC 1.20.2+ for `data modify ... set string` syntax
+/// @returns      rs:strings.Result contains the extracted substring
+/// @example
+/// str_slice("A", 0, 5)   // first 5 chars of rs:strings.A
+/// str_slice("A", 2, -1)  // drop first 2 and last 1 chars
 fn str_slice(s: string, start: int, end: int) {
     // MC 1.20.2+ set-string command: copies a substring of the source string.
     // {s}, {start}, {end} are interpolated by the RedScript compiler.

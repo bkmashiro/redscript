@@ -78,32 +78,62 @@ impl Timer {
 
 // ─── Tick-based stopwatch ─────────────────────────────────────────────────────
 
-// tick_to_seconds(ticks): convert MC ticks to seconds (20 ticks = 1 second)
+/// Convert Minecraft ticks to whole seconds (20 ticks = 1 second).
+/// @since 1.0.0
+/// @param ticks  Elapsed ticks
+/// @returns      ticks / 20
+/// @example
+/// let s = tick_to_seconds(100)  // result: 5
 fn tick_to_seconds(ticks: int): int {
     return ticks / 20;
 }
 
-// tick_to_ms(ticks): convert ticks to milliseconds
+/// Convert Minecraft ticks to milliseconds (1 tick = 50 ms).
+/// @since 1.0.0
+/// @param ticks  Elapsed ticks
+/// @returns      ticks * 50
+/// @example
+/// let ms = tick_to_ms(20)  // result: 1000
 fn tick_to_ms(ticks: int): int {
     return ticks * 50;
 }
 
-// seconds_to_ticks(s): convert seconds to ticks
+/// Convert seconds to Minecraft ticks (1 second = 20 ticks).
+/// @since 1.0.0
+/// @param s  Seconds
+/// @returns  s * 20
+/// @example
+/// let t = seconds_to_ticks(5)  // result: 100
 fn seconds_to_ticks(s: int): int {
     return s * 20;
 }
 
-// format_time_s(ticks): ticks → seconds component (mod 60)
+/// Extract seconds component from a tick count (0-59).
+/// @since 1.0.0
+/// @param ticks  Elapsed ticks
+/// @returns      (ticks / 20) % 60
+/// @example
+/// let s = format_time_s(1500)  // result: 15  (75 seconds mod 60)
 fn format_time_s(ticks: int): int {
     return (ticks / 20) % 60;
 }
 
-// format_time_m(ticks): ticks → minutes component
+/// Extract minutes component from a tick count (0-59).
+/// @since 1.0.0
+/// @param ticks  Elapsed ticks
+/// @returns      (ticks / 1200) % 60
+/// @example
+/// let m = format_time_m(72000)  // result: 0  (1 hour)
 fn format_time_m(ticks: int): int {
     return (ticks / 1200) % 60;
 }
 
-// format_time_h(ticks): ticks → hours component
+/// Extract hours component from a tick count.
+/// @since 1.0.0
+/// @param ticks  Elapsed ticks
+/// @returns      ticks / 72000
+/// @example
+/// let h = format_time_h(144000)  // result: 2
 fn format_time_h(ticks: int): int {
     return ticks / 72000;
 }

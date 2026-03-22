@@ -17,6 +17,13 @@ module library;
 
 // ─── Phase 1: Basic integer helpers ──────────────────────────────────────────
 
+/// Return the absolute value of x.
+/// @since 1.0.0
+/// @param x  The input value (any numeric type T)
+/// @returns  x if x >= 0, else -x
+/// @example
+/// let a = abs(-5)   // result: 5
+/// let b = abs(3)    // result: 3
 fn abs<T>(x: T) -> T {
     if (x < 0) {
         return 0 - x;
@@ -24,6 +31,12 @@ fn abs<T>(x: T) -> T {
     return x;
 }
 
+/// Return the sign of x: 1, 0, or -1.
+/// @since 1.0.0
+/// @param x  Input integer
+/// @returns  1 if x > 0, -1 if x < 0, 0 if x == 0
+/// @example
+/// let s = sign(-42)  // result: -1
 fn sign(x: int) -> int {
     if (x > 0) {
         return 1;
@@ -34,6 +47,13 @@ fn sign(x: int) -> int {
     return 0;
 }
 
+/// Return the smaller of two values.
+/// @since 1.0.0
+/// @param a  First value
+/// @param b  Second value
+/// @returns  a if a < b, else b
+/// @example
+/// let m = min(3, 7)  // result: 3
 fn min<T>(a: T, b: T) -> T {
     if (a < b) {
         return a;
@@ -41,6 +61,13 @@ fn min<T>(a: T, b: T) -> T {
     return b;
 }
 
+/// Return the larger of two values.
+/// @since 1.0.0
+/// @param a  First value
+/// @param b  Second value
+/// @returns  a if a > b, else b
+/// @example
+/// let m = max(3, 7)  // result: 7
 fn max<T>(a: T, b: T) -> T {
     if (a > b) {
         return a;
@@ -48,6 +75,15 @@ fn max<T>(a: T, b: T) -> T {
     return b;
 }
 
+/// Clamp x to the range [lo, hi].
+/// @since 1.0.0
+/// @param x   Input value
+/// @param lo  Lower bound (inclusive)
+/// @param hi  Upper bound (inclusive)
+/// @returns   lo if x < lo; hi if x > hi; otherwise x
+/// @example
+/// let c = clamp(150, 0, 100)  // result: 100
+/// let d = clamp(50, 0, 100)   // result: 50
 fn clamp<T>(x: T, lo: T, hi: T) -> T {
     if (x < lo) {
         return lo;
@@ -58,9 +94,15 @@ fn clamp<T>(x: T, lo: T, hi: T) -> T {
     return x;
 }
 
-// Linear interpolation (fixed-point t, t in [0, 1000])
-// lerp(0, 1000, 500) == 500
-// lerp(100, 200, 750) == 175
+/// Linear interpolation between a and b using fixed-point t in [0, 1000].
+/// @since 1.0.0
+/// @param a  Start value
+/// @param b  End value
+/// @param t  Interpolation factor ×1000 (0 = a, 1000 = b)
+/// @returns  a + (b - a) * t / 1000
+/// @example
+/// let v = lerp(0, 1000, 500)    // result: 500
+/// let w = lerp(100, 200, 750)   // result: 175
 fn lerp(a: int, b: int, t: int) -> int {
     return a + (b - a) * t / 1000;
 }
@@ -100,9 +142,13 @@ fn isqrt(n: int) -> int {
     return x;
 }
 
-// Fixed-point sqrt (scale = 1000)
-// sqrt_fixed(2000) ≈ 1414  (√2 × 1000)
-// sqrt_fixed(1000) == 1000 (√1 × 1000)
+/// Fixed-point square root (scale = 1000).
+/// @since 1.0.0
+/// @param x  Input value ×1000 (i.e. 2.0 → 2000)
+/// @returns  sqrt(x/1000) × 1000
+/// @example
+/// let s = sqrt_fixed(2000)  // result: ~1414  (√2 × 1000)
+/// let t = sqrt_fixed(1000)  // result: 1000   (√1 × 1000)
 fn sqrt_fixed(x: int) -> int {
     return isqrt(x * 1000);
 }
@@ -162,14 +208,14 @@ fn _math_init() {
     );
 }
 
-// sin_fixed(deg) → sin(deg°) × 1000   (integer degrees, any value)
-// sin_fixed(30)  == 500
-// sin_fixed(90)  == 1000
-// sin_fixed(180) == 0
-// sin_fixed(270) == -1000
-//
-// @require_on_load(_math_init): the sin lookup table is written to NBT storage at
-// world load automatically when this function is included in a project.
+/// Sine of an angle in integer degrees, returned as ×1000 fixed-point.
+/// Uses a 91-entry lookup table stored in NBT (math:tables.sin).
+/// @since 2.0.0
+/// @param deg  Angle in degrees (any integer; normalised mod 360)
+/// @returns    sin(deg°) × 1000  (range: -1000 to 1000)
+/// @example
+/// let s = sin_fixed(30)   // result: 500
+/// let t = sin_fixed(270)  // result: -1000
 @require_on_load(_math_init)
 fn sin_fixed(deg: int) -> int {
     // Normalise to [0, 359]
@@ -192,10 +238,14 @@ fn sin_fixed(deg: int) -> int {
     return 0 - storage_get_int("math:tables", "sin", idx);
 }
 
-// cos_fixed(deg) → cos(deg°) × 1000   (integer degrees, any value)
-// cos_fixed(0)   == 1000
-// cos_fixed(90)  == 0
-// cos_fixed(180) == -1000
+/// Cosine of an angle in integer degrees, returned as ×1000 fixed-point.
+/// Implemented as sin_fixed(deg + 90).
+/// @since 2.0.0
+/// @param deg  Angle in degrees (any integer; normalised mod 360)
+/// @returns    cos(deg°) × 1000  (range: -1000 to 1000)
+/// @example
+/// let c = cos_fixed(0)    // result: 1000
+/// let d = cos_fixed(180)  // result: -1000
 @require_on_load(_math_init)
 fn cos_fixed(deg: int) -> int {
     return sin_fixed(deg + 90);

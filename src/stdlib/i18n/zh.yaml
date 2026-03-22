@@ -1,0 +1,229 @@
+## zh.yaml — 中文翻译文件，供 gen-docs.ts 生成 docs/zh/stdlib/*.md 使用。
+## 结构：<模块>.<函数名>.{desc, params.<param>, returns, example_note}
+
+math:
+  abs:
+    desc: 返回 x 的绝对值（支持泛型 T）
+    params:
+      x: 输入值（任意数值类型 T）
+    returns: 若 x >= 0 则返回 x，否则返回 -x
+  sign:
+    desc: 返回 x 的符号：1、0 或 -1
+    params:
+      x: 输入整数
+    returns: x > 0 返回 1，x < 0 返回 -1，x == 0 返回 0
+  min:
+    desc: 返回两个值中较小的一个
+    params:
+      a: 第一个值
+      b: 第二个值
+    returns: a < b 则返回 a，否则返回 b
+  max:
+    desc: 返回两个值中较大的一个
+    params:
+      a: 第一个值
+      b: 第二个值
+    returns: a > b 则返回 a，否则返回 b
+  clamp:
+    desc: 将 x 限制在 [lo, hi] 范围内
+    params:
+      x: 输入值
+      lo: 下界（含）
+      hi: 上界（含）
+    returns: x < lo 返回 lo；x > hi 返回 hi；否则返回 x
+  lerp:
+    desc: 在 a 和 b 之间进行线性插值，t 为定点数（范围 0-1000）
+    params:
+      a: 起始值
+      b: 结束值
+      t: 插值因子 ×1000（0 = a，1000 = b）
+    returns: a + (b - a) * t / 1000
+  sqrt_fixed:
+    desc: 定点数平方根（精度 ×1000）
+    params:
+      x: 输入值 ×1000（即 2.0 传入 2000）
+    returns: sqrt(x/1000) × 1000
+  sin_fixed:
+    desc: 整数角度的正弦值，返回值 ×1000（查表法，精度 ≤0.1%）
+    params:
+      deg: 角度（任意整数，自动对 360 取模）
+    returns: sin(deg°) × 1000，范围 -1000 到 1000
+  cos_fixed:
+    desc: 整数角度的余弦值，返回值 ×1000（通过 sin_fixed(deg+90) 实现）
+    params:
+      deg: 角度（任意整数，自动对 360 取模）
+    returns: cos(deg°) × 1000，范围 -1000 到 1000
+
+vec:
+  dot2d:
+    desc: 两个二维整数向量的点积
+    params:
+      ax: 向量 A 的 X 分量
+      ay: 向量 A 的 Y 分量
+      bx: 向量 B 的 X 分量
+      by: 向量 B 的 Y 分量
+    returns: ax*bx + ay*by
+  length2d_fixed:
+    desc: 二维向量的欧几里得长度，结果 ×1000 定点数
+    params:
+      x: X 分量（保持 |x|, |y| ≤ ~1000 以避免溢出）
+      y: Y 分量
+    returns: sqrt(x²+y²) × 1000
+  dot3d:
+    desc: 两个三维整数向量的点积
+    params:
+      ax: 向量 A 的 X 分量
+      ay: 向量 A 的 Y 分量
+      az: 向量 A 的 Z 分量
+      bx: 向量 B 的 X 分量
+      by: 向量 B 的 Y 分量
+      bz: 向量 B 的 Z 分量
+    returns: ax*bx + ay*by + az*bz
+  cross3d_x:
+    desc: 叉积 A×B 的 X 分量（ay*bz - az*by）
+    params:
+      ax: A 的 X 分量
+      ay: A 的 Y 分量
+      az: A 的 Z 分量
+      bx: B 的 X 分量
+      by: B 的 Y 分量
+      bz: B 的 Z 分量
+    returns: ay*bz - az*by
+  cross3d_y:
+    desc: 叉积 A×B 的 Y 分量（az*bx - ax*bz）
+    params:
+      ax: A 的 X 分量
+      ay: A 的 Y 分量
+      az: A 的 Z 分量
+      bx: B 的 X 分量
+      by: B 的 Y 分量
+      bz: B 的 Z 分量
+    returns: az*bx - ax*bz
+  cross3d_z:
+    desc: 叉积 A×B 的 Z 分量（ax*by - ay*bx）
+    params:
+      ax: A 的 X 分量
+      ay: A 的 Y 分量
+      az: A 的 Z 分量
+      bx: B 的 X 分量
+      by: B 的 Y 分量
+      bz: B 的 Z 分量
+    returns: ax*by - ay*bx
+
+strings:
+  str_len:
+    desc: 返回 rs:strings.{s} 中字符串的长度（MC 限制：普通字符串总返回 1）
+    params:
+      s: rs:strings 中的 NBT 字段名（如 "A"）
+    returns: 普通字符串返回 1；字符列表返回元素数量
+  str_concat:
+    desc: 将 rs:strings 中的两个字符串拼接，结果以 NBT 列表形式写入 rs:strings.Result
+    params:
+      a: 第一个字符串的 NBT 字段名（如 "A"）
+      b: 第二个字符串的 NBT 字段名（如 "B"）
+    returns: rs:strings.Result 被设为 [valueA, valueB] 的 NBT 列表
+  str_contains:
+    desc: 检测 rs:strings.{s} 是否包含 rs:strings.{sub}（因 MC 限制始终返回 0）
+    params:
+      s: 被搜索字符串的 NBT 字段名
+      sub: 子字符串的 NBT 字段名
+    returns: 0（始终，MC 原生不支持子串搜索）
+  str_slice:
+    desc: 从 rs:strings.{s} 中提取子串，写入 rs:strings.Result（需要 MC 1.20.2+）
+    params:
+      s: 源字符串的 NBT 字段名（如 "A"）
+      start: 起始索引（含，0-based）
+      end: 结束索引（不含，负数从末尾计）
+    returns: rs:strings.Result 包含提取的子串
+
+result:
+  result_ok:
+    desc: 构造一个携带成功值的 Result
+    params:
+      value: 成功值（任意整数）
+    returns: Result::Ok(value)
+  result_err:
+    desc: 构造一个携带错误码的 Result
+    params:
+      code: 错误码（按惯例使用负数：-1 通用错误，-2 除零）
+    returns: Result::Err(code)
+  result_is_ok:
+    desc: 判断 Result 是否为 Ok
+    params:
+      r: 要检测的 Result
+    returns: Ok 返回 1，Err 返回 0
+  result_is_err:
+    desc: 判断 Result 是否为 Err
+    params:
+      r: 要检测的 Result
+    returns: Err 返回 1，Ok 返回 0
+  result_value:
+    desc: 从 Ok 结果中提取值（Err 时返回 0，请先调用 result_is_ok 检查）
+    params:
+      r: 要解包的 Result
+    returns: Ok 的值，或 0（Err 时）
+  result_code:
+    desc: 从 Err 结果中提取错误码（Ok 时返回 0）
+    params:
+      r: 要解包的 Result
+    returns: Err 的错误码，或 0（Ok 时）
+  result_divide:
+    desc: 带安全检查的整数除法，除数为零时返回 Err(-2)
+    params:
+      a: 被除数
+      b: 除数
+    returns: Ok(a/b) 或 Err(-2)（b == 0 时）
+
+timer:
+  tick_to_seconds:
+    desc: 将 Minecraft 游戏刻转换为整秒（20 刻 = 1 秒）
+    params:
+      ticks: 游戏刻数
+    returns: ticks / 20
+  tick_to_ms:
+    desc: 将游戏刻转换为毫秒（1 刻 = 50 ms）
+    params:
+      ticks: 游戏刻数
+    returns: ticks * 50
+  seconds_to_ticks:
+    desc: 将秒转换为 Minecraft 游戏刻（1 秒 = 20 刻）
+    params:
+      s: 秒数
+    returns: s * 20
+  format_time_s:
+    desc: 从刻数中提取秒分量（0-59）
+    params:
+      ticks: 游戏刻数
+    returns: (ticks / 20) % 60
+  format_time_m:
+    desc: 从刻数中提取分钟分量（0-59）
+    params:
+      ticks: 游戏刻数
+    returns: (ticks / 1200) % 60
+  format_time_h:
+    desc: 从刻数中提取小时分量
+    params:
+      ticks: 游戏刻数
+    returns: ticks / 72000
+  Timer.new:
+    desc: 创建一个指定持续时长的新计时器
+    params:
+      duration: 持续游戏刻数
+    returns: 新的 Timer 实例
+  Timer.start:
+    desc: 启动或继续计时器
+  Timer.pause:
+    desc: 暂停计时器
+  Timer.reset:
+    desc: 将已流逝的刻数重置为零
+  Timer.done:
+    desc: 检查计时器是否已达到持续时间
+    returns: 若已完成返回 true，否则返回 false
+  Timer.elapsed:
+    desc: 获取已流逝的游戏刻数
+    returns: 已流逝刻数
+  Timer.remaining:
+    desc: 获取剩余刻数（最小为 0）
+    returns: 剩余刻数，不足时为 0
+  Timer.tick:
+    desc: 在计时器激活时手动推进一刻
