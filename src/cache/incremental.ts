@@ -1,18 +1,23 @@
 /**
- * Incremental compilation — only recompile files whose content (or
- * dependencies) has changed since the last build.
+ * Incremental compilation — only recompile files whose content, imports,
+ * or reverse dependents changed since the last build.
  */
 
+import * as fs from 'fs'
 import * as path from 'path'
 import { compile, type CompileOptions, type CompileResult } from '../emit/compile'
-import * as fs from 'fs'
+import type { DatapackFile } from '../emit'
 import { FileCache } from './index'
-import { DependencyGraph } from './deps'
+import { DependencyGraph, parseImports } from './deps'
 
 export interface IncrementalOptions {
   namespace?: string
   /** Output directory for compiled files. */
   output: string
+  generateSourceMap?: boolean
+  mcVersion?: CompileOptions['mcVersion']
+  lenient?: boolean
+  includeDirs?: string[]
 }
 
 export interface IncrementalResult {
@@ -24,139 +29,168 @@ export interface IncrementalResult {
   errors: Map<string, string>
   /** Per-file compile results (only for recompiled files). */
   results: Map<string, CompileResult>
+  /** Files skipped due to cache hit. */
+  skippedFiles: string[]
+  /** Files rebuilt in this run. */
+  rebuiltFiles: string[]
+  /** Elapsed wall time for this run. */
+  elapsedMs: number
 }
 
-/** Cached compilation output per entry file. */
-interface CompileCacheEntry {
-  result: CompileResult
-  /** Content hashes of entry file + all its transitive deps at compile time. */
-  depHashes: Map<string, string>
-}
-
-const compiledCache = new Map<string, CompileCacheEntry>()
-
-/**
- * Compile a set of entry files incrementally.
- *
- * For each file:
- * - Compute content hash of the file and all its transitive imports
- * - If all hashes match the previous build → skip (cache hit)
- * - If any hash changed → recompile from scratch
- */
 export function compileIncremental(
   files: string[],
   cache: FileCache,
   depGraph: DependencyGraph,
   options: IncrementalOptions,
 ): IncrementalResult {
+  const start = Date.now()
+  const normalizedEntries = [...new Set(files.map(file => path.resolve(file)))]
   const result: IncrementalResult = {
     recompiled: 0,
     cached: 0,
     errors: new Map(),
     results: new Map(),
+    skippedFiles: [],
+    rebuiltFiles: [],
+    elapsedMs: 0,
   }
 
-  // Phase 1: Update dependency graph for all files
-  for (const file of files) {
-    const absFile = path.resolve(file)
-    try {
-      const source = fs.readFileSync(absFile, 'utf-8')
-      depGraph.addFile(absFile, source)
-    } catch {
-      // File might have been deleted
-      depGraph.removeFile(absFile)
-    }
+  if (normalizedEntries.length === 0) {
+    result.elapsedMs = Date.now() - start
+    return result
   }
 
-  // Phase 2: Detect all changed source files BEFORE recompiling anything.
-  // This prevents cache.update() during one file's recompile from hiding
-  // changes needed by another file that shares the same dependency.
-  const changedSourceFiles = new Set<string>()
-  const allSourceFiles = new Set<string>()
+  depGraph.clear()
+  const discoveredFiles = discoverDependencyGraph(normalizedEntries, depGraph)
+  const changedFiles = new Set<string>()
 
-  for (const file of files) {
-    const absFile = path.resolve(file)
-    const allDeps = depGraph.getTransitiveDeps(absFile)
-    allSourceFiles.add(absFile)
-    for (const dep of allDeps) allSourceFiles.add(dep)
+  for (const file of discoveredFiles) {
+    if (cache.hasChanged(file)) changedFiles.add(file)
   }
 
-  for (const sourceFile of allSourceFiles) {
-    if (cache.hasChanged(sourceFile)) {
-      changedSourceFiles.add(sourceFile)
-    }
+  const dirtyFiles = depGraph.computeDirtySet(changedFiles)
+  for (const entry of normalizedEntries) {
+    if (!discoveredFiles.has(entry)) dirtyFiles.add(entry)
   }
 
-  // Phase 3: For each entry file, check if it or any dep changed → recompile
-  for (const file of files) {
-    const absFile = path.resolve(file)
+  for (const entryFile of normalizedEntries) {
+    const entryDeps = depGraph.getTransitiveDeps(entryFile)
+    const entryUnit = new Set([entryFile, ...entryDeps])
+    const cachedEntry = cache.get(entryFile)
+    const cachedDepList = new Set(cachedEntry?.dependencies ?? [])
 
-    // Collect all files in this compilation unit (entry + transitive deps)
-    const allDeps = depGraph.getTransitiveDeps(absFile)
-    const unitFiles = [absFile, ...allDeps]
+    const hasDependencyDrift =
+      cachedDepList.size !== entryUnit.size ||
+      [...entryUnit].some(file => !cachedDepList.has(file))
 
-    // Check if any file in the unit has changed
-    let needsRecompile = false
-    const prevEntry = compiledCache.get(absFile)
+    const canUseCache =
+      !dirtyFiles.has(entryFile) &&
+      !hasDependencyDrift &&
+      !!cachedEntry?.outputFiles &&
+      cachedEntry.outputFiles.length > 0
 
-    if (!prevEntry) {
-      needsRecompile = true
-    } else {
-      for (const unitFile of unitFiles) {
-        if (changedSourceFiles.has(unitFile)) {
-          needsRecompile = true
-          break
-        }
-      }
-      // Also check if the set of dependencies changed
-      if (!needsRecompile && prevEntry.depHashes.size !== unitFiles.length) {
-        needsRecompile = true
-      }
-    }
-
-    if (!needsRecompile) {
-      // Cache hit — write cached result to output
-      const cached = compiledCache.get(absFile)!
-      writeBuildOutput(cached.result, options.output)
+    if (canUseCache) {
+      writeBuildOutput(cachedEntry.outputFiles!, options.output)
       result.cached++
+      result.skippedFiles.push(entryFile)
       continue
     }
 
-    // Cache miss — recompile
     try {
-      const source = fs.readFileSync(absFile, 'utf-8')
-      const ns = options.namespace ?? deriveNamespace(absFile)
-      const compileResult = compile(source, { namespace: ns, filePath: absFile })
+      const source = fs.readFileSync(entryFile, 'utf-8')
+      const ns = options.namespace ?? deriveNamespace(entryFile)
+      const compileResult = compile(source, {
+        namespace: ns,
+        filePath: entryFile,
+        generateSourceMap: options.generateSourceMap,
+        mcVersion: options.mcVersion,
+        lenient: options.lenient,
+        includeDirs: options.includeDirs,
+      })
+      const outputFiles = cloneFiles(compileResult.files)
+      const compiledFunctions = outputFiles
+        .filter(file => file.path.endsWith('.mcfunction'))
+        .map(file => file.path)
 
-      // Update caches
-      const depHashes = new Map<string, string>()
-      for (const unitFile of unitFiles) {
-        cache.update(unitFile)
-        const entry = cache.get(unitFile)
-        if (entry) depHashes.set(unitFile, entry.hash)
+      removeStaleOutputs(cachedEntry?.outputFiles ?? [], outputFiles, options.output)
+
+      for (const file of entryUnit) {
+        cache.update(file)
       }
 
-      compiledCache.set(absFile, { result: compileResult, depHashes })
-      writeBuildOutput(compileResult, options.output)
+      const entryRecord = cache.get(entryFile)
+      if (entryRecord) {
+        entryRecord.compiledFunctions = compiledFunctions
+        entryRecord.outputFiles = outputFiles
+        entryRecord.dependencies = [...entryUnit].sort()
+      }
+
+      writeBuildOutput(outputFiles, options.output)
 
       result.recompiled++
-      result.results.set(absFile, compileResult)
+      result.results.set(entryFile, compileResult)
+      result.rebuiltFiles.push(entryFile)
     } catch (err) {
-      result.errors.set(absFile, (err as Error).message)
+      result.errors.set(entryFile, (err as Error).message)
     }
   }
 
+  cache.save()
+  result.elapsedMs = Date.now() - start
   return result
 }
 
+function discoverDependencyGraph(entries: string[], depGraph: DependencyGraph): Set<string> {
+  const visited = new Set<string>()
+  const queue = [...entries]
+
+  while (queue.length > 0) {
+    const current = path.resolve(queue.shift()!)
+    if (visited.has(current)) continue
+    visited.add(current)
+
+    try {
+      const source = fs.readFileSync(current, 'utf-8')
+      depGraph.addFile(current, source)
+      const imports = parseImports(current, source)
+      for (const imported of imports) {
+        if (!visited.has(imported)) queue.push(imported)
+      }
+    } catch {
+      depGraph.removeFile(current)
+    }
+  }
+
+  return visited
+}
+
+function cloneFiles(files: DatapackFile[]): DatapackFile[] {
+  return files.map(file => ({ path: file.path, content: file.content }))
+}
+
 /** Write compile output files to the output directory. */
-function writeBuildOutput(compileResult: CompileResult, output: string): void {
+function writeBuildOutput(files: DatapackFile[], output: string): void {
   fs.mkdirSync(output, { recursive: true })
-  for (const dataFile of compileResult.files) {
+  for (const dataFile of files) {
     const filePath = path.join(output, dataFile.path)
     const dir = path.dirname(filePath)
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(filePath, dataFile.content)
+  }
+}
+
+function removeStaleOutputs(
+  previousFiles: DatapackFile[],
+  nextFiles: DatapackFile[],
+  output: string,
+): void {
+  if (previousFiles.length === 0) return
+  const nextPaths = new Set(nextFiles.map(file => file.path))
+
+  for (const oldFile of previousFiles) {
+    if (nextPaths.has(oldFile.path)) continue
+    const targetPath = path.join(output, oldFile.path)
+    if (fs.existsSync(targetPath)) fs.rmSync(targetPath, { force: true })
   }
 }
 
@@ -165,9 +199,4 @@ function deriveNamespace(filePath: string): string {
   return basename.toLowerCase().replace(/[^a-z0-9]/g, '_')
 }
 
-/**
- * Reset the in-memory compile cache. Useful for testing.
- */
-export function resetCompileCache(): void {
-  compiledCache.clear()
-}
+export function resetCompileCache(): void {}

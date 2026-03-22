@@ -10,7 +10,8 @@ import type {
   Block, ConstDecl, Decorator, EntitySelector, Expr, FnDecl, GlobalDecl, LiteralExpr, Param,
   Program, RangeExpr, SelectorFilter, SelectorKind, Span, Stmt, TypeNode, AssignOp,
   StructDecl, StructField, ExecuteSubcommand, EnumDecl, EnumVariant, BlockPosExpr, ImplBlock,
-  CoordComponent, LambdaParam, EntityTypeName, ImportDecl, MatchPattern
+  CoordComponent, LambdaParam, EntityTypeName, ImportDecl, MatchPattern,
+  InterfaceDecl, InterfaceMethod
 } from '../ast/types'
 import type { BinOp, CmpOp } from '../ast/types'
 import { DiagnosticError } from '../diagnostics'
@@ -227,6 +228,7 @@ export class Parser {
     const enums: EnumDecl[] = []
     const consts: ConstDecl[] = []
     const imports: ImportDecl[] = []
+    const interfaces: InterfaceDecl[] = []
     let isLibrary = false
     let moduleName: string | undefined
 
@@ -284,6 +286,8 @@ export class Parser {
           structs.push(this.parseStructDecl())
         } else if (this.check('impl')) {
           implBlocks.push(this.parseImplBlock())
+        } else if (this.check('interface')) {
+          interfaces.push(this.parseInterfaceDecl())
         } else if (this.check('enum')) {
           enums.push(this.parseEnumDecl())
         } else if (this.check('const')) {
@@ -329,7 +333,7 @@ export class Parser {
       }
     }
 
-    return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, isLibrary }
+    return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, interfaces, isLibrary }
   }
 
   // -------------------------------------------------------------------------
@@ -422,6 +426,62 @@ export class Parser {
 
     this.expect('}')
     return this.withLoc({ kind: 'impl_block', traitName, typeName, methods }, implToken)
+  }
+
+  /**
+   * Parse an interface declaration:
+   *   interface <Name> {
+   *     fn <method>(<params>): <retType>
+   *     ...
+   *   }
+   * Method signatures have no body — they are prototype-only.
+   */
+  private parseInterfaceDecl(): InterfaceDecl {
+    const ifaceToken = this.expect('interface')
+    const name = this.expect('ident').value
+    this.expect('{')
+
+    const methods: InterfaceMethod[] = []
+    while (!this.check('}') && !this.check('eof')) {
+      const fnToken = this.expect('fn')
+      const methodName = this.expect('ident').value
+      this.expect('(')
+      const params = this.parseInterfaceParams()
+      this.expect(')')
+      let returnType: TypeNode | undefined
+      if (this.match(':')) {
+        returnType = this.parseType()
+      }
+      // No body — interface methods are signature-only
+      methods.push(this.withLoc({ name: methodName, params, returnType }, fnToken) as InterfaceMethod)
+    }
+
+    this.expect('}')
+    return this.withLoc({ name, methods }, ifaceToken) as InterfaceDecl
+  }
+
+  /**
+   * Parse interface method params — like parseParams but allows bare `self`
+   * (no `:` required for the first param named 'self').
+   */
+  private parseInterfaceParams(): Param[] {
+    const params: Param[] = []
+    if (!this.check(')')) {
+      do {
+        const paramToken = this.expect('ident')
+        const paramName = paramToken.value
+        let type: TypeNode
+        if (params.length === 0 && paramName === 'self' && !this.check(':')) {
+          // self without type annotation — use a sentinel struct type
+          type = { kind: 'named', name: 'void' }
+        } else {
+          this.expect(':')
+          type = this.parseType()
+        }
+        params.push(this.withLoc({ name: paramName, type }, paramToken))
+      } while (this.match(','))
+    }
+    return params
   }
 
   private parseConstDecl(): ConstDecl {
@@ -567,6 +627,10 @@ export class Parser {
 
     if (!argsStr) {
       return { name }
+    }
+
+    if (name === 'profile') {
+      this.error('@profile decorator does not accept arguments')
     }
 
     const args: Decorator['args'] = {}

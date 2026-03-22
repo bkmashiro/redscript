@@ -5,7 +5,7 @@
  * Collects errors but doesn't block compilation (warn mode).
  */
 
-import type { Program, FnDecl, Stmt, Expr, TypeNode, Block, EntityTypeName, EntitySelector } from '../ast/types'
+import type { Program, FnDecl, Stmt, Expr, TypeNode, Block, EntityTypeName, EntitySelector, InterfaceDecl, InterfaceMethod } from '../ast/types'
 import { DiagnosticError, DiagnosticCollector } from '../diagnostics'
 import { getEventParamSpecs, isEventTypeName } from '../events/types'
 
@@ -154,6 +154,9 @@ export class TypeChecker {
   private loopDepth = 0
   private condDepth = 0
 
+  // interface name → InterfaceDecl
+  private interfaces: Map<string, InterfaceDecl> = new Map()
+
   private readonly richTextBuiltins = new Map<string, { messageIndex: number }>([
     ['say', { messageIndex: 0 }],
     ['announce', { messageIndex: 0 }],
@@ -202,6 +205,11 @@ export class TypeChecker {
     // First pass: collect function and struct declarations
     for (const fn of program.declarations) {
       this.functions.set(fn.name, fn)
+    }
+
+    // Register interface declarations
+    for (const iface of program.interfaces ?? []) {
+      this.interfaces.set(iface.name, iface)
     }
 
     // Register global variables (mutable) so functions can reference and assign them
@@ -297,6 +305,24 @@ export class TypeChecker {
       this.consts.set(constDecl.name, constType)
     }
 
+    // Verify that each `impl <Interface> for <Struct>` satisfies all interface methods
+    for (const implBlock of program.implBlocks ?? []) {
+      if (!implBlock.traitName) continue
+      const iface = this.interfaces.get(implBlock.traitName)
+      if (!iface) continue  // Unknown trait — not our concern here (could be built-in like Display)
+
+      const implementedMethods = new Set(implBlock.methods.map(m => m.name))
+      for (const required of iface.methods) {
+        if (!implementedMethods.has(required.name)) {
+          const span = implBlock.span ?? required.span
+          this.report(
+            `Struct '${implBlock.typeName}' does not implement required method '${required.name}' from interface '${implBlock.traitName}'`,
+            span ?? { line: 1, col: 1 }
+          )
+        }
+      }
+    }
+
     // Second pass: type check function bodies
     for (const fn of program.declarations) {
       this.checkFunction(fn)
@@ -374,6 +400,17 @@ export class TypeChecker {
       if (fn.params.length > 0) {
         this.report(`@watch handler '${fn.name}' cannot declare parameters`, fn)
       }
+    }
+
+    const profileDecorators = fn.decorators.filter(decorator => decorator.name === 'profile')
+    if (profileDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @profile decorators`, fn)
+      return
+    }
+
+    if (profileDecorators.length === 1 && (profileDecorators[0].rawArgs?.length || profileDecorators[0].args && Object.keys(profileDecorators[0].args).length > 0)) {
+      this.report(`@profile decorator on '${fn.name}' does not accept arguments`, fn)
+      return
     }
 
     const eventDecorators = fn.decorators.filter(decorator => decorator.name === 'on')

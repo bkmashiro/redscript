@@ -1,24 +1,39 @@
 /**
  * FileCache — content-hash-based compilation cache for incremental builds.
  *
- * Stores per-file content hashes and optional cached HIR modules.
- * Persists to `.redscript-cache/` as JSON.
+ * Stores per-file content hashes and optional cached output payloads.
+ * Persists to `.redscript-cache/cache.json`.
  */
 
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
 import type { HIRModule } from '../hir/types'
+import type { DatapackFile } from '../emit'
+
+export interface CachedOutputFile extends DatapackFile {}
 
 export interface CacheEntry {
   hash: string
   mtime: number
   hir?: HIRModule
+  compiledFunctions?: string[]
+  outputFiles?: CachedOutputFile[]
+  dependencies?: string[]
 }
 
 interface SerializedCache {
-  version: 1
-  entries: Record<string, { hash: string; mtime: number }>
+  version: 2
+  entries: Record<
+    string,
+    {
+      hash: string
+      mtime: number
+      compiledFunctions?: string[]
+      outputFiles?: CachedOutputFile[]
+      dependencies?: string[]
+    }
+  >
 }
 
 export class FileCache {
@@ -102,12 +117,18 @@ export class FileCache {
   save(): void {
     fs.mkdirSync(this.cacheDir, { recursive: true })
     const serialized: SerializedCache = {
-      version: 1,
+      version: 2,
       entries: {},
     }
     for (const [filePath, entry] of this.entries) {
       // Don't persist HIR — it contains non-serializable references
-      serialized.entries[filePath] = { hash: entry.hash, mtime: entry.mtime }
+      serialized.entries[filePath] = {
+        hash: entry.hash,
+        mtime: entry.mtime,
+        compiledFunctions: entry.compiledFunctions,
+        outputFiles: entry.outputFiles,
+        dependencies: entry.dependencies,
+      }
     }
     const cachePath = path.join(this.cacheDir, 'cache.json')
     fs.writeFileSync(cachePath, JSON.stringify(serialized, null, 2))
@@ -118,9 +139,15 @@ export class FileCache {
     const cachePath = path.join(this.cacheDir, 'cache.json')
     try {
       const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8')) as SerializedCache
-      if (data.version !== 1) return
+      if (data.version !== 2) return
       for (const [filePath, entry] of Object.entries(data.entries)) {
-        this.entries.set(filePath, { hash: entry.hash, mtime: entry.mtime })
+        this.entries.set(filePath, {
+          hash: entry.hash,
+          mtime: entry.mtime,
+          compiledFunctions: entry.compiledFunctions,
+          outputFiles: entry.outputFiles,
+          dependencies: entry.dependencies,
+        })
       }
     } catch {
       // No cache or corrupt — start fresh

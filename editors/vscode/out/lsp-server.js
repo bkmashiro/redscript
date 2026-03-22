@@ -9229,6 +9229,7 @@ var KEYWORDS = {
   declare: "declare",
   export: "export",
   import: "import",
+  interface: "interface",
   int: "int",
   bool: "bool",
   float: "float",
@@ -9948,6 +9949,7 @@ var Parser = class _Parser {
     const enums = [];
     const consts = [];
     const imports = [];
+    const interfaces = [];
     let isLibrary = false;
     let moduleName;
     if (this.check("namespace")) {
@@ -9993,6 +9995,8 @@ var Parser = class _Parser {
           structs.push(this.parseStructDecl());
         } else if (this.check("impl")) {
           implBlocks.push(this.parseImplBlock());
+        } else if (this.check("interface")) {
+          interfaces.push(this.parseInterfaceDecl());
         } else if (this.check("enum")) {
           enums.push(this.parseEnumDecl());
         } else if (this.check("const")) {
@@ -10033,7 +10037,7 @@ var Parser = class _Parser {
         }
       }
     }
-    return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, isLibrary };
+    return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, interfaces, isLibrary };
   }
   // -------------------------------------------------------------------------
   // Struct Declaration
@@ -10108,6 +10112,56 @@ var Parser = class _Parser {
     }
     this.expect("}");
     return this.withLoc({ kind: "impl_block", traitName, typeName, methods }, implToken);
+  }
+  /**
+   * Parse an interface declaration:
+   *   interface <Name> {
+   *     fn <method>(<params>): <retType>
+   *     ...
+   *   }
+   * Method signatures have no body — they are prototype-only.
+   */
+  parseInterfaceDecl() {
+    const ifaceToken = this.expect("interface");
+    const name = this.expect("ident").value;
+    this.expect("{");
+    const methods = [];
+    while (!this.check("}") && !this.check("eof")) {
+      const fnToken = this.expect("fn");
+      const methodName = this.expect("ident").value;
+      this.expect("(");
+      const params = this.parseInterfaceParams();
+      this.expect(")");
+      let returnType;
+      if (this.match(":")) {
+        returnType = this.parseType();
+      }
+      methods.push(this.withLoc({ name: methodName, params, returnType }, fnToken));
+    }
+    this.expect("}");
+    return this.withLoc({ name, methods }, ifaceToken);
+  }
+  /**
+   * Parse interface method params — like parseParams but allows bare `self`
+   * (no `:` required for the first param named 'self').
+   */
+  parseInterfaceParams() {
+    const params = [];
+    if (!this.check(")")) {
+      do {
+        const paramToken = this.expect("ident");
+        const paramName = paramToken.value;
+        let type;
+        if (params.length === 0 && paramName === "self" && !this.check(":")) {
+          type = { kind: "named", name: "void" };
+        } else {
+          this.expect(":");
+          type = this.parseType();
+        }
+        params.push(this.withLoc({ name: paramName, type }, paramToken));
+      } while (this.match(","));
+    }
+    return params;
   }
   parseConstDecl() {
     const constToken = this.expect("const");
@@ -11994,6 +12048,8 @@ var TypeChecker = class _TypeChecker {
     // Depth of loop/conditional nesting (for static-allocation enforcement)
     this.loopDepth = 0;
     this.condDepth = 0;
+    // interface name → InterfaceDecl
+    this.interfaces = /* @__PURE__ */ new Map();
     this.richTextBuiltins = /* @__PURE__ */ new Map([
       ["say", { messageIndex: 0 }],
       ["announce", { messageIndex: 0 }],
@@ -12034,6 +12090,9 @@ var TypeChecker = class _TypeChecker {
   check(program) {
     for (const fn of program.declarations) {
       this.functions.set(fn.name, fn);
+    }
+    for (const iface of program.interfaces ?? []) {
+      this.interfaces.set(iface.name, iface);
     }
     for (const global of program.globals ?? []) {
       this.globals.set(global.name, this.normalizeType(global.type));
@@ -12117,6 +12176,21 @@ var TypeChecker = class _TypeChecker {
       }
       this.consts.set(constDecl.name, constType);
     }
+    for (const implBlock of program.implBlocks ?? []) {
+      if (!implBlock.traitName) continue;
+      const iface = this.interfaces.get(implBlock.traitName);
+      if (!iface) continue;
+      const implementedMethods = new Set(implBlock.methods.map((m) => m.name));
+      for (const required of iface.methods) {
+        if (!implementedMethods.has(required.name)) {
+          const span = implBlock.span ?? required.span;
+          this.report(
+            `Struct '${implBlock.typeName}' does not implement required method '${required.name}' from interface '${implBlock.traitName}'`,
+            span ?? { line: 1, col: 1 }
+          );
+        }
+      }
+    }
     for (const fn of program.declarations) {
       this.checkFunction(fn);
     }
@@ -12176,6 +12250,15 @@ var TypeChecker = class _TypeChecker {
       if (fn.params.length > 0) {
         this.report(`@watch handler '${fn.name}' cannot declare parameters`, fn);
       }
+    }
+    const profileDecorators = fn.decorators.filter((decorator) => decorator.name === "profile");
+    if (profileDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @profile decorators`, fn);
+      return;
+    }
+    if (profileDecorators.length === 1 && (profileDecorators[0].rawArgs?.length || profileDecorators[0].args && Object.keys(profileDecorators[0].args).length > 0)) {
+      this.report(`@profile decorator on '${fn.name}' does not accept arguments`, fn);
+      return;
     }
     const eventDecorators = fn.decorators.filter((decorator) => decorator.name === "on");
     if (eventDecorators.length === 0) {

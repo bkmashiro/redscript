@@ -270,7 +270,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'config' | 'singleton'
+  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'config' | 'singleton' | 'profile'
   args?: {
     rate?: number
     objective?: string
@@ -348,6 +348,25 @@ export interface ImplBlock {
   span?: Span
 }
 
+// ---------------------------------------------------------------------------
+// Interface / Trait Declarations
+// ---------------------------------------------------------------------------
+
+/** A method signature in an interface body (no body) */
+export interface InterfaceMethod {
+  name: string
+  params: Param[]
+  returnType?: TypeNode
+  span?: Span
+}
+
+/** `interface Drawable { fn draw(self, x: int, y: int) ... }` */
+export interface InterfaceDecl {
+  name: string
+  methods: InterfaceMethod[]
+  span?: Span
+}
+
 export interface EnumPayloadField {
   name: string
   type: TypeNode
@@ -415,6 +434,8 @@ export interface Program {
   consts: ConstDecl[]
   /** Phase 5b: module imports (`import math::sin;`) */
   imports: ImportDecl[]
+  /** Interface / trait declarations */
+  interfaces: InterfaceDecl[]
   /** True when the source file declares `module library;`.
    *  Library-mode: all functions are DCE-eligible by default — none are treated
    *  as MC entry points unless they carry @tick / @load / @on / @keep etc. */

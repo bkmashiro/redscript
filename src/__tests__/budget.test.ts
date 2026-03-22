@@ -31,6 +31,11 @@ function mkModule(functions: LIRFunction[]): LIRModule {
 // ---------------------------------------------------------------------------
 
 describe('estimateCommandCount', () => {
+  test('missing function returns 0', () => {
+    const mod = mkModule([mkFn('main', [])])
+    expect(estimateCommandCount('missing', mod)).toBe(0)
+  })
+
   test('flat function — counts each instruction as 1', () => {
     const fn = mkFn('simple', [
       { kind: 'score_set', dst: slot('$x'), value: 0 },

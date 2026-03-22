@@ -165,4 +165,36 @@ describe('CLI API', () => {
       expect(fs.readFileSync(filePath, 'utf-8')).toBe('fn main()\n{\nlet x: int = 1;\n}\n')
     })
   })
+
+  describe('compile CLI', () => {
+    it('supports --incremental and reuses cached output on the second run', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-compile-cli-'))
+      const filePath = path.join(tempDir, 'main.mcrs')
+      const outDir = path.join(tempDir, 'dist')
+      fs.writeFileSync(filePath, 'fn main() { say("hi"); }\n')
+
+      const first = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, 'compile', filePath, '--incremental', '-o', outDir],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      const second = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, 'compile', filePath, '--incremental', '-o', outDir],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(first.status).toBe(0)
+      expect(second.status).toBe(0)
+      expect(second.stdout).toContain('Reused cache')
+      expect(fs.existsSync(path.join(tempDir, '.redscript-cache', 'cache.json'))).toBe(true)
+    })
+  })
 })

@@ -238,9 +238,13 @@ describe('compileIncremental', () => {
     expect(result.recompiled).toBe(2)
     expect(result.cached).toBe(0)
     expect(result.errors.size).toBe(0)
+    const entry = cache.get(path.resolve(a))
+    expect(entry?.hash).toMatch(/^[0-9a-f]{64}$/)
+    expect(entry?.compiledFunctions?.length).toBeGreaterThan(0)
+    expect(entry?.outputFiles?.length).toBeGreaterThan(0)
   })
 
-  test('second compile (no changes): all files cached', () => {
+  test('second compile (no changes): all files cached and faster', () => {
     const a = writeFile(tmpDir, 'a.mcrs', 'fn a_func() { let x: int = 1; }')
     const b = writeFile(tmpDir, 'b.mcrs', 'fn b_func() { let y: int = 2; }')
 
@@ -248,7 +252,7 @@ describe('compileIncremental', () => {
     const depGraph = new DependencyGraph()
 
     // First compile
-    compileIncremental([a, b], cache, depGraph, { output: outDir })
+    const first = compileIncremental([a, b], cache, depGraph, { output: outDir })
 
     // Second compile — no changes
     const result = compileIncremental([a, b], cache, depGraph, { output: outDir })
@@ -256,6 +260,8 @@ describe('compileIncremental', () => {
     expect(result.recompiled).toBe(0)
     expect(result.cached).toBe(2)
     expect(result.errors.size).toBe(0)
+    expect(result.skippedFiles).toEqual([path.resolve(a), path.resolve(b)])
+    expect(result.elapsedMs).toBeLessThanOrEqual(first.elapsedMs + 20)
   })
 
   test('modify one file: only that file recompiled', () => {
@@ -305,6 +311,8 @@ describe('compileIncremental', () => {
     expect(result.recompiled).toBe(2)
     expect(result.cached).toBe(1)
     expect(result.errors.size).toBe(0)
+    expect(result.rebuiltFiles).toEqual([path.resolve(main1), path.resolve(main2)])
+    expect(result.skippedFiles).toEqual([path.resolve(other)])
   })
 
   test('output files are written to disk', () => {

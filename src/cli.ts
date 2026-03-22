@@ -30,7 +30,7 @@ function printUsage(): void {
 RedScript Compiler v2
 
 Usage:
-  redscript compile <file> [-o <out>] [--namespace <ns>]
+  redscript compile <file> [-o <out>] [--namespace <ns>] [--incremental]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
   redscript fmt <file.mcrs> [file2.mcrs ...]
@@ -58,6 +58,7 @@ Options:
                          e.g. --mc-version 1.20.2, --mc-version 1.19
   --lenient              Treat type errors as warnings instead of blocking compilation
   --include <dir>        Add a directory to the import search path (repeatable)
+  --incremental          Enable file-level incremental compilation cache
   -h, --help             Show this help message
 `)
 }
@@ -165,6 +166,7 @@ function parseArgs(args: string[]): {
   includeDirs?: string[]
   format?: 'human' | 'json'
   fmtCheck?: boolean
+  incremental?: boolean
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -206,6 +208,9 @@ function parseArgs(args: string[]): {
     } else if (arg === '--check') {
       result.fmtCheck = true
       i++
+    } else if (arg === '--incremental') {
+      result.incremental = true
+      i++
     } else if (!result.command) {
       result.command = arg
       i++
@@ -234,6 +239,7 @@ function compileCommand(
   mcVersionStr?: string,
   lenient = false,
   includeDirs?: string[],
+  incremental = false,
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -249,6 +255,42 @@ function compileCommand(
       console.error(`Error: ${(e as Error).message}`)
       process.exit(1)
     }
+  }
+
+  if (incremental) {
+    const cacheDir = path.join(path.dirname(file), '.redscript-cache')
+    const cache = new FileCache(cacheDir)
+    cache.load()
+    const depGraph = new DependencyGraph()
+
+    const incResult = compileIncremental([file], cache, depGraph, {
+      namespace,
+      output,
+      generateSourceMap: sourceMap,
+      mcVersion,
+      lenient,
+      includeDirs,
+    })
+    if (incResult.errors.size > 0) {
+      const [failedFile, errorMessage] = incResult.errors.entries().next().value as [string, string]
+      const source = fs.existsSync(failedFile) ? fs.readFileSync(failedFile, 'utf-8') : ''
+      console.error(formatError(new Error(errorMessage), source, failedFile))
+      process.exit(1)
+    }
+
+    if (incResult.cached > 0) {
+      const entry = cache.get(path.resolve(file))
+      console.log(`✓ Reused cache for ${file}`)
+      console.log(`  Namespace: ${namespace}`)
+      console.log(`  Files: ${entry?.outputFiles?.length ?? 0}`)
+      return
+    }
+
+    const compiled = incResult.results.get(path.resolve(file))
+    console.log(`✓ Compiled ${file} to ${output}/`)
+    console.log(`  Namespace: ${namespace}`)
+    console.log(`  Files: ${compiled?.files.length ?? 0}`)
+    return
   }
 
   const source = fs.readFileSync(file, 'utf-8')
@@ -436,6 +478,7 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
     const incResult = compileIncremental(files, cache, depGraph, {
       namespace,
       output,
+      includeDirs: undefined,
     })
 
     const timestamp = new Date().toLocaleTimeString()
@@ -534,6 +577,7 @@ async function main(): Promise<void> {
         parsed.mcVersionStr,
         parsed.lenient,
         parsed.includeDirs,
+        parsed.incremental,
       )
       }
       break

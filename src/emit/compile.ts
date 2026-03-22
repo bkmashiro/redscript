@@ -48,6 +48,8 @@ export interface CompileOptions {
   config?: Record<string, number>
   /** Internal: stop after parse + typecheck + HIR checks. */
   stopAfterCheck?: boolean
+  /** When true, enable debug-only helpers such as @profile instrumentation. */
+  debug?: boolean
 }
 
 export interface CompileResult {
@@ -117,6 +119,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     lenient = false,
     includeDirs,
     stopAfterCheck = false,
+    debug = false,
   } = options
   const warnings: string[] = []
 
@@ -299,6 +302,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const inlineFunctions = new Set<string>()
     const coroutineInfos: CoroutineInfo[] = []
     const scheduleFunctions: Array<{ name: string; ticks: number }> = []
+    const profiledFunctions: string[] = []
     const eventHandlers = new Map<string, string[]>()
     for (const fn of hir.functions) {
       if (fn.watchObjective) {
@@ -323,6 +327,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
         }
         if (dec.name === 'schedule') {
           scheduleFunctions.push({ name: fn.name, ticks: dec.args?.ticks ?? 1 })
+        }
+        if (dec.name === 'profile') {
+          profiledFunctions.push(fn.name)
         }
         if (dec.name === 'on' && dec.args?.eventType) {
           const evType = dec.args.eventType as string
@@ -446,7 +453,19 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     // Stage 7: LIR → .mcfunction
-    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions, generateSourceMap, mcVersion, eventHandlers, singletonObjectives })
+    const files = emit(lirOpt, {
+      namespace,
+      tickFunctions,
+      loadFunctions,
+      watchFunctions,
+      scheduleFunctions,
+      generateSourceMap,
+      mcVersion,
+      eventHandlers,
+      singletonObjectives,
+      profiledFunctions,
+      enableProfiling: debug,
+    })
     const prunedFiles = pruneLibraryFunctionFiles(files, libraryFilePaths)
 
     return { files: prunedFiles, warnings, success: true as const }

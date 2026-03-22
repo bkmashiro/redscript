@@ -18280,6 +18280,7 @@ var require_lexer = __commonJS({
       declare: "declare",
       export: "export",
       import: "import",
+      interface: "interface",
       int: "int",
       bool: "bool",
       float: "float",
@@ -19009,6 +19010,7 @@ var require_parser = __commonJS({
         const enums = [];
         const consts = [];
         const imports = [];
+        const interfaces = [];
         let isLibrary = false;
         let moduleName;
         if (this.check("namespace")) {
@@ -19054,6 +19056,8 @@ var require_parser = __commonJS({
               structs.push(this.parseStructDecl());
             } else if (this.check("impl")) {
               implBlocks.push(this.parseImplBlock());
+            } else if (this.check("interface")) {
+              interfaces.push(this.parseInterfaceDecl());
             } else if (this.check("enum")) {
               enums.push(this.parseEnumDecl());
             } else if (this.check("const")) {
@@ -19094,7 +19098,7 @@ var require_parser = __commonJS({
             }
           }
         }
-        return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, isLibrary };
+        return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, interfaces, isLibrary };
       }
       // -------------------------------------------------------------------------
       // Struct Declaration
@@ -19170,6 +19174,56 @@ var require_parser = __commonJS({
         }
         this.expect("}");
         return this.withLoc({ kind: "impl_block", traitName, typeName, methods }, implToken);
+      }
+      /**
+       * Parse an interface declaration:
+       *   interface <Name> {
+       *     fn <method>(<params>): <retType>
+       *     ...
+       *   }
+       * Method signatures have no body — they are prototype-only.
+       */
+      parseInterfaceDecl() {
+        const ifaceToken = this.expect("interface");
+        const name = this.expect("ident").value;
+        this.expect("{");
+        const methods = [];
+        while (!this.check("}") && !this.check("eof")) {
+          const fnToken = this.expect("fn");
+          const methodName = this.expect("ident").value;
+          this.expect("(");
+          const params = this.parseInterfaceParams();
+          this.expect(")");
+          let returnType;
+          if (this.match(":")) {
+            returnType = this.parseType();
+          }
+          methods.push(this.withLoc({ name: methodName, params, returnType }, fnToken));
+        }
+        this.expect("}");
+        return this.withLoc({ name, methods }, ifaceToken);
+      }
+      /**
+       * Parse interface method params — like parseParams but allows bare `self`
+       * (no `:` required for the first param named 'self').
+       */
+      parseInterfaceParams() {
+        const params = [];
+        if (!this.check(")")) {
+          do {
+            const paramToken = this.expect("ident");
+            const paramName = paramToken.value;
+            let type;
+            if (params.length === 0 && paramName === "self" && !this.check(":")) {
+              type = { kind: "named", name: "void" };
+            } else {
+              this.expect(":");
+              type = this.parseType();
+            }
+            params.push(this.withLoc({ name: paramName, type }, paramToken));
+          } while (this.match(","));
+        }
+        return params;
       }
       parseConstDecl() {
         const constToken = this.expect("const");
@@ -27094,6 +27148,8 @@ var require_emit = __commonJS({
       const loadFns = options.loadFunctions ?? [];
       const scheduleFns = options.scheduleFunctions ?? [];
       const watchFns = options.watchFunctions ?? [];
+      const profiledFns = options.profiledFunctions ?? [];
+      const enableProfiling = options.enableProfiling ?? false;
       const objective = module3.objective;
       const genSourceMap = options.generateSourceMap ?? false;
       const mcVersion = options.mcVersion ?? mc_version_1.DEFAULT_MC_VERSION;
@@ -27108,7 +27164,11 @@ var require_emit = __commonJS({
       const loadCmds = [
         `scoreboard objectives add ${objective} dummy`,
         ...watchFns.map((watch) => `scoreboard objectives add ${watchPrevObjective(watch.name)} dummy`),
-        ...singletonObjectives.map((obj) => `scoreboard objectives add ${obj} dummy`)
+        ...singletonObjectives.map((obj) => `scoreboard objectives add ${obj} dummy`),
+        ...enableProfiling && profiledFns.length > 0 ? [
+          "scoreboard objectives add __time dummy",
+          "scoreboard objectives add __profile dummy"
+        ] : []
       ];
       files.push({
         path: `data/${namespace}/function/load.mcfunction`,
@@ -27118,16 +27178,26 @@ var require_emit = __commonJS({
         const fnPath = fnNameToPath(fn.name, namespace);
         if (genSourceMap) {
           const builder = new sourcemap_1.SourceMapBuilder(fnPath);
-          const lines = emitFunctionWithSourceMap(fn, namespace, objective, builder, mcVersion);
+          const lines = emitFunctionWithSourceMap(fn, namespace, objective, builder, mcVersion, enableProfiling && profiledFns.includes(fn.name));
           files.push({ path: fnPath, content: lines.join("\n") + "\n" });
           const map = builder.build();
           if (map) {
             files.push({ path: (0, sourcemap_1.sourceMapPath)(fnPath), content: (0, sourcemap_1.serializeSourceMap)(map) });
           }
         } else {
-          const lines = emitFunction(fn, namespace, objective, mcVersion);
+          const lines = emitFunction(fn, namespace, objective, mcVersion, enableProfiling && profiledFns.includes(fn.name));
           files.push({ path: fnPath, content: lines.join("\n") + "\n" });
         }
+      }
+      if (enableProfiling && profiledFns.length > 0) {
+        files.push({
+          path: `data/${namespace}/function/__profiler_reset.mcfunction`,
+          content: emitProfilerReset(profiledFns).join("\n") + "\n"
+        });
+        files.push({
+          path: `data/${namespace}/function/__profiler_report.mcfunction`,
+          content: emitProfilerReport(profiledFns).join("\n") + "\n"
+        });
       }
       for (const { name, ticks } of scheduleFns) {
         files.push({
@@ -27184,18 +27254,33 @@ var require_emit = __commonJS({
       }
       return files;
     }
-    function emitFunction(fn, namespace, objective, mcVersion) {
-      const lines = [];
+    function emitFunction(fn, namespace, objective, mcVersion, isProfiled = false) {
+      const lines = isProfiled ? profilerStartLines(fn.name) : [];
       for (const instr of fn.instructions) {
         lines.push(emitInstr(instr, namespace, objective, mcVersion));
       }
+      if (isProfiled) {
+        lines.push(...profilerEndLines(fn.name));
+      }
       return lines;
     }
-    function emitFunctionWithSourceMap(fn, namespace, objective, builder, mcVersion) {
+    function emitFunctionWithSourceMap(fn, namespace, objective, builder, mcVersion, isProfiled = false) {
       const lines = [];
+      if (isProfiled) {
+        for (const line of profilerStartLines(fn.name)) {
+          lines.push(line);
+          builder.addLine(void 0);
+        }
+      }
       for (const instr of fn.instructions) {
         lines.push(emitInstr(instr, namespace, objective, mcVersion));
         builder.addLine(instr.sourceLoc);
+      }
+      if (isProfiled) {
+        for (const line of profilerEndLines(fn.name)) {
+          lines.push(line);
+          builder.addLine(void 0);
+        }
       }
       return lines;
     }
@@ -27208,6 +27293,47 @@ var require_emit = __commonJS({
     }
     function watchPrevObjective(name) {
       return `__watch_${name}_prev`;
+    }
+    function profilerSafeName(name) {
+      return name.replace(/[^A-Za-z0-9_]/g, "_");
+    }
+    function profilerStartPlayer(name) {
+      return `#prof_start_${profilerSafeName(name)}`;
+    }
+    function profilerDeltaPlayer(name) {
+      return `#prof_delta_${profilerSafeName(name)}`;
+    }
+    function profilerTotalPlayer(name) {
+      return `#prof_total_${profilerSafeName(name)}`;
+    }
+    function profilerCountPlayer(name) {
+      return `#prof_count_${profilerSafeName(name)}`;
+    }
+    function profilerStartLines(name) {
+      return [
+        `# __profiler_start_${name}`,
+        `scoreboard players set ${profilerStartPlayer(name)} __time 0`,
+        `execute store result score ${profilerStartPlayer(name)} __time run time query gametime`
+      ];
+    }
+    function profilerEndLines(name) {
+      return [
+        `# __profiler_end_${name}`,
+        `scoreboard players set ${profilerDeltaPlayer(name)} __time 0`,
+        `execute store result score ${profilerDeltaPlayer(name)} __time run time query gametime`,
+        `scoreboard players operation ${profilerDeltaPlayer(name)} __time -= ${profilerStartPlayer(name)} __time`,
+        `scoreboard players operation ${profilerTotalPlayer(name)} __profile += ${profilerDeltaPlayer(name)} __time`,
+        `scoreboard players add ${profilerCountPlayer(name)} __profile 1`
+      ];
+    }
+    function emitProfilerReset(profiledFns) {
+      return profiledFns.flatMap((name) => [
+        `scoreboard players set ${profilerTotalPlayer(name)} __profile 0`,
+        `scoreboard players set ${profilerCountPlayer(name)} __profile 0`
+      ]);
+    }
+    function emitProfilerReport(profiledFns) {
+      return profiledFns.map((name) => `tellraw @a [{"text":"[profile] ${name}: total="},{"score":{"name":"${profilerTotalPlayer(name)}","objective":"__profile"}},{"text":" ticks count="},{"score":{"name":"${profilerCountPlayer(name)}","objective":"__profile"}}]`);
     }
     function emitInstr(instr, ns, obj, mcVersion) {
       switch (instr.kind) {
@@ -28433,6 +28559,7 @@ var require_typechecker = __commonJS({
         this.selfTypeStack = ["entity"];
         this.loopDepth = 0;
         this.condDepth = 0;
+        this.interfaces = /* @__PURE__ */ new Map();
         this.richTextBuiltins = /* @__PURE__ */ new Map([
           ["say", { messageIndex: 0 }],
           ["announce", { messageIndex: 0 }],
@@ -28471,6 +28598,9 @@ var require_typechecker = __commonJS({
       check(program) {
         for (const fn of program.declarations) {
           this.functions.set(fn.name, fn);
+        }
+        for (const iface of program.interfaces ?? []) {
+          this.interfaces.set(iface.name, iface);
         }
         for (const global of program.globals ?? []) {
           this.globals.set(global.name, this.normalizeType(global.type));
@@ -28551,6 +28681,20 @@ var require_typechecker = __commonJS({
           }
           this.consts.set(constDecl.name, constType);
         }
+        for (const implBlock of program.implBlocks ?? []) {
+          if (!implBlock.traitName)
+            continue;
+          const iface = this.interfaces.get(implBlock.traitName);
+          if (!iface)
+            continue;
+          const implementedMethods = new Set(implBlock.methods.map((m) => m.name));
+          for (const required of iface.methods) {
+            if (!implementedMethods.has(required.name)) {
+              const span = implBlock.span ?? required.span;
+              this.report(`Struct '${implBlock.typeName}' does not implement required method '${required.name}' from interface '${implBlock.traitName}'`, span ?? { line: 1, col: 1 });
+            }
+          }
+        }
         for (const fn of program.declarations) {
           this.checkFunction(fn);
         }
@@ -28608,6 +28752,15 @@ var require_typechecker = __commonJS({
           if (fn.params.length > 0) {
             this.report(`@watch handler '${fn.name}' cannot declare parameters`, fn);
           }
+        }
+        const profileDecorators = fn.decorators.filter((decorator) => decorator.name === "profile");
+        if (profileDecorators.length > 1) {
+          this.report(`Function '${fn.name}' cannot have multiple @profile decorators`, fn);
+          return;
+        }
+        if (profileDecorators.length === 1 && (profileDecorators[0].rawArgs?.length || profileDecorators[0].args && Object.keys(profileDecorators[0].args).length > 0)) {
+          this.report(`@profile decorator on '${fn.name}' does not accept arguments`, fn);
+          return;
         }
         const eventDecorators = fn.decorators.filter((decorator) => decorator.name === "on");
         if (eventDecorators.length === 0) {
@@ -29751,7 +29904,7 @@ var require_compile2 = __commonJS({
       return files.filter((file) => !libraryPaths.has(file.path) || reachableFiles.has(file.path));
     }
     function compile(source, options = {}) {
-      const { namespace = "redscript", filePath, generateSourceMap = false, mcVersion = mc_version_1.DEFAULT_MC_VERSION, lenient = false, includeDirs, stopAfterCheck = false } = options;
+      const { namespace = "redscript", filePath, generateSourceMap = false, mcVersion = mc_version_1.DEFAULT_MC_VERSION, lenient = false, includeDirs, stopAfterCheck = false, debug = false } = options;
       const warnings = [];
       const preprocessed = (0, compile_1.preprocessSourceWithMetadata)(source, { filePath, includeDirs });
       const processedSource = preprocessed.source;
@@ -29909,6 +30062,7 @@ var require_compile2 = __commonJS({
         const inlineFunctions = /* @__PURE__ */ new Set();
         const coroutineInfos = [];
         const scheduleFunctions = [];
+        const profiledFunctions = [];
         const eventHandlers = /* @__PURE__ */ new Map();
         for (const fn of hir.functions) {
           if (fn.watchObjective) {
@@ -29935,6 +30089,9 @@ var require_compile2 = __commonJS({
             }
             if (dec.name === "schedule") {
               scheduleFunctions.push({ name: fn.name, ticks: dec.args?.ticks ?? 1 });
+            }
+            if (dec.name === "profile") {
+              profiledFunctions.push(fn.name);
             }
             if (dec.name === "on" && dec.args?.eventType) {
               const evType = dec.args.eventType;
@@ -30017,7 +30174,19 @@ var require_compile2 = __commonJS({
             macroParams: []
           });
         }
-        const files = (0, index_1.emit)(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions, generateSourceMap, mcVersion, eventHandlers, singletonObjectives });
+        const files = (0, index_1.emit)(lirOpt, {
+          namespace,
+          tickFunctions,
+          loadFunctions,
+          watchFunctions,
+          scheduleFunctions,
+          generateSourceMap,
+          mcVersion,
+          eventHandlers,
+          singletonObjectives,
+          profiledFunctions,
+          enableProfiling: debug
+        });
         const prunedFiles = pruneLibraryFunctionFiles(files, libraryFilePaths);
         return { files: prunedFiles, warnings, success: true };
       } catch (err) {
@@ -30914,11 +31083,17 @@ var require_cache = __commonJS({
       save() {
         fs2.mkdirSync(this.cacheDir, { recursive: true });
         const serialized = {
-          version: 1,
+          version: 2,
           entries: {}
         };
         for (const [filePath, entry] of this.entries) {
-          serialized.entries[filePath] = { hash: entry.hash, mtime: entry.mtime };
+          serialized.entries[filePath] = {
+            hash: entry.hash,
+            mtime: entry.mtime,
+            compiledFunctions: entry.compiledFunctions,
+            outputFiles: entry.outputFiles,
+            dependencies: entry.dependencies
+          };
         }
         const cachePath = path3.join(this.cacheDir, "cache.json");
         fs2.writeFileSync(cachePath, JSON.stringify(serialized, null, 2));
@@ -30928,10 +31103,16 @@ var require_cache = __commonJS({
         const cachePath = path3.join(this.cacheDir, "cache.json");
         try {
           const data = JSON.parse(fs2.readFileSync(cachePath, "utf-8"));
-          if (data.version !== 1)
+          if (data.version !== 2)
             return;
           for (const [filePath, entry] of Object.entries(data.entries)) {
-            this.entries.set(filePath, { hash: entry.hash, mtime: entry.mtime });
+            this.entries.set(filePath, {
+              hash: entry.hash,
+              mtime: entry.mtime,
+              compiledFunctions: entry.compiledFunctions,
+              outputFiles: entry.outputFiles,
+              dependencies: entry.dependencies
+            });
           }
         } catch {
         }
@@ -31142,93 +31323,130 @@ var require_incremental = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.compileIncremental = compileIncremental;
     exports2.resetCompileCache = resetCompileCache;
+    var fs2 = __importStar(require("fs"));
     var path3 = __importStar(require("path"));
     var compile_1 = require_compile2();
-    var fs2 = __importStar(require("fs"));
-    var compiledCache = /* @__PURE__ */ new Map();
+    var deps_1 = require_deps();
     function compileIncremental(files, cache, depGraph, options) {
+      const start = Date.now();
+      const normalizedEntries = [...new Set(files.map((file) => path3.resolve(file)))];
       const result = {
         recompiled: 0,
         cached: 0,
         errors: /* @__PURE__ */ new Map(),
-        results: /* @__PURE__ */ new Map()
+        results: /* @__PURE__ */ new Map(),
+        skippedFiles: [],
+        rebuiltFiles: [],
+        elapsedMs: 0
       };
-      for (const file of files) {
-        const absFile = path3.resolve(file);
-        try {
-          const source = fs2.readFileSync(absFile, "utf-8");
-          depGraph.addFile(absFile, source);
-        } catch {
-          depGraph.removeFile(absFile);
-        }
+      if (normalizedEntries.length === 0) {
+        result.elapsedMs = Date.now() - start;
+        return result;
       }
-      const changedSourceFiles = /* @__PURE__ */ new Set();
-      const allSourceFiles = /* @__PURE__ */ new Set();
-      for (const file of files) {
-        const absFile = path3.resolve(file);
-        const allDeps = depGraph.getTransitiveDeps(absFile);
-        allSourceFiles.add(absFile);
-        for (const dep of allDeps)
-          allSourceFiles.add(dep);
+      depGraph.clear();
+      const discoveredFiles = discoverDependencyGraph(normalizedEntries, depGraph);
+      const changedFiles = /* @__PURE__ */ new Set();
+      for (const file of discoveredFiles) {
+        if (cache.hasChanged(file))
+          changedFiles.add(file);
       }
-      for (const sourceFile of allSourceFiles) {
-        if (cache.hasChanged(sourceFile)) {
-          changedSourceFiles.add(sourceFile);
-        }
+      const dirtyFiles = depGraph.computeDirtySet(changedFiles);
+      for (const entry of normalizedEntries) {
+        if (!discoveredFiles.has(entry))
+          dirtyFiles.add(entry);
       }
-      for (const file of files) {
-        const absFile = path3.resolve(file);
-        const allDeps = depGraph.getTransitiveDeps(absFile);
-        const unitFiles = [absFile, ...allDeps];
-        let needsRecompile = false;
-        const prevEntry = compiledCache.get(absFile);
-        if (!prevEntry) {
-          needsRecompile = true;
-        } else {
-          for (const unitFile of unitFiles) {
-            if (changedSourceFiles.has(unitFile)) {
-              needsRecompile = true;
-              break;
-            }
-          }
-          if (!needsRecompile && prevEntry.depHashes.size !== unitFiles.length) {
-            needsRecompile = true;
-          }
-        }
-        if (!needsRecompile) {
-          const cached = compiledCache.get(absFile);
-          writeBuildOutput(cached.result, options.output);
+      for (const entryFile of normalizedEntries) {
+        const entryDeps = depGraph.getTransitiveDeps(entryFile);
+        const entryUnit = /* @__PURE__ */ new Set([entryFile, ...entryDeps]);
+        const cachedEntry = cache.get(entryFile);
+        const cachedDepList = new Set(cachedEntry?.dependencies ?? []);
+        const hasDependencyDrift = cachedDepList.size !== entryUnit.size || [...entryUnit].some((file) => !cachedDepList.has(file));
+        const canUseCache = !dirtyFiles.has(entryFile) && !hasDependencyDrift && !!cachedEntry?.outputFiles && cachedEntry.outputFiles.length > 0;
+        if (canUseCache) {
+          writeBuildOutput(cachedEntry.outputFiles, options.output);
           result.cached++;
+          result.skippedFiles.push(entryFile);
           continue;
         }
         try {
-          const source = fs2.readFileSync(absFile, "utf-8");
-          const ns = options.namespace ?? deriveNamespace(absFile);
-          const compileResult = (0, compile_1.compile)(source, { namespace: ns, filePath: absFile });
-          const depHashes = /* @__PURE__ */ new Map();
-          for (const unitFile of unitFiles) {
-            cache.update(unitFile);
-            const entry = cache.get(unitFile);
-            if (entry)
-              depHashes.set(unitFile, entry.hash);
+          const source = fs2.readFileSync(entryFile, "utf-8");
+          const ns = options.namespace ?? deriveNamespace(entryFile);
+          const compileResult = (0, compile_1.compile)(source, {
+            namespace: ns,
+            filePath: entryFile,
+            generateSourceMap: options.generateSourceMap,
+            mcVersion: options.mcVersion,
+            lenient: options.lenient,
+            includeDirs: options.includeDirs
+          });
+          const outputFiles = cloneFiles(compileResult.files);
+          const compiledFunctions = outputFiles.filter((file) => file.path.endsWith(".mcfunction")).map((file) => file.path);
+          removeStaleOutputs(cachedEntry?.outputFiles ?? [], outputFiles, options.output);
+          for (const file of entryUnit) {
+            cache.update(file);
           }
-          compiledCache.set(absFile, { result: compileResult, depHashes });
-          writeBuildOutput(compileResult, options.output);
+          const entryRecord = cache.get(entryFile);
+          if (entryRecord) {
+            entryRecord.compiledFunctions = compiledFunctions;
+            entryRecord.outputFiles = outputFiles;
+            entryRecord.dependencies = [...entryUnit].sort();
+          }
+          writeBuildOutput(outputFiles, options.output);
           result.recompiled++;
-          result.results.set(absFile, compileResult);
+          result.results.set(entryFile, compileResult);
+          result.rebuiltFiles.push(entryFile);
         } catch (err) {
-          result.errors.set(absFile, err.message);
+          result.errors.set(entryFile, err.message);
         }
       }
+      cache.save();
+      result.elapsedMs = Date.now() - start;
       return result;
     }
-    function writeBuildOutput(compileResult, output) {
+    function discoverDependencyGraph(entries, depGraph) {
+      const visited = /* @__PURE__ */ new Set();
+      const queue = [...entries];
+      while (queue.length > 0) {
+        const current = path3.resolve(queue.shift());
+        if (visited.has(current))
+          continue;
+        visited.add(current);
+        try {
+          const source = fs2.readFileSync(current, "utf-8");
+          depGraph.addFile(current, source);
+          const imports = (0, deps_1.parseImports)(current, source);
+          for (const imported of imports) {
+            if (!visited.has(imported))
+              queue.push(imported);
+          }
+        } catch {
+          depGraph.removeFile(current);
+        }
+      }
+      return visited;
+    }
+    function cloneFiles(files) {
+      return files.map((file) => ({ path: file.path, content: file.content }));
+    }
+    function writeBuildOutput(files, output) {
       fs2.mkdirSync(output, { recursive: true });
-      for (const dataFile of compileResult.files) {
+      for (const dataFile of files) {
         const filePath = path3.join(output, dataFile.path);
         const dir = path3.dirname(filePath);
         fs2.mkdirSync(dir, { recursive: true });
         fs2.writeFileSync(filePath, dataFile.content);
+      }
+    }
+    function removeStaleOutputs(previousFiles, nextFiles, output) {
+      if (previousFiles.length === 0)
+        return;
+      const nextPaths = new Set(nextFiles.map((file) => file.path));
+      for (const oldFile of previousFiles) {
+        if (nextPaths.has(oldFile.path))
+          continue;
+        const targetPath = path3.join(output, oldFile.path);
+        if (fs2.existsSync(targetPath))
+          fs2.rmSync(targetPath, { force: true });
       }
     }
     function deriveNamespace(filePath) {
@@ -31236,7 +31454,6 @@ var require_incremental = __commonJS({
       return basename.toLowerCase().replace(/[^a-z0-9]/g, "_");
     }
     function resetCompileCache() {
-      compiledCache.clear();
     }
   }
 });

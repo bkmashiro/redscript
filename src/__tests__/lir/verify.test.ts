@@ -115,6 +115,19 @@ describe('LIR verifier — objective checks', () => {
     const errors = verifyLIR(mod)
     expect(errors.length).toBe(1)
   })
+
+  test('checks slots in store_score_to_nbt and store_nbt_to_score', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'store_score_to_nbt', ns: 'rs:data', path: 'value', type: 'int', scale: 1, src: { player: '$bad', obj: '__bad' } },
+        { kind: 'store_nbt_to_score', dst: { player: '$also_bad', obj: '__bad' }, ns: 'rs:data', path: 'value', scale: 1 },
+      ]),
+    ])
+    const errors = verifyLIR(mod)
+    expect(errors).toHaveLength(2)
+    expect(errors[0].message).toContain('__bad')
+    expect(errors[1].message).toContain('__bad')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -122,6 +135,13 @@ describe('LIR verifier — objective checks', () => {
 // ---------------------------------------------------------------------------
 
 describe('LIR verifier — function references', () => {
+  test('skips placeholder empty function refs', () => {
+    const mod = mkModule([
+      mkFn('main', [{ kind: 'call', fn: 'test:' }]),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
+  })
+
   test('accepts call to existing function', () => {
     const mod = mkModule([
       mkFn('main', [{ kind: 'call', fn: 'test:helper' }]),
@@ -158,6 +178,19 @@ describe('LIR verifier — function references', () => {
     const errors = verifyLIR(mod)
     expect(errors.length).toBe(1)
     expect(errors[0].message).toContain('undefined function')
+  })
+
+  test('rejects call_unless variants to undefined function', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'call_unless_matches', fn: 'test:missing_a', slot: slot('c'), range: '1' },
+        { kind: 'call_unless_score', fn: 'test:missing_b', a: slot('a'), op: 'eq', b: slot('b') },
+      ]),
+    ])
+    const errors = verifyLIR(mod)
+    expect(errors).toHaveLength(2)
+    expect(errors[0].message).toContain('missing_a')
+    expect(errors[1].message).toContain('missing_b')
   })
 
   test('rejects call_context to undefined function', () => {

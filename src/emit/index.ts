@@ -33,6 +33,10 @@ export interface EmitOptions {
   eventHandlers?: Map<string, string[]>
   /** Scoreboard objective names for @singleton struct fields — added to load.mcfunction */
   singletonObjectives?: string[]
+  /** Functions decorated with @profile. */
+  profiledFunctions?: string[]
+  /** Emit debug-only profiling instrumentation and helpers. */
+  enableProfiling?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -45,6 +49,8 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const loadFns = options.loadFunctions ?? []
   const scheduleFns = options.scheduleFunctions ?? []
   const watchFns = options.watchFunctions ?? []
+  const profiledFns = options.profiledFunctions ?? []
+  const enableProfiling = options.enableProfiling ?? false
   const objective = module.objective
   const genSourceMap = options.generateSourceMap ?? false
   const mcVersion = options.mcVersion ?? DEFAULT_MC_VERSION
@@ -65,6 +71,12 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     `scoreboard objectives add ${objective} dummy`,
     ...watchFns.map(watch => `scoreboard objectives add ${watchPrevObjective(watch.name)} dummy`),
     ...singletonObjectives.map(obj => `scoreboard objectives add ${obj} dummy`),
+    ...(enableProfiling && profiledFns.length > 0
+      ? [
+          'scoreboard objectives add __time dummy',
+          'scoreboard objectives add __profile dummy',
+        ]
+      : []),
   ]
   files.push({
     path: `data/${namespace}/function/load.mcfunction`,
@@ -76,16 +88,27 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     const fnPath = fnNameToPath(fn.name, namespace)
     if (genSourceMap) {
       const builder = new SourceMapBuilder(fnPath)
-      const lines = emitFunctionWithSourceMap(fn, namespace, objective, builder, mcVersion)
+      const lines = emitFunctionWithSourceMap(fn, namespace, objective, builder, mcVersion, enableProfiling && profiledFns.includes(fn.name))
       files.push({ path: fnPath, content: lines.join('\n') + '\n' })
       const map = builder.build()
       if (map) {
         files.push({ path: sourceMapPath(fnPath), content: serializeSourceMap(map) })
       }
     } else {
-      const lines = emitFunction(fn, namespace, objective, mcVersion)
+      const lines = emitFunction(fn, namespace, objective, mcVersion, enableProfiling && profiledFns.includes(fn.name))
       files.push({ path: fnPath, content: lines.join('\n') + '\n' })
     }
+  }
+
+  if (enableProfiling && profiledFns.length > 0) {
+    files.push({
+      path: `data/${namespace}/function/__profiler_reset.mcfunction`,
+      content: emitProfilerReset(profiledFns).join('\n') + '\n',
+    })
+    files.push({
+      path: `data/${namespace}/function/__profiler_report.mcfunction`,
+      content: emitProfilerReport(profiledFns).join('\n') + '\n',
+    })
   }
 
   // @schedule wrapper functions: _schedule_xxx → schedule function ns:xxx Nt
@@ -157,10 +180,19 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
 // Function emission
 // ---------------------------------------------------------------------------
 
-function emitFunction(fn: LIRFunction, namespace: string, objective: string, mcVersion: McVersion): string[] {
-  const lines: string[] = []
+function emitFunction(
+  fn: LIRFunction,
+  namespace: string,
+  objective: string,
+  mcVersion: McVersion,
+  isProfiled = false,
+): string[] {
+  const lines: string[] = isProfiled ? profilerStartLines(fn.name) : []
   for (const instr of fn.instructions) {
     lines.push(emitInstr(instr, namespace, objective, mcVersion))
+  }
+  if (isProfiled) {
+    lines.push(...profilerEndLines(fn.name))
   }
   return lines
 }
@@ -171,11 +203,24 @@ function emitFunctionWithSourceMap(
   objective: string,
   builder: SourceMapBuilder,
   mcVersion: McVersion,
+  isProfiled = false,
 ): string[] {
   const lines: string[] = []
+  if (isProfiled) {
+    for (const line of profilerStartLines(fn.name)) {
+      lines.push(line)
+      builder.addLine(undefined)
+    }
+  }
   for (const instr of fn.instructions) {
     lines.push(emitInstr(instr, namespace, objective, mcVersion))
     builder.addLine(instr.sourceLoc)
+  }
+  if (isProfiled) {
+    for (const line of profilerEndLines(fn.name)) {
+      lines.push(line)
+      builder.addLine(undefined)
+    }
   }
   return lines
 }
@@ -192,6 +237,58 @@ function watchDispatcherName(name: string): string {
 
 function watchPrevObjective(name: string): string {
   return `__watch_${name}_prev`
+}
+
+function profilerSafeName(name: string): string {
+  return name.replace(/[^A-Za-z0-9_]/g, '_')
+}
+
+function profilerStartPlayer(name: string): string {
+  return `#prof_start_${profilerSafeName(name)}`
+}
+
+function profilerDeltaPlayer(name: string): string {
+  return `#prof_delta_${profilerSafeName(name)}`
+}
+
+function profilerTotalPlayer(name: string): string {
+  return `#prof_total_${profilerSafeName(name)}`
+}
+
+function profilerCountPlayer(name: string): string {
+  return `#prof_count_${profilerSafeName(name)}`
+}
+
+function profilerStartLines(name: string): string[] {
+  return [
+    `# __profiler_start_${name}`,
+    `scoreboard players set ${profilerStartPlayer(name)} __time 0`,
+    `execute store result score ${profilerStartPlayer(name)} __time run time query gametime`,
+  ]
+}
+
+function profilerEndLines(name: string): string[] {
+  return [
+    `# __profiler_end_${name}`,
+    `scoreboard players set ${profilerDeltaPlayer(name)} __time 0`,
+    `execute store result score ${profilerDeltaPlayer(name)} __time run time query gametime`,
+    `scoreboard players operation ${profilerDeltaPlayer(name)} __time -= ${profilerStartPlayer(name)} __time`,
+    `scoreboard players operation ${profilerTotalPlayer(name)} __profile += ${profilerDeltaPlayer(name)} __time`,
+    `scoreboard players add ${profilerCountPlayer(name)} __profile 1`,
+  ]
+}
+
+function emitProfilerReset(profiledFns: string[]): string[] {
+  return profiledFns.flatMap(name => [
+    `scoreboard players set ${profilerTotalPlayer(name)} __profile 0`,
+    `scoreboard players set ${profilerCountPlayer(name)} __profile 0`,
+  ])
+}
+
+function emitProfilerReport(profiledFns: string[]): string[] {
+  return profiledFns.map(name => (
+    `tellraw @a [{"text":"[profile] ${name}: total="},{"score":{"name":"${profilerTotalPlayer(name)}","objective":"__profile"}},{"text":" ticks count="},{"score":{"name":"${profilerCountPlayer(name)}","objective":"__profile"}}]`
+  ))
 }
 
 // ---------------------------------------------------------------------------
