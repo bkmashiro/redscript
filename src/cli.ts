@@ -26,6 +26,7 @@ import { execSync } from 'child_process'
 import archiver from 'archiver'
 import { loadProjectConfig, buildTomlTemplate } from './config/project-config'
 import { docsCommand } from './docs'
+import { applyCheckFixes } from './check-fix'
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -39,7 +40,7 @@ Usage:
   redscript publish <file> [-o <out.zip>] [--namespace <ns>] [--mc-version <ver>]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript test <file> [--dry-run] [--mc-url <url>]
-  redscript check <file>
+  redscript check <file> [--fix]
   redscript lint <file> [--max-function-lines <n>]
   redscript init [project-name]
   redscript fmt <file.mcrs> [file2.mcrs ...]
@@ -74,6 +75,7 @@ Options:
   --lenient              Treat type errors as warnings instead of blocking compilation
   --include <dir>        Add a directory to the import search path (repeatable)
   --incremental          Enable file-level incremental compilation cache
+  --fix                  (check) Apply safe auto-fixes for lint-detected issues
   --dry-run              (test) Verify compilation only — no MC server connection needed
   --mc-url <url>         (test) MC server HTTP API URL for running tests live
   -h, --help             Show this help message
@@ -184,6 +186,7 @@ function parseArgs(args: string[]): {
   format?: 'human' | 'json'
   fmtCheck?: boolean
   incremental?: boolean
+  fix?: boolean
   maxFunctionLines?: number
   description?: string
   dryRun?: boolean
@@ -232,6 +235,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--incremental') {
       result.incremental = true
+      i++
+    } else if (arg === '--fix') {
+      result.fix = true
       i++
     } else if (arg === '--max-function-lines') {
       result.maxFunctionLines = parseInt(args[++i], 10)
@@ -507,16 +513,46 @@ function formatWarningHuman(diagnostic: CliDiagnostic): string {
   return `warning: [${diagnostic.kind}] ${diagnostic.message}`
 }
 
-function checkCommand(file: string, namespace?: string, outputFormat: 'human' | 'json' = 'human'): void {
+function checkCommand(file: string, namespace?: string, outputFormat: 'human' | 'json' = 'human', fix = false): void {
   // Read source file
   if (!fs.existsSync(file)) {
     console.error(`Error: File not found: ${file}`)
     process.exit(1)
   }
 
-  const source = fs.readFileSync(file, 'utf-8')
+  let source = fs.readFileSync(file, 'utf-8')
 
   const ns = namespace ?? deriveNamespace(file)
+  let fixSummary: {
+    removedUnusedImports: number
+    removedDeadBranches: number
+    annotatedMagicNumbers: number
+  } | undefined
+  if (fix) {
+    try {
+      const fixed = applyCheckFixes(source, file, ns)
+      fixSummary = fixed.summary
+      if (fixed.source !== source) {
+        fs.writeFileSync(file, fixed.source, 'utf-8')
+        source = fixed.source
+      }
+      if (outputFormat !== 'json') {
+        console.log(`Applied fixes to ${file}`)
+        console.log(`  Removed unused imports: ${fixed.summary.removedUnusedImports}`)
+        console.log(`  Removed dead branches: ${fixed.summary.removedDeadBranches}`)
+        console.log(`  Annotated magic numbers: ${fixed.summary.annotatedMagicNumbers}`)
+      }
+    } catch (err) {
+      const error = err as Error
+      if (err instanceof DiagnosticError) {
+        console.error(formatError(error, source, file))
+      } else {
+        console.error(error.message)
+      }
+      process.exit(2)
+    }
+  }
+
   const result = checkDetailed(source, ns, file)
   const warnings = result.warnings.map(w => warningToDiagnostic(w, file))
   const errors = result.errors.map(errorToDiagnostic)
@@ -527,6 +563,7 @@ function checkCommand(file: string, namespace?: string, outputFormat: 'human' | 
     console.log(JSON.stringify({
       file,
       namespace: ns,
+      fixes: fixSummary,
       diagnostics,
       summary: {
         warnings: warnings.length,
@@ -922,7 +959,7 @@ async function main(): Promise<void> {
         const fileDir = path.dirname(path.resolve(parsed.file))
         const tomlConfig = loadProjectConfig(fileDir)
         const namespace = parsed.namespace ?? tomlConfig?.project?.namespace
-        checkCommand(parsed.file, namespace, parsed.format ?? 'human')
+        checkCommand(parsed.file, namespace, parsed.format ?? 'human', parsed.fix ?? false)
       }
       break
 
