@@ -9,9 +9,11 @@
  */
 
 import * as http from 'http'
-import { server } from '../repl-server'
+import { requestHandler } from '../repl-server'
 
-const PORT = 3000
+// Use a different port from repl-server.test.ts (3000) to avoid port conflicts
+const PORT = 3001
+const server = http.createServer(requestHandler)
 
 function rawRequest(
   method: string,

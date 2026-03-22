@@ -32,7 +32,7 @@ function sendJSON(res: http.ServerResponse, status: number, body: unknown): void
   res.end(json)
 }
 
-const server = http.createServer(async (req, res) => {
+export const requestHandler = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -86,12 +86,17 @@ const server = http.createServer(async (req, res) => {
 
   // 404 fallback
   sendJSON(res, 404, { error: 'Not found' })
-})
+}
 
-server.listen(PORT, () => {
-  console.log(`RedScript REPL server listening on http://localhost:${PORT}`)
-  console.log('  POST /compile  — compile RedScript code')
-  console.log('  GET  /health   — health check')
-})
+const server = http.createServer(requestHandler)
+
+// Only auto-start when this module is run directly (not when imported by tests)
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`RedScript REPL server listening on http://localhost:${PORT}`)
+    console.log('  POST /compile  — compile RedScript code')
+    console.log('  GET  /health   — health check')
+  })
+}
 
 export { server }

@@ -81,6 +81,7 @@ describe('emit/compile mocked branch coverage', () => {
       jest.doMock('../../parser', () => ({
         Parser: jest.fn().mockImplementation(() => ({
           warnings: [],
+          parseErrors: [],
           parse: () => parseQueue.shift(),
         })),
       }))
@@ -90,7 +91,7 @@ describe('emit/compile mocked branch coverage', () => {
           getWarnings: () => [],
         })),
       }))
-      jest.doMock('../../hir/lower', () => ({ lowerToHIR: jest.fn(() => ({ functions: [] })) }))
+      jest.doMock('../../hir/lower', () => ({ lowerToHIR: jest.fn(() => ({ functions: [], structs: [] })) }))
       jest.doMock('../../hir/monomorphize', () => ({ monomorphize: jest.fn(x => x) }))
       jest.doMock('../../hir/deprecated', () => ({ checkDeprecatedCalls: jest.fn(() => []) }))
       jest.doMock('../../mir/lower', () => ({ lowerToMIR: jest.fn(() => ({ functions: [] })) }))
@@ -168,6 +169,7 @@ describe('emit/compile mocked branch coverage', () => {
       jest.doMock('../../parser', () => ({
         Parser: jest.fn().mockImplementation(() => ({
           warnings: [],
+          parseErrors: [],
           parse: () => parseQueue.shift(),
         })),
       }))
@@ -195,6 +197,7 @@ describe('emit/compile mocked branch coverage', () => {
               decorators: [{ name: 'on', args: { eventType: 'NotReal' } }],
             },
           ],
+          structs: [],
         })),
       }))
       jest.doMock('../../hir/monomorphize', () => ({ monomorphize: jest.fn(x => x) }))
