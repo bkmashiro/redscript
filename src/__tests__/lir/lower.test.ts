@@ -545,6 +545,22 @@ describe('MIR→LIR lowering — jump (inlining)', () => {
       { kind: 'score_set', dst: slot('t1'), value: 2 },
     ])
   })
+
+  test('jump to an already-visited block short-circuits recursion', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [
+          { kind: 'const', dst: 't0', value: 1 },
+        ], { kind: 'jump', target: 'entry' }),
+      ]),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+
+    expect(main.instructions).toEqual([
+      { kind: 'score_set', dst: slot('t0'), value: 1 },
+    ])
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -615,5 +631,22 @@ describe('MIR→LIR lowering — module', () => {
     const drawFn = lir.functions.find(f => f.name === 'draw')!
     expect(drawFn.isMacro).toBe(true)
     expect(drawFn.macroParams).toEqual(['px', 'py'])
+  })
+
+  test('unknown MIR instructions and terminators are ignored safely', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [
+          { kind: 'const', dst: 't0', value: 7 },
+          { kind: 'mystery_instr' } as any,
+        ], { kind: 'mystery_term' } as any),
+      ]),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+
+    expect(main.instructions).toEqual([
+      { kind: 'score_set', dst: slot('t0'), value: 7 },
+    ])
   })
 })
