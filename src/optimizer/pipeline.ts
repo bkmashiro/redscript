@@ -15,6 +15,7 @@ import { dce } from './dce'
 import { blockMerge } from './block_merge'
 import { branchSimplify } from './branch_simplify'
 import { loopUnroll } from './unroll'
+import { licm } from './licm'
 import { nbtBatchRead } from './nbt-batch'
 import { interproceduralConstProp } from './interprocedural'
 import { inlinePass } from './inline'
@@ -28,6 +29,7 @@ export type Pass = (fn: MIRFunction) => MIRFunction
 
 const defaultPasses: Pass[] = [
   loopUnroll,
+  licm,
   nbtBatchRead,
   constantFold,
   copyProp,
