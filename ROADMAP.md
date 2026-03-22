@@ -23,13 +23,13 @@
 | NBT Batch Read | ✅ | Merge consecutive NBT reads |
 | Function Inlining (`@inline`) | ✅ | Manual inline annotation |
 | Partial Evaluation | ✅ | Fold dead branches with constant conditions |
-| Tail Call Optimization (TCO) | 📋 | Convert tail recursion to loops (MC depth limit ~512) |
-| Common Subexpression Elimination (CSE) | 📋 | Cache repeated expressions |
-| Auto-Inline Small Functions | 📋 | Auto-inline functions < 5 statements |
-| Execute Chain Optimization | 📋 | Merge `execute if A run execute if B` → `execute if A if B` |
-| Strength Reduction | 📋 | `x * 2` → `x + x`, cheaper operations |
-| Scoreboard Read Batching | 📋 | Merge multiple reads of same scoreboard var in one tick |
-| NBT Write Coalescing | 📋 | Merge consecutive writes to same NBT path |
+| Tail Call Optimization (TCO) | ✅ | Convert tail recursion to loops (MC depth limit ~512) |
+| Common Subexpression Elimination (CSE) | ✅ | Cache repeated expressions |
+| Auto-Inline Small Functions | ✅ | Auto-inline functions < 5 statements |
+| Execute Chain Optimization | ✅ | Merge `execute if A run execute if B` → `execute if A if B` |
+| Strength Reduction | ✅ | `x * 2` → `x + x`, cheaper operations |
+| Scoreboard Read Batching | ✅ | Merge multiple reads of same scoreboard var in one tick |
+| NBT Write Coalescing | ✅ | Merge consecutive writes to same NBT path |
 
 ---
 
@@ -73,9 +73,9 @@
 | `@profile` | ✅ | Performance profiling |
 | `@throttle(ticks)` | ✅ | Rate limit execution |
 | `@retry(max)` | ✅ | Auto-retry on failure |
-| `@memoize` | 🔄 | Cache function results |
+| `@memoize` | ✅ | Cache function results |
 | `@benchmark` | 📋 | Tick-level benchmarking |
-| `@test` | 🔄 | Mark test functions |
+| `@test` | ✅ | Mark test functions |
 
 ---
 
@@ -91,10 +91,10 @@
 | `redscript init` | ✅ | Project scaffold |
 | `redscript watch` | ✅ | Watch mode + hot reload |
 | `redscript publish` | ✅ | Package as .zip datapack |
-| `redscript test` | 🔄 | Run @test functions |
+| `redscript test` | ✅ | Run @test functions |
 | `redscript upgrade` | ✅ | Check for updates |
 | `redscript repl` | ✅ | HTTP REPL server |
-| `redscript docs` | 📋 | Open stdlib docs in browser |
+| `redscript docs` | ✅ | Open stdlib docs in browser |
 
 ---
 
@@ -126,12 +126,12 @@ All 50 modules documented with `///` annotations and en+zh generated docs.
 | LSP hover docs | ✅ | Shows `///` comments on hover |
 | LSP lint diagnostics | ✅ | Real-time lint warnings in Problems panel |
 | Playground | ✅ | Web IDE with examples |
-| Playground share | 📋 | URL-encoded shareable links |
+| Playground share | ✅ | URL-encoded shareable links (lz-string URL hash) |
 | REPL server | ✅ | HTTP POST /compile |
 | Doc generator | ✅ | `npm run docs:gen` — 50 modules |
 | CI docs:check | ✅ | PR fails if docs out of sync |
 | Benchmarks suite | ✅ | `benchmarks/` |
-| Source map | 🔄 | Trace mcfunction → .mcrs line |
+| Source map | ✅ | Trace mcfunction → .mcrs line |
 
 ---
 
