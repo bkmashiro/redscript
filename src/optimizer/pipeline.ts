@@ -18,7 +18,9 @@ import { branchSimplify } from './branch_simplify'
 import { loopUnroll } from './unroll'
 import { licm } from './licm'
 import { nbtBatchRead } from './nbt-batch'
+import { scoreboardBatchRead } from './scoreboard-batch'
 import { interproceduralConstProp } from './interprocedural'
+import { autoInlineSmallFunctions } from './auto-inline'
 import { inlinePass } from './inline'
 import { cse } from './cse'
 
@@ -33,6 +35,7 @@ const defaultPasses: Pass[] = [
   loopUnroll,
   licm,
   nbtBatchRead,
+  scoreboardBatchRead,
   constantFold,
   strengthReduction,
   cse,
@@ -58,7 +61,7 @@ export function optimizeFunction(fn: MIRFunction, passes: Pass[] = defaultPasses
 
 export function optimizeModule(mod: MIRModule, passes?: Pass[]): MIRModule {
   // Module-level pass: inline @inline-marked functions before per-function opts
-  const inlined = inlinePass(mod)
+  const inlined = autoInlineSmallFunctions(inlinePass(mod))
   const perFnOptimized = {
     ...inlined,
     functions: inlined.functions.map(fn => optimizeFunction(fn, passes)),
