@@ -9218,6 +9218,7 @@ var KEYWORDS = {
   in: "in",
   is: "is",
   struct: "struct",
+  extends: "extends",
   impl: "impl",
   enum: "enum",
   trigger: "trigger",
@@ -9520,7 +9521,7 @@ var Lexer = class {
       return;
     }
     let value = "@";
-    while (/[a-zA-Z_0-9]/.test(this.peek())) {
+    while (/[a-zA-Z_0-9-]/.test(this.peek())) {
       value += this.advance();
     }
     if (this.peek() === "(") {
@@ -10045,6 +10046,7 @@ var Parser = class _Parser {
   parseStructDecl() {
     const structToken = this.expect("struct");
     const name = this.expect("ident").value;
+    const extendsName = this.match("extends") ? this.expect("ident").value : void 0;
     this.expect("{");
     const fields = [];
     while (!this.check("}") && !this.check("eof")) {
@@ -10055,7 +10057,7 @@ var Parser = class _Parser {
       this.match(",");
     }
     this.expect("}");
-    return this.withLoc({ name, fields }, structToken);
+    return this.withLoc({ name, extends: extendsName, fields }, structToken);
   }
   parseEnumDecl() {
     const enumToken = this.expect("enum");
@@ -10274,7 +10276,7 @@ var Parser = class _Parser {
     return decorators;
   }
   parseDecoratorValue(value) {
-    const match = value.match(/^@(\w+)(?:\((.*)\))?$/s);
+    const match = value.match(/^@([A-Za-z_][A-Za-z0-9_-]*)(?:\((.*)\))?$/s);
     if (!match) {
       this.error(`Invalid decorator: ${value}`);
     }
@@ -10283,8 +10285,8 @@ var Parser = class _Parser {
     if (!argsStr) {
       return { name };
     }
-    if (name === "profile") {
-      this.error("@profile decorator does not accept arguments");
+    if (name === "profile" || name === "benchmark" || name === "memoize") {
+      this.error(`@${name} decorator does not accept arguments`);
     }
     const args = {};
     if (name === "on") {
@@ -10329,6 +10331,13 @@ var Parser = class _Parser {
       }
       return { name, args: {} };
     }
+    if (name === "test") {
+      const strMatch = argsStr.match(/^"([^"]*)"$/);
+      if (strMatch) {
+        return { name, args: { testLabel: strMatch[1] } };
+      }
+      return { name, args: { testLabel: "" } };
+    }
     if (name === "require_on_load") {
       const rawArgs = [];
       for (const part of argsStr.split(",")) {
@@ -10363,6 +10372,8 @@ var Parser = class _Parser {
         args.item = val;
       } else if (key === "team") {
         args.team = val;
+      } else if (key === "max") {
+        args.max = parseInt(val, 10);
       }
     }
     return { name, args };
@@ -10492,16 +10503,47 @@ var Parser = class _Parser {
     }
     if (this.check("break")) {
       const token = this.advance();
+      if (this.check("ident")) {
+        const labelToken = this.advance();
+        this.match(";");
+        return this.withLoc({ kind: "break_label", label: labelToken.value }, token);
+      }
       this.match(";");
       return this.withLoc({ kind: "break" }, token);
     }
     if (this.check("continue")) {
       const token = this.advance();
+      if (this.check("ident")) {
+        const labelToken = this.advance();
+        this.match(";");
+        return this.withLoc({ kind: "continue_label", label: labelToken.value }, token);
+      }
       this.match(";");
       return this.withLoc({ kind: "continue" }, token);
     }
     if (this.check("if")) {
       return this.parseIfStmt();
+    }
+    if (this.check("ident") && this.peek(1).kind === ":") {
+      const labelToken = this.advance();
+      const colonToken = this.advance();
+      let loopStmt;
+      if (this.check("while")) {
+        loopStmt = this.parseWhileStmt();
+      } else if (this.check("for")) {
+        loopStmt = this.parseForStmt();
+      } else if (this.check("foreach")) {
+        loopStmt = this.parseForeachStmt();
+      } else if (this.check("repeat")) {
+        loopStmt = this.parseRepeatStmt();
+      } else {
+        throw new DiagnosticError(
+          "ParseError",
+          `Expected loop statement after label '${labelToken.value}:', found '${this.peek().kind}'`,
+          { line: labelToken.line, col: labelToken.col }
+        );
+      }
+      return this.withLoc({ kind: "labeled_loop", label: labelToken.value, body: loopStmt }, labelToken);
     }
     if (this.check("while")) {
       return this.parseWhileStmt();
@@ -11928,6 +11970,49 @@ function toTypeNode(typeName) {
   return { kind: "struct", name: typeName };
 }
 
+// ../../src/structs/expand.ts
+function expandStructDeclarations(structs, onError) {
+  const expandedByName = /* @__PURE__ */ new Map();
+  const expanded = [];
+  for (const struct of structs) {
+    const inheritedFields = [];
+    const seenFieldNames = /* @__PURE__ */ new Set();
+    if (struct.extends) {
+      const parent = expandedByName.get(struct.extends);
+      if (!parent) {
+        onError?.({
+          message: `Struct '${struct.name}' extends unknown struct '${struct.extends}'`,
+          node: struct
+        });
+      } else {
+        for (const field of parent.fields) {
+          inheritedFields.push(field);
+          seenFieldNames.add(field.name);
+        }
+      }
+    }
+    const ownFields = [];
+    for (const field of struct.fields) {
+      if (seenFieldNames.has(field.name)) {
+        onError?.({
+          message: `Struct '${struct.name}' cannot override inherited field '${field.name}'`,
+          node: struct
+        });
+        continue;
+      }
+      seenFieldNames.add(field.name);
+      ownFields.push(field);
+    }
+    const resolved = {
+      ...struct,
+      fields: [...inheritedFields, ...ownFields]
+    };
+    expanded.push(resolved);
+    expandedByName.set(struct.name, resolved);
+  }
+  return expanded;
+}
+
 // ../../src/typechecker/index.ts
 var ENTITY_HIERARCHY = {
   "entity": null,
@@ -12011,6 +12096,10 @@ var VOID_TYPE = { kind: "named", name: "void" };
 var INT_TYPE = { kind: "named", name: "int" };
 var STRING_TYPE = { kind: "named", name: "string" };
 var BUILTIN_SIGNATURES = {
+  assert: {
+    params: [{ kind: "named", name: "bool" }],
+    return: VOID_TYPE
+  },
   setTimeout: {
     params: [INT_TYPE, { kind: "function_type", params: [], return: VOID_TYPE }],
     return: VOID_TYPE
@@ -12120,7 +12209,10 @@ var TypeChecker = class _TypeChecker {
         methods.set(method.name, method);
       }
     }
-    for (const struct of program.structs ?? []) {
+    const expandedStructs = expandStructDeclarations(program.structs ?? [], ({ message, node }) => {
+      this.report(message, node);
+    });
+    for (const struct of expandedStructs) {
       const fields = /* @__PURE__ */ new Map();
       for (const field of struct.fields) {
         fields.set(field.name, field.type);
@@ -12254,6 +12346,28 @@ var TypeChecker = class _TypeChecker {
         this.report(`@watch handler '${fn.name}' cannot declare parameters`, fn);
       }
     }
+    const throttleDecorators = fn.decorators.filter((decorator) => decorator.name === "throttle");
+    if (throttleDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @throttle decorators`, fn);
+      return;
+    }
+    if (throttleDecorators.length === 1) {
+      const ticks = throttleDecorators[0].args?.ticks;
+      if (ticks === void 0 || ticks <= 0) {
+        this.report(`@throttle on '${fn.name}' requires ticks=N (positive integer)`, fn);
+      }
+    }
+    const retryDecorators = fn.decorators.filter((decorator) => decorator.name === "retry");
+    if (retryDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @retry decorators`, fn);
+      return;
+    }
+    if (retryDecorators.length === 1) {
+      const max = retryDecorators[0].args?.max;
+      if (max === void 0 || max <= 0) {
+        this.report(`@retry on '${fn.name}' requires max=N (positive integer)`, fn);
+      }
+    }
     const profileDecorators = fn.decorators.filter((decorator) => decorator.name === "profile");
     if (profileDecorators.length > 1) {
       this.report(`Function '${fn.name}' cannot have multiple @profile decorators`, fn);
@@ -12262,6 +12376,31 @@ var TypeChecker = class _TypeChecker {
     if (profileDecorators.length === 1 && (profileDecorators[0].rawArgs?.length || profileDecorators[0].args && Object.keys(profileDecorators[0].args).length > 0)) {
       this.report(`@profile decorator on '${fn.name}' does not accept arguments`, fn);
       return;
+    }
+    const benchmarkDecorators = fn.decorators.filter((decorator) => decorator.name === "benchmark");
+    if (benchmarkDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @benchmark decorators`, fn);
+      return;
+    }
+    if (benchmarkDecorators.length === 1 && (benchmarkDecorators[0].rawArgs?.length || benchmarkDecorators[0].args && Object.keys(benchmarkDecorators[0].args).length > 0)) {
+      this.report(`@benchmark decorator on '${fn.name}' does not accept arguments`, fn);
+      return;
+    }
+    const memoizeDecorators = fn.decorators.filter((decorator) => decorator.name === "memoize");
+    if (memoizeDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @memoize decorators`, fn);
+      return;
+    }
+    if (memoizeDecorators.length === 1) {
+      if (fn.params.length !== 1) {
+        this.report(`@memoize on '${fn.name}' requires exactly one parameter`, fn);
+      } else {
+        const paramType = fn.params[0].type;
+        const isInt = paramType.kind === "named" && paramType.name === "int";
+        if (!isInt) {
+          this.report(`@memoize on '${fn.name}' only supports int parameters (got '${paramType.kind === "named" ? paramType.name : paramType.kind}')`, fn);
+        }
+      }
     }
     const eventDecorators = fn.decorators.filter((decorator) => decorator.name === "on");
     if (eventDecorators.length === 0) {
@@ -12424,6 +12563,16 @@ var TypeChecker = class _TypeChecker {
         this.checkExpr(stmt.expr);
         break;
       case "raw":
+        break;
+      case "break":
+      case "continue":
+      case "break_label":
+      case "continue_label":
+        break;
+      case "labeled_loop":
+        this.loopDepth++;
+        this.checkStmt(stmt.body);
+        this.loopDepth--;
         break;
       case "const_decl":
         this.scope.set(stmt.name, { type: stmt.type, mutable: false });
@@ -12602,7 +12751,33 @@ var TypeChecker = class _TypeChecker {
         break;
       case "struct_lit":
         for (const field of expr.fields) {
-          this.checkExpr(field.value);
+          let fieldType;
+          if (expectedType) {
+            const normalized = this.normalizeType(expectedType);
+            if (normalized.kind === "struct") {
+              const structFields = this.structs.get(normalized.name);
+              if (structFields && !structFields.has(field.name)) {
+                this.report(`Struct '${normalized.name}' has no field '${field.name}'`, expr);
+              } else {
+                fieldType = structFields?.get(field.name);
+              }
+            }
+          }
+          this.checkExpr(field.value, fieldType);
+          if (fieldType) {
+            const actualType = this.inferType(field.value, fieldType);
+            if (this.isNumericMismatch(fieldType, actualType)) {
+              this.report(
+                `Field '${field.name}' of struct expects ${this.typeToString(fieldType)}, got ${this.typeToString(actualType)}`,
+                field.value
+              );
+            } else if (!this.typesMatch(fieldType, actualType)) {
+              this.report(
+                `Field '${field.name}' of struct expects ${this.typeToString(fieldType)}, got ${this.typeToString(actualType)}`,
+                field.value
+              );
+            }
+          }
         }
         break;
       case "str_interp":
@@ -13277,6 +13452,9 @@ var TypeChecker = class _TypeChecker {
       return this.isEntitySubtype(actual.entityType, expected.entityType);
     }
     if (expected.kind === "selector" && actual.kind === "selector") {
+      return true;
+    }
+    if (expected.kind === "selector" && actual.kind === "named" && actual.name === "string") {
       return true;
     }
     if (expected.kind !== actual.kind) return false;
@@ -14288,6 +14466,1812 @@ var BUILTIN_METADATA = {
   }
 };
 
+// ../../src/hir/lower.ts
+function lowerToHIR(program) {
+  const structs = expandStructDeclarations(program.structs).map((s) => ({
+    name: s.name,
+    extends: s.extends,
+    fields: s.fields.map((f) => ({ name: f.name, type: f.type })),
+    isSingleton: s.isSingleton,
+    span: s.span
+  }));
+  return {
+    namespace: program.namespace,
+    globals: program.globals.map(lowerGlobal),
+    functions: program.declarations.map(lowerFunction),
+    structs,
+    implBlocks: program.implBlocks.map((ib) => ({
+      typeName: ib.typeName,
+      traitName: ib.traitName,
+      methods: ib.methods.map(lowerFunction),
+      span: ib.span
+    })),
+    enums: program.enums.map((e) => ({
+      name: e.name,
+      variants: e.variants.map((v) => ({ name: v.name, value: v.value, fields: v.fields })),
+      span: e.span
+    })),
+    consts: program.consts.map((c) => ({
+      name: c.name,
+      type: c.type,
+      value: lowerExpr(c.value),
+      span: c.span
+    })),
+    isLibrary: program.isLibrary
+  };
+}
+function lowerMatchPattern(pat) {
+  switch (pat.kind) {
+    case "PatSome":
+      return pat;
+    case "PatNone":
+      return pat;
+    case "PatInt":
+      return pat;
+    case "PatWild":
+      return pat;
+    case "PatExpr":
+      return { kind: "PatExpr", expr: lowerExpr(pat.expr) };
+    case "PatEnum":
+      return { kind: "PatEnum", enumName: pat.enumName, variant: pat.variant, bindings: pat.bindings };
+  }
+}
+function lowerGlobal(g) {
+  return {
+    name: g.name,
+    type: g.type,
+    init: lowerExpr(g.init),
+    mutable: g.mutable,
+    span: g.span
+  };
+}
+function lowerFunction(fn) {
+  return {
+    name: fn.name,
+    typeParams: fn.typeParams,
+    params: fn.params.map(lowerParam),
+    returnType: fn.returnType,
+    decorators: fn.decorators,
+    body: lowerBlock(fn.body),
+    isLibraryFn: fn.isLibraryFn,
+    isExported: fn.isExported,
+    span: fn.span,
+    sourceFile: fn.sourceFile,
+    watchObjective: fn.watchObjective
+  };
+}
+function lowerParam(p) {
+  return {
+    name: p.name,
+    type: p.type,
+    default: p.default ? lowerExpr(p.default) : void 0
+  };
+}
+function lowerBlock(block) {
+  const result = [];
+  for (const stmt of block) {
+    const lowered = lowerStmt(stmt);
+    if (Array.isArray(lowered)) {
+      result.push(...lowered);
+    } else {
+      result.push(lowered);
+    }
+  }
+  return result;
+}
+function lowerStmt(stmt) {
+  switch (stmt.kind) {
+    case "let":
+      return { kind: "let", name: stmt.name, type: stmt.type, init: lowerExpr(stmt.init), span: stmt.span };
+    case "let_destruct":
+      return { kind: "let_destruct", names: stmt.names, type: stmt.type, init: lowerExpr(stmt.init), span: stmt.span };
+    case "const_decl":
+      return { kind: "const_decl", name: stmt.name, type: stmt.type, value: lowerExpr(stmt.value), span: stmt.span };
+    case "expr":
+      return { kind: "expr", expr: lowerExpr(stmt.expr), span: stmt.span };
+    case "return":
+      return { kind: "return", value: stmt.value ? lowerExpr(stmt.value) : void 0, span: stmt.span };
+    case "break":
+      return { kind: "break", span: stmt.span };
+    case "continue":
+      return { kind: "continue", span: stmt.span };
+    case "break_label":
+      return { kind: "break_label", label: stmt.label, span: stmt.span };
+    case "continue_label":
+      return { kind: "continue_label", label: stmt.label, span: stmt.span };
+    case "labeled_loop": {
+      const lowered = lowerStmt(stmt.body);
+      if (Array.isArray(lowered)) {
+        const inits = lowered.slice(0, -1);
+        const loopStmt = lowered[lowered.length - 1];
+        const labeled = { kind: "labeled_loop", label: stmt.label, body: loopStmt, span: stmt.span };
+        return [...inits, labeled];
+      }
+      return { kind: "labeled_loop", label: stmt.label, body: lowered, span: stmt.span };
+    }
+    case "if":
+      return {
+        kind: "if",
+        cond: lowerExpr(stmt.cond),
+        then: lowerBlock(stmt.then),
+        else_: stmt.else_ ? lowerBlock(stmt.else_) : void 0,
+        span: stmt.span
+      };
+    case "while":
+      return { kind: "while", cond: lowerExpr(stmt.cond), body: lowerBlock(stmt.body), span: stmt.span };
+    // --- Desugaring: for → while ---
+    case "for": {
+      const stmts = [];
+      if (stmt.init) {
+        const init = lowerStmt(stmt.init);
+        if (Array.isArray(init)) stmts.push(...init);
+        else stmts.push(init);
+      }
+      const body = lowerBlock(stmt.body);
+      const step = [{ kind: "expr", expr: lowerExpr(stmt.step), span: stmt.span }];
+      stmts.push({ kind: "while", cond: lowerExpr(stmt.cond), body, step, span: stmt.span });
+      return stmts;
+    }
+    // --- Desugaring: for_range → let + while(cond) { body } step { v++ } ---
+    case "for_range": {
+      const varName = stmt.varName;
+      const initStmt = {
+        kind: "let",
+        name: varName,
+        type: { kind: "named", name: "int" },
+        init: lowerExpr(stmt.start),
+        span: stmt.span
+      };
+      const body = lowerBlock(stmt.body);
+      const step = [{
+        kind: "expr",
+        expr: {
+          kind: "assign",
+          target: varName,
+          value: {
+            kind: "binary",
+            op: "+",
+            left: { kind: "ident", name: varName },
+            right: { kind: "int_lit", value: 1 }
+          }
+        }
+      }];
+      const whileStmt = {
+        kind: "while",
+        cond: {
+          kind: "binary",
+          op: stmt.inclusive ? "<=" : "<",
+          left: { kind: "ident", name: varName },
+          right: lowerExpr(stmt.end)
+        },
+        body,
+        step,
+        span: stmt.span
+      };
+      return [initStmt, whileStmt];
+    }
+    // --- Desugaring: for_in_array → let idx = 0; while(idx < len) { let v = arr[idx]; body; idx = idx + 1 } ---
+    case "for_in_array": {
+      const idxName = `__forin_idx_${stmt.binding}`;
+      const initStmt = {
+        kind: "let",
+        name: idxName,
+        type: { kind: "named", name: "int" },
+        init: { kind: "int_lit", value: 0 },
+        span: stmt.span
+      };
+      const bindingInit = {
+        kind: "let",
+        name: stmt.binding,
+        type: void 0,
+        init: {
+          kind: "index",
+          obj: { kind: "ident", name: stmt.arrayName },
+          index: { kind: "ident", name: idxName }
+        },
+        span: stmt.span
+      };
+      const stepStmt = {
+        kind: "expr",
+        expr: {
+          kind: "assign",
+          target: idxName,
+          value: {
+            kind: "binary",
+            op: "+",
+            left: { kind: "ident", name: idxName },
+            right: { kind: "int_lit", value: 1 }
+          }
+        },
+        span: stmt.span
+      };
+      const body = [bindingInit, ...lowerBlock(stmt.body)];
+      const step = [stepStmt];
+      const whileStmt = {
+        kind: "while",
+        cond: {
+          kind: "binary",
+          op: "<",
+          left: { kind: "ident", name: idxName },
+          right: lowerExpr(stmt.lenExpr)
+        },
+        body,
+        step,
+        span: stmt.span
+      };
+      return [initStmt, whileStmt];
+    }
+    // --- Desugaring: for_each → let __for_len = arr.len(); let __for_i = 0; while(__for_i < __for_len) { let item = arr[__for_i]; body; __for_i = __for_i + 1 } ---
+    case "for_each": {
+      const id = forEachCounter++;
+      const idxName = `__foreach_i_${id}`;
+      const lenName = `__foreach_len_${id}`;
+      const arrExpr = lowerExpr(stmt.array);
+      const lenInitStmt = {
+        kind: "let",
+        name: lenName,
+        type: { kind: "named", name: "int" },
+        init: {
+          kind: "invoke",
+          callee: { kind: "member", obj: arrExpr, field: "len" },
+          args: []
+        },
+        span: stmt.span
+      };
+      const idxInitStmt = {
+        kind: "let",
+        name: idxName,
+        type: { kind: "named", name: "int" },
+        init: { kind: "int_lit", value: 0 },
+        span: stmt.span
+      };
+      const bindingInit = {
+        kind: "let",
+        name: stmt.binding,
+        type: void 0,
+        init: {
+          kind: "index",
+          obj: arrExpr,
+          index: { kind: "ident", name: idxName }
+        },
+        span: stmt.span
+      };
+      const stepStmt = {
+        kind: "expr",
+        expr: {
+          kind: "assign",
+          target: idxName,
+          value: {
+            kind: "binary",
+            op: "+",
+            left: { kind: "ident", name: idxName },
+            right: { kind: "int_lit", value: 1 }
+          }
+        },
+        span: stmt.span
+      };
+      const body = [bindingInit, ...lowerBlock(stmt.body)];
+      const step = [stepStmt];
+      const whileStmt = {
+        kind: "while",
+        cond: {
+          kind: "binary",
+          op: "<",
+          left: { kind: "ident", name: idxName },
+          right: { kind: "ident", name: lenName }
+        },
+        body,
+        step,
+        span: stmt.span
+      };
+      return [lenInitStmt, idxInitStmt, whileStmt];
+    }
+    case "foreach":
+      return {
+        kind: "foreach",
+        binding: stmt.binding,
+        iterable: lowerExpr(stmt.iterable),
+        body: lowerBlock(stmt.body),
+        executeContext: stmt.executeContext,
+        span: stmt.span
+      };
+    case "match":
+      return {
+        kind: "match",
+        expr: lowerExpr(stmt.expr),
+        arms: stmt.arms.map((arm) => ({
+          pattern: lowerMatchPattern(arm.pattern),
+          body: lowerBlock(arm.body)
+        })),
+        span: stmt.span
+      };
+    // --- Desugaring: as_block → execute [as] ---
+    case "as_block":
+      return {
+        kind: "execute",
+        subcommands: [{ kind: "as", selector: stmt.selector }],
+        body: lowerBlock(stmt.body),
+        span: stmt.span
+      };
+    // --- Desugaring: at_block → execute [at] ---
+    case "at_block":
+      return {
+        kind: "execute",
+        subcommands: [{ kind: "at", selector: stmt.selector }],
+        body: lowerBlock(stmt.body),
+        span: stmt.span
+      };
+    // --- Desugaring: as_at → execute [as, at] ---
+    case "as_at":
+      return {
+        kind: "execute",
+        subcommands: [
+          { kind: "as", selector: stmt.as_sel },
+          { kind: "at", selector: stmt.at_sel }
+        ],
+        body: lowerBlock(stmt.body),
+        span: stmt.span
+      };
+    case "execute":
+      return {
+        kind: "execute",
+        subcommands: stmt.subcommands.map(lowerExecuteSubcommand),
+        body: lowerBlock(stmt.body),
+        span: stmt.span
+      };
+    case "raw":
+      return { kind: "raw", cmd: stmt.cmd, span: stmt.span };
+    case "if_let_some":
+      return {
+        kind: "if_let_some",
+        binding: stmt.binding,
+        init: lowerExpr(stmt.init),
+        then: lowerBlock(stmt.then),
+        else_: stmt.else_ ? lowerBlock(stmt.else_) : void 0,
+        span: stmt.span
+      };
+    // --- Desugaring: do_while → body + while(cond) { body } ---
+    // Emits the body once unconditionally, then a while loop:
+    //   <body>
+    //   while (cond) { <body> }
+    case "do_while": {
+      const firstBody = lowerBlock(stmt.body);
+      const loopBody = lowerBlock(stmt.body);
+      const whileStmt = {
+        kind: "while",
+        cond: lowerExpr(stmt.cond),
+        body: loopBody,
+        span: stmt.span
+      };
+      return [...firstBody, whileStmt];
+    }
+    // --- Desugaring: repeat N → let __repeat_i = 0; while(__repeat_i < N) { body; __repeat_i = __repeat_i + 1 } ---
+    case "repeat": {
+      const id = repeatCounter++;
+      const idxName = `__repeat_i_${id}`;
+      const initStmt = {
+        kind: "let",
+        name: idxName,
+        type: { kind: "named", name: "int" },
+        init: { kind: "int_lit", value: 0 },
+        span: stmt.span
+      };
+      const body = lowerBlock(stmt.body);
+      const step = [{
+        kind: "expr",
+        expr: {
+          kind: "assign",
+          target: idxName,
+          value: {
+            kind: "binary",
+            op: "+",
+            left: { kind: "ident", name: idxName },
+            right: { kind: "int_lit", value: 1 }
+          }
+        }
+      }];
+      const whileStmt = {
+        kind: "while",
+        cond: {
+          kind: "binary",
+          op: "<",
+          left: { kind: "ident", name: idxName },
+          right: { kind: "int_lit", value: stmt.count }
+        },
+        body,
+        step,
+        span: stmt.span
+      };
+      return [initStmt, whileStmt];
+    }
+    case "while_let_some":
+      return {
+        kind: "while_let_some",
+        binding: stmt.binding,
+        init: lowerExpr(stmt.init),
+        body: lowerBlock(stmt.body),
+        span: stmt.span
+      };
+    default: {
+      const _exhaustive = stmt;
+      throw new Error(`Unknown statement kind: ${_exhaustive.kind}`);
+    }
+  }
+}
+function lowerExecuteSubcommand(sub) {
+  return sub;
+}
+var forEachCounter = 0;
+var repeatCounter = 0;
+var COMPOUND_TO_BINOP = {
+  "+=": "+",
+  "-=": "-",
+  "*=": "*",
+  "/=": "/",
+  "%=": "%"
+};
+function lowerExpr(expr) {
+  switch (expr.kind) {
+    // --- Pass-through literals ---
+    case "int_lit":
+    case "float_lit":
+    case "byte_lit":
+    case "short_lit":
+    case "long_lit":
+    case "double_lit":
+    case "bool_lit":
+    case "str_lit":
+    case "range_lit":
+    case "rel_coord":
+    case "local_coord":
+    case "mc_name":
+    case "blockpos":
+      return expr;
+    case "ident":
+      return { kind: "ident", name: expr.name, span: expr.span };
+    case "selector":
+      return { kind: "selector", raw: expr.raw, isSingle: expr.isSingle, sel: expr.sel, span: expr.span };
+    case "array_lit":
+      return { kind: "array_lit", elements: expr.elements.map(lowerExpr), span: expr.span };
+    case "struct_lit":
+      return {
+        kind: "struct_lit",
+        fields: expr.fields.map((f) => ({ name: f.name, value: lowerExpr(f.value) })),
+        span: expr.span
+      };
+    case "str_interp":
+      return {
+        kind: "str_interp",
+        parts: expr.parts.map((p) => typeof p === "string" ? p : lowerExpr(p)),
+        span: expr.span
+      };
+    case "f_string": {
+      const hirParts = expr.parts.map(
+        (part) => part.kind === "text" ? { kind: "text", value: part.value } : { kind: "expr", expr: lowerExpr(part.expr) }
+      );
+      return { kind: "f_string", parts: hirParts, span: expr.span };
+    }
+    // Binary ops — && and || preserved as-is (short-circuit → control flow in MIR)
+    case "binary":
+      return {
+        kind: "binary",
+        op: expr.op,
+        left: lowerExpr(expr.left),
+        right: lowerExpr(expr.right),
+        span: expr.span
+      };
+    case "unary":
+      return { kind: "unary", op: expr.op, operand: lowerExpr(expr.operand), span: expr.span };
+    case "is_check":
+      return { kind: "is_check", expr: lowerExpr(expr.expr), entityType: expr.entityType, span: expr.span };
+    // --- Desugaring: compound assignment → plain assign ---
+    case "assign":
+      if (expr.op !== "=") {
+        const binOp = COMPOUND_TO_BINOP[expr.op];
+        return {
+          kind: "assign",
+          target: expr.target,
+          value: {
+            kind: "binary",
+            op: binOp,
+            left: { kind: "ident", name: expr.target },
+            right: lowerExpr(expr.value),
+            span: expr.span
+          },
+          span: expr.span
+        };
+      }
+      return { kind: "assign", target: expr.target, value: lowerExpr(expr.value), span: expr.span };
+    // --- Desugaring: compound member_assign → plain member_assign ---
+    case "member_assign":
+      if (expr.op !== "=") {
+        const binOp = COMPOUND_TO_BINOP[expr.op];
+        const obj = lowerExpr(expr.obj);
+        return {
+          kind: "member_assign",
+          obj,
+          field: expr.field,
+          value: {
+            kind: "binary",
+            op: binOp,
+            left: { kind: "member", obj, field: expr.field },
+            right: lowerExpr(expr.value),
+            span: expr.span
+          },
+          span: expr.span
+        };
+      }
+      return {
+        kind: "member_assign",
+        obj: lowerExpr(expr.obj),
+        field: expr.field,
+        value: lowerExpr(expr.value),
+        span: expr.span
+      };
+    case "member":
+      return { kind: "member", obj: lowerExpr(expr.obj), field: expr.field, span: expr.span };
+    case "index":
+      return { kind: "index", obj: lowerExpr(expr.obj), index: lowerExpr(expr.index), span: expr.span };
+    // --- Desugaring: compound index_assign → plain index_assign ---
+    case "index_assign":
+      if (expr.op !== "=") {
+        const binOp = COMPOUND_TO_BINOP[expr.op];
+        const obj = lowerExpr(expr.obj);
+        const index = lowerExpr(expr.index);
+        return {
+          kind: "index_assign",
+          obj,
+          index,
+          op: "=",
+          value: {
+            kind: "binary",
+            op: binOp,
+            left: { kind: "index", obj, index },
+            right: lowerExpr(expr.value),
+            span: expr.span
+          },
+          span: expr.span
+        };
+      }
+      return {
+        kind: "index_assign",
+        obj: lowerExpr(expr.obj),
+        index: lowerExpr(expr.index),
+        op: expr.op,
+        value: lowerExpr(expr.value),
+        span: expr.span
+      };
+    case "call":
+      return { kind: "call", fn: expr.fn, args: expr.args.map(lowerExpr), typeArgs: expr.typeArgs, span: expr.span };
+    case "invoke":
+      return { kind: "invoke", callee: lowerExpr(expr.callee), args: expr.args.map(lowerExpr), span: expr.span };
+    case "static_call":
+      return {
+        kind: "static_call",
+        type: expr.type,
+        method: expr.method,
+        args: expr.args.map(lowerExpr),
+        span: expr.span
+      };
+    case "path_expr":
+      return { kind: "path_expr", enumName: expr.enumName, variant: expr.variant, span: expr.span };
+    case "enum_construct":
+      return {
+        kind: "enum_construct",
+        enumName: expr.enumName,
+        variant: expr.variant,
+        args: expr.args.map((a) => ({ name: a.name, value: lowerExpr(a.value) })),
+        span: expr.span
+      };
+    case "tuple_lit":
+      return { kind: "tuple_lit", elements: expr.elements.map(lowerExpr), span: expr.span };
+    case "some_lit":
+      return { kind: "some_lit", value: lowerExpr(expr.value), span: expr.span };
+    case "none_lit":
+      return { kind: "none_lit", span: expr.span };
+    case "unwrap_or":
+      return { kind: "unwrap_or", opt: lowerExpr(expr.opt), default_: lowerExpr(expr.default_), span: expr.span };
+    case "type_cast":
+      return { kind: "type_cast", expr: lowerExpr(expr.expr), targetType: expr.targetType, span: expr.span };
+    case "lambda": {
+      const body = Array.isArray(expr.body) ? lowerBlock(expr.body) : lowerExpr(expr.body);
+      return {
+        kind: "lambda",
+        params: expr.params,
+        returnType: expr.returnType,
+        body,
+        span: expr.span
+      };
+    }
+    default: {
+      const _exhaustive = expr;
+      throw new Error(`Unknown expression kind: ${_exhaustive.kind}`);
+    }
+  }
+}
+
+// ../../src/lint/index.ts
+function lintSource(source, imports, hir, options = {}) {
+  const warnings = [];
+  const file = options.filePath;
+  const maxLines = options.maxFunctionLines ?? 50;
+  warnings.push(...checkUnusedImports(imports, hir, file));
+  for (const fn of hir.functions) {
+    if (fn.isLibraryFn) continue;
+    warnings.push(...checkUnusedVariables(fn, file));
+    warnings.push(...checkMagicNumbers(fn, file));
+    warnings.push(...checkDeadBranches(fn, file));
+    const fnWarning = checkFunctionLength(fn, maxLines, file);
+    if (fnWarning) warnings.push(fnWarning);
+  }
+  return warnings;
+}
+function lintString(source, filePath, namespace = "redscript", options = {}) {
+  const lexer = new Lexer(source);
+  const tokens = lexer.tokenize();
+  const parser = new Parser(tokens, source, namespace);
+  const ast = parser.parse(namespace);
+  const hir = lowerToHIR(ast);
+  return lintSource(source, ast.imports, hir, { ...options, filePath });
+}
+function checkUnusedImports(imports, hir, file) {
+  const warnings = [];
+  const calledNames = /* @__PURE__ */ new Set();
+  for (const fn of hir.functions) {
+    collectCalledNames(fn.body, calledNames);
+  }
+  for (const imp of imports) {
+    if (!imp.symbol || imp.symbol === "*") continue;
+    if (!calledNames.has(imp.symbol)) {
+      const warn = {
+        rule: "unused-import",
+        message: `Import "${imp.symbol}" from "${imp.moduleName}" is never used`,
+        file
+      };
+      if (imp.span) {
+        warn.line = imp.span.line;
+        warn.col = imp.span.col;
+      }
+      warnings.push(warn);
+    }
+  }
+  return warnings;
+}
+function collectCalledNames(block, out) {
+  for (const stmt of block) {
+    collectCalledNamesStmt(stmt, out);
+  }
+}
+function collectCalledNamesStmt(stmt, out) {
+  switch (stmt.kind) {
+    case "let":
+      collectCalledNamesExpr(stmt.init, out);
+      break;
+    case "const_decl":
+      collectCalledNamesExpr(stmt.value, out);
+      break;
+    case "let_destruct":
+      collectCalledNamesExpr(stmt.init, out);
+      break;
+    case "expr":
+    case "return":
+      if (stmt.kind === "return" && stmt.value) collectCalledNamesExpr(stmt.value, out);
+      if (stmt.kind === "expr") collectCalledNamesExpr(stmt.expr, out);
+      break;
+    case "if":
+      collectCalledNamesExpr(stmt.cond, out);
+      collectCalledNames(stmt.then, out);
+      if (stmt.else_) collectCalledNames(stmt.else_, out);
+      break;
+    case "while":
+      collectCalledNamesExpr(stmt.cond, out);
+      collectCalledNames(stmt.body, out);
+      if (stmt.step) collectCalledNames(stmt.step, out);
+      break;
+    case "foreach":
+      collectCalledNamesExpr(stmt.iterable, out);
+      collectCalledNames(stmt.body, out);
+      break;
+    case "match":
+      collectCalledNamesExpr(stmt.expr, out);
+      for (const arm of stmt.arms) collectCalledNames(arm.body, out);
+      break;
+    case "execute":
+      collectCalledNames(stmt.body, out);
+      break;
+    case "if_let_some":
+      collectCalledNamesExpr(stmt.init, out);
+      collectCalledNames(stmt.then, out);
+      if (stmt.else_) collectCalledNames(stmt.else_, out);
+      break;
+    case "while_let_some":
+      collectCalledNamesExpr(stmt.init, out);
+      collectCalledNames(stmt.body, out);
+      break;
+    case "labeled_loop":
+      collectCalledNamesStmt(stmt.body, out);
+      break;
+  }
+}
+function collectCalledNamesExpr(expr, out) {
+  if (!expr) return;
+  switch (expr.kind) {
+    case "call":
+      out.add(expr.fn);
+      for (const arg of expr.args) collectCalledNamesExpr(arg, out);
+      break;
+    case "invoke":
+      collectCalledNamesExpr(expr.callee, out);
+      for (const arg of expr.args) collectCalledNamesExpr(arg, out);
+      break;
+    case "static_call":
+      out.add(expr.method);
+      for (const arg of expr.args) collectCalledNamesExpr(arg, out);
+      break;
+    case "binary":
+      collectCalledNamesExpr(expr.left, out);
+      collectCalledNamesExpr(expr.right, out);
+      break;
+    case "unary":
+      collectCalledNamesExpr(expr.operand, out);
+      break;
+    case "member":
+    case "member_assign":
+      collectCalledNamesExpr(expr.obj, out);
+      if (expr.kind === "member_assign") collectCalledNamesExpr(expr.value, out);
+      break;
+    case "index":
+    case "index_assign":
+      collectCalledNamesExpr(expr.obj, out);
+      collectCalledNamesExpr(expr.index, out);
+      if (expr.kind === "index_assign") collectCalledNamesExpr(expr.value, out);
+      break;
+    case "assign":
+      collectCalledNamesExpr(expr.value, out);
+      break;
+    case "some_lit":
+      collectCalledNamesExpr(expr.value, out);
+      break;
+    case "unwrap_or":
+      collectCalledNamesExpr(expr.opt, out);
+      collectCalledNamesExpr(expr.default_, out);
+      break;
+    case "type_cast":
+      collectCalledNamesExpr(expr.expr, out);
+      break;
+    case "array_lit":
+    case "tuple_lit":
+      for (const e of expr.elements) collectCalledNamesExpr(e, out);
+      break;
+    case "struct_lit":
+      for (const f of expr.fields) collectCalledNamesExpr(f.value, out);
+      break;
+    case "str_interp":
+      for (const p of expr.parts) {
+        if (typeof p !== "string") collectCalledNamesExpr(p, out);
+      }
+      break;
+    case "f_string":
+      for (const p of expr.parts) {
+        if (p.kind === "expr") collectCalledNamesExpr(p.expr, out);
+      }
+      break;
+    case "lambda":
+      if (Array.isArray(expr.body)) {
+        collectCalledNames(expr.body, out);
+      } else {
+        collectCalledNamesExpr(expr.body, out);
+      }
+      break;
+    case "enum_construct":
+      for (const f of expr.args) collectCalledNamesExpr(f.value, out);
+      break;
+    // Terminals: ident, int_lit, float_lit, bool_lit, str_lit, etc.
+    default:
+      break;
+  }
+}
+function checkUnusedVariables(fn, file) {
+  const warnings = [];
+  const declared = /* @__PURE__ */ new Map();
+  collectLetDecls(fn.body, declared);
+  const reads = /* @__PURE__ */ new Map();
+  countIdentReads(fn.body, reads, new Set(declared.keys()));
+  for (const [name, info] of declared) {
+    const readCount = reads.get(name) ?? 0;
+    if (readCount === 0) {
+      const warn = {
+        rule: "unused-variable",
+        message: `Variable "${name}" is declared but never used`,
+        file
+      };
+      if (info.span) {
+        warn.line = info.span.line;
+        warn.col = info.span.col;
+      }
+      warnings.push(warn);
+    }
+  }
+  return warnings;
+}
+function collectLetDecls(block, out) {
+  for (const stmt of block) {
+    if (stmt.kind === "let") {
+      out.set(stmt.name, { name: stmt.name, span: stmt.span, readCount: 0 });
+      collectLetDeclsExpr(stmt.init, out);
+    } else if (stmt.kind === "let_destruct") {
+      for (const name of stmt.names) {
+        out.set(name, { name, span: stmt.span, readCount: 0 });
+      }
+      collectLetDeclsExpr(stmt.init, out);
+    } else if (stmt.kind === "const_decl") {
+    } else {
+      collectLetDeclsStmt(stmt, out);
+    }
+  }
+}
+function collectLetDeclsExpr(_expr, _out) {
+}
+function collectLetDeclsStmt(stmt, out) {
+  switch (stmt.kind) {
+    case "if":
+      collectLetDecls(stmt.then, out);
+      if (stmt.else_) collectLetDecls(stmt.else_, out);
+      break;
+    case "while":
+      collectLetDecls(stmt.body, out);
+      if (stmt.step) collectLetDecls(stmt.step, out);
+      break;
+    case "foreach":
+      out.set(stmt.binding, { name: stmt.binding, span: stmt.span, readCount: 0 });
+      collectLetDecls(stmt.body, out);
+      break;
+    case "match":
+      for (const arm of stmt.arms) collectLetDecls(arm.body, out);
+      break;
+    case "execute":
+      collectLetDecls(stmt.body, out);
+      break;
+    case "if_let_some":
+      out.set(stmt.binding, { name: stmt.binding, span: stmt.span, readCount: 0 });
+      collectLetDecls(stmt.then, out);
+      if (stmt.else_) collectLetDecls(stmt.else_, out);
+      break;
+    case "while_let_some":
+      out.set(stmt.binding, { name: stmt.binding, span: stmt.span, readCount: 0 });
+      collectLetDecls(stmt.body, out);
+      break;
+    case "labeled_loop":
+      collectLetDeclsStmt(stmt.body, out);
+      break;
+  }
+}
+function countIdentReads(block, out, declared) {
+  for (const stmt of block) {
+    countIdentReadsStmt(stmt, out, declared);
+  }
+}
+function countIdentReadsStmt(stmt, out, declared) {
+  switch (stmt.kind) {
+    case "let":
+      countIdentReadsExpr(stmt.init, out, declared);
+      break;
+    case "let_destruct":
+      countIdentReadsExpr(stmt.init, out, declared);
+      break;
+    case "const_decl":
+      countIdentReadsExpr(stmt.value, out, declared);
+      break;
+    case "expr":
+      countIdentReadsExpr(stmt.expr, out, declared);
+      break;
+    case "return":
+      if (stmt.value) countIdentReadsExpr(stmt.value, out, declared);
+      break;
+    case "if":
+      countIdentReadsExpr(stmt.cond, out, declared);
+      countIdentReads(stmt.then, out, declared);
+      if (stmt.else_) countIdentReads(stmt.else_, out, declared);
+      break;
+    case "while":
+      countIdentReadsExpr(stmt.cond, out, declared);
+      countIdentReads(stmt.body, out, declared);
+      if (stmt.step) countIdentReads(stmt.step, out, declared);
+      break;
+    case "foreach":
+      countIdentReadsExpr(stmt.iterable, out, declared);
+      countIdentReads(stmt.body, out, declared);
+      break;
+    case "match":
+      countIdentReadsExpr(stmt.expr, out, declared);
+      for (const arm of stmt.arms) countIdentReads(arm.body, out, declared);
+      break;
+    case "execute":
+      countIdentReads(stmt.body, out, declared);
+      break;
+    case "if_let_some":
+      countIdentReadsExpr(stmt.init, out, declared);
+      countIdentReads(stmt.then, out, declared);
+      if (stmt.else_) countIdentReads(stmt.else_, out, declared);
+      break;
+    case "while_let_some":
+      countIdentReadsExpr(stmt.init, out, declared);
+      countIdentReads(stmt.body, out, declared);
+      break;
+    case "labeled_loop":
+      countIdentReadsStmt(stmt.body, out, declared);
+      break;
+  }
+}
+function countIdentReadsExpr(expr, out, declared) {
+  if (!expr) return;
+  switch (expr.kind) {
+    case "ident":
+      if (declared.has(expr.name)) {
+        out.set(expr.name, (out.get(expr.name) ?? 0) + 1);
+      }
+      break;
+    case "assign":
+      countIdentReadsExpr(expr.value, out, declared);
+      break;
+    case "binary":
+      countIdentReadsExpr(expr.left, out, declared);
+      countIdentReadsExpr(expr.right, out, declared);
+      break;
+    case "unary":
+      countIdentReadsExpr(expr.operand, out, declared);
+      break;
+    case "call":
+      for (const arg of expr.args) countIdentReadsExpr(arg, out, declared);
+      break;
+    case "invoke":
+      countIdentReadsExpr(expr.callee, out, declared);
+      for (const arg of expr.args) countIdentReadsExpr(arg, out, declared);
+      break;
+    case "static_call":
+      for (const arg of expr.args) countIdentReadsExpr(arg, out, declared);
+      break;
+    case "member":
+      countIdentReadsExpr(expr.obj, out, declared);
+      break;
+    case "member_assign":
+      countIdentReadsExpr(expr.obj, out, declared);
+      countIdentReadsExpr(expr.value, out, declared);
+      break;
+    case "index":
+      countIdentReadsExpr(expr.obj, out, declared);
+      countIdentReadsExpr(expr.index, out, declared);
+      break;
+    case "index_assign":
+      countIdentReadsExpr(expr.obj, out, declared);
+      countIdentReadsExpr(expr.index, out, declared);
+      countIdentReadsExpr(expr.value, out, declared);
+      break;
+    case "some_lit":
+      countIdentReadsExpr(expr.value, out, declared);
+      break;
+    case "unwrap_or":
+      countIdentReadsExpr(expr.opt, out, declared);
+      countIdentReadsExpr(expr.default_, out, declared);
+      break;
+    case "type_cast":
+      countIdentReadsExpr(expr.expr, out, declared);
+      break;
+    case "array_lit":
+    case "tuple_lit":
+      for (const e of expr.elements) countIdentReadsExpr(e, out, declared);
+      break;
+    case "struct_lit":
+      for (const f of expr.fields) countIdentReadsExpr(f.value, out, declared);
+      break;
+    case "str_interp":
+      for (const p of expr.parts) {
+        if (typeof p !== "string") countIdentReadsExpr(p, out, declared);
+      }
+      break;
+    case "f_string":
+      for (const p of expr.parts) {
+        if (p.kind === "expr") countIdentReadsExpr(p.expr, out, declared);
+      }
+      break;
+    case "lambda":
+      if (Array.isArray(expr.body)) {
+        countIdentReads(expr.body, out, declared);
+      } else {
+        countIdentReadsExpr(expr.body, out, declared);
+      }
+      break;
+    case "enum_construct":
+      for (const f of expr.args) countIdentReadsExpr(f.value, out, declared);
+      break;
+    default:
+      break;
+  }
+}
+function checkMagicNumbers(fn, file) {
+  const warnings = [];
+  checkMagicNumbersBlock(
+    fn.body,
+    warnings,
+    file,
+    /*inConst=*/
+    false
+  );
+  return warnings;
+}
+var MAGIC_NUMBER_THRESHOLD = 1;
+function isMagicNumber(value) {
+  return Math.abs(value) > MAGIC_NUMBER_THRESHOLD;
+}
+function checkMagicNumbersBlock(block, out, file, inConst) {
+  for (const stmt of block) {
+    checkMagicNumbersStmt(stmt, out, file, inConst);
+  }
+}
+function checkMagicNumbersStmt(stmt, out, file, inConst) {
+  switch (stmt.kind) {
+    case "const_decl":
+      break;
+    case "let":
+      checkMagicNumbersExpr(stmt.init, out, file);
+      break;
+    case "let_destruct":
+      checkMagicNumbersExpr(stmt.init, out, file);
+      break;
+    case "expr":
+      checkMagicNumbersExpr(stmt.expr, out, file);
+      break;
+    case "return":
+      if (stmt.value) checkMagicNumbersExpr(stmt.value, out, file);
+      break;
+    case "if":
+      checkMagicNumbersExpr(stmt.cond, out, file);
+      checkMagicNumbersBlock(stmt.then, out, file, false);
+      if (stmt.else_) checkMagicNumbersBlock(stmt.else_, out, file, false);
+      break;
+    case "while":
+      checkMagicNumbersExpr(stmt.cond, out, file);
+      checkMagicNumbersBlock(stmt.body, out, file, false);
+      if (stmt.step) checkMagicNumbersBlock(stmt.step, out, file, false);
+      break;
+    case "foreach":
+      checkMagicNumbersExpr(stmt.iterable, out, file);
+      checkMagicNumbersBlock(stmt.body, out, file, false);
+      break;
+    case "match":
+      checkMagicNumbersExpr(stmt.expr, out, file);
+      for (const arm of stmt.arms) checkMagicNumbersBlock(arm.body, out, file, false);
+      break;
+    case "execute":
+      checkMagicNumbersBlock(stmt.body, out, file, false);
+      break;
+    case "if_let_some":
+      checkMagicNumbersExpr(stmt.init, out, file);
+      checkMagicNumbersBlock(stmt.then, out, file, false);
+      if (stmt.else_) checkMagicNumbersBlock(stmt.else_, out, file, false);
+      break;
+    case "while_let_some":
+      checkMagicNumbersExpr(stmt.init, out, file);
+      checkMagicNumbersBlock(stmt.body, out, file, false);
+      break;
+    case "labeled_loop":
+      checkMagicNumbersStmt(stmt.body, out, file, inConst);
+      break;
+  }
+}
+function checkMagicNumbersExpr(expr, out, file) {
+  if (!expr) return;
+  switch (expr.kind) {
+    case "int_lit":
+    case "float_lit":
+    case "byte_lit":
+    case "short_lit":
+    case "long_lit":
+    case "double_lit":
+      if (isMagicNumber(expr.value)) {
+        const warn = {
+          rule: "magic-number",
+          message: `Avoid magic number ${expr.value}, consider using a const`,
+          file
+        };
+        if (expr.span) {
+          warn.line = expr.span.line;
+          warn.col = expr.span.col;
+        }
+        out.push(warn);
+      }
+      break;
+    case "binary":
+      checkMagicNumbersExpr(expr.left, out, file);
+      checkMagicNumbersExpr(expr.right, out, file);
+      break;
+    case "unary":
+      checkMagicNumbersExpr(expr.operand, out, file);
+      break;
+    case "call":
+      for (const arg of expr.args) checkMagicNumbersExpr(arg, out, file);
+      break;
+    case "invoke":
+      checkMagicNumbersExpr(expr.callee, out, file);
+      for (const arg of expr.args) checkMagicNumbersExpr(arg, out, file);
+      break;
+    case "static_call":
+      for (const arg of expr.args) checkMagicNumbersExpr(arg, out, file);
+      break;
+    case "member":
+      checkMagicNumbersExpr(expr.obj, out, file);
+      break;
+    case "member_assign":
+      checkMagicNumbersExpr(expr.obj, out, file);
+      checkMagicNumbersExpr(expr.value, out, file);
+      break;
+    case "index":
+      checkMagicNumbersExpr(expr.obj, out, file);
+      checkMagicNumbersExpr(expr.index, out, file);
+      break;
+    case "index_assign":
+      checkMagicNumbersExpr(expr.obj, out, file);
+      checkMagicNumbersExpr(expr.index, out, file);
+      checkMagicNumbersExpr(expr.value, out, file);
+      break;
+    case "assign":
+      checkMagicNumbersExpr(expr.value, out, file);
+      break;
+    case "some_lit":
+      checkMagicNumbersExpr(expr.value, out, file);
+      break;
+    case "unwrap_or":
+      checkMagicNumbersExpr(expr.opt, out, file);
+      checkMagicNumbersExpr(expr.default_, out, file);
+      break;
+    case "type_cast":
+      checkMagicNumbersExpr(expr.expr, out, file);
+      break;
+    case "array_lit":
+    case "tuple_lit":
+      for (const e of expr.elements) checkMagicNumbersExpr(e, out, file);
+      break;
+    case "struct_lit":
+      for (const f of expr.fields) checkMagicNumbersExpr(f.value, out, file);
+      break;
+    case "str_interp":
+      for (const p of expr.parts) {
+        if (typeof p !== "string") checkMagicNumbersExpr(p, out, file);
+      }
+      break;
+    case "f_string":
+      for (const p of expr.parts) {
+        if (p.kind === "expr") checkMagicNumbersExpr(p.expr, out, file);
+      }
+      break;
+    case "lambda":
+      if (Array.isArray(expr.body)) {
+        checkMagicNumbersBlock(expr.body, out, file, false);
+      } else {
+        checkMagicNumbersExpr(expr.body, out, file);
+      }
+      break;
+    case "enum_construct":
+      for (const f of expr.args) checkMagicNumbersExpr(f.value, out, file);
+      break;
+    default:
+      break;
+  }
+}
+function checkDeadBranches(fn, file) {
+  const warnings = [];
+  checkDeadBranchesBlock(fn.body, warnings, file);
+  return warnings;
+}
+function checkDeadBranchesBlock(block, out, file) {
+  for (const stmt of block) {
+    if (stmt.kind === "if") {
+      const result = evaluateConstBool(stmt.cond);
+      if (result !== null) {
+        const warn = {
+          rule: "dead-branch",
+          message: result ? `Condition is always true \u2014 else branch is dead code` : `Condition is always false \u2014 then branch is dead code`,
+          file
+        };
+        if (stmt.span) {
+          warn.line = stmt.span.line;
+          warn.col = stmt.span.col;
+        } else if (stmt.cond.span) {
+          warn.line = stmt.cond.span.line;
+          warn.col = stmt.cond.span.col;
+        }
+        out.push(warn);
+      }
+      checkDeadBranchesBlock(stmt.then, out, file);
+      if (stmt.else_) checkDeadBranchesBlock(stmt.else_, out, file);
+    } else {
+      checkDeadBranchesStmt(stmt, out, file);
+    }
+  }
+}
+function checkDeadBranchesStmt(stmt, out, file) {
+  switch (stmt.kind) {
+    case "while":
+      checkDeadBranchesBlock(stmt.body, out, file);
+      if (stmt.step) checkDeadBranchesBlock(stmt.step, out, file);
+      break;
+    case "foreach":
+      checkDeadBranchesBlock(stmt.body, out, file);
+      break;
+    case "match":
+      for (const arm of stmt.arms) checkDeadBranchesBlock(arm.body, out, file);
+      break;
+    case "execute":
+      checkDeadBranchesBlock(stmt.body, out, file);
+      break;
+    case "if_let_some":
+      checkDeadBranchesBlock(stmt.then, out, file);
+      if (stmt.else_) checkDeadBranchesBlock(stmt.else_, out, file);
+      break;
+    case "while_let_some":
+      checkDeadBranchesBlock(stmt.body, out, file);
+      break;
+    case "labeled_loop":
+      checkDeadBranchesStmt(stmt.body, out, file);
+      break;
+  }
+}
+function evaluateConstBool(expr) {
+  if (expr.kind === "bool_lit") return expr.value;
+  if (expr.kind === "binary") {
+    const lv = evaluateConstNumber(expr.left);
+    const rv = evaluateConstNumber(expr.right);
+    if (lv !== null && rv !== null) {
+      switch (expr.op) {
+        case "==":
+          return lv === rv;
+        case "!=":
+          return lv !== rv;
+        case "<":
+          return lv < rv;
+        case "<=":
+          return lv <= rv;
+        case ">":
+          return lv > rv;
+        case ">=":
+          return lv >= rv;
+      }
+    }
+    const lb = evaluateConstBool(expr.left);
+    const rb = evaluateConstBool(expr.right);
+    if (lb !== null && rb !== null) {
+      if (expr.op === "==") return lb === rb;
+      if (expr.op === "!=") return lb !== rb;
+    }
+  }
+  return null;
+}
+function evaluateConstNumber(expr) {
+  switch (expr.kind) {
+    case "int_lit":
+    case "float_lit":
+    case "byte_lit":
+    case "short_lit":
+    case "long_lit":
+    case "double_lit":
+      return expr.value;
+    default:
+      return null;
+  }
+}
+function checkFunctionLength(fn, maxLines, file) {
+  const lineCount = countFunctionLines(fn);
+  if (lineCount > maxLines) {
+    const warn = {
+      rule: "function-too-long",
+      message: `Function "${fn.name}" is ${lineCount} lines long (max ${maxLines}), consider splitting it`,
+      file
+    };
+    if (fn.span) {
+      warn.line = fn.span.line;
+      warn.col = fn.span.col;
+    }
+    return warn;
+  }
+  return null;
+}
+function countFunctionLines(fn) {
+  if (fn.span && fn.body.length > 0) {
+    const lastStmt = fn.body[fn.body.length - 1];
+    if (lastStmt.span && fn.span.line) {
+      const endLine = lastStmt.span.line;
+      const startLine = fn.span.line;
+      if (endLine > startLine) return endLine - startLine;
+    }
+  }
+  return countStmts(fn.body);
+}
+function countStmts(block) {
+  let count = 0;
+  for (const stmt of block) {
+    count++;
+    switch (stmt.kind) {
+      case "if":
+        count += countStmts(stmt.then);
+        if (stmt.else_) count += countStmts(stmt.else_);
+        break;
+      case "while":
+        count += countStmts(stmt.body);
+        if (stmt.step) count += countStmts(stmt.step);
+        break;
+      case "foreach":
+        count += countStmts(stmt.body);
+        break;
+      case "match":
+        for (const arm of stmt.arms) count += countStmts(arm.body);
+        break;
+      case "execute":
+        count += countStmts(stmt.body);
+        break;
+      case "if_let_some":
+        count += countStmts(stmt.then);
+        if (stmt.else_) count += countStmts(stmt.else_);
+        break;
+      case "while_let_some":
+        count += countStmts(stmt.body);
+        break;
+      case "labeled_loop":
+        count += countStmts([stmt.body]);
+        break;
+    }
+  }
+  return count;
+}
+
+// ../../src/lsp/rename.ts
+function keyFor(line, col) {
+  return `${line}:${col}`;
+}
+function buildTokenCursor(source) {
+  const tokens = new Lexer(source).tokenize().filter((token) => token.kind !== "eof");
+  const byLineCol = /* @__PURE__ */ new Map();
+  tokens.forEach((token, index) => byLineCol.set(keyFor(token.line, token.col), index));
+  return { tokens, byLineCol };
+}
+function tokenToRange(doc, token) {
+  const start = doc.positionAt(doc.offsetAt({ line: token.line - 1, character: token.col - 1 }));
+  const end = doc.positionAt(doc.offsetAt({ line: token.line - 1, character: token.col - 1 }) + token.value.length);
+  return { start, end };
+}
+function containsPosition(token, position) {
+  const line = token.line - 1;
+  const start = token.col - 1;
+  const end = start + token.value.length;
+  return position.line === line && position.character >= start && position.character <= end;
+}
+function makeScope(parent) {
+  return {
+    parent,
+    locals: /* @__PURE__ */ new Map(),
+    types: /* @__PURE__ */ new Map()
+  };
+}
+function resolveLocal(scope, name) {
+  let cur = scope;
+  while (cur) {
+    const found = cur.locals.get(name);
+    if (found) return found;
+    cur = cur.parent;
+  }
+  return null;
+}
+function resolveType(scope, name) {
+  let cur = scope;
+  while (cur) {
+    const found = cur.types.get(name);
+    if (found) return found;
+    cur = cur.parent;
+  }
+  return null;
+}
+function findTokenIndex(cursor, line, col) {
+  return cursor.byLineCol.get(keyFor(line, col)) ?? -1;
+}
+function findNextToken(cursor, startIndex, predicate) {
+  for (let i = Math.max(0, startIndex); i < cursor.tokens.length; i++) {
+    if (predicate(cursor.tokens[i], i)) return cursor.tokens[i];
+  }
+  return null;
+}
+function findFunctionNameToken(cursor, fn) {
+  if (!fn.span) return null;
+  const fnIndex = findTokenIndex(cursor, fn.span.line, fn.span.col);
+  if (fnIndex === -1) return null;
+  return findNextToken(cursor, fnIndex + 1, (token) => token.kind === "ident" && token.value === fn.name);
+}
+function findDeclarationNameToken(cursor, stmt) {
+  if (!stmt.span) return null;
+  const startIndex = findTokenIndex(cursor, stmt.span.line, stmt.span.col);
+  if (startIndex === -1) return null;
+  return findNextToken(
+    cursor,
+    startIndex + 1,
+    (token) => token.kind === "ident" && token.value === stmt.name && token.line === stmt.span.line
+  );
+}
+function findFieldDeclarationTokens(cursor, program) {
+  const result = /* @__PURE__ */ new Map();
+  for (const struct of program.structs ?? []) {
+    if (!struct.span) continue;
+    const structIndex = findTokenIndex(cursor, struct.span.line, struct.span.col);
+    if (structIndex === -1) continue;
+    let i = structIndex;
+    while (i < cursor.tokens.length && cursor.tokens[i].kind !== "{") i++;
+    if (i >= cursor.tokens.length) continue;
+    let fieldIndex = 0;
+    let depth = 1;
+    i++;
+    while (i < cursor.tokens.length && depth > 0 && fieldIndex < struct.fields.length) {
+      const token = cursor.tokens[i];
+      if (token.kind === "{") depth++;
+      else if (token.kind === "}") depth--;
+      else if (depth === 1 && token.kind === "ident" && token.value === struct.fields[fieldIndex].name && cursor.tokens[i + 1]?.kind === ":") {
+        result.set(`${struct.name}.${token.value}`, token);
+        fieldIndex++;
+      }
+      i++;
+    }
+  }
+  return result;
+}
+function findParamToken(cursor, fn, paramName, fromIndex) {
+  return findNextToken(
+    cursor,
+    fromIndex,
+    (token) => token.kind === "ident" && token.value === paramName && cursor.tokens[cursor.tokens.indexOf(token) + 1]?.kind === ":"
+  );
+}
+function findFieldAccessToken(cursor, expr) {
+  if (!expr.span) return null;
+  const startIndex = findTokenIndex(cursor, expr.span.line, expr.span.col);
+  if (startIndex === -1) return null;
+  return findNextToken(
+    cursor,
+    startIndex + 1,
+    (token, index) => token.kind === "ident" && token.value === expr.field && cursor.tokens[index - 1]?.kind === "." && token.line === expr.span.line
+  );
+}
+function findStructLiteralFieldToken(cursor, expr, fieldName, skipCount) {
+  if (!expr.span) return null;
+  const startIndex = findTokenIndex(cursor, expr.span.line, expr.span.col);
+  if (startIndex === -1) return null;
+  let depth = 0;
+  let skipped = 0;
+  for (let i = startIndex; i < cursor.tokens.length; i++) {
+    const token = cursor.tokens[i];
+    if (token.kind === "{") depth++;
+    else if (token.kind === "}") {
+      depth--;
+      if (depth === 0) break;
+    } else if (depth === 1 && token.kind === "ident" && token.value === fieldName && cursor.tokens[i + 1]?.kind === ":") {
+      if (skipped === skipCount) return token;
+      skipped++;
+    }
+  }
+  return null;
+}
+function typeNameOf(type, program) {
+  if (!type) return null;
+  if (type.kind === "struct") return type.name;
+  if (type.kind === "named" && program.structs?.some((struct) => struct.name === type.name)) return type.name;
+  return null;
+}
+function resolveExprStructName(expr, scope, program, currentFn) {
+  switch (expr.kind) {
+    case "ident":
+      return typeNameOf(resolveType(scope, expr.name), program);
+    case "member": {
+      const objType = resolveExprStructName(expr.obj, scope, program, currentFn);
+      if (!objType) return null;
+      const structDecl = program.structs?.find((struct) => struct.name === objType);
+      const fieldType = structDecl?.fields.find((field) => field.name === expr.field)?.type;
+      return typeNameOf(fieldType, program);
+    }
+    case "call": {
+      const fn = program.declarations.find((candidate) => candidate.name === expr.fn);
+      return typeNameOf(fn?.returnType, program);
+    }
+    case "type_cast":
+      return typeNameOf(expr.targetType, program);
+    case "struct_lit":
+      return typeNameOf(currentFn.returnType, program);
+    default:
+      return null;
+  }
+}
+function addOccurrence(symbol, token) {
+  if (!symbol || !token) return;
+  if (symbol.occurrences.some((existing) => existing.line === token.line && existing.col === token.col)) return;
+  symbol.occurrences.push(token);
+}
+function buildRenameIndex(source, program) {
+  const cursor = buildTokenCursor(source);
+  const symbols = [];
+  const functions = /* @__PURE__ */ new Map();
+  const fieldSymbols = /* @__PURE__ */ new Map();
+  const fieldDeclTokens = findFieldDeclarationTokens(cursor, program);
+  for (const fn of program.declarations) {
+    const symbol = { kind: "function", name: fn.name, occurrences: [] };
+    addOccurrence(symbol, findFunctionNameToken(cursor, fn));
+    functions.set(fn.name, symbol);
+    symbols.push(symbol);
+  }
+  for (const struct of program.structs ?? []) {
+    for (const field of struct.fields) {
+      const symbol = {
+        kind: "field",
+        name: field.name,
+        structName: struct.name,
+        occurrences: []
+      };
+      addOccurrence(symbol, fieldDeclTokens.get(`${struct.name}.${field.name}`) ?? null);
+      fieldSymbols.set(`${struct.name}.${field.name}`, symbol);
+      symbols.push(symbol);
+    }
+  }
+  function walkBlock(block, scope, currentFn) {
+    for (const stmt of block) walkStmt(stmt, scope, currentFn);
+  }
+  function bindLocal(name, type, token, scope) {
+    const symbol = { kind: "local", name, occurrences: [] };
+    addOccurrence(symbol, token);
+    scope.locals.set(name, symbol);
+    if (type) scope.types.set(name, type);
+    symbols.push(symbol);
+    return symbol;
+  }
+  function walkPattern(pattern, scope, currentFn) {
+    if (pattern.kind === "PatSome") {
+      bindLocal(pattern.binding, void 0, null, scope);
+    } else if (pattern.kind === "PatEnum") {
+      for (const binding of pattern.bindings) bindLocal(binding, void 0, null, scope);
+    } else if (pattern.kind === "PatExpr") {
+      walkExpr(pattern.expr, scope, null, currentFn);
+    }
+  }
+  function walkStmt(stmt, scope, currentFn) {
+    switch (stmt.kind) {
+      case "let": {
+        walkExpr(stmt.init, scope, stmt.type ? typeNameOf(stmt.type, program) : null, currentFn);
+        const inferredType = stmt.type ?? (() => {
+          const inferredStruct = resolveExprStructName(stmt.init, scope, program, currentFn);
+          return inferredStruct ? { kind: "struct", name: inferredStruct } : void 0;
+        })();
+        bindLocal(stmt.name, inferredType, findDeclarationNameToken(cursor, stmt), scope);
+        return;
+      }
+      case "const_decl":
+        walkExpr(stmt.value, scope, null, currentFn);
+        bindLocal(stmt.name, stmt.type, findDeclarationNameToken(cursor, stmt), scope);
+        return;
+      case "let_destruct":
+        walkExpr(stmt.init, scope, null, currentFn);
+        for (const name of stmt.names) bindLocal(name, stmt.type, null, scope);
+        return;
+      case "expr":
+        walkExpr(stmt.expr, scope, null, currentFn);
+        return;
+      case "return":
+        if (stmt.value) walkExpr(stmt.value, scope, typeNameOf(currentFn.returnType, program), currentFn);
+        return;
+      case "if":
+        walkExpr(stmt.cond, scope, null, currentFn);
+        walkBlock(stmt.then, makeScope(scope), currentFn);
+        if (stmt.else_) walkBlock(stmt.else_, makeScope(scope), currentFn);
+        return;
+      case "while":
+      case "do_while":
+        walkExpr(stmt.cond, scope, null, currentFn);
+        walkBlock(stmt.body, makeScope(scope), currentFn);
+        return;
+      case "repeat":
+      case "as_block":
+      case "at_block":
+      case "as_at":
+      case "execute":
+        walkBlock(stmt.body, makeScope(scope), currentFn);
+        return;
+      case "for": {
+        const forScope = makeScope(scope);
+        if (stmt.init) walkStmt(stmt.init, forScope, currentFn);
+        walkExpr(stmt.cond, forScope, null, currentFn);
+        walkExpr(stmt.step, forScope, null, currentFn);
+        walkBlock(stmt.body, forScope, currentFn);
+        return;
+      }
+      case "foreach": {
+        walkExpr(stmt.iterable, scope, null, currentFn);
+        const foreachScope = makeScope(scope);
+        bindLocal(stmt.binding, void 0, null, foreachScope);
+        walkBlock(stmt.body, foreachScope, currentFn);
+        return;
+      }
+      case "for_range": {
+        walkExpr(stmt.start, scope, null, currentFn);
+        walkExpr(stmt.end, scope, null, currentFn);
+        const forScope = makeScope(scope);
+        bindLocal(stmt.varName, { kind: "named", name: "int" }, null, forScope);
+        walkBlock(stmt.body, forScope, currentFn);
+        return;
+      }
+      case "for_each": {
+        walkExpr(stmt.array, scope, null, currentFn);
+        const forScope = makeScope(scope);
+        bindLocal(stmt.binding, void 0, null, forScope);
+        walkBlock(stmt.body, forScope, currentFn);
+        return;
+      }
+      case "for_in_array": {
+        const forScope = makeScope(scope);
+        bindLocal(stmt.binding, void 0, null, forScope);
+        walkExpr(stmt.lenExpr, forScope, null, currentFn);
+        walkBlock(stmt.body, forScope, currentFn);
+        return;
+      }
+      case "match":
+        walkExpr(stmt.expr, scope, null, currentFn);
+        for (const arm of stmt.arms) {
+          const armScope = makeScope(scope);
+          walkPattern(arm.pattern, armScope, currentFn);
+          walkBlock(arm.body, armScope, currentFn);
+        }
+        return;
+      case "if_let_some": {
+        walkExpr(stmt.init, scope, null, currentFn);
+        const thenScope = makeScope(scope);
+        bindLocal(stmt.binding, void 0, null, thenScope);
+        walkBlock(stmt.then, thenScope, currentFn);
+        if (stmt.else_) walkBlock(stmt.else_, makeScope(scope), currentFn);
+        return;
+      }
+      case "while_let_some": {
+        walkExpr(stmt.init, scope, null, currentFn);
+        const whileScope = makeScope(scope);
+        bindLocal(stmt.binding, void 0, null, whileScope);
+        walkBlock(stmt.body, whileScope, currentFn);
+        return;
+      }
+      case "labeled_loop":
+        walkStmt(stmt.body, makeScope(scope), currentFn);
+        return;
+      default:
+        return;
+    }
+  }
+  function walkExpr(expr, scope, expectedStructName, currentFn) {
+    switch (expr.kind) {
+      case "ident":
+        addOccurrence(resolveLocal(scope, expr.name), expr.span ? cursor.tokens[findTokenIndex(cursor, expr.span.line, expr.span.col)] ?? null : null);
+        return;
+      case "assign":
+        addOccurrence(resolveLocal(scope, expr.target), expr.span ? cursor.tokens[findTokenIndex(cursor, expr.span.line, expr.span.col)] ?? null : null);
+        walkExpr(expr.value, scope, null, currentFn);
+        return;
+      case "call":
+        addOccurrence(functions.get(expr.fn) ?? null, expr.span ? cursor.tokens[findTokenIndex(cursor, expr.span.line, expr.span.col)] ?? null : null);
+        for (const arg of expr.args) walkExpr(arg, scope, null, currentFn);
+        return;
+      case "member": {
+        walkExpr(expr.obj, scope, null, currentFn);
+        const structName = resolveExprStructName(expr.obj, scope, program, currentFn);
+        addOccurrence(structName ? fieldSymbols.get(`${structName}.${expr.field}`) ?? null : null, findFieldAccessToken(cursor, expr));
+        return;
+      }
+      case "member_assign": {
+        walkExpr(expr.obj, scope, null, currentFn);
+        const structName = resolveExprStructName(expr.obj, scope, program, currentFn);
+        addOccurrence(structName ? fieldSymbols.get(`${structName}.${expr.field}`) ?? null : null, findFieldAccessToken(cursor, expr));
+        walkExpr(expr.value, scope, structName ? typeNameOf(program.structs?.find((struct) => struct.name === structName)?.fields.find((field) => field.name === expr.field)?.type, program) : null, currentFn);
+        return;
+      }
+      case "struct_lit": {
+        const structName = expectedStructName;
+        if (structName) {
+          expr.fields.forEach((field, index) => {
+            addOccurrence(fieldSymbols.get(`${structName}.${field.name}`) ?? null, findStructLiteralFieldToken(cursor, expr, field.name, index));
+            const fieldType = program.structs?.find((struct) => struct.name === structName)?.fields.find((candidate) => candidate.name === field.name)?.type;
+            walkExpr(field.value, scope, typeNameOf(fieldType, program), currentFn);
+          });
+        } else {
+          for (const field of expr.fields) walkExpr(field.value, scope, null, currentFn);
+        }
+        return;
+      }
+      case "binary":
+        walkExpr(expr.left, scope, null, currentFn);
+        walkExpr(expr.right, scope, null, currentFn);
+        return;
+      case "unary":
+      case "type_cast":
+        walkExpr(expr.kind === "unary" ? expr.operand : expr.expr, scope, null, currentFn);
+        return;
+      case "invoke":
+        walkExpr(expr.callee, scope, null, currentFn);
+        for (const arg of expr.args) walkExpr(arg, scope, null, currentFn);
+        return;
+      case "index":
+        walkExpr(expr.obj, scope, null, currentFn);
+        walkExpr(expr.index, scope, null, currentFn);
+        return;
+      case "index_assign":
+        walkExpr(expr.obj, scope, null, currentFn);
+        walkExpr(expr.index, scope, null, currentFn);
+        walkExpr(expr.value, scope, null, currentFn);
+        return;
+      case "array_lit":
+      case "tuple_lit":
+        for (const item of expr.elements) walkExpr(item, scope, null, currentFn);
+        return;
+      case "enum_construct":
+        for (const arg of expr.args) walkExpr(arg.value, scope, null, currentFn);
+        return;
+      case "some_lit":
+        walkExpr(expr.value, scope, null, currentFn);
+        return;
+      case "unwrap_or":
+        walkExpr(expr.opt, scope, null, currentFn);
+        walkExpr(expr.default_, scope, null, currentFn);
+        return;
+      case "str_interp":
+        for (const part of expr.parts) {
+          if (typeof part !== "string") walkExpr(part, scope, null, currentFn);
+        }
+        return;
+      case "f_string":
+        for (const part of expr.parts) {
+          if (part.kind === "expr") walkExpr(part.expr, scope, null, currentFn);
+        }
+        return;
+      case "lambda": {
+        const lambdaScope = makeScope(scope);
+        let fromIndex = expr.span ? findTokenIndex(cursor, expr.span.line, expr.span.col) : -1;
+        for (const param of expr.params) {
+          const token = findParamToken(cursor, currentFn, param.name, fromIndex + 1);
+          if (token) fromIndex = cursor.tokens.indexOf(token);
+          bindLocal(param.name, param.type, token, lambdaScope);
+        }
+        if (Array.isArray(expr.body)) walkBlock(expr.body, lambdaScope, currentFn);
+        else walkExpr(expr.body, lambdaScope, null, currentFn);
+        return;
+      }
+      default:
+        return;
+    }
+  }
+  for (const fn of program.declarations) {
+    const rootScope = makeScope(null);
+    let fromIndex = findFunctionNameToken(cursor, fn) && cursor.tokens.indexOf(findFunctionNameToken(cursor, fn)) || -1;
+    for (const param of fn.params) {
+      const token = findParamToken(cursor, fn, param.name, fromIndex + 1);
+      if (token) fromIndex = cursor.tokens.indexOf(token);
+      bindLocal(param.name, param.type, token, rootScope);
+    }
+    walkBlock(fn.body, rootScope, fn);
+  }
+  return symbols;
+}
+function findRenameRanges(source, program, position) {
+  const doc = TextDocument.create("file:///rename.mcrs", "redscript", 1, source);
+  const symbols = buildRenameIndex(source, program);
+  const symbol = symbols.find((candidate) => candidate.occurrences.some((token) => containsPosition(token, position)));
+  if (!symbol) return [];
+  return symbol.occurrences.slice().sort((a, b) => a.line - b.line || a.col - b.col).map((token) => tokenToRange(doc, token));
+}
+function buildRenameWorkspaceEdit(doc, program, position, newName) {
+  const ranges = findRenameRanges(doc.getText(), program, position);
+  if (ranges.length === 0) return null;
+  return {
+    changes: {
+      [doc.uri]: ranges.map((range) => ({ range, newText: newName }))
+    }
+  };
+}
+
 // ../../src/lsp/server.ts
 var connection = (0, import_node.createConnection)(import_node.ProposedFeatures.all);
 var documents = new import_node.TextDocuments(TextDocument);
@@ -14424,6 +16408,28 @@ function toDiagnostic(err) {
     source: "redscript"
   };
 }
+var LINT_SEVERITY_MAP = {
+  "unused-variable": import_node.DiagnosticSeverity.Information,
+  "magic-number": import_node.DiagnosticSeverity.Hint,
+  "dead-branch": import_node.DiagnosticSeverity.Warning,
+  "unused-import": import_node.DiagnosticSeverity.Information,
+  "function-too-long": import_node.DiagnosticSeverity.Warning
+};
+function lintWarningToDiagnostic(w) {
+  const line = Math.max(0, (w.line ?? 1) - 1);
+  const col = Math.max(0, (w.col ?? 1) - 1);
+  const severity = LINT_SEVERITY_MAP[w.rule] ?? import_node.DiagnosticSeverity.Warning;
+  return {
+    severity,
+    range: {
+      start: { line, character: col },
+      end: { line, character: col + 80 }
+    },
+    message: w.message,
+    source: "redscript-lint",
+    code: w.rule
+  };
+}
 var DECORATOR_DOCS = {
   tick: "Runs every game tick.\n\n**Optional args:** `rate=N` (every N ticks, e.g. `@tick(rate=20)` = once per second)\n\nExample: `@tick fn every_tick() {}` or `@tick(rate=20) fn every_second() {}`",
   load: "Runs once on `/reload`. Use for initialization.\n\nExample: `@load fn init() { scoreboard_create(...) }`",
@@ -14463,6 +16469,41 @@ function formatFnSignature(fn) {
   const ret = typeToString(fn.returnType);
   const typeParams = fn.typeParams?.length ? `<${fn.typeParams.join(", ")}>` : "";
   return `fn ${fn.name}${typeParams}(${params}): ${ret}`;
+}
+function parseDocCommentText(raw) {
+  const result = { description: "", params: [], returns: null };
+  const descLines = [];
+  for (const line of raw.split("\n")) {
+    const paramMatch = line.match(/^@param\s+(\w+)\s+(.+)$/);
+    if (paramMatch) {
+      result.params.push({ name: paramMatch[1], doc: paramMatch[2].trim() });
+      continue;
+    }
+    const retMatch = line.match(/^@returns?\s+(.+)$/);
+    if (retMatch) {
+      result.returns = retMatch[1].trim();
+      continue;
+    }
+    if (/^@\w+/.test(line.trim())) continue;
+    descLines.push(line);
+  }
+  result.description = descLines.join("\n").trim();
+  return result;
+}
+function formatDocCommentMarkdown(doc) {
+  const parts = [];
+  if (doc.description) parts.push(doc.description);
+  if (doc.params.length > 0) {
+    parts.push("\n**Parameters:**");
+    for (const p of doc.params) {
+      parts.push(`- \`${p.name}\` \u2014 ${p.doc}`);
+    }
+  }
+  if (doc.returns) {
+    parts.push(`
+**Returns:** ${doc.returns}`);
+  }
+  return parts.join("\n");
 }
 function extractDocComment(source, fn) {
   if (!fn.span) return null;
@@ -14658,6 +16699,18 @@ function validateAndPublish(doc) {
   const source = doc.getText();
   const parsed = parseDocument(doc.uri, source);
   const diagnostics = parsed.errors.map(toDiagnostic);
+  try {
+    const filePath = (() => {
+      try {
+        return (0, import_url.fileURLToPath)(doc.uri);
+      } catch {
+        return doc.uri;
+      }
+    })();
+    const lintWarnings = lintString(source, filePath);
+    diagnostics.push(...lintWarnings.map(lintWarningToDiagnostic));
+  } catch {
+  }
   connection.sendDiagnostics({ uri: doc.uri, diagnostics });
 }
 documents.onDidOpen((e) => validateAndPublish(e.document));
@@ -14744,11 +16797,20 @@ ${builtin.doc}`
   const fn = findFunction(program, word);
   if (fn) {
     const sig = formatFnSignature(fn);
+    const rawDoc = extractDocComment(source, fn);
+    let docSection = "";
+    if (rawDoc) {
+      const parsed = parseDocCommentText(rawDoc);
+      const md = formatDocCommentMarkdown(parsed);
+      if (md) docSection = `
+
+${md}`;
+    }
     const content = {
       kind: import_node.MarkupKind.Markdown,
       value: `\`\`\`redscript
 ${sig}
-\`\`\``
+\`\`\`${docSection}`
     };
     return { contents: content };
   }
@@ -15303,20 +17365,9 @@ connection.onReferences((params) => {
 connection.onRenameRequest((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return null;
-  const wordRange = getWordRangeAtPosition(doc, params.position);
-  if (!wordRange) return null;
-  const word = doc.getText(wordRange);
-  if (!word) return null;
-  const text = doc.getText();
-  const edits = [];
-  const regex = new RegExp(`\\b${word}\\b`, "g");
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    const start = doc.positionAt(match.index);
-    const end = doc.positionAt(match.index + word.length);
-    edits.push({ range: { start, end }, newText: params.newName });
-  }
-  return { changes: { [params.textDocument.uri]: edits } };
+  const parsed = parsedDocs.get(params.textDocument.uri);
+  if (!parsed?.program) return null;
+  return buildRenameWorkspaceEdit(doc, parsed.program, params.position, params.newName);
 });
 documents.listen(connection);
 connection.listen();

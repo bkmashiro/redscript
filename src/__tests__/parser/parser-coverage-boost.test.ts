@@ -288,7 +288,7 @@ describe('Parser — labeled loops', () => {
 
   test('labeled repeat loop', () => {
     const stmt = parseStmt(`
-      loop: repeat(5) {
+      loop: repeat 5 {
         continue loop;
       }
     `)
@@ -679,9 +679,10 @@ describe('Parser — string interpolation', () => {
     const tokens = new Lexer(src).tokenize()
     const parser = new Parser(tokens)
     const prog = parser.parse('test')
-    const stmt = prog.declarations[0].body[0]
+    // Second statement is the f-string (body[1])
+    const stmt = prog.declarations[0].body[1]
     expect(stmt.kind).toBe('let')
-    const init = (stmt as any).value
+    const init = (stmt as any).init
     expect(init.kind).toBe('f_string')
   })
 
@@ -690,9 +691,10 @@ describe('Parser — string interpolation', () => {
     const tokens = new Lexer(src).tokenize()
     const parser = new Parser(tokens)
     const prog = parser.parse('test')
-    const stmt = prog.declarations[0].body[0]
+    // Third statement is the f-string (body[2])
+    const stmt = prog.declarations[0].body[2]
     expect(stmt.kind).toBe('let')
-    const init = (stmt as any).value
+    const init = (stmt as any).init
     expect(init.kind).toBe('f_string')
     expect(init.parts.length).toBeGreaterThan(1)
   })
@@ -704,7 +706,7 @@ describe('Parser — string interpolation', () => {
     const prog = parser.parse('test')
     const stmt = prog.declarations[0].body[0]
     expect(stmt.kind).toBe('let')
-    const init = (stmt as any).value
+    const init = (stmt as any).init
     expect(init.kind).toBe('str_lit')
   })
 
@@ -713,7 +715,7 @@ describe('Parser — string interpolation', () => {
     const src = 'fn _t() { let msg = "no interp here"; }'
     const tokens = new Lexer(src).tokenize()
     const prog = new Parser(tokens).parse('test')
-    const init = (prog.declarations[0].body[0] as any).value
+    const init = (prog.declarations[0].body[0] as any).init
     expect(init.kind).toBe('str_lit')
   })
 })
@@ -856,7 +858,7 @@ describe('Parser — entity type name', () => {
         }
       }
     `)
-    expect(prog.declarations[0].body[0].kind).toBe('for_each')
+    expect(prog.declarations[0].body[0].kind).toBe('foreach')
   })
 })
 
@@ -930,10 +932,11 @@ describe('Parser — match expression patterns', () => {
 // ── typeof / instanceof expressions ───────────────────────────────────────
 
 describe('Parser — is (instanceof) expressions', () => {
-  test('is expression for type check', () => {
-    const expr = parseExpr('x is int')
-    expect(expr.kind).toBe('bin_op')
-    expect((expr as any).op).toBe('is')
+  test('is expression for entity type check', () => {
+    // 'is' checks entity types like Player, Mob, etc.
+    const expr = parseExpr('x is Player')
+    expect(expr.kind).toBe('is_check')
+    expect((expr as any).entityType).toBe('Player')
   })
 })
 
