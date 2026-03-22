@@ -50,6 +50,7 @@ import { BUILTIN_METADATA } from '../builtins/metadata'
 import type { BuiltinDef } from '../builtins/metadata'
 import { lintString } from '../lint'
 import type { LintWarning } from '../lint'
+import { buildRenameWorkspaceEdit } from './rename'
 
 // ---------------------------------------------------------------------------
 // Connection and document manager
@@ -1380,24 +1381,9 @@ connection.onReferences((params: ReferenceParams): Location[] => {
 connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
   const doc = documents.get(params.textDocument.uri)
   if (!doc) return null
-
-  const wordRange = getWordRangeAtPosition(doc, params.position)
-  if (!wordRange) return null
-  const word = doc.getText(wordRange)
-  if (!word) return null
-
-  const text = doc.getText()
-  const edits: import('vscode-languageserver/node').TextEdit[] = []
-  const regex = new RegExp(`\\b${word}\\b`, 'g')
-  let match: RegExpExecArray | null
-
-  while ((match = regex.exec(text)) !== null) {
-    const start = doc.positionAt(match.index)
-    const end = doc.positionAt(match.index + word.length)
-    edits.push({ range: { start, end }, newText: params.newName })
-  }
-
-  return { changes: { [params.textDocument.uri]: edits } }
+  const parsed = parsedDocs.get(params.textDocument.uri)
+  if (!parsed?.program) return null
+  return buildRenameWorkspaceEdit(doc, parsed.program, params.position, params.newName)
 })
 
 // ---------------------------------------------------------------------------
