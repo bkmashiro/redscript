@@ -273,7 +273,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'no-inline' | 'config' | 'singleton' | 'profile' | 'throttle' | 'retry' | 'memoize' | 'test'
+  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'no-inline' | 'config' | 'singleton' | 'profile' | 'benchmark' | 'throttle' | 'retry' | 'memoize' | 'test'
   args?: {
     rate?: number
     objective?: string

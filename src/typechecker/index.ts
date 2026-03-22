@@ -446,6 +446,17 @@ export class TypeChecker {
       return
     }
 
+    const benchmarkDecorators = fn.decorators.filter(decorator => decorator.name === 'benchmark')
+    if (benchmarkDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @benchmark decorators`, fn)
+      return
+    }
+
+    if (benchmarkDecorators.length === 1 && (benchmarkDecorators[0].rawArgs?.length || benchmarkDecorators[0].args && Object.keys(benchmarkDecorators[0].args).length > 0)) {
+      this.report(`@benchmark decorator on '${fn.name}' does not accept arguments`, fn)
+      return
+    }
+
     const memoizeDecorators = fn.decorators.filter(decorator => decorator.name === 'memoize')
     if (memoizeDecorators.length > 1) {
       this.report(`Function '${fn.name}' cannot have multiple @memoize decorators`, fn)

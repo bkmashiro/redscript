@@ -630,7 +630,7 @@ export class Parser {
       return { name }
     }
 
-    if (name === 'profile' || name === 'memoize') {
+    if (name === 'profile' || name === 'benchmark' || name === 'memoize') {
       this.error(`@${name} decorator does not accept arguments`)
     }
 

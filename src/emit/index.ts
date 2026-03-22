@@ -41,6 +41,8 @@ export interface EmitOptions {
   singletonObjectives?: string[]
   /** Functions decorated with @profile. */
   profiledFunctions?: string[]
+  /** Functions decorated with @benchmark. */
+  benchmarkFunctions?: string[]
   /** Emit debug-only profiling instrumentation and helpers. */
   enableProfiling?: boolean
   /** Functions decorated with @throttle. */
@@ -62,6 +64,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const scheduleFns = options.scheduleFunctions ?? []
   const watchFns = options.watchFunctions ?? []
   const profiledFns = options.profiledFunctions ?? []
+  const benchmarkFns = options.benchmarkFunctions ?? []
   const enableProfiling = options.enableProfiling ?? false
   const throttleFns = options.throttleFunctions ?? []
   const retryFns = options.retryFunctions ?? []
@@ -93,6 +96,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
           'scoreboard objectives add __profile dummy',
         ]
       : []),
+    ...(benchmarkFns.length > 0 ? ['scoreboard objectives add __bench dummy'] : []),
     ...throttleFns.map(t => `scoreboard objectives add ${throttleObjective(t.name)} dummy`),
     ...retryFns.map(r => `scoreboard objectives add ${retryObjective(r.name)} dummy`),
     ...(memoizeFns.length > 0 ? [`scoreboard objectives add __memo dummy`] : []),
@@ -144,6 +148,28 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     files.push({
       path: `data/${namespace}/function/_schedule_${name}.mcfunction`,
       content: `schedule function ${namespace}:${name} ${ticks}t\n`,
+    })
+  }
+
+  // @benchmark wrapper functions
+  for (const name of benchmarkFns) {
+    const implName = `${name}_impl`
+    const deltaPlayer = benchmarkDeltaPlayer(name)
+    files.push({
+      path: fnNameToPath(name, namespace),
+      content: `function ${namespace}:${implName}\n`,
+    })
+    files.push({
+      path: fnNameToPath(benchmarkWrapperName(name), namespace),
+      content: [
+        `scoreboard players set ${benchmarkStartPlayer(name)} __bench 0`,
+        `execute store result score ${benchmarkStartPlayer(name)} __bench run time query gametime`,
+        `function ${namespace}:${implName}`,
+        `scoreboard players set ${deltaPlayer} __bench 0`,
+        `execute store result score ${deltaPlayer} __bench run time query gametime`,
+        `scoreboard players operation ${deltaPlayer} __bench -= ${benchmarkStartPlayer(name)} __bench`,
+        `tellraw @a [{"text":"[benchmark] ${name}: "},{"score":{"name":"${deltaPlayer}","objective":"__bench"}},{"text":" ticks"}]`,
+      ].join('\n') + '\n',
     })
   }
 
@@ -420,6 +446,18 @@ function profilerTotalPlayer(name: string): string {
 
 function profilerCountPlayer(name: string): string {
   return `#prof_count_${profilerSafeName(name)}`
+}
+
+function benchmarkWrapperName(name: string): string {
+  return `__bench_${name}`
+}
+
+function benchmarkStartPlayer(name: string): string {
+  return `#bench_start_${profilerSafeName(name)}`
+}
+
+function benchmarkDeltaPlayer(name: string): string {
+  return `#bench_delta_${profilerSafeName(name)}`
 }
 
 function profilerStartLines(name: string): string[] {

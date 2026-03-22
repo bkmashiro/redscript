@@ -321,6 +321,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const coroutineInfos: CoroutineInfo[] = []
     const scheduleFunctions: Array<{ name: string; ticks: number }> = []
     const profiledFunctions: string[] = []
+    const benchmarkFunctions: string[] = []
     const throttleFunctions: Array<{ name: string; ticks: number }> = []
     const retryFunctions: Array<{ name: string; max: number }> = []
     const memoizeFunctions: string[] = []
@@ -352,6 +353,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
         }
         if (dec.name === 'profile') {
           profiledFunctions.push(fn.name)
+        }
+        if (dec.name === 'benchmark') {
+          benchmarkFunctions.push(fn.name)
         }
         if (dec.name === 'throttle' && dec.args?.ticks) {
           throttleFunctions.push({ name: fn.name, ticks: dec.args.ticks })
@@ -509,6 +513,20 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       }
     }
 
+    // Stage 6.96: Rename @benchmark functions to <fn>_impl in LIR,
+    // rewriting recursive self-calls so public and benchmark wrappers can target the implementation.
+    for (const fnName of benchmarkFunctions) {
+      const lirFn = lirOpt.functions.find(f => f.name === fnName)
+      if (!lirFn) continue
+      const implName = `${fnName}_impl`
+      lirFn.name = implName
+      for (const instr of lirFn.instructions) {
+        if ('fn' in instr && instr.fn === fnName) {
+          ;(instr as { fn: string }).fn = implName
+        }
+      }
+    }
+
     // Stage 7: LIR → .mcfunction
     const files = emit(lirOpt, {
       namespace,
@@ -521,6 +539,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       eventHandlers,
       singletonObjectives,
       profiledFunctions,
+      benchmarkFunctions,
       enableProfiling: debug,
       throttleFunctions,
       retryFunctions,
