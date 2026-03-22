@@ -1,20 +1,50 @@
-// Runtime Set implementation using NBT storage.
+// sets.mcrs — Runtime Set implementation using NBT storage.
+//
 // Sets are stored as NBT arrays with uniqueness enforced on add.
-//
-// Note: This is reference documentation for the builtins.
-// Actual implementation is in the compiler.
-//
-// fn set_new() -> string
-//   Creates a new empty set. Returns a unique set ID.
-//
-// fn set_add(set: string, value: string)
-//   Adds a value to the set if it is not already present.
-//
-// fn set_contains(set: string, value: string) -> int
-//   Returns 1 if the value exists in the set, 0 otherwise.
-//
-// fn set_remove(set: string, value: string)
-//   Removes a value from the set.
-//
-// fn set_clear(set: string)
-//   Removes all values from the set.
+// The actual implementation lives in the compiler — these are documentation stubs.
+
+module library;
+
+/// Create a new empty set and return its unique set ID (string handle).
+/// @since 1.1.0
+/// @returns A unique set ID used by all other set operations
+/// @example
+/// let s: string = set_new();
+/// set_add(s, "apple");
+fn set_new(): string {
+    raw("# compiler builtin — do not call directly");
+    return "";
+}
+
+/// Add a value to the set if it is not already present (no-op if already contained).
+/// @since 1.1.0
+/// @param set Set ID returned by `set_new`
+/// @param value Value to add
+fn set_add(set: string, value: string) {
+    raw("# compiler builtin — do not call directly");
+}
+
+/// Test whether a value exists in the set.
+/// @since 1.1.0
+/// @param set Set ID returned by `set_new`
+/// @param value Value to look up
+/// @returns 1 if the value is in the set, 0 otherwise
+fn set_contains(set: string, value: string): int {
+    raw("# compiler builtin — do not call directly");
+    return 0;
+}
+
+/// Remove a value from the set (no-op if not present).
+/// @since 1.1.0
+/// @param set Set ID returned by `set_new`
+/// @param value Value to remove
+fn set_remove(set: string, value: string) {
+    raw("# compiler builtin — do not call directly");
+}
+
+/// Remove all values from the set, leaving it empty.
+/// @since 1.1.0
+/// @param set Set ID returned by `set_new`
+fn set_clear(set: string) {
+    raw("# compiler builtin — do not call directly");
+}

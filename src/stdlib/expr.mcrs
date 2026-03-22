@@ -26,9 +26,24 @@ module library;
 //   With x = 15000 (1.5): result = mulfix10k(20000, 15000) + 10000
 //                                 = 30000 + 10000 = 40000 (4.0)
 
-// expr_eval(tokens, n, x): evaluate n RPN tokens, substituting x for -10000.
-// Returns the top-of-stack value (×10000 scale).
-// Undefined behaviour if the token stream is malformed (stack underflow/overflow).
+/// Evaluate an RPN (Reverse Polish Notation) token stream with a single variable substitution.
+///
+/// Token encoding (all values × 10000):
+/// - Positive integer: literal value pushed onto the stack
+/// - `-10000`: variable `x` (replaced by the `x` argument)
+/// - `-1` ADD, `-2` SUB, `-3` MUL (fixed-point), `-4` DIV (fixed-point)
+/// - `-5` SIN (degrees × 10000 → result × 10000), `-6` COS, `-7` SQRT, `-8` ABS
+///
+/// Internal stack depth: 16 elements. Behaviour is undefined for malformed token streams.
+/// @since 1.2.0
+/// @param tokens RPN token array of length n
+/// @param n Number of tokens
+/// @param x Variable value × 10000 substituted for token `-10000`
+/// @returns Top-of-stack value × 10000 after evaluating all tokens
+/// @example
+/// // 2*x + 1  →  RPN: [20000, -10000, -3, 10000, -1]
+/// let prog: int[] = [20000, -10000, -3, 10000, -1];
+/// expr_eval(prog, 5, 15000); // 40000  (2×1.5 + 1 = 4.0)
 fn expr_eval(tokens: int[], n: int, x: int): int {
     let stack: int[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     let sp: int = 0;  // stack pointer: number of items on stack

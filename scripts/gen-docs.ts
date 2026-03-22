@@ -83,6 +83,18 @@ const TARGET_MODULES = [
   // Pathfinding / AI
   'graph',
   'pathfind',
+  // High-precision math / calculus
+  'math_hp',
+  'calculus',
+  // Advanced algorithms / statistics
+  'advanced',
+  // Expression evaluator
+  'expr',
+  // Game utilities
+  'cooldown',
+  'list',
+  'events',
+  'sets',
 ];
 
 // ─── Types ───────────────────────────────────────────────────────────────────

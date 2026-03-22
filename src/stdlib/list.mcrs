@@ -21,9 +21,26 @@ module library;
 
 // ─── Static min/max/avg ──────────────────────────────────────────────────────
 
+/// Return the smaller of two integers.
+/// @since 1.0.0
+/// @param a First value
+/// @param b Second value
+/// @returns a if a ≤ b, otherwise b
 fn sort2_min(a: int, b: int): int { if (a <= b) { return a; } return b; }
+
+/// Return the larger of two integers.
+/// @since 1.0.0
+/// @param a First value
+/// @param b Second value
+/// @returns a if a ≥ b, otherwise b
 fn sort2_max(a: int, b: int): int { if (a >= b) { return a; } return b; }
 
+/// Minimum of three integers.
+/// @since 1.0.0
+/// @param a First value
+/// @param b Second value
+/// @param c Third value
+/// @returns The smallest of a, b, c
 fn list_min3(a: int, b: int, c: int): int {
     let m: int = a;
     if (b < m) { m = b; }
@@ -31,6 +48,12 @@ fn list_min3(a: int, b: int, c: int): int {
     return m;
 }
 
+/// Maximum of three integers.
+/// @since 1.0.0
+/// @param a First value
+/// @param b Second value
+/// @param c Third value
+/// @returns The largest of a, b, c
 fn list_max3(a: int, b: int, c: int): int {
     let m: int = a;
     if (b > m) { m = b; }
@@ -38,6 +61,14 @@ fn list_max3(a: int, b: int, c: int): int {
     return m;
 }
 
+/// Minimum of five integers.
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @param d Value 4
+/// @param e Value 5
+/// @returns The smallest of the five inputs
 fn list_min5(a: int, b: int, c: int, d: int, e: int): int {
     let m: int = a;
     if (b < m) { m = b; }
@@ -47,6 +78,14 @@ fn list_min5(a: int, b: int, c: int, d: int, e: int): int {
     return m;
 }
 
+/// Maximum of five integers.
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @param d Value 4
+/// @param e Value 5
+/// @returns The largest of the five inputs
 fn list_max5(a: int, b: int, c: int, d: int, e: int): int {
     let m: int = a;
     if (b > m) { m = b; }
@@ -56,15 +95,60 @@ fn list_max5(a: int, b: int, c: int, d: int, e: int): int {
     return m;
 }
 
+/// Sum of five integers.
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @param d Value 4
+/// @param e Value 5
+/// @returns a + b + c + d + e
 fn list_sum5(a: int, b: int, c: int, d: int, e: int): int { return a + b + c + d + e; }
+
+/// Sum of four integers.
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @param d Value 4
+/// @returns a + b + c + d
 fn list_sum4(a: int, b: int, c: int, d: int): int { return a + b + c + d; }
+
+/// Sum of three integers.
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @returns a + b + c
 fn list_sum3(a: int, b: int, c: int): int { return a + b + c; }
+
+/// Integer average of three values (truncates toward zero).
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @returns (a + b + c) / 3
 fn avg3(a: int, b: int, c: int): int { return (a + b + c) / 3; }
+
+/// Integer average of five values (truncates toward zero).
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @param d Value 4
+/// @param e Value 5
+/// @returns (a + b + c + d + e) / 5
 fn avg5(a: int, b: int, c: int, d: int, e: int): int { return (a + b + c + d + e) / 5; }
 
 // ─── Static sort (sorting network) ───────────────────────────────────────────
 
-// sort3(a, b, c, pos): return sorted value at position pos (0=min, 1=mid, 2=max)
+/// Sort three values and return the one at position `pos` (0 = min, 1 = mid, 2 = max).
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @param pos Desired position in sorted order (0, 1, or 2)
+/// @returns The value at the requested sorted position
 fn sort3(a: int, b: int, c: int, pos: int): int {
     let x: int = a; let y: int = b; let z: int = c;
     if (x > y) { let t: int = x; x = y; y = t; }
@@ -77,6 +161,12 @@ fn sort3(a: int, b: int, c: int, pos: int): int {
 
 // ─── Weighted random choice ───────────────────────────────────────────────────
 
+/// Weighted random choice between two options (0 or 1) using an LCG seed.
+/// @since 1.0.0
+/// @param seed LCG seed (any integer)
+/// @param w0 Weight for option 0 (must be > 0)
+/// @param w1 Weight for option 1 (must be > 0)
+/// @returns 0 with probability w0/(w0+w1), 1 otherwise
 fn weighted2(seed: int, w0: int, w1: int): int {
     let total: int = w0 + w1;
     let r: int = seed * 1664525 + 1013904223;
@@ -85,6 +175,13 @@ fn weighted2(seed: int, w0: int, w1: int): int {
     return 1;
 }
 
+/// Weighted random choice among three options (0, 1, or 2) using an LCG seed.
+/// @since 1.0.0
+/// @param seed LCG seed (any integer)
+/// @param w0 Weight for option 0
+/// @param w1 Weight for option 1
+/// @param w2 Weight for option 2
+/// @returns 0, 1, or 2 proportional to the respective weights
 fn weighted3(seed: int, w0: int, w1: int, w2: int): int {
     let total: int = w0 + w1 + w2;
     let r: int = seed * 1664525 + 1013904223;
@@ -97,8 +194,14 @@ fn weighted3(seed: int, w0: int, w1: int, w2: int): int {
 
 // ─── Sorting networks (fixed-size, optimal compare-swap count) ────────────────
 
-// sort4(a,b,c,d, pos): sort 4 values, return value at position pos (0=min)
-// Uses 5-comparison optimal sorting network
+/// Sort four values using an optimal 5-comparison sorting network, returning the value at `pos`.
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @param d Value 4
+/// @param pos Desired position in sorted order (0 = min, 3 = max)
+/// @returns The value at the requested sorted position
 fn sort4(a: int, b: int, c: int, d: int, pos: int): int {
     let w: int = a; let x: int = b; let y: int = c; let z: int = d;
     // Sorting network for 4 elements
@@ -113,8 +216,15 @@ fn sort4(a: int, b: int, c: int, d: int, pos: int): int {
     return z;
 }
 
-// sort5(a,b,c,d,e, pos): sort 5 values, return value at position pos
-// Uses 9-comparison sorting network
+/// Sort five values using a 9-comparison Batcher odd-even merge sort network, returning the value at `pos`.
+/// @since 1.0.0
+/// @param a Value 1
+/// @param b Value 2
+/// @param c Value 3
+/// @param d Value 4
+/// @param e Value 5
+/// @param pos Desired position in sorted order (0 = min, 4 = max)
+/// @returns The value at the requested sorted position
 fn sort5(a: int, b: int, c: int, d: int, e: int, pos: int): int {
     let v0: int = a; let v1: int = b; let v2: int = c; let v3: int = d; let v4: int = e;
     // 9-comparison sorting network (Batcher odd-even merge sort)
@@ -136,8 +246,11 @@ fn sort5(a: int, b: int, c: int, d: int, e: int, pos: int): int {
 
 // ─── Dynamic sort (arbitrary-length, uses array reference passing) ─────────────
 
-// list_sort_asc(arr, len): in-place ascending bubble sort
-// Requires RedScript ≥ 2.4.0 (array parameter by reference)
+/// In-place ascending bubble sort for an array of any length.
+/// Requires RedScript ≥ 2.4.0 (array parameter passed by reference).
+/// @since 1.0.0
+/// @param arr Array to sort (modified in-place)
+/// @param len Number of elements to sort
 fn list_sort_asc(arr: int[], len: int) {
     let i: int = 0;
     while (i < len - 1) {
@@ -154,7 +267,11 @@ fn list_sort_asc(arr: int[], len: int) {
     }
 }
 
-// list_sort_desc(arr, len): in-place descending bubble sort
+/// In-place descending bubble sort for an array of any length.
+/// Requires RedScript ≥ 2.4.0 (array parameter passed by reference).
+/// @since 1.0.0
+/// @param arr Array to sort (modified in-place)
+/// @param len Number of elements to sort
 fn list_sort_desc(arr: int[], len: int) {
     let i: int = 0;
     while (i < len - 1) {
@@ -173,7 +290,11 @@ fn list_sort_desc(arr: int[], len: int) {
 
 // ─── Dynamic array aggregates ─────────────────────────────────────────────────
 
-// list_sum(arr, len): sum of all elements
+/// Sum all elements of an array.
+/// @since 1.0.0
+/// @param arr Input array
+/// @param len Number of elements
+/// @returns Sum of arr[0..len)
 fn list_sum(arr: int[], len: int): int {
     let s: int = 0;
     let i: int = 0;
@@ -184,15 +305,22 @@ fn list_sum(arr: int[], len: int): int {
     return s;
 }
 
-// list_avg(arr, len): arithmetic mean ×10000 (fixed-point)
-// Returns (sum * 10000) / len; returns 0 for empty array
+/// Arithmetic mean of an array as fixed-point × 10000.
+/// @since 1.0.0
+/// @param arr Input array
+/// @param len Number of elements (must be > 0)
+/// @returns (sum × 10000) / len; returns 0 for empty array
 fn list_avg(arr: int[], len: int): int {
     if (len <= 0) { return 0; }
     let s: int = list_sum(arr, len);
     return s * 10000 / len;
 }
 
-// list_min(arr, len): minimum element in array
+/// Minimum element in an array.
+/// @since 1.0.0
+/// @param arr Input array (must have at least one element)
+/// @param len Number of elements
+/// @returns Smallest value in arr[0..len)
 fn list_min(arr: int[], len: int): int {
     let m: int = arr[0];
     let i: int = 1;
@@ -203,7 +331,11 @@ fn list_min(arr: int[], len: int): int {
     return m;
 }
 
-// list_max(arr, len): maximum element in array
+/// Maximum element in an array.
+/// @since 1.0.0
+/// @param arr Input array (must have at least one element)
+/// @param len Number of elements
+/// @returns Largest value in arr[0..len)
 fn list_max(arr: int[], len: int): int {
     let m: int = arr[0];
     let i: int = 1;
@@ -214,7 +346,12 @@ fn list_max(arr: int[], len: int): int {
     return m;
 }
 
-// list_contains(arr, len, val): 1 if val is in arr, 0 otherwise
+/// Test whether a value exists in an array.
+/// @since 1.0.0
+/// @param arr Input array
+/// @param len Number of elements
+/// @param val Value to search for
+/// @returns 1 if val is found, 0 otherwise
 fn list_contains(arr: int[], len: int, val: int): int {
     let i: int = 0;
     while (i < len) {
@@ -224,7 +361,12 @@ fn list_contains(arr: int[], len: int, val: int): int {
     return 0;
 }
 
-// list_index_of(arr, len, val): first index of val in arr, or -1 if not found
+/// Find the first index of a value in an array.
+/// @since 1.0.0
+/// @param arr Input array
+/// @param len Number of elements
+/// @param val Value to search for
+/// @returns First index of val, or -1 if not found
 fn list_index_of(arr: int[], len: int, val: int): int {
     let i: int = 0;
     while (i < len) {
@@ -234,8 +376,12 @@ fn list_index_of(arr: int[], len: int, val: int): int {
     return -1;
 }
 
-// list_shuffle(arr, len, seed): Fisher-Yates shuffle in-place using next_lcg RNG
-// For each i from len-1 down to 1: pick j in [0, i] using next_lcg, swap arr[i] and arr[j]
+/// Fisher-Yates in-place shuffle using a linear congruential generator.
+/// @since 1.0.0
+/// @param arr Array to shuffle (modified in-place)
+/// @param len Number of elements
+/// @param seed Initial LCG seed (any integer)
+/// @returns The shuffled array (same reference as arr)
 fn list_shuffle(arr: int[], len: int, seed: int): int[] {
     let i: int = len - 1;
     let s: int = seed;
@@ -252,7 +398,11 @@ fn list_shuffle(arr: int[], len: int, seed: int): int[] {
     return arr;
 }
 
-// list_dedup_count(arr, len): count of unique values (O(n²) — fine for small arrays)
+/// Count the number of unique values in an array (O(n²); suitable for small arrays).
+/// @since 1.0.0
+/// @param arr Input array
+/// @param len Number of elements
+/// @returns Count of distinct values in arr[0..len)
 fn list_dedup_count(arr: int[], len: int): int {
     let count: int = 0;
     let i: int = 0;

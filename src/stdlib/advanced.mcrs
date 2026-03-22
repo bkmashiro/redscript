@@ -11,9 +11,11 @@ module library;
 
 // ─── Category 1: Number theory ───────────────────────────────────────────────
 
-// Fibonacci number F(n) using simple iteration.
-// Overflow: F(46) = 1836311903 ≈ INT_MAX; use n ≤ 46.
-// fib(0) == 0, fib(1) == 1, fib(10) == 55
+/// Fibonacci number F(n) using simple iteration.
+/// Overflow: F(46) = 1 836 311 903 ≈ INT_MAX; keep n ≤ 46.
+/// @since 1.0.0
+/// @param n Index (n ≥ 0)
+/// @returns F(n) — fib(0) == 0, fib(1) == 1, fib(10) == 55
 fn fib(n: int) -> int {
     if (n <= 0) { return 0; }
     if (n == 1) { return 1; }
@@ -29,9 +31,14 @@ fn fib(n: int) -> int {
     return b;
 }
 
-// Primality test by trial division up to √n.
-// Returns 1 if n is prime, 0 otherwise.
-// is_prime(2) == 1, is_prime(4) == 0, is_prime(97) == 1
+/// Primality test by trial division up to √n.
+/// @since 1.0.0
+/// @param n Integer to test (n ≥ 0)
+/// @returns 1 if n is prime, 0 otherwise
+/// @example
+/// is_prime(2)  // 1
+/// is_prime(4)  // 0
+/// is_prime(97) // 1
 fn is_prime(n: int) -> int {
     if (n < 2) { return 0; }
     if (n == 2) { return 1; }
@@ -44,10 +51,10 @@ fn is_prime(n: int) -> int {
     return 1;
 }
 
-// Number of steps in the Collatz sequence starting at n until reaching 1.
-// collatz_steps(1)  == 0
-// collatz_steps(6)  == 8
-// collatz_steps(27) == 111   (world record among small numbers)
+/// Number of steps in the Collatz sequence starting at n until reaching 1.
+/// @since 1.0.0
+/// @param n Starting value (n ≥ 1)
+/// @returns Step count — collatz_steps(1) == 0, collatz_steps(6) == 8
 fn collatz_steps(n: int) -> int {
     if (n <= 1) { return 0; }
     let x: int = n;
@@ -63,8 +70,10 @@ fn collatz_steps(n: int) -> int {
     return steps;
 }
 
-// Sum of decimal digits.  Negative input uses absolute value.
-// digit_sum(123) == 6, digit_sum(0) == 0
+/// Sum of decimal digits. Negative input uses the absolute value.
+/// @since 1.0.0
+/// @param n Integer input
+/// @returns Sum of digits — digit_sum(123) == 6, digit_sum(0) == 0
 fn digit_sum(n: int) -> int {
     let x: int = n;
     if (x < 0) { x = 0 - x; }
@@ -77,8 +86,10 @@ fn digit_sum(n: int) -> int {
     return sum;
 }
 
-// Count decimal digits.  0 has 1 digit.  Negative: counts absolute digits.
-// count_digits(0) == 1, count_digits(100) == 3
+/// Count decimal digits of n. 0 has 1 digit; negative values count absolute digits.
+/// @since 1.0.0
+/// @param n Integer input
+/// @returns Digit count — count_digits(0) == 1, count_digits(100) == 3
 fn count_digits(n: int) -> int {
     let x: int = n;
     if (x < 0) { x = 0 - x; }
@@ -91,8 +102,10 @@ fn count_digits(n: int) -> int {
     return cnt;
 }
 
-// Reverse the decimal digits of an integer.  Sign is preserved.
-// reverse_int(12345) == 54321, reverse_int(-42) == -24
+/// Reverse the decimal digits of an integer. Sign is preserved.
+/// @since 1.0.0
+/// @param n Integer input
+/// @returns Digit-reversed integer — reverse_int(12345) == 54321, reverse_int(-42) == -24
 fn reverse_int(n: int) -> int {
     let x: int = n;
     let neg: int = 0;
@@ -106,9 +119,13 @@ fn reverse_int(n: int) -> int {
     return result;
 }
 
-// Modular exponentiation: (base ^ exp) mod m  using fast O(log exp) squaring.
-// IMPORTANT: m must be ≤ 46340 to avoid b*b overflow (46340² < INT_MAX).
-// mod_pow(2, 10, 1000) == 24   (1024 mod 1000)
+/// Modular exponentiation: (base ^ exp) mod m using O(log exp) binary squaring.
+/// ⚠ m must be ≤ 46 340 to avoid `b*b` int32 overflow.
+/// @since 1.0.0
+/// @param base Base value
+/// @param exp Exponent (≥ 0)
+/// @param m Modulus (1 < m ≤ 46340)
+/// @returns (base^exp) mod m — mod_pow(2, 10, 1000) == 24
 fn mod_pow(base: int, exp: int, m: int) -> int {
     if (m == 1) { return 0; }
     let result: int = 1;
@@ -127,10 +144,11 @@ fn mod_pow(base: int, exp: int, m: int) -> int {
 
 // ─── Category 2: Hashing & noise ─────────────────────────────────────────────
 
-// Integer hash function.  Output is non-negative, range [0, ~2 × 10⁹).
-// Deterministic, no randomness — same input always produces the same output.
-// Suitable as a seeded pseudo-random value for procedural generation.
-// hash_int(0) != hash_int(1), repeatable across runs.
+/// Deterministic integer hash. Output is non-negative [0, ~2×10⁹).
+/// Same input always produces the same output — useful as a seeded pseudo-random value.
+/// @since 1.0.0
+/// @param n Input integer (any value)
+/// @returns Non-negative hash value
 fn hash_int(n: int) -> int {
     let h: int = n;
     if (h < 0) { h = 0 - h; }
@@ -143,9 +161,11 @@ fn hash_int(n: int) -> int {
     return h;
 }
 
-// 1D value noise.  Input x in fixed-point (scale = 1000).
-// Output in [0, 999] — smoothly interpolated between hashed lattice points.
-// noise1d(0) == noise1d(0), noise1d(500) is between noise1d(0) and noise1d(1000).
+/// 1-D value noise with C¹ continuity via smoothstep interpolation.
+/// Input x is fixed-point (scale = 1000). Output in [0, 999].
+/// @since 1.0.0
+/// @param x Coordinate × 1000 (e.g. 500 = 0.5, 1000 = 1.0)
+/// @returns Smoothly interpolated noise value in [0, 999]
 fn noise1d(x: int) -> int {
     let ix: int = x / 1000;
     let frac: int = x % 1000;
@@ -165,24 +185,30 @@ fn noise1d(x: int) -> int {
 
 // ─── Category 3: Curves ──────────────────────────────────────────────────────
 
-// Quadratic Bezier: B(t) = lerp(lerp(p0,p1,t), lerp(p1,p2,t), t)
-// De Casteljau's algorithm — numerically stable, safe for large coordinates.
-// t in [0, 1000] (fixed-point).
-//
-// bezier_quad(0, 500, 1000, 0)    == 0     (t=0: start)
-// bezier_quad(0, 500, 1000, 500)  == 500   (t=500: midpoint of curve)
-// bezier_quad(0, 500, 1000, 1000) == 1000  (t=1000: end)
-// bezier_quad(0, 1000, 0, 500)    == 500   (arch at midpoint)
+/// Quadratic Bezier curve evaluated at t using De Casteljau's algorithm.
+/// @since 1.0.0
+/// @param p0 Start control point
+/// @param p1 Middle control point
+/// @param p2 End control point
+/// @param t Parameter × 1000 (0 = start, 1000 = end)
+/// @returns Curve value at t
+/// @example
+/// bezier_quad(0, 500, 1000, 500)  // 500  (midpoint)
+/// bezier_quad(0, 1000, 0, 500)    // 500  (arch at midpoint)
 fn bezier_quad(p0: int, p1: int, p2: int, t: int) -> int {
     let m0: int = lerp(p0, p1, t);
     let m1: int = lerp(p1, p2, t);
     return lerp(m0, m1, t);
 }
 
-// Cubic Bezier: 4-point curve using De Casteljau's algorithm.
-// t in [0, 1000].
-// bezier_cubic(0, 333, 667, 1000, 0)    == 0
-// bezier_cubic(0, 333, 667, 1000, 1000) == 1000
+/// Cubic Bezier curve evaluated at t using De Casteljau's algorithm.
+/// @since 1.0.0
+/// @param p0 Control point 0 (start)
+/// @param p1 Control point 1
+/// @param p2 Control point 2
+/// @param p3 Control point 3 (end)
+/// @param t Parameter × 1000 (0 = start, 1000 = end)
+/// @returns Curve value at t
 fn bezier_cubic(p0: int, p1: int, p2: int, p3: int, t: int) -> int {
     let m0: int = lerp(p0, p1, t);
     let m1: int = lerp(p1, p2, t);
@@ -194,22 +220,17 @@ fn bezier_cubic(p0: int, p1: int, p2: int, p3: int, t: int) -> int {
 
 // ─── Category 4: Fractals 🤯 ─────────────────────────────────────────────────
 
-// Mandelbrot set iteration count.
-//
-// cx, cy: fixed-point coordinates of the complex number c = cx/1000 + i*cy/1000
-//   cx = -2000..1000  (i.e. real part -2.0..1.0)
-//   cy = -1000..1000  (imaginary part -1.0..1.0)
-//
-// Returns the number of iterations before |z| > 2 (escape), or max_iter if
-// the point is in the Mandelbrot set.  Use the return value to colour blocks!
-//
-// Points in the set: mandelbrot_iter(-1000, 0, 100) == 100  (c = -1+0i)
-// Points outside:   mandelbrot_iter(1000, 0, 100)  == 0   (c = 1+0i, escapes immediately)
-// Boundary region:  mandelbrot_iter(-500, 500, 50) → varies
-//
-// Algorithm: z₀ = 0, z_{n+1} = z_n² + c
-//   z_n = (zr + zi·i),  z_n² = zr²−zi² + 2·zr·zi·i
-//   Escape when |z|² = (zr²+zi²)/10⁶ > 4  ↔  mulfix(zr,zr)+mulfix(zi,zi) > 4000
+/// Mandelbrot set iteration count for complex number c = cx/1000 + i·cy/1000.
+/// Returns the escape iteration count, or max_iter if the point is in the set.
+/// Use the return value to colour blocks!
+/// @since 1.0.0
+/// @param cx Real part × 1000 (range −2000..1000)
+/// @param cy Imaginary part × 1000 (range −1000..1000)
+/// @param max_iter Maximum iteration count
+/// @returns Iterations before |z| > 2, or max_iter if in the set
+/// @example
+/// mandelbrot_iter(-1000, 0, 100) // 100 — c = -1+0i is in the set
+/// mandelbrot_iter(1000, 0, 100)  //   0 — c = 1+0i escapes immediately
 fn mandelbrot_iter(cx: int, cy: int, max_iter: int) -> int {
     let zr: int = 0;
     let zi: int = 0;
@@ -227,10 +248,15 @@ fn mandelbrot_iter(cx: int, cy: int, max_iter: int) -> int {
     return max_iter;
 }
 
-// Julia set iteration count (generalised Mandelbrot with fixed c and variable z₀).
-// z0r, z0i: starting point (fixed-point, scale=1000)
-// cr, ci:   constant c   (fixed-point, scale=1000)
-// Same escape condition as mandelbrot_iter.
+/// Julia set iteration count with fixed constant c and variable starting point z₀.
+/// Same escape condition as `mandelbrot_iter`.
+/// @since 1.0.0
+/// @param z0r Real part of starting point × 1000
+/// @param z0i Imaginary part of starting point × 1000
+/// @param cr Real part of constant c × 1000
+/// @param ci Imaginary part of constant c × 1000
+/// @param max_iter Maximum iteration count
+/// @returns Iterations before |z| > 2, or max_iter if in the set
 fn julia_iter(z0r: int, z0i: int, cr: int, ci: int, max_iter: int) -> int {
     let zr: int = z0r;
     let zi: int = z0i;
@@ -250,15 +276,16 @@ fn julia_iter(z0r: int, z0i: int, cr: int, ci: int, max_iter: int) -> int {
 
 // ─── Category 5: Geometry experiments ────────────────────────────────────────
 
-// Angle between two 2D vectors in degrees (×1 = degrees, unsigned 0..180).
-// Strategy: normalize both vectors to unit (×1000 components), then
-//   angle = atan2(|cross|, dot)  where cross,dot are from the unit vectors.
-// Unit vector components are ≤ 1000, so cross/dot ≤ 10^6 (no overflow).
-// After dividing by 1000 to re-scale, pass to atan2_fixed.
-//
-// angle_between(1000, 0, 0, 1000) == 90
-// angle_between(1000, 0, 1000, 0) == 0
-// angle_between(1000, 0, -1000, 0) == 180
+/// Unsigned angle (0–180°) between two 2-D integer vectors.
+/// @since 1.0.0
+/// @param x1 X component of vector 1
+/// @param y1 Y component of vector 1
+/// @param x2 X component of vector 2
+/// @param y2 Y component of vector 2
+/// @returns Angle in whole degrees [0, 180]; 0 for zero-length inputs
+/// @example
+/// angle_between(1000, 0, 0, 1000)  // 90
+/// angle_between(1000, 0, -1000, 0) // 180
 fn angle_between(x1: int, y1: int, x2: int, y2: int) -> int {
     let nx1: int = normalize2d_x(x1, y1);
     let ny1: int = normalize2d_y(x1, y1);
@@ -272,13 +299,13 @@ fn angle_between(x1: int, y1: int, x2: int, y2: int) -> int {
     return atan2_fixed(c, d);
 }
 
-// Clamp a 2D point to lie within a circle of radius r centred at origin.
-// r is in the same units as x, y (raw block coords, NOT fixed-point).
-// Returns the clamped x component.
-// Note: keep x, y < ~2000 to avoid overflow in normalize2d_x (x * 10^6).
-//
-// clamp_circle_x(3, 4, 10) == 3   (point at dist 5, inside r=10)
-// clamp_circle_x(600, 0, 500) == 500
+/// X component of the point (x, y) clamped to a circle of radius r centred at the origin.
+/// Keep |x|, |y| < ~2000 to avoid overflow in `normalize2d_x`.
+/// @since 1.0.0
+/// @param x X coordinate (raw block coords, not fixed-point)
+/// @param y Y coordinate
+/// @param r Circle radius in the same units as x/y
+/// @returns Clamped X — clamp_circle_x(600, 0, 500) == 500
 fn clamp_circle_x(x: int, y: int, r: int) -> int {
     // length2d_fixed returns dist × 1000; compare with r × 1000
     let dist: int = length2d_fixed(x, y);
@@ -286,17 +313,23 @@ fn clamp_circle_x(x: int, y: int, r: int) -> int {
     return normalize2d_x(x, y) * r / 1000;
 }
 
-// Y component of circle clamp.
-// clamp_circle_y(0, 600, 500) == 500
+/// Y component of the point (x, y) clamped to a circle of radius r centred at the origin.
+/// @since 1.0.0
+/// @param x X coordinate
+/// @param y Y coordinate
+/// @param r Circle radius
+/// @returns Clamped Y — clamp_circle_y(0, 600, 500) == 500
 fn clamp_circle_y(x: int, y: int, r: int) -> int {
     let dist: int = length2d_fixed(x, y);
     if (dist <= r * 1000) { return y; }
     return normalize2d_y(x, y) * r / 1000;
 }
 
-// Newton's method integer square root (alternative to isqrt).
-// Converges quadratically; validates our while loop + division.
-// newton_sqrt(25) == 5, newton_sqrt(100) == 10, newton_sqrt(2) == 1
+/// Integer square root via Newton's method (alternative to `isqrt`).
+/// Converges quadratically; useful for validating while-loop + division logic.
+/// @since 1.0.0
+/// @param n Non-negative integer
+/// @returns ⌊√n⌋ — newton_sqrt(25) == 5, newton_sqrt(100) == 10
 fn newton_sqrt(n: int) -> int {
     if (n <= 0) { return 0; }
     if (n == 1) { return 1; }
@@ -311,11 +344,15 @@ fn newton_sqrt(n: int) -> int {
 
 // ─── Category 3 (cont.): Higher-order Bezier curves ─────────────────────────
 
-// Quartic Bezier: 5-point curve using De Casteljau's algorithm.
-// t in [0, 1000].
-// bezier_quartic(0, 250, 500, 750, 1000, 0)    == 0    (t=0: start)
-// bezier_quartic(0, 250, 500, 750, 1000, 1000) == 1000 (t=1: end)
-// bezier_quartic(0, 250, 500, 750, 1000, 500)  == 500  (midpoint, uniform pts)
+/// Quartic (5-point) Bezier curve evaluated at t using De Casteljau's algorithm.
+/// @since 1.0.0
+/// @param p0 Control point 0 (start)
+/// @param p1 Control point 1
+/// @param p2 Control point 2
+/// @param p3 Control point 3
+/// @param p4 Control point 4 (end)
+/// @param t Parameter × 1000 (0 = start, 1000 = end)
+/// @returns Curve value at t
 fn bezier_quartic(p0: int, p1: int, p2: int, p3: int, p4: int, t: int) -> int {
     let m0: int = lerp(p0, p1, t);
     let m1: int = lerp(p1, p2, t);
@@ -329,12 +366,13 @@ fn bezier_quartic(p0: int, p1: int, p2: int, p3: int, p4: int, t: int) -> int {
     return lerp(o0, o1, t);
 }
 
-// bezier_n(pts, n, t): N-order Bezier curve via De Casteljau's algorithm.
-// pts: array of n control points (int[], will be modified in-place).
-// t in [0, 1000].
-// WARNING: modifies pts in-place. Call bezier_n_safe if you need to preserve pts.
-// bezier_n([0,333,667,1000], 4, 0)    == 0    (t=0: returns pts[0])
-// bezier_n([0,333,667,1000], 4, 1000) == 1000 (t=1: returns pts[n-1])
+/// Arbitrary-degree Bezier curve via De Casteljau's algorithm.
+/// ⚠ Modifies `pts` in-place. Use `bezier_n_safe` to preserve the original array.
+/// @since 1.0.0
+/// @param pts Array of n control points (modified in-place during evaluation)
+/// @param n Number of control points
+/// @param t Parameter × 1000 (0 = start, 1000 = end)
+/// @returns Curve value at t
 fn bezier_n(pts: int[], n: int, t: int) -> int {
     let r: int = 0;
     while (r < n - 1) {
@@ -348,18 +386,22 @@ fn bezier_n(pts: int[], n: int, t: int) -> int {
     return pts[0];
 }
 
-// bezier_n_safe(pts, work, n, t): N-order Bezier, non-destructive.
-// Copies pts into work (length >= n) then runs bezier_n on work.
-// pts is not modified.
+/// Non-destructive arbitrary-degree Bezier curve. Copies `pts` into `work` then evaluates.
+/// @since 1.0.0
+/// @param pts Array of n control points (not modified)
+/// @param work Working buffer of length ≥ n (will be overwritten)
+/// @param n Number of control points
+/// @param t Parameter × 1000 (0 = start, 1000 = end)
+/// @returns Curve value at t
 fn bezier_n_safe(pts: int[], work: int[], n: int, t: int) -> int {
     bigint_copy(pts, work, n);
     return bezier_n(work, n, t);
 }
 
-// Digital root: repeatedly sum digits until single digit.
-// digital_root(493) == 7  (4+9+3=16 → 1+6=7)
-// digital_root(9) == 9
-// digital_root(0) == 0
+/// Digital root: repeatedly sum digits until a single digit remains.
+/// @since 1.0.0
+/// @param n Non-negative integer
+/// @returns Single-digit root — digital_root(493) == 7, digital_root(0) == 0
 fn digital_root(n: int) -> int {
     if (n == 0) { return 0; }
     let r: int = n % 9;
@@ -367,10 +409,11 @@ fn digital_root(n: int) -> int {
     return r;
 }
 
-// Ulam spiral ring number: which concentric square ring is n on?
-// Ring 0: n=1; Ring 1: n=2..9 (3×3 square); Ring 2: n=10..25 (5×5); etc.
-// Formula: floor((isqrt(n-1) + 1) / 2)
-// spiral_ring(1) == 0, spiral_ring(9) == 1, spiral_ring(25) == 2
+/// Ulam spiral ring number: which concentric square ring contains n?
+/// Ring 0: n=1; Ring 1: n=2..9 (3×3); Ring 2: n=10..25 (5×5); etc.
+/// @since 1.0.0
+/// @param n Positive integer
+/// @returns Ring index — spiral_ring(1) == 0, spiral_ring(9) == 1, spiral_ring(25) == 2
 fn spiral_ring(n: int) -> int {
     if (n <= 1) { return 0; }
     return (isqrt(n - 1) + 1) / 2;
@@ -378,11 +421,13 @@ fn spiral_ring(n: int) -> int {
 
 // ── Statistics ────────────────────────────────────────────────────────────────
 
-// median(arr, n): Median of n integers (fixed-point ×1000 for even n).
-// Sorts a COPY of the array; the original is not modified.
-// All values and n must be positive; n must be >= 1.
-// For odd  n: returns arr[(n-1)/2] after sorting (exact).
-// For even n: returns (arr[n/2-1] + arr[n/2]) * 500  (i.e. average ×1000).
+/// Median of n integers. Sorts a copy of the array; the original is not modified.
+/// For odd n returns the middle value × 1000. For even n returns the average × 1000.
+/// @since 1.1.0
+/// @param arr Input array (not modified)
+/// @param work Working buffer of length ≥ n (will be overwritten)
+/// @param n Number of elements (must be ≥ 1)
+/// @returns Median × 1000
 fn median(arr: int[], work: int[], n: int) -> int {
     bigint_copy(arr, work, n);
     insertion_sort(work, n);
@@ -392,9 +437,12 @@ fn median(arr: int[], work: int[], n: int) -> int {
     return (work[n / 2 - 1] + work[n / 2]) * 500;
 }
 
-// mode(arr, n): Most frequent element in arr[0..n).  Tie-breaks toward
-// the smallest value (because the scan is linear left-to-right after sort).
-// Returns the modal value (not a frequency count).
+/// Most frequent element (mode) in arr[0..n). Tie-breaks toward the smallest value.
+/// @since 1.1.0
+/// @param arr Input array (not modified)
+/// @param work Working buffer of length ≥ n (will be overwritten)
+/// @param n Number of elements (must be ≥ 1)
+/// @returns The modal value
 fn mode(arr: int[], work: int[], n: int) -> int {
     if (n <= 0) { return 0; }
     bigint_copy(arr, work, n);
@@ -420,8 +468,11 @@ fn mode(arr: int[], work: int[], n: int) -> int {
     return best_val;
 }
 
-// mean_fx(arr, n): Arithmetic mean, fixed-point ×1000.
-// Returns sum(arr) * 1000 / n.
+/// Arithmetic mean as fixed-point × 1000.
+/// @since 1.1.0
+/// @param arr Input array of integers
+/// @param n Number of elements (must be ≥ 1)
+/// @returns sum(arr) × 1000 / n; 0 for empty array
 fn mean_fx(arr: int[], n: int) -> int {
     if (n <= 0) { return 0; }
     let sum: int = 0;
@@ -433,10 +484,12 @@ fn mean_fx(arr: int[], n: int) -> int {
     return sum * 1000 / n;
 }
 
-// std_dev_fx(arr, n): Population standard deviation, fixed-point ×1000.
-// Uses integer arithmetic: sqrt( sum((x - mean)^2) / n ) scaled by 1000.
-// All values are assumed to fit in int32 without overflow after squaring
-// deviations in the ×1 domain.
+/// Population standard deviation as fixed-point × 1000.
+/// Uses integer arithmetic; values must fit in int32 before squaring deviations.
+/// @since 1.1.0
+/// @param arr Input array of integers
+/// @param n Number of elements (must be ≥ 2)
+/// @returns √(Σ(xᵢ−mean)² / n) × 1000; 0 for n ≤ 1
 fn std_dev_fx(arr: int[], n: int) -> int {
     if (n <= 1) { return 0; }
     let mean: int = mean_fx(arr, n) / 1000;   // integer mean (rounds down)
@@ -454,16 +507,14 @@ fn std_dev_fx(arr: int[], n: int) -> int {
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
-// hermite_spline(p0,p1,m0,m1,t): Cubic Hermite interpolation.
-// p0, p1: endpoint values; m0, m1: tangents at endpoints.
-// t: parameter in [0, 1000] (fixed-point ×1000).
-// Returns interpolated value ×1 (same scale as p0/p1).
-// Basis functions (t̂ = t/1000):
-//   h00 = 2t̂³ − 3t̂² + 1
-//   h10 = t̂³  − 2t̂² + t̂
-//   h01 = −2t̂³ + 3t̂²
-//   h11 = t̂³  − t̂²
-// All arithmetic kept in ×1000 scale internally.
+/// Cubic Hermite spline interpolation between two endpoints with explicit tangents.
+/// @since 1.1.0
+/// @param p0 Start value
+/// @param p1 End value
+/// @param m0 Tangent at p0
+/// @param m1 Tangent at p1
+/// @param t Parameter × 1000 (0 = p0, 1000 = p1)
+/// @returns Interpolated value (same scale as p0/p1)
 fn hermite_spline(p0: int, p1: int, m0: int, m1: int, t: int) -> int {
     let t2: int = t * t / 1000;       // t²  ×1000
     let t3: int = t2 * t / 1000;      // t³  ×1000
@@ -480,9 +531,15 @@ fn hermite_spline(p0: int, p1: int, m0: int, m1: int, t: int) -> int {
     return p0 * h00 / 1000 + m0 * h10 + p1 * h01 / 1000 + m1 * h11;
 }
 
-// catmull_rom(p0,p1,p2,p3,t): Catmull-Rom spline through p1..p2.
-// Tangents are derived from the surrounding points: m1 = (p2-p0)/2, m2 = (p3-p1)/2.
-// t in [0, 1000].
+/// Catmull-Rom spline: interpolates between p1 and p2 with tangents derived from neighbours.
+/// Tangents: m1 = (p2 − p0) / 2, m2 = (p3 − p1) / 2.
+/// @since 1.1.0
+/// @param p0 Point before the segment start
+/// @param p1 Segment start
+/// @param p2 Segment end
+/// @param p3 Point after the segment end
+/// @param t Parameter × 1000 (0 = p1, 1000 = p2)
+/// @returns Interpolated value between p1 and p2
 fn catmull_rom(p0: int, p1: int, p2: int, p3: int, t: int) -> int {
     let m1: int = (p2 - p0) / 2;
     let m2: int = (p3 - p1) / 2;

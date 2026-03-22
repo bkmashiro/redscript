@@ -24,18 +24,24 @@ module library;
 // Do NOT kill or modify entities with this tag.
 let _TRIG_TAG: string = "rs_trig";
 
-// init_trig(): create the Marker entity used by sin_hp/cos_hp.
-// Safe to call multiple times (uses execute unless entity).
-// Must be called from your @load function.
+/// Initialise the Marker entity used by `sin_hp` and `cos_hp`.
+/// Safe to call multiple times (guarded by `execute unless entity`).
+/// Must be called from your `@load` function.
+/// @since 1.3.0
+/// @example
+/// @load fn setup() { init_trig(); }
 @require_on_load(init_trig)
 fn init_trig() {
     raw("execute unless entity @e[tag=rs_trig,limit=1] run summon minecraft:marker ~ 0 ~ {Tags:[\"rs_trig\"]}");
 }
 
-// sin_hp(angle): high-precision sine.
-// angle: degrees × 10000 (e.g. 450000 = 45°, 900000 = 90°)
-// returns: sin(angle/10000°) × 10000
-// Example: sin_hp(900000) == 10000, sin_hp(0) == 0, sin_hp(450000) ≈ 7071
+/// High-precision sine using the MC Marker entity rotation trick (~15 sig. figs).
+/// @since 1.3.0
+/// @param angle Angle in degrees × 10000 (e.g. 450000 = 45°, 900000 = 90°)
+/// @returns sin(angle / 10000 °) × 10000
+/// @example
+/// let s: int = sin_hp(900000);  // 10000  (sin 90° = 1.0)
+/// let s2: int = sin_hp(450000); // ≈ 7071 (sin 45° ≈ 0.7071)
 @require_on_load(init_trig)
 fn sin_hp(angle: int): int {
     // Step 1: store angle into scoreboard, then use execute store to set Rotation[0]
@@ -50,9 +56,13 @@ fn sin_hp(angle: int): int {
     return scoreboard_get("$sin_hp_out", "__rs_math_hp");
 }
 
-// cos_hp(angle): high-precision cosine.
-// angle: degrees × 10000 (e.g. 450000 = 45°)
-// returns: cos(angle/10000°) × 10000
+/// High-precision cosine using the MC Marker entity rotation trick (~15 sig. figs).
+/// @since 1.3.0
+/// @param angle Angle in degrees × 10000 (e.g. 450000 = 45°)
+/// @returns cos(angle / 10000 °) × 10000
+/// @example
+/// let c: int = cos_hp(0);       // 10000  (cos 0° = 1.0)
+/// let c2: int = cos_hp(450000); // ≈ 7071 (cos 45° ≈ 0.7071)
 @require_on_load(init_trig)
 fn cos_hp(angle: int): int {
     scoreboard_set("$cos_hp_in", "__rs_math_hp", angle);
@@ -80,16 +90,23 @@ fn cos_hp(angle: int): int {
 //   Uses a SEPARATE entity tagged "rs_div" for SVD operations.
 //   init_trig() does NOT create rs_div — call init_div() separately.
 
-// init_div(): create the Display Entity for SVD operations.
-// Call once from your @load function.
+/// Initialise the `block_display` entity used for SVD-based division operations.
+/// Must be called from your `@load` function (separate from `init_trig`).
+/// @since 1.3.0
+/// @example
+/// @load fn setup() { init_trig(); init_div(); }
 @require_on_load(init_div)
 fn init_div() {
     raw("execute unless entity @e[tag=rs_div,limit=1] run summon minecraft:block_display ~ 0 ~ {Tags:[\"rs_div\"]}");
 }
 
-// div_hp(a, b): high-precision division a/b, returns (a/b) × 10000
-// a, b: integers (×10000 scale). Result: (a/b) × 10000
-// Example: div_hp(10000, 3000) ≈ 33333 (10000/3000 = 3.3333...)
+/// High-precision division a / b using the Display Entity SVD trick (~15 sig. figs).
+/// @since 1.3.0
+/// @param a Dividend × 10000
+/// @param b Divisor × 10000 (must not be zero)
+/// @returns (a / b) × 10000
+/// @example
+/// let r: int = div_hp(10000, 3000); // ≈ 33333  (10000/3000 = 3.333…)
 @require_on_load(init_div)
 fn div_hp(a: int, b: int): int {
     // Set transformation matrix: [a,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,b]
@@ -106,9 +123,14 @@ fn div_hp(a: int, b: int): int {
     return scoreboard_get("$div_result", "__rs_math_hp");
 }
 
-// div3_hp(a, b, c, d): divide three values by d simultaneously
-// Returns a/d, result in scoreboard $div3_x/y/z __rs_math_hp (×10000)
-// Use scoreboard_get to read each result.
+/// Divide three values by the same divisor simultaneously using the Display Entity SVD trick.
+/// Results are stored in scoreboards `$div3_x`, `$div3_y`, `$div3_z` on `__rs_math_hp`.
+/// @since 1.3.0
+/// @param a First numerator × 10000
+/// @param b Second numerator × 10000
+/// @param c Third numerator × 10000
+/// @param d Common denominator × 10000 (must not be zero)
+/// @returns a / d × 10000 (also writes b/d and c/d to `$div3_y`/`$div3_z`)
 @require_on_load(init_div)
 fn div3_hp(a: int, b: int, c: int, d: int): int {
     scoreboard_set("$div3_a", "__rs_math_hp", a);
@@ -133,9 +155,12 @@ fn div3_hp(a: int, b: int, c: int, d: int): int {
     return scoreboard_get("$div3_x", "__rs_math_hp");
 }
 
-// sqrt_hp(x): high-precision square root via vector magnitude trick
-// x: integer ×10000. Returns √(x/10000) × 10000
-// Uses: send vector (√x, 0, 0) unit → magnitude = √x
+/// High-precision square root via Newton iteration refined with `div_hp`.
+/// @since 1.3.0
+/// @param x Input value × 10000 (must be ≥ 0)
+/// @returns √(x / 10000) × 10000
+/// @example
+/// let r: int = sqrt_hp(20000); // ≈ 14142  (√2 ≈ 1.4142)
 @require_on_load(init_div)
 fn sqrt_hp(x: int): int {
     // Use trig entity: tp it to (sqrt(x), 0, 0) direction
@@ -157,9 +182,12 @@ fn sqrt_hp(x: int): int {
     return g;
 }
 
-// norm3_hp(x, y, z): high-precision 3D vector norm √(x²+y²+z²)
-// All inputs ×10000. Returns magnitude ×10000.
-// Uses trig entity position trick.
+/// High-precision 3-D vector magnitude √(x² + y² + z²) using `sqrt_hp`.
+/// @since 1.3.0
+/// @param x X component × 10000
+/// @param y Y component × 10000
+/// @param z Z component × 10000
+/// @returns √(x²+y²+z²) / 10000, result × 10000
 @require_on_load(init_trig)
 fn norm3_hp(x: int, y: int, z: int): int {
     // Store x,y,z as float in storage
@@ -205,6 +233,14 @@ fn __dmul_apply_scale() {
     raw("$execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 1");
 }
 
+/// Multiply a double-precision value `d` by a fixed-point integer `f` (× 10000)
+/// using a macro trick to keep all arithmetic in IEEE 754 double precision.
+/// @since 1.3.0
+/// @param d Double operand (stored in NBT as IEEE 754 double)
+/// @param f Fixed-point multiplier × 10000 (e.g. 15000 = 1.5)
+/// @returns d × (f / 10000) as a double
+/// @example
+/// let r: double = double_mul_fixed(3.14d, 20000); // 6.28  (3.14 × 2.0)
 fn double_mul_fixed(d: double, f: int): double {
     // Step 1: store f into math_hp scoreboard, then compute scale = f × 0.0001
     scoreboard_set("$dmul_f", "__rs_math_hp", f);
@@ -232,8 +268,9 @@ fn double_mul_fixed(d: double, f: int): double {
 // ⚠ Precision: full double (~15 sig figs). No overflow within double range.
 //
 
-// init_double_add(): summon the AEC marker entity for double_add/sub.
-// Called automatically via @require_on_load.
+/// Initialise the `area_effect_cloud` marker entity used by `double_add` and `double_sub`.
+/// Called automatically via `@require_on_load`.
+/// @since 1.3.0
 @require_on_load(init_double_add)
 fn init_double_add() {
     raw("execute unless entity b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 run summon minecraft:area_effect_cloud ~ ~ ~ {UUID:[I;-1238834609,-698744574,-1879932794,1006600372],NoGravity:1b,Duration:2147483647,Tags:[\"rs_math_hp_marker\"]}");
@@ -251,8 +288,12 @@ fn __dadd_tp_rel() {
     raw("$execute at b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 run tp b54f1a4f-d7ac-4002-915e-3c2a3bf6f8a4 ~$(dx) 0.0 0.0");
 }
 
-// double_add(a, b): a + b in true double precision.
-// a, b: double (NBT-backed). Returns: a + b as double in __dp0.
+/// Add two double-precision values in true IEEE 754 double precision
+/// using the MC entity position trick.
+/// @since 1.3.0
+/// @param a First addend (double, stored in `__dp0`)
+/// @param b Second addend (double, stored in `__dp1`)
+/// @returns a + b as a double
 @require_on_load(init_double_add)
 fn double_add(a: double, b: double): double {
     // __dp0 = a, __dp1 = b (set by caller)
@@ -280,8 +321,11 @@ fn double_add(a: double, b: double): double {
 //   Catastrophic cancellation warning applies when a ≈ b (same as all FP subtraction).
 //
 
-// double_sub(a, b): a - b in double precision.
-// a, b: double. Returns: a - b as double in __dp0.
+/// Subtract two double-precision values (a − b) using the entity position trick.
+/// @since 1.3.0
+/// @param a Minuend (double)
+/// @param b Subtrahend (double) — negated then added via `double_add`
+/// @returns a − b as a double
 @require_on_load(init_double_add)
 fn double_sub(a: double, b: double): double {
     // Negate __dp1 (b): read as ×10000 long, store back as double × -0.0001
@@ -318,6 +362,12 @@ fn double_sub(a: double, b: double): double {
 // double-precision ln/exp are available.
 //
 
+/// Multiply two doubles via scoreboard integer approximation (~4 decimal digits).
+/// ⚠ Overflows for |a| × |b| > ~21474. Use `double_mul_fixed` for higher precision.
+/// @since 1.3.0
+/// @param a First factor (double)
+/// @param b Second factor (double)
+/// @returns a × b (scoreboard approximation, ~4 sig. figs.)
 fn double_mul(a: double, b: double): double {
     // Convert a and b to ×10000 integer scores
     raw("execute store result score $dmul_a __rs_math_hp run data get storage rs:d __dp0 10000");
@@ -353,9 +403,12 @@ fn __ddiv_set_mat() {
     raw("$data modify entity @e[tag=rs_div,limit=1] transformation set value [$(da)f,0f,0f,0f,0f,1f,0f,0f,0f,0f,1f,0f,0f,0f,0f,$(db)f]");
 }
 
-// double_div(a, b): a / b in true double precision.
-// a, b: double. Returns: a / b as double in __dp0.
-// ⚠ b must not be zero (produces Java Infinity, corrupts NBT).
+/// Divide two doubles in true IEEE 754 double precision via the Display Entity SVD trick.
+/// ⚠ `b` must not be zero (produces Java `Infinity`, corrupts NBT).
+/// @since 1.3.0
+/// @param a Dividend (double)
+/// @param b Divisor (double, must not be zero)
+/// @returns a / b as a double
 @require_on_load(init_div)
 fn double_div(a: double, b: double): double {
     // Store a and b as float in macro args compound for __ddiv_set_mat
@@ -383,6 +436,14 @@ fn double_div(a: double, b: double): double {
 // Precision: one Newton step squares the error, improving from ~6 digits to ~11 digits.
 // Since exp_fx itself has ~6-digit precision, the effective output is ~8–9 digits.
 //
+
+/// High-precision natural logarithm via one Newton refinement of the 5-term atanh series.
+/// Precision ~8–9 significant digits. Valid for x ∈ [100, 1 000 000] (× 10000 scale).
+/// @since 1.3.0
+/// @param x Input value × 10000 (e.g. 10000 = 1.0, 27183 ≈ e)
+/// @returns ln(x / 10000) × 10000
+/// @example
+/// let r: int = ln_hp(27183); // ≈ 10000  (ln(e) ≈ 1.0)
 fn ln_hp(x: int): int {
     // Step 1: initial estimate via 5-term atanh series
     let y: int = ln_5term(x);
@@ -408,6 +469,12 @@ fn ln_hp(x: int): int {
 // max_error ≈ 0.000002 (2× better than 3-term ln())
 // Cost: ~5 more scoreboard operations than ln()
 //
+
+/// Natural logarithm using a 5-term atanh series (more accurate than the 3-term `ln()`).
+/// Max error ≈ 0.000002. Valid for x ∈ [100, 1 000 000] (× 10000 scale).
+/// @since 1.3.0
+/// @param x Input value × 10000
+/// @returns ln(x / 10000) × 10000
 fn ln_5term(x: int): int {
     let scale: int = 10000;
     let ln2: int = 6931;
@@ -448,6 +515,12 @@ fn ln_5term(x: int): int {
 // Scale r by 100 more to get √x in ×10000 units: r_scaled = r * 100.
 // Then convert to double with scale 0.0001.
 //
+
+/// Square root of a double-precision value, returned as a double.
+/// Internally converts to × 10000 fixed-point, applies `isqrt`, then converts back.
+/// @since 1.3.0
+/// @param x Input double (must be ≥ 0)
+/// @returns √x as a double
 fn double_sqrt(x: double): double {
     // Convert double → ×10000 int
     let x_fixed: int = x as int;
@@ -475,6 +548,15 @@ fn double_sqrt(x: double): double {
 //   5. result_fixed = exp_fx(exponent)         — ×10000, ≈ e^(ln(base)*exp_val)
 //   6. Convert result_fixed to double via scoreboard
 //
+
+/// Real-valued power: base^exp_val for double base and double exponent.
+/// Uses the identity a^b = e^(b·ln(a)) via fixed-point helpers. Precision ~8–9 digits.
+/// @since 1.3.0
+/// @param base Base value (double, must be > 0)
+/// @param exp_val Exponent (double)
+/// @returns base^exp_val as a double
+/// @example
+/// let r: double = pow_real(2.0d, 0.5d); // ≈ 1.4142 (√2)
 @require_on_load(init_trig)
 fn pow_real(base: double, exp_val: double): double {
     // Read base ×10000 from __dp0 (first double param)
@@ -501,6 +583,15 @@ fn pow_real(base: double, exp_val: double): double {
 // Uses binary exponentiation. Handles negative exponents via double_div.
 // Recursion supported in RedScript.
 //
+
+/// Double base raised to an integer exponent using binary exponentiation (O(log n)).
+/// Handles negative exponents via `double_div`.
+/// @since 1.3.0
+/// @param base Base value (double)
+/// @param exp_val Integer exponent (may be negative)
+/// @returns base^exp_val as a double
+/// @example
+/// let r: double = pow_fast(2.0d, 10); // 1024.0
 fn pow_fast(base: double, exp_val: int): double {
     if (exp_val == 0) { return 1.0d; }
     if (exp_val < 0) {

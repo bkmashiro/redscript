@@ -4,11 +4,24 @@
 // that can route string literals through user-defined calls. Today this file
 // manages one cooldown slot on the `rs` objective.
 
+/// Start (or restart) a cooldown for the given slot.
+/// The cooldown expires after `ticks` game ticks.
+/// @since 1.2.0
+/// @param name Cooldown slot identifier (reserved for future multi-slot support)
+/// @param ticks Duration in game ticks (20 ticks = 1 second)
+/// @example
+/// cooldown_start("sword", 40); // 2-second cooldown
 fn cooldown_start(name: string, ticks: int) {
     scoreboard_set("cooldown_ticks", #rs, ticks);
     scoreboard_set("cooldown_active", #rs, 1);
 }
 
+/// Check whether the cooldown has expired (i.e. is ready to fire again).
+/// @since 1.2.0
+/// @param name Cooldown slot identifier (reserved for future multi-slot support)
+/// @returns 1 if the cooldown is ready (inactive or ticks remaining ≤ 0), 0 otherwise
+/// @example
+/// if (cooldown_ready("sword") == 1) { attack(); cooldown_start("sword", 40); }
 fn cooldown_ready(name: string) -> int {
     let active: int = scoreboard_get("cooldown_active", #rs);
     let ticks_left: int = scoreboard_get("cooldown_ticks", #rs);
@@ -24,6 +37,12 @@ fn cooldown_ready(name: string) -> int {
     return 0;
 }
 
+/// Advance the cooldown by one tick. Call this every tick from a `@tick` function.
+/// Automatically marks the cooldown inactive when the remaining ticks reach zero.
+/// @since 1.2.0
+/// @param name Cooldown slot identifier (reserved for future multi-slot support)
+/// @example
+/// @tick fn game_tick() { cooldown_tick("sword"); }
 fn cooldown_tick(name: string) {
     let active: int = scoreboard_get("cooldown_active", #rs);
     let ticks_left: int = scoreboard_get("cooldown_ticks", #rs);

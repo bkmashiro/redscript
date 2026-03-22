@@ -1,13 +1,32 @@
-module events
-// RedScript event dispatcher — detects MC events and dispatches to function tags.
-// Handlers register via @on(EventType) decorator (compiler-generated tag JSON).
+// events.mcrs — RedScript event dispatcher.
+//
+// Detects MC scoreboard-driven events each tick and dispatches them to
+// function tags so multiple handlers can be registered with @on(EventType).
+//
+// Supported events (dispatched via function tags):
+//   #rs:on_player_join  — fired once for each player without the rs.joined tag
+//   #rs:on_player_death — fired when a player's rs.deaths score reaches 1+
+//   #rs:on_entity_kill  — fired when a player's rs.kills score reaches 1+
+//   #rs:on_item_use     — fired when a player uses a carrot-on-a-stick
+//
+// Usage:
+//   @on(PlayerJoin) fn greet() { tellraw(@s, "Welcome!"); }
 
+module events
+
+/// Internal load function: registers scoreboard objectives for death, kill, and item-use tracking.
+/// Do not call directly — invoked automatically at datapack load.
+/// @since 1.2.0
 @load fn __events_load() {
     raw("scoreboard objectives add rs.deaths deathCount")
     raw("scoreboard objectives add rs.kills totalKillCount")
     raw("scoreboard objectives add rs.item_use minecraft.used:minecraft.carrot_on_a_stick")
 }
 
+/// Internal tick function: polls scoreboard objectives each game tick and dispatches
+/// PlayerJoin / PlayerDeath / EntityKill / ItemUse events to their respective function tags.
+/// Do not call directly — invoked automatically every tick.
+/// @since 1.2.0
 @tick fn __events_tick() {
     // PlayerJoin: players without rs.joined tag
     raw("execute as @a[tag=!rs.joined] run function #rs:on_player_join")

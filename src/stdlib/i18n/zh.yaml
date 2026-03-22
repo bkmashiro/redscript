@@ -2231,3 +2231,641 @@ quaternion:
       pitch: X 轴旋转（度）
       roll: Z 轴旋转（度）
     returns: W 分量 ×10000
+
+math_hp:
+  init_trig:
+    desc: 初始化 sin_hp/cos_hp 使用的 Marker 实体（rs_trig 标签）。可多次调用（内有 unless entity 保护），必须在 @load 中调用。
+    returns: 无返回值
+  sin_hp:
+    desc: 利用 MC Marker 实体旋转技巧实现高精度正弦（~15 位有效数字）。
+    params:
+      angle: 角度 ×10000（如 450000 = 45°，900000 = 90°）
+    returns: sin(angle/10000°) ×10000
+  cos_hp:
+    desc: 利用 MC Marker 实体旋转技巧实现高精度余弦（~15 位有效数字）。
+    params:
+      angle: 角度 ×10000
+    returns: cos(angle/10000°) ×10000
+  init_div:
+    desc: 初始化 SVD 除法运算使用的 block_display 实体（rs_div 标签）。需在 @load 中单独调用（与 init_trig 独立）。
+    returns: 无返回值
+  div_hp:
+    desc: 利用 Display Entity SVD 技巧实现高精度除法 a/b（~15 位有效数字）。b 不能为零。
+    params:
+      a: 被除数 ×10000
+      b: 除数 ×10000（不能为零）
+    returns: (a/b) ×10000
+  div3_hp:
+    desc: 同时用同一除数对三个值做高精度除法。结果写入计分板 $div3_x/$div3_y/$div3_z。
+    params:
+      a: 第一个被除数 ×10000
+      b: 第二个被除数 ×10000
+      c: 第三个被除数 ×10000
+      d: 公共除数 ×10000（不能为零）
+    returns: a/d ×10000（b/d、c/d 写入 $div3_y/$div3_z）
+  sqrt_hp:
+    desc: 高精度平方根，通过 Newton 迭代配合 div_hp 精化。
+    params:
+      x: 输入值 ×10000（必须 ≥ 0）
+    returns: √(x/10000) ×10000
+  norm3_hp:
+    desc: 高精度三维向量模长 √(x²+y²+z²)，使用 sqrt_hp 实现。
+    params:
+      x: X 分量 ×10000
+      y: Y 分量 ×10000
+      z: Z 分量 ×10000
+    returns: 向量模长 ×10000
+  double_mul_fixed:
+    desc: 使用宏技巧将双精度值 d 乘以定点整数 f（×10000），全程保持 IEEE 754 双精度精度。
+    params:
+      d: 双精度操作数（NBT 存储）
+      f: 定点乘数 ×10000（如 15000 = 1.5）
+    returns: d × (f/10000) 的双精度结果
+  init_double_add:
+    desc: 初始化 double_add/double_sub 使用的 area_effect_cloud 标记实体。由 @require_on_load 自动调用。
+    returns: 无返回值
+  double_add:
+    desc: 利用 MC 实体坐标技巧，在真正的 IEEE 754 双精度下计算 a + b。
+    params:
+      a: 第一个加数（双精度）
+      b: 第二个加数（双精度）
+    returns: a + b（双精度）
+  double_sub:
+    desc: 双精度减法 a − b（对 b 取反后调用 double_add）。
+    params:
+      a: 被减数（双精度）
+      b: 减数（双精度）
+    returns: a − b（双精度）
+  double_mul:
+    desc: 通过计分板整数近似实现双精度乘法（约 4 位有效小数）。|a|×|b| > ~21474 时会溢出。
+    params:
+      a: 第一个因数（双精度）
+      b: 第二个因数（双精度）
+    returns: a × b（近似，约 4 位精度）
+  double_div:
+    desc: 利用 Display Entity SVD 技巧实现真正的 IEEE 754 双精度除法。b 不能为零。
+    params:
+      a: 被除数（双精度）
+      b: 除数（双精度，不能为零）
+    returns: a / b（双精度）
+  ln_hp:
+    desc: 高精度自然对数，通过对 5 项 atanh 级数结果进行一次 Newton 修正（~8–9 位精度）。有效范围 x ∈ [100, 1000000]。
+    params:
+      x: 输入值 ×10000（如 10000 = 1.0，27183 ≈ e）
+    returns: ln(x/10000) ×10000
+  ln_5term:
+    desc: 使用 5 项 atanh 级数计算自然对数（比 3 项 ln() 精度高 2 倍，最大误差 ≈ 0.000002）。
+    params:
+      x: 输入值 ×10000
+    returns: ln(x/10000) ×10000
+  double_sqrt:
+    desc: 双精度平方根，内部转换为定点数后用 isqrt 计算，再转回双精度。
+    params:
+      x: 输入双精度值（必须 ≥ 0）
+    returns: √x（双精度）
+  pow_real:
+    desc: 实数幂次方 base^exp_val，通过 a^b = e^(b·ln(a)) 实现（~8–9 位精度）。base 必须 > 0。
+    params:
+      base: 底数（双精度，必须 > 0）
+      exp_val: 指数（双精度）
+    returns: base^exp_val（双精度）
+  pow_fast:
+    desc: 双精度底数的整数次方，使用二进制快速幂（O(log n)），支持负指数。
+    params:
+      base: 底数（双精度）
+      exp_val: 整数指数（可以为负）
+    returns: base^exp_val（双精度）
+
+calculus:
+  deriv_forward:
+    desc: 前向差分导数：(f(x+h) − f(x)) / h。
+    params:
+      f1: f(x+h) ×10000
+      f0: f(x) ×10000
+      h_fx: 步长 ×10000（不能为零）
+    returns: df/dx ×10000；h_fx==0 时返回 0
+  deriv_central:
+    desc: 中心差分导数：(f(x+h) − f(x−h)) / (2h)，比前向差分更精确。
+    params:
+      f_plus: f(x+h) ×10000
+      f_minus: f(x−h) ×10000
+      h_fx: 步长 ×10000
+    returns: df/dx ×10000
+  second_deriv:
+    desc: 二阶中心差分导数：(f(x+h) − 2f(x) + f(x−h)) / h²。
+    params:
+      f_plus: f(x+h) ×10000
+      f0: f(x) ×10000
+      f_minus: f(x−h) ×10000
+      h_fx: 步长 ×10000
+    returns: d²f/dx² ×10000
+  integrate_trapezoid:
+    desc: 梯形法则数值积分，适用于等间距采样点数组。
+    params:
+      vals: n 个函数值 ×10000 的数组
+      n: 采样点个数（须 ≥ 2）
+      h_fx: 采样步长 ×10000
+    returns: 积分近似值 ×10000
+  integrate_simpson:
+    desc: Simpson 1/3 法则数值积分，比梯形法则更精确（平滑函数适用）。n 应为奇数且 ≥ 3。
+    params:
+      vals: n 个函数值 ×10000 的数组
+      n: 采样点个数（建议为奇数且 ≥ 3）
+      h_fx: 采样步长 ×10000
+    returns: 积分近似值 ×10000
+  riemann_left:
+    desc: 左黎曼和：∑ f(xᵢ) × h，i = 0 … n−2。
+    params:
+      vals: n 个函数值 ×10000 的数组
+      n: 采样点个数
+      h_fx: 步长 ×10000
+    returns: 积分近似值 ×10000
+  riemann_right:
+    desc: 右黎曼和：∑ f(xᵢ) × h，i = 1 … n−1。
+    params:
+      vals: n 个函数值 ×10000 的数组
+      n: 采样点个数
+      h_fx: 步长 ×10000
+    returns: 积分近似值 ×10000
+  riemann_mid:
+    desc: 中点黎曼和，使用预先计算的中点值。
+    params:
+      vals: n 个区间中点函数值 ×10000 的数组
+      n: 区间（中点）个数
+      h_fx: 步长 ×10000
+    returns: 积分近似值 ×10000
+  curve_length_2d:
+    desc: 通过逐段欧几里得距离近似计算二维折线弧长。
+    params:
+      xs: n 个点的 X 坐标 ×10000 数组
+      ys: n 个点的 Y 坐标 ×10000 数组
+      n: 点的数量（须 ≥ 2）
+    returns: 近似弧长 ×10000
+  running_mean:
+    desc: Welford 在线算法：用新样本更新滚动均值。
+    params:
+      prev_mean: 上一次均值 ×10000
+      new_val: 新样本值 ×10000
+      n: 加入新样本后的总计数（n ≥ 1）
+    returns: 更新后的均值 ×10000
+  running_m2:
+    desc: Welford 在线算法：更新用于计算方差的 M2 累加器。方差 = M2 / (n−1)。
+    params:
+      prev_m2: 上一次 M2 累加器 ×10000
+      prev_mean: 加入新样本前的均值 ×10000
+      new_mean: 加入新样本后的均值 ×10000
+      new_val: 新样本值 ×10000
+    returns: 更新后的 M2 累加器 ×10000
+  variance_from_m2:
+    desc: 从 Welford M2 累加器和样本数计算样本方差。
+    params:
+      m2: running_m2 的 M2 累加器 ×10000
+      n: 已收集样本数
+    returns: 样本方差 ×10000；n ≤ 1 时返回 0
+  std_dev_approx:
+    desc: 对方差取整数平方根，近似得到标准差。
+    params:
+      variance_fx: 方差 ×10000（如来自 variance_from_m2）
+    returns: √variance ×10000；非正输入返回 0
+
+advanced:
+  fib:
+    desc: 迭代法计算斐波那契数 F(n)。n ≤ 46（F(46) ≈ INT_MAX）。
+    params:
+      n: 索引（n ≥ 0）
+    returns: F(n)
+  is_prime:
+    desc: 通过试除法（除到 √n）判断素数。
+    params:
+      n: 待测整数（n ≥ 0）
+    returns: 1 表示素数，0 表示合数
+  collatz_steps:
+    desc: 计算从 n 出发的 Collatz 序列到达 1 所需的步数。
+    params:
+      n: 起始值（n ≥ 1）
+    returns: 步数
+  digit_sum:
+    desc: 各十进制位数字之和，负数取绝对值后计算。
+    params:
+      n: 输入整数
+    returns: 各位数字之和
+  count_digits:
+    desc: 统计整数的十进制位数，0 有 1 位，负数统计绝对值的位数。
+    params:
+      n: 输入整数
+    returns: 位数
+  reverse_int:
+    desc: 翻转整数各十进制位，符号保留。
+    params:
+      n: 输入整数
+    returns: 翻转后的整数
+  mod_pow:
+    desc: 快速模幂：(base^exp) mod m，使用 O(log exp) 二进制快速幂。m 须 ≤ 46340。
+    params:
+      base: 底数
+      exp: 指数（≥ 0）
+      m: 模数（1 < m ≤ 46340）
+    returns: (base^exp) mod m
+  hash_int:
+    desc: 确定性整数哈希，输出非负 [0, ~2×10⁹)，同输入始终产生同输出，适合程序化生成的种子随机值。
+    params:
+      n: 输入整数
+    returns: 非负哈希值
+  noise1d:
+    desc: 1D 值噪声，通过 smoothstep 插值实现 C¹ 连续性。输入 ×1000，输出 [0, 999]。
+    params:
+      x: 坐标 ×1000
+    returns: 平滑插值噪声值 [0, 999]
+  bezier_quad:
+    desc: 二次贝塞尔曲线（De Casteljau 算法），t ∈ [0, 1000]。
+    params:
+      p0: 起始控制点
+      p1: 中间控制点
+      p2: 终止控制点
+      t: 参数 ×1000（0 = 起点，1000 = 终点）
+    returns: t 处的曲线值
+  bezier_cubic:
+    desc: 三次贝塞尔曲线（De Casteljau 算法），t ∈ [0, 1000]。
+    params:
+      p0: 控制点 0（起点）
+      p1: 控制点 1
+      p2: 控制点 2
+      p3: 控制点 3（终点）
+      t: 参数 ×1000
+    returns: t 处的曲线值
+  mandelbrot_iter:
+    desc: Mandelbrot 集迭代次数，c = cx/1000 + i·cy/1000。返回逃逸迭代次数，可用于方块着色。
+    params:
+      cx: 实部 ×1000（范围 −2000..1000）
+      cy: 虚部 ×1000（范围 −1000..1000）
+      max_iter: 最大迭代次数
+    returns: 逃逸前的迭代次数，或 max_iter（在集合内）
+  julia_iter:
+    desc: Julia 集迭代次数，固定常数 c，可变起点 z₀。
+    params:
+      z0r: 起点实部 ×1000
+      z0i: 起点虚部 ×1000
+      cr: 常数 c 实部 ×1000
+      ci: 常数 c 虚部 ×1000
+      max_iter: 最大迭代次数
+    returns: 逃逸前的迭代次数，或 max_iter
+  angle_between:
+    desc: 两个二维整数向量之间的无符号夹角（0–180°）。
+    params:
+      x1: 向量 1 的 X 分量
+      y1: 向量 1 的 Y 分量
+      x2: 向量 2 的 X 分量
+      y2: 向量 2 的 Y 分量
+    returns: 夹角（整数度数，0–180）
+  clamp_circle_x:
+    desc: 将点 (x, y) 约束到以原点为圆心、半径为 r 的圆内，返回 X 分量。
+    params:
+      x: X 坐标
+      y: Y 坐标
+      r: 圆半径（与 x/y 同单位）
+    returns: 约束后的 X 分量
+  clamp_circle_y:
+    desc: 将点 (x, y) 约束到以原点为圆心、半径为 r 的圆内，返回 Y 分量。
+    params:
+      x: X 坐标
+      y: Y 坐标
+      r: 圆半径
+    returns: 约束后的 Y 分量
+  newton_sqrt:
+    desc: Newton 迭代法求整数平方根（isqrt 的替代方案，二次收敛）。
+    params:
+      n: 非负整数
+    returns: ⌊√n⌋
+  bezier_quartic:
+    desc: 四次（5 控制点）贝塞尔曲线（De Casteljau 算法），t ∈ [0, 1000]。
+    params:
+      p0: 控制点 0（起点）
+      p1: 控制点 1
+      p2: 控制点 2
+      p3: 控制点 3
+      p4: 控制点 4（终点）
+      t: 参数 ×1000
+    returns: t 处的曲线值
+  bezier_n:
+    desc: 任意阶贝塞尔曲线（De Casteljau 算法）。⚠ 会修改 pts 数组，如需保留原数组请用 bezier_n_safe。
+    params:
+      pts: n 个控制点数组（会被原地修改）
+      n: 控制点数量
+      t: 参数 ×1000
+    returns: t 处的曲线值
+  bezier_n_safe:
+    desc: 非破坏性任意阶贝塞尔曲线，将 pts 复制到 work 后再求值，pts 不被修改。
+    params:
+      pts: 控制点数组（不被修改）
+      work: 工作缓冲区（长度 ≥ n，会被覆写）
+      n: 控制点数量
+      t: 参数 ×1000
+    returns: t 处的曲线值
+  digital_root:
+    desc: 数字根：反复对各位求和直到得到单个数字。
+    params:
+      n: 非负整数
+    returns: 数字根（1–9）；0 返回 0
+  spiral_ring:
+    desc: Ulam 螺旋环号：n 位于哪个同心正方形环上（环 0 = n=1，环 1 = n=2..9，以此类推）。
+    params:
+      n: 正整数
+    returns: 环号
+  median:
+    desc: n 个整数的中位数（×1000 定点数）。奇数 n 返回中间值 ×1000，偶数 n 返回两中间值均值 ×1000。不修改原数组。
+    params:
+      arr: 输入数组（不被修改）
+      work: 工作缓冲区（长度 ≥ n）
+      n: 元素个数（≥ 1）
+    returns: 中位数 ×1000
+  mode:
+    desc: 出现频率最高的元素（众数），平局时取最小值。
+    params:
+      arr: 输入数组（不被修改）
+      work: 工作缓冲区（长度 ≥ n）
+      n: 元素个数（≥ 1）
+    returns: 众数值
+  mean_fx:
+    desc: 算术均值，返回定点数 ×1000。
+    params:
+      arr: 输入整数数组
+      n: 元素个数（≥ 1）
+    returns: sum(arr) ×1000 / n；空数组返回 0
+  std_dev_fx:
+    desc: 总体标准差，返回定点数 ×1000（使用整数算术）。
+    params:
+      arr: 输入整数数组
+      n: 元素个数（≥ 2）
+    returns: √(Σ(xᵢ−mean)²/n) ×1000；n ≤ 1 返回 0
+  hermite_spline:
+    desc: 三次 Hermite 样条插值，使用显式切线。
+    params:
+      p0: 起始值
+      p1: 终止值
+      m0: p0 处的切线
+      m1: p1 处的切线
+      t: 参数 ×1000（0 = p0，1000 = p1）
+    returns: 插值结果（与 p0/p1 同单位）
+  catmull_rom:
+    desc: Catmull-Rom 样条，在 p1 到 p2 之间插值，切线由相邻点自动推导。
+    params:
+      p0: 段起点前的点
+      p1: 段起点
+      p2: 段终点
+      p3: 段终点后的点
+      t: 参数 ×1000（0 = p1，1000 = p2）
+    returns: p1 到 p2 之间的插值结果
+
+expr:
+  expr_eval:
+    desc: 求值 RPN（逆波兰表达式）令牌流，支持单变量替换。正整数为字面量，-10000 为变量 x，-1~-8 为运算符。栈深度 16。
+    params:
+      tokens: 长度为 n 的 RPN 令牌数组
+      n: 令牌数量
+      x: 替换令牌 -10000 的变量值 ×10000
+    returns: 求值后栈顶值 ×10000
+
+cooldown:
+  cooldown_start:
+    desc: 启动（或重启）指定槽位的冷却计时，持续 ticks 游戏刻。
+    params:
+      name: 冷却槽位标识符（保留，供未来多槽位使用）
+      ticks: 冷却持续时间（游戏刻，20 刻 = 1 秒）
+    returns: 无返回值
+  cooldown_ready:
+    desc: 检查冷却是否已到期（可再次触发）。
+    params:
+      name: 冷却槽位标识符
+    returns: 1 表示已就绪（非活跃或剩余刻数 ≤ 0），0 表示仍在冷却
+  cooldown_tick:
+    desc: 冷却计时推进一刻，须在 @tick 函数中每刻调用。剩余刻数归零时自动标记为非活跃。
+    params:
+      name: 冷却槽位标识符
+    returns: 无返回值
+
+list:
+  sort2_min:
+    desc: 返回两个整数中较小的一个。
+    params:
+      a: 第一个值
+      b: 第二个值
+    returns: a ≤ b 则返回 a，否则返回 b
+  sort2_max:
+    desc: 返回两个整数中较大的一个。
+    params:
+      a: 第一个值
+      b: 第二个值
+    returns: a ≥ b 则返回 a，否则返回 b
+  list_min3:
+    desc: 三个整数中的最小值。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+    returns: a、b、c 中的最小值
+  list_max3:
+    desc: 三个整数中的最大值。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+    returns: a、b、c 中的最大值
+  list_min5:
+    desc: 五个整数中的最小值。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+      d: 值 4
+      e: 值 5
+    returns: 五个输入中的最小值
+  list_max5:
+    desc: 五个整数中的最大值。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+      d: 值 4
+      e: 值 5
+    returns: 五个输入中的最大值
+  list_sum5:
+    desc: 五个整数之和。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+      d: 值 4
+      e: 值 5
+    returns: a + b + c + d + e
+  list_sum4:
+    desc: 四个整数之和。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+      d: 值 4
+    returns: a + b + c + d
+  list_sum3:
+    desc: 三个整数之和。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+    returns: a + b + c
+  avg3:
+    desc: 三个值的整数均值（向零截断）。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+    returns: (a + b + c) / 3
+  avg5:
+    desc: 五个值的整数均值（向零截断）。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+      d: 值 4
+      e: 值 5
+    returns: (a + b + c + d + e) / 5
+  sort3:
+    desc: 对三个值排序，返回指定位置的值（0 = 最小，1 = 中间，2 = 最大）。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+      pos: 排序后的位置（0、1 或 2）
+    returns: 指定排序位置的值
+  weighted2:
+    desc: 利用 LCG 种子在两个选项（0 或 1）间做加权随机选择。
+    params:
+      seed: LCG 种子（任意整数）
+      w0: 选项 0 的权重
+      w1: 选项 1 的权重
+    returns: 以概率 w0/(w0+w1) 返回 0，否则返回 1
+  weighted3:
+    desc: 利用 LCG 种子在三个选项（0、1 或 2）间做加权随机选择。
+    params:
+      seed: LCG 种子
+      w0: 选项 0 的权重
+      w1: 选项 1 的权重
+      w2: 选项 2 的权重
+    returns: 按权重比例返回 0、1 或 2
+  sort4:
+    desc: 使用 5 次比较的最优排序网络对四个值排序，返回指定位置的值。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+      d: 值 4
+      pos: 排序后的位置（0 = 最小，3 = 最大）
+    returns: 指定排序位置的值
+  sort5:
+    desc: 使用 9 次比较的 Batcher 奇偶归并排序网络对五个值排序，返回指定位置的值。
+    params:
+      a: 值 1
+      b: 值 2
+      c: 值 3
+      d: 值 4
+      e: 值 5
+      pos: 排序后的位置（0 = 最小，4 = 最大）
+    returns: 指定排序位置的值
+  list_sort_asc:
+    desc: 原地升序冒泡排序（任意长度）。需要 RedScript ≥ 2.4.0（数组引用传参）。
+    params:
+      arr: 待排序数组（原地修改）
+      len: 要排序的元素数量
+    returns: 无返回值
+  list_sort_desc:
+    desc: 原地降序冒泡排序（任意长度）。需要 RedScript ≥ 2.4.0。
+    params:
+      arr: 待排序数组（原地修改）
+      len: 要排序的元素数量
+    returns: 无返回值
+  list_sum:
+    desc: 数组所有元素之和。
+    params:
+      arr: 输入数组
+      len: 元素数量
+    returns: arr[0..len) 的总和
+  list_avg:
+    desc: 数组算术均值，返回定点数 ×10000。
+    params:
+      arr: 输入数组
+      len: 元素数量（须 > 0）
+    returns: (sum ×10000) / len；空数组返回 0
+  list_min:
+    desc: 数组中的最小元素（数组至少有一个元素）。
+    params:
+      arr: 输入数组
+      len: 元素数量
+    returns: arr[0..len) 中的最小值
+  list_max:
+    desc: 数组中的最大元素（数组至少有一个元素）。
+    params:
+      arr: 输入数组
+      len: 元素数量
+    returns: arr[0..len) 中的最大值
+  list_contains:
+    desc: 检查数组中是否存在某个值。
+    params:
+      arr: 输入数组
+      len: 元素数量
+      val: 要搜索的值
+    returns: 找到返回 1，否则返回 0
+  list_index_of:
+    desc: 查找值在数组中第一次出现的索引。
+    params:
+      arr: 输入数组
+      len: 元素数量
+      val: 要搜索的值
+    returns: 第一个索引，未找到返回 -1
+  list_shuffle:
+    desc: Fisher-Yates 原地随机打乱，使用线性同余生成器。
+    params:
+      arr: 待打乱数组（原地修改）
+      len: 元素数量
+      seed: 初始 LCG 种子（任意整数）
+    returns: 打乱后的数组（与 arr 相同引用）
+  list_dedup_count:
+    desc: 统计数组中唯一值的数量（O(n²)，适合小数组）。
+    params:
+      arr: 输入数组
+      len: 元素数量
+    returns: arr[0..len) 中不同值的个数
+
+events:
+  __events_load:
+    desc: 内部加载函数：注册 rs.deaths/rs.kills/rs.item_use 计分板目标。勿直接调用。
+    returns: 无返回值
+  __events_tick:
+    desc: 内部每刻函数：检测玩家加入/死亡/击杀/物品使用事件并分发到对应函数标签。勿直接调用。
+    returns: 无返回值
+
+sets:
+  set_new:
+    desc: 创建一个新的空集合并返回唯一集合 ID（字符串句柄）。
+    returns: 集合 ID（字符串句柄）
+  set_add:
+    desc: 若值不存在则将其加入集合（已存在则无操作）。
+    params:
+      set: set_new 返回的集合 ID
+      value: 要添加的值
+    returns: 无返回值
+  set_contains:
+    desc: 检查集合中是否存在某个值。
+    params:
+      set: 集合 ID
+      value: 要查找的值
+    returns: 存在返回 1，否则返回 0
+  set_remove:
+    desc: 从集合中移除某个值（不存在则无操作）。
+    params:
+      set: 集合 ID
+      value: 要移除的值
+    returns: 无返回值
+  set_clear:
+    desc: 清空集合中的所有值。
+    params:
+      set: 集合 ID
+    returns: 无返回值

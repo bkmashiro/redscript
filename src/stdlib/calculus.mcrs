@@ -12,24 +12,35 @@ module library;
 
 // ─── Differentiation ─────────────────────────────────────────────────────────
 
-// deriv_forward(f1, f0, h_fx): forward difference derivative
-// f1 = f(x+h), f0 = f(x), h_fx = step size ×10000
-// Returns df/dx ×10000
+/// Forward-difference derivative: (f(x+h) − f(x)) / h.
+/// @since 1.3.0
+/// @param f1 f(x + h) × 10000
+/// @param f0 f(x) × 10000
+/// @param h_fx Step size × 10000 (must not be zero)
+/// @returns df/dx × 10000; returns 0 if h_fx == 0
 fn deriv_forward(f1: int, f0: int, h_fx: int): int {
     if (h_fx == 0) { return 0; }
     return (f1 - f0) * 10000 / h_fx;
 }
 
-// deriv_central(f_plus, f_minus, h_fx): central difference (more accurate)
-// f_plus = f(x+h), f_minus = f(x-h)
-// Returns df/dx ×10000
+/// Central-difference derivative: (f(x+h) − f(x−h)) / (2h). More accurate than forward difference.
+/// @since 1.3.0
+/// @param f_plus f(x + h) × 10000
+/// @param f_minus f(x − h) × 10000
+/// @param h_fx Step size × 10000 (must not be zero)
+/// @returns df/dx × 10000; returns 0 if h_fx == 0
 fn deriv_central(f_plus: int, f_minus: int, h_fx: int): int {
     if (h_fx == 0) { return 0; }
     return (f_plus - f_minus) * 10000 / (2 * h_fx);
 }
 
-// second_deriv(f_plus, f0, f_minus, h_fx): second derivative
-// Returns d²f/dx² ×10000
+/// Second derivative via the central finite-difference formula: (f(x+h) − 2f(x) + f(x−h)) / h².
+/// @since 1.3.0
+/// @param f_plus f(x + h) × 10000
+/// @param f0 f(x) × 10000
+/// @param f_minus f(x − h) × 10000
+/// @param h_fx Step size × 10000 (must not be zero)
+/// @returns d²f/dx² × 10000; returns 0 if h_fx == 0
 fn second_deriv(f_plus: int, f0: int, f_minus: int, h_fx: int): int {
     if (h_fx == 0) { return 0; }
     return (f_plus - 2 * f0 + f_minus) * 100000000 / h_fx / h_fx;
@@ -40,10 +51,15 @@ fn second_deriv(f_plus: int, f0: int, f_minus: int, h_fx: int): int {
 // For integration, the user provides an array of function values at equally
 // spaced points, and the step size.
 
-// integrate_trapezoid(vals, n, h_fx): trapezoidal rule integration
-// vals: array of n function values ×10000, equally spaced by h_fx
-// h_fx: step width ×10000
-// Returns integral ×10000 (area under curve)
+/// Numerical integration using the trapezoidal rule.
+/// @since 1.3.0
+/// @param vals Array of n function values × 10000 at equally spaced points
+/// @param n Number of sample points (must be ≥ 2)
+/// @param h_fx Step width between samples × 10000
+/// @returns Approximate integral × 10000 (area under the curve)
+/// @example
+/// let ys: int[] = [0, 5000, 10000]; // f(0)=0, f(0.5)=0.5, f(1)=1  (linear)
+/// let area: int = integrate_trapezoid(ys, 3, 5000); // ≈ 5000  (∫₀¹ x dx = 0.5)
 fn integrate_trapezoid(vals: int[], n: int, h_fx: int): int {
     if (n < 2) { return 0; }
     // Sum = (vals[0] + vals[n-1]) / 2 + vals[1] + vals[2] + ... + vals[n-2]
@@ -56,8 +72,13 @@ fn integrate_trapezoid(vals: int[], n: int, h_fx: int): int {
     return sum * h_fx / 10000;
 }
 
-// integrate_simpson(vals, n, h_fx): Simpson's 1/3 rule (n must be odd, n ≥ 3)
-// More accurate than trapezoid for smooth functions
+/// Numerical integration using Simpson's 1/3 rule (more accurate than trapezoid for smooth functions).
+/// Uses n−1 intervals if n is even. Requires n ≥ 3.
+/// @since 1.3.0
+/// @param vals Array of n function values × 10000 at equally spaced points
+/// @param n Number of sample points (should be odd and ≥ 3)
+/// @param h_fx Step width × 10000
+/// @returns Approximate integral × 10000
 fn integrate_simpson(vals: int[], n: int, h_fx: int): int {
     if (n < 3) { return integrate_trapezoid(vals, n, h_fx); }
     // Ensure n is odd by using n-1 if even
@@ -80,7 +101,12 @@ fn integrate_simpson(vals: int[], n: int, h_fx: int): int {
 
 // ─── Riemann sums ─────────────────────────────────────────────────────────────
 
-// riemann_left(vals, n, h_fx): left Riemann sum
+/// Left Riemann sum: sum of f(x_i) × h for i = 0 … n−2.
+/// @since 1.3.0
+/// @param vals Array of n function values × 10000
+/// @param n Number of sample points
+/// @param h_fx Step width × 10000
+/// @returns Approximate integral × 10000
 fn riemann_left(vals: int[], n: int, h_fx: int): int {
     let sum: int = 0;
     let i: int = 0;
@@ -88,7 +114,12 @@ fn riemann_left(vals: int[], n: int, h_fx: int): int {
     return sum * h_fx / 10000;
 }
 
-// riemann_right(vals, n, h_fx): right Riemann sum
+/// Right Riemann sum: sum of f(x_i) × h for i = 1 … n−1.
+/// @since 1.3.0
+/// @param vals Array of n function values × 10000
+/// @param n Number of sample points
+/// @param h_fx Step width × 10000
+/// @returns Approximate integral × 10000
 fn riemann_right(vals: int[], n: int, h_fx: int): int {
     let sum: int = 0;
     let i: int = 1;
@@ -96,8 +127,12 @@ fn riemann_right(vals: int[], n: int, h_fx: int): int {
     return sum * h_fx / 10000;
 }
 
-// riemann_mid(vals, n, h_fx): midpoint Riemann sum
-// vals: midpoint values (n-1 midpoints for n-1 intervals)
+/// Midpoint Riemann sum using precomputed midpoint values.
+/// @since 1.3.0
+/// @param vals Array of n midpoint values × 10000 (one per interval)
+/// @param n Number of intervals (i.e. length of vals)
+/// @param h_fx Step width × 10000
+/// @returns Approximate integral × 10000
 fn riemann_mid(vals: int[], n: int, h_fx: int): int {
     let sum: int = 0;
     let i: int = 0;
@@ -107,8 +142,12 @@ fn riemann_mid(vals: int[], n: int, h_fx: int): int {
 
 // ─── Curve length ────────────────────────────────────────────────────────────
 
-// curve_length_2d(xs, ys, n): approximate arc length of a 2D polyline
-// xs, ys: x and y coordinates ×10000 of n points
+/// Approximate arc length of a 2-D polyline through n points using the Euclidean distance between consecutive points.
+/// @since 1.3.0
+/// @param xs X coordinates × 10000 of the n points
+/// @param ys Y coordinates × 10000 of the n points
+/// @param n Number of points (must be ≥ 2)
+/// @returns Approximate arc length × 10000
 fn curve_length_2d(xs: int[], ys: int[], n: int): int {
     let total: int = 0;
     let i: int = 0;
@@ -124,26 +163,43 @@ fn curve_length_2d(xs: int[], ys: int[], n: int): int {
 
 // ─── Running statistics ───────────────────────────────────────────────────────
 
-// running_mean(prev_mean, new_val, n): Welford's online mean update
-// prev_mean ×10000, new_val ×10000, n: count after adding new_val (n ≥ 1)
+/// Welford's online algorithm: update a running mean with a new sample.
+/// @since 1.3.0
+/// @param prev_mean Previous mean × 10000
+/// @param new_val New sample value × 10000
+/// @param n Total count after adding the new sample (n ≥ 1)
+/// @returns Updated mean × 10000
 fn running_mean(prev_mean: int, new_val: int, n: int): int {
     if (n <= 1) { return new_val; }
     return prev_mean + (new_val - prev_mean) * 10000 / (n * 10000);
 }
 
-// running_m2(prev_m2, prev_mean, new_mean, new_val): Welford's M2 update
-// Used to compute variance: variance = m2 / (n-1)
+/// Welford's online algorithm: update the M2 accumulator used to compute variance.
+/// Variance = running_m2 / (n − 1) after n samples.
+/// @since 1.3.0
+/// @param prev_m2 Previous M2 accumulator × 10000
+/// @param prev_mean Mean before adding the new sample × 10000
+/// @param new_mean Mean after adding the new sample × 10000
+/// @param new_val New sample value × 10000
+/// @returns Updated M2 accumulator × 10000
 fn running_m2(prev_m2: int, prev_mean: int, new_mean: int, new_val: int): int {
     return prev_m2 + (new_val - prev_mean) * (new_val - new_mean) / 10000;
 }
 
-// variance_from_m2(m2, n): get variance from Welford's M2, n = number of samples
+/// Compute sample variance from a Welford M2 accumulator and sample count.
+/// @since 1.3.0
+/// @param m2 M2 accumulator from `running_m2` × 10000
+/// @param n Number of samples collected
+/// @returns Sample variance × 10000; returns 0 for n ≤ 1
 fn variance_from_m2(m2: int, n: int): int {
     if (n <= 1) { return 0; }
     return m2 / (n - 1);
 }
 
-// std_dev_approx(variance_fx): approximate std dev = √variance
+/// Approximate standard deviation as the integer square root of the variance.
+/// @since 1.3.0
+/// @param variance_fx Variance × 10000 (e.g. from `variance_from_m2`)
+/// @returns √variance × 10000; returns 0 for non-positive input
 fn std_dev_approx(variance_fx: int): int {
     if (variance_fx <= 0) { return 0; }
     return isqrt(variance_fx * 100) * 100 / 10000;
