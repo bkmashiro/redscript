@@ -12,7 +12,7 @@
 
 import { compile, checkDetailed } from './index'
 import { DiagnosticError, formatError } from './diagnostics'
-import { parseMcVersion, DEFAULT_MC_VERSION } from './types/mc-version'
+import { parseMcVersion, DEFAULT_MC_VERSION, McVersion } from './types/mc-version'
 import { startRepl } from './repl'
 import { generateDts } from './builtins/metadata'
 import { FileCache } from './cache/index'
@@ -23,6 +23,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as https from 'https'
 import { execSync } from 'child_process'
+import archiver from 'archiver'
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -33,6 +34,7 @@ RedScript Compiler v2
 
 Usage:
   redscript compile <file> [-o <out>] [--namespace <ns>] [--incremental]
+  redscript publish <file> [-o <out.zip>] [--namespace <ns>] [--mc-version <ver>]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
   redscript lint <file> [--max-function-lines <n>]
@@ -44,6 +46,7 @@ Usage:
 
 Commands:
   compile       Compile a RedScript file to a Minecraft datapack
+  publish       Compile and package the datapack as a .zip (ready to install in Minecraft)
   watch         Watch a directory for .mcrs file changes, recompile, and hot reload
   check         Check a RedScript file for errors without generating output
   lint          Statically analyze a RedScript file for potential issues (warnings)
@@ -174,6 +177,7 @@ function parseArgs(args: string[]): {
   fmtCheck?: boolean
   incremental?: boolean
   maxFunctionLines?: number
+  description?: string
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -220,6 +224,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--max-function-lines') {
       result.maxFunctionLines = parseInt(args[++i], 10)
+      i++
+    } else if (arg === '--description') {
+      result.description = args[++i]
       i++
     } else if (!result.command) {
       result.command = arg
@@ -637,6 +644,123 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
   })
 }
 
+/**
+ * Map a McVersion enum value to the corresponding pack_format integer.
+ * https://minecraft.wiki/w/Pack_format
+ */
+function mcVersionToPackFormat(version: McVersion): number {
+  // Use a threshold-based mapping (≥ version → pack_format)
+  if (version >= McVersion.v1_21_4) return 48
+  if (version >= McVersion.v1_21)   return 45
+  if (version >= McVersion.v1_20_4) return 26
+  if (version >= McVersion.v1_20_2) return 22
+  if (version >= McVersion.v1_20)   return 18
+  return 15 // 1.19 and below
+}
+
+/**
+ * Read redscript.config.json from the given directory (if it exists).
+ */
+function readConfig(dir: string): Record<string, string> {
+  const configPath = path.join(dir, 'redscript.config.json')
+  if (fs.existsSync(configPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return {}
+}
+
+/**
+ * publish command — compile then zip as a Minecraft datapack.
+ */
+async function publishCommand(
+  file: string,
+  outputZip: string,
+  namespace: string,
+  description: string,
+  mcVersionStr: string | undefined,
+  lenient = false,
+  includeDirs?: string[],
+): Promise<void> {
+  if (!fs.existsSync(file)) {
+    console.error(`Error: File not found: ${file}`)
+    process.exit(1)
+  }
+
+  let mcVersion = DEFAULT_MC_VERSION
+  if (mcVersionStr) {
+    try {
+      mcVersion = parseMcVersion(mcVersionStr)
+    } catch (e) {
+      console.error(`Error: ${(e as Error).message}`)
+      process.exit(1)
+    }
+  }
+
+  const source = fs.readFileSync(file, 'utf-8')
+
+  let compileResult
+  try {
+    compileResult = compile(source, {
+      namespace,
+      filePath: file,
+      generateSourceMap: false,
+      mcVersion,
+      lenient,
+      includeDirs,
+    })
+  } catch (err) {
+    console.error(formatError(err as Error, source, file))
+    process.exit(1)
+  }
+
+  for (const w of compileResult.warnings) {
+    console.error(`Warning: ${w}`)
+  }
+
+  const packFormat = mcVersionToPackFormat(mcVersion)
+  const mcmeta = JSON.stringify({
+    pack: {
+      pack_format: packFormat,
+      description,
+    }
+  }, null, 2)
+
+  // Ensure output directory exists
+  fs.mkdirSync(path.dirname(path.resolve(outputZip)), { recursive: true })
+
+  await new Promise<void>((resolve, reject) => {
+    const output = fs.createWriteStream(outputZip)
+    const archive = archiver('zip', { zlib: { level: 9 } })
+
+    output.on('close', resolve)
+    archive.on('error', reject)
+    archive.pipe(output)
+
+    // Add pack.mcmeta at root
+    archive.append(mcmeta, { name: 'pack.mcmeta' })
+
+    // Add compiled files — skip pack.mcmeta from compile result (we generate our own)
+    // The compile result already produces correct datapack paths, e.g.:
+    //   data/<namespace>/function/setup.mcfunction
+    //   data/minecraft/tags/function/load.json
+    for (const dataFile of compileResult.files) {
+      if (dataFile.path === 'pack.mcmeta') continue
+      archive.append(dataFile.content, { name: dataFile.path })
+    }
+
+    void archive.finalize()
+  })
+
+  console.log(`✓ Published ${file} → ${outputZip}`)
+  console.log(`  Namespace:   ${namespace}`)
+  console.log(`  pack_format: ${packFormat}`)
+  console.log(`  Files:       ${compileResult.files.length}`)
+}
+
 // Main
 const parsed = parseArgs(args)
 
@@ -676,6 +800,38 @@ async function main(): Promise<void> {
       )
       }
       break
+
+    case 'publish': {
+      if (!parsed.file) {
+        console.error('Error: No input file specified')
+        printUsage()
+        process.exit(1)
+      }
+      {
+        // Determine project directory (where redscript.config.json lives)
+        const fileDir = path.dirname(path.resolve(parsed.file))
+        const config = readConfig(fileDir)
+
+        const namespace = parsed.namespace ?? config.namespace ?? deriveNamespace(parsed.file)
+        const description = parsed.description ?? config.description ?? `${namespace} datapack`
+        const mcVersionStr = parsed.mcVersionStr ?? config.mcVersion
+
+        // Default output: <namespace>.zip in cwd
+        const defaultZip = path.join(process.cwd(), `${namespace}.zip`)
+        const outputZip = parsed.output ?? defaultZip
+
+        await publishCommand(
+          parsed.file,
+          outputZip,
+          namespace,
+          description,
+          mcVersionStr,
+          parsed.lenient,
+          parsed.includeDirs,
+        )
+      }
+      break
+    }
 
     case 'watch':
       if (!parsed.file) {
