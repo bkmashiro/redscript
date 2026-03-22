@@ -14,6 +14,8 @@
 
 import type { MIRBlock, MIRFunction, MIRInstr, Operand } from '../mir/types'
 
+type PowInstr = { kind: 'pow'; dst: string; a: Operand; b: Operand; sourceLoc?: MIRInstr['sourceLoc'] }
+
 export function strengthReduction(fn: MIRFunction): MIRFunction {
   return {
     ...fn,
@@ -29,6 +31,10 @@ function rewriteBlock(block: MIRBlock): MIRBlock {
 }
 
 function rewriteInstr(instr: MIRInstr): MIRInstr | null {
+  const powInstr = asPowInstr(instr)
+  if (powInstr && isConst(powInstr.b, 1))
+    return makeCopy(powInstr.dst, powInstr.a, powInstr.sourceLoc)
+
   switch (instr.kind) {
     case 'mul':
       return rewriteMul(instr)
@@ -40,9 +46,6 @@ function rewriteInstr(instr: MIRInstr): MIRInstr | null {
       if (isConst(instr.b, 0)) return makeCopy(instr.dst, instr.a, instr.sourceLoc)
       return null
     case 'div':
-      if (isConst(instr.b, 1)) return makeCopy(instr.dst, instr.a, instr.sourceLoc)
-      return null
-    case 'pow':
       if (isConst(instr.b, 1)) return makeCopy(instr.dst, instr.a, instr.sourceLoc)
       return null
     default:
@@ -68,6 +71,11 @@ function rewriteMul(instr: Extract<MIRInstr, { kind: 'mul' }>): MIRInstr | null 
 
 function isConst(op: Operand, value: number): boolean {
   return op.kind === 'const' && op.value === value
+}
+
+function asPowInstr(instr: MIRInstr): PowInstr | null {
+  const candidate = instr as MIRInstr | PowInstr
+  return candidate.kind === 'pow' ? candidate : null
 }
 
 function makeCopy(dst: string, src: Operand, sourceLoc?: MIRInstr['sourceLoc']): MIRInstr {

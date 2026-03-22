@@ -146,10 +146,17 @@ function cloneCallee(
   for (const block of callee.blocks) {
     collectDefinedTemps(block, calleeTemps)
   }
-  // Build renaming map: old temp → new temp (scoped to inlineId)
+  // Build renaming map: old temp → new temp (scoped to inlineId).
+  // Convention temps (__rf_*, __opt_*, $ret, $p0/$p1/...) are global calling-
+  // convention slots that must NOT be renamed — the caller reads them by the
+  // exact name after the call returns.
+  const GLOBAL_TEMP_PREFIXES = ['__rf_', '__opt_', '$ret', '$p']
+  function isGlobalConventionTemp(t: Temp): boolean {
+    return GLOBAL_TEMP_PREFIXES.some(pfx => t.startsWith(pfx))
+  }
   const tempRename = new Map<Temp, Temp>()
   for (const tmp of calleeTemps) {
-    if (!sub.has(tmp)) {
+    if (!sub.has(tmp) && !isGlobalConventionTemp(tmp)) {
       tempRename.set(tmp, `${tmp}${inlineId}`)
     }
   }

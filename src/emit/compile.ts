@@ -384,6 +384,14 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Stage 4: MIR optimization
     const mirOpt = optimizeModule(mir)
 
+    // Remove auto-inlined functions from the library-prune set so their
+    // .mcfunction files are still emitted (external callers may use them).
+    if (mirOpt.keepInOutput && mirOpt.keepInOutput.size > 0) {
+      for (const fnName of mirOpt.keepInOutput) {
+        libraryFilePaths.delete(`data/${namespace}/function/${fnName}.mcfunction`)
+      }
+    }
+
     // Stage 4b: Coroutine transform (opt-in, only for @coroutine functions)
     const coroResult = coroutineTransform(mirOpt, coroutineInfos)
     const mirFinal = coroResult.module

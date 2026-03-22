@@ -141,15 +141,17 @@ function cseBlock(block: MIRBlock): MIRBlock {
     if (key !== null) {
       const existing = available.get(key)
       if (existing !== undefined) {
-        // Replace with a copy from the already-computed temp
         const dst = getDst(instr)!
-        instrs.push({ kind: 'copy', dst, src: { kind: 'temp', name: existing } })
-        // Don't update available[key] — the original mapping stays valid
-        // But do invalidate any previous mapping for dst if it existed
-        invalidate(dst)
-        // Record dst as another name for the result (through copy)
-        // No need to add to available again; the original key still maps to existing
-        continue
+        // Don't CSE self-modifying instructions (dst is one of the source temps).
+        // e.g. t5 = t5 + 1: each occurrence uses a different value of t5.
+        const selfModifying = getUsedTemps(instr).includes(dst)
+        if (!selfModifying) {
+          // Replace with a copy from the already-computed temp
+          instrs.push({ kind: 'copy', dst, src: { kind: 'temp', name: existing } })
+          // But do invalidate any previous mapping for dst if it existed
+          invalidate(dst)
+          continue
+        }
       }
     }
 

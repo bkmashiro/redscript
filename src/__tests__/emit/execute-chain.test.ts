@@ -78,6 +78,8 @@ describe('execute chain optimization: compilation output', () => {
     const fn: LIRFunction = {
       name: 'test_fn',
       instructions,
+      isMacro: false,
+      macroParams: [],
       params: [],
       returnType: 'void',
     }

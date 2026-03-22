@@ -88,7 +88,7 @@ describe('strength reduction', () => {
   test('rewrites x ^ 1 to x', () => {
     const fn = mkFn([
       mkBlock('entry', [
-        { kind: 'pow', dst: 't0', a: t('x'), b: c(1) },
+        { kind: 'pow', dst: 't0', a: t('x'), b: c(1) } as unknown as MIRInstr,
       ], { kind: 'return', value: t('t0') }),
     ])
 

@@ -104,6 +104,8 @@ export interface LIRFunction {
   instructions: LIRInstr[]    // flat list (no blocks; control flow is via call_if_*)
   isMacro: boolean
   macroParams: string[]       // names of $(param) substitution keys
+  params?: string[]           // optional parameter names (for metadata/tests)
+  returnType?: string         // optional return type (for metadata/tests)
   sourceLoc?: SourceLoc
   sourceSnippet?: string
 }

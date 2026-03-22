@@ -186,22 +186,26 @@ describe('impl: struct param method (bug fix)', () => {
           return self.x * self.x + self.y * self.y
         }
       }
-      @keep fn test(): void {
+      @keep fn test_dot(): int {
         let a: Vec2 = { x: 3, y: 4 }
         let b: Vec2 = { x: 1, y: 2 }
-        let d: int = a.dot(b)
-        let l: int = a.length_sq()
+        return a.dot(b)
+      }
+      @keep fn test_lensq(): int {
+        let a: Vec2 = { x: 3, y: 4 }
+        return a.length_sq()
       }
     `
     const result = compile(src, { namespace: 'test' })
     // dot(a={3,4}, b={1,2}) = 3*1 + 4*2 = 11, length_sq(a) = 9+16 = 25
-    // Compiler constant-folds into a specialized function dot__const_3_4_1_2
+    // After auto-inline + constant folding, the result is a direct constant.
     const allContent = result.files.map(f => f.content).join('\n')
-    // The specialized dot function should compute 3*1=3 and 4*2=8 and add them = 11
-    expect(allContent).toMatch(/set.*3\b/)
-    expect(allContent).toMatch(/set.*8\b/)
-    // Ensure no helper files for __entity_tag or nonexistent functions are emitted
+    // The constant results 11 and 25 should appear in the output
+    expect(allContent).toContain('11')
+    expect(allContent).toContain('25')
+    // Ensure Vec2::dot and Vec2::length_sq are emitted (keepInOutput after auto-inline)
     const fnPaths = result.files.map(f => f.path)
     expect(fnPaths.some(p => p.includes('dot'))).toBe(true)
+    expect(fnPaths.some(p => p.includes('length_sq'))).toBe(true)
   })
 })

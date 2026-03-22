@@ -66,6 +66,7 @@ export type MIRInstr = MIRInstrBase & (
   | { kind: 'mul'; dst: Temp; a: Operand; b: Operand }
   | { kind: 'div'; dst: Temp; a: Operand; b: Operand }
   | { kind: 'mod'; dst: Temp; a: Operand; b: Operand }
+  | { kind: 'pow'; dst: Temp; a: Operand; b: Operand }
   | { kind: 'neg'; dst: Temp; src: Operand }
 
   // ── Comparison (result is 0 or 1) ────────────────────────────────────────
@@ -128,4 +129,9 @@ export interface MIRModule {
   inlineFunctions?: Set<string>
   /** Set of fully-qualified function names marked @no-inline. */
   noInlineFunctions?: Set<string>
+  /**
+   * Set of function names that were auto-inlined and whose definitions should
+   * still be emitted as separate .mcfunction files (so library callers work).
+   */
+  keepInOutput?: Set<string>
 }

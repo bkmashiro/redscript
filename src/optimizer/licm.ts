@@ -72,7 +72,7 @@ function tryHoistOne(fn: MIRFunction): MIRFunction {
     const info = analyzeLoop(fn, blockMap, block)
     if (!info) continue
 
-    const hoisted = collectInvariant(info, blockMap)
+    const hoisted = collectInvariant(info, blockMap, fn)
     if (hoisted.length === 0) continue
 
     return applyHoist(fn, blockMap, info, hoisted)
@@ -140,50 +140,44 @@ function findPreHeaderPred(fn: MIRFunction, headerId: BlockId, latchId: BlockId)
   return preds.length === 1 ? preds[0] : null
 }
 
-/** BFS/DFS: collect all block ids that are in the loop (header..latch). */
+/**
+ * Collect all block ids that belong to the loop using backward reachability.
+ *
+ * Algorithm: start from the latch and follow predecessors backward until we
+ * reach the header. Every visited block (including header and latch) is part
+ * of the loop. This is correct regardless of block naming conventions, so it
+ * handles branches, merges, and nested conditionals inside the loop body.
+ */
 function collectLoopBlocks(
   fn: MIRFunction,
   blockMap: Map<BlockId, MIRBlock>,
   headerId: BlockId,
   latchId: BlockId,
 ): Set<BlockId> {
-  const result = new Set<BlockId>()
-  const queue: BlockId[] = [headerId]
+  // Build predecessor map
+  const predsMap = new Map<BlockId, BlockId[]>()
+  for (const b of fn.blocks) predsMap.set(b.id, [])
+  for (const b of fn.blocks) {
+    for (const tgt of getTermTargets(b.term)) {
+      const list = predsMap.get(tgt)
+      if (list) list.push(b.id)
+    }
+  }
 
+  // Backward BFS from latch to header
+  const result = new Set<BlockId>()
+  const queue: BlockId[] = [latchId]
   while (queue.length > 0) {
     const id = queue.shift()!
     if (result.has(id)) continue
     result.add(id)
-    if (id === latchId) continue   // don't expand past the latch's targets
-
-    const block = blockMap.get(id)
-    if (!block) continue
-
-    for (const target of getTermTargets(block.term)) {
-      // Only follow edges that stay inside the loop (don't chase the exit edge)
-      // Heuristic: follow targets that have 'loop_' prefix or are the latch
-      if (!result.has(target) && isLoopBlock(target, headerId)) {
-        queue.push(target)
-      }
+    if (id === headerId) continue  // don't go past the header
+    for (const pred of predsMap.get(id) ?? []) {
+      if (!result.has(pred)) queue.push(pred)
     }
   }
 
   return result
-}
-
-function isLoopBlock(id: BlockId, headerId: BlockId): boolean {
-  // A block belongs to the loop if it has a loop_ prefix derived from the same
-  // loop as headerId, or is the header itself.
-  if (id === headerId) return true
-  // Extract the loop suffix from headerId: "loop_header" or "loop_header_N"
-  const suffix = headerId.replace(/^loop_header/, '')
-  return (
-    id.startsWith('loop_body' + suffix) ||
-    id.startsWith('loop_latch' + suffix) ||
-    id.startsWith('loop_header' + suffix) ||
-    // Nested loop blocks will have further prefixes — include them
-    id.startsWith('loop_' ) && id.includes(suffix)
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +193,7 @@ interface HoistedInstr {
 function collectInvariant(
   info: LoopInfo,
   blockMap: Map<BlockId, MIRBlock>,
+  fn: MIRFunction,
 ): HoistedInstr[] {
   // Step 1: collect the set of all temps defined (written) anywhere in the loop
   const variantTemps = new Set<Temp>()
@@ -220,6 +215,19 @@ function collectInvariant(
   const hoisted: HoistedInstr[] = []
   let changed = true
   const removedKeys = new Set<string>()  // "blockId:index"
+
+  // Compute the set of temps defined OUTSIDE the loop (in preheader or earlier).
+  // An instruction can only be safely hoisted from the loop body if its dst is
+  // NOT already defined outside the loop — otherwise hoisting would shadow the
+  // prior value when the loop iterates zero times (e.g. while(false)).
+  const definedOutsideLoop = new Set<Temp>()
+  for (const block of fn.blocks) {
+    if (info.loopBlockIds.has(block.id)) continue  // skip loop blocks
+    for (const instr of block.instrs) {
+      const d = getInstrDst(instr)
+      if (d !== null) definedOutsideLoop.add(d)
+    }
+  }
 
   while (changed) {
     changed = false
@@ -246,10 +254,21 @@ function collectInvariant(
         // All source operands must be invariant (not in variantTemps)
         if (!allOperandsInvariant(instr, variantTemps)) continue
 
+        // Don't hoist if there are OTHER writers of dst in the loop (excluding
+        // this instruction itself). If another non-hoisted instruction also writes
+        // dst, hoisting this one would leave stale values on subsequent iterations.
+        const currentKeyForCheck = key  // this instruction's key (not yet in removedKeys)
+        if (hasOtherWriters(dst, info.loopBlockIds, blockMap, removedKeys, currentKeyForCheck)) continue
+
+        // Don't hoist if dst is also defined outside the loop. Hoisting would
+        // shadow the prior value when the loop executes zero times.
+        if (definedOutsideLoop.has(dst)) continue
+
         // This instruction is loop-invariant — hoist it
         hoisted.push({ fromBlockId: id, instrIndex: i, instr })
         removedKeys.add(key)
         // After hoisting, the dst is no longer variant inside the loop
+        // (we already checked above that no other writer remains).
         variantTemps.delete(dst)
         changed = true
       }
@@ -257,6 +276,29 @@ function collectInvariant(
   }
 
   return hoisted
+}
+
+/** Returns true if there exists another non-hoisted instruction in the loop
+ *  (other than `excludeKey`) that also writes to `dst`. */
+function hasOtherWriters(
+  dst: Temp,
+  loopBlockIds: Set<BlockId>,
+  blockMap: Map<BlockId, MIRBlock>,
+  removedKeys: Set<string>,
+  excludeKey: string,
+): boolean {
+  for (const id of loopBlockIds) {
+    const block = blockMap.get(id)
+    if (!block) continue
+    for (let i = 0; i < block.instrs.length; i++) {
+      const k = `${id}:${i}`
+      if (k === excludeKey) continue  // skip the current candidate
+      if (removedKeys.has(k)) continue  // skip already-hoisted
+      const d = getInstrDst(block.instrs[i])
+      if (d === dst) return true
+    }
+  }
+  return false
 }
 
 function allOperandsInvariant(instr: MIRInstr, variantTemps: Set<Temp>): boolean {

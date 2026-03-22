@@ -1,5 +1,5 @@
 import type { MIRFunction, MIRModule } from '../mir/types'
-import { inlineSelectedFunctions } from './inline'
+import { inlinePass } from './inline'
 
 const SMALL_FUNCTION_INSTR_LIMIT = 5
 
@@ -13,10 +13,29 @@ export function autoInlineSmallFunctions(mod: MIRModule): MIRModule {
     if (noInlineFns.has(fn.name)) continue
     if (recursiveFns.has(fn.name)) continue
     if (countFunctionInstrs(fn) > SMALL_FUNCTION_INSTR_LIMIT) continue
+    // Don't auto-inline functions with raw() calls — these reference
+    // MC calling-convention registers ($p0, etc.) that become invalid when inlined.
+    if (containsRawCall(fn)) continue
     autoInlineFns.add(fn.name)
   }
 
-  return inlineSelectedFunctions(mod, autoInlineFns)
+  const inlineFunctions = new Set(mod.inlineFunctions ?? [])
+  for (const fnName of autoInlineFns) inlineFunctions.add(fnName)
+
+  // Track auto-inlined functions so compile pipeline can keep their output files
+  const keepInOutput = new Set(mod.keepInOutput ?? [])
+  for (const fnName of autoInlineFns) keepInOutput.add(fnName)
+
+  return inlinePass({ ...mod, inlineFunctions, keepInOutput })
+}
+
+function containsRawCall(fn: MIRFunction): boolean {
+  for (const block of fn.blocks) {
+    for (const instr of block.instrs) {
+      if (instr.kind === 'call' && instr.fn.startsWith('__raw:')) return true
+    }
+  }
+  return false
 }
 
 function countFunctionInstrs(fn: MIRFunction): number {
