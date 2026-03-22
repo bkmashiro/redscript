@@ -23,6 +23,7 @@ import { interproceduralConstProp } from './interprocedural'
 import { autoInlineSmallFunctions } from './auto-inline'
 import { inlinePass } from './inline'
 import { cse } from './cse'
+import { nbtCoalesce } from './nbt-coalesce'
 
 // selectorCache is intentionally excluded from the default pipeline:
 // it emits synthetic __sel_cleanup_* / __sel_tag_* call_context instructions
@@ -35,6 +36,7 @@ const defaultPasses: Pass[] = [
   loopUnroll,
   licm,
   nbtBatchRead,
+  nbtCoalesce,
   scoreboardBatchRead,
   constantFold,
   strengthReduction,
