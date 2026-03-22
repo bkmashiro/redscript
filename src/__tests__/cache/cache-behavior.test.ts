@@ -100,7 +100,7 @@ describe('FileCache — load with wrong version is ignored', () => {
     // Write a v2 cache file
     fs.writeFileSync(
       path.join(cacheDir, 'cache.json'),
-      JSON.stringify({ version: 2, entries: { '/some/file.mcrs': { hash: 'abc', mtime: 1 } } }),
+      JSON.stringify({ version: 99, entries: { '/some/file.mcrs': { hash: 'abc', mtime: 1 } } }),
     )
     const cache = new FileCache(cacheDir)
     cache.load()
