@@ -863,9 +863,8 @@ async function main(): Promise<void> {
 
         // Default output: <namespace>.zip in cwd
         const defaultZip = path.join(process.cwd(), `${namespace}.zip`)
-        const outputZip = parsed.output ?? tomlConfig?.output?.dir
-          ? path.join(tomlConfig!.output!.dir!, `${namespace}.zip`)
-          : defaultZip
+        const outputZip = parsed.output
+          ?? (tomlConfig?.output?.dir ? path.join(tomlConfig.output.dir, `${namespace}.zip`) : defaultZip)
 
         await publishCommand(
           parsed.file,
