@@ -287,13 +287,16 @@ function renderEnDoc(modDoc: ModuleDoc): string {
     const doc = fn.doc;
     const anchor = fn.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
 
-    lines.push(`## \`${fn.name}\``);
-    lines.push('');
-
+    // Build title with optional badges
+    let titleLine = `## \`${fn.name}\``;
     if (doc.since) {
-      lines.push(`**Since:** ${doc.since}`);
-      lines.push('');
+      titleLine += ` <Badge type="info" text="Since v${doc.since}" />`;
     }
+    if (doc.deprecated) {
+      titleLine += ` <Badge type="danger" text="Deprecated" />`;
+    }
+    lines.push(titleLine);
+    lines.push('');
 
     if (doc.deprecated) {
       lines.push(`> ⚠️ **Deprecated:** ${doc.deprecated}`);
@@ -376,13 +379,16 @@ function renderZhDoc(modDoc: ModuleDoc, zh: Record<string, any>): string {
     // Look up zh translation: prefer fn.name key, fallback to base name
     const zhEntry = modZh[fn.name] || modZh[fn.name.split('.').pop()!] || {};
 
-    lines.push(`## \`${fn.name}\``);
-    lines.push('');
-
+    // Build title with optional badges
+    let titleLine = `## \`${fn.name}\``;
     if (doc.since) {
-      lines.push(`**版本：** ${doc.since}`);
-      lines.push('');
+      titleLine += ` <Badge type="info" text="Since v${doc.since}" />`;
     }
+    if (doc.deprecated) {
+      titleLine += ` <Badge type="danger" text="Deprecated" />`;
+    }
+    lines.push(titleLine);
+    lines.push('');
 
     if (doc.deprecated) {
       lines.push(`> ⚠️ **已废弃：** ${doc.deprecated}`);
