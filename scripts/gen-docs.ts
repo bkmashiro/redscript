@@ -18,13 +18,19 @@ import * as yaml from 'yaml';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
+const CHECK_MODE = process.argv.includes('--check');
+
+// --docs-dir <path> overrides the default DOCS_ROOT (useful in CI)
+const docsDirIdx = process.argv.indexOf('--docs-dir');
+const DOCS_DIR_OVERRIDE = docsDirIdx !== -1 ? process.argv[docsDirIdx + 1] : null;
+
 const STDLIB_DIR = path.join(__dirname, '..', 'src', 'stdlib');
 const I18N_ZH    = path.join(STDLIB_DIR, 'i18n', 'zh.yaml');
-const DOCS_ROOT  = path.join(process.env.HOME!, 'projects', 'redscript-docs', 'docs');
+const DOCS_ROOT  = DOCS_DIR_OVERRIDE
+  ? path.resolve(DOCS_DIR_OVERRIDE, 'docs')
+  : path.join(process.env.HOME!, 'projects', 'redscript-docs', 'docs');
 const EN_OUT     = path.join(DOCS_ROOT, 'en', 'stdlib');
 const ZH_OUT     = path.join(DOCS_ROOT, 'zh', 'stdlib');
-
-const CHECK_MODE = process.argv.includes('--check');
 
 // Modules to process (filename without .mcrs → output basename)
 const TARGET_MODULES = [

@@ -19,7 +19,7 @@
     "validate-mc": "jest src/__tests__/mc-syntax.test.ts --verbose",
     "postbuild": "node scripts/postbuild.js",
     "docs:gen": "npx ts-node scripts/gen-docs.ts",
-    "docs:check": "npx ts-node scripts/gen-docs.ts --check"
+    "docs:check": "npx ts-node scripts/gen-docs.ts --check --docs-dir ~/projects/redscript-docs"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
