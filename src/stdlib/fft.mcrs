@@ -50,26 +50,29 @@
 
 module library;
 
-// ─── dft_noop ────────────────────────────────────────────────────────────────
-// Default onDone callback for dft_coro. Does nothing. Replace with your own.
+/// Default no-op completion callback for `dft_coro`. Does nothing.
+///
+/// @since 2.0.0
 fn dft_noop(): void {
     let _unused: int = 0;
 }
 
-// ─── dft_real ────────────────────────────────────────────────────────────────
-//
-// Compute the Discrete Fourier Transform of `input[0..n-1]`.
-//
-// X[k] = Σ_{j=0}^{n-1}  x[j] * cos(360*k*j/n)  (real part)
-//                       - x[j] * sin(360*k*j/n)  (imaginary part)
-//
-// Parameters:
-//   input  — signal samples in fixed-point ×10000
-//   n      — number of samples (≤ 16 recommended)
-//   out_re — output array for real parts  (×10000, must be pre-allocated to n)
-//   out_im — output array for imaginary parts (×10000, must be pre-allocated to n)
-//
-// The caller must pre-fill out_re and out_im to zero before calling.
+/// Compute the Discrete Fourier Transform of `input[0..n-1]`.
+///
+/// Output arrays must be pre-allocated to length `n` and filled with zeros
+/// before calling.
+///
+/// Formula: `X[k] = Σ x[j] * (cos(2πkj/n) - i·sin(2πkj/n))`
+///
+/// @since 2.0.0
+/// @param input   Signal samples in fixed-point ×10000
+/// @param n       Number of samples (≤ 16 recommended)
+/// @param out_re  Pre-allocated output array for real parts (×10000)
+/// @param out_im  Pre-allocated output array for imaginary parts (×10000)
+/// @example
+/// let re: int[] = [0, 0, 0, 0]
+/// let im: int[] = [0, 0, 0, 0]
+/// dft_real(sig, 4, re, im)
 fn dft_real(input: int[], n: int, out_re: int[], out_im: int[]) {
     let k: int = 0;
     while (k < n) {
@@ -92,23 +95,22 @@ fn dft_real(input: int[], n: int, out_re: int[], out_im: int[]) {
     }
 }
 
-// ─── dft_magnitude ───────────────────────────────────────────────────────────
-//
-// Return |X[k]| = sqrt(re[k]² + im[k]²) in ×10000 fixed-point.
-//
-// Uses sqrt_fixed from math.mcrs (which returns ×1000).
-// We scale the result ×10 to convert from ×1000 back to ×10000 output scale.
-//
-// Note: squaring ×10000 values can reach ~10^9 per term, which fits in int32
-// as long as |re[k]| and |im[k]| stay below ~46340 (≈ 4.6× the input peak).
-// For typical signals this is fine; for amplitudes > 10000 per sample, divide
-// inputs by a scale factor before calling to avoid overflow.
+/// Return the magnitude of DFT bin `k`: `|X[k]| = sqrt(re[k]² + im[k]²)` in ×10000.
+///
+/// Note: squaring ×10000 values can reach ~10⁹ per term, which fits in int32 for
+/// amplitudes ≤ ~46340. For larger amplitudes, scale the input before calling.
+///
+/// @since 2.0.0
+/// @param re  Real output array from `dft_real`
+/// @param im  Imaginary output array from `dft_real`
+/// @param k   Bin index
+/// @returns   Magnitude of bin `k` in ×10000 fixed-point
+/// @example
+/// let mag: int = dft_magnitude(re, im, 1)
 fn dft_magnitude(re: int[], im: int[], k: int): int {
     // sum_sq is in ×10000² = ×100000000 scale
     // We want the result in ×10000, so we compute sqrt( re² + im² ) directly.
-    // sqrt_fixed(x) = sqrt(x * 1000) / 1 = isqrt(x * 1000)
-    // We need sqrt(re²+im²) in ×10000, so:
-    //   sqrt_fixed takes x in ×10000 → returns sqrt(x) in ×10000 (approx)
+    // sqrt_fixed takes x in ×10000 → returns sqrt(x) in ×10000 (approx)
     // Actually sqrt_fixed(x) returns sqrt(x) * 1000 / sqrt(1000) ...
     // Simplest: compute isqrt(re[k]*re[k] + im[k]*im[k]) which gives ×10000.
     let r: int = re[k];
@@ -119,26 +121,35 @@ fn dft_magnitude(re: int[], im: int[], k: int): int {
     return isqrt(sum_sq * 10000);
 }
 
-// ─── dft_power ───────────────────────────────────────────────────────────────
-//
-// Return the power spectrum value for bin k: re[k]²/10000 + im[k]²/10000.
-//
-// Division by 10000 prevents int32 overflow for values up to ~46340 (×10000).
-// The result is in ×10000 scale (power units).
+/// Return the power spectrum value for bin `k`: `re[k]²/10000 + im[k]²/10000`.
+///
+/// Division by 10000 prevents int32 overflow for values up to ~46340 (×10000).
+/// The result is in ×10000 scale (power units).
+///
+/// @since 2.0.0
+/// @param re  Real output array from `dft_real`
+/// @param im  Imaginary output array from `dft_real`
+/// @param k   Bin index
+/// @returns   Power of bin `k` in ×10000 units
+/// @example
+/// let power: int = dft_power(re, im, 2)
 fn dft_power(re: int[], im: int[], k: int): int {
     let r: int = re[k];
     let i: int = im[k];
     return r * r / 10000 + i * i / 10000;
 }
 
-// ─── dft_coro ────────────────────────────────────────────────────────────────
-//
-// Coroutine variant of dft_real.  Processes 4 output bins (k values) per tick.
-// Results are pushed into out_re and out_im as each batch completes.
-// Use onDone for notification when the full DFT is finished.
-//
-// Parameters: same as dft_real.
-// The caller must pre-fill out_re and out_im to zero before starting.
+/// Coroutine variant of `dft_real` that processes 4 output bins per tick.
+///
+/// Results are pushed into `out_re` and `out_im` as each batch completes.
+/// Use `onDone` for notification when the full DFT is finished. Pre-fill both
+/// output arrays with zeros before starting.
+///
+/// @since 2.0.0
+/// @param input   Signal samples in fixed-point ×10000
+/// @param n       Number of samples (≤ 16 recommended)
+/// @param out_re  Pre-allocated output array for real parts (×10000)
+/// @param out_im  Pre-allocated output array for imaginary parts (×10000)
 @coroutine(batch=4, onDone=dft_noop)
 fn dft_coro(input: int[], n: int, out_re: int[], out_im: int[]) {
     let k: int = 0;
@@ -160,18 +171,17 @@ fn dft_coro(input: int[], n: int, out_re: int[], out_im: int[]) {
     }
 }
 
-// ─── dft_freq_bin ────────────────────────────────────────────────────────────
-//
-// Return the frequency (in Hz) corresponding to DFT bin k.
-//
-//   freq = sample_rate_hz * k / n
-//
-// Example: dft_freq_bin(44100, 16, 4) = 44100 * 4 / 16 = 11025 Hz
-//
-// Parameters:
-//   sample_rate_hz — sampling rate in Hz (e.g. 20 for Minecraft tick rate)
-//   n              — transform size
-//   k              — bin index (0 .. n-1)
+/// Return the frequency (Hz) corresponding to DFT bin `k`.
+///
+/// Formula: `freq = sample_rate_hz * k / n`
+///
+/// @since 2.0.0
+/// @param sample_rate_hz  Sampling rate in Hz (e.g. `20` for Minecraft tick rate)
+/// @param n               Transform size (number of samples)
+/// @param k               Bin index in range [0, n-1]
+/// @returns               Frequency in Hz for bin `k`
+/// @example
+/// let freq: int = dft_freq_bin(20, 8, 3)
 fn dft_freq_bin(sample_rate_hz: int, n: int, k: int): int {
     return sample_rate_hz * k / n;
 }

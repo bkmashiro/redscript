@@ -14,69 +14,211 @@ module library;
 
 // ─── Constructors ─────────────────────────────────────────────────────────────
 
-// quat_identity: returns W component of identity quaternion (x=y=z=0, w=1)
+/// W component of the identity quaternion `(0, 0, 0, 1)`.
+///
+/// @since 2.0.0
+/// @returns  `10000`
 fn quat_identity_w(): int { return 10000; }
+
+/// X component of the identity quaternion.
+///
+/// @since 2.0.0
+/// @returns  `0`
 fn quat_identity_x(): int { return 0; }
+
+/// Y component of the identity quaternion.
+///
+/// @since 2.0.0
+/// @returns  `0`
 fn quat_identity_y(): int { return 0; }
+
+/// Z component of the identity quaternion.
+///
+/// @since 2.0.0
+/// @returns  `0`
 fn quat_identity_z(): int { return 0; }
 
-// quat_from_axis_x: rotation around X axis by angle degrees
-// sin_fixed/cos_fixed return ×1000; we scale to ×10000 by multiplying by 10
-// angle_deg: degrees (integer)
+/// X component of a quaternion representing rotation by `angle_deg` around the X axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees (integer)
+/// @returns          `sin(angle/2)` ×10000
 fn quat_axis_x_x(angle_deg: int): int { return sin_fixed(angle_deg / 2) * 10; }
+
+/// Y component of a quaternion representing rotation by `angle_deg` around the X axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `0`
 fn quat_axis_x_y(angle_deg: int): int { return 0; }
+
+/// Z component of a quaternion representing rotation by `angle_deg` around the X axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `0`
 fn quat_axis_x_z(angle_deg: int): int { return 0; }
+
+/// W component of a quaternion representing rotation by `angle_deg` around the X axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `cos(angle/2)` ×10000
 fn quat_axis_x_w(angle_deg: int): int { return cos_fixed(angle_deg / 2) * 10; }
 
-// quat_from_axis_y: rotation around Y axis
+/// X component of a quaternion representing rotation by `angle_deg` around the Y axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `0`
 fn quat_axis_y_x(angle_deg: int): int { return 0; }
+
+/// Y component of a quaternion representing rotation by `angle_deg` around the Y axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `sin(angle/2)` ×10000
 fn quat_axis_y_y(angle_deg: int): int { return sin_fixed(angle_deg / 2) * 10; }
+
+/// Z component of a quaternion representing rotation by `angle_deg` around the Y axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `0`
 fn quat_axis_y_z(angle_deg: int): int { return 0; }
+
+/// W component of a quaternion representing rotation by `angle_deg` around the Y axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `cos(angle/2)` ×10000
 fn quat_axis_y_w(angle_deg: int): int { return cos_fixed(angle_deg / 2) * 10; }
 
-// quat_from_axis_z: rotation around Z axis
+/// X component of a quaternion representing rotation by `angle_deg` around the Z axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `0`
 fn quat_axis_z_x(angle_deg: int): int { return 0; }
+
+/// Y component of a quaternion representing rotation by `angle_deg` around the Z axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `0`
 fn quat_axis_z_y(angle_deg: int): int { return 0; }
+
+/// Z component of a quaternion representing rotation by `angle_deg` around the Z axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `sin(angle/2)` ×10000
 fn quat_axis_z_z(angle_deg: int): int { return sin_fixed(angle_deg / 2) * 10; }
+
+/// W component of a quaternion representing rotation by `angle_deg` around the Z axis.
+///
+/// @since 2.0.0
+/// @param angle_deg  Rotation angle in degrees
+/// @returns          `cos(angle/2)` ×10000
 fn quat_axis_z_w(angle_deg: int): int { return cos_fixed(angle_deg / 2) * 10; }
 
 // ─── Quaternion multiplication ────────────────────────────────────────────────
 // q = (ax,ay,az,aw) * (bx,by,bz,bw)
 // All components ×10000, result ×10000
 
+/// X component of quaternion product `a × b`.
+///
+/// @since 2.0.0
+/// @param ax  @param ay  @param az  @param aw  Quaternion a components ×10000
+/// @param bx  @param by  @param bz  @param bw  Quaternion b components ×10000
+/// @returns   X component of `a × b` ×10000
+/// @example
+/// let rx: int = quat_mul_x(ax, ay, az, aw, bx, by, bz, bw)
 fn quat_mul_x(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
     // x = aw*bx + ax*bw + ay*bz - az*by
     return mulfix(aw, bx) + mulfix(ax, bw) + mulfix(ay, bz) - mulfix(az, by);
 }
 
+/// Y component of quaternion product `a × b`.
+///
+/// @since 2.0.0
+/// @param ax  @param ay  @param az  @param aw  Quaternion a components ×10000
+/// @param bx  @param by  @param bz  @param bw  Quaternion b components ×10000
+/// @returns   Y component of `a × b` ×10000
 fn quat_mul_y(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
     // y = aw*by - ax*bz + ay*bw + az*bx
     return mulfix(aw, by) - mulfix(ax, bz) + mulfix(ay, bw) + mulfix(az, bx);
 }
 
+/// Z component of quaternion product `a × b`.
+///
+/// @since 2.0.0
+/// @param ax  @param ay  @param az  @param aw  Quaternion a components ×10000
+/// @param bx  @param by  @param bz  @param bw  Quaternion b components ×10000
+/// @returns   Z component of `a × b` ×10000
 fn quat_mul_z(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
     // z = aw*bz + ax*by - ay*bx + az*bw
     return mulfix(aw, bz) + mulfix(ax, by) - mulfix(ay, bx) + mulfix(az, bw);
 }
 
+/// W component of quaternion product `a × b`.
+///
+/// @since 2.0.0
+/// @param ax  @param ay  @param az  @param aw  Quaternion a components ×10000
+/// @param bx  @param by  @param bz  @param bw  Quaternion b components ×10000
+/// @returns   W component of `a × b` ×10000
 fn quat_mul_w(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
     // w = aw*bw - ax*bx - ay*by - az*bz
     return mulfix(aw, bw) - mulfix(ax, bx) - mulfix(ay, by) - mulfix(az, bz);
 }
 
 // ─── Quaternion conjugate (= inverse for unit quaternion) ────────────────────
+
+/// X component of the conjugate of quaternion `(qx, qy, qz, qw)`.
+///
+/// @since 2.0.0
+/// @param qx  @param qy  @param qz  @param qw  Input quaternion ×10000
+/// @returns   `-qx`
 fn quat_conj_x(qx: int, qy: int, qz: int, qw: int): int { return 0 - qx; }
+
+/// Y component of the conjugate of quaternion `(qx, qy, qz, qw)`.
+///
+/// @since 2.0.0
+/// @param qx  @param qy  @param qz  @param qw  Input quaternion ×10000
+/// @returns   `-qy`
 fn quat_conj_y(qx: int, qy: int, qz: int, qw: int): int { return 0 - qy; }
+
+/// Z component of the conjugate of quaternion `(qx, qy, qz, qw)`.
+///
+/// @since 2.0.0
+/// @param qx  @param qy  @param qz  @param qw  Input quaternion ×10000
+/// @returns   `-qz`
 fn quat_conj_z(qx: int, qy: int, qz: int, qw: int): int { return 0 - qz; }
+
+/// W component of the conjugate of quaternion `(qx, qy, qz, qw)`.
+///
+/// @since 2.0.0
+/// @param qx  @param qy  @param qz  @param qw  Input quaternion ×10000
+/// @returns   `qw` (unchanged)
 fn quat_conj_w(qx: int, qy: int, qz: int, qw: int): int { return qw; }
 
-// ─── Magnitude squared ×10000 ─────────────────────────────────────────────────
-// For unit quaternion: should equal 10000 (= 1.0 in ×10000 scale)
+/// Magnitude squared of a quaternion in ×10000 scale.
+///
+/// For a unit quaternion this should equal `10000`.
+///
+/// @since 2.0.0
+/// @param qx  @param qy  @param qz  @param qw  Quaternion components ×10000
+/// @returns   `qx²/10000 + qy²/10000 + qz²/10000 + qw²/10000` (×10000)
 fn quat_mag_sq(qx: int, qy: int, qz: int, qw: int): int {
     return mulfix(qx, qx) + mulfix(qy, qy) + mulfix(qz, qz) + mulfix(qw, qw);
 }
 
-// ─── Dot product ×10000 ──────────────────────────────────────────────────────
+/// Dot product of two quaternions in ×10000 scale.
+///
+/// @since 2.0.0
+/// @param ax  @param ay  @param az  @param aw  Quaternion a ×10000
+/// @param bx  @param by  @param bz  @param bw  Quaternion b ×10000
+/// @returns   `ax*bx/10000 + ay*by/10000 + az*bz/10000 + aw*bw/10000`
 fn quat_dot(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int): int {
     return mulfix(ax, bx) + mulfix(ay, by) + mulfix(az, bz) + mulfix(aw, bw);
 }
@@ -99,6 +241,17 @@ fn _quat_slerp_mag(rx: int, ry: int, rz: int, rw: int): int {
     return isqrt(ss);  // returns ≈ 1000 for unit quaternion
 }
 
+/// X component of the SLERP interpolation between quaternions `a` and `b` at `t/1000`.
+///
+/// Uses LERP + normalise (good approximation for small angles).
+///
+/// @since 2.0.0
+/// @param ax  @param ay  @param az  @param aw  Start quaternion ×10000
+/// @param bx  @param by  @param bz  @param bw  End quaternion ×10000
+/// @param t   Interpolation factor ×1000 (0 = a, 1000 = b)
+/// @returns   X component of interpolated quaternion ×10000
+/// @example
+/// let rx: int = quat_slerp_x(ax, ay, az, aw, bx, by, bz, bw, 500)
 fn quat_slerp_x(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int, t: int): int {
     let inv_t: int = 1000 - t;
     let rx: int = ax * inv_t / 1000 + bx * t / 1000;
@@ -110,6 +263,13 @@ fn quat_slerp_x(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, b
     return rx * 1000 / mag;
 }
 
+/// Y component of the SLERP interpolation between quaternions `a` and `b` at `t/1000`.
+///
+/// @since 2.0.0
+/// @param ax  @param ay  @param az  @param aw  Start quaternion ×10000
+/// @param bx  @param by  @param bz  @param bw  End quaternion ×10000
+/// @param t   Interpolation factor ×1000
+/// @returns   Y component of interpolated quaternion ×10000
 fn quat_slerp_y(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int, t: int): int {
     let inv_t: int = 1000 - t;
     let rx: int = ax * inv_t / 1000 + bx * t / 1000;
@@ -121,6 +281,13 @@ fn quat_slerp_y(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, b
     return ry * 1000 / mag;
 }
 
+/// Z component of the SLERP interpolation between quaternions `a` and `b` at `t/1000`.
+///
+/// @since 2.0.0
+/// @param ax  @param ay  @param az  @param aw  Start quaternion ×10000
+/// @param bx  @param by  @param bz  @param bw  End quaternion ×10000
+/// @param t   Interpolation factor ×1000
+/// @returns   Z component of interpolated quaternion ×10000
 fn quat_slerp_z(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int, t: int): int {
     let inv_t: int = 1000 - t;
     let rx: int = ax * inv_t / 1000 + bx * t / 1000;
@@ -132,6 +299,13 @@ fn quat_slerp_z(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, b
     return rz * 1000 / mag;
 }
 
+/// W component of the SLERP interpolation between quaternions `a` and `b` at `t/1000`.
+///
+/// @since 2.0.0
+/// @param ax  @param ay  @param az  @param aw  Start quaternion ×10000
+/// @param bx  @param by  @param bz  @param bw  End quaternion ×10000
+/// @param t   Interpolation factor ×1000
+/// @returns   W component of interpolated quaternion ×10000
 fn quat_slerp_w(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, bw: int, t: int): int {
     let inv_t: int = 1000 - t;
     let rx: int = ax * inv_t / 1000 + bx * t / 1000;
@@ -147,6 +321,15 @@ fn quat_slerp_w(ax: int, ay: int, az: int, aw: int, bx: int, by: int, bz: int, b
 // yaw: Y-axis rotation (°), pitch: X-axis rotation (°), roll: Z-axis rotation (°)
 // YXZ order: first yaw, then pitch, then roll
 
+/// X component of the quaternion from Euler angles (YXZ order, MC convention).
+///
+/// @since 2.0.0
+/// @param yaw    Y-axis rotation in degrees
+/// @param pitch  X-axis rotation in degrees
+/// @param roll   Z-axis rotation in degrees
+/// @returns      X component ×10000
+/// @example
+/// let qx: int = quat_euler_x(90, 0, 0)
 fn quat_euler_x(yaw: int, pitch: int, roll: int): int {
     let cy: int = cos_fixed(yaw / 2) * 10;
     let sy: int = sin_fixed(yaw / 2) * 10;
@@ -158,6 +341,13 @@ fn quat_euler_x(yaw: int, pitch: int, roll: int): int {
     return mulfix(mulfix(cy, sp), cr) + mulfix(mulfix(sy, cp), sr);
 }
 
+/// Y component of the quaternion from Euler angles (YXZ order, MC convention).
+///
+/// @since 2.0.0
+/// @param yaw    Y-axis rotation in degrees
+/// @param pitch  X-axis rotation in degrees
+/// @param roll   Z-axis rotation in degrees
+/// @returns      Y component ×10000
 fn quat_euler_y(yaw: int, pitch: int, roll: int): int {
     let cy: int = cos_fixed(yaw / 2) * 10;
     let sy: int = sin_fixed(yaw / 2) * 10;
@@ -169,6 +359,13 @@ fn quat_euler_y(yaw: int, pitch: int, roll: int): int {
     return mulfix(mulfix(sy, cp), cr) - mulfix(mulfix(cy, sp), sr);
 }
 
+/// Z component of the quaternion from Euler angles (YXZ order, MC convention).
+///
+/// @since 2.0.0
+/// @param yaw    Y-axis rotation in degrees
+/// @param pitch  X-axis rotation in degrees
+/// @param roll   Z-axis rotation in degrees
+/// @returns      Z component ×10000
 fn quat_euler_z(yaw: int, pitch: int, roll: int): int {
     let cy: int = cos_fixed(yaw / 2) * 10;
     let sy: int = sin_fixed(yaw / 2) * 10;
@@ -180,6 +377,13 @@ fn quat_euler_z(yaw: int, pitch: int, roll: int): int {
     return mulfix(mulfix(cy, cp), sr) - mulfix(mulfix(sy, sp), cr);
 }
 
+/// W component of the quaternion from Euler angles (YXZ order, MC convention).
+///
+/// @since 2.0.0
+/// @param yaw    Y-axis rotation in degrees
+/// @param pitch  X-axis rotation in degrees
+/// @param roll   Z-axis rotation in degrees
+/// @returns      W component ×10000
 fn quat_euler_w(yaw: int, pitch: int, roll: int): int {
     let cy: int = cos_fixed(yaw / 2) * 10;
     let sy: int = sin_fixed(yaw / 2) * 10;

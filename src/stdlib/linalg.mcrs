@@ -31,14 +31,30 @@ module library;
 
 // ─── 2D Vector ────────────────────────────────────────────────────────────────
 
-// vec2d_dot(ax, ay, bx, by): dot product of 2D vectors a and b.
+/// Dot product of two 2D vectors.
+///
+/// @since 2.0.0
+/// @param ax  X component of vector A
+/// @param ay  Y component of vector A
+/// @param bx  X component of vector B
+/// @param by  Y component of vector B
+/// @returns   `ax*bx + ay*by`
+/// @example
+/// let d: double = vec2d_dot(1.0d, 0.0d, 0.0d, 1.0d)
 fn vec2d_dot(ax: double, ay: double, bx: double, by: double): double {
     let t0: double = ax * bx;
     let t1: double = ay * by;
     return t0 + t1;
 }
 
-// vec2d_length(x, y): Euclidean length of 2D vector.
+/// Euclidean length of a 2D vector.
+///
+/// @since 2.0.0
+/// @param x  X component
+/// @param y  Y component
+/// @returns  `sqrt(x² + y²)`
+/// @example
+/// let len: double = vec2d_length(3.0d, 4.0d)
 fn vec2d_length(x: double, y: double): double {
     let xx: double = x * x;
     let yy: double = y * y;
@@ -46,14 +62,23 @@ fn vec2d_length(x: double, y: double): double {
     return double_sqrt(s) as double;
 }
 
-// vec2d_dist(ax, ay, bx, by): Euclidean distance between two 2D points.
+/// Euclidean distance between two 2D points.
+///
+/// @since 2.0.0
+/// @param ax  X coordinate of point A
+/// @param ay  Y coordinate of point A
+/// @param bx  X coordinate of point B
+/// @param by  Y coordinate of point B
+/// @returns   `sqrt((ax-bx)² + (ay-by)²)`
+/// @example
+/// let dist: double = vec2d_dist(0.0d, 0.0d, 3.0d, 4.0d)
 fn vec2d_dist(ax: double, ay: double, bx: double, by: double): double {
     let dx: double = ax - bx;
     let dy: double = ay - by;
     return vec2d_length(dx, dy);
 }
 
-// _vec2d_len_sq_fx(x, y): squared length as ×10000 fixed int (for zero-check).
+// _vec2d_len_sq_fx(x, y): squared length as integer (for zero-check).
 fn _vec2d_len_sq_fx(x: double, y: double): int {
     let xx: double = x * x;
     let yy: double = y * y;
@@ -61,8 +86,16 @@ fn _vec2d_len_sq_fx(x: double, y: double): int {
     return sq as int;
 }
 
-// vec2d_normalize_x(x, y): x component of the unit vector.
-//   Returns 0.0 if the vector has zero length.
+/// X component of the normalized unit vector for a 2D vector.
+///
+/// Returns `0.0` if the vector has zero length.
+///
+/// @since 2.0.0
+/// @param x  X component
+/// @param y  Y component
+/// @returns  `x / ||(x, y)||`, or `0.0` for a zero vector
+/// @example
+/// let nx: double = vec2d_normalize_x(3.0d, 4.0d)
 fn vec2d_normalize_x(x: double, y: double): double {
     let sq_fx: int = _vec2d_len_sq_fx(x, y);
     if (sq_fx == 0) {
@@ -72,8 +105,16 @@ fn vec2d_normalize_x(x: double, y: double): double {
     return x / len;
 }
 
-// vec2d_normalize_y(x, y): y component of the unit vector.
-//   Returns 0.0 if the vector has zero length.
+/// Y component of the normalized unit vector for a 2D vector.
+///
+/// Returns `0.0` if the vector has zero length.
+///
+/// @since 2.0.0
+/// @param x  X component
+/// @param y  Y component
+/// @returns  `y / ||(x, y)||`, or `0.0` for a zero vector
+/// @example
+/// let ny: double = vec2d_normalize_y(3.0d, 4.0d)
 fn vec2d_normalize_y(x: double, y: double): double {
     let sq_fx: int = _vec2d_len_sq_fx(x, y);
     if (sq_fx == 0) {
@@ -85,7 +126,18 @@ fn vec2d_normalize_y(x: double, y: double): double {
 
 // ─── 3D Vector ────────────────────────────────────────────────────────────────
 
-// vec3d_dot(ax,ay,az, bx,by,bz): dot product of 3D vectors a and b.
+/// Dot product of two 3D vectors.
+///
+/// @since 2.0.0
+/// @param ax  X component of vector A
+/// @param ay  Y component of vector A
+/// @param az  Z component of vector A
+/// @param bx  X component of vector B
+/// @param by  Y component of vector B
+/// @param bz  Z component of vector B
+/// @returns   `ax*bx + ay*by + az*bz`
+/// @example
+/// let d: double = vec3d_dot(1.0d, 0.0d, 0.0d, 0.0d, 1.0d, 0.0d)
 fn vec3d_dot(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
     let t0: double = ax * bx;
     let t1: double = ay * by;
@@ -94,7 +146,15 @@ fn vec3d_dot(ax: double, ay: double, az: double, bx: double, by: double, bz: dou
     return s + t2;
 }
 
-// vec3d_length(x, y, z): Euclidean length of 3D vector.
+/// Euclidean length of a 3D vector.
+///
+/// @since 2.0.0
+/// @param x  X component
+/// @param y  Y component
+/// @param z  Z component
+/// @returns  `sqrt(x² + y² + z²)`
+/// @example
+/// let len: double = vec3d_length(1.0d, 2.0d, 2.0d)
 fn vec3d_length(x: double, y: double, z: double): double {
     let xx: double = x * x;
     let yy: double = y * y;
@@ -104,7 +164,16 @@ fn vec3d_length(x: double, y: double, z: double): double {
     return double_sqrt(s2) as double;
 }
 
-// vec3d_dist(ax,ay,az, bx,by,bz): Euclidean distance between two 3D points.
+/// Euclidean distance between two 3D points.
+///
+/// @since 2.0.0
+/// @param ax  X coordinate of point A
+/// @param ay  Y coordinate of point A
+/// @param az  Z coordinate of point A
+/// @param bx  X coordinate of point B
+/// @param by  Y coordinate of point B
+/// @param bz  Z coordinate of point B
+/// @returns   `sqrt((ax-bx)² + (ay-by)² + (az-bz)²)`
 fn vec3d_dist(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
     let dx: double = ax - bx;
     let dy: double = ay - by;
@@ -112,28 +181,43 @@ fn vec3d_dist(ax: double, ay: double, az: double, bx: double, by: double, bz: do
     return vec3d_length(dx, dy, dz);
 }
 
-// vec3d_cross_x: x component of cross product a × b.
+/// X component of the cross product `a × b`.
+///
+/// @since 2.0.0
+/// @param ax  X of A   @param ay  Y of A   @param az  Z of A
+/// @param bx  X of B   @param by  Y of B   @param bz  Z of B
+/// @returns   `ay*bz - az*by`
 fn vec3d_cross_x(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
     let t0: double = ay * bz;
     let t1: double = az * by;
     return t0 - t1;
 }
 
-// vec3d_cross_y: y component of cross product a × b.
+/// Y component of the cross product `a × b`.
+///
+/// @since 2.0.0
+/// @param ax  X of A   @param ay  Y of A   @param az  Z of A
+/// @param bx  X of B   @param by  Y of B   @param bz  Z of B
+/// @returns   `az*bx - ax*bz`
 fn vec3d_cross_y(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
     let t0: double = az * bx;
     let t1: double = ax * bz;
     return t0 - t1;
 }
 
-// vec3d_cross_z: z component of cross product a × b.
+/// Z component of the cross product `a × b`.
+///
+/// @since 2.0.0
+/// @param ax  X of A   @param ay  Y of A   @param az  Z of A
+/// @param bx  X of B   @param by  Y of B   @param bz  Z of B
+/// @returns   `ax*by - ay*bx`
 fn vec3d_cross_z(ax: double, ay: double, az: double, bx: double, by: double, bz: double): double {
     let t0: double = ax * by;
     let t1: double = ay * bx;
     return t0 - t1;
 }
 
-// _vec3d_len_sq_fx(x, y, z): squared length as ×10000 fixed int (for zero-check).
+// _vec3d_len_sq_fx(x, y, z): squared length as integer (for zero-check).
 fn _vec3d_len_sq_fx(x: double, y: double, z: double): int {
     let xx: double = x * x;
     let yy: double = y * y;
@@ -143,8 +227,15 @@ fn _vec3d_len_sq_fx(x: double, y: double, z: double): int {
     return sq as int;
 }
 
-// vec3d_normalize_x(x, y, z): x component of the unit vector.
-//   Returns 0.0 if the vector has zero length.
+/// X component of the normalized unit vector for a 3D vector.
+///
+/// Returns `0.0` if the vector has zero length.
+///
+/// @since 2.0.0
+/// @param x  X component   @param y  Y component   @param z  Z component
+/// @returns  `x / ||(x, y, z)||`, or `0.0` for a zero vector
+/// @example
+/// let nx: double = vec3d_normalize_x(3.0d, 4.0d, 0.0d)
 fn vec3d_normalize_x(x: double, y: double, z: double): double {
     let sq_fx: int = _vec3d_len_sq_fx(x, y, z);
     if (sq_fx == 0) {
@@ -154,8 +245,13 @@ fn vec3d_normalize_x(x: double, y: double, z: double): double {
     return x / len;
 }
 
-// vec3d_normalize_y(x, y, z): y component of the unit vector.
-//   Returns 0.0 if the vector has zero length.
+/// Y component of the normalized unit vector for a 3D vector.
+///
+/// Returns `0.0` if the vector has zero length.
+///
+/// @since 2.0.0
+/// @param x  X component   @param y  Y component   @param z  Z component
+/// @returns  `y / ||(x, y, z)||`, or `0.0` for a zero vector
 fn vec3d_normalize_y(x: double, y: double, z: double): double {
     let sq_fx: int = _vec3d_len_sq_fx(x, y, z);
     if (sq_fx == 0) {
@@ -165,8 +261,13 @@ fn vec3d_normalize_y(x: double, y: double, z: double): double {
     return y / len;
 }
 
-// vec3d_normalize_z(x, y, z): z component of the unit vector.
-//   Returns 0.0 if the vector has zero length.
+/// Z component of the normalized unit vector for a 3D vector.
+///
+/// Returns `0.0` if the vector has zero length.
+///
+/// @since 2.0.0
+/// @param x  X component   @param y  Y component   @param z  Z component
+/// @returns  `z / ||(x, y, z)||`, or `0.0` for a zero vector
 fn vec3d_normalize_z(x: double, y: double, z: double): double {
     let sq_fx: int = _vec3d_len_sq_fx(x, y, z);
     if (sq_fx == 0) {
@@ -182,49 +283,83 @@ fn vec3d_normalize_z(x: double, y: double, z: double): double {
 //   [ a  b ]   a = m[0,0]  b = m[0,1]
 //   [ c  d ]   c = m[1,0]  d = m[1,1]
 
-// mat2d_det(a,b,c,d): determinant of a 2×2 matrix.
+/// Determinant of a 2×2 matrix `[[a, b], [c, d]]`.
+///
+/// @since 2.0.0
+/// @param a  Element [0,0]   @param b  Element [0,1]
+/// @param c  Element [1,0]   @param d  Element [1,1]
+/// @returns  `a*d - b*c`
+/// @example
+/// let det: double = mat2d_det(1.0d, 2.0d, 3.0d, 4.0d)
 fn mat2d_det(a: double, b: double, c: double, d: double): double {
     let t0: double = a * d;
     let t1: double = b * c;
     return t0 - t1;
 }
 
-// mat2d_mul_r0c0: element [0,0] of matrix product M0 × M1.
+/// Element [0,0] of the 2×2 matrix product `M0 × M1`.
+///
+/// @since 2.0.0
+/// @param a0  M0 row-major elements (a0, b0, c0, d0)
+/// @param a1  M1 row-major elements (a1, b1, c1, d1)
+/// @returns   `a0*a1 + b0*c1`
 fn mat2d_mul_r0c0(a0: double, b0: double, c0: double, d0: double, a1: double, b1: double, c1: double, d1: double): double {
     let t0: double = a0 * a1;
     let t1: double = b0 * c1;
     return t0 + t1;
 }
 
-// mat2d_mul_r0c1: element [0,1] of matrix product M0 × M1.
+/// Element [0,1] of the 2×2 matrix product `M0 × M1`.
+///
+/// @since 2.0.0
+/// @param a0  M0 row-major elements   @param a1  M1 row-major elements
+/// @returns   `a0*b1 + b0*d1`
 fn mat2d_mul_r0c1(a0: double, b0: double, c0: double, d0: double, a1: double, b1: double, c1: double, d1: double): double {
     let t0: double = a0 * b1;
     let t1: double = b0 * d1;
     return t0 + t1;
 }
 
-// mat2d_mul_r1c0: element [1,0] of matrix product M0 × M1.
+/// Element [1,0] of the 2×2 matrix product `M0 × M1`.
+///
+/// @since 2.0.0
+/// @param a0  M0 row-major elements   @param a1  M1 row-major elements
+/// @returns   `c0*a1 + d0*c1`
 fn mat2d_mul_r1c0(a0: double, b0: double, c0: double, d0: double, a1: double, b1: double, c1: double, d1: double): double {
     let t0: double = c0 * a1;
     let t1: double = d0 * c1;
     return t0 + t1;
 }
 
-// mat2d_mul_r1c1: element [1,1] of matrix product M0 × M1.
+/// Element [1,1] of the 2×2 matrix product `M0 × M1`.
+///
+/// @since 2.0.0
+/// @param a0  M0 row-major elements   @param a1  M1 row-major elements
+/// @returns   `c0*b1 + d0*d1`
 fn mat2d_mul_r1c1(a0: double, b0: double, c0: double, d0: double, a1: double, b1: double, c1: double, d1: double): double {
     let t0: double = c0 * b1;
     let t1: double = d0 * d1;
     return t0 + t1;
 }
 
-// mat2d_vecmul_x(a,b,c,d, vx,vy): x component of matrix-vector product M × v.
+/// X component of the 2×2 matrix–vector product `M × v`.
+///
+/// @since 2.0.0
+/// @param a  M[0,0]   @param b  M[0,1]   @param c  M[1,0]   @param d  M[1,1]
+/// @param vx  Vector X component   @param vy  Vector Y component
+/// @returns   `a*vx + b*vy`
 fn mat2d_vecmul_x(a: double, b: double, c: double, d: double, vx: double, vy: double): double {
     let t0: double = a * vx;
     let t1: double = b * vy;
     return t0 + t1;
 }
 
-// mat2d_vecmul_y(a,b,c,d, vx,vy): y component of matrix-vector product M × v.
+/// Y component of the 2×2 matrix–vector product `M × v`.
+///
+/// @since 2.0.0
+/// @param a  M[0,0]   @param b  M[0,1]   @param c  M[1,0]   @param d  M[1,1]
+/// @param vx  Vector X component   @param vy  Vector Y component
+/// @returns   `c*vx + d*vy`
 fn mat2d_vecmul_y(a: double, b: double, c: double, d: double, vx: double, vy: double): double {
     let t0: double = c * vx;
     let t1: double = d * vy;
@@ -241,7 +376,17 @@ fn mat2d_vecmul_y(a: double, b: double, c: double, d: double, vx: double, vy: do
 //
 // NOTE: det must be non-zero; no guard is applied (caller's responsibility).
 
-// solve2d_x: x solution component via Cramer's rule.
+/// X solution of the 2×2 linear system `[a b; c d] * [x; y] = [ex; ey]` via Cramer's rule.
+///
+/// Caller must ensure `det(a, b, c, d) ≠ 0`.
+///
+/// @since 2.0.0
+/// @param a   M[0,0]   @param b   M[0,1]
+/// @param c   M[1,0]   @param d   M[1,1]
+/// @param ex  RHS x    @param ey  RHS y
+/// @returns   `(ex*d - b*ey) / det`
+/// @example
+/// let x: double = solve2d_x(1.0d, 0.0d, 0.0d, 1.0d, 3.0d, 4.0d)
 fn solve2d_x(a: double, b: double, c: double, d: double, ex: double, ey: double): double {
     let num: double = ex * d;
     let sub: double = b * ey;
@@ -250,7 +395,17 @@ fn solve2d_x(a: double, b: double, c: double, d: double, ex: double, ey: double)
     return numer / det;
 }
 
-// solve2d_y: y solution component via Cramer's rule.
+/// Y solution of the 2×2 linear system `[a b; c d] * [x; y] = [ex; ey]` via Cramer's rule.
+///
+/// Caller must ensure `det(a, b, c, d) ≠ 0`.
+///
+/// @since 2.0.0
+/// @param a   M[0,0]   @param b   M[0,1]
+/// @param c   M[1,0]   @param d   M[1,1]
+/// @param ex  RHS x    @param ey  RHS y
+/// @returns   `(a*ey - ex*c) / det`
+/// @example
+/// let y: double = solve2d_y(1.0d, 0.0d, 0.0d, 1.0d, 3.0d, 4.0d)
 fn solve2d_y(a: double, b: double, c: double, d: double, ex: double, ey: double): double {
     let num: double = a * ey;
     let sub: double = ex * c;

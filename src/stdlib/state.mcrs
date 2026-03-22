@@ -23,19 +23,39 @@
 module library
 
 /// Read the current state of an entity.
-/// Returns -1 if the entity has not been initialised (score is 0 = unset in MC,
-/// but we reserve -1 as the sentinel for "never set via init_state").
+///
+/// Returns `-1` if the entity has not been initialised (score is 0 = unset in
+/// Minecraft, but we reserve `-1` as the sentinel for "never set via
+/// `init_state`").
+///
+/// @since 1.0.0
+/// @param entity  Selector for the target entity
+/// @returns       Current state value stored in `rs.state`, or `-1` if unset
+/// @example
+/// let s: int = get_state(@s)
 fn get_state(entity: selector) -> int {
     return scoreboard_get(entity, "rs.state");
 }
 
 /// Write a state value to an entity.
+///
+/// @since 1.0.0
+/// @param entity  Selector for the target entity
+/// @param state   Integer state constant to write
+/// @example
+/// set_state(@s, 1)
 fn set_state(entity: selector, state: int) {
     scoreboard_set(entity, "rs.state", state);
 }
 
 /// Check whether an entity is currently in the given state.
-/// Returns 1 if yes, 0 if no.
+///
+/// @since 1.0.0
+/// @param entity  Selector for the target entity
+/// @param state   Integer state constant to compare against
+/// @returns       `1` if the entity is in `state`, `0` otherwise
+/// @example
+/// if (is_state(@s, STATE_COMBAT) == 1) { /* per-tick combat logic */ }
 fn is_state(entity: selector, state: int) -> int {
     let cur: int = get_state(entity);
     if (cur == state) {
@@ -45,7 +65,14 @@ fn is_state(entity: selector, state: int) -> int {
 }
 
 /// Initialise an entity's state only if it has not been set yet (score == -1).
-/// Call once on spawn / load to avoid overwriting an in-progress state.
+///
+/// Call once on spawn or load to avoid overwriting an in-progress state.
+///
+/// @since 1.0.0
+/// @param entity   Selector for the target entity
+/// @param initial  State constant to write when the entity is uninitialised
+/// @example
+/// init_state(@s, STATE_IDLE)
 fn init_state(entity: selector, initial: int) {
     let cur: int = get_state(entity);
     if (cur == -1) {
@@ -54,8 +81,16 @@ fn init_state(entity: selector, initial: int) {
 }
 
 /// Attempt a guarded transition from `from` to `to`.
+///
 /// Only performs the transition when the entity is currently in `from`.
-/// Returns 1 on success, 0 if the entity was not in `from`.
+///
+/// @since 1.0.0
+/// @param entity  Selector for the target entity
+/// @param from    Required current state
+/// @param to      State to transition into
+/// @returns       `1` on success, `0` if the entity was not in `from`
+/// @example
+/// let ok: int = transition(@s, STATE_IDLE, STATE_COMBAT)
 fn transition(entity: selector, from: int, to: int) -> int {
     if (is_state(entity, from) == 1) {
         set_state(entity, to);

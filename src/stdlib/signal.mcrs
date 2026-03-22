@@ -9,15 +9,30 @@ module library;
 
 // ─── Uniform distribution ────────────────────────────────────────────────────
 
-// uniform_int(seed, lo, hi): integer in [lo, hi] inclusive
-// Returns new seed for chaining: use the result as next seed input.
+/// Return a uniform integer in `[lo, hi]` inclusive.
+///
+/// Uses LCG RNG. Pass the result as the seed for the next call to chain samples.
+///
+/// @since 2.0.0
+/// @param seed  Any integer seed value
+/// @param lo    Inclusive lower bound
+/// @param hi    Inclusive upper bound
+/// @returns     Pseudo-random integer in [lo, hi]
+/// @example
+/// let dmg: int = uniform_int(seed, 5, 15)
 fn uniform_int(seed: int, lo: int, hi: int): int {
     let r: int = seed * 1664525 + 1013904223;
     if (r < 0) { r = 0 - r; }
     return lo + r % (hi - lo + 1);
 }
 
-// uniform_frac(seed): uniform fraction in [0, 10000] (×10000 scale)
+/// Return a uniform fraction in [0, 10000] (×10000 scale).
+///
+/// @since 2.0.0
+/// @param seed  Any integer seed value
+/// @returns     Pseudo-random integer in [0, 10000]
+/// @example
+/// let frac: int = uniform_frac(seed)
 fn uniform_frac(seed: int): int {
     let r: int = seed * 1664525 + 1013904223;
     if (r < 0) { r = 0 - r; }
@@ -25,13 +40,17 @@ fn uniform_frac(seed: int): int {
 }
 
 // ─── Normal (Gaussian) approximation ─────────────────────────────────────────
-//
-// Method: Sum of 12 uniform [0,1] random values → subtract 6 → scale.
-// Result approximates N(0,1). Good enough for game use.
-// (Box-Muller requires sqrt/ln; this is cheaper and sufficient.)
-//
-// normal_approx12(seed): approximate N(0, 1) × 10000, range ≈ [-60000, 60000]
-// Each call consumes the seed 12 times (chains internally).
+
+/// Approximate N(0, 1) variate using the Irwin–Hall method (sum of 12 uniform samples).
+///
+/// Result is in ×10000 scale, range approximately [−60000, 60000].
+/// Each call chains the seed 12 times internally.
+///
+/// @since 2.0.0
+/// @param seed  Any integer seed value
+/// @returns     Approximate N(0,1) sample ×10000
+/// @example
+/// let z: int = normal_approx12(seed)
 fn normal_approx12(seed: int): int {
     let s: int = seed;
     let sum: int = 0;
@@ -54,21 +73,25 @@ fn normal_approx12(seed: int): int {
 }
 
 // ─── Exponential distribution ─────────────────────────────────────────────────
-//
-// Method: -ln(U) / λ where U is uniform [0,1].
-// Approximation: use ln from stdlib/math.
-//
-// exp_dist_approx(seed, lambda_fx): exponential variate × 10000
-// lambda_fx: rate parameter × 10000 (e.g. 10000 = rate 1.0)
-// Returns value in [0, ∞) × 10000, but caps at 100000 (10.0) for MC sanity.
-// Note: requires import "stdlib/math" for ln function.
+
+/// Sample from an exponential distribution with rate `lambda_fx`.
+///
+/// Method: `-ln(U) / λ` where `U ~ Uniform(0.01, 1)`. Result is capped at
+/// `100000` (= 10.0 × 10000) for Minecraft sanity.
+///
+/// Requires `import "stdlib/math"` for the `ln` function.
+///
+/// @since 2.0.0
+/// @param seed       Any integer seed value
+/// @param lambda_fx  Rate parameter ×10000 (e.g. `10000` = rate 1.0)
+/// @returns          Exponential variate ×10000, capped at 100000
+/// @example
+/// let wait: int = exp_dist_approx(seed, 10000)
 fn exp_dist_approx(seed: int, lambda_fx: int): int {
     let r: int = seed * 1664525 + 1013904223;
     if (r < 0) { r = 0 - r; }
     let u: int = 100 + r % 9901;  // uniform in [100, 10000] (avoid ln(0))
     // -ln(u/10000) × 10000 / lambda_fx
-    // ln(u) where u is ×10000 → use existing ln(u) which returns ×10000
-    // -ln(u/10000) = -(ln(u) - ln(10000)) = ln(10000) - ln(u)
     // ln(10000) × 10000 ≈ 92103
     let ln_u: int = ln(u);    // requires stdlib/math
     let neg_ln: int = 92103 - ln_u;
@@ -80,8 +103,14 @@ fn exp_dist_approx(seed: int, lambda_fx: int): int {
 
 // ─── Bernoulli trial ──────────────────────────────────────────────────────────
 
-// bernoulli(seed, p_fx): 1 with probability p/10000, else 0.
-// p_fx: probability × 10000 (e.g. 5000 = 50%, 1000 = 10%)
+/// Return `1` with probability `p_fx / 10000`, otherwise `0`.
+///
+/// @since 2.0.0
+/// @param seed   Any integer seed value
+/// @param p_fx   Probability ×10000 (e.g. `5000` = 50%, `1000` = 10%)
+/// @returns      `1` with the given probability, `0` otherwise
+/// @example
+/// if (bernoulli(seed, 3000) == 1) { /* 30% chance */ }
 fn bernoulli(seed: int, p_fx: int): int {
     let r: int = seed * 1664525 + 1013904223;
     if (r < 0) { r = 0 - r; }
@@ -91,7 +120,15 @@ fn bernoulli(seed: int, p_fx: int): int {
 
 // ─── Weighted choice ──────────────────────────────────────────────────────────
 
-// weighted2(seed, w0, w1): choose 0 or 1 with weights w0, w1
+/// Choose `0` or `1` with the given integer weights.
+///
+/// @since 2.0.0
+/// @param seed  Any integer seed value
+/// @param w0    Weight for outcome `0`
+/// @param w1    Weight for outcome `1`
+/// @returns     `0` or `1` sampled proportionally to the weights
+/// @example
+/// let side: int = weighted2(seed, 3, 7)
 fn weighted2(seed: int, w0: int, w1: int): int {
     let total: int = w0 + w1;
     let r: int = seed * 1664525 + 1013904223;
@@ -100,7 +137,16 @@ fn weighted2(seed: int, w0: int, w1: int): int {
     return 1;
 }
 
-// weighted3(seed, w0, w1, w2): choose 0, 1, or 2 with given weights
+/// Choose `0`, `1`, or `2` with the given integer weights.
+///
+/// @since 2.0.0
+/// @param seed  Any integer seed value
+/// @param w0    Weight for outcome `0`
+/// @param w1    Weight for outcome `1`
+/// @param w2    Weight for outcome `2`
+/// @returns     `0`, `1`, or `2` sampled proportionally to the weights
+/// @example
+/// let tier: int = weighted3(seed, 50, 30, 20)
 fn weighted3(seed: int, w0: int, w1: int, w2: int): int {
     let total: int = w0 + w1 + w2;
     let r: int = seed * 1664525 + 1013904223;
@@ -112,15 +158,19 @@ fn weighted3(seed: int, w0: int, w1: int, w2: int): int {
 }
 
 // ─── Gamma distribution ───────────────────────────────────────────────────────
-//
-// gamma_sample(shape_k, scale_theta, seed): Gamma(k, theta) × 10000
-// Method: sum of k independent Exponential(theta) samples.
-//   Exponential(theta) = -theta * ln(U)  where U ~ Uniform(0,1).
-// shape_k: integer shape parameter × 10000 (e.g. 10000 = k=1, 20000 = k=2)
-// scale_theta: scale parameter × 10000 (e.g. 10000 = theta=1.0)
-// seed: any integer seed
-// Returns: Gamma variate × 10000. Handles k = 1..5 via loop.
-// Requires: ln (stdlib/math), uniform_int (stdlib/signal)
+
+/// Sample from a Gamma(k, θ) distribution via summing k exponential samples.
+///
+/// Handles integer shape `k = 1..5` (pass `shape_k × 10000`).
+/// Requires `ln` from `stdlib/math`.
+///
+/// @since 2.0.0
+/// @param shape_k      Shape parameter k ×10000 (e.g. `20000` = k=2)
+/// @param scale_theta  Scale parameter θ ×10000 (e.g. `10000` = θ=1.0)
+/// @param seed         Any integer seed value
+/// @returns            Gamma variate ×10000
+/// @example
+/// let g: int = gamma_sample(20000, 10000, seed)
 fn gamma_sample(shape_k: int, scale_theta: int, seed: int): int {
     // Gamma(k, theta) = sum of k Exponential(theta) samples
     // Exponential(theta) = -theta * ln(U), U ~ Uniform(0.1, 0.9999)
@@ -145,14 +195,18 @@ fn gamma_sample(shape_k: int, scale_theta: int, seed: int): int {
 }
 
 // ─── Poisson distribution ─────────────────────────────────────────────────────
-//
-// poisson_sample(lambda, seed): Poisson(lambda) count
-// Method: Knuth algorithm — count uniform products until product < e^(-lambda).
-// lambda: rate parameter × 10000 (e.g. 30000 = lambda=3.0)
-// seed: any integer seed
-// Returns: non-negative integer count (plain int, not ×10000).
-// Works well for lambda ≤ 20 (200000 in ×10000). Hard cap at 100 iterations.
-// Requires: exp_fx (stdlib/math), uniform_int (stdlib/signal)
+
+/// Sample from a Poisson(λ) distribution using the Knuth algorithm.
+///
+/// Works well for `lambda ≤ 20` (200000 in ×10000). Hard cap at 100 iterations.
+/// Requires `exp_fx` from `stdlib/math`.
+///
+/// @since 2.0.0
+/// @param lambda  Rate parameter ×10000 (e.g. `30000` = λ=3.0)
+/// @param seed    Any integer seed value
+/// @returns       Poisson count (plain integer, not ×10000)
+/// @example
+/// let n: int = poisson_sample(30000, seed)
 fn poisson_sample(lambda: int, seed: int): int {
     let neg_lambda: int = 0 - lambda;
     let L: int = exp_fx(neg_lambda);
@@ -168,13 +222,17 @@ fn poisson_sample(lambda: int, seed: int): int {
 }
 
 // ─── Geometric distribution ───────────────────────────────────────────────────
-//
-// geometric_sample(p_success, seed): Geometric(p) — failures before first success
-// Method: floor(ln(U) / ln(1-p))
-// p_success: success probability × 10000 (e.g. 5000 = p=0.5)
-// seed: any integer seed
-// Returns: non-negative integer count of failures.
-// Requires: ln (stdlib/math), uniform_int (stdlib/signal)
+
+/// Sample from a Geometric(p) distribution (number of failures before first success).
+///
+/// Method: `floor(ln(U) / ln(1 - p))`. Requires `ln` from `stdlib/math`.
+///
+/// @since 2.0.0
+/// @param p_success  Success probability ×10000 (e.g. `5000` = p=0.5)
+/// @param seed       Any integer seed value
+/// @returns          Non-negative integer count of failures
+/// @example
+/// let fails: int = geometric_sample(5000, seed)
 fn geometric_sample(p_success: int, seed: int): int {
     let u: int = uniform_int(seed, 1, 9999);
     let ln_u: int = ln(u);
@@ -186,14 +244,18 @@ fn geometric_sample(p_success: int, seed: int): int {
 }
 
 // ─── Negative Binomial distribution ──────────────────────────────────────────
-//
-// negative_binomial_sample(r, p_success, seed): NegBin(r, p) — failures before r successes
-// Method: sum r independent Geometric(p) samples.
-// r: number of successes (plain integer, e.g. 1, 2, 3)
-// p_success: success probability × 10000 (e.g. 5000 = p=0.5)
-// seed: any integer seed
-// Returns: non-negative integer count of total failures.
-// Requires: geometric_sample
+
+/// Sample from a Negative Binomial NegBin(r, p) distribution.
+///
+/// Method: sum `r` independent Geometric(p) samples.
+///
+/// @since 2.0.0
+/// @param r          Number of successes (plain integer, e.g. 1, 2, 3)
+/// @param p_success  Success probability ×10000 (e.g. `5000` = p=0.5)
+/// @param seed       Any integer seed value
+/// @returns          Total number of failures before `r` successes
+/// @example
+/// let n: int = negative_binomial_sample(3, 5000, seed)
 fn negative_binomial_sample(r: int, p_success: int, seed: int): int {
     let s: int = 0;
     let i: int = 0;
@@ -205,7 +267,7 @@ fn negative_binomial_sample(r: int, p_success: int, seed: int): int {
 }
 
 // ─── DFT helpers ──────────────────────────────────────────────────────────────
-//
+
 // _sin45(q): sin(q × 45°) × 10000, q = 0..7 (handles full circle in 45° steps)
 // Pure arithmetic — no NBT storage required. Works in MCRuntime for testing.
 fn _sin45(q: int): int {
@@ -226,24 +288,20 @@ fn _cos45(q: int): int {
     return _sin45(q + 2);  // cos(x) = sin(x + 90°) = sin((q+2)×45°)
 }
 
-// ─── Discrete Fourier Transform (fixed-point, n ≤ 8) ─────────────────────────
-//
-// Computes DFT bin k of a real-valued signal with n samples.
-// All values use ×10000 scale.
-//
-// Angle convention: 360*k*j/n degrees — always a multiple of 45° for n ≤ 8.
-// Trig is handled by _sin45/_cos45 which take a 45°-step index.
-//
-// dft_real(s0..s7, n, k): real part of DFT bin k
-//   real[k] = (1/n) × Σ(j=0..n-1) samples[j] × cos(2π k j / n)
-//   Return value ×10000.
-//
-// To keep within int32: divide each term by 10000 before accumulating,
-// then divide the sum by n at the end.
-//
-// Note: passes samples as 8 explicit integers (s0..s7).
-//       Use s0..s(n-1); remaining args are ignored based on n.
-
+/// Real part of DFT bin `k` for a real-valued signal with up to 8 samples.
+///
+/// All values use ×10000 scale. Angle convention: multiples of 45°.
+/// Unused sample arguments (beyond `n`) are ignored.
+///
+/// Formula: `real[k] = (1/n) Σ samples[j] × cos(2πkj/n)`
+///
+/// @since 2.0.0
+/// @param s0  Sample 0 ×10000   …   @param s7  Sample 7 ×10000
+/// @param n   Number of samples (1–8)
+/// @param k   Bin index (0 to n−1)
+/// @returns   Real part of DFT bin k, ×10000
+/// @example
+/// let re0: int = dft_real(10000, 0, -10000, 0, 0, 0, 0, 0, 4, 0)
 fn dft_real(s0: int, s1: int, s2: int, s3: int,
             s4: int, s5: int, s6: int, s7: int,
             n: int, k: int): int {
@@ -282,8 +340,15 @@ fn dft_real(s0: int, s1: int, s2: int, s3: int,
     return acc / n;
 }
 
-// dft_imag(s0..s7, n, k): imaginary part of DFT bin k (negative sine convention)
-//   imag[k] = -(1/n) × Σ(j=0..n-1) samples[j] × sin(2π k j / n)
+/// Imaginary part of DFT bin `k` for a real-valued signal with up to 8 samples.
+///
+/// Uses the negative-sine convention: `imag[k] = -(1/n) Σ samples[j] × sin(2πkj/n)`
+///
+/// @since 2.0.0
+/// @param s0  Sample 0 ×10000   …   @param s7  Sample 7 ×10000
+/// @param n   Number of samples (1–8)
+/// @param k   Bin index (0 to n−1)
+/// @returns   Imaginary part of DFT bin k, ×10000
 fn dft_imag(s0: int, s1: int, s2: int, s3: int,
             s4: int, s5: int, s6: int, s7: int,
             n: int, k: int): int {
@@ -321,8 +386,15 @@ fn dft_imag(s0: int, s1: int, s2: int, s3: int,
     return 0 - (acc / n);
 }
 
-// dft_magnitude(s0..s7, n, k): magnitude of DFT bin k
-//   magnitude = sqrt_fx(real² + imag²)  where both real,imag are ×10000
+/// Magnitude of DFT bin `k`: `sqrt(real² + imag²)` in ×10000.
+///
+/// @since 2.0.0
+/// @param s0  Sample 0 ×10000   …   @param s7  Sample 7 ×10000
+/// @param n   Number of samples (1–8)
+/// @param k   Bin index (0 to n−1)
+/// @returns   Magnitude of DFT bin k in ×10000
+/// @example
+/// let mag: int = dft_magnitude(10000, 0, -10000, 0, 0, 0, 0, 0, 4, 1)
 fn dft_magnitude(s0: int, s1: int, s2: int, s3: int,
                  s4: int, s5: int, s6: int, s7: int,
                  n: int, k: int): int {

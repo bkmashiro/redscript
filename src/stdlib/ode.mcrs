@@ -21,10 +21,24 @@
 
 module library
 
+/// Fixed-point multiplication: `a_fx * b_fx / 10000`.
+///
+/// @since 2.0.0
+/// @param a_fx  First operand ×10000
+/// @param b_fx  Second operand ×10000
+/// @returns     Product in ×10000 scale
 fn ode_mul_fx(a_fx: int, b_fx: int): int {
     return a_fx * b_fx / 10000
 }
 
+/// Compute the RK4 weighted increment: `h * (k1 + 2k2 + 2k3 + k4) / 6`.
+///
+/// All values are ×10000. The divisor 60000 = 6 × 10000.
+///
+/// @since 2.0.0
+/// @param h_fx          Step size ×10000
+/// @param deriv_sum_fx  `k1 + 2k2 + 2k3 + k4` in ×10000
+/// @returns             Weighted increment in ×10000
 fn ode_weighted_increment(h_fx: int, deriv_sum_fx: int): int {
     return h_fx * deriv_sum_fx / 60000
 }
@@ -47,6 +61,17 @@ fn _ode_get_slot5(): int { raw("execute store result score $ret __OBJ__ run data
 fn _ode_get_slot6(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[6]"); raw("return 1"); return 0 }
 fn _ode_get_slot7(): int { raw("execute store result score $ret __OBJ__ run data get storage rs:ode state[7]"); raw("return 1"); return 0 }
 
+/// Initialise the ODE module state in `storage rs:ode`.
+///
+/// @since 2.0.0
+/// @param system_id  Built-in system constant (1=decay, 2=growth, 3=oscillator)
+/// @param t_fx       Initial time ×10000
+/// @param y_fx       Initial primary variable y(0) ×10000
+/// @param y2_fx      Initial secondary variable y'(0) ×10000 (for system 3)
+/// @param k_fx       Rate/spring constant ×10000
+/// @param extra_fx   Damping coefficient ×10000 (for system 3)
+/// @example
+/// ode_reset(1, 0, 10000, 0, 10000, 0)
 fn ode_reset(system_id: int, t_fx: int, y_fx: int, y2_fx: int, k_fx: int, extra_fx: int) {
     raw("data modify storage rs:ode state set value [0,0,0,0,0,0,0,0]")
     _ode_set_slot0(system_id)
@@ -59,12 +84,46 @@ fn ode_reset(system_id: int, t_fx: int, y_fx: int, y2_fx: int, k_fx: int, extra_
     _ode_set_slot7(0)
 }
 
+/// Return the current system ID from ODE state.
+///
+/// @since 2.0.0
+/// @returns  System ID stored in slot 0
 fn ode_get_system(): int { return _ode_get_slot0() }
+
+/// Return the current time `t` from ODE state (×10000).
+///
+/// @since 2.0.0
+/// @returns  Current time ×10000
 fn ode_get_t(): int { return _ode_get_slot1() }
+
+/// Return the current primary variable `y` from ODE state (×10000).
+///
+/// @since 2.0.0
+/// @returns  Current y value ×10000
 fn ode_get_y(): int { return _ode_get_slot2() }
+
+/// Return the current secondary variable `y'` from ODE state (×10000).
+///
+/// @since 2.0.0
+/// @returns  Current y' value ×10000 (meaningful for system 3 only)
 fn ode_get_y2(): int { return _ode_get_slot3() }
+
+/// Return the rate constant `k` from ODE state (×10000).
+///
+/// @since 2.0.0
+/// @returns  Rate constant ×10000
 fn ode_get_k(): int { return _ode_get_slot4() }
+
+/// Return the extra parameter from ODE state (×10000).
+///
+/// @since 2.0.0
+/// @returns  Extra parameter ×10000 (damping for system 3)
 fn ode_get_extra(): int { return _ode_get_slot5() }
+
+/// Return the number of steps taken so far.
+///
+/// @since 2.0.0
+/// @returns  Step count (plain integer)
 fn ode_get_steps(): int { return _ode_get_slot6() }
 
 // Scalar-system dispatcher helper matching the callback-free pattern.
@@ -100,6 +159,13 @@ fn ode_eval_y2(system_id: int, t_fx: int, y_fx: int, y2_fx: int, k_fx: int, extr
     return 0
 }
 
+/// Advance the ODE state by one RK4 step of size `h_fx`.
+///
+/// Updates time `t`, primary variable `y` (and `y2` for system 3), and
+/// increments the step counter in `storage rs:ode`.
+///
+/// @since 2.0.0
+/// @param h_fx  Step size ×10000 (e.g. `1000` = 0.1 time unit)
 fn ode_step(h_fx: int) {
     let system_id: int = ode_get_system()
     let t_fx: int = ode_get_t()
@@ -149,6 +215,21 @@ fn ode_step(h_fx: int) {
     _ode_set_slot6(step_count + 1)
 }
 
+/// Run `steps` RK4 steps of a scalar ODE system and store results in module state.
+///
+/// Built-in systems: `1` = exponential decay (`dy/dt = -k·y`),
+/// `2` = exponential growth (`dy/dt = k·y`).
+///
+/// @since 2.0.0
+/// @param system_id  Built-in system constant (1 or 2 for scalar systems)
+/// @param t0_fx      Initial time ×10000
+/// @param y0_fx      Initial y value ×10000
+/// @param h_fx       Step size ×10000
+/// @param steps      Number of RK4 steps to execute
+/// @param k_fx       Rate constant ×10000
+/// @example
+/// ode_run(1, 0, 10000, 1000, 10, 10000)
+/// let y: int = ode_get_y()
 fn ode_run(system_id: int, t0_fx: int, y0_fx: int, h_fx: int, steps: int, k_fx: int) {
     ode_reset(system_id, t0_fx, y0_fx, 0, k_fx, 0)
     let i: int = 0
@@ -158,6 +239,21 @@ fn ode_run(system_id: int, t0_fx: int, y0_fx: int, h_fx: int, steps: int, k_fx: 
     }
 }
 
+/// Run `steps` RK4 steps of a 2D ODE system (e.g. harmonic oscillator).
+///
+/// Built-in system 3: `y' = y2`, `y2' = -k·y - extra·y2`.
+///
+/// @since 2.0.0
+/// @param system_id  Built-in system constant (use `3` for harmonic oscillator)
+/// @param t0_fx      Initial time ×10000
+/// @param y0_fx      Initial y value ×10000
+/// @param y20_fx     Initial y' value ×10000
+/// @param h_fx       Step size ×10000
+/// @param steps      Number of RK4 steps to execute
+/// @param k_fx       Spring constant ×10000
+/// @param extra_fx   Damping coefficient ×10000
+/// @example
+/// ode_run2(3, 0, 10000, 0, 1000, 20, 10000, 500)
 fn ode_run2(system_id: int, t0_fx: int, y0_fx: int, y20_fx: int, h_fx: int, steps: int, k_fx: int, extra_fx: int) {
     ode_reset(system_id, t0_fx, y0_fx, y20_fx, k_fx, extra_fx)
     let i: int = 0

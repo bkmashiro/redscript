@@ -20,10 +20,16 @@ module library;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// GRAVITY: MC gravity per tick ×10000 (≈ 0.08 * 10000 = 800)
+/// Minecraft gravity per tick in ×10000 fixed-point (≈ 0.08 × 10000 = 800).
+///
+/// @since 2.0.0
+/// @returns  `800`
 fn parabola_gravity(): int { return 800; }
 
-// GRAVITY_HALF: gravity/2 for displacement formula ×10000
+/// Half of Minecraft gravity per tick (used for displacement formula).
+///
+/// @since 2.0.0
+/// @returns  `400`
 fn parabola_gravity_half(): int { return 400; }
 
 // ─── Ballistic trajectory (no drag) ──────────────────────────────────────────
@@ -35,16 +41,27 @@ fn parabola_gravity_half(): int { return 400; }
 //
 // All velocities returned ×10000 (blocks/tick × 10000)
 
-// parabola_vx(dx, ticks): initial X velocity ×10000
-// dx: horizontal displacement in blocks
-// ticks: flight time in ticks
+/// Compute the initial X velocity needed to reach `dx` blocks in `ticks` ticks.
+///
+/// @since 2.0.0
+/// @param dx     Horizontal X displacement in blocks
+/// @param ticks  Flight time in ticks
+/// @returns      Initial X velocity ×10000 (`dx * 10000 / ticks`), or `0` if `ticks ≤ 0`
+/// @example
+/// let vx: int = parabola_vx(10, 20)
 fn parabola_vx(dx: int, ticks: int): int {
     if (ticks <= 0) { return 0; }
     return dx * 10000 / ticks;
 }
 
-// parabola_vy(dy, ticks): initial Y velocity ×10000
-// dy: vertical displacement in blocks (positive = up)
+/// Compute the initial Y velocity needed to reach height `dy` in `ticks` ticks.
+///
+/// @since 2.0.0
+/// @param dy     Vertical displacement in blocks (positive = up)
+/// @param ticks  Flight time in ticks
+/// @returns      Initial Y velocity ×10000, or `0` if `ticks ≤ 0`
+/// @example
+/// let vy: int = parabola_vy(5, 20)
 fn parabola_vy(dy: int, ticks: int): int {
     if (ticks <= 0) { return 0; }
     // vy * t = dy * 10000 + gravity_half * t^2
@@ -53,14 +70,24 @@ fn parabola_vy(dy: int, ticks: int): int {
     return (dy * 10000 + g_term) / ticks;
 }
 
-// parabola_vz(dz, ticks): initial Z velocity ×10000
+/// Compute the initial Z velocity needed to reach `dz` blocks in `ticks` ticks.
+///
+/// @since 2.0.0
+/// @param dz     Horizontal Z displacement in blocks
+/// @param ticks  Flight time in ticks
+/// @returns      Initial Z velocity ×10000, or `0` if `ticks ≤ 0`
 fn parabola_vz(dz: int, ticks: int): int {
     if (ticks <= 0) { return 0; }
     return dz * 10000 / ticks;
 }
 
-// parabola_speed_xz(dx, dz, ticks): horizontal speed ×10000 (for launch angle)
-// Returns sqrt(vx^2 + vz^2) ×10000
+/// Compute the horizontal speed `sqrt(vx² + vz²)` needed to reach `(dx, dz)` in `ticks` ticks.
+///
+/// @since 2.0.0
+/// @param dx     X displacement in blocks
+/// @param dz     Z displacement in blocks
+/// @param ticks  Flight time in ticks
+/// @returns      Horizontal launch speed ×10000, or `0` if `ticks ≤ 0`
 fn parabola_speed_xz(dx: int, dz: int, ticks: int): int {
     if (ticks <= 0) { return 0; }
     let vx: int = parabola_vx(dx, ticks);
@@ -77,37 +104,60 @@ fn parabola_speed_xz(dx: int, dz: int, ticks: int): int {
 //   y(t) = vy0 * t / 10000 - gravity_half * t^2 / 10000
 //   z(t) = vz0 * t / 10000
 
-// parabola_x(vx0, t): X position at tick t in blocks
+/// X position at tick `t` given initial X velocity `vx0` ×10000.
+///
+/// @since 2.0.0
+/// @param vx0  Initial X velocity ×10000
+/// @param t    Elapsed ticks
+/// @returns    X displacement in blocks (`vx0 * t / 10000`)
 fn parabola_x(vx0: int, t: int): int {
     return vx0 * t / 10000;
 }
 
-// parabola_y(vy0, t): Y position at tick t in blocks
+/// Y position at tick `t` given initial Y velocity `vy0` ×10000.
+///
+/// @since 2.0.0
+/// @param vy0  Initial Y velocity ×10000
+/// @param t    Elapsed ticks
+/// @returns    Y displacement in blocks (positive = up)
 fn parabola_y(vy0: int, t: int): int {
     let g_term: int = parabola_gravity_half() * t * t / 10000;
     return vy0 * t / 10000 - g_term;
 }
 
-// parabola_z(vz0, t): Z position at tick t in blocks
+/// Z position at tick `t` given initial Z velocity `vz0` ×10000.
+///
+/// @since 2.0.0
+/// @param vz0  Initial Z velocity ×10000
+/// @param t    Elapsed ticks
+/// @returns    Z displacement in blocks
 fn parabola_z(vz0: int, t: int): int {
     return vz0 * t / 10000;
 }
 
 // ─── Flight time estimation ───────────────────────────────────────────────────
-//
-// Given initial upward velocity vy0 (×10000), find the tick when the projectile
-// returns to launch height (y=0):
-//   t = 2 * vy0 / gravity = 2 * vy0 / 800
-// Returns ticks (integer). Returns 0 if vy0 <= 0.
 
-// parabola_flight_time(vy0): ticks until returning to launch height
+/// Estimate the tick when the projectile returns to launch height (`y = 0`).
+///
+/// Formula: `t = 2 × vy0 / gravity`. Returns `0` for non-positive initial velocity.
+///
+/// @since 2.0.0
+/// @param vy0  Initial Y velocity ×10000
+/// @returns    Flight time in ticks, or `0` if `vy0 ≤ 0`
+/// @example
+/// let t: int = parabola_flight_time(8000)
 fn parabola_flight_time(vy0: int): int {
     if (vy0 <= 0) { return 0; }
     return 2 * vy0 / parabola_gravity();
 }
 
-// parabola_max_height(vy0): maximum height above launch point in blocks
-// apex at t = vy0 / gravity
+/// Maximum height (in blocks) above the launch point.
+///
+/// @since 2.0.0
+/// @param vy0  Initial Y velocity ×10000
+/// @returns    Apex height in blocks, or `0` if `vy0 ≤ 0`
+/// @example
+/// let h: int = parabola_max_height(8000)
 fn parabola_max_height(vy0: int): int {
     if (vy0 <= 0) { return 0; }
     let t_apex: int = vy0 / parabola_gravity();
@@ -123,27 +173,46 @@ fn parabola_max_height(vy0: int): int {
 //
 // drag: ×10000 (e.g. 9900 = 0.99 for arrows, 9800 = 0.98 for fireballs)
 
-// parabola_step_vx(vx, drag): apply drag to X velocity
+/// Apply drag to the X velocity for one tick.
+///
+/// @since 2.0.0
+/// @param vx    Current X velocity ×10000
+/// @param drag  Drag factor ×10000 (e.g. `9900` = 0.99 for arrows)
+/// @returns     New X velocity ×10000
 fn parabola_step_vx(vx: int, drag: int): int {
     return mulfix(vx, drag);
 }
 
-// parabola_step_vy(vy, drag): apply gravity then drag to Y velocity
+/// Apply gravity and then drag to the Y velocity for one tick.
+///
+/// @since 2.0.0
+/// @param vy    Current Y velocity ×10000
+/// @param drag  Drag factor ×10000
+/// @returns     New Y velocity ×10000 after `(vy - gravity) * drag`
 fn parabola_step_vy(vy: int, drag: int): int {
     return mulfix(vy - parabola_gravity(), drag);
 }
 
-// parabola_step_vz(vz, drag): apply drag to Z velocity
+/// Apply drag to the Z velocity for one tick.
+///
+/// @since 2.0.0
+/// @param vz    Current Z velocity ×10000
+/// @param drag  Drag factor ×10000
+/// @returns     New Z velocity ×10000
 fn parabola_step_vz(vz: int, drag: int): int {
     return mulfix(vz, drag);
 }
 
 // ─── Targeting helpers ────────────────────────────────────────────────────────
 
-// parabola_ticks_for_range(range): estimate ticks to reach a horizontal range
-// range: distance in blocks
-// Uses average speed heuristic: t ≈ range * 10000 / 8000 (arrow ≈ 0.8 b/t horizontal)
-// For precise aiming use parabola_vx/vy/vz with desired ticks.
+/// Estimate the number of ticks to reach a horizontal range using average arrow speed.
+///
+/// Heuristic: `t ≈ range × 10000 / 8000` (assumes ≈ 0.8 blocks/tick horizontal).
+/// For precise aiming, use `parabola_vx/vy/vz` with a chosen tick count.
+///
+/// @since 2.0.0
+/// @param range  Horizontal distance in blocks
+/// @returns      Estimated ticks (minimum 1)
 fn parabola_ticks_for_range(range: int): int {
     if (range <= 0) { return 1; }
     let t: int = range * 10000 / 8000;
@@ -151,7 +220,13 @@ fn parabola_ticks_for_range(range: int): int {
     return t;
 }
 
-// parabola_in_range(dx, dz, max_range): returns 1 if target within horizontal range
+/// Check whether a target is within horizontal range.
+///
+/// @since 2.0.0
+/// @param dx         X displacement to target in blocks
+/// @param dz         Z displacement to target in blocks
+/// @param max_range  Maximum range in blocks
+/// @returns          `1` if `dist(dx, dz) ≤ max_range`, otherwise `0`
 fn parabola_in_range(dx: int, dz: int, max_range: int): int {
     let dist_sq: int = dx * dx + dz * dz;
     let range_sq: int = max_range * max_range;

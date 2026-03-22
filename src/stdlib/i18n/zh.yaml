@@ -25,7 +25,7 @@ math:
       b: 第二个值
     returns: a > b 则返回 a，否则返回 b
   clamp:
-    desc: 将 x 限制在 [lo, hi] 范围内
+    desc: "将 x 限制在 [lo, hi] 范围内"
     params:
       x: 输入值
       lo: 下界（含）
@@ -112,7 +112,7 @@ vec:
 
 strings:
   str_len:
-    desc: 返回 rs:strings.{s} 中字符串的长度（MC 限制：普通字符串总返回 1）
+    desc: "返回 rs:strings.{s} 中字符串的长度（MC 限制：普通字符串总返回 1）"
     params:
       s: rs:strings 中的 NBT 字段名（如 "A"）
     returns: 普通字符串返回 1；字符列表返回元素数量
@@ -121,15 +121,15 @@ strings:
     params:
       a: 第一个字符串的 NBT 字段名（如 "A"）
       b: 第二个字符串的 NBT 字段名（如 "B"）
-    returns: rs:strings.Result 被设为 [valueA, valueB] 的 NBT 列表
+    returns: "rs:strings.Result 被设为 [valueA, valueB] 的 NBT 列表"
   str_contains:
-    desc: 检测 rs:strings.{s} 是否包含 rs:strings.{sub}（因 MC 限制始终返回 0）
+    desc: "检测 rs:strings.{s} 是否包含 rs:strings.{sub}（因 MC 限制始终返回 0）"
     params:
       s: 被搜索字符串的 NBT 字段名
       sub: 子字符串的 NBT 字段名
     returns: 0（始终，MC 原生不支持子串搜索）
   str_slice:
-    desc: 从 rs:strings.{s} 中提取子串，写入 rs:strings.Result（需要 MC 1.20.2+）
+    desc: "从 rs:strings.{s} 中提取子串，写入 rs:strings.Result（需要 MC 1.20.2+）"
     params:
       s: 源字符串的 NBT 字段名（如 "A"）
       start: 起始索引（含，0-based）
@@ -138,19 +138,19 @@ strings:
 
 map:
   map_set:
-    desc: 将整数值写入 storage rs:maps.{map_name}.{key}
+    desc: "将整数值写入 storage rs:maps.{map_name}.{key}"
     params:
       map_name: rs:maps 下的顶层 map 名称
       key: map compound 内的键名
       value: 要写入的整数值
   map_get:
-    desc: 读取 storage rs:maps.{map_name}.{key} 中的整数值
+    desc: "读取 storage rs:maps.{map_name}.{key} 中的整数值"
     params:
       map_name: rs:maps 下的顶层 map 名称
       key: map compound 内的键名
     returns: 已存储的整数值；若键不存在则返回 0
   map_has:
-    desc: 检查 storage rs:maps.{map_name}.{key} 是否存在
+    desc: "检查 storage rs:maps.{map_name}.{key} 是否存在"
     params:
       map_name: rs:maps 下的顶层 map 名称
       key: map compound 内的键名
@@ -161,34 +161,34 @@ map:
       map_name: rs:maps 下的顶层 map 名称
       key: map compound 内的键名
   map_clear:
-    desc: 删除整个 storage rs:maps.{map_name} compound
+    desc: "删除整个 storage rs:maps.{map_name} compound"
     params:
       map_name: rs:maps 下的顶层 map 名称
 
 set_int:
   set_add:
-    desc: 向 storage rs:set_int.{set_name} 中插入一个整数；若已存在则不会重复添加
+    desc: "向 storage rs:set_int.{set_name} 中插入一个整数；若已存在则不会重复添加"
     params:
       set_name: rs:set_int 下的集合名称
       value: 要插入的整数值
   set_has:
-    desc: 检查整数是否存在于 storage rs:set_int.{set_name} 中
+    desc: "检查整数是否存在于 storage rs:set_int.{set_name} 中"
     params:
       set_name: rs:set_int 下的集合名称
       value: 要检测的整数值
     returns: 元素存在返回 1，否则返回 0
   set_remove:
-    desc: 从 storage rs:set_int.{set_name} 中删除一个整数
+    desc: "从 storage rs:set_int.{set_name} 中删除一个整数"
     params:
       set_name: rs:set_int 下的集合名称
       value: 要删除的整数值
   set_size:
-    desc: 返回 storage rs:set_int.{set_name} 中当前元素数量
+    desc: "返回 storage rs:set_int.{set_name} 中当前元素数量"
     params:
       set_name: rs:set_int 下的集合名称
     returns: 集合中的整数个数；若集合不存在则返回 0
   set_clear:
-    desc: 将 storage rs:set_int.{set_name} 重置为空整数列表
+    desc: "将 storage rs:set_int.{set_name} 重置为空整数列表"
     params:
       set_name: rs:set_int 下的集合名称
   set_union:
@@ -474,7 +474,7 @@ world:
     desc: 根据世界时间计算太阳方位角，结果为角度 ×10000 定点数
     params:
       ticks: Minecraft 世界时间（游戏刻）
-    returns: 方位角，范围为 `[0, 3600000)`
+    returns: "方位角，范围为 `[0, 3600000)`"
 
 interactions:
   interactions_init:
@@ -692,7 +692,7 @@ effects:
   speed:
     desc: 给目标实体施加速度提升效果
     params:
-      target: 实体选择器（如 @p, @a, @e[...]）
+      target: "实体选择器（如 @p, @a, @e[...]）"
       duration: 效果持续时间（刻，20 刻 = 1 秒）
       level: 效果等级（0 = 速度 I，1 = 速度 II，...）
     returns: void — 应用 minecraft:speed 效果
@@ -846,7 +846,7 @@ easing:
   ease_linear:
     desc: 线性缓动，无加速或减速
     params:
-      t: 进度 ×10000，范围 [0, 10000]
+      t: "进度 ×10000，范围 [0, 10000]"
     returns: t（恒等函数）
   ease_in_quad:
     desc: 二次方缓入，慢开始快结束
@@ -892,7 +892,7 @@ easing:
     desc: 弹跳缓出，结尾模拟球落地弹跳
     params:
       t: 进度 ×10000
-    returns: 分段弹跳曲线，范围 [0, 10000]
+    returns: "分段弹跳曲线，范围 [0, 10000]"
 
 geometry:
   midpoint:
@@ -935,16 +935,16 @@ geometry:
       r: 圆柱半径
     returns: 点在圆柱截面内返回 1，否则返回 0
   angle_normalize:
-    desc: 将角度（度×10000）归一化到 [0, 3600000) 范围
+    desc: "将角度（度×10000）归一化到 [0, 3600000) 范围"
     params:
       deg: 输入角度 ×10000（可为负数或超过 360°）
-    returns: 等效角度在 [0, 3600000) 范围内
+    returns: "等效角度在 [0, 3600000) 范围内"
   angle_diff:
     desc: 计算两角度之间的有符号最短角度差（度×10000）
     params:
       a: 起始角 ×10000
       b: 目标角 ×10000
-    returns: 有符号差值在 (-1800000, 1800000]
+    returns: "有符号差值在 (-1800000, 1800000]"
 
 random:
   next_lcg:
@@ -954,12 +954,12 @@ random:
     returns: 下一个伪随机 int32（同时作为下次调用的种子）
     example_note: seed = next_lcg(seed)
   random_range:
-    desc: 生成 [lo, hi) 范围内的伪随机整数
+    desc: "生成 [lo, hi) 范围内的伪随机整数"
     params:
       seed: next_lcg 的输出值
       lo: 下界（含）
       hi: 上界（不含，必须 > lo）
-    returns: 范围 [lo, hi) 内的整数
+    returns: "范围 [lo, hi) 内的整数"
     example_note: let roll = random_range(seed, 1, 7) — 骰子 1-6
   random_bool:
     desc: 以相等概率生成 0 或 1 的伪随机布尔值
@@ -972,7 +972,7 @@ random:
       n: 试验次数
       p_x10000: 成功概率 ×10000（如 5000 = 50%）
       seed: LCG 种子（任意非零整数）
-    returns: 成功次数，范围 [0, n]
+    returns: "成功次数，范围 [0, n]"
   hypergeometric_sample:
     desc: 无放回抽样并统计成功项数（超几何分布）
     params:
@@ -980,44 +980,44 @@ random:
       success_states: 总体中成功项数量
       draws: 抽取数量
       seed: LCG 种子
-    returns: 抽中的成功项数，范围 [0, min(draws, success_states)]
+    returns: "抽中的成功项数，范围 [0, min(draws, success_states)]"
 
 bits:
   bit_get:
     desc: 检测 x 的第 n 位是否为 1
     params:
       x: 要检测的整数
-      n: 位索引（0 = 最低位），范围 [0, 30]
+      n: "位索引（0 = 最低位），范围 [0, 30]"
     returns: 第 n 位为 1 则返回 1，否则返回 0
   bit_set:
     desc: 将 x 的第 n 位设为 1（幂等）
     params:
       x: 要修改的整数
-      n: 要置 1 的位索引，范围 [0, 30]
+      n: "要置 1 的位索引，范围 [0, 30]"
     returns: 第 n 位置为 1 后的 x
   bit_clear:
     desc: 将 x 的第 n 位清零（幂等）
     params:
       x: 要修改的整数
-      n: 要清零的位索引，范围 [0, 30]
+      n: "要清零的位索引，范围 [0, 30]"
     returns: 第 n 位置为 0 后的 x
   bit_toggle:
     desc: 翻转 x 的第 n 位（0→1 或 1→0）
     params:
       x: 要修改的整数
-      n: 要翻转的位索引，范围 [0, 30]
+      n: "要翻转的位索引，范围 [0, 30]"
     returns: 第 n 位翻转后的 x
   bit_shl:
     desc: 左移 x n 位（等效于 x * 2^n）
     params:
       x: 要移位的整数
-      n: 左移位数，范围 [0, 30]
+      n: "左移位数，范围 [0, 30]"
     returns: x << n
   bit_shr:
     desc: 逻辑右移 x n 位（等效于 x / 2^n，向零截断）
     params:
       x: 要移位的整数
-      n: 右移位数，范围 [0, 30]
+      n: "右移位数，范围 [0, 30]"
     returns: x >> n
   bit_and:
     desc: 两个整数的按位与（31 个非符号位）
@@ -1046,65 +1046,65 @@ bits:
     desc: 统计 x 中置 1 的位数（汉明重量）
     params:
       x: 整数值（使用 31 个低位；符号位不计）
-    returns: 置 1 的位数，范围 [0, 31]
+    returns: "置 1 的位数，范围 [0, 31]"
 
 color:
   rgb_pack:
     desc: 将 RGB 分量打包为单个整数（0xRRGGBB 格式）
     params:
-      r: 红色通道，范围 [0, 255]
-      g: 绿色通道，范围 [0, 255]
-      b: 蓝色通道，范围 [0, 255]
+      r: "红色通道，范围 [0, 255]"
+      g: "绿色通道，范围 [0, 255]"
+      b: "蓝色通道，范围 [0, 255]"
     returns: r*65536 + g*256 + b
   rgb_r:
     desc: 从打包 RGB 整数中提取红色分量
     params:
       packed: 打包颜色整数（0xRRGGBB）
-    returns: 红色通道值，范围 [0, 255]
+    returns: "红色通道值，范围 [0, 255]"
   rgb_g:
     desc: 从打包 RGB 整数中提取绿色分量
     params:
       packed: 打包颜色整数（0xRRGGBB）
-    returns: 绿色通道值，范围 [0, 255]
+    returns: "绿色通道值，范围 [0, 255]"
   rgb_b:
     desc: 从打包 RGB 整数中提取蓝色分量
     params:
       packed: 打包颜色整数（0xRRGGBB）
-    returns: 蓝色通道值，范围 [0, 255]
+    returns: "蓝色通道值，范围 [0, 255]"
   rgb_lerp:
     desc: 两个打包 RGB 颜色之间的线性插值
     params:
       a: 起始颜色（打包 0xRRGGBB）
       b: 结束颜色（打包 0xRRGGBB）
-      t: 混合因子，范围 [0, 1000]（0=a，1000=b）
+      t: "混合因子，范围 [0, 1000]（0=a，1000=b）"
     returns: a 和 b 之间插值得到的打包 RGB 颜色
   rgb_to_l:
     desc: 从 RGB 分量计算 HSL 亮度（×10000 精度）
     params:
-      r: 红色 ×10000，范围 [0, 2550000]
+      r: "红色 ×10000，范围 [0, 2550000]"
       g: 绿色 ×10000
       b: 蓝色 ×10000
-    returns: 亮度，范围 [0, 10000]（0=黑，10000=白）
+    returns: "亮度，范围 [0, 10000]（0=黑，10000=白）"
   rgb_to_s:
     desc: 从 RGB 分量计算 HSL 饱和度（×10000 精度）
     params:
       r: 红色 ×10000
       g: 绿色 ×10000
       b: 蓝色 ×10000
-    returns: 饱和度，范围 [0, 10000]（0=灰，10000=全饱和）
+    returns: "饱和度，范围 [0, 10000]（0=灰，10000=全饱和）"
   rgb_to_h:
     desc: 从 RGB 分量计算 HSL 色相（×10000 精度）
     params:
       r: 红色 ×10000
       g: 绿色 ×10000
       b: 蓝色 ×10000
-    returns: 色相，范围 [0, 3600000]（度×10000；0=红，1200000=绿，2400000=蓝）
+    returns: "色相，范围 [0, 3600000]（度×10000；0=红，1200000=绿，2400000=蓝）"
   hsl_to_packed:
     desc: 将 HSL（×10000 精度）转换为打包 RGB 整数（0xRRGGBB）
     params:
-      h: 色相 ×10000，范围 [0, 3600000]
-      s: 饱和度 ×10000，范围 [0, 10000]
-      l: 亮度 ×10000，范围 [0, 10000]
+      h: "色相 ×10000，范围 [0, 3600000]"
+      s: "饱和度 ×10000，范围 [0, 10000]"
+      l: "亮度 ×10000，范围 [0, 10000]"
     returns: 打包 RGB 整数，每通道 0-255
 
 noise:
@@ -1123,20 +1123,20 @@ noise:
     desc: 定点数位置处的平滑一维值噪声
     params:
       x_fx: 位置 ×10000（如 10000 = 坐标 1.0）
-    returns: 噪声值，范围 [0, 10000]，整数坐标间平滑插值
+    returns: "噪声值，范围 [0, 10000]，整数坐标间平滑插值"
   value_noise_2d:
     desc: 定点数位置处的平滑二维值噪声
     params:
       x_fx: X 位置 ×10000
       z_fx: Z 位置 ×10000
-    returns: 噪声值，范围 [0, 10000]，双线性平滑插值
+    returns: "噪声值，范围 [0, 10000]，双线性平滑插值"
   fbm_1d:
     desc: 一维分形布朗运动（fBm）— 叠加多组八度值噪声
     params:
       x_fx: 位置 ×10000
       octaves: 噪声层数（1–6；越多细节越丰富但越慢）
       persistence_fx: 每八度振幅衰减因子 ×10000（5000 = 0.5 推荐）
-    returns: 归一化噪声值，约在 [0, 10000]
+    returns: "归一化噪声值，约在 [0, 10000]"
   fbm_2d:
     desc: 二维分形布朗运动 — 叠加多组二维值噪声
     params:
@@ -1144,7 +1144,7 @@ noise:
       z_fx: Z 位置 ×10000
       octaves: 噪声层数（1–6）
       persistence_fx: 振幅衰减因子 ×10000
-    returns: 归一化噪声值，约在 [0, 10000]
+    returns: "归一化噪声值，约在 [0, 10000]"
   terrain_height:
     desc: 使用 3 组八度 fBm 噪声生成地形高度
     params:
@@ -1159,7 +1159,7 @@ sort:
     desc: 就地升序排序整数数组（插入排序，O(n²)，适合 n≤64）
     params:
       arr: 要排序的整数数组（就地修改）
-      len: 要排序的元素数量（arr[0..len-1]）
+      len: "要排序的元素数量（arr[0..len-1]）"
     returns: void — 调用后 arr 升序排列
   insertion_sort_desc:
     desc: 就地降序排序整数数组（插入排序）
@@ -1174,7 +1174,7 @@ sort:
       la: a 的元素数量
       b: 第二个已排序数组
       lb: b 的元素数量
-    returns: 包含 a 和 b 所有元素的新排序 int[]，长度 la+lb
+    returns: "包含 a 和 b 所有元素的新排序 int[]，长度 la+lb"
   merge_sort_coro:
     desc: 使用协程将归并排序分散到多个 tick 执行（O(n log n)，适合大数组）
     params:
@@ -1203,7 +1203,7 @@ bigint:
     desc: 大整数乘以小整数（1 ≤ n ≤ 9999）
     params:
       a: 被乘数大整数
-      n: 小整数乘数（范围 [1, 9999]）
+      n: "小整数乘数（范围 [1, 9999]）"
       result: 输出数组
       len: 分块数量
     returns: void — result = a × n
@@ -1220,7 +1220,7 @@ bigint:
     desc: 大整数除以小整数，返回商和余数
     params:
       a: 被除数大整数
-      divisor: 小整数除数（范围 [1, 9999]）
+      divisor: "小整数除数（范围 [1, 9999]）"
       result: 商输出数组
       len: 分块数量
     returns: 余数（范围 0..divisor-1）
@@ -1245,17 +1245,17 @@ bigint:
 heap:
   heap_new:
     desc: 分配一个可容纳 64 个元素的新空堆
-    returns: int[]，h[0]=0（大小），h[1..64] 预分配为零
+    returns: "int[]，h[0]=0（大小），h[1..64] 预分配为零"
   heap_size:
     desc: 返回堆中当前存储的元素数量
     params:
       h: 由 heap_new 创建的堆数组
-    returns: 当前元素数量（h[0]）
+    returns: "当前元素数量（h[0]）"
   heap_peek:
     desc: 查看堆顶元素但不移除（最小堆返回最小值，最大堆返回最大值）
     params:
       h: 非空堆数组；前置条件：heap_size(h) > 0
-    returns: 堆顶元素（h[1]）
+    returns: "堆顶元素（h[1]）"
   heap_push:
     desc: 向最小堆插入一个值
     params:
@@ -1283,8 +1283,8 @@ graph:
   graph_new:
     desc: 创建含 n 个节点、最多 256 条有向边的新空图
     params:
-      n: 节点数量（限制在 [0, 64]）
-    returns: 初始化的图 int[]，g[0]=0（边数），g[1]=n（节点数）
+      n: "节点数量（限制在 [0, 64]）"
+    returns: "初始化的图 int[]，g[0]=0（边数），g[1]=n（节点数）"
   graph_add_edge:
     desc: 向图中添加一条有向加权边
     params:
@@ -1306,15 +1306,15 @@ graph:
     params:
       g: 图数组
       start: 起始节点索引
-      out_visited: 长度 >= node_count 的 int[]；已访问节点对应格设为 1
-    returns: BFS 访问顺序的节点索引 int[]；起始节点无效时返回空数组
+      out_visited: "长度 >= node_count 的 int[]；已访问节点对应格设为 1"
+    returns: "BFS 访问顺序的节点索引 int[]；起始节点无效时返回空数组"
   graph_dfs:
     desc: 从起始节点深度优先搜索，返回访问顺序（迭代实现，基于栈）
     params:
       g: 图数组
       start: 起始节点索引
-      out_visited: 长度 >= node_count 的 int[]
-    returns: DFS 访问顺序的节点索引 int[]
+      out_visited: "长度 >= node_count 的 int[]"
+    returns: "DFS 访问顺序的节点索引 int[]"
   graph_has_path:
     desc: 使用 BFS 检测两节点之间是否存在有向路径
     params:
@@ -1328,16 +1328,16 @@ graph:
       g: 图数组
       src: 源节点索引
       dst: 目标节点索引（用于返回值）
-      out_dist: 长度 >= node_count 的 int[]；填入最短距离（不可达为 -1）
+      out_dist: "长度 >= node_count 的 int[]；填入最短距离（不可达为 -1）"
     returns: src 到 dst 的最短距离，不可达返回 -1
 
 pathfind:
   pf_pack:
     desc: 将 (x, z) 网格坐标编码为单个打包整数
     params:
-      x: 网格 X 坐标 [0, 15]
-      z: 网格 Z 坐标 [0, 15]
-    returns: x * 16 + z（范围 [0, 255] 内的唯一索引）
+      x: "网格 X 坐标 [0, 15]"
+      z: "网格 Z 坐标 [0, 15]"
+    returns: "x * 16 + z（范围 [0, 255] 内的唯一索引）"
   pf_unpack_x:
     desc: 从打包网格索引中提取 X 坐标
     params:
@@ -1350,21 +1350,21 @@ pathfind:
     returns: Z 分量：packed % 16
   pf_new_map:
     desc: 分配一个新的 16×16 网格障碍物地图，所有格子初始可通行
-    returns: 包含 256 个零的 int[]；0=可通行，1=阻塞
+    returns: "包含 256 个零的 int[]；0=可通行，1=阻塞"
   pf_set_blocked:
     desc: 将网格格子标记为不可通行（阻塞）
     params:
       map: 来自 pf_new_map 的障碍物地图
-      x: 格子 X 坐标 [0, 15]
-      z: 格子 Z 坐标 [0, 15]
-    returns: void — 设置 map[pf_pack(x,z)] = 1
+      x: "格子 X 坐标 [0, 15]"
+      z: "格子 Z 坐标 [0, 15]"
+    returns: "void — 设置 map[pf_pack(x,z)] = 1"
   pf_set_open:
     desc: 将网格格子标记为可通行（开放）
     params:
       map: 来自 pf_new_map 的障碍物地图
-      x: 格子 X 坐标 [0, 15]
-      z: 格子 Z 坐标 [0, 15]
-    returns: void — 设置 map[pf_pack(x,z)] = 0
+      x: "格子 X 坐标 [0, 15]"
+      z: "格子 Z 坐标 [0, 15]"
+    returns: "void — 设置 map[pf_pack(x,z)] = 0"
   pf_is_blocked:
     desc: 检查网格格子是否被阻塞或超出边界
     params:
@@ -1384,18 +1384,850 @@ pathfind:
     desc: 使用 BFS 在 16×16 网格上寻找两格子之间的最短路径
     params:
       map: 来自 pf_new_map 的障碍物地图（已设置阻塞）
-      sx: 起始格子 X [0, 15]
-      sz: 起始格子 Z [0, 15]
-      gx: 目标格子 X [0, 15]
-      gz: 目标格子 Z [0, 15]
-    returns: 从起点到终点（含）的打包坐标 int[]，无路径时返回空数组
+      sx: "起始格子 X [0, 15]"
+      sz: "起始格子 Z [0, 15]"
+      gx: "目标格子 X [0, 15]"
+      gz: "目标格子 Z [0, 15]"
+    returns: "从起点到终点（含）的打包坐标 int[]，无路径时返回空数组"
   pathfind_bfs_coro:
     desc: 跨 tick 分散执行的 BFS 寻路（协程版本，避免卡顿）
     params:
       map: 来自 pf_new_map 的障碍物地图
-      sx: 起始格子 X [0, 15]
-      sz: 起始格子 Z [0, 15]
-      gx: 目标格子 X [0, 15]
-      gz: 目标格子 Z [0, 15]
-      out: 调用方提供的 int[]，完成时接收打包路径坐标
-    returns: void — 结果异步推入 out[]；替换 pf_noop 可设置完成回调
+      sx: "起始格子 X [0, 15]"
+      sz: "起始格子 Z [0, 15]"
+      gx: "目标格子 X [0, 15]"
+      gz: "目标格子 Z [0, 15]"
+      out: "调用方提供的 int[]，完成时接收打包路径坐标"
+    returns: "void — 结果异步推入 out[]；替换 pf_noop 可设置完成回调"
+
+scheduler:
+  task_schedule:
+    desc: 为玩家排程指定槽位的任务，在 delay 个 tick 后触发
+    params:
+      p: 目标玩家或实体选择器
+      task_id: "槽位索引 [0, 7]"
+      delay: 等待的 tick 数
+  task_cancel:
+    desc: 取消玩家指定槽位的任务（将计数器归零）
+    params:
+      p: 目标玩家或实体选择器
+      task_id: "槽位索引 [0, 7]"
+  task_ready:
+    desc: 检查玩家指定槽位的任务是否在本 tick 触发；触发后自动清除
+    params:
+      p: 目标玩家或实体选择器
+      task_id: "槽位索引 [0, 7]"
+    returns: 任务触发返回 1，否则返回 0
+  gtask_schedule:
+    desc: 排程全局槽位任务（绑定到 #rs 假玩家），在 delay 个 tick 后触发
+    params:
+      task_id: "槽位索引 [0, 7]"
+      delay: 等待的 tick 数
+  gtask_cancel:
+    desc: 取消全局槽位任务
+    params:
+      task_id: "槽位索引 [0, 7]"
+  gtask_ready:
+    desc: 检查全局槽位任务是否在本 tick 触发；触发后自动清除
+    params:
+      task_id: "槽位索引 [0, 7]"
+    returns: 任务触发返回 1，否则返回 0
+  scheduler_tick:
+    desc: 每 tick 将所有激活的玩家和全局计时器减 1；在 @tick 函数中调用
+
+state:
+  get_state:
+    desc: 读取实体的当前状态值
+    params:
+      entity: 目标实体选择器
+    returns: rs.state 中存储的状态值；未初始化时返回 -1
+  set_state:
+    desc: 将状态值写入实体
+    params:
+      entity: 目标实体选择器
+      state: 要写入的整数状态常量
+  is_state:
+    desc: 检查实体当前是否处于指定状态
+    params:
+      entity: 目标实体选择器
+      state: 要对比的整数状态常量
+    returns: 实体处于该状态返回 1，否则返回 0
+  init_state:
+    desc: 仅在实体未初始化时（得分为 -1）写入初始状态，避免覆盖进行中的状态
+    params:
+      entity: 目标实体选择器
+      initial: 未初始化时写入的状态常量
+  transition:
+    desc: 仅当实体处于 from 状态时执行受保护的状态转换
+    params:
+      entity: 目标实体选择器
+      from: 所需的当前状态
+      to: 目标状态
+    returns: 转换成功返回 1；实体不在 from 状态返回 0
+
+ecs:
+  ecs_registry_new:
+    desc: 分配一个全零的 16 槽组件注册表
+    returns: "长度为 16 的 int[]，所有槽位为 0"
+  ecs_register:
+    desc: 在注册表中标记 comp_id 为已注册，并返回更新后的注册表
+    params:
+      reg: 来自 ecs_registry_new 的注册表数组
+      comp_id: 组件类型 ID（0–15）
+    returns: 更新后的注册表数组
+  ecs_is_registered:
+    desc: 检查 comp_id 是否已注册
+    params:
+      reg: 来自 ecs_registry_new 的注册表数组
+      comp_id: 组件类型 ID（0–15）
+    returns: 已注册返回 1，否则返回 0
+  ecs_health_init:
+    desc: 创建血量为满血的 Health 组件状态
+    params:
+      entity_score: 用于标识实体的计分板得分
+      max_hp: 最大生命值
+    returns: 长度为 8 的 Health 组件状态数组
+  ecs_health_get:
+    desc: 从 Health 组件状态中返回当前 HP
+    params:
+      state: 来自 ecs_health_init 的状态数组
+    returns: 当前生命值
+  ecs_health_max:
+    desc: 从 Health 组件状态中返回最大 HP
+    params:
+      state: 来自 ecs_health_init 的状态数组
+    returns: 最大生命值
+  ecs_health_set:
+    desc: "设置当前 HP（钳制到 [0, max]）并返回更新后的状态"
+    params:
+      state: Health 组件状态
+      hp: 新的生命值（自动钳制到有效范围）
+    returns: 更新后的状态数组
+  ecs_health_damage:
+    desc: 扣除 HP（钳制到 0）并返回更新后的状态
+    params:
+      state: Health 组件状态
+      amount: 扣除量（正整数）
+    returns: 更新后的状态数组
+  ecs_health_heal:
+    desc: 恢复 HP（钳制到最大值）并返回更新后的状态
+    params:
+      state: Health 组件状态
+      amount: 恢复量（正整数）
+    returns: 更新后的状态数组
+  ecs_health_is_dead:
+    desc: 判断实体 HP 是否归零
+    params:
+      state: Health 组件状态
+    returns: HP <= 0 返回 1，存活返回 0
+  ecs_health_pct:
+    desc: 以 ×10000 定点数返回 HP 百分比（5000 = 50.00%）
+    params:
+      state: Health 组件状态
+    returns: current_hp * 10000 / max_hp；max_hp 为 0 时返回 0
+  ecs_vel_init:
+    desc: 创建具有给定初始速度的速度组件状态
+    params:
+      vx: X 方向速度 ×1000（1000 = 1.0 格/tick）
+      vy: Y 方向速度 ×1000
+      vz: Z 方向速度 ×1000
+    returns: 长度为 8 的速度组件状态数组
+  ecs_vel_get_x:
+    desc: 从速度组件状态中返回 X 速度
+    params:
+      state: 速度组件状态
+    returns: X 速度 ×1000
+  ecs_vel_get_y:
+    desc: 从速度组件状态中返回 Y 速度
+    params:
+      state: 速度组件状态
+    returns: Y 速度 ×1000
+  ecs_vel_get_z:
+    desc: 从速度组件状态中返回 Z 速度
+    params:
+      state: 速度组件状态
+    returns: Z 速度 ×1000
+  ecs_vel_set:
+    desc: 设置所有速度分量并返回更新后的状态
+    params:
+      state: 速度组件状态
+      vx: 新 X 速度 ×1000
+      vy: 新 Y 速度 ×1000
+      vz: 新 Z 速度 ×1000
+    returns: 更新后的状态数组
+  ecs_vel_speed:
+    desc: 返回速度向量的模（sqrt(vx²+vy²+vz²)）×1000
+    params:
+      state: 速度组件状态
+    returns: 速度大小 ×1000
+  ecs_vel_apply_gravity:
+    desc: 每 tick 将 Y 速度减去重力加速度
+    params:
+      state: 速度组件状态
+      gravity_fx: 重力加速度 ×1000（如 980 ≈ 0.98 格/tick²）
+    returns: 更新后的状态数组
+  ecs_vel_damp:
+    desc: 对所有速度分量乘以阻力系数
+    params:
+      state: 速度组件状态
+      factor_fx: 阻力系数 ×10000（如 8000 = 0.80 倍衰减）
+    returns: 更新后的状态数组
+
+fft:
+  dft_noop:
+    desc: dft_coro 的默认空回调，不执行任何操作
+  dft_real:
+    desc: "计算 input[0..n-1] 的离散傅里叶变换，输出实部到 out_re"
+    params:
+      input: 信号采样值数组，×10000 定点数
+      n: 采样数量（建议 ≤ 16）
+      out_re: 预分配输出数组，存放实部（×10000）
+      out_im: 预分配输出数组，存放虚部（×10000）
+  dft_magnitude:
+    desc: 返回 DFT 第 k 个频段的幅度（sqrt(re²+im²)），×10000
+    params:
+      re: dft_real 输出的实部数组
+      im: dft_real 输出的虚部数组
+      k: 频段索引
+    returns: 第 k 频段幅度，×10000
+  dft_power:
+    desc: 返回 DFT 第 k 个频段的功率（re²/10000 + im²/10000），×10000
+    params:
+      re: dft_real 输出的实部数组
+      im: dft_real 输出的虚部数组
+      k: 频段索引
+    returns: 第 k 频段功率，×10000
+  dft_coro:
+    desc: dft_real 的协程版本，每 tick 处理 4 个输出频段，避免卡顿
+    params:
+      input: 信号采样值数组，×10000
+      n: 采样数量（建议 ≤ 16）
+      out_re: 预分配输出数组，存放实部
+      out_im: 预分配输出数组，存放虚部
+  dft_freq_bin:
+    desc: 返回 DFT 第 k 个频段对应的频率（Hz）
+    params:
+      sample_rate_hz: 采样率（Hz，如 20 = Minecraft tick 速率）
+      n: 变换大小
+      k: 频段索引
+    returns: 第 k 频段对应的频率（Hz）
+
+ode:
+  ode_mul_fx:
+    desc: 定点数乘法：a_fx * b_fx / 10000
+    params:
+      a_fx: 第一个操作数 ×10000
+      b_fx: 第二个操作数 ×10000
+    returns: 乘积（×10000）
+  ode_weighted_increment:
+    desc: 计算 RK4 加权增量：h * (k1 + 2k2 + 2k3 + k4) / 6
+    params:
+      h_fx: 步长 ×10000
+      deriv_sum_fx: k1 + 2k2 + 2k3 + k4，×10000
+    returns: 加权增量 ×10000
+  ode_reset:
+    desc: 在 storage rs:ode 中初始化 ODE 模块状态
+    params:
+      system_id: 内置系统常量（1=衰减，2=增长，3=振荡器）
+      t_fx: 初始时间 ×10000
+      y_fx: 初始主变量 y(0) ×10000
+      y2_fx: 初始次变量 y'(0) ×10000（仅 system 3 使用）
+      k_fx: 速率/弹性常数 ×10000
+      extra_fx: 阻尼系数 ×10000（仅 system 3 使用）
+  ode_get_system:
+    desc: 返回 ODE 状态中的系统 ID
+    returns: 槽位 0 中存储的系统 ID
+  ode_get_t:
+    desc: 返回当前时间 t（×10000）
+    returns: 当前时间 ×10000
+  ode_get_y:
+    desc: 返回当前主变量 y（×10000）
+    returns: 当前 y 值 ×10000
+  ode_get_y2:
+    desc: 返回当前次变量 y'（×10000，仅对 system 3 有意义）
+    returns: 当前 y' 值 ×10000
+  ode_get_k:
+    desc: 返回速率常数 k（×10000）
+    returns: 速率常数 ×10000
+  ode_get_extra:
+    desc: 返回额外参数（×10000，system 3 中表示阻尼）
+    returns: 额外参数 ×10000
+  ode_get_steps:
+    desc: 返回已执行的步数
+    returns: 步数（普通整数）
+  ode_step:
+    desc: 向前推进一个 RK4 步
+    params:
+      h_fx: 步长 ×10000（如 1000 = 0.1 时间单位）
+  ode_run:
+    desc: 对标量 ODE 系统执行 steps 步 RK4 积分
+    params:
+      system_id: 内置系统常量（1 或 2 用于标量系统）
+      t0_fx: 初始时间 ×10000
+      y0_fx: 初始 y 值 ×10000
+      h_fx: 步长 ×10000
+      steps: RK4 步数
+      k_fx: 速率常数 ×10000
+  ode_run2:
+    desc: 对二维 ODE 系统（如谐振子）执行 steps 步 RK4 积分
+    params:
+      system_id: 内置系统常量（system 3 = 谐振子）
+      t0_fx: 初始时间 ×10000
+      y0_fx: 初始 y 值 ×10000
+      y20_fx: 初始 y' 值 ×10000
+      h_fx: 步长 ×10000
+      steps: RK4 步数
+      k_fx: 弹性常数 ×10000
+      extra_fx: 阻尼系数 ×10000
+
+linalg:
+  vec2d_dot:
+    desc: 两个二维向量的点积
+    params:
+      ax: 向量 A 的 X 分量
+      ay: 向量 A 的 Y 分量
+      bx: 向量 B 的 X 分量
+      by: 向量 B 的 Y 分量
+    returns: ax*bx + ay*by
+  vec2d_length:
+    desc: 二维向量的欧几里得长度
+    params:
+      x: X 分量
+      y: Y 分量
+    returns: sqrt(x² + y²)
+  vec2d_dist:
+    desc: 两个二维点之间的欧几里得距离
+    params:
+      ax: 点 A 的 X 坐标
+      ay: 点 A 的 Y 坐标
+      bx: 点 B 的 X 坐标
+      by: 点 B 的 Y 坐标
+    returns: sqrt((ax-bx)² + (ay-by)²)
+  vec2d_normalize_x:
+    desc: 二维单位向量的 X 分量；零向量返回 0.0
+    params:
+      x: X 分量
+      y: Y 分量
+    returns: x / ||(x,y)||，零向量时返回 0.0
+  vec2d_normalize_y:
+    desc: 二维单位向量的 Y 分量；零向量返回 0.0
+    params:
+      x: X 分量
+      y: Y 分量
+    returns: y / ||(x,y)||，零向量时返回 0.0
+  vec3d_dot:
+    desc: 两个三维向量的点积
+    params:
+    returns: ax*bx + ay*by + az*bz
+  vec3d_length:
+    desc: 三维向量的欧几里得长度
+    params:
+    returns: sqrt(x² + y² + z²)
+  vec3d_dist:
+    desc: 两个三维点之间的欧几里得距离
+    params:
+    returns: sqrt((ax-bx)² + (ay-by)² + (az-bz)²)
+  vec3d_cross_x:
+    desc: 叉积 a × b 的 X 分量
+    params:
+    returns: ay*bz - az*by
+  vec3d_cross_y:
+    desc: 叉积 a × b 的 Y 分量
+    params:
+    returns: az*bx - ax*bz
+  vec3d_cross_z:
+    desc: 叉积 a × b 的 Z 分量
+    params:
+    returns: ax*by - ay*bx
+  vec3d_normalize_x:
+    desc: 三维单位向量的 X 分量；零向量返回 0.0
+    params:
+    returns: x / ||(x,y,z)||，零向量时返回 0.0
+  vec3d_normalize_y:
+    desc: 三维单位向量的 Y 分量；零向量返回 0.0
+    params:
+    returns: y / ||(x,y,z)||，零向量时返回 0.0
+  vec3d_normalize_z:
+    desc: 三维单位向量的 Z 分量；零向量返回 0.0
+    params:
+    returns: z / ||(x,y,z)||，零向量时返回 0.0
+  mat2d_det:
+    desc: 2×2 矩阵的行列式
+    params:
+    returns: a*d - b*c
+  mat2d_mul_r0c0:
+    desc: "两个 2×2 矩阵乘积 M0×M1 的元素 [0,0]"
+    params:
+    returns: a0*a1 + b0*c1
+  mat2d_mul_r0c1:
+    desc: "两个 2×2 矩阵乘积 M0×M1 的元素 [0,1]"
+    returns: a0*b1 + b0*d1
+  mat2d_mul_r1c0:
+    desc: "两个 2×2 矩阵乘积 M0×M1 的元素 [1,0]"
+    returns: c0*a1 + d0*c1
+  mat2d_mul_r1c1:
+    desc: "两个 2×2 矩阵乘积 M0×M1 的元素 [1,1]"
+    returns: c0*b1 + d0*d1
+  mat2d_vecmul_x:
+    desc: 2×2 矩阵与向量乘积 M×v 的 X 分量
+    params:
+    returns: a*vx + b*vy
+  mat2d_vecmul_y:
+    desc: 2×2 矩阵与向量乘积 M×v 的 Y 分量
+    params:
+    returns: c*vx + d*vy
+  solve2d_x:
+    desc: 用 Cramer 法则求解 2×2 线性方程组的 x 分量
+    params:
+    returns: (ex*d - b*ey) / det
+  solve2d_y:
+    desc: 用 Cramer 法则求解 2×2 线性方程组的 y 分量
+    params:
+    returns: (a*ey - ex*c) / det
+
+matrix:
+  rotate2d_x:
+    desc: 将 (x, y) 绕原点旋转 angle_deg（×10000°）后的 X 分量
+    params:
+      x: 输入 X 坐标 ×10000
+      y: 输入 Y 坐标 ×10000
+      angle_deg: 角度 ×10000（如 450000 = 45°）
+    returns: x*cos(angle) - y*sin(angle)，×10000
+  rotate2d_y:
+    desc: 将 (x, y) 绕原点旋转 angle_deg（×10000°）后的 Y 分量
+    params:
+      x: 输入 X 坐标 ×10000
+      y: 输入 Y 坐标 ×10000
+      angle_deg: 角度 ×10000
+    returns: x*sin(angle) + y*cos(angle)，×10000
+  scale_x:
+    desc: 对 X 坐标施加缩放（sx_fx ×10000）
+    params:
+      x: 输入 X 值 ×10000
+      sx_fx: 缩放系数 ×10000（如 20000 = 2×）
+    returns: x * sx_fx / 10000
+  scale_y:
+    desc: 对 Y 坐标施加缩放
+    params:
+      y: 输入 Y 值 ×10000
+      sy_fx: 缩放系数 ×10000
+    returns: y * sy_fx / 10000
+  scale_z:
+    desc: 对 Z 坐标施加缩放
+    params:
+      z: 输入 Z 值 ×10000
+      sz_fx: 缩放系数 ×10000
+    returns: z * sz_fx / 10000
+  uniform_scale:
+    desc: 对单个分量施加均匀缩放
+    params:
+      v: 输入分量 ×10000
+      s_fx: 均匀缩放系数 ×10000
+    returns: v * s_fx / 10000
+  rotate_y_x:
+    desc: 绕 Y 轴旋转 angle_deg（×10000°）后的 X 分量
+    params:
+      angle_deg: 角度 ×10000
+    returns: x*cos + z*sin，×10000
+  rotate_y_z:
+    desc: 绕 Y 轴旋转 angle_deg（×10000°）后的 Z 分量
+    params:
+      angle_deg: 角度 ×10000
+    returns: -x*sin + z*cos，×10000
+  rotate_x_y:
+    desc: 绕 X 轴旋转 angle_deg（×10000°）后的 Y 分量
+    params:
+      angle_deg: 角度 ×10000
+    returns: y*cos - z*sin，×10000
+  rotate_x_z:
+    desc: 绕 X 轴旋转 angle_deg（×10000°）后的 Z 分量
+    params:
+      angle_deg: 角度 ×10000
+    returns: y*sin + z*cos，×10000
+  quat_sin_half:
+    desc: 用于 Display Entity Y 轴四元数的 sin(angle/2)，×1000
+    params:
+      angle_deg_fx: 完整旋转角度 ×10000
+    returns: sin(angle/2)，×1000
+  quat_cos_half:
+    desc: 用于 Display Entity Y 轴四元数的 cos(angle/2)，×1000
+    params:
+      angle_deg_fx: 完整旋转角度 ×10000
+    returns: cos(angle/2)，×1000
+  billboard_y:
+    desc: 计算朝向玩家的广告牌 Y 轴旋转角度
+    params:
+      player_yaw_fx: "玩家偏航角 ×10000（来自实体 NBT Rotation[0]）"
+    returns: "广告牌 Y 旋转 ×10000，范围 [0, 3600000)"
+  lerp_angle:
+    desc: 在两个角度（×10000）之间沿最短弧线性插值
+    params:
+      a_fx: 起始角度 ×10000
+      b_fx: 终止角度 ×10000
+      t: 插值系数 ×10000（0 = a，10000 = b）
+    returns: 插值角度 ×10000
+  mat3_mul_elem:
+    desc: "计算 3×3 矩阵乘积 A×B 的元素 C[row][col]（×10000）"
+    params:
+      a00: "A[0,0] … a22: A[2,2]（9 个行主序元素，×10000）"
+      b00: "B[0,0] … b22: B[2,2]（9 个行主序元素，×10000）"
+      row: 目标行索引（0–2）
+      col: 目标列索引（0–2）
+    returns: "C[row][col]，×10000"
+  mat3_mul_vec3_elem:
+    desc: 计算 3×3 矩阵与列向量乘积 A×v 的一个分量
+    params:
+      a00: A 的 9 个行主序元素，×10000
+      comp: 输出分量索引（0=x, 1=y, 2=z）
+    returns: "(A×v)[comp]，×10000"
+  mat4_mul_elem:
+    desc: "计算 4×4 矩阵乘积 A×B 的元素 C[row][col]（×10000）"
+    params:
+      a00: A 的 16 个行主序元素，×10000
+      b00: B 的 16 个行主序元素，×10000
+      row: 目标行索引（0–3）
+      col: 目标列索引（0–3）
+    returns: "C[row][col]，×10000"
+  mat4_mul_vec4_elem:
+    desc: 计算 4×4 矩阵与齐次向量乘积 A×v 的一个分量
+    params:
+      a00: A 的 16 个行主序元素，×10000
+      comp: 输出分量索引（0=x, 1=y, 2=z, 3=w）
+    returns: "(A×v)[comp]，×10000"
+
+signal:
+  uniform_int:
+    desc: "返回 [lo, hi] 内的均匀随机整数（使用 LCG 随机数生成器）"
+    params:
+      seed: 任意整数种子
+      lo: 下界（含）
+      hi: 上界（含）
+    returns: "[lo, hi] 内的伪随机整数"
+  uniform_frac:
+    desc: "返回 [0, 10000] 内的均匀随机分数（×10000 精度）"
+    params:
+      seed: 任意整数种子
+    returns: "[0, 10000] 内的伪随机整数"
+  normal_approx12:
+    desc: 使用 Irwin-Hall 方法（12 个均匀采样之和）近似 N(0,1) 变量
+    params:
+      seed: 任意整数种子
+    returns: "近似 N(0,1) 采样值 ×10000，范围约 [-60000, 60000]"
+  exp_dist_approx:
+    desc: 从速率为 lambda_fx 的指数分布中采样（结果上限为 100000）
+    params:
+      seed: 任意整数种子
+      lambda_fx: 速率参数 ×10000（如 10000 = 速率 1.0）
+    returns: 指数分布变量 ×10000，上限 100000
+  bernoulli:
+    desc: 以 p_fx/10000 的概率返回 1，否则返回 0
+    params:
+      seed: 任意整数种子
+      p_fx: 概率 ×10000（如 5000 = 50%，1000 = 10%）
+    returns: 以给定概率返回 1，否则返回 0
+  weighted2:
+    desc: 按权重 w0、w1 随机选择 0 或 1
+    params:
+      seed: 任意整数种子
+      w0: 结果 0 的权重
+      w1: 结果 1 的权重
+    returns: 按权重比例采样的 0 或 1
+  weighted3:
+    desc: 按权重 w0、w1、w2 随机选择 0、1 或 2
+    params:
+      seed: 任意整数种子
+      w0: 结果 0 的权重
+      w1: 结果 1 的权重
+      w2: 结果 2 的权重
+    returns: 按权重比例采样的 0、1 或 2
+  gamma_sample:
+    desc: 从 Gamma(k, θ) 分布中采样（支持整数 k = 1..5）
+    params:
+      shape_k: 形状参数 k ×10000（如 20000 = k=2）
+      scale_theta: 尺度参数 θ ×10000（如 10000 = θ=1.0）
+      seed: 任意整数种子
+    returns: Gamma 分布变量 ×10000
+  poisson_sample:
+    desc: 使用 Knuth 算法从 Poisson(λ) 分布中采样（λ ≤ 20 时效果最佳）
+    params:
+      lambda: 速率参数 ×10000（如 30000 = λ=3.0）
+      seed: 任意整数种子
+    returns: Poisson 计数（普通整数，非 ×10000）
+  geometric_sample:
+    desc: 从几何分布 Geometric(p) 中采样（首次成功前失败次数）
+    params:
+      p_success: 成功概率 ×10000（如 5000 = p=0.5）
+      seed: 任意整数种子
+    returns: 非负整数失败次数
+  negative_binomial_sample:
+    desc: 从负二项分布 NegBin(r, p) 中采样（r 次成功前的总失败次数）
+    params:
+      r: 成功次数（普通整数，如 1, 2, 3）
+      p_success: 成功概率 ×10000
+      seed: 任意整数种子
+    returns: 总失败次数
+  dft_real:
+    desc: 计算最多 8 个样本的实值信号第 k 个 DFT 频段实部
+    params:
+      s0: "样本 0 ×10000  …  s7: 样本 7 ×10000"
+      n: 样本数（1–8）
+      k: 频段索引（0 到 n−1）
+    returns: DFT 第 k 频段实部，×10000
+  dft_imag:
+    desc: 计算最多 8 个样本的实值信号第 k 个 DFT 频段虚部
+    params:
+      s0: "样本 0 ×10000  …  s7: 样本 7 ×10000"
+      n: 样本数（1–8）
+      k: 频段索引
+    returns: DFT 第 k 频段虚部，×10000（使用负正弦约定）
+  dft_magnitude:
+    desc: 计算 DFT 第 k 频段的幅度 sqrt(re² + im²)，×10000
+    params:
+      s0: "样本 0 ×10000  …  s7: 样本 7 ×10000"
+      n: 样本数
+      k: 频段索引
+    returns: 第 k 频段幅度，×10000
+
+parabola:
+  parabola_gravity:
+    desc: 每 tick 的 Minecraft 重力加速度（×10000，固定为 800）
+    returns: "800"
+  parabola_gravity_half:
+    desc: 每 tick 重力加速度的一半（用于位移公式）
+    returns: "400"
+  parabola_vx:
+    desc: 计算在 ticks 个 tick 内水平移动 dx 格所需的初始 X 速度（×10000）
+    params:
+      dx: X 方向位移（格）
+      ticks: 飞行时间（tick）
+    returns: 初始 X 速度 ×10000；ticks ≤ 0 时返回 0
+  parabola_vy:
+    desc: 计算在 ticks 个 tick 内垂直移动 dy 格所需的初始 Y 速度（×10000）
+    params:
+      dy: 垂直位移（格，正值向上）
+      ticks: 飞行时间（tick）
+    returns: 初始 Y 速度 ×10000；ticks ≤ 0 时返回 0
+  parabola_vz:
+    desc: 计算在 ticks 个 tick 内水平移动 dz 格所需的初始 Z 速度（×10000）
+    params:
+      dz: Z 方向位移（格）
+      ticks: 飞行时间（tick）
+    returns: 初始 Z 速度 ×10000；ticks ≤ 0 时返回 0
+  parabola_speed_xz:
+    desc: 计算到达 (dx, dz) 所需的水平速度大小（×10000）
+    params:
+      dx: X 位移（格）
+      dz: Z 位移（格）
+      ticks: 飞行时间（tick）
+    returns: 水平发射速度 ×10000；ticks ≤ 0 时返回 0
+  parabola_x:
+    desc: 在 t tick 时的 X 位置（格）
+    params:
+      vx0: 初始 X 速度 ×10000
+      t: 已过 tick 数
+    returns: X 位移（格）
+  parabola_y:
+    desc: 在 t tick 时的 Y 位置（格）
+    params:
+      vy0: 初始 Y 速度 ×10000
+      t: 已过 tick 数
+    returns: Y 位移（格，正值向上）
+  parabola_z:
+    desc: 在 t tick 时的 Z 位置（格）
+    params:
+      vz0: 初始 Z 速度 ×10000
+      t: 已过 tick 数
+    returns: Z 位移（格）
+  parabola_flight_time:
+    desc: 估算抛体返回发射高度时的 tick 数
+    params:
+      vy0: 初始 Y 速度 ×10000
+    returns: 飞行时间（tick）；vy0 ≤ 0 时返回 0
+  parabola_max_height:
+    desc: 抛体高出发射点的最大高度（格）
+    params:
+      vy0: 初始 Y 速度 ×10000
+    returns: 顶点高度（格）；vy0 ≤ 0 时返回 0
+  parabola_step_vx:
+    desc: 对 X 速度施加一 tick 阻力
+    params:
+      vx: 当前 X 速度 ×10000
+      drag: 阻力系数 ×10000（如 9900 = 0.99 箭矢）
+    returns: 新 X 速度 ×10000
+  parabola_step_vy:
+    desc: 对 Y 速度先施加重力再施加阻力（一 tick）
+    params:
+      vy: 当前 Y 速度 ×10000
+      drag: 阻力系数 ×10000
+    returns: 新 Y 速度 ×10000
+  parabola_step_vz:
+    desc: 对 Z 速度施加一 tick 阻力
+    params:
+      vz: 当前 Z 速度 ×10000
+      drag: 阻力系数 ×10000
+    returns: 新 Z 速度 ×10000
+  parabola_ticks_for_range:
+    desc: 根据水平距离估算飞行 tick 数（启发式，约 0.8 格/tick 水平速度）
+    params:
+      range: 水平距离（格）
+    returns: 估算 tick 数（最小为 1）
+  parabola_in_range:
+    desc: 检查目标是否在水平射程内
+    params:
+      dx: 到目标的 X 位移（格）
+      dz: 到目标的 Z 位移（格）
+      max_range: 最大射程（格）
+    returns: dist(dx,dz) ≤ max_range 返回 1，否则返回 0
+
+quaternion:
+  quat_identity_w:
+    desc: 单位四元数 (0,0,0,1) 的 W 分量
+    returns: "10000"
+  quat_identity_x:
+    desc: 单位四元数的 X 分量
+    returns: "0"
+  quat_identity_y:
+    desc: 单位四元数的 Y 分量
+    returns: "0"
+  quat_identity_z:
+    desc: 单位四元数的 Z 分量
+    returns: "0"
+  quat_axis_x_x:
+    desc: 绕 X 轴旋转 angle_deg° 的四元数 X 分量
+    params:
+      angle_deg: 旋转角度（整数，度）
+    returns: sin(angle/2) ×10000
+  quat_axis_x_y:
+    desc: 绕 X 轴旋转 angle_deg° 的四元数 Y 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: "0"
+  quat_axis_x_z:
+    desc: 绕 X 轴旋转 angle_deg° 的四元数 Z 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: "0"
+  quat_axis_x_w:
+    desc: 绕 X 轴旋转 angle_deg° 的四元数 W 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: cos(angle/2) ×10000
+  quat_axis_y_x:
+    desc: 绕 Y 轴旋转 angle_deg° 的四元数 X 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: "0"
+  quat_axis_y_y:
+    desc: 绕 Y 轴旋转 angle_deg° 的四元数 Y 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: sin(angle/2) ×10000
+  quat_axis_y_z:
+    desc: 绕 Y 轴旋转 angle_deg° 的四元数 Z 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: "0"
+  quat_axis_y_w:
+    desc: 绕 Y 轴旋转 angle_deg° 的四元数 W 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: cos(angle/2) ×10000
+  quat_axis_z_x:
+    desc: 绕 Z 轴旋转 angle_deg° 的四元数 X 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: "0"
+  quat_axis_z_y:
+    desc: 绕 Z 轴旋转 angle_deg° 的四元数 Y 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: "0"
+  quat_axis_z_z:
+    desc: 绕 Z 轴旋转 angle_deg° 的四元数 Z 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: sin(angle/2) ×10000
+  quat_axis_z_w:
+    desc: 绕 Z 轴旋转 angle_deg° 的四元数 W 分量
+    params:
+      angle_deg: 旋转角度（度）
+    returns: cos(angle/2) ×10000
+  quat_mul_x:
+    desc: 四元数乘积 a×b 的 X 分量（所有分量 ×10000）
+    params:
+    returns: (a×b) 的 X 分量 ×10000
+  quat_mul_y:
+    desc: 四元数乘积 a×b 的 Y 分量
+    returns: (a×b) 的 Y 分量 ×10000
+  quat_mul_z:
+    desc: 四元数乘积 a×b 的 Z 分量
+    returns: (a×b) 的 Z 分量 ×10000
+  quat_mul_w:
+    desc: 四元数乘积 a×b 的 W 分量
+    returns: (a×b) 的 W 分量 ×10000
+  quat_conj_x:
+    desc: 四元数共轭的 X 分量
+    params:
+    returns: -qx
+  quat_conj_y:
+    desc: 四元数共轭的 Y 分量
+    returns: -qy
+  quat_conj_z:
+    desc: 四元数共轭的 Z 分量
+    returns: -qz
+  quat_conj_w:
+    desc: 四元数共轭的 W 分量（不变）
+    returns: qw
+  quat_mag_sq:
+    desc: 四元数的模平方（×10000）；单位四元数应等于 10000
+    params:
+    returns: qx²/10000 + qy²/10000 + qz²/10000 + qw²/10000
+  quat_dot:
+    desc: 两个四元数的点积（×10000）
+    params:
+    returns: ax*bx/10000 + ay*by/10000 + az*bz/10000 + aw*bw/10000
+  quat_slerp_x:
+    desc: 两个四元数在 t/1000 处球面线性插值的 X 分量（LERP + 归一化近似）
+    params:
+      t: 插值系数 ×1000（0=a，1000=b）
+    returns: 插值四元数的 X 分量 ×10000
+  quat_slerp_y:
+    desc: 两个四元数在 t/1000 处球面线性插值的 Y 分量
+    params:
+    returns: 插值四元数的 Y 分量 ×10000
+  quat_slerp_z:
+    desc: 两个四元数在 t/1000 处球面线性插值的 Z 分量
+    params:
+    returns: 插值四元数的 Z 分量 ×10000
+  quat_slerp_w:
+    desc: 两个四元数在 t/1000 处球面线性插值的 W 分量
+    params:
+    returns: 插值四元数的 W 分量 ×10000
+  quat_euler_x:
+    desc: 欧拉角（YXZ 顺序，MC 约定）转换为四元数的 X 分量
+    params:
+      yaw: Y 轴旋转（度）
+      pitch: X 轴旋转（度）
+      roll: Z 轴旋转（度）
+    returns: X 分量 ×10000
+  quat_euler_y:
+    desc: 欧拉角（YXZ 顺序）转换为四元数的 Y 分量
+    params:
+      yaw: Y 轴旋转（度）
+      pitch: X 轴旋转（度）
+      roll: Z 轴旋转（度）
+    returns: Y 分量 ×10000
+  quat_euler_z:
+    desc: 欧拉角（YXZ 顺序）转换为四元数的 Z 分量
+    params:
+      yaw: Y 轴旋转（度）
+      pitch: X 轴旋转（度）
+      roll: Z 轴旋转（度）
+    returns: Z 分量 ×10000
+  quat_euler_w:
+    desc: 欧拉角（YXZ 顺序）转换为四元数的 W 分量
+    params:
+      yaw: Y 轴旋转（度）
+      pitch: X 轴旋转（度）
+      roll: Z 轴旋转（度）
+    returns: W 分量 ×10000

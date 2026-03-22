@@ -7,6 +7,8 @@
 module library
 
 /// Sends a plain white chat message to a player or selector.
+///
+/// @since 1.0.0
 /// @param p    Recipient selector
 /// @param msg  Plain text message content
 /// @example
@@ -16,17 +18,26 @@ fn dialog_say(p: selector, msg: string) {
 }
 
 /// Broadcasts a plain white chat message to all players.
+///
+/// @since 1.0.0
 /// @param msg  Plain text message content
+/// @example
+/// dialog_broadcast("Server restart in 60 seconds")
 fn dialog_broadcast(msg: string) {
     raw("tellraw @a {\"text\":\"{msg}\"}");
 }
 
 /// Sends a colored chat message to a player or selector.
+///
 /// Color mapping: `0=white`, `1=red`, `2=green`, `3=gold`, `4=aqua`.
 /// Any other value falls back to white.
+///
+/// @since 1.0.0
 /// @param p      Recipient selector
 /// @param msg    Plain text message content
-/// @param color  Color selector integer
+/// @param color  Color selector integer (0=white, 1=red, 2=green, 3=gold, 4=aqua)
+/// @example
+/// dialog_say_color(@s, "You died!", 1)
 fn dialog_say_color(p: selector, msg: string, color: int) {
     if (color == 1) {
         raw("tellraw {p} {\"text\":\"{msg}\",\"color\":\"red\"}");
@@ -48,23 +59,35 @@ fn dialog_say_color(p: selector, msg: string, color: int) {
 }
 
 /// Displays a title and subtitle on a player's screen.
+///
+/// @since 1.0.0
 /// @param p         Recipient selector
 /// @param title     Large title text
 /// @param subtitle  Subtitle text shown below the title
+/// @example
+/// dialog_title(@s, "Stage 2", "Defeat the boss")
 fn dialog_title(p: selector, title: string, subtitle: string) {
     raw("title {p} title {\"text\":\"{title}\"}");
     raw("title {p} subtitle {\"text\":\"{subtitle}\"}");
 }
 
 /// Clears any currently displayed title for the target selector.
+///
+/// @since 1.0.0
 /// @param p  Recipient selector
+/// @example
+/// dialog_title_clear(@s)
 fn dialog_title_clear(p: selector) {
     raw("title {p} clear");
 }
 
 /// Displays a short message in the player's actionbar.
+///
+/// @since 1.0.0
 /// @param p    Recipient selector
 /// @param msg  Plain text message content
+/// @example
+/// dialog_actionbar(@s, "Mana: 80/100")
 fn dialog_actionbar(p: selector, msg: string) {
     raw("title {p} actionbar {\"text\":\"{msg}\"}");
 }

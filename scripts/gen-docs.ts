@@ -34,12 +34,30 @@ const ZH_OUT     = path.join(DOCS_ROOT, 'zh', 'stdlib');
 
 // Modules to process (filename without .mcrs → output basename)
 const TARGET_MODULES = [
+  // Core utilities
   'math',
   'vec',
   'strings',
-  'map',
   'result',
+  'bits',
+  'random',
+  // Data structures
+  'map',
+  'set_int',
+  'heap',
+  'sort',
+  'bigint',
+  // Game systems
   'timer',
+  'scheduler',
+  'state',
+  'dialog',
+  'ecs',
+  'player',
+  'effects',
+  'combat',
+  'physics',
+  // MC-specific
   'bossbar',
   'tags',
   'teams',
@@ -49,7 +67,22 @@ const TARGET_MODULES = [
   'interactions',
   'inventory',
   'particles',
-  'dialog',
+  // Math / DSP
+  'easing',
+  'geometry',
+  'noise',
+  'color',
+  'fft',
+  'ode',
+  'signal',
+  'parabola',
+  // Linear algebra
+  'linalg',
+  'matrix',
+  'quaternion',
+  // Pathfinding / AI
+  'graph',
+  'pathfind',
 ];
 
 // ─── Types ───────────────────────────────────────────────────────────────────

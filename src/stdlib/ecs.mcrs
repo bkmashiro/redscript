@@ -55,7 +55,12 @@ let ECS_COMP_DAMAGE: int = 3
 // Registry is a 16-element int[] where registry[comp_id] == 1 means registered.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ecs_registry_new(): allocate a blank 16-slot registry
+/// Allocate a blank 16-slot component registry.
+///
+/// @since 2.0.0
+/// @returns  A new `int[]` of length 16 with all slots set to `0`
+/// @example
+/// let reg: int[] = ecs_registry_new()
 fn ecs_registry_new(): int[] {
     let reg: int[] = []
     let i: int = 0
@@ -66,7 +71,14 @@ fn ecs_registry_new(): int[] {
     return reg
 }
 
-// ecs_register(reg, comp_id): mark comp_id as registered; returns updated reg
+/// Mark `comp_id` as registered in the registry and return the updated registry.
+///
+/// @since 2.0.0
+/// @param reg      Registry array from `ecs_registry_new`
+/// @param comp_id  Component type ID in range [0, 15]
+/// @returns        Updated registry array
+/// @example
+/// reg = ecs_register(reg, ECS_COMP_HEALTH)
 fn ecs_register(reg: int[], comp_id: int): int[] {
     if (comp_id >= 0) {
         if (comp_id < 16) {
@@ -76,7 +88,14 @@ fn ecs_register(reg: int[], comp_id: int): int[] {
     return reg
 }
 
-// ecs_is_registered(reg, comp_id): 1 if registered, 0 otherwise
+/// Check whether `comp_id` is registered.
+///
+/// @since 2.0.0
+/// @param reg      Registry array from `ecs_registry_new`
+/// @param comp_id  Component type ID in range [0, 15]
+/// @returns        `1` if registered, `0` otherwise
+/// @example
+/// if (ecs_is_registered(reg, ECS_COMP_HEALTH) == 1) { }
 fn ecs_is_registered(reg: int[], comp_id: int): int {
     if (comp_id >= 0) {
         if (comp_id < 16) {
@@ -96,8 +115,14 @@ fn ecs_is_registered(reg: int[], comp_id: int): int {
 //   [3..7] reserved   — 0
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ecs_health_init(entity_score, max_hp): create a health component state
-// Sets current_hp = max_hp (full health at spawn)
+/// Create a health component state with `current_hp = max_hp` (full health).
+///
+/// @since 2.0.0
+/// @param entity_score  Scoreboard score identifying the entity
+/// @param max_hp        Maximum hit points
+/// @returns             New 8-element health component state array
+/// @example
+/// let hp: int[] = ecs_health_init(42, 100)
 fn ecs_health_init(entity_score: int, max_hp: int): int[] {
     let s: int[] = []
     s.push(entity_score)
@@ -111,17 +136,36 @@ fn ecs_health_init(entity_score: int, max_hp: int): int[] {
     return s
 }
 
-// ecs_health_get(state): return current HP
+/// Return current HP from a health component state.
+///
+/// @since 2.0.0
+/// @param state  Health component state from `ecs_health_init`
+/// @returns      Current hit point value
+/// @example
+/// let hp: int = ecs_health_get(state)
 fn ecs_health_get(state: int[]): int {
     return state[1]
 }
 
-// ecs_health_max(state): return maximum HP
+/// Return maximum HP from a health component state.
+///
+/// @since 2.0.0
+/// @param state  Health component state from `ecs_health_init`
+/// @returns      Maximum hit point value
+/// @example
+/// let max: int = ecs_health_max(state)
 fn ecs_health_max(state: int[]): int {
     return state[2]
 }
 
-// ecs_health_set(state, hp): set current HP (clamped to [0, max]), return state
+/// Set current HP (clamped to [0, max]) and return the updated state.
+///
+/// @since 2.0.0
+/// @param state  Health component state from `ecs_health_init`
+/// @param hp     New HP value (clamped to valid range automatically)
+/// @returns      Updated state array
+/// @example
+/// state = ecs_health_set(state, 50)
 fn ecs_health_set(state: int[], hp: int): int[] {
     let clamped: int = hp
     if (clamped < 0) { clamped = 0 }
@@ -130,7 +174,14 @@ fn ecs_health_set(state: int[], hp: int): int[] {
     return state
 }
 
-// ecs_health_damage(state, amount): subtract amount from HP, clamp to 0
+/// Subtract `amount` from HP (clamped to 0) and return the updated state.
+///
+/// @since 2.0.0
+/// @param state   Health component state
+/// @param amount  Damage amount to subtract (positive integer)
+/// @returns       Updated state array
+/// @example
+/// state = ecs_health_damage(state, 30)
 fn ecs_health_damage(state: int[], amount: int): int[] {
     let next: int = state[1] - amount
     if (next < 0) { next = 0 }
@@ -138,7 +189,14 @@ fn ecs_health_damage(state: int[], amount: int): int[] {
     return state
 }
 
-// ecs_health_heal(state, amount): add amount to HP, clamp to max
+/// Add `amount` to HP (clamped to max) and return the updated state.
+///
+/// @since 2.0.0
+/// @param state   Health component state
+/// @param amount  Healing amount to add (positive integer)
+/// @returns       Updated state array
+/// @example
+/// state = ecs_health_heal(state, 20)
 fn ecs_health_heal(state: int[], amount: int): int[] {
     let next: int = state[1] + amount
     if (next > state[2]) { next = state[2] }
@@ -146,14 +204,25 @@ fn ecs_health_heal(state: int[], amount: int): int[] {
     return state
 }
 
-// ecs_health_is_dead(state): 1 if HP <= 0, else 0
+/// Return `1` if the entity HP is at or below zero, otherwise `0`.
+///
+/// @since 2.0.0
+/// @param state  Health component state
+/// @returns      `1` if dead, `0` if alive
+/// @example
+/// if (ecs_health_is_dead(state) == 1) { /* handle death */ }
 fn ecs_health_is_dead(state: int[]): int {
     if (state[1] <= 0) { return 1 }
     return 0
 }
 
-// ecs_health_pct(state): HP percentage as fixed-point ×10000
-// e.g. 50 HP out of 100 max → 5000  (= 50.00%)
+/// Return HP as a percentage in fixed-point ×10000 (e.g., `5000` = 50.00%).
+///
+/// @since 2.0.0
+/// @param state  Health component state
+/// @returns      `current_hp * 10000 / max_hp`, or `0` if max_hp is zero
+/// @example
+/// let pct: int = ecs_health_pct(state)
 fn ecs_health_pct(state: int[]): int {
     if (state[2] <= 0) { return 0 }
     return state[1] * 10000 / state[2]
@@ -171,7 +240,15 @@ fn ecs_health_pct(state: int[]): int {
 // Fixed-point convention: 1000 = 1.0 block/tick
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ecs_vel_init(vx, vy, vz): create a velocity component state
+/// Create a velocity component state with the given initial velocities.
+///
+/// @since 2.0.0
+/// @param vx  X velocity ×1000 fixed-point (1000 = 1.0 block/tick)
+/// @param vy  Y velocity ×1000 fixed-point
+/// @param vz  Z velocity ×1000 fixed-point
+/// @returns   New 8-element velocity component state array
+/// @example
+/// let vel: int[] = ecs_vel_init(1000, 0, 500)
 fn ecs_vel_init(vx: int, vy: int, vz: int): int[] {
     let s: int[] = []
     s.push(vx)
@@ -185,22 +262,43 @@ fn ecs_vel_init(vx: int, vy: int, vz: int): int[] {
     return s
 }
 
-// ecs_vel_get_x(state): return vx
+/// Return X velocity from a velocity component state.
+///
+/// @since 2.0.0
+/// @param state  Velocity component state
+/// @returns      X velocity ×1000 fixed-point
 fn ecs_vel_get_x(state: int[]): int {
     return state[0]
 }
 
-// ecs_vel_get_y(state): return vy
+/// Return Y velocity from a velocity component state.
+///
+/// @since 2.0.0
+/// @param state  Velocity component state
+/// @returns      Y velocity ×1000 fixed-point
 fn ecs_vel_get_y(state: int[]): int {
     return state[1]
 }
 
-// ecs_vel_get_z(state): return vz
+/// Return Z velocity from a velocity component state.
+///
+/// @since 2.0.0
+/// @param state  Velocity component state
+/// @returns      Z velocity ×1000 fixed-point
 fn ecs_vel_get_z(state: int[]): int {
     return state[2]
 }
 
-// ecs_vel_set(state, vx, vy, vz): set all velocity components, return state
+/// Set all velocity components and return the updated state.
+///
+/// @since 2.0.0
+/// @param state  Velocity component state
+/// @param vx     New X velocity ×1000
+/// @param vy     New Y velocity ×1000
+/// @param vz     New Z velocity ×1000
+/// @returns      Updated state array
+/// @example
+/// state = ecs_vel_set(state, 500, 1200, 0)
 fn ecs_vel_set(state: int[], vx: int, vy: int, vz: int): int[] {
     state[0] = vx
     state[1] = vy
@@ -208,9 +306,16 @@ fn ecs_vel_set(state: int[], vx: int, vy: int, vz: int): int[] {
     return state
 }
 
-// ecs_vel_speed(state): magnitude of velocity vector ×1000
-// Uses sqrt_fixed: speed = sqrt(vx² + vy² + vz²) in fixed-point units
-// e.g. ecs_vel_speed([3000, 4000, 0, ...]) == 5000
+/// Return the speed (magnitude) of the velocity vector ×1000.
+///
+/// Uses `sqrt_fixed` from `math.mcrs`. For example,
+/// `ecs_vel_speed([3000, 4000, 0, ...])` returns approximately `5000`.
+///
+/// @since 2.0.0
+/// @param state  Velocity component state
+/// @returns      `sqrt(vx² + vy² + vz²)` in ×1000 fixed-point
+/// @example
+/// let speed: int = ecs_vel_speed(vel_state)
 fn ecs_vel_speed(state: int[]): int {
     let vx: int = state[0]
     let vy: int = state[1]
@@ -221,15 +326,27 @@ fn ecs_vel_speed(state: int[]): int {
     return sqrt_fixed(mag_sq)
 }
 
-// ecs_vel_apply_gravity(state, gravity_fx): subtract gravity from vy
-// gravity_fx is fixed-point ×1000 (e.g. 980 ≈ 0.980 blocks/tick², roughly 0.08g per tick)
+/// Apply gravity by subtracting `gravity_fx` from the Y velocity each tick.
+///
+/// @since 2.0.0
+/// @param state       Velocity component state
+/// @param gravity_fx  Gravity acceleration ×1000 per tick (e.g. `980` ≈ 0.98 blocks/tick²)
+/// @returns           Updated state array
+/// @example
+/// vel_state = ecs_vel_apply_gravity(vel_state, 980)
 fn ecs_vel_apply_gravity(state: int[], gravity_fx: int): int[] {
     state[1] = state[1] - gravity_fx
     return state
 }
 
-// ecs_vel_damp(state, factor_fx): multiply each velocity component by factor_fx/10000
-// factor_fx: friction factor ×10000 (e.g. 8000 = 0.80 damping)
+/// Apply a friction damping factor to all velocity components.
+///
+/// @since 2.0.0
+/// @param state      Velocity component state
+/// @param factor_fx  Friction factor ×10000 (e.g. `8000` = 0.80 damping)
+/// @returns          Updated state array with each component multiplied by `factor_fx/10000`
+/// @example
+/// vel_state = ecs_vel_damp(vel_state, 9000)
 fn ecs_vel_damp(state: int[], factor_fx: int): int[] {
     state[0] = state[0] * factor_fx / 10000
     state[1] = state[1] * factor_fx / 10000

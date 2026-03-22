@@ -15,7 +15,14 @@ module library
 
 // ─── Per-player tasks ─────────────────────────────────────────────────────────
 
-/// Schedule slot task_id (0..7) to fire after `delay` ticks for player p.
+/// Schedule slot `task_id` (0–7) to fire after `delay` ticks for player `p`.
+///
+/// @since 1.0.0
+/// @param p        Recipient player or entity selector
+/// @param task_id  Slot index in range [0, 7]
+/// @param delay    Number of ticks to wait before firing
+/// @example
+/// task_schedule(@s, 0, 40)
 fn task_schedule(p: selector, task_id: int, delay: int) {
     if (task_id == 0) {
         scoreboard_set(p, "rs.t0", delay);
@@ -48,7 +55,13 @@ fn task_schedule(p: selector, task_id: int, delay: int) {
     }
 }
 
-/// Cancel slot task_id for player p (zeroes the counter).
+/// Cancel slot `task_id` for player `p` (zeroes the counter).
+///
+/// @since 1.0.0
+/// @param p        Recipient player or entity selector
+/// @param task_id  Slot index in range [0, 7]
+/// @example
+/// task_cancel(@s, 0)
 fn task_cancel(p: selector, task_id: int) {
     if (task_id == 0) {
         scoreboard_set(p, "rs.t0", 0);
@@ -81,8 +94,16 @@ fn task_cancel(p: selector, task_id: int) {
     }
 }
 
-/// Returns 1 if slot task_id is ready (counter reached 1 on last tick), 0 otherwise.
-/// Automatically clears the slot when ready.
+/// Returns `1` if slot `task_id` fired on this tick (counter reached 1), `0` otherwise.
+///
+/// Automatically clears the slot once it fires so subsequent calls return `0`.
+///
+/// @since 1.0.0
+/// @param p        Player or entity selector to check
+/// @param task_id  Slot index in range [0, 7]
+/// @returns        `1` when the task is ready, `0` otherwise
+/// @example
+/// if (task_ready(@s, 0) == 1) { /* handle event */ }
 fn task_ready(p: selector, task_id: int) -> int {
     let val: int = 0;
     if (task_id == 0) {
@@ -123,7 +144,16 @@ fn task_ready(p: selector, task_id: int) -> int {
 
 // ─── Global tasks (bound to #rs fake-player) ──────────────────────────────────
 
-/// Schedule global slot task_id (0..7) to fire after `delay` ticks.
+/// Schedule global slot `task_id` (0–7) to fire after `delay` ticks.
+///
+/// Global tasks are stored on the `#rs` fake-player and are not bound to any
+/// specific player entity.
+///
+/// @since 1.0.0
+/// @param task_id  Slot index in range [0, 7]
+/// @param delay    Number of ticks to wait before firing
+/// @example
+/// gtask_schedule(0, 200)
 fn gtask_schedule(task_id: int, delay: int) {
     if (task_id == 0) {
         scoreboard_set("#rs", "rs.g0", delay);
@@ -156,7 +186,12 @@ fn gtask_schedule(task_id: int, delay: int) {
     }
 }
 
-/// Cancel global slot task_id.
+/// Cancel global slot `task_id` by zeroing its counter.
+///
+/// @since 1.0.0
+/// @param task_id  Slot index in range [0, 7]
+/// @example
+/// gtask_cancel(0)
 fn gtask_cancel(task_id: int) {
     if (task_id == 0) {
         scoreboard_set("#rs", "rs.g0", 0);
@@ -189,8 +224,15 @@ fn gtask_cancel(task_id: int) {
     }
 }
 
-/// Returns 1 if global slot task_id is ready, 0 otherwise.
-/// Automatically clears the slot when ready.
+/// Returns `1` if global slot `task_id` fired this tick, `0` otherwise.
+///
+/// Automatically clears the slot once it fires.
+///
+/// @since 1.0.0
+/// @param task_id  Slot index in range [0, 7]
+/// @returns        `1` when the task is ready, `0` otherwise
+/// @example
+/// if (gtask_ready(0) == 1) { /* handle global event */ }
 fn gtask_ready(task_id: int) -> int {
     let val: int = 0;
     if (task_id == 0) {
@@ -231,8 +273,15 @@ fn gtask_ready(task_id: int) -> int {
 
 // ─── Tick driver ──────────────────────────────────────────────────────────────
 
-/// Decrement all active per-player timers by 1.
-/// Call this inside your @tick function (executed as @a).
+/// Decrement all active per-player and global timers by 1 each tick.
+///
+/// Call this inside your `@tick` function (executed as `@a`). Counters are
+/// clamped to 0 so they never go negative.
+///
+/// @since 1.0.0
+/// @example
+/// // In your @tick mcfunction:
+/// scheduler_tick()
 fn scheduler_tick() {
     // Per-player slots
     raw("execute as @a run scoreboard players remove @s rs.t0 1");

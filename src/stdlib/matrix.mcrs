@@ -15,14 +15,28 @@ module library;
 
 // ─── 2D transform helpers ────────────────────────────────────────────────────
 
-// rotate2d_x: x component after 2D rotation by angle_deg×10000
-// rotate2d_x(x, y, 450000) ≈ x*cos45 - y*sin45
+/// X component after 2D rotation of `(x, y)` by `angle_deg` (×10000).
+///
+/// @since 2.0.0
+/// @param x          Input X coordinate ×10000
+/// @param y          Input Y coordinate ×10000
+/// @param angle_deg  Angle in degrees ×10000 (e.g. `450000` = 45°)
+/// @returns          `x*cos(angle) - y*sin(angle)` in ×10000
+/// @example
+/// let rx: int = rotate2d_x(10000, 0, 900000)
 fn rotate2d_x(x: int, y: int, angle_deg: int): int {
     let c: int = cos_fixed(angle_deg / 10000);
     let s: int = sin_fixed(angle_deg / 10000);
     return x * c / 1000 - y * s / 1000;
 }
 
+/// Y component after 2D rotation of `(x, y)` by `angle_deg` (×10000).
+///
+/// @since 2.0.0
+/// @param x          Input X coordinate ×10000
+/// @param y          Input Y coordinate ×10000
+/// @param angle_deg  Angle in degrees ×10000
+/// @returns          `x*sin(angle) + y*cos(angle)` in ×10000
 fn rotate2d_y(x: int, y: int, angle_deg: int): int {
     let c: int = cos_fixed(angle_deg / 10000);
     let s: int = sin_fixed(angle_deg / 10000);
@@ -31,36 +45,86 @@ fn rotate2d_y(x: int, y: int, angle_deg: int): int {
 
 // ─── Scale helpers ────────────────────────────────────────────────────────────
 
-// scale_x(x, sx_fx): scale x by sx_fx (sx_fx ×10000, e.g. 20000 = 2×)
+/// Scale X coordinate by `sx_fx` (×10000).
+///
+/// @since 2.0.0
+/// @param x     Input X value ×10000
+/// @param sx_fx  Scale factor ×10000 (e.g. `20000` = 2×)
+/// @returns      `x * sx_fx / 10000`
 fn scale_x(x: int, sx_fx: int): int { return x * sx_fx / 10000; }
+
+/// Scale Y coordinate by `sy_fx` (×10000).
+///
+/// @since 2.0.0
+/// @param y     Input Y value ×10000
+/// @param sy_fx  Scale factor ×10000
+/// @returns      `y * sy_fx / 10000`
 fn scale_y(y: int, sy_fx: int): int { return y * sy_fx / 10000; }
+
+/// Scale Z coordinate by `sz_fx` (×10000).
+///
+/// @since 2.0.0
+/// @param z     Input Z value ×10000
+/// @param sz_fx  Scale factor ×10000
+/// @returns      `z * sz_fx / 10000`
 fn scale_z(z: int, sz_fx: int): int { return z * sz_fx / 10000; }
 
-// uniform_scale(v, s_fx): apply uniform scale
+/// Apply a uniform scale factor to a single component.
+///
+/// @since 2.0.0
+/// @param v    Input component value ×10000
+/// @param s_fx  Uniform scale factor ×10000
+/// @returns     `v * s_fx / 10000`
 fn uniform_scale(v: int, s_fx: int): int { return v * s_fx / 10000; }
 
 // ─── 3D rotation (Euler angles, Y-up) ────────────────────────────────────────
 
-// rotate_y_x: X component after rotation around Y axis
+/// X component after rotation around the Y axis by `angle_deg` (×10000).
+///
+/// @since 2.0.0
+/// @param x          Input X coordinate ×10000
+/// @param z          Input Z coordinate ×10000
+/// @param angle_deg  Angle in degrees ×10000
+/// @returns          `x*cos(angle) + z*sin(angle)` in ×10000
 fn rotate_y_x(x: int, z: int, angle_deg: int): int {
     let c: int = cos_fixed(angle_deg / 10000);
     let s: int = sin_fixed(angle_deg / 10000);
     return x * c / 1000 + z * s / 1000;
 }
 
+/// Z component after rotation around the Y axis by `angle_deg` (×10000).
+///
+/// @since 2.0.0
+/// @param x          Input X coordinate ×10000
+/// @param z          Input Z coordinate ×10000
+/// @param angle_deg  Angle in degrees ×10000
+/// @returns          `-x*sin(angle) + z*cos(angle)` in ×10000
 fn rotate_y_z(x: int, z: int, angle_deg: int): int {
     let c: int = cos_fixed(angle_deg / 10000);
     let s: int = sin_fixed(angle_deg / 10000);
     return 0 - x * s / 1000 + z * c / 1000;
 }
 
-// rotate_x_y: Y component after rotation around X axis
+/// Y component after rotation around the X axis by `angle_deg` (×10000).
+///
+/// @since 2.0.0
+/// @param y          Input Y coordinate ×10000
+/// @param z          Input Z coordinate ×10000
+/// @param angle_deg  Angle in degrees ×10000
+/// @returns          `y*cos(angle) - z*sin(angle)` in ×10000
 fn rotate_x_y(y: int, z: int, angle_deg: int): int {
     let c: int = cos_fixed(angle_deg / 10000);
     let s: int = sin_fixed(angle_deg / 10000);
     return y * c / 1000 - z * s / 1000;
 }
 
+/// Z component after rotation around the X axis by `angle_deg` (×10000).
+///
+/// @since 2.0.0
+/// @param y          Input Y coordinate ×10000
+/// @param z          Input Z coordinate ×10000
+/// @param angle_deg  Angle in degrees ×10000
+/// @returns          `y*sin(angle) + z*cos(angle)` in ×10000
 fn rotate_x_z(y: int, z: int, angle_deg: int): int {
     let c: int = cos_fixed(angle_deg / 10000);
     let s: int = sin_fixed(angle_deg / 10000);
@@ -77,20 +141,33 @@ fn rotate_x_z(y: int, z: int, angle_deg: int): int {
 //
 // These helpers compute quaternion components (×10000)
 
-// quat_sin_half(angle_deg_fx): sin(angle/2) ×1000
-// angle_deg_fx: degrees ×10000
+/// sin(angle/2) in ×1000 for a Display Entity Y-axis quaternion.
+///
+/// @since 2.0.0
+/// @param angle_deg_fx  Full rotation angle in degrees ×10000
+/// @returns             `sin(angle/2)` in ×1000
 fn quat_sin_half(angle_deg_fx: int): int {
     return sin_fixed(angle_deg_fx / 20000);  // angle/2 in degrees, then /10000 for sin_fixed
 }
 
+/// cos(angle/2) in ×1000 for a Display Entity Y-axis quaternion.
+///
+/// @since 2.0.0
+/// @param angle_deg_fx  Full rotation angle in degrees ×10000
+/// @returns             `cos(angle/2)` in ×1000
 fn quat_cos_half(angle_deg_fx: int): int {
     return cos_fixed(angle_deg_fx / 20000);
 }
 
 // ─── Billboard helpers ────────────────────────────────────────────────────────
 
-// billboard_rotation_y(player_yaw_fx): get Y rotation for a billboard facing player
-// player_yaw_fx: player yaw ×10000 (from entity NBT Rotation[0])
+/// Compute the Y rotation for a billboard that faces the player.
+///
+/// @since 2.0.0
+/// @param player_yaw_fx  Player yaw angle ×10000 (from entity NBT `Rotation[0]`)
+/// @returns              Billboard Y rotation ×10000 (opposite of player yaw, in [0, 3600000))
+/// @example
+/// let by: int = billboard_y(player_yaw)
 fn billboard_y(player_yaw_fx: int): int {
     // Billboard should face opposite direction
     return (player_yaw_fx + 1800000) % 3600000;
@@ -98,7 +175,17 @@ fn billboard_y(player_yaw_fx: int): int {
 
 // ─── Interpolation for smooth animation ──────────────────────────────────────
 
-// lerp_angle(a_fx, b_fx, t): lerp between two angles ×10000, taking shortest path
+/// Interpolate between two angles (×10000) taking the shortest arc.
+///
+/// Normalises the angular difference to [−1800000, 1800000] before interpolating.
+///
+/// @since 2.0.0
+/// @param a_fx  Start angle ×10000
+/// @param b_fx  End angle ×10000
+/// @param t     Interpolation factor ×10000 (0 = a, 10000 = b)
+/// @returns     Interpolated angle ×10000
+/// @example
+/// let a: int = lerp_angle(0, 3600000, 5000)
 fn lerp_angle(a_fx: int, b_fx: int, t: int): int {
     let diff: int = b_fx - a_fx;
     // Normalize to [-1800000, 1800000]
@@ -116,11 +203,17 @@ fn lerp_angle(a_fx: int, b_fx: int, t: int): int {
 //   a10 a11 a12
 //   a20 a21 a22
 
-// mat3_mul: compute one element C[row][col] of a 3×3 matrix product
-// row ∈ {0,1,2}, col ∈ {0,1,2}
-// Pass all 18 components of A and B individually.
-// Returns C[row][col] ×10000
-
+/// Compute element `C[row][col]` of the 3×3 matrix product `A × B`.
+///
+/// All matrix values are ×10000 fixed-point. Pass all 18 components of A and B
+/// individually. `row` and `col` are each in {0, 1, 2}.
+///
+/// @since 2.0.0
+/// @param a00  A[0,0] … a22  A[2,2]  (9 elements, row-major)
+/// @param b00  B[0,0] … b22  B[2,2]  (9 elements, row-major)
+/// @param row  Target row index (0–2)
+/// @param col  Target column index (0–2)
+/// @returns    `C[row][col]` in ×10000
 fn mat3_mul_elem(
     a00: int, a01: int, a02: int,
     a10: int, a11: int, a12: int,
@@ -150,8 +243,13 @@ fn mat3_mul_elem(
     return r0 + r1 + r2;
 }
 
-// mat3_mul_vec3: multiply 3×3 matrix by a column vector (vx, vy, vz) ×10000
-// Returns one component (0=x, 1=y, 2=z) of the result vector ×10000
+/// Compute one component of the 3×3 matrix–vector product `A × v`.
+///
+/// @since 2.0.0
+/// @param a00  A[0,0] … a22  A[2,2]  (9 elements, row-major, ×10000)
+/// @param vx   Vector X ×10000   @param vy  Vector Y ×10000   @param vz  Vector Z ×10000
+/// @param comp  Output component index (0=x, 1=y, 2=z)
+/// @returns     `(A × v)[comp]` in ×10000
 fn mat3_mul_vec3_elem(
     a00: int, a01: int, a02: int,
     a10: int, a11: int, a12: int,
@@ -174,6 +272,16 @@ fn mat3_mul_vec3_elem(
 // mat4_mul_elem: compute one element C[row][col] of a 4×4 matrix product.
 // Row-major, 16+16=32 components. Returns C[row][col] ×10000.
 
+/// Compute element `C[row][col]` of the 4×4 matrix product `A × B`.
+///
+/// Row-major layout, all values ×10000. `row` and `col` are each in {0, 1, 2, 3}.
+///
+/// @since 2.0.0
+/// @param a00  A[0,0] … a33  A[3,3]  (16 elements, row-major, ×10000)
+/// @param b00  B[0,0] … b33  B[3,3]  (16 elements, row-major, ×10000)
+/// @param row  Target row index (0–3)
+/// @param col  Target column index (0–3)
+/// @returns    `C[row][col]` in ×10000
 fn mat4_mul_elem(
     a00: int, a01: int, a02: int, a03: int,
     a10: int, a11: int, a12: int, a13: int,
@@ -200,8 +308,13 @@ fn mat4_mul_elem(
     return ar0 * bc0 / 10000 + ar1 * bc1 / 10000 + ar2 * bc2 / 10000 + ar3 * bc3 / 10000;
 }
 
-// mat4_mul_vec4_elem: multiply 4×4 matrix by homogeneous vector (vx,vy,vz,vw) ×10000
-// comp: 0=x, 1=y, 2=z, 3=w
+/// Compute one component of the 4×4 matrix–homogeneous-vector product `A × v`.
+///
+/// @since 2.0.0
+/// @param a00  A[0,0] … a33  A[3,3]  (16 elements, row-major, ×10000)
+/// @param vx   Vector X ×10000   @param vy  Y   @param vz  Z   @param vw  W
+/// @param comp  Output component index (0=x, 1=y, 2=z, 3=w)
+/// @returns     `(A × v)[comp]` in ×10000
 fn mat4_mul_vec4_elem(
     a00: int, a01: int, a02: int, a03: int,
     a10: int, a11: int, a12: int, a13: int,
