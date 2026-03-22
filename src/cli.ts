@@ -18,6 +18,7 @@ import { generateDts } from './builtins/metadata'
 import { FileCache } from './cache/index'
 import { DependencyGraph } from './cache/deps'
 import { compileIncremental } from './cache/incremental'
+import { lintFile, formatLintWarning } from './lint/index'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as https from 'https'
@@ -34,6 +35,7 @@ Usage:
   redscript compile <file> [-o <out>] [--namespace <ns>] [--incremental]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript check <file>
+  redscript lint <file> [--max-function-lines <n>]
   redscript init [project-name]
   redscript fmt <file.mcrs> [file2.mcrs ...]
   redscript generate-dts [-o <file>]
@@ -44,6 +46,7 @@ Commands:
   compile       Compile a RedScript file to a Minecraft datapack
   watch         Watch a directory for .mcrs file changes, recompile, and hot reload
   check         Check a RedScript file for errors without generating output
+  lint          Statically analyze a RedScript file for potential issues (warnings)
   init          Scaffold a new RedScript datapack project
   fmt           Auto-format RedScript source files
   generate-dts  Generate builtin function declaration file (builtins.d.mcrs)
@@ -170,6 +173,7 @@ function parseArgs(args: string[]): {
   format?: 'human' | 'json'
   fmtCheck?: boolean
   incremental?: boolean
+  maxFunctionLines?: number
 } {
   const result: ReturnType<typeof parseArgs> = {}
   let i = 0
@@ -213,6 +217,9 @@ function parseArgs(args: string[]): {
       i++
     } else if (arg === '--incremental') {
       result.incremental = true
+      i++
+    } else if (arg === '--max-function-lines') {
+      result.maxFunctionLines = parseInt(args[++i], 10)
       i++
     } else if (!result.command) {
       result.command = arg
@@ -691,6 +698,34 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       checkCommand(parsed.file, parsed.namespace, parsed.format ?? 'human')
+      break
+
+    case 'lint':
+      if (!parsed.file) {
+        console.error('Error: No input file specified')
+        printUsage()
+        process.exit(1)
+      }
+      {
+        const namespace = parsed.namespace ?? deriveNamespace(parsed.file)
+        try {
+          const warnings = lintFile(parsed.file, namespace, {
+            maxFunctionLines: parsed.maxFunctionLines,
+          })
+          for (const w of warnings) {
+            console.log(formatLintWarning(w))
+          }
+          if (warnings.length === 0) {
+            console.log('✓ No lint issues found')
+          } else {
+            console.log(`\n${warnings.length} lint issue(s) found`)
+          }
+          process.exit(warnings.length > 0 ? 1 : 0)
+        } catch (err) {
+          console.error(`Error: ${(err as Error).message}`)
+          process.exit(2)
+        }
+      }
       break
 
     case 'fmt':
