@@ -24,6 +24,7 @@ import * as path from 'path'
 import * as https from 'https'
 import { execSync } from 'child_process'
 import archiver from 'archiver'
+import { loadProjectConfig, buildTomlTemplate } from './config/project-config'
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -264,6 +265,7 @@ fn heartbeat(): void {
   say("Tick from ${namespace}");
 }
 `,
+    'redscript.toml': buildTomlTemplate(namespace),
     'redscript.config.json': `${JSON.stringify({
       namespace,
       entry: 'src/main.mcrs',
@@ -289,7 +291,8 @@ Then copy \`dist/\` into your world's datapacks folder and run \`/reload\`.
 ## Files
 
 - \`src/main.mcrs\` contains \`@load\` and \`@tick\` examples.
-- \`redscript.config.json\` stores the default project settings.
+- \`redscript.toml\` stores the project configuration (replaces CLI flags).
+- \`redscript.config.json\` stores legacy project settings.
 `,
   }
 }
@@ -785,19 +788,30 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       {
-        const namespace = parsed.namespace ?? deriveNamespace(parsed.file)
-        const output = parsed.output ?? './dist'
+        // Load redscript.toml (walk up from file's directory); CLI args take priority
+        const fileDir = path.dirname(path.resolve(parsed.file))
+        const tomlConfig = loadProjectConfig(fileDir)
 
-      compileCommand(
-        parsed.file,
-        output,
-        namespace,
-        parsed.sourceMap,
-        parsed.mcVersionStr,
-        parsed.lenient,
-        parsed.includeDirs,
-        parsed.incremental,
-      )
+        const namespace = parsed.namespace
+          ?? tomlConfig?.project?.namespace
+          ?? deriveNamespace(parsed.file)
+        const output = parsed.output
+          ?? tomlConfig?.output?.dir
+          ?? './dist'
+        const mcVersionStr = parsed.mcVersionStr ?? tomlConfig?.project?.['mc-version']
+        const includeDirs = parsed.includeDirs
+          ?? tomlConfig?.compiler?.['include-dirs']
+
+        compileCommand(
+          parsed.file,
+          output,
+          namespace,
+          parsed.sourceMap,
+          mcVersionStr,
+          parsed.lenient,
+          includeDirs,
+          parsed.incremental,
+        )
       }
       break
 
@@ -808,17 +822,31 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       {
-        // Determine project directory (where redscript.config.json lives)
+        // Determine project directory
         const fileDir = path.dirname(path.resolve(parsed.file))
-        const config = readConfig(fileDir)
+        // Load redscript.toml first, fall back to legacy redscript.config.json
+        const tomlConfig = loadProjectConfig(fileDir)
+        const legacyConfig = readConfig(fileDir)
 
-        const namespace = parsed.namespace ?? config.namespace ?? deriveNamespace(parsed.file)
-        const description = parsed.description ?? config.description ?? `${namespace} datapack`
-        const mcVersionStr = parsed.mcVersionStr ?? config.mcVersion
+        const namespace = parsed.namespace
+          ?? tomlConfig?.project?.namespace
+          ?? legacyConfig.namespace
+          ?? deriveNamespace(parsed.file)
+        const description = parsed.description
+          ?? tomlConfig?.project?.description
+          ?? legacyConfig.description
+          ?? `${namespace} datapack`
+        const mcVersionStr = parsed.mcVersionStr
+          ?? tomlConfig?.project?.['mc-version']
+          ?? legacyConfig.mcVersion
+        const includeDirs = parsed.includeDirs
+          ?? tomlConfig?.compiler?.['include-dirs']
 
         // Default output: <namespace>.zip in cwd
         const defaultZip = path.join(process.cwd(), `${namespace}.zip`)
-        const outputZip = parsed.output ?? defaultZip
+        const outputZip = parsed.output ?? tomlConfig?.output?.dir
+          ? path.join(tomlConfig!.output!.dir!, `${namespace}.zip`)
+          : defaultZip
 
         await publishCommand(
           parsed.file,
@@ -827,7 +855,7 @@ async function main(): Promise<void> {
           description,
           mcVersionStr,
           parsed.lenient,
-          parsed.includeDirs,
+          includeDirs,
         )
       }
       break
@@ -853,7 +881,12 @@ async function main(): Promise<void> {
         printUsage()
         process.exit(1)
       }
-      checkCommand(parsed.file, parsed.namespace, parsed.format ?? 'human')
+      {
+        const fileDir = path.dirname(path.resolve(parsed.file))
+        const tomlConfig = loadProjectConfig(fileDir)
+        const namespace = parsed.namespace ?? tomlConfig?.project?.namespace
+        checkCommand(parsed.file, namespace, parsed.format ?? 'human')
+      }
       break
 
     case 'lint':
