@@ -231,12 +231,7 @@ export class TypeChecker {
         }
         if (selfIndex === 0) {
           const selfType = this.normalizeType(method.params[0].type)
-          // For trait impl blocks (e.g. impl Display for Vec2), the self type is the struct.
-          // Also allow bare 'self' with void type when inside a trait impl.
-          const isValidSelfType = selfType.kind === 'struct' && selfType.name === implBlock.typeName
-          const isTraitImplVoidSelf = implBlock.traitName !== undefined
-            && selfType.kind === 'named' && selfType.name === 'void'
-          if (!isValidSelfType && !isTraitImplVoidSelf) {
+          if (selfType.kind !== 'struct' || selfType.name !== implBlock.typeName) {
             this.report(`Method '${method.name}' has invalid 'self' type`, method.params[0])
           }
         }

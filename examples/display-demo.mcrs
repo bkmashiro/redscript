@@ -29,17 +29,17 @@ impl Vec2 {
     }
 }
 
-// ── Player with Display ───────────────────────────────────────────────────────
+// ── Hero (player stats) with Display ─────────────────────────────────────────
 
-struct Player {
+struct Hero {
     level:  int,
     score:  int,
     health: int
 }
 
-impl Display for Player {
+impl Display for Hero {
     fn to_string(self): string {
-        return f"Player[lv={self.level} hp={self.health} score={self.score}]"
+        return f"Hero[lv={self.level} hp={self.health} score={self.score}]"
     }
 }
 
@@ -59,6 +59,6 @@ impl Display for Player {
     let scaled: Vec2 = a.scale(2)
     announce(f"a × 2 = {scaled.to_string()}")
 
-    let hero: Player = Player { level: 10, score: 9999, health: 20 }
+    let hero: Hero = Hero { level: 10, score: 9999, health: 20 }
     announce(f"Hero: {hero.to_string()}")
 }
