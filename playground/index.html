@@ -14,6 +14,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -308,6 +309,7 @@
 
     <button class="btn secondary" id="btn-clear">Clear</button>
     <button class="btn" id="btn-compile">▶ Compile</button>
+    <button class="btn secondary" id="share-btn" onclick="shareCode()">📋 Share</button>
 
     <div id="status-indicator">
       <div id="status-dot"></div>
@@ -784,6 +786,30 @@ async function checkHealth() {
     setStatus('error', 'Server offline — run: npm run repl');
   }
 }
+
+// ────────────────────────────────────────────────────────────────
+// Share — lz-string URL hash
+// ────────────────────────────────────────────────────────────────
+function shareCode() {
+  const code = editor.getValue();
+  const compressed = LZString.compressToEncodedURIComponent(code);
+  const url = location.origin + location.pathname + '#code=' + compressed;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('share-btn');
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '📋 Share', 2000);
+  });
+}
+
+// Restore code from URL hash on load
+window.addEventListener('load', () => {
+  const hash = location.hash;
+  if (hash.startsWith('#code=')) {
+    const compressed = hash.slice(6);
+    const code = LZString.decompressFromEncodedURIComponent(compressed);
+    if (code) editor.setValue(code);
+  }
+});
 
 // ────────────────────────────────────────────────────────────────
 // Init — load Hello World example
