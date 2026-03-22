@@ -132,6 +132,10 @@ function substituteInstr(instr: MIRInstr, sub: Map<Temp, Operand>): MIRInstr {
       return { ...instr, a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) }
     case 'cmp':
       return { ...instr, a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) }
+    case 'score_write':
+      return { ...instr, src: substituteOp(instr.src, sub) }
+    case 'score_read':
+      return instr  // no substitutable operands (player/obj are strings)
     case 'nbt_write':
       return { ...instr, src: substituteOp(instr.src, sub) }
     case 'nbt_read_dynamic':

@@ -21,6 +21,19 @@ export const BUILTIN_SET = new Set([
   'summon', 'particle', 'playsound', 'clear', 'weather',
   'time_set', 'time_add', 'gamerule', 'tag_add', 'tag_remove',
   'kick', 'setblock', 'fill', 'clone', 'difficulty', 'xp_add', 'xp_set',
+  // Entity movement / teleport
+  'tp', 'tp_to',
+  // Scoreboard management
+  'scoreboard_add_objective', 'scoreboard_remove_objective',
+  'scoreboard_display', 'scoreboard_hide',
+  // Team management
+  'team_add', 'team_remove', 'team_join', 'team_leave', 'team_option',
+  // Bossbar management
+  'bossbar_add', 'bossbar_remove', 'bossbar_set_value', 'bossbar_get_value',
+  'bossbar_set_max', 'bossbar_set_color', 'bossbar_set_style',
+  'bossbar_set_visible', 'bossbar_set_players',
+  // Data / NBT
+  'data_get', 'data_merge',
 ])
 
 // ---------------------------------------------------------------------------
@@ -47,7 +60,14 @@ export function detectMacroFunctions(hir: HIRModule): Map<string, MacroFunctionI
     if (macroParams.size > 0) {
       const paramTypes = new Map<string, string>()
       for (const p of fn.params) {
-        const typeName = p.type?.kind === 'named' ? (p.type as any).name : 'int'
+        let typeName: string
+        if (p.type?.kind === 'named') {
+          typeName = (p.type as any).name
+        } else if (p.type?.kind === 'selector' || p.type?.kind === 'entity') {
+          typeName = 'selector'
+        } else {
+          typeName = 'int'
+        }
         paramTypes.set(p.name, typeName)
       }
       result.set(fn.name, { macroParams, paramTypes })
@@ -62,7 +82,14 @@ export function detectMacroFunctions(hir: HIRModule): Map<string, MacroFunctionI
       if (macroParams.size > 0) {
         const paramTypes = new Map<string, string>()
         for (const p of m.params) {
-          const typeName = p.type?.kind === 'named' ? (p.type as any).name : 'int'
+          let typeName: string
+          if (p.type?.kind === 'named') {
+            typeName = (p.type as any).name
+          } else if (p.type?.kind === 'selector' || p.type?.kind === 'entity') {
+            typeName = 'selector'
+          } else {
+            typeName = 'int'
+          }
           paramTypes.set(p.name, typeName)
         }
         result.set(`${ib.typeName}::${m.name}`, { macroParams, paramTypes })

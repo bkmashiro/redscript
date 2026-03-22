@@ -2049,21 +2049,45 @@ function lowerExpr(
       // Check if calling a macro function → emit call_macro
       const targetMacro = ctx.macroInfo.get(expr.fn)
       if (targetMacro) {
-        const args = expr.args.map(a => lowerExpr(a, ctx, scope))
         const targetParams = ctx.fnParamInfo.get(expr.fn) ?? []
         const macroArgs: { name: string; value: Operand; type: NBTType; scale: number }[] = []
-        for (let i = 0; i < targetParams.length && i < args.length; i++) {
+        for (let i = 0; i < targetParams.length && i < expr.args.length; i++) {
           const paramName = targetParams[i].name
           if (targetMacro.macroParams.has(paramName)) {
             const paramTypeName = targetMacro.paramTypes.get(paramName) ?? 'int'
-            const isFloat = paramTypeName === 'float'
-            const isFixed = paramTypeName === 'fixed'
-            macroArgs.push({
-              name: paramName,
-              value: args[i],
-              type: (isFloat || isFixed) ? 'double' : 'int',
-              scale: isFloat ? 0.01 : isFixed ? 0.0001 : 1,
-            })
+            const isString = paramTypeName === 'string' || paramTypeName === 'format_string'
+            const isSelector = paramTypeName === 'selector'
+            if (isString) {
+              // String macro params: store directly to rs:macro_args as NBT string
+              const srcPath = lowerStringExprToPath(expr.args[i], ctx, scope, paramName)
+              if (srcPath) {
+                ctx.emit({
+                  kind: 'call',
+                  dst: null,
+                  fn: `__raw:data modify storage rs:macro_args ${paramName} set from storage rs:strings ${srcPath}`,
+                  args: [],
+                })
+              }
+            } else if (isSelector) {
+              // Selector macro params: store the selector string as an NBT string in rs:macro_args
+              const arg = expr.args[i]
+              const selStr = arg.kind === 'selector' ? arg.raw : '@s'
+              ctx.emit({
+                kind: 'call',
+                dst: null,
+                fn: `__raw:data modify storage rs:macro_args ${paramName} set value ${JSON.stringify(selStr)}`,
+                args: [],
+              })
+            } else {
+              const isFloat = paramTypeName === 'float'
+              const isFixed = paramTypeName === 'fixed'
+              macroArgs.push({
+                name: paramName,
+                value: lowerExpr(expr.args[i], ctx, scope),
+                type: (isFloat || isFixed) ? 'double' : 'int',
+                scale: isFloat ? 0.01 : isFixed ? 0.0001 : 1,
+              })
+            }
           }
         }
         const t = ctx.freshTemp()
@@ -3066,6 +3090,26 @@ function formatBuiltinCall(
     case 'difficulty': cmd = `difficulty ${strs[0]}`; break
     case 'xp_add': cmd = `xp add ${strs[0]} ${strs[1]} ${strs[2] ?? 'points'}`; break
     case 'xp_set': cmd = `xp set ${strs[0]} ${strs[1]} ${strs[2] ?? 'points'}`; break
+    case 'scoreboard_add_objective': cmd = strs[2] ? `scoreboard objectives add ${strs[0]} ${strs[1]} ${strs[2]}` : `scoreboard objectives add ${strs[0]} ${strs[1]}`; break
+    case 'scoreboard_remove_objective': cmd = `scoreboard objectives remove ${strs[0]}`; break
+    case 'scoreboard_display': cmd = `scoreboard objectives setdisplay ${strs[0]} ${strs[1] ?? ''}`; break
+    case 'scoreboard_hide': cmd = `scoreboard objectives setdisplay ${strs[0]}`; break
+    case 'team_add': cmd = strs[1] ? `team add ${strs[0]} ${strs[1]}` : `team add ${strs[0]}`; break
+    case 'team_remove': cmd = `team remove ${strs[0]}`; break
+    case 'team_join': cmd = `team join ${strs[0]} ${strs[1]}`; break
+    case 'team_leave': cmd = `team leave ${strs[0]}`; break
+    case 'team_option': cmd = `team modify ${strs[0]} ${strs[1]} ${strs[2]}`; break
+    case 'bossbar_add': cmd = `bossbar add ${strs[0]} ${strs[1] ? JSON.stringify({ text: strs[1] }) : '""'}`; break
+    case 'bossbar_remove': cmd = `bossbar remove ${strs[0]}`; break
+    case 'bossbar_set_value': cmd = `bossbar set ${strs[0]} value ${strs[1]}`; break
+    case 'bossbar_get_value': cmd = `bossbar get ${strs[0]} value`; break
+    case 'bossbar_set_max': cmd = `bossbar set ${strs[0]} max ${strs[1]}`; break
+    case 'bossbar_set_color': cmd = `bossbar set ${strs[0]} color ${strs[1]}`; break
+    case 'bossbar_set_style': cmd = `bossbar set ${strs[0]} style ${strs[1]}`; break
+    case 'bossbar_set_visible': cmd = `bossbar set ${strs[0]} visible ${strs[1]}`; break
+    case 'bossbar_set_players': cmd = `bossbar set ${strs[0]} players ${strs[1]}`; break
+    case 'data_get': cmd = `data get ${strs[0]} ${strs[1]} ${strs[2] ?? ''}`.trimEnd(); break
+    case 'data_merge': cmd = `data merge ${strs[0]} ${strs[1]} ${strs[2]}`; break
     default: cmd = `${fn} ${strs.join(' ')}`
   }
 

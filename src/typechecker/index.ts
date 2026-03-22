@@ -1591,6 +1591,11 @@ export class TypeChecker {
     if (expected.kind === 'selector' && actual.kind === 'selector') {
       return true  // any entity subtype is compatible
     }
+    // Fake player names (#name) are mc_name tokens typed as string — allow them
+    // where a selector is expected, since MC scoreboards accept fake player names.
+    if (expected.kind === 'selector' && actual.kind === 'named' && actual.name === 'string') {
+      return true
+    }
 
     if (expected.kind !== actual.kind) return false
 
