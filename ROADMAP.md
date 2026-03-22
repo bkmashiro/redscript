@@ -74,7 +74,7 @@
 | `@throttle(ticks)` | ✅ | Rate limit execution |
 | `@retry(max)` | ✅ | Auto-retry on failure |
 | `@memoize` | ✅ | Cache function results |
-| `@benchmark` | 📋 | Tick-level benchmarking |
+| `@benchmark` | ✅ | Tick-level benchmarking |
 | `@test` | ✅ | Mark test functions |
 
 ---
@@ -153,7 +153,7 @@ All 50 modules documented with `///` annotations and en+zh generated docs.
 
 | Item | Status |
 |------|--------|
-| redscript-mc v3.0.0 npm publish | 📋 |
+| redscript-mc v3.0.0 npm publish | ✅ |
 | VSCode marketplace v3.0.0 description update | 📋 |
 | nest-faster-crud npm publish | 📋 |
 | GitHub Release notes | 📋 |
