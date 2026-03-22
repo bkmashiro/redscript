@@ -290,7 +290,7 @@ function renderEnDoc(modDoc: ModuleDoc): string {
     // Build title with optional badges
     let titleLine = `## \`${fn.name}\``;
     if (doc.since) {
-      titleLine += ` <Badge type="info" text="Since v${doc.since}" />`;
+      titleLine += ` <Badge type="info" text="v${doc.since}" />`;
     }
     if (doc.deprecated) {
       titleLine += ` <Badge type="danger" text="Deprecated" />`;
@@ -382,7 +382,7 @@ function renderZhDoc(modDoc: ModuleDoc, zh: Record<string, any>): string {
     // Build title with optional badges
     let titleLine = `## \`${fn.name}\``;
     if (doc.since) {
-      titleLine += ` <Badge type="info" text="Since v${doc.since}" />`;
+      titleLine += ` <Badge type="info" text="v${doc.since}" />`;
     }
     if (doc.deprecated) {
       titleLine += ` <Badge type="danger" text="Deprecated" />`;
