@@ -84,6 +84,61 @@ fn test() {
   })
 })
 
+describe('requested type error scenarios', () => {
+  it('reports struct field type mismatch', () => {
+    const errors = typeCheck(`
+struct Point { x: int, y: int }
+
+fn test() {
+    let p: Point = { x: true, y: 2 };
+}
+`)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].message).toContain("Field 'x' of struct expects int, got bool")
+  })
+
+  it('reports function argument count mismatch', () => {
+    const errors = typeCheck(`
+fn add(a: int, b: int) -> int {
+    return a + b;
+}
+
+fn test() {
+    let total: int = add(1);
+}
+`)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].message).toContain("Function 'add' expects 2 arguments, got 1")
+  })
+
+  it('reports return type mismatch', () => {
+    const errors = typeCheck(`
+fn is_ready() -> bool {
+    return 1;
+}
+`)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].message).toContain('Return type mismatch')
+  })
+
+  it('reports missing interface methods in impl block', () => {
+    const errors = typeCheck(`
+interface Drawable {
+    fn draw(self)
+    fn bounds(self): int
+}
+
+struct Sprite { width: int }
+
+impl Drawable for Sprite {
+    fn draw(self: Sprite) {}
+}
+`)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors.some(err => err.message.includes("does not implement required method 'bounds'"))).toBe(true)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // destructuring
 // ---------------------------------------------------------------------------

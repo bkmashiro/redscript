@@ -48,6 +48,8 @@ import { DiagnosticError } from '../diagnostics'
 import type { Program, FnDecl, Span, TypeNode, Stmt, Block } from '../ast/types'
 import { BUILTIN_METADATA } from '../builtins/metadata'
 import type { BuiltinDef } from '../builtins/metadata'
+import { lintString } from '../lint'
+import type { LintWarning } from '../lint'
 
 // ---------------------------------------------------------------------------
 // Connection and document manager
@@ -229,6 +231,32 @@ function toDiagnostic(err: DiagnosticError): Diagnostic {
   }
 }
 
+/** Severity mapping for lint rules. */
+const LINT_SEVERITY_MAP: Record<string, DiagnosticSeverity> = {
+  'unused-variable':   DiagnosticSeverity.Information,
+  'magic-number':      DiagnosticSeverity.Hint,
+  'dead-branch':       DiagnosticSeverity.Warning,
+  'unused-import':     DiagnosticSeverity.Information,
+  'function-too-long': DiagnosticSeverity.Warning,
+}
+
+/** Convert a LintWarning to an LSP Diagnostic. */
+function lintWarningToDiagnostic(w: LintWarning): Diagnostic {
+  const line = Math.max(0, (w.line ?? 1) - 1)
+  const col  = Math.max(0, (w.col  ?? 1) - 1)
+  const severity = LINT_SEVERITY_MAP[w.rule] ?? DiagnosticSeverity.Warning
+  return {
+    severity,
+    range: {
+      start: { line, character: col },
+      end:   { line, character: col + 80 },
+    },
+    message: w.message,
+    source: 'redscript-lint',
+    code: w.rule,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Decorator hover docs
 // ---------------------------------------------------------------------------
@@ -293,6 +321,60 @@ function formatFnSignature(fn: FnDecl): string {
 // ---------------------------------------------------------------------------
 
 /** Build a mapping from identifier name → definition location. */
+// ---------------------------------------------------------------------------
+// Doc comment parsing helpers
+// ---------------------------------------------------------------------------
+
+interface ParsedDocComment {
+  description: string
+  params: Array<{ name: string; doc: string }>
+  returns: string | null
+}
+
+/**
+ * Parse a raw triple-slash or block comment into structured sections.
+ * Supports @param name desc and @returns desc.
+ */
+function parseDocCommentText(raw: string): ParsedDocComment {
+  const result: ParsedDocComment = { description: '', params: [], returns: null }
+  const descLines: string[] = []
+  for (const line of raw.split('\n')) {
+    const paramMatch = line.match(/^@param\s+(\w+)\s+(.+)$/)
+    if (paramMatch) {
+      result.params.push({ name: paramMatch[1], doc: paramMatch[2].trim() })
+      continue
+    }
+    const retMatch = line.match(/^@returns?\s+(.+)$/)
+    if (retMatch) {
+      result.returns = retMatch[1].trim()
+      continue
+    }
+    // Skip @since / @example etc
+    if (/^@\w+/.test(line.trim())) continue
+    descLines.push(line)
+  }
+  result.description = descLines.join('\n').trim()
+  return result
+}
+
+/**
+ * Format a ParsedDocComment into Markdown for LSP hover.
+ */
+function formatDocCommentMarkdown(doc: ParsedDocComment): string {
+  const parts: string[] = []
+  if (doc.description) parts.push(doc.description)
+  if (doc.params.length > 0) {
+    parts.push('\n**Parameters:**')
+    for (const p of doc.params) {
+      parts.push(`- \`${p.name}\` — ${p.doc}`)
+    }
+  }
+  if (doc.returns) {
+    parts.push(`\n**Returns:** ${doc.returns}`)
+  }
+  return parts.join('\n')
+}
+
 /**
  * Extract the leading doc comment (/** ... *\/) immediately before a function
  * declaration, returning it as plain text (tags stripped).
@@ -477,6 +559,14 @@ function validateAndPublish(doc: TextDocument): void {
   const source = doc.getText()
   const parsed = parseDocument(doc.uri, source)
   const diagnostics: Diagnostic[] = parsed.errors.map(toDiagnostic)
+
+  // Also run lint rules and push them as lower-severity diagnostics
+  try {
+    const filePath = (() => { try { return fileURLToPath(doc.uri) } catch { return doc.uri } })()
+    const lintWarnings = lintString(source, filePath)
+    diagnostics.push(...lintWarnings.map(lintWarningToDiagnostic))
+  } catch { /* lint is best-effort; don't block diagnostics */ }
+
   connection.sendDiagnostics({ uri: doc.uri, diagnostics })
 }
 
@@ -585,9 +675,16 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   const fn = findFunction(program, word)
   if (fn) {
     const sig = formatFnSignature(fn)
+    const rawDoc = extractDocComment(source, fn)
+    let docSection = ''
+    if (rawDoc) {
+      const parsed = parseDocCommentText(rawDoc)
+      const md = formatDocCommentMarkdown(parsed)
+      if (md) docSection = `\n\n${md}`
+    }
     const content: MarkupContent = {
       kind: MarkupKind.Markdown,
-      value: `\`\`\`redscript\n${sig}\n\`\`\``,
+      value: `\`\`\`redscript\n${sig}\n\`\`\`${docSection}`,
     }
     return { contents: content }
   }

@@ -105,6 +105,19 @@ struct Good {
       const { errors } = parseWithErrors(source)
       expect(errors.length).toBeGreaterThanOrEqual(1)
     })
+
+    it('recovers from a broken top-level const and still parses later functions', () => {
+      const source = `
+const BAD: = 1;
+
+fn good_after_error() {
+  return;
+}
+`
+      const { errors, parsedFns } = parseWithErrors(source)
+      expect(errors.length).toBeGreaterThanOrEqual(1)
+      expect(parsedFns).toContain('good_after_error')
+    })
   })
 
   describe('block-level (statement) recovery', () => {
@@ -132,6 +145,37 @@ fn test_fn() {
 `
       const { errors } = parseWithErrors(source)
       expect(errors.length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('recovers after consuming a bad statement semicolon and keeps later statements', () => {
+      const source = `
+fn test_fn() {
+  let x: int = ;
+  let y: int = 42;
+  return;
+}
+`
+      const tokens = new Lexer(source).tokenize()
+      const parser = new Parser(tokens, source)
+      const ast = parser.parse('test')
+
+      expect(parser.parseErrors.length).toBeGreaterThanOrEqual(1)
+      expect(ast.declarations[0].body.some(stmt => stmt.kind === 'return')).toBe(true)
+    })
+
+    it('recovers at block end without consuming the closing brace', () => {
+      const source = `
+fn broken() {
+  let x: int = }
+
+fn after_broken() {
+  return;
+}
+`
+      const { errors, parsedFns } = parseWithErrors(source)
+      expect(errors.length).toBeGreaterThanOrEqual(1)
+      expect(parsedFns).toContain('broken')
+      expect(parsedFns).toContain('after_broken')
     })
   })
 

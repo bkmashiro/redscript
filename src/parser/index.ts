@@ -727,6 +727,8 @@ export class Parser {
         args.item = val
       } else if (key === 'team') {
         args.team = val
+      } else if (key === 'max') {
+        args.max = parseInt(val, 10)
       }
     }
 

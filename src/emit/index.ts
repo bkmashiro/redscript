@@ -37,6 +37,10 @@ export interface EmitOptions {
   profiledFunctions?: string[]
   /** Emit debug-only profiling instrumentation and helpers. */
   enableProfiling?: boolean
+  /** Functions decorated with @throttle. */
+  throttleFunctions?: Array<{ name: string; ticks: number }>
+  /** Functions decorated with @retry. */
+  retryFunctions?: Array<{ name: string; max: number }>
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +55,8 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const watchFns = options.watchFunctions ?? []
   const profiledFns = options.profiledFunctions ?? []
   const enableProfiling = options.enableProfiling ?? false
+  const throttleFns = options.throttleFunctions ?? []
+  const retryFns = options.retryFunctions ?? []
   const objective = module.objective
   const genSourceMap = options.generateSourceMap ?? false
   const mcVersion = options.mcVersion ?? DEFAULT_MC_VERSION
@@ -77,6 +83,8 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
           'scoreboard objectives add __profile dummy',
         ]
       : []),
+    ...throttleFns.map(t => `scoreboard objectives add ${throttleObjective(t.name)} dummy`),
+    ...retryFns.map(r => `scoreboard objectives add ${retryObjective(r.name)} dummy`),
   ]
   files.push({
     path: `data/${namespace}/function/load.mcfunction`,
@@ -133,6 +141,77 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     })
   }
 
+  // @throttle wrapper functions
+  for (const { name, ticks } of throttleFns) {
+    const obj = throttleObjective(name)
+    const inner = `${name}_inner`
+    files.push({
+      path: fnNameToPath(throttleDispatcherName(name), namespace),
+      content: [
+        `scoreboard players add __throttle_${name} ${obj} 1`,
+        `execute if score __throttle_${name} ${obj} matches ${ticks}.. run function ${namespace}:${inner}`,
+        `execute if score __throttle_${name} ${obj} matches ${ticks}.. run scoreboard players set __throttle_${name} ${obj} 0`,
+      ].join('\n') + '\n',
+    })
+    // Rename the original function to _inner by emitting a redirect wrapper:
+    // The original LIR function keeps its original name; the dispatcher wraps it.
+    // We just need the dispatcher to call the real function as <name>_inner.
+    // Actually: the original compiled function stays as <name>. We generate
+    // a wrapper at <name>_inner that simply calls <name>.
+    files.push({
+      path: fnNameToPath(inner, namespace),
+      content: `function ${namespace}:${name}\n`,
+    })
+  }
+
+  // @retry wrapper functions
+  for (const { name, max } of retryFns) {
+    const obj = retryObjective(name)
+    const dispatcherName = retryDispatcherName(name)
+    // Dispatcher: if retries remaining > 0, call the function; if it returns 0, decrement counter
+    // We use a two-file approach:
+    //   __retry_<name>: decrements counter then calls the real function
+    //   __retry_<name>_init: sets the counter to max and schedules the first attempt
+    // Runtime logic:
+    //   - On success (fn returns nonzero): reset counter to 0
+    //   - On failure (fn returns 0): counter -= 1, schedule next tick
+    // Since we can't read a function return value in mcfunction directly,
+    // we use a storage-based approach: the function itself sets a "success" flag.
+    // Simpler scoreboard approach (matching task spec):
+    //   __retry_<name> obj tracks remaining attempts
+    //   Each tick, if counter > 0: call fn, if fn "failed" (set counter to 0 from outside) schedule retry
+    // Simplest correct approach:
+    //   generate a tick-registered dispatcher that:
+    //     1. if counter > 0, call the function
+    //     2. function sets __retry_<name>_result to 1 on success (convention)
+    //     3. if result == 0, decrement counter; else reset counter
+    // For simplicity, use the same pattern as @throttle but inverted:
+    //   The user's function sets a score $ret to signal success/failure.
+    //   We wrap it: if counter > 0, run the function.
+    //   After running, check $ret: if 0, keep counter; else reset to 0.
+    //   Next tick the dispatcher will retry if counter > 0.
+    //
+    // Minimal correct implementation (matching task spec — fn returns 0 = failure):
+    //   __retry_<name>_tick: registered as @tick
+    //     execute if score __retry_<name> <obj> matches 1.. run function ns:<name>
+    //     execute if score __retry_<name> <obj> matches 1.. if score $ret <obj> matches 0 run scoreboard players remove __retry_<name> <obj> 1
+    //     execute if score __retry_<name> <obj> matches 1.. unless score $ret <obj> matches 0 run scoreboard players set __retry_<name> <obj> 0
+    //   To start a retry sequence, something must set __retry_<name> <obj> to max.
+    //   We generate __retry_<name>_start: scoreboard players set __retry_<name> <obj> <max>
+    files.push({
+      path: fnNameToPath(dispatcherName, namespace),
+      content: [
+        `execute if score __retry_${name} ${obj} matches 1.. run function ${namespace}:${name}`,
+        `execute if score __retry_${name} ${obj} matches 1.. if score $ret ${obj} matches 0 run scoreboard players remove __retry_${name} ${obj} 1`,
+        `execute if score __retry_${name} ${obj} matches 1.. unless score $ret ${obj} matches 0 run scoreboard players set __retry_${name} ${obj} 0`,
+      ].join('\n') + '\n',
+    })
+    files.push({
+      path: fnNameToPath(`${name}_start`, namespace),
+      content: `scoreboard players set __retry_${name} ${obj} ${max}\n`,
+    })
+  }
+
   // Tag files for tick/load
   if (loadFns.length > 0 || true) {
     // Always include load.json — it must reference the load.mcfunction
@@ -143,7 +222,12 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     })
   }
 
-  const allTickFns = [...tickFns, ...watchFns.map(watch => watchDispatcherName(watch.name))]
+  const allTickFns = [
+    ...tickFns,
+    ...watchFns.map(watch => watchDispatcherName(watch.name)),
+    ...throttleFns.map(t => throttleDispatcherName(t.name)),
+    ...retryFns.map(r => retryDispatcherName(r.name)),
+  ]
   if (allTickFns.length > 0) {
     const tickValues = allTickFns.map(fn => `${namespace}:${fn}`)
     files.push({
@@ -237,6 +321,22 @@ function watchDispatcherName(name: string): string {
 
 function watchPrevObjective(name: string): string {
   return `__watch_${name}_prev`
+}
+
+function throttleDispatcherName(name: string): string {
+  return `__throttle_${name}`
+}
+
+function throttleObjective(name: string): string {
+  return `__throttle`
+}
+
+function retryDispatcherName(name: string): string {
+  return `__retry_${name}`
+}
+
+function retryObjective(name: string): string {
+  return `__retry`
 }
 
 function profilerSafeName(name: string): string {

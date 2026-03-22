@@ -303,6 +303,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const coroutineInfos: CoroutineInfo[] = []
     const scheduleFunctions: Array<{ name: string; ticks: number }> = []
     const profiledFunctions: string[] = []
+    const throttleFunctions: Array<{ name: string; ticks: number }> = []
+    const retryFunctions: Array<{ name: string; max: number }> = []
     const eventHandlers = new Map<string, string[]>()
     for (const fn of hir.functions) {
       if (fn.watchObjective) {
@@ -330,6 +332,12 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
         }
         if (dec.name === 'profile') {
           profiledFunctions.push(fn.name)
+        }
+        if (dec.name === 'throttle' && dec.args?.ticks) {
+          throttleFunctions.push({ name: fn.name, ticks: dec.args.ticks })
+        }
+        if (dec.name === 'retry' && dec.args?.max) {
+          retryFunctions.push({ name: fn.name, max: dec.args.max })
         }
         if (dec.name === 'on' && dec.args?.eventType) {
           const evType = dec.args.eventType as string
@@ -465,6 +473,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       singletonObjectives,
       profiledFunctions,
       enableProfiling: debug,
+      throttleFunctions,
+      retryFunctions,
     })
     const prunedFiles = pruneLibraryFunctionFiles(files, libraryFilePaths)
 

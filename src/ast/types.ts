@@ -270,7 +270,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'config' | 'singleton' | 'profile'
+  name: 'tick' | 'load' | 'watch' | 'on' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'config' | 'singleton' | 'profile' | 'throttle' | 'retry'
   args?: {
     rate?: number
     objective?: string
@@ -288,6 +288,8 @@ export interface Decorator {
     configKey?: string
     /** @config decorator: default value */
     configDefault?: number
+    /** @retry decorator: max retry count */
+    max?: number
   }
   /** Raw positional arguments (used by @requires and future generic decorators). */
   rawArgs?: Array<{ kind: 'string'; value: string } | { kind: 'number'; value: number }>

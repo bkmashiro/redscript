@@ -402,6 +402,30 @@ export class TypeChecker {
       }
     }
 
+    const throttleDecorators = fn.decorators.filter(decorator => decorator.name === 'throttle')
+    if (throttleDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @throttle decorators`, fn)
+      return
+    }
+    if (throttleDecorators.length === 1) {
+      const ticks = throttleDecorators[0].args?.ticks
+      if (ticks === undefined || ticks <= 0) {
+        this.report(`@throttle on '${fn.name}' requires ticks=N (positive integer)`, fn)
+      }
+    }
+
+    const retryDecorators = fn.decorators.filter(decorator => decorator.name === 'retry')
+    if (retryDecorators.length > 1) {
+      this.report(`Function '${fn.name}' cannot have multiple @retry decorators`, fn)
+      return
+    }
+    if (retryDecorators.length === 1) {
+      const max = retryDecorators[0].args?.max
+      if (max === undefined || max <= 0) {
+        this.report(`@retry on '${fn.name}' requires max=N (positive integer)`, fn)
+      }
+    }
+
     const profileDecorators = fn.decorators.filter(decorator => decorator.name === 'profile')
     if (profileDecorators.length > 1) {
       this.report(`Function '${fn.name}' cannot have multiple @profile decorators`, fn)
@@ -812,7 +836,35 @@ export class TypeChecker {
 
       case 'struct_lit':
         for (const field of expr.fields) {
-          this.checkExpr(field.value)
+          let fieldType: TypeNode | undefined
+          if (expectedType) {
+            const normalized = this.normalizeType(expectedType)
+            if (normalized.kind === 'struct') {
+              const structFields = this.structs.get(normalized.name)
+              if (structFields && !structFields.has(field.name)) {
+                this.report(`Struct '${normalized.name}' has no field '${field.name}'`, expr)
+              } else {
+                fieldType = structFields?.get(field.name)
+              }
+            }
+          }
+
+          this.checkExpr(field.value, fieldType)
+
+          if (fieldType) {
+            const actualType = this.inferType(field.value, fieldType)
+            if (this.isNumericMismatch(fieldType, actualType)) {
+              this.report(
+                `Field '${field.name}' of struct expects ${this.typeToString(fieldType)}, got ${this.typeToString(actualType)}`,
+                field.value
+              )
+            } else if (!this.typesMatch(fieldType, actualType)) {
+              this.report(
+                `Field '${field.name}' of struct expects ${this.typeToString(fieldType)}, got ${this.typeToString(actualType)}`,
+                field.value
+              )
+            }
+          }
         }
         break
 
