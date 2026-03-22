@@ -988,7 +988,7 @@ function rewriteInstr(instr: MIRInstr, promoted: Map<Temp, Temp>): MIRInstr {
       return { ...instr, dst: rTemp(instr.dst) }
     case 'copy':
       return { ...instr, dst: rTemp(instr.dst), src: rOp(instr.src) }
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
       return { ...instr, dst: rTemp(instr.dst), a: rOp(instr.a), b: rOp(instr.b) }
     case 'neg':
       return { ...instr, dst: rTemp(instr.dst), src: rOp(instr.src) }
@@ -1057,7 +1057,7 @@ function getSuccessors(term: MIRInstr): BlockId[] {
 function getDst(instr: MIRInstr): Temp | null {
   switch (instr.kind) {
     case 'const': case 'copy':
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'neg': case 'cmp':
     case 'and': case 'or': case 'not':
     case 'nbt_read':
@@ -1077,7 +1077,7 @@ function getUsedTemps(instr: MIRInstr): Temp[] {
   switch (instr.kind) {
     case 'copy': case 'neg': case 'not':
       addOp(instr.src); break
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'cmp': case 'and': case 'or':
       addOp(instr.a); addOp(instr.b); break
     case 'nbt_write':

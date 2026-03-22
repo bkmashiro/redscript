@@ -127,7 +127,7 @@ function substituteInstr(instr: MIRInstr, sub: Map<Temp, Operand>): MIRInstr {
   switch (instr.kind) {
     case 'copy': return { ...instr, src: substituteOp(instr.src, sub) }
     case 'neg': case 'not': return { ...instr, src: substituteOp(instr.src, sub) }
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'and': case 'or':
       return { ...instr, a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) }
     case 'cmp':

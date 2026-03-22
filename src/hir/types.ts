@@ -164,6 +164,9 @@ export type HIRStmt =
   | { kind: 'return'; value?: HIRExpr; span?: Span }
   | { kind: 'break'; span?: Span }
   | { kind: 'continue'; span?: Span }
+  | { kind: 'break_label'; label: string; span?: Span }
+  | { kind: 'continue_label'; label: string; span?: Span }
+  | { kind: 'labeled_loop'; label: string; body: HIRStmt; span?: Span }
   | { kind: 'if'; cond: HIRExpr; then: HIRBlock; else_?: HIRBlock; span?: Span }
   | { kind: 'while'; cond: HIRExpr; body: HIRBlock; step?: HIRBlock; span?: Span }
   // foreach preserved (entity iteration is MC-specific, not just sugar)
@@ -199,6 +202,7 @@ export interface HIRFunction {
   isLibraryFn?: boolean
   isExported?: boolean
   span?: Span
+  sourceFile?: string
   /** Set when the function is decorated with @watch("objective") — the scoreboard objective to watch. */
   watchObjective?: string
 }
@@ -210,6 +214,7 @@ export interface HIRStructField {
 
 export interface HIRStruct {
   name: string
+  extends?: string
   fields: HIRStructField[]
   /** True when the struct was declared with `@singleton` */
   isSingleton?: boolean

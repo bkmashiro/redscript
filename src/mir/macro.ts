@@ -129,6 +129,7 @@ function scanStmt(stmt: HIRStmt, paramNames: Set<string>, macroParams: Set<strin
       for (const arm of stmt.arms) scanBlock(arm.body, paramNames, macroParams)
       break
     case 'execute': scanBlock(stmt.body, paramNames, macroParams); break
+    case 'labeled_loop': scanStmt(stmt.body, paramNames, macroParams); break
     case 'raw': break
   }
 }

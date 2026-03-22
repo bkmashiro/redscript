@@ -114,6 +114,7 @@ describe('emit: direct LIR emission', () => {
     expect(getFile(files, 'data/emitns/function/load.mcfunction')).toBe('scoreboard objectives add __emit dummy\n')
 
     const main = getFile(files, 'data/emitns/function/main/run.mcfunction')
+    expect(main).toContain('# src: src/test.mcrs:3')
     expect(main).toContain('scoreboard players set $a __emit 7')
     expect(main).toContain('scoreboard players operation $b __emit = $a __emit')
     expect(main).toContain('scoreboard players operation $a __emit += $b __emit')
@@ -150,7 +151,7 @@ describe('emit: direct LIR emission', () => {
     const map = JSON.parse(getFile(files, 'data/emitns/function/main/run.sourcemap.json'))
     expect(map.generatedFile).toBe('data/emitns/function/main/run.mcfunction')
     expect(map.sources).toEqual(['src/test.mcrs'])
-    expect(map.mappings[0]).toMatchObject({ line: 1, sourceLine: 3, sourceCol: 5 })
+    expect(map.mappings[0]).toMatchObject({ line: 2, sourceLine: 3, sourceCol: 5 })
     expect(files.find(f => f.path === 'data/emitns/function/empty.sourcemap.json')).toBeUndefined()
   })
 

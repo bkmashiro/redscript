@@ -20,22 +20,26 @@ import type {
   HIRExecuteSubcommand, HIRStruct, HIRImplBlock, HIREnum, HIRConst, HIRGlobal, HIRMatchPattern,
   HIRFStringPart,
 } from './types'
+import { expandStructDeclarations } from '../structs/expand'
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 export function lowerToHIR(program: Program): HIRModule {
+  const structs = expandStructDeclarations(program.structs).map((s): HIRStruct => ({
+    name: s.name,
+    extends: s.extends,
+    fields: s.fields.map(f => ({ name: f.name, type: f.type })),
+    isSingleton: s.isSingleton,
+    span: s.span,
+  }))
+
   return {
     namespace: program.namespace,
     globals: program.globals.map(lowerGlobal),
     functions: program.declarations.map(lowerFunction),
-    structs: program.structs.map((s): HIRStruct => ({
-      name: s.name,
-      fields: s.fields.map(f => ({ name: f.name, type: f.type })),
-      isSingleton: s.isSingleton,
-      span: s.span,
-    })),
+    structs,
     implBlocks: program.implBlocks.map((ib): HIRImplBlock => ({
       typeName: ib.typeName,
       traitName: ib.traitName,
@@ -97,6 +101,7 @@ function lowerFunction(fn: FnDecl): HIRFunction {
     isLibraryFn: fn.isLibraryFn,
     isExported: fn.isExported,
     span: fn.span,
+    sourceFile: fn.sourceFile,
     watchObjective: fn.watchObjective,
   }
 }
@@ -149,6 +154,27 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
 
     case 'continue':
       return { kind: 'continue', span: stmt.span }
+
+    case 'break_label':
+      return { kind: 'break_label', label: stmt.label, span: stmt.span }
+
+    case 'continue_label':
+      return { kind: 'continue_label', label: stmt.label, span: stmt.span }
+
+    case 'labeled_loop': {
+      // Lower the body — for desugared loops (for_each, for_range, etc.) this may return
+      // an array of [init..., while_stmt]. The label should attach to the while stmt only;
+      // any init stmts come before as plain statements.
+      const lowered = lowerStmt(stmt.body)
+      if (Array.isArray(lowered)) {
+        // Multiple stmts: init stmts + while (last element)
+        const inits = lowered.slice(0, -1)
+        const loopStmt = lowered[lowered.length - 1]
+        const labeled: HIRStmt = { kind: 'labeled_loop', label: stmt.label, body: loopStmt, span: stmt.span }
+        return [...inits, labeled]
+      }
+      return { kind: 'labeled_loop', label: stmt.label, body: lowered, span: stmt.span }
+    }
 
     case 'if':
       return {

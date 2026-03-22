@@ -37,6 +37,7 @@ function exprKey(instr: MIRInstr): string | null {
     case 'mul':
     case 'div':
     case 'mod':
+    case 'pow':
     case 'and':
     case 'or': {
       const ka = operandKey(instr.a)
@@ -64,7 +65,7 @@ function exprKey(instr: MIRInstr): string | null {
 function getDst(instr: MIRInstr): Temp | null {
   switch (instr.kind) {
     case 'const': case 'copy': case 'add': case 'sub': case 'mul':
-    case 'div': case 'mod': case 'neg': case 'not': case 'and':
+    case 'div': case 'mod': case 'pow': case 'neg': case 'not': case 'and':
     case 'or': case 'cmp': case 'string_match': case 'nbt_read':
     case 'nbt_read_dynamic': case 'nbt_list_len': case 'score_read':
       return instr.dst

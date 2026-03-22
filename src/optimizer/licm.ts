@@ -351,7 +351,7 @@ function hasSideEffects(instr: MIRInstr): boolean {
 function getInstrDst(instr: MIRInstr): Temp | null {
   switch (instr.kind) {
     case 'const': case 'copy':
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'neg': case 'cmp': case 'and': case 'or': case 'not':
     case 'nbt_read': case 'nbt_read_dynamic': case 'nbt_list_len':
     case 'string_match': case 'score_read':
@@ -367,7 +367,7 @@ function getSourceOperands(instr: MIRInstr): Operand[] {
   switch (instr.kind) {
     case 'copy': case 'neg': case 'not':
       return [instr.src]
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'cmp': case 'and': case 'or':
       return [instr.a, instr.b]
     case 'nbt_write':

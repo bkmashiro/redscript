@@ -116,6 +116,8 @@ export interface MIRFunction {
   blocks: MIRBlock[]
   entry: BlockId         // entry block id (always 'entry')
   isMacro: boolean       // true if any param is a macro param
+  sourceLoc?: SourceLoc
+  sourceSnippet?: string
 }
 
 export interface MIRModule {
@@ -124,4 +126,6 @@ export interface MIRModule {
   objective: string      // scoreboard objective (default: __<namespace>)
   /** Set of fully-qualified function names marked @inline. */
   inlineFunctions?: Set<string>
+  /** Set of fully-qualified function names marked @no-inline. */
+  noInlineFunctions?: Set<string>
 }

@@ -113,6 +113,7 @@ class LoweringContext {
       instructions: [macroLine],
       isMacro: true,
       macroParams: ['arr_idx'],
+      sourceSnippet: `dynamic index helper for ${ns} ${pathPrefix}`,
     })
 
     this.dynIdxHelpers.set(key, qualifiedName)
@@ -147,6 +148,7 @@ class LoweringContext {
       instructions: [macroLine],
       isMacro: true,
       macroParams: ['arr_idx', 'arr_val'],
+      sourceSnippet: `dynamic write helper for ${ns} ${pathPrefix}`,
     })
 
     this.dynWrtHelpers.set(key, qualifiedName)
@@ -232,6 +234,8 @@ function lowerFunction(fn: MIRFunction, ctx: LoweringContext): void {
     instructions: instrs,
     isMacro: fn.isMacro,
     macroParams: fn.params.filter(p => p.isMacroParam).map(p => p.name),
+    sourceLoc: fn.sourceLoc,
+    sourceSnippet: fn.sourceSnippet,
   })
 
   // Emit separate functions for multi-pred blocks
@@ -245,6 +249,8 @@ function lowerFunction(fn: MIRFunction, ctx: LoweringContext): void {
         instructions: blockInstrs,
         isMacro: false,
         macroParams: [],
+        sourceLoc: fn.sourceLoc,
+        sourceSnippet: fn.sourceSnippet,
       })
     }
   }
@@ -690,6 +696,8 @@ function emitBranchTarget(
         instructions: blockInstrs,
         isMacro: false,
         macroParams: [],
+        sourceLoc: fn.sourceLoc,
+        sourceSnippet: fn.sourceSnippet,
       })
       parentVisited.add(blockId)
     }
@@ -707,6 +715,8 @@ function emitBranchTarget(
     instructions: blockInstrs,
     isMacro: false,
     macroParams: [],
+    sourceLoc: fn.sourceLoc,
+    sourceSnippet: fn.sourceSnippet,
   })
 
   // Mark visited so parent doesn't re-inline

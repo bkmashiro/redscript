@@ -70,7 +70,7 @@ function rewriteUses(instr: MIRInstr, copies: Map<Temp, Operand>): MIRInstr {
     case 'neg':
     case 'not':
       return { ...instr, src: resolve(instr.src, copies) }
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'and': case 'or':
       return { ...instr, a: resolve(instr.a, copies), b: resolve(instr.b, copies) }
     case 'cmp':
@@ -99,7 +99,7 @@ function rewriteUses(instr: MIRInstr, copies: Map<Temp, Operand>): MIRInstr {
 function getDst(instr: MIRInstr): Temp | null {
   switch (instr.kind) {
     case 'const': case 'copy':
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'neg': case 'cmp':
     case 'and': case 'or': case 'not':
     case 'nbt_read':

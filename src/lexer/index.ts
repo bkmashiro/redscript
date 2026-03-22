@@ -15,7 +15,7 @@ import { DiagnosticError } from '../diagnostics'
 export type TokenKind =
   // Keywords
   | 'fn' | 'let' | 'const' | 'if' | 'else' | 'while' | 'for' | 'foreach' | 'match' | 'do' | 'repeat'
-  | 'return' | 'break' | 'continue' | 'as' | 'at' | 'in' | 'is' | 'struct' | 'impl' | 'enum' | 'trigger' | 'namespace' | 'module' | 'interface'
+  | 'return' | 'break' | 'continue' | 'as' | 'at' | 'in' | 'is' | 'struct' | 'extends' | 'impl' | 'enum' | 'trigger' | 'namespace' | 'module' | 'interface'
   | 'execute' | 'run' | 'unless' | 'declare' | 'export' | 'import'
   // Types
   | 'int' | 'bool' | 'float' | 'fixed' | 'string' | 'void'
@@ -84,6 +84,7 @@ const KEYWORDS: Record<string, TokenKind> = {
   in: 'in',
   is: 'is',
   struct: 'struct',
+  extends: 'extends',
   impl: 'impl',
   enum: 'enum',
   trigger: 'trigger',
@@ -438,7 +439,7 @@ export class Lexer {
 
     // Otherwise it's a decorator (@tick, @on_trigger, etc.)
     let value = '@'
-    while (/[a-zA-Z_0-9]/.test(this.peek())) {
+    while (/[a-zA-Z_0-9-]/.test(this.peek())) {
       value += this.advance()
     }
 

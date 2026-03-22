@@ -327,7 +327,7 @@ function substituteInstr(instr: MIRInstr, sub: Map<Temp, Operand>): MIRInstr {
   switch (instr.kind) {
     case 'copy': return { ...instr, src: substituteOp(instr.src, sub) }
     case 'neg': case 'not': return { ...instr, src: substituteOp(instr.src, sub) }
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'and': case 'or':
       return { ...instr, a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) }
     case 'cmp':
@@ -356,7 +356,7 @@ function substituteInstr(instr: MIRInstr, sub: Map<Temp, Operand>): MIRInstr {
 function getInstrDst(instr: MIRInstr): Temp | null {
   switch (instr.kind) {
     case 'const': case 'copy':
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'neg': case 'cmp': case 'and': case 'or': case 'not':
     case 'nbt_read':
     case 'nbt_read_dynamic':

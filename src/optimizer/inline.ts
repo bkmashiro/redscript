@@ -29,12 +29,16 @@ function freshInlineId(): string {
 }
 
 export function inlinePass(mod: MIRModule): MIRModule {
-  const inlineSet = mod.inlineFunctions
+  return inlineSelectedFunctions(mod, mod.inlineFunctions)
+}
+
+export function inlineSelectedFunctions(mod: MIRModule, inlineSet?: ReadonlySet<string>): MIRModule {
   if (!inlineSet || inlineSet.size === 0) return mod
 
   const fnMap = new Map<string, MIRFunction>(mod.functions.map(f => [f.name, f]))
+  const recursiveFns = findRecursiveFunctions(mod.functions)
 
-  const updatedFunctions = mod.functions.map(fn => inlineCallsInFunction(fn, fnMap, inlineSet))
+  const updatedFunctions = mod.functions.map(fn => inlineCallsInFunction(fn, fnMap, inlineSet, recursiveFns))
 
   return { ...mod, functions: updatedFunctions }
 }
@@ -46,7 +50,8 @@ export function inlinePass(mod: MIRModule): MIRModule {
 function inlineCallsInFunction(
   fn: MIRFunction,
   fnMap: Map<string, MIRFunction>,
-  inlineSet: Set<string>,
+  inlineSet: ReadonlySet<string>,
+  recursiveFns: ReadonlySet<string>,
 ): MIRFunction {
   // Flatten all blocks into a mutable list; we may split blocks during inlining.
   let blocks = fn.blocks.map(b => ({ ...b, instrs: [...b.instrs] }))
@@ -65,7 +70,7 @@ function inlineCallsInFunction(
         if (!callee) return false
         if (callee.isMacro) return false
         if (callee.name === fn.name) return false // no self-recursion
-        if (isSelfRecursive(callee)) return false
+        if (recursiveFns.has(callee.name)) return false
         if (callee.params.length !== instr.args.length) return false
         return true
       })
@@ -247,7 +252,7 @@ function subAndRenameInstr(
       return { ...instr, dst: renameDst(instr.dst)!, src: substituteOp(instr.src, sub) }
     case 'neg': case 'not':
       return { ...instr, dst: renameDst(instr.dst)!, src: substituteOp(instr.src, sub) }
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'and': case 'or':
       return { ...instr, dst: renameDst(instr.dst)!, a: substituteOp(instr.a, sub), b: substituteOp(instr.b, sub) }
     case 'cmp':
@@ -283,12 +288,41 @@ function subAndRenameInstr(
   }
 }
 
-function isSelfRecursive(fn: MIRFunction): boolean {
-  for (const block of fn.blocks) {
-    for (const instr of block.instrs) {
-      if (instr.kind === 'call' && instr.fn === fn.name) return true
-      if (instr.kind === 'call_macro' && instr.fn === fn.name) return true
+export function findRecursiveFunctions(functions: MIRFunction[]): Set<string> {
+  const fnNames = new Set(functions.map(fn => fn.name))
+  const edges = new Map<string, Set<string>>()
+
+  for (const fn of functions) {
+    const callees = new Set<string>()
+    for (const block of fn.blocks) {
+      for (const instr of block.instrs) {
+        if ((instr.kind === 'call' || instr.kind === 'call_macro') && fnNames.has(instr.fn)) {
+          callees.add(instr.fn)
+        }
+      }
+    }
+    edges.set(fn.name, callees)
+  }
+
+  const recursive = new Set<string>()
+
+  for (const fn of functions) {
+    const seen = new Set<string>()
+    const stack = [...(edges.get(fn.name) ?? [])]
+
+    while (stack.length > 0) {
+      const current = stack.pop()!
+      if (current === fn.name) {
+        recursive.add(fn.name)
+        break
+      }
+      if (seen.has(current)) continue
+      seen.add(current)
+      for (const next of edges.get(current) ?? []) {
+        stack.push(next)
+      }
     }
   }
-  return false
+
+  return recursive
 }

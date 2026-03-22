@@ -242,7 +242,7 @@ describe('source map — file path convention', () => {
       generateSourceMap: true,
       filePath: 'src/test.mcrs',
     })
-    const smFiles = result.files.filter(f => f.path.endsWith('.sourcemap.json'))
+    const smFiles = result.files.filter(f => f.path.startsWith('data/') && f.path.endsWith('.sourcemap.json'))
     expect(smFiles.length).toBeGreaterThan(0)
     for (const sf of smFiles) {
       expect(sf.path).toMatch(/\.sourcemap\.json$/)

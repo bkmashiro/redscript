@@ -289,6 +289,13 @@ class Monomorphizer {
       case 'continue':
       case 'raw':
         return stmt
+      case 'break_label':
+      case 'continue_label':
+        return stmt
+      case 'labeled_loop': {
+        const body = this.rewriteStmt(stmt.body, ctx)
+        return { ...stmt, body }
+      }
     }
   }
 

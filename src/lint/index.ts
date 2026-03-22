@@ -205,6 +205,9 @@ function collectCalledNamesStmt(stmt: HIRStmt, out: Set<string>): void {
       collectCalledNamesExpr(stmt.init, out)
       collectCalledNames(stmt.body, out)
       break
+    case 'labeled_loop':
+      collectCalledNamesStmt(stmt.body, out)
+      break
   }
 }
 
@@ -381,6 +384,9 @@ function collectLetDeclsStmt(stmt: HIRStmt, out: Map<string, VarInfo>): void {
       out.set(stmt.binding, { name: stmt.binding, span: stmt.span, readCount: 0 })
       collectLetDecls(stmt.body, out)
       break
+    case 'labeled_loop':
+      collectLetDeclsStmt(stmt.body, out)
+      break
   }
 }
 
@@ -437,6 +443,9 @@ function countIdentReadsStmt(stmt: HIRStmt, out: Map<string, number>, declared: 
     case 'while_let_some':
       countIdentReadsExpr(stmt.init, out, declared)
       countIdentReads(stmt.body, out, declared)
+      break
+    case 'labeled_loop':
+      countIdentReadsStmt(stmt.body, out, declared)
       break
   }
 }
@@ -608,6 +617,9 @@ function checkMagicNumbersStmt(
     case 'while_let_some':
       checkMagicNumbersExpr(stmt.init, out, file)
       checkMagicNumbersBlock(stmt.body, out, file, false)
+      break
+    case 'labeled_loop':
+      checkMagicNumbersStmt(stmt.body, out, file, inConst)
       break
   }
 }
@@ -783,6 +795,9 @@ function checkDeadBranchesStmt(stmt: HIRStmt, out: LintWarning[], file: string |
     case 'while_let_some':
       checkDeadBranchesBlock(stmt.body, out, file)
       break
+    case 'labeled_loop':
+      checkDeadBranchesStmt(stmt.body, out, file)
+      break
   }
 }
 
@@ -897,6 +912,9 @@ function countStmts(block: HIRBlock): number {
         break
       case 'while_let_some':
         count += countStmts(stmt.body)
+        break
+      case 'labeled_loop':
+        count += countStmts([stmt.body])
         break
     }
   }

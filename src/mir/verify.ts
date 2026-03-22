@@ -164,7 +164,7 @@ function getDst(instr: MIRInstr): Temp | null {
   switch (instr.kind) {
     case 'const':
     case 'copy':
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'neg':
     case 'cmp':
     case 'string_match':
@@ -195,7 +195,7 @@ function getUsedTemps(instr: MIRInstr): Temp[] {
     case 'not':
       temps.push(...getOperandTemps(instr.src))
       break
-    case 'add': case 'sub': case 'mul': case 'div': case 'mod':
+    case 'add': case 'sub': case 'mul': case 'div': case 'mod': case 'pow':
     case 'cmp':
     case 'and': case 'or':
       temps.push(...getOperandTemps(instr.a), ...getOperandTemps(instr.b))

@@ -618,7 +618,7 @@ export class Parser {
   private parseDecoratorValue(value: string): Decorator {
     // Parse @tick, @on(PlayerDeath), @on_trigger("name"), or @deprecated("msg with ) parens")
     // Use a greedy match for args that allows any content inside the outermost parens.
-    const match = value.match(/^@(\w+)(?:\((.*)\))?$/s)
+    const match = value.match(/^@([A-Za-z_][A-Za-z0-9_-]*)(?:\((.*)\))?$/s)
     if (!match) {
       this.error(`Invalid decorator: ${value}`)
     }

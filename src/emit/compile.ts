@@ -312,11 +312,12 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       return { files: [], warnings, success: true as const }
     }
 
-    // Extract @tick, @load, @watch, @inline, @coroutine, @schedule, @on, and @memoize handlers from HIR (before decorator info is lost)
+    // Extract decorator metadata before HIR lowering discards it.
     const tickFunctions: string[] = []
     const loadFunctions: string[] = []
     const watchFunctions: Array<{ name: string; objective: string }> = []
     const inlineFunctions = new Set<string>()
+    const noInlineFunctions = new Set<string>()
     const coroutineInfos: CoroutineInfo[] = []
     const scheduleFunctions: Array<{ name: string; ticks: number }> = []
     const profiledFunctions: string[] = []
@@ -338,6 +339,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
         if (dec.name === 'tick') tickFunctions.push(fn.name)
         if (dec.name === 'load') loadFunctions.push(fn.name)
         if (dec.name === 'inline') inlineFunctions.add(fn.name)
+        if (dec.name === 'no-inline') noInlineFunctions.add(fn.name)
         if (dec.name === 'coroutine') {
           coroutineInfos.push({
             fnName: fn.name,
@@ -374,6 +376,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const mir = lowerToMIR(hir, filePath)
     if (inlineFunctions.size > 0) {
       mir.inlineFunctions = inlineFunctions
+    }
+    if (noInlineFunctions.size > 0) {
+      mir.noInlineFunctions = noInlineFunctions
     }
 
     // Stage 4: MIR optimization

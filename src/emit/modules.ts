@@ -538,7 +538,10 @@ function rewriteStmt(stmt: Stmt, symbolMap: Map<string, string>): void {
     case 'let_destruct':
       rewriteExpr(stmt.init, symbolMap)
       break
-    // break, continue, raw: nothing to rewrite
+    case 'labeled_loop':
+      rewriteStmt(stmt.body, symbolMap)
+      break
+    // break, continue, break_label, continue_label, raw: nothing to rewrite
   }
 }
 
