@@ -2074,6 +2074,72 @@ function lowerExpr(
 
       // Handle builtin calls → raw MC commands
       if (BUILTIN_SET.has(expr.fn)) {
+        // Special case: say() with f_string → MC macro function ($say template)
+        // MC `say` is plain text and cannot reference scoreboards directly;
+        // use function macros (MC 1.20.2+) to interpolate variables.
+        if (expr.fn === 'say' && expr.args[0]?.kind === 'f_string') {
+          const fstr = precomputeFStringParts(expr.args[0], ctx, scope)
+          if (fstr.kind === 'f_string') {
+            const ns = ctx.getNamespace()
+            const obj = `__${ns}`
+            const helperName = `${ctx.getFnName()}__say_macro_${ctx.freshTemp()}`
+
+            // Build macro template: "text $(var) more text"
+            let template = 'say '
+            const macroVarNames: string[] = []
+            for (const part of fstr.parts) {
+              if (part.kind === 'text') {
+                template += part.value
+              } else {
+                const inner = part.expr as HIRExpr
+                if (inner.kind === 'ident') {
+                  // Strip leading $ from temp names for macro param names
+                  const varName = inner.name.startsWith('$') ? inner.name.slice(1) : inner.name
+                  template += `$(${varName})`
+                  macroVarNames.push(inner.name)
+                } else if (inner.kind === 'int_lit') {
+                  template += String(inner.value)
+                } else {
+                  template += '?'
+                }
+              }
+            }
+
+            // Emit: copy each scoreboard var to rs:macro_args storage
+            for (const varName of macroVarNames) {
+              const cleanName = varName.startsWith('$') ? varName.slice(1) : varName
+              ctx.emit({
+                kind: 'call', dst: null,
+                fn: `__raw:execute store result storage rs:macro_args ${cleanName} int 1 run scoreboard players get ${varName} ${obj}`,
+                args: [],
+              })
+            }
+
+            // Build helper MIR function with isMacro: true
+            const helperCtx = new FnContext(ns, helperName, ctx.structDefs, ctx.implMethods)
+            helperCtx.emit({ kind: 'call', dst: null, fn: `__raw:$${template}`, args: [] })
+            helperCtx.terminate({ kind: 'return', value: null })
+            const helperReachable = computeReachable(helperCtx.blocks, 'entry')
+            const helperBlocks = helperCtx.blocks.filter(b => helperReachable.has(b.id))
+            computePreds(helperBlocks)
+            ctx.helperFunctions.push({
+              name: helperName,
+              params: [],
+              blocks: helperBlocks,
+              entry: 'entry',
+              isMacro: true,
+              sourceSnippet: 'say macro helper',
+            })
+
+            // Emit: function <helper> with storage rs:macro_args
+            ctx.emit({ kind: 'call', dst: null, fn: `__raw:function ${ns}:${helperName} with storage rs:macro_args`, args: [] })
+
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: t, value: 0 })
+            return { kind: 'temp', name: t }
+          }
+        }
+
         // For text builtins with f-string args, precompute complex expressions to temp vars
         const TEXT_BUILTINS_SET = new Set(['tell', 'tellraw', 'title', 'subtitle', 'actionbar', 'announce'])
         let resolvedArgs = expr.args
@@ -3146,17 +3212,7 @@ function formatBuiltinCall(
       }
       break
     }
-    case 'say': {
-      // If arg is an f_string, use tellraw @a for variable interpolation
-      // (MC `say` command is plain text and cannot reference scoreboards)
-      if (args[0]?.kind === 'f_string') {
-        const msgJson = resolveTextArg(args[0])
-        cmd = `tellraw @a ${msgJson}`
-      } else {
-        cmd = `say ${strs[0] ?? ''}`
-      }
-      break
-    }
+    case 'say': cmd = `say ${strs[0] ?? ''}`; break
     case 'tell':
     case 'tellraw': {
       const msgJson = resolveTextArg(args[1])
