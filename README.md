@@ -2,400 +2,204 @@
 
 <img src="./logo.png" alt="RedScript Logo" width="64" />
 
-<img src="https://img.shields.io/badge/RedScript-2.6.2-red?style=for-the-badge&logo=minecraft&logoColor=white" alt="RedScript" />
+# RedScript
 
-**A typed scripting language that compiles to Minecraft datapacks.**
+**A typed language that compiles to Minecraft datapacks.**
 
-Write clean game logic. RedScript handles the scoreboard spaghetti.
+Write clean code. Get vanilla datapacks. No mods required.
 
-[![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-1901%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
-[![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
-[![npm downloads](https://img.shields.io/npm/dm/redscript-mc?color=cb3837)](https://www.npmjs.com/package/redscript-mc)
+[![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837&label=npm)](https://www.npmjs.com/package/redscript-mc)
+[![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-3886%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
-[![Online IDE](https://img.shields.io/badge/Try-Online%20IDE-orange)](https://redscript-ide.pages.dev)
-[![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-[中文版](./README.zh.md) · [Quick Start](#quick-start) · [Docs](https://redscript-docs.pages.dev) · [Contributing](./CONTRIBUTING.md)
-
-### 🚀 [Try it online — no install needed!](https://redscript-ide.pages.dev)
-
-<img src="./demo.gif" alt="RedScript Demo — math curves drawn with particles in Minecraft" width="520" />
-
-*↑ Five mathematical curves rendered in real-time with particles — 100% vanilla, no mods!*
-*`y = x·sin(x)` · `y = sin(x) + ½sin(2x)` · `y = e⁻ˣsin(4x)` · `y = tanh(2x)` · `r = cos(2θ)` rose curve*
-*Each curve is computed tick-by-tick using RedScript's fixed-point math stdlib.*
+[中文版](./README.zh.md) · [Documentation](https://redscript-docs.pages.dev) · [Playground](https://redscript.pages.dev)
 
 </div>
 
 ---
 
-### What is RedScript?
+## Why RedScript?
 
-RedScript is a typed scripting language that compiles to vanilla Minecraft datapacks. Write clean code with variables, functions, loops, and events — RedScript handles the scoreboard commands and `.mcfunction` files for you.
+Minecraft datapacks are powerful but painful to write:
 
-**The demo above?** Five math curves drawn with 64 sample points each. The core logic:
+```mcfunction
+# Vanilla: Check if player has 100+ score and give reward
+execute as @a[scores={points=100..}] run scoreboard players add @s rewards 1
+execute as @a[scores={points=100..}] run scoreboard players set @s points 0
+execute as @a[scores={points=100..}] run give @s minecraft:diamond 1
+execute as @a[scores={points=100..}] run tellraw @s {"text":"Reward claimed!"}
+```
 
 ```rs
-import "stdlib/math"
-
-let phase: int = 0;
-let frame: int = 0;
-
-// 5 curves cycle every 128 ticks (~6.5 s each)
-@tick fn _wave_tick() {
-    phase = (phase + 4) % 360;
-    frame = frame + 1;
-
-    let curve_id: int = (frame / 128) % 5;
-
-    // Compute sin at 9 column offsets (40° apart = full sine wave span)
-    let s0: int = sin_fixed((phase +   0) % 360);
-    let s1: int = sin_fixed((phase +  40) % 360);
-    // ... s2 through s8 ...
-
-    // Draw bar chart: each column height = sin value
-    // (64 fixed particle positions per curve, all respawned each tick)
-    if (curve_id == 0) { _draw_xsinx(); }
-    if (curve_id == 1) { _draw_harmonic(); }
-    // ...
-
-    actionbar(@a, f"§e  y = x·sin(x)   phase: {phase}°  center: {s0}‰");
-}
-```
-
-**What you get:**
-- ✅ `let` / `const` variables (no more `scoreboard players set`)
-- ✅ `if` / `else` / `for` / `foreach` / `break` / `continue` control flow
-- ✅ `@tick` / `@load` / `@on(Event)` decorators
-- ✅ `foreach (p in @a) at @s positioned ~ ~1 ~` and full `execute` subcommand support
-- ✅ `match` with range patterns like `70..79`
-- ✅ Builtins accept runtime macro variables in any argument position
-- ✅ f-strings like `f"Score: {points}"` for dynamic output
-- ✅ Public functions are preserved automatically; `_privateFn()` stays private
-- ✅ `enum` types with `match` dispatch (zero-runtime overhead)
-- ✅ Multi-return values: `fn divmod(a: int, b: int): (int, int)`
-- ✅ Generics: `fn max<T>(a: T, b: T): T` (monomorphized)
-- ✅ `Option<T>` null safety: `Some(x)` / `None` / `if let Some(x) = opt`
-- ✅ `@coroutine(batch=N)` for tick-spread loops (no more maxCommandChain hits)
-- ✅ `@schedule(ticks=N)` to delay function execution
-- ✅ Module system: `module math; import math::sin;`
-- ✅ Multi-version targets: `--mc-version 1.20.2`
-- ✅ Source maps: `--source-map` for debugging
-- ✅ Language Server Protocol: diagnostics, hover, go-to-def, completion
-- ✅ One file -> ready-to-use datapack
-
----
-
-### Quick Start
-
-#### Option 1: Online IDE (No Install)
-
-**[→ redscript-ide.pages.dev](https://redscript-ide.pages.dev)** — Write code, see output instantly.
-
-#### Option 2: VSCode Extension
-
-1. Install [RedScript for VSCode](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
-2. Get syntax highlighting, auto-complete, hover docs, and more
-
-#### Option 3: CLI
-
-```mcrs
-struct Timer { _id: int; duration: int; }
-
-impl Timer {
-    fn new(duration: int): Timer {
-        return Timer { _id: 0, duration: duration };
+// RedScript: Same logic, readable
+@tick fn check_rewards() {
+    foreach (p in @a) {
+        if (scoreboard_get(p, #points) >= 100) {
+            scoreboard_add(p, #rewards, 1);
+            scoreboard_set(p, #points, 0);
+            give(p, "minecraft:diamond", 1);
+            tell(p, "Reward claimed!");
+        }
     }
-    fn done(self): bool { return true; }
-}
-
-@on(PlayerJoin)
-fn welcome(player: Player) {
-    say(f"Welcome {player}!");
-}
-
-@tick fn game_loop() {
-    let timer = Timer::new(100);
-    setTimeout(200, () => { say("Delayed!"); });
 }
 ```
+
+## Quick Start
+
+### Try Online (No Install)
+
+**[→ redscript.pages.dev](https://redscript.pages.dev)** — Write code, download datapack.
+
+### Install CLI
 
 ```bash
 npm install -g redscript-mc
-redscript compile game.mcrs -o ./my-datapack
 ```
 
-#### Deploy
-
-Drop the output folder into your world's `datapacks/` directory and run `/reload`. Done.
-
----
-
-### The Language
-
-#### Variables & Types
+### Hello World
 
 ```rs
-let x: int = 42;
-let name: string = "Steve";
-let spawn: BlockPos = (0, 64, 0);
-let nearby: BlockPos = (~5, ~0, ~5);   // relative coords
-const MAX: int = 100;                  // compile-time constant
-```
-
-#### MC Names (Objectives, Tags, Teams)
-
-Use `#name` for Minecraft identifiers — no quotes needed:
-
-```rs
-// Objectives, fake players, tags, teams — write without quotes
-let hp: int = scoreboard_get(@s, #health);
-scoreboard_set(#game, #timer, 300);     // fake player #game, objective timer
-tag_add(@s, #hasKey);
-team_join(#red, @s);
-gamerule(#keepInventory, true);
-
-// String literals still work (backward compatible)
-scoreboard_get(@s, "health")            // same output as #health
-```
-
-#### Functions & Defaults
-
-```rs
-fn greet(player: selector, msg: string = "Welcome!") {
-    tell(player, msg);
+// hello.mcrs
+@load fn init() {
+    say("Hello from RedScript!");
 }
 
-greet(@s);              // uses default message
-greet(@a, "Hello!");    // override
-```
-
-#### Decorators
-
-```rs
-@tick                  // every tick
-fn heartbeat() { ... }
-
-@tick(rate=20)         // every second
-fn every_second() { ... }
-
-@on_advancement("story/mine_diamond")
-fn on_diamond() {
-    give(@s, "minecraft:diamond", 5);
-}
-
-@on_death
-fn on_death() {
-    scoreboard_add(@s, #deaths, 1);
-}
-
-// Delay execution by N ticks (20t = 1 second)
-@schedule(ticks=20)
-fn after_one_second(): void {
-    title(@a, "One second later!");
-}
-
-// Spread a heavy loop across multiple ticks (batch=N iterations/tick)
-@coroutine(batch=50, onDone=all_done)
-fn process_all(): void {
-    let i: int = 0;
-    while (i < 1000) {
-        // work spread over ~20 ticks instead of lagging one tick
-        i = i + 1;
+@tick fn game_loop() {
+    foreach (p in @a[tag=playing]) {
+        effect(p, "minecraft:speed", 1, 0, true);
     }
 }
 ```
 
-#### Control Flow
-
-```rs
-if (hp <= 0) {
-    respawn();
-} else if (hp < 5) {
-    warn_player();
-}
-
-for (let i: int = 0; i < 10; i = i + 1) {
-    say(f"Spawning wave {i}");
-    summon("minecraft:zombie", ~0, ~0, ~0);
-}
-
-foreach (player in @a) {
-    heal(player, 2);
-}
-```
-
-#### Structs & Enums
-
-```rs
-enum Phase { Lobby, Playing, Ended }
-
-struct Player {
-    score: int,
-    alive: bool,
-}
-
-match (phase) {
-    Phase::Lobby   => { announce("Waiting..."); }
-    Phase::Playing => { every_second(); }
-    Phase::Ended   => { show_scoreboard(); }
-}
-```
-
-#### Lambdas
-
-```rs
-fn apply(f: (int) -> int, x: int) -> int {
-    return f(x);
-}
-
-let double = (x: int) -> int { return x * 2; };
-apply(double, 5);  // 10
-```
-
-#### Arrays
-
-```rs
-let scores: int[] = [];
-push(scores, 42);
-
-foreach (s in scores) {
-    announce(f"Score: {s}");
-}
-```
-
----
-
-### CLI Reference
-
-```
-redscript compile <file>       Compile to datapack (default) or structure
-  -o, --output <dir>           Output directory         [default: ./out]
-  --target datapack|structure  Output format            [default: datapack]
-  --namespace <ns>             Datapack namespace       [default: filename]
-  --mc-version <ver>           Target MC version        [default: 1.21]
-  --include <dir>              Extra library search path (repeatable)
-  --source-map                 Emit .mcrs.map source map for debugging
-  --no-optimize                Skip optimizer passes
-  --stats                      Print optimizer statistics
-
-redscript repl                 Interactive REPL
-redscript validate <file>      Validate MC commands
-```
-
----
-
-### Stdlib
-
-RedScript ships a built-in standard library. Use the short form — no path needed:
-
-```rs
-import "stdlib/math"      // fixed-point math: ln, sqrt_fx, exp_fx, sin_fixed, cos_fixed...
-import "stdlib/math_hp"   // high-precision trig via entity rotation (init_trig required)
-import "stdlib/vec"       // 2D/3D vector: dot, cross, length, distance, atan2, rotate...
-import "stdlib/random"    // LCG & PCG random number generators
-import "stdlib/color"     // RGB/HSL color packing, blending, conversion
-import "stdlib/bits"      // bitwise AND/OR/XOR/NOT/shift/popcount (integer-simulated)
-import "stdlib/list"      // sort3, min/max/avg, weighted utilities
-import "stdlib/geometry"  // AABB/sphere contains, parabola physics, angle helpers
-import "stdlib/signal"    // normal/exponential distributions, bernoulli, weighted choice
-import "stdlib/bigint"    // 96-bit base-10000 arithmetic (add/sub/mul/div/cmp)
-import "stdlib/easing"    // 12 easing functions: quad/cubic/sine/bounce/back/smooth
-import "stdlib/noise"     // value noise, fractal Brownian motion, terrain height
-import "stdlib/calculus"  // numerical differentiation, trapezoid/Simpson integration, curve length, online statistics
-import "stdlib/matrix"    // 2D/3D rotation, Display Entity quaternion helpers
-import "stdlib/combat"    // damage, kill-check helpers
-import "stdlib/player"    // health, alive check, range
-import "stdlib/cooldown"  // per-player cooldown tracking
-```
-
-All stdlib files use `module library;` — only the functions you actually call are compiled in.
-
-> Parts of the standard library are inspired by [kaer-3058/large_number](https://github.com/kaer-3058/large_number), a comprehensive math library for Minecraft datapacks.
-
-Custom library paths can be added with `--include <dir>` so your own modules work the same way.
-
-**Example — computing Fibonacci(50) in-game:**
-
-```rs
-import "stdlib/bigint"
-
-fn show_fib() {
-    bigint_fib(50);
-    // F(50) = 12,586,269,025 — too big for int32, stored across 3 limbs:
-    let l0: int = bigint_get_a(0);  // 9025
-    let l1: int = bigint_get_a(1);  // 8626
-    let l2: int = bigint_get_a(2);  // 125
-    say(f"F(50) limbs: {l2} {l1} {l0}");
-}
-```
-
----
-
-### Examples
-
-The `examples/` directory contains ready-to-compile demos:
-
-| File | What it shows |
-|---|---|
-| `readme-demo.mcrs` | Real-time sine wave particles — `@tick`, `foreach`, f-strings, math stdlib |
-| `math-showcase.mcrs` | All stdlib math modules: trig, vectors, BigInt, fractals |
-| `showcase.mcrs` | Full feature tour: structs, enums, `match`, lambdas, `@tick`/`@load` |
-| `coroutine-demo.mcrs` | `@coroutine(batch=50)` — spread 1000 iterations across ~20 ticks |
-| `enum-demo.mcrs` | Enum state machine: NPC AI cycling Idle → Moving → Attacking with `match` |
-| `scheduler-demo.mcrs` | `@schedule(ticks=20)` — delayed events, chained schedules |
-
-Compile any example:
 ```bash
-node dist/cli.js compile examples/coroutine-demo.mcrs -o ~/mc-server/datapacks/demo --namespace demo
+redscript build hello.mcrs -o ./my-datapack
+```
+
+Drop `my-datapack/` into your world's `datapacks/` folder, run `/reload`. Done.
+
+---
+
+## Features
+
+### Language
+
+| Feature | Example |
+|---------|---------|
+| Variables | `let x: int = 42;` |
+| Functions | `fn damage(target: selector, amount: int) { ... }` |
+| Control flow | `if`, `else`, `for`, `while`, `foreach`, `match` |
+| Structs | `struct Player { score: int, alive: bool }` |
+| Enums | `enum State { Lobby, Playing, Ended }` |
+| Option type | `let item: Option<int> = Some(5);` |
+| Result type | `let r: Result<int, string> = Ok(42);` |
+| F-strings | `say(f"Score: {points}");` |
+| Modules | `import math; math::sin(45);` |
+
+### Minecraft Integration
+
+```rs
+// Decorators for game events
+@tick fn every_tick() { }
+@tick(rate=20) fn every_second() { }
+@load fn on_datapack_load() { }
+@on(PlayerJoin) fn welcome(p: Player) { }
+
+// Entity selectors work naturally
+foreach (zombie in @e[type=zombie, distance=..10]) {
+    kill(zombie);
+}
+
+// Execute subcommands
+foreach (p in @a) at @s positioned ~ ~2 ~ {
+    particle("minecraft:flame", ~0, ~0, ~0, 0.1, 0.1, 0.1, 0.01, 10);
+}
+
+// Coroutines for heavy work (spread across ticks)
+@coroutine(batch=100)
+fn process_all() {
+    for (let i = 0; i < 10000; i = i + 1) {
+        // Won't lag — runs 100 iterations per tick
+    }
+}
+```
+
+### Tooling
+
+- **15 optimizer passes** — Dead code elimination, constant folding, inlining, etc.
+- **LSP** — Hover docs, go-to-definition, auto-complete, diagnostics
+- **VSCode Extension** — Full syntax highlighting and snippets
+- **50 stdlib modules** — Math, vectors, pathfinding, particles, and more
+
+---
+
+## CLI Commands
+
+```bash
+redscript build <file>     # Compile with optimizations
+redscript compile <file>   # Compile without optimizations
+redscript check <file>     # Type check only
+redscript fmt <file>       # Format code
+redscript lint <file>      # Static analysis
+redscript test <file>      # Run @test functions
+redscript watch <dir>      # Watch mode with hot reload
+redscript docs [module]    # Open stdlib docs
 ```
 
 ---
 
-### Changelog Highlights
+## Standard Library
 
-#### v1.2.27 (2026-03-14)
+50 modules covering math, data structures, game systems, and MC-specific helpers:
 
-- **BigInt real-MC fix**: `storage_set_int` macro now uses `execute store result storage` instead of `data modify set value $(n)` — avoids a Minecraft macro substitution bug with integer values; BigInt confirmed working on Paper 1.21.4
-- **showcase**: `atan2_fixed` returns degrees (0–360), not millidegrees; fixed over-division in examples; `mod_pow` test cases use small safe-range moduli (no INT32 overflow)
+```rs
+import math;        // sin, cos, sqrt, pow, abs
+import vec;         // 2D/3D vectors, dot, cross, normalize
+import random;      // LCG/PCG random generators
+import pathfind;    // A* pathfinding
+import particles;   // Particle helpers
+import inventory;   // Slot manipulation
+import scheduler;   // Delayed execution
+import ecs;         // Entity-component system
+// ... and 42 more
+```
 
-#### v1.2.26 (2026-03-14)
-
-- Full math/vector/advanced/bigint standard library (see above)
-- `module library;` pragma for zero-cost tree-shaking
-- `storage_get_int` / `storage_set_int` dynamic NBT array builtins
-- Compiler bug fixes: `isqrt` convergence, copy propagation, variable scoping
-
-#### v1.2.25 (2026-03-13)
-
-- Entity type hierarchy with `W_IMPOSSIBLE_AS` warnings
-- Variable name mangling (`$a`, `$b`, `$c`, ...) for minimal scoreboard footprint
-- Automated CI/CD: npm publish + VSCode extension on every push
-
-#### v1.2.0
-
-- `impl` blocks, methods, and static constructors
-- `is` type narrowing for entity-safe control flow
-- `@on(Event)` static events and callback scheduling builtins
-- Runtime f-strings for output functions
-- Expanded stdlib with Timer OOP APIs and 313 MC tag constants
-- Dead code elimination
-
-See [CHANGELOG.md](./CHANGELOG.md) for the full release notes.
+Full list: [Stdlib Documentation](https://redscript-docs.pages.dev/stdlib/)
 
 ---
 
-## Acknowledgements
+## Examples
 
-Parts of the standard library are inspired by [kaer-3058/large_number](https://github.com/kaer-3058/large_number), a comprehensive math library for Minecraft datapacks. RedScript provides a higher-level, type-safe API over similar algorithms.
+| File | Description |
+|------|-------------|
+| [`loops-demo.mcrs`](./examples/loops-demo.mcrs) | All loop constructs |
+| [`showcase.mcrs`](./examples/showcase.mcrs) | Full feature tour |
+
+More in the [`examples/`](./examples/) directory.
+
+---
+
+## Documentation
+
+- **[Getting Started](https://redscript-docs.pages.dev/guide/)** — Installation and first project
+- **[Language Reference](https://redscript-docs.pages.dev/reference/)** — Complete syntax guide
+- **[Stdlib Reference](https://redscript-docs.pages.dev/stdlib/)** — All 50 modules documented
+- **[CLI Reference](https://redscript-docs.pages.dev/cli/)** — Command line options
+
+---
+
+## Links
+
+- [Online Playground](https://redscript.pages.dev)
+- [VSCode Extension](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
+- [npm Package](https://www.npmjs.com/package/redscript-mc)
+- [Changelog](./CHANGELOG.md)
+- [Contributing](./CONTRIBUTING.md)
 
 ---
 
 <div align="center">
 
-MIT License · Copyright © 2026 [bkmashiro](https://github.com/bkmashiro)
-
-*Write less. Build more. Ship faster.*
+MIT License · [bkmashiro](https://github.com/bkmashiro)
 
 </div>
