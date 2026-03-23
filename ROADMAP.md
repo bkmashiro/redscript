@@ -1,6 +1,6 @@
 # RedScript ROADMAP
 
-> Last updated: 2026-03-22
+> Last updated: 2026-03-23
 > Current version: 3.0.0
 
 ## Legend
@@ -145,7 +145,7 @@ All 50 modules documented with `///` annotations and en+zh generated docs.
 | Type system reference | ✅ |
 | Error reference | ✅ |
 | Blog posts (3) | ✅ |
-| Tutorials | 📋 |
+| Tutorials (23 en + 23 zh) | ✅ |
 
 ---
 
