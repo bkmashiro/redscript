@@ -18107,7 +18107,7 @@ var require_package = __commonJS({
   "../../dist/package.json"(exports2, module2) {
     module2.exports = {
       name: "redscript-mc",
-      version: "3.0.0",
+      version: "3.0.1",
       description: "A high-level programming language that compiles to Minecraft datapacks",
       main: "dist/src/index.js",
       bin: {
