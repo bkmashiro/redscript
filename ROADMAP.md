@@ -156,4 +156,4 @@ All 50 modules documented with `///` annotations and en+zh generated docs.
 | redscript-mc v3.0.0 npm publish | ✅ |
 | VSCode marketplace v3.0.0 description update | ✅ |
 | nest-faster-crud npm publish | ✅ |
-| GitHub Release notes | 📋 |
+| GitHub Release notes | ✅ |
