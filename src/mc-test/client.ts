@@ -267,6 +267,46 @@ export class MCTestClient {
   }
 
   /**
+   * Dump all scoreboard entries for a namespace's objective (__<ns>).
+   * Returns { "$p0": 0, "$val": 11, "#result": 42, ... }
+   */
+  async dumpScores(ns: string): Promise<Record<string, number>> {
+    return this.get('/scoreboard/dump', { ns })
+      .then((r: any) => r.entries ?? {})
+  }
+
+  /**
+   * Dump all scoreboard entries for a specific objective.
+   */
+  async dumpScoresByObj(obj: string): Promise<Record<string, number>> {
+    return this.get('/scoreboard/dump', { obj })
+      .then((r: any) => r.entries ?? {})
+  }
+
+  /**
+   * Dump the raw NBT of an entire storage namespace.
+   */
+  async dumpStorage(storage: string): Promise<{ raw: string; ok: boolean }> {
+    return this.get('/storage/dump', { storage })
+  }
+
+  /**
+   * Assert multiple scoreboard values at once.
+   * Usage: await mc.assertScoreMap('ns', { '$p0': 11, '$ret': 2 })
+   */
+  async assertScoreMap(ns: string, expected: Record<string, number>): Promise<void> {
+    const actual = await this.dumpScores(ns)
+    for (const [key, val] of Object.entries(expected)) {
+      if (actual[key] !== val) {
+        throw new Error(
+          `assertScoreMap[${ns}] ${key}: expected ${val}, got ${actual[key] ?? '(unset)'}\n` +
+          `Full dump: ${JSON.stringify(actual)}`
+        )
+      }
+    }
+  }
+
+  /**
    * Wait until a scoreboard value equals expected, up to timeout ms.
    */
   async waitForScore(
