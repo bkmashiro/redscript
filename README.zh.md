@@ -13,7 +13,7 @@
 [![Tests](https://img.shields.io/badge/tests-3886%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 
-[English](./README.md) · [文档](https://redscript-docs.pages.dev) · [在线编辑器](https://redscript.pages.dev)
+[English](./README.md) · [文档](https://redscript-docs.pages.dev) · [在线编辑器](https://redscript-ide.pages.dev)
 
 </div>
 
@@ -49,7 +49,7 @@ execute as @a[scores={points=100..}] run tellraw @s {"text":"领取成功!"}
 
 ### 在线体验（无需安装）
 
-**[→ redscript.pages.dev](https://redscript.pages.dev)** — 写代码，下载数据包。
+**[→ redscript-ide.pages.dev](https://redscript-ide.pages.dev)** — 写代码，下载数据包。
 
 ### 安装 CLI
 
@@ -190,7 +190,7 @@ import ecs;         // 实体组件系统
 
 ## 链接
 
-- [在线编辑器](https://redscript.pages.dev)
+- [在线编辑器](https://redscript-ide.pages.dev)
 - [VSCode 扩展](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 - [npm 包](https://www.npmjs.com/package/redscript-mc)
 - [更新日志](./CHANGELOG.md)

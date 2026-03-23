@@ -13,7 +13,7 @@ Write clean code. Get vanilla datapacks. No mods required.
 [![Tests](https://img.shields.io/badge/tests-3886%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 
-[中文版](./README.zh.md) · [Documentation](https://redscript-docs.pages.dev) · [Playground](https://redscript.pages.dev)
+[中文版](./README.zh.md) · [Documentation](https://redscript-docs.pages.dev) · [Playground](https://redscript-ide.pages.dev)
 
 </div>
 
@@ -49,7 +49,7 @@ execute as @a[scores={points=100..}] run tellraw @s {"text":"Reward claimed!"}
 
 ### Try Online (No Install)
 
-**[→ redscript.pages.dev](https://redscript.pages.dev)** — Write code, download datapack.
+**[→ redscript-ide.pages.dev](https://redscript-ide.pages.dev)** — Write code, download datapack.
 
 ### Install CLI
 
@@ -190,7 +190,7 @@ More in the [`examples/`](./examples/) directory.
 
 ## Links
 
-- [Online Playground](https://redscript.pages.dev)
+- [Online Playground](https://redscript-ide.pages.dev)
 - [VSCode Extension](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
 - [npm Package](https://www.npmjs.com/package/redscript-mc)
 - [Changelog](./CHANGELOG.md)
