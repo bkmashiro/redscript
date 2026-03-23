@@ -3146,7 +3146,17 @@ function formatBuiltinCall(
       }
       break
     }
-    case 'say': cmd = `say ${strs[0] ?? ''}`; break
+    case 'say': {
+      // If arg is an f_string, use tellraw @a for variable interpolation
+      // (MC `say` command is plain text and cannot reference scoreboards)
+      if (args[0]?.kind === 'f_string') {
+        const msgJson = resolveTextArg(args[0])
+        cmd = `tellraw @a ${msgJson}`
+      } else {
+        cmd = `say ${strs[0] ?? ''}`
+      }
+      break
+    }
     case 'tell':
     case 'tellraw': {
       const msgJson = resolveTextArg(args[1])
