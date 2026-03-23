@@ -19,7 +19,7 @@ import { MCTestClient } from '../../mc-test/client'
 const MC_HOST = process.env.MC_HOST ?? 'localhost'
 const MC_PORT = parseInt(process.env.MC_PORT ?? '25561')
 const MC_SERVER_DIR = process.env.MC_SERVER_DIR ?? path.join(process.env.HOME!, 'mc-test-server')
-const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-test2')
+const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-test')
 
 const STDLIB_DIR = path.join(__dirname, '../../stdlib')
 
