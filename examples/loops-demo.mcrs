@@ -1,0 +1,87 @@
+// loops-demo.mcrs — All loop constructs in RedScript
+
+// Standard while loop
+fn countdown(n: int) {
+    let i = n;
+    while i > 0 {
+        say(f"{i}...");
+        i = i - 1;
+    }
+    say("§aBlastoff!");
+}
+
+// do-while: always runs at least once
+fn roll_until_six(): int {
+    let roll = 0;
+    let attempts = 0;
+    
+    do {
+        roll = random(1, 6);
+        attempts = attempts + 1;
+        say(f"Rolled: {roll}");
+    } while roll != 6;
+    
+    return attempts;
+}
+
+// repeat N: fixed iterations
+fn spawn_particles() {
+    repeat 10 {
+        particle("minecraft:flame", @s, 0.5, 0.5, 0.5, 0.1, 5);
+    }
+}
+
+// for-in: iterate arrays
+fn sum_array(arr: int[]): int {
+    let total = 0;
+    for x in arr {
+        total = total + x;
+    }
+    return total;
+}
+
+// break and continue
+fn find_first_even(arr: int[]): int {
+    for x in arr {
+        if x < 0 {
+            continue;  // Skip negatives
+        }
+        if x % 2 == 0 {
+            return x;  // Found it!
+        }
+    }
+    return -1;  // Not found
+}
+
+// Nested loops with labeled break
+fn find_in_matrix(grid: int[][], target: int): bool {
+    let found = false;
+    
+    for row in grid {
+        for cell in row {
+            if cell == target {
+                found = true;
+                break;  // Break inner loop
+            }
+        }
+        if found {
+            break;  // Break outer loop
+        }
+    }
+    
+    return found;
+}
+
+@tick
+fn demo() {
+    countdown(3);
+    
+    let attempts = roll_until_six();
+    say(f"Got 6 after {attempts} attempts");
+    
+    let nums = [1, 2, 3, 4, 5];
+    say(f"Sum: {sum_array(nums)}");
+    
+    let mixed = [-1, 3, -2, 4, 5];
+    say(f"First even: {find_first_even(mixed)}");
+}

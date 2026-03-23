@@ -1,0 +1,57 @@
+// const-demo.mcrs — Compile-time constants
+
+// Constants are inlined at compile time
+const MAX_HEALTH: int = 100;
+const REGEN_RATE: int = 5;
+const SPAWN_X: int = 0;
+const SPAWN_Y: int = 64;
+const SPAWN_Z: int = 0;
+
+// String constants for consistency
+const PREFIX: string = "§6[Game]§r ";
+const ERROR_PREFIX: string = "§c[Error]§r ";
+
+// Math constants from stdlib
+import "std:math"
+const TAU: int = PI * 2;  // 2π in fixed-point
+
+// Use constants in code
+let health: int = MAX_HEALTH;
+
+fn heal(player: selector, amount: int) {
+    health = health + amount;
+    if health > MAX_HEALTH {
+        health = MAX_HEALTH;
+    }
+    tell(player, f"{PREFIX}Healed to {health}/{MAX_HEALTH}");
+}
+
+fn respawn(player: selector) {
+    health = MAX_HEALTH;
+    tp(player, SPAWN_X, SPAWN_Y, SPAWN_Z);
+    tell(player, f"{PREFIX}Respawned!");
+}
+
+@tick(rate=20)
+fn passive_regen() {
+    if health < MAX_HEALTH {
+        health = health + REGEN_RATE;
+        if health > MAX_HEALTH {
+            health = MAX_HEALTH;
+        }
+    }
+}
+
+// @deprecated warns at call sites
+@deprecated("Use heal() instead")
+fn old_heal(p: selector) {
+    health = MAX_HEALTH;
+}
+
+@tick
+fn demo() {
+    // This will show a compile-time warning:
+    // old_heal(@s);  // ⚠️ Deprecated: Use heal() instead
+    
+    heal(@s, 20);
+}

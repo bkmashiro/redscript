@@ -1,0 +1,41 @@
+// event-demo.mcrs — Event-driven programming with @on decorator
+
+import "std:dialog"
+
+// Welcome new players
+@on(PlayerJoin)
+fn welcome(player: selector) {
+    title(player, f"§6Welcome!");
+    subtitle(player, f"§7Enjoy your stay");
+    
+    // Give starter kit
+    give(player, "minecraft:wooden_sword", 1);
+    give(player, "minecraft:bread", 16);
+}
+
+// Track player deaths
+let death_count: int = 0;
+
+@on(PlayerDeath)
+fn on_death(player: selector) {
+    death_count = death_count + 1;
+    announce(f"§c{death_count} deaths so far today");
+}
+
+// Reward for kills
+@on(EntityKill)
+fn on_kill(killer: selector, victim: selector) {
+    // Give XP for kills
+    xp(killer, 10);
+    actionbar(killer, f"§a+10 XP");
+}
+
+// Custom item interactions
+@on(ItemUse)
+fn on_item_use(player: selector, item: string) {
+    if item == "minecraft:compass" {
+        // Teleport to spawn
+        tp(player, 0, 64, 0);
+        tell(player, "§bTeleported to spawn!");
+    }
+}
