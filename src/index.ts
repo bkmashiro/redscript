@@ -4,7 +4,9 @@
  * Main entry point for programmatic usage.
  */
 
-export const version = '2.0.0'
+// Read version from package.json to avoid hardcoding
+import pkg from '../package.json'
+export const version = pkg.version
 
 import { compile } from './emit/compile'
 import { CheckFailedError, DiagnosticError, parseErrorMessage } from './diagnostics'

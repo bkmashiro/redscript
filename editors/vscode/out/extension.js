@@ -18102,6 +18102,66 @@ var require_node3 = __commonJS({
   }
 });
 
+// ../../dist/package.json
+var require_package = __commonJS({
+  "../../dist/package.json"(exports2, module2) {
+    module2.exports = {
+      name: "redscript-mc",
+      version: "3.0.0",
+      description: "A high-level programming language that compiles to Minecraft datapacks",
+      main: "dist/src/index.js",
+      bin: {
+        redscript: "dist/src/cli.js",
+        rsc: "dist/src/cli.js",
+        "redscript-lsp": "dist/src/lsp/main.js"
+      },
+      scripts: {
+        build: "tsc",
+        dev: "tsc -w",
+        test: "jest",
+        bench: "npx ts-node benchmarks/compiler-perf.ts",
+        cli: "ts-node src/cli.ts",
+        lsp: "node dist/src/lsp/main.js",
+        repl: "ts-node src/repl-server.ts",
+        "validate-mc": "jest src/__tests__/mc-syntax.test.ts --verbose",
+        postbuild: "node scripts/postbuild.js",
+        "docs:gen": "npx ts-node scripts/gen-docs.ts",
+        "docs:check": "npx ts-node scripts/gen-docs.ts --check --docs-dir ~/projects/redscript-docs"
+      },
+      devDependencies: {
+        "@types/adm-zip": "^0.5.8",
+        "@types/archiver": "^7.0.0",
+        "@types/jest": "^29.5.0",
+        "@types/node": "^20.0.0",
+        "adm-zip": "^0.5.16",
+        jest: "^29.7.0",
+        "ts-jest": "^29.1.0",
+        "ts-node": "^10.9.0",
+        typescript: "^5.4.0",
+        yaml: "^2.8.3"
+      },
+      license: "MIT",
+      keywords: [
+        "minecraft",
+        "datapack",
+        "mcfunction",
+        "compiler",
+        "redscript"
+      ],
+      repository: {
+        type: "git",
+        url: "https://github.com/bkmashiro/redscript.git"
+      },
+      author: "bkmashiro",
+      dependencies: {
+        archiver: "^7.0.1",
+        "vscode-languageserver": "^9.0.1",
+        "vscode-languageserver-textdocument": "^1.0.12"
+      }
+    };
+  }
+});
+
 // ../../dist/src/diagnostics/index.js
 var require_diagnostics = __commonJS({
   "../../dist/src/diagnostics/index.js"(exports2) {
@@ -33080,12 +33140,16 @@ var require_incremental = __commonJS({
 var require_src = __commonJS({
   "../../dist/src/index.js"(exports2) {
     "use strict";
+    var __importDefault = exports2 && exports2.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.resetCompileCache = exports2.compileIncremental = exports2.parseImports = exports2.DependencyGraph = exports2.hashFile = exports2.FileCache = exports2.MCCommandValidator = exports2.preprocessSourceWithMetadata = exports2.preprocessSource = exports2.Parser = exports2.Lexer = exports2.DEFAULT_MC_VERSION = exports2.compareMcVersion = exports2.parseMcVersion = exports2.McVersion = exports2.compileModules = exports2.compile = exports2.version = void 0;
     exports2.check = check;
     exports2.checkWithWarnings = checkWithWarnings;
     exports2.checkDetailed = checkDetailed;
-    exports2.version = "2.0.0";
+    var package_json_1 = __importDefault(require_package());
+    exports2.version = package_json_1.default.version;
     var compile_1 = require_compile2();
     var diagnostics_1 = require_diagnostics();
     var compile_2 = require_compile2();
