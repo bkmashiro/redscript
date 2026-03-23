@@ -1,47 +1,67 @@
 # RedScript VSCode Extension
 
-Syntax highlighting and snippets for [RedScript](https://github.com/bkmashiro/redscript) — a compiler targeting Minecraft Java Edition datapacks.
+> Version 1.3.80 | [RedScript 3.0](https://github.com/bkmashiro/redscript)
+
+Full language support for [RedScript](https://github.com/bkmashiro/redscript) — a compiler targeting Minecraft Java Edition datapacks.
 
 ## Features
 
-- **RedScript syntax highlighting** (`.rs` files)
-  - Keywords: `fn`, `let`, `struct`, `if`, `while`, `for`, `foreach`, `as`, `at`
-  - Entity selectors: `@a`, `@e[type=zombie, distance=..5]`, etc.
+### Syntax Highlighting
+
+- **RedScript** (`.mcrs`, `.rs` files)
+  - Keywords, types, decorators, operators
+  - Entity selectors: `@a`, `@e[type=zombie, distance=..5]`
   - Range literals: `..5`, `1..`, `1..10`
-  - Decorators: `@tick`, `@tick(rate=20)`, `@on_trigger("name")`
-  - Built-in functions: `say`, `kill`, `give`, `effect`, `raw`, `random`, `spawn_object`
-  - Types: `int`, `float`, `bool`, `string`, `void`
+  - Format strings: `f"Hello {name}!"`
+  - All 50 stdlib modules
 
-- **mcfunction syntax highlighting** (`.mcfunction` files)
-  - Full command syntax from [MinecraftCommands/syntax-mcfunction](https://github.com/MinecraftCommands/syntax-mcfunction)
-  - Entity selectors, NBT, coordinates, resource locations
+- **mcfunction** (`.mcfunction` files)
+  - Full command syntax highlighting
+  - Entity selectors, NBT, coordinates
 
-- **Code snippets**
-  - `fn` → function declaration
-  - `tickfn` → `@tick` function
-  - `tickratefn` → `@tick(rate=N)` function
-  - `trigfn` → `@on_trigger` handler
-  - `foreach` → entity foreach loop
-  - `struct` → struct declaration
-  - `for` → C-style for loop
-  - `spawn` → spawn_object call
-  - And more...
+### Language Server (LSP)
+
+- **Diagnostics** — Real-time error checking
+- **Hover** — Type info and `///` doc comments
+- **Go to Definition** — Jump to function/struct declarations
+- **Auto-complete** — Functions, types, stdlib modules
+- **Lint warnings** — 5 built-in lint rules
+
+### Code Snippets
+
+| Trigger | Result |
+|---------|--------|
+| `fn` | Function declaration |
+| `tickfn` | `@tick` function |
+| `struct` | Struct declaration |
+| `match` | Match expression |
+| `foreach` | Entity foreach loop |
+| `result` | Result<T> handling |
 
 ## Install
 
-### From VSIX (manual)
+### VS Code Marketplace
+
+Search for "RedScript" in the Extensions panel, or:
+```
+ext install bkmashiro.redscript-vscode
+```
+
+### Manual (VSIX)
 
 ```bash
 cd editors/vscode
 npm install -g @vscode/vsce
 vsce package
-code --install-extension redscript-vscode-0.1.0.vsix
+code --install-extension redscript-vscode-1.3.80.vsix
 ```
 
-### Note on `.rs` extension
+## File Extensions
 
-RedScript uses `.rs` files, same as Rust. If you have the Rust extension installed, you may need to associate `.rs` files with RedScript manually:
+- `.mcrs` — Recommended (no conflict with Rust)
+- `.rs` — Supported, but may conflict with Rust extension
 
+To force `.rs` as RedScript:
 ```json
 // settings.json
 {
@@ -51,28 +71,30 @@ RedScript uses `.rs` files, same as Rust. If you have the Rust extension install
 }
 ```
 
-Or use `.mcrs` extension (we may switch to this in future).
-
 ## Usage
 
-Write RedScript code with full syntax highlighting:
+```redscript
+import math;
+import player;
 
-```
 @tick(rate=20)
-fn check_zombies() {
-    foreach (z in @e[type=zombie, distance=..10]) {
-        kill(z);
+fn gravity_check() {
+    foreach (p in @a[tag=flying]) {
+        let y = player::get_y(p);
+        if y > 100 {
+            effect::give(p, "slow_falling", 5);
+        }
     }
 }
-
-@on_trigger("claim_reward")
-fn handle_claim() {
-    give(@s, "minecraft:diamond", 1);
-}
 ```
 
-Compile with the CLI:
-
+Compile:
 ```bash
-redscript compile src/main.rs -o dist/mypack/
+redscript build src/ -o dist/mypack/
 ```
+
+## Links
+
+- [RedScript Documentation](https://redscript-docs.pages.dev)
+- [Online Playground](https://redscript.pages.dev)
+- [GitHub](https://github.com/bkmashiro/redscript)
