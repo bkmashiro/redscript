@@ -2176,13 +2176,14 @@ export class Parser {
     let index = 0
 
     while (index < token.value.length) {
+      // Check for {...} interpolation
       if (token.value[index] === '{') {
         if (current) {
           parts.push({ kind: 'text', value: current })
           current = ''
         }
 
-        index++
+        index++ // skip '{'
         let depth = 1
         let exprSource = ''
         let inString = false

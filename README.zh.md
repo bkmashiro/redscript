@@ -261,7 +261,7 @@ let scores: int[] = [];
 push(scores, 42);
 
 foreach (s in scores) {
-    announce("Score: ${s}");
+    announce(f"Score: {s}");
 }
 ```
 

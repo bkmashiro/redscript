@@ -568,8 +568,9 @@ export class Lexer {
         continue
       }
 
+      // Check for {...} interpolation
       if (interpolationDepth === 0 && this.peek() === '{') {
-        value += this.advance()
+        value += this.advance() // {
         interpolationDepth = 1
         interpolationString = false
         continue
