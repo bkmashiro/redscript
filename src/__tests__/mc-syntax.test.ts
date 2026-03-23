@@ -16,6 +16,9 @@ function getCommands(source: string, namespace = 'test'): string[] {
     .filter(file => file.path.endsWith('.mcfunction'))
     .flatMap(file => file.content.split('\n'))
     .filter(line => line.trim().length > 0)
+    .filter(line => !line.startsWith('#'))                     // skip comments
+    .filter(line => !line.startsWith('$'))                     // skip MC macro lines ($say, $data, etc.)
+    .filter(line => !/ with storage /.test(line))              // skip macro function calls
 }
 
 function validateSource(
