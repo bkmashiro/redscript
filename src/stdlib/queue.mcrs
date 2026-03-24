@@ -11,6 +11,19 @@
 
 module library;
 
+// Placeholder conventions used in raw() strings:
+//   __OBJ__  → replaced with __<namespace> (per-namespace scoreboard objective)
+//   __NS__   → replaced with the current namespace
+//   __RS__   → replaced with "rs" (global RedScript scoreboard objective)
+
+// ─── Initialisation ──────────────────────────────────────────────────────────
+
+/// Ensure the shared "rs" scoreboard objective exists.
+/// Called automatically on datapack load.
+@load fn __queue_init() {
+    raw("scoreboard objectives add rs dummy");
+}
+
 // ─── Internal macro helpers ──────────────────────────────────────────────────
 
 fn __queue_append_apply() {
@@ -18,11 +31,11 @@ fn __queue_append_apply() {
 }
 
 fn __queue_peek_apply() {
-    raw("$execute store result score $ret __OBJ__ run data get storage rs:arrays Queue[$(idx)]");
+    raw("$execute store result score rs.peek_tmp __RS__ run data get storage rs:arrays Queue[$(idx)]");
 }
 
 fn __queue_size_raw_apply() {
-    raw("$execute store result score $ret __OBJ__ run data get storage rs:arrays Queue");
+    raw("execute store result score $ret __OBJ__ run data get storage rs:arrays Queue");
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -53,10 +66,10 @@ fn queue_pop(): int {
     let empty: int = queue_empty();
     if (empty == 1) { return -1; }
 
-    // Read front element
-    raw("scoreboard players set $ret __OBJ__ 0");
+    // Read front element via macro (idx → Queue[idx] → rs.peek_tmp)
     raw("execute store result storage rs:macro_args idx int 1 run scoreboard players get rs.q_head __RS__");
     raw("function __NS__:__queue_peek_apply with storage rs:macro_args");
+    raw("scoreboard players operation $ret __OBJ__ = rs.peek_tmp __RS__");
     // Advance head pointer
     raw("scoreboard players add rs.q_head __RS__ 1");
     raw("return 1");
@@ -75,9 +88,9 @@ fn queue_peek(): int {
     let empty: int = queue_empty();
     if (empty == 1) { return -1; }
 
-    raw("scoreboard players set $ret __OBJ__ 0");
     raw("execute store result storage rs:macro_args idx int 1 run scoreboard players get rs.q_head __RS__");
     raw("function __NS__:__queue_peek_apply with storage rs:macro_args");
+    raw("scoreboard players operation $ret __OBJ__ = rs.peek_tmp __RS__");
     raw("return 1");
     return 0;
 }
@@ -92,7 +105,7 @@ fn queue_peek(): int {
 /// let n: int = queue_size()
 fn queue_size(): int {
     raw("scoreboard players set $ret __OBJ__ 0");
-    raw("function __NS__:__queue_size_raw_apply with storage rs:macro_args");
+    raw("function __NS__:__queue_size_raw_apply");
     raw("scoreboard players operation $ret __OBJ__ -= rs.q_head __RS__");
     raw("return 1");
     return 0;

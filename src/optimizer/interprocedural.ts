@@ -58,7 +58,7 @@ function runOnePass(mod: MIRModule): MIRModule {
         if (fnMap.has(mangledName) || added.has(mangledName)) continue
 
         // Create specialized clone
-        const specialized = specialize(callee, constArgs.map(a => a.value), mangledName)
+        const specialized = specialize(callee, constArgs.map(a => a.value), mangledName, mod.objective)
         newFunctions.push(specialized)
         added.add(mangledName)
         fnMap.set(mangledName, specialized)
@@ -89,7 +89,27 @@ function mangleName(name: string, args: number[]): string {
   return `${name}__const_${args.map(v => v < 0 ? `n${Math.abs(v)}` : String(v)).join('_')}`
 }
 
-function specialize(fn: MIRFunction, args: number[], newName: string): MIRFunction {
+/**
+ * Returns true if the function has any __raw: calls that directly reference
+ * scoreboard param slots ($p0, $p1, ...) by name in the raw command string.
+ * Such functions use the raw() pattern to read params via scoreboard, so the
+ * specialized clone must pre-set those slots before executing the body.
+ */
+function hasRawParamRefs(fn: MIRFunction, paramCount: number): boolean {
+  for (let i = 0; i < paramCount; i++) {
+    const pattern = `$p${i}`
+    for (const block of fn.blocks) {
+      for (const instr of block.instrs) {
+        if (instr.kind === 'call' && instr.fn.startsWith('__raw:') && instr.fn.includes(pattern)) {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
+function specialize(fn: MIRFunction, args: number[], newName: string, objective: string): MIRFunction {
   // Build substitution map: param.name → const operand
   const sub = new Map<Temp, Operand>()
   for (let i = 0; i < fn.params.length; i++) {
@@ -97,6 +117,24 @@ function specialize(fn: MIRFunction, args: number[], newName: string): MIRFuncti
   }
 
   const newBlocks = fn.blocks.map(block => substituteBlock(block, sub))
+
+  // If the function uses raw() commands that read from $p<i> scoreboard slots
+  // directly, we must pre-set those slots in the entry block so the raw commands
+  // see the correct values (the normal call convention sets $p<i> at the call
+  // site, but the specialized function is called with no args).
+  if (hasRawParamRefs(fn, args.length)) {
+    const entryBlock = newBlocks.find(b => b.id === fn.entry)
+    if (entryBlock) {
+      const scoreWrites: MIRInstr[] = args.map((value, i) => ({
+        kind: 'score_write' as const,
+        player: `$p${i}`,
+        obj: objective,
+        src: { kind: 'const' as const, value },
+      }))
+      entryBlock.instrs = [...scoreWrites, ...entryBlock.instrs]
+    }
+  }
+
   const specialized: MIRFunction = {
     ...fn,
     name: newName,

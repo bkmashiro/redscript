@@ -1318,6 +1318,7 @@ function lowerStmt(
       const rawCmd = stmt.cmd
         .replace(/__NS__/g, ns)
         .replace(/__OBJ__/g, `__${ns}`)
+        .replace(/__RS__/g, 'rs')
       ctx.emit({ kind: 'call', dst: null, fn: `__raw:${rawCmd}`, args: [] })
       break
     }
@@ -1620,6 +1621,21 @@ function lowerExpr(
 
     case 'assign': {
       const val = lowerExpr(expr.value, ctx, scope)
+      // Check if the target is a struct variable — if so, update its field temps
+      // from the __rf_<field> return slots that the callee populated.
+      const sv = ctx.structVars.get(expr.target)
+      if (sv) {
+        const fields = ctx.structDefs.get(sv.typeName) ?? []
+        for (const fieldName of fields) {
+          const existingFieldTemp = sv.fields.get(fieldName)
+          // Reuse the existing field temp if it exists (so scoreboard slot stays stable),
+          // otherwise allocate a fresh one.
+          const fieldTemp = existingFieldTemp ?? ctx.freshTemp()
+          ctx.emit({ kind: 'copy', dst: fieldTemp, src: { kind: 'temp', name: `__rf_${fieldName}` } })
+          sv.fields.set(fieldName, fieldTemp)
+        }
+        return val
+      }
       // Reuse the existing temp for this variable so that updates inside
       // if/while bodies are visible to outer code (we target mutable
       // scoreboard slots, not true SSA registers).
