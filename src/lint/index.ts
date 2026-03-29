@@ -5,11 +5,16 @@
  * Run after HIR lowering, before MIR.
  *
  * Rules:
- *   unused-variable   — let x = 5 but x never read
- *   unused-import     — import math::sin but sin never called
- *   magic-number      — literal number > 1 used directly (0 and 1 ignored)
- *   dead-branch       — if (const == const) always-true/false condition
- *   function-too-long — function body exceeds 50 lines
+ *   unused-variable        — let x = 5 but x never read
+ *   unused-import          — import math::sin but sin never called
+ *   magic-number           — literal number > 1 used directly (0 and 1 ignored)
+ *   dead-branch            — if (const == const) always-true/false condition
+ *   function-too-long      — function body exceeds 50 lines
+ *   no-dead-assignment     — variable assigned but never read after the assignment
+ *   prefer-match-exhaustive — Option match missing Some or None arm
+ *   no-empty-catch         — empty else branch in if_let_some (silent failure)
+ *   naming-convention      — variables must be camelCase; types must be PascalCase
+ *   no-magic-numbers       — any literal number other than 0 or 1 used in an expression
  */
 
 import type {
@@ -42,6 +47,8 @@ export interface LintOptions {
   filePath?: string
   /** Max function body lines before function-too-long fires (default: 50) */
   maxFunctionLines?: number
+  /** Allowed literal number values for no-magic-numbers (default: [0, 1]) */
+  allowedNumbers?: number[]
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +68,7 @@ export function lintSource(
   const warnings: LintWarning[] = []
   const file = options.filePath
   const maxLines = options.maxFunctionLines ?? 50
+  const allowedNumbers = options.allowedNumbers ?? [0, 1]
 
   // Rule: unused-import
   warnings.push(...checkUnusedImports(imports, hir, file))
@@ -80,7 +88,25 @@ export function lintSource(
     // Rule: function-too-long
     const fnWarning = checkFunctionLength(fn, maxLines, file)
     if (fnWarning) warnings.push(fnWarning)
+
+    // Rule: no-dead-assignment
+    warnings.push(...checkNoDeadAssignment(fn, file))
+
+    // Rule: prefer-match-exhaustive
+    warnings.push(...checkPreferMatchExhaustive(fn, file))
+
+    // Rule: no-empty-catch
+    warnings.push(...checkNoEmptyCatch(fn, file))
+
+    // Rule: naming-convention
+    warnings.push(...checkNamingConvention(fn, file))
+
+    // Rule: no-magic-numbers
+    warnings.push(...checkNoMagicNumbers(fn, allowedNumbers, file))
   }
+
+  // Rule: naming-convention — type names in structs/enums
+  warnings.push(...checkNamingConventionModule(hir, file))
 
   return warnings
 }
@@ -919,4 +945,686 @@ function countStmts(block: HIRBlock): number {
     }
   }
   return count
+}
+
+// ---------------------------------------------------------------------------
+// Rule: no-dead-assignment
+// ---------------------------------------------------------------------------
+//
+// Detects variables that are assigned (via `assign` expr) but whose value is
+// never subsequently read. This is stricter than unused-variable: the variable
+// IS read at some point, but a particular write is "dead" because it is
+// overwritten before being read.
+//
+// Implementation: single-pass, scope-insensitive. We track every assignment
+// target and warn if the same name is assigned twice with no intervening read.
+
+function checkNoDeadAssignment(fn: HIRFunction, file?: string): LintWarning[] {
+  const warnings: LintWarning[] = []
+  // Map from name → span of the last unread assignment
+  const pendingWrite = new Map<string, { span?: Span }>()
+  noDeadAssignBlock(fn.body, pendingWrite, warnings, file)
+  return warnings
+}
+
+function noDeadAssignBlock(
+  block: HIRBlock,
+  pending: Map<string, { span?: Span }>,
+  out: LintWarning[],
+  file: string | undefined,
+): void {
+  for (const stmt of block) {
+    noDeadAssignStmt(stmt, pending, out, file)
+  }
+}
+
+function noDeadAssignStmt(
+  stmt: HIRStmt,
+  pending: Map<string, { span?: Span }>,
+  out: LintWarning[],
+  file: string | undefined,
+): void {
+  switch (stmt.kind) {
+    case 'let':
+      // Initial let binding — register as pending write
+      noDeadAssignExprReads(stmt.init, pending, out, file)
+      pending.set(stmt.name, { span: stmt.span })
+      break
+    case 'let_destruct':
+      noDeadAssignExprReads(stmt.init, pending, out, file)
+      for (const name of stmt.names) pending.set(name, { span: stmt.span })
+      break
+    case 'const_decl':
+      noDeadAssignExprReads(stmt.value, pending, out, file)
+      break
+    case 'expr':
+      noDeadAssignExprReads(stmt.expr, pending, out, file)
+      break
+    case 'return':
+      if (stmt.value) noDeadAssignExprReads(stmt.value, pending, out, file)
+      break
+    case 'if':
+      noDeadAssignExprReads(stmt.cond, pending, out, file)
+      noDeadAssignBlock(stmt.then, pending, out, file)
+      if (stmt.else_) noDeadAssignBlock(stmt.else_, pending, out, file)
+      break
+    case 'while':
+      noDeadAssignExprReads(stmt.cond, pending, out, file)
+      noDeadAssignBlock(stmt.body, pending, out, file)
+      if (stmt.step) noDeadAssignBlock(stmt.step, pending, out, file)
+      break
+    case 'foreach':
+      noDeadAssignExprReads(stmt.iterable, pending, out, file)
+      noDeadAssignBlock(stmt.body, pending, out, file)
+      break
+    case 'match':
+      noDeadAssignExprReads(stmt.expr, pending, out, file)
+      for (const arm of stmt.arms) noDeadAssignBlock(arm.body, pending, out, file)
+      break
+    case 'execute':
+      noDeadAssignBlock(stmt.body, pending, out, file)
+      break
+    case 'if_let_some':
+      noDeadAssignExprReads(stmt.init, pending, out, file)
+      noDeadAssignBlock(stmt.then, pending, out, file)
+      if (stmt.else_) noDeadAssignBlock(stmt.else_, pending, out, file)
+      break
+    case 'while_let_some':
+      noDeadAssignExprReads(stmt.init, pending, out, file)
+      noDeadAssignBlock(stmt.body, pending, out, file)
+      break
+    case 'labeled_loop':
+      noDeadAssignStmt(stmt.body, pending, out, file)
+      break
+  }
+}
+
+/** Processes an expression: reads clear pending writes; assign exprs register new pending writes. */
+function noDeadAssignExprReads(
+  expr: HIRExpr | undefined,
+  pending: Map<string, { span?: Span }>,
+  out: LintWarning[],
+  file: string | undefined,
+): void {
+  if (!expr) return
+  switch (expr.kind) {
+    case 'ident':
+      // Reading a variable clears its pending write
+      pending.delete(expr.name)
+      break
+    case 'assign': {
+      // RHS is read first
+      noDeadAssignExprReads(expr.value, pending, out, file)
+      // Then the target is written — if there's already a pending unread write, warn
+      if (pending.has(expr.target)) {
+        const prev = pending.get(expr.target)!
+        const warn: LintWarning = {
+          rule: 'no-dead-assignment',
+          message: `Assignment to "${expr.target}" is never read before being overwritten`,
+          file,
+        }
+        if (prev.span) { warn.line = prev.span.line; warn.col = prev.span.col }
+        out.push(warn)
+      }
+      pending.set(expr.target, { span: expr.span })
+      break
+    }
+    case 'binary':
+      noDeadAssignExprReads(expr.left, pending, out, file)
+      noDeadAssignExprReads(expr.right, pending, out, file)
+      break
+    case 'unary':
+      noDeadAssignExprReads(expr.operand, pending, out, file)
+      break
+    case 'call':
+      for (const arg of expr.args) noDeadAssignExprReads(arg, pending, out, file)
+      break
+    case 'invoke':
+      noDeadAssignExprReads(expr.callee, pending, out, file)
+      for (const arg of expr.args) noDeadAssignExprReads(arg, pending, out, file)
+      break
+    case 'static_call':
+      for (const arg of expr.args) noDeadAssignExprReads(arg, pending, out, file)
+      break
+    case 'member':
+      noDeadAssignExprReads(expr.obj, pending, out, file)
+      break
+    case 'member_assign':
+      noDeadAssignExprReads(expr.obj, pending, out, file)
+      noDeadAssignExprReads(expr.value, pending, out, file)
+      break
+    case 'index':
+      noDeadAssignExprReads(expr.obj, pending, out, file)
+      noDeadAssignExprReads(expr.index, pending, out, file)
+      break
+    case 'index_assign':
+      noDeadAssignExprReads(expr.obj, pending, out, file)
+      noDeadAssignExprReads(expr.index, pending, out, file)
+      noDeadAssignExprReads(expr.value, pending, out, file)
+      break
+    case 'some_lit':
+      noDeadAssignExprReads(expr.value, pending, out, file)
+      break
+    case 'unwrap_or':
+      noDeadAssignExprReads(expr.opt, pending, out, file)
+      noDeadAssignExprReads(expr.default_, pending, out, file)
+      break
+    case 'type_cast':
+      noDeadAssignExprReads(expr.expr, pending, out, file)
+      break
+    case 'array_lit':
+    case 'tuple_lit':
+      for (const e of expr.elements) noDeadAssignExprReads(e, pending, out, file)
+      break
+    case 'struct_lit':
+      for (const f of expr.fields) noDeadAssignExprReads(f.value, pending, out, file)
+      break
+    case 'str_interp':
+      for (const p of expr.parts) {
+        if (typeof p !== 'string') noDeadAssignExprReads(p, pending, out, file)
+      }
+      break
+    case 'f_string':
+      for (const p of expr.parts) {
+        if (p.kind === 'expr') noDeadAssignExprReads(p.expr, pending, out, file)
+      }
+      break
+    case 'lambda':
+      if (Array.isArray(expr.body)) {
+        noDeadAssignBlock(expr.body as HIRBlock, pending, out, file)
+      } else {
+        noDeadAssignExprReads(expr.body as HIRExpr, pending, out, file)
+      }
+      break
+    case 'enum_construct':
+      for (const f of expr.args) noDeadAssignExprReads(f.value, pending, out, file)
+      break
+    default:
+      break
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rule: prefer-match-exhaustive
+// ---------------------------------------------------------------------------
+//
+// When a match statement uses Option patterns (PatSome / PatNone), it should
+// cover both arms. Missing PatNone means the None case falls through silently;
+// missing PatSome means Some values are unhandled.
+
+function checkPreferMatchExhaustive(fn: HIRFunction, file?: string): LintWarning[] {
+  const warnings: LintWarning[] = []
+  checkPreferMatchExhaustiveBlock(fn.body, warnings, file)
+  return warnings
+}
+
+function checkPreferMatchExhaustiveBlock(block: HIRBlock, out: LintWarning[], file: string | undefined): void {
+  for (const stmt of block) {
+    checkPreferMatchExhaustiveStmt(stmt, out, file)
+  }
+}
+
+function checkPreferMatchExhaustiveStmt(stmt: HIRStmt, out: LintWarning[], file: string | undefined): void {
+  switch (stmt.kind) {
+    case 'match': {
+      const patKinds = new Set(stmt.arms.map(a => a.pattern.kind))
+      const hasOptionPat = patKinds.has('PatSome') || patKinds.has('PatNone')
+      const hasWild = patKinds.has('PatWild')
+      if (hasOptionPat && !hasWild) {
+        const hasSome = patKinds.has('PatSome')
+        const hasNone = patKinds.has('PatNone')
+        if (!hasSome) {
+          const warn: LintWarning = {
+            rule: 'prefer-match-exhaustive',
+            message: `match on Option is missing a Some(_) arm`,
+            file,
+          }
+          if (stmt.span) { warn.line = stmt.span.line; warn.col = stmt.span.col }
+          out.push(warn)
+        }
+        if (!hasNone) {
+          const warn: LintWarning = {
+            rule: 'prefer-match-exhaustive',
+            message: `match on Option is missing a None arm`,
+            file,
+          }
+          if (stmt.span) { warn.line = stmt.span.line; warn.col = stmt.span.col }
+          out.push(warn)
+        }
+      }
+      // Recurse into arm bodies
+      for (const arm of stmt.arms) checkPreferMatchExhaustiveBlock(arm.body, out, file)
+      break
+    }
+    case 'if':
+      checkPreferMatchExhaustiveBlock(stmt.then, out, file)
+      if (stmt.else_) checkPreferMatchExhaustiveBlock(stmt.else_, out, file)
+      break
+    case 'while':
+      checkPreferMatchExhaustiveBlock(stmt.body, out, file)
+      if (stmt.step) checkPreferMatchExhaustiveBlock(stmt.step, out, file)
+      break
+    case 'foreach':
+      checkPreferMatchExhaustiveBlock(stmt.body, out, file)
+      break
+    case 'execute':
+      checkPreferMatchExhaustiveBlock(stmt.body, out, file)
+      break
+    case 'if_let_some':
+      checkPreferMatchExhaustiveBlock(stmt.then, out, file)
+      if (stmt.else_) checkPreferMatchExhaustiveBlock(stmt.else_, out, file)
+      break
+    case 'while_let_some':
+      checkPreferMatchExhaustiveBlock(stmt.body, out, file)
+      break
+    case 'labeled_loop':
+      checkPreferMatchExhaustiveStmt(stmt.body, out, file)
+      break
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rule: no-empty-catch
+// ---------------------------------------------------------------------------
+//
+// RedScript has no try/catch. The equivalent pattern is `if_let_some` with an
+// empty else_ block (silently ignoring the None case) or a match arm whose
+// body is empty. Both patterns silently swallow a failure — warn about them.
+
+function checkNoEmptyCatch(fn: HIRFunction, file?: string): LintWarning[] {
+  const warnings: LintWarning[] = []
+  checkNoEmptyCatchBlock(fn.body, warnings, file)
+  return warnings
+}
+
+function checkNoEmptyCatchBlock(block: HIRBlock, out: LintWarning[], file: string | undefined): void {
+  for (const stmt of block) {
+    checkNoEmptyCatchStmt(stmt, out, file)
+  }
+}
+
+function checkNoEmptyCatchStmt(stmt: HIRStmt, out: LintWarning[], file: string | undefined): void {
+  switch (stmt.kind) {
+    case 'if_let_some':
+      if (stmt.else_ && stmt.else_.length === 0) {
+        const warn: LintWarning = {
+          rule: 'no-empty-catch',
+          message: `Empty else block in if let Some — None case is silently ignored`,
+          file,
+        }
+        if (stmt.span) { warn.line = stmt.span.line; warn.col = stmt.span.col }
+        out.push(warn)
+      }
+      checkNoEmptyCatchBlock(stmt.then, out, file)
+      if (stmt.else_) checkNoEmptyCatchBlock(stmt.else_, out, file)
+      break
+    case 'match':
+      for (const arm of stmt.arms) {
+        if (arm.body.length === 0) {
+          const warn: LintWarning = {
+            rule: 'no-empty-catch',
+            message: `Empty match arm body — consider handling this case explicitly`,
+            file,
+          }
+          if (stmt.span) { warn.line = stmt.span.line; warn.col = stmt.span.col }
+          out.push(warn)
+        }
+        checkNoEmptyCatchBlock(arm.body, out, file)
+      }
+      break
+    case 'if':
+      checkNoEmptyCatchBlock(stmt.then, out, file)
+      if (stmt.else_) checkNoEmptyCatchBlock(stmt.else_, out, file)
+      break
+    case 'while':
+      checkNoEmptyCatchBlock(stmt.body, out, file)
+      if (stmt.step) checkNoEmptyCatchBlock(stmt.step, out, file)
+      break
+    case 'foreach':
+      checkNoEmptyCatchBlock(stmt.body, out, file)
+      break
+    case 'execute':
+      checkNoEmptyCatchBlock(stmt.body, out, file)
+      break
+    case 'while_let_some':
+      checkNoEmptyCatchBlock(stmt.body, out, file)
+      break
+    case 'labeled_loop':
+      checkNoEmptyCatchStmt(stmt.body, out, file)
+      break
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rule: naming-convention
+// ---------------------------------------------------------------------------
+//
+// Variables (let bindings, foreach bindings) must use camelCase.
+// Type names (structs, enums) must use PascalCase.
+//
+// camelCase: starts with lowercase letter, no underscores (except leading _)
+// PascalCase: starts with uppercase letter
+
+function isCamelCase(name: string): boolean {
+  // Allow leading underscore (private convention), then must start lowercase
+  const stripped = name.startsWith('_') ? name.slice(1) : name
+  if (stripped.length === 0) return true
+  // Must start with lowercase, no underscores after first char
+  return /^[a-z][a-zA-Z0-9]*$/.test(stripped)
+}
+
+function isPascalCase(name: string): boolean {
+  return /^[A-Z][a-zA-Z0-9]*$/.test(name)
+}
+
+function checkNamingConvention(fn: HIRFunction, file?: string): LintWarning[] {
+  const warnings: LintWarning[] = []
+  checkNamingConventionBlock(fn.body, warnings, file)
+  return warnings
+}
+
+function checkNamingConventionBlock(block: HIRBlock, out: LintWarning[], file: string | undefined): void {
+  for (const stmt of block) {
+    checkNamingConventionStmt(stmt, out, file)
+  }
+}
+
+function checkNamingConventionStmt(stmt: HIRStmt, out: LintWarning[], file: string | undefined): void {
+  switch (stmt.kind) {
+    case 'let':
+      if (!isCamelCase(stmt.name)) {
+        const warn: LintWarning = {
+          rule: 'naming-convention',
+          message: `Variable "${stmt.name}" should use camelCase`,
+          file,
+        }
+        if (stmt.span) { warn.line = stmt.span.line; warn.col = stmt.span.col }
+        out.push(warn)
+      }
+      break
+    case 'let_destruct':
+      for (const name of stmt.names) {
+        if (!isCamelCase(name)) {
+          const warn: LintWarning = {
+            rule: 'naming-convention',
+            message: `Variable "${name}" should use camelCase`,
+            file,
+          }
+          if (stmt.span) { warn.line = stmt.span.line; warn.col = stmt.span.col }
+          out.push(warn)
+        }
+      }
+      break
+    case 'foreach':
+      if (!isCamelCase(stmt.binding)) {
+        const warn: LintWarning = {
+          rule: 'naming-convention',
+          message: `Loop variable "${stmt.binding}" should use camelCase`,
+          file,
+        }
+        if (stmt.span) { warn.line = stmt.span.line; warn.col = stmt.span.col }
+        out.push(warn)
+      }
+      checkNamingConventionBlock(stmt.body, out, file)
+      break
+    case 'if':
+      checkNamingConventionBlock(stmt.then, out, file)
+      if (stmt.else_) checkNamingConventionBlock(stmt.else_, out, file)
+      break
+    case 'while':
+      checkNamingConventionBlock(stmt.body, out, file)
+      if (stmt.step) checkNamingConventionBlock(stmt.step, out, file)
+      break
+    case 'match':
+      for (const arm of stmt.arms) checkNamingConventionBlock(arm.body, out, file)
+      break
+    case 'execute':
+      checkNamingConventionBlock(stmt.body, out, file)
+      break
+    case 'if_let_some':
+      if (!isCamelCase(stmt.binding)) {
+        const warn: LintWarning = {
+          rule: 'naming-convention',
+          message: `Binding "${stmt.binding}" should use camelCase`,
+          file,
+        }
+        if (stmt.span) { warn.line = stmt.span.line; warn.col = stmt.span.col }
+        out.push(warn)
+      }
+      checkNamingConventionBlock(stmt.then, out, file)
+      if (stmt.else_) checkNamingConventionBlock(stmt.else_, out, file)
+      break
+    case 'while_let_some':
+      if (!isCamelCase(stmt.binding)) {
+        const warn: LintWarning = {
+          rule: 'naming-convention',
+          message: `Binding "${stmt.binding}" should use camelCase`,
+          file,
+        }
+        if (stmt.span) { warn.line = stmt.span.line; warn.col = stmt.span.col }
+        out.push(warn)
+      }
+      checkNamingConventionBlock(stmt.body, out, file)
+      break
+    case 'labeled_loop':
+      checkNamingConventionStmt(stmt.body, out, file)
+      break
+  }
+}
+
+/** Check type names (structs and enums) at the module level. */
+function checkNamingConventionModule(hir: HIRModule, file?: string): LintWarning[] {
+  const warnings: LintWarning[] = []
+  for (const s of hir.structs) {
+    if (!isPascalCase(s.name)) {
+      const warn: LintWarning = {
+        rule: 'naming-convention',
+        message: `Struct "${s.name}" should use PascalCase`,
+        file,
+      }
+      if (s.span) { warn.line = s.span.line; warn.col = s.span.col }
+      warnings.push(warn)
+    }
+  }
+  for (const e of hir.enums) {
+    if (!isPascalCase(e.name)) {
+      const warn: LintWarning = {
+        rule: 'naming-convention',
+        message: `Enum "${e.name}" should use PascalCase`,
+        file,
+      }
+      if (e.span) { warn.line = e.span.line; warn.col = e.span.col }
+      warnings.push(warn)
+    }
+  }
+  return warnings
+}
+
+// ---------------------------------------------------------------------------
+// Rule: no-magic-numbers
+// ---------------------------------------------------------------------------
+//
+// Flags any numeric literal that is not in the allowedNumbers list (default
+// [0, 1]) when used outside of a const declaration. Unlike the older
+// magic-number rule (threshold > 1), this rule checks against an explicit
+// allow-list, making it configurable for different projects.
+
+function checkNoMagicNumbers(fn: HIRFunction, allowed: number[], file?: string): LintWarning[] {
+  const warnings: LintWarning[] = []
+  const allowedSet = new Set(allowed)
+  checkNoMagicNumbersBlock(fn.body, warnings, file, allowedSet, /*inConst=*/false)
+  return warnings
+}
+
+function checkNoMagicNumbersBlock(
+  block: HIRBlock,
+  out: LintWarning[],
+  file: string | undefined,
+  allowed: Set<number>,
+  inConst: boolean,
+): void {
+  for (const stmt of block) {
+    checkNoMagicNumbersStmt(stmt, out, file, allowed, inConst)
+  }
+}
+
+function checkNoMagicNumbersStmt(
+  stmt: HIRStmt,
+  out: LintWarning[],
+  file: string | undefined,
+  allowed: Set<number>,
+  inConst: boolean,
+): void {
+  switch (stmt.kind) {
+    case 'const_decl':
+      // Numbers in const declarations are the intended fix — skip
+      break
+    case 'let':
+      checkNoMagicNumbersExpr(stmt.init, out, file, allowed)
+      break
+    case 'let_destruct':
+      checkNoMagicNumbersExpr(stmt.init, out, file, allowed)
+      break
+    case 'expr':
+      checkNoMagicNumbersExpr(stmt.expr, out, file, allowed)
+      break
+    case 'return':
+      if (stmt.value) checkNoMagicNumbersExpr(stmt.value, out, file, allowed)
+      break
+    case 'if':
+      checkNoMagicNumbersExpr(stmt.cond, out, file, allowed)
+      checkNoMagicNumbersBlock(stmt.then, out, file, allowed, false)
+      if (stmt.else_) checkNoMagicNumbersBlock(stmt.else_, out, file, allowed, false)
+      break
+    case 'while':
+      checkNoMagicNumbersExpr(stmt.cond, out, file, allowed)
+      checkNoMagicNumbersBlock(stmt.body, out, file, allowed, false)
+      if (stmt.step) checkNoMagicNumbersBlock(stmt.step, out, file, allowed, false)
+      break
+    case 'foreach':
+      checkNoMagicNumbersExpr(stmt.iterable, out, file, allowed)
+      checkNoMagicNumbersBlock(stmt.body, out, file, allowed, false)
+      break
+    case 'match':
+      checkNoMagicNumbersExpr(stmt.expr, out, file, allowed)
+      for (const arm of stmt.arms) checkNoMagicNumbersBlock(arm.body, out, file, allowed, false)
+      break
+    case 'execute':
+      checkNoMagicNumbersBlock(stmt.body, out, file, allowed, false)
+      break
+    case 'if_let_some':
+      checkNoMagicNumbersExpr(stmt.init, out, file, allowed)
+      checkNoMagicNumbersBlock(stmt.then, out, file, allowed, false)
+      if (stmt.else_) checkNoMagicNumbersBlock(stmt.else_, out, file, allowed, false)
+      break
+    case 'while_let_some':
+      checkNoMagicNumbersExpr(stmt.init, out, file, allowed)
+      checkNoMagicNumbersBlock(stmt.body, out, file, allowed, false)
+      break
+    case 'labeled_loop':
+      checkNoMagicNumbersStmt(stmt.body, out, file, allowed, inConst)
+      break
+  }
+}
+
+function checkNoMagicNumbersExpr(
+  expr: HIRExpr | undefined,
+  out: LintWarning[],
+  file: string | undefined,
+  allowed: Set<number>,
+): void {
+  if (!expr) return
+  switch (expr.kind) {
+    case 'int_lit':
+    case 'float_lit':
+    case 'byte_lit':
+    case 'short_lit':
+    case 'long_lit':
+    case 'double_lit':
+      if (!allowed.has(expr.value)) {
+        const warn: LintWarning = {
+          rule: 'no-magic-numbers',
+          message: `Magic number ${expr.value} — extract to a named const`,
+          file,
+        }
+        if (expr.span) { warn.line = expr.span.line; warn.col = expr.span.col }
+        out.push(warn)
+      }
+      break
+    case 'binary':
+      checkNoMagicNumbersExpr(expr.left, out, file, allowed)
+      checkNoMagicNumbersExpr(expr.right, out, file, allowed)
+      break
+    case 'unary':
+      checkNoMagicNumbersExpr(expr.operand, out, file, allowed)
+      break
+    case 'call':
+      for (const arg of expr.args) checkNoMagicNumbersExpr(arg, out, file, allowed)
+      break
+    case 'invoke':
+      checkNoMagicNumbersExpr(expr.callee, out, file, allowed)
+      for (const arg of expr.args) checkNoMagicNumbersExpr(arg, out, file, allowed)
+      break
+    case 'static_call':
+      for (const arg of expr.args) checkNoMagicNumbersExpr(arg, out, file, allowed)
+      break
+    case 'member':
+      checkNoMagicNumbersExpr(expr.obj, out, file, allowed)
+      break
+    case 'member_assign':
+      checkNoMagicNumbersExpr(expr.obj, out, file, allowed)
+      checkNoMagicNumbersExpr(expr.value, out, file, allowed)
+      break
+    case 'index':
+      checkNoMagicNumbersExpr(expr.obj, out, file, allowed)
+      checkNoMagicNumbersExpr(expr.index, out, file, allowed)
+      break
+    case 'index_assign':
+      checkNoMagicNumbersExpr(expr.obj, out, file, allowed)
+      checkNoMagicNumbersExpr(expr.index, out, file, allowed)
+      checkNoMagicNumbersExpr(expr.value, out, file, allowed)
+      break
+    case 'assign':
+      checkNoMagicNumbersExpr(expr.value, out, file, allowed)
+      break
+    case 'some_lit':
+      checkNoMagicNumbersExpr(expr.value, out, file, allowed)
+      break
+    case 'unwrap_or':
+      checkNoMagicNumbersExpr(expr.opt, out, file, allowed)
+      checkNoMagicNumbersExpr(expr.default_, out, file, allowed)
+      break
+    case 'type_cast':
+      checkNoMagicNumbersExpr(expr.expr, out, file, allowed)
+      break
+    case 'array_lit':
+    case 'tuple_lit':
+      for (const e of expr.elements) checkNoMagicNumbersExpr(e, out, file, allowed)
+      break
+    case 'struct_lit':
+      for (const f of expr.fields) checkNoMagicNumbersExpr(f.value, out, file, allowed)
+      break
+    case 'str_interp':
+      for (const p of expr.parts) {
+        if (typeof p !== 'string') checkNoMagicNumbersExpr(p, out, file, allowed)
+      }
+      break
+    case 'f_string':
+      for (const p of expr.parts) {
+        if (p.kind === 'expr') checkNoMagicNumbersExpr(p.expr, out, file, allowed)
+      }
+      break
+    case 'lambda':
+      if (Array.isArray(expr.body)) {
+        checkNoMagicNumbersBlock(expr.body as HIRBlock, out, file, allowed, false)
+      } else {
+        checkNoMagicNumbersExpr(expr.body as HIRExpr, out, file, allowed)
+      }
+      break
+    case 'enum_construct':
+      for (const f of expr.args) checkNoMagicNumbersExpr(f.value, out, file, allowed)
+      break
+    default:
+      break
+  }
 }
