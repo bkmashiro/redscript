@@ -124,7 +124,7 @@ export class ExprParser extends TypeParser {
     if (ENTITY_TYPE_NAMES.has(token.value as EntityTypeName)) {
       return token.value as EntityTypeName
     }
-    this.error(`Unknown entity type '${token.value}'`)
+    this.error(`Unknown entity type '${token.value}'. Valid types: ${[...ENTITY_TYPE_NAMES].slice(0, 6).join(', ')}, ...`)
   }
 
   private isSubtraction(): boolean {
@@ -436,7 +436,7 @@ export class ExprParser extends TypeParser {
       return this.parseArrayLit()
     }
 
-    this.error(`Unexpected token '${token.kind}'`)
+    this.error(`Unexpected token '${token.value || token.kind}'. Expected an expression (identifier, literal, '(', '[', or '{')`)
   }
 
   parseLiteralExpr(): LiteralExpr {
@@ -451,7 +451,7 @@ export class ExprParser extends TypeParser {
         this.advance()
         return this.withLoc({ kind: 'float_lit', value: -Number(token.value) }, token)
       }
-      this.error('Expected number after unary -')
+      this.error('Expected number after unary minus (-). Const values must be numeric or string literals')
     }
     const expr = this.parsePrimaryExpr()
     if (

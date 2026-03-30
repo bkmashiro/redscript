@@ -67,7 +67,7 @@ export class TypeParser extends ParserBase {
         type = { kind: 'struct', name: token.value }
       }
     } else {
-      this.error(`Expected type, got '${token.kind}'`)
+      this.error(`Expected type, got '${token.value || token.kind}'. Valid types: int, float, bool, string, void, or a struct/enum name`)
     }
 
     while (this.match('[')) {

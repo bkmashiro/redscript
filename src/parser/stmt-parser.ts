@@ -318,7 +318,7 @@ export class StmtParser extends ExprParser {
           end = this.parseExpr()
         }
       } else {
-        this.error('Expected .. or ..= in for-range expression')
+        this.error('Expected .. or ..= in for-range expression. Example: for i in 0..10 { ... }')
       }
     }
 
@@ -529,7 +529,7 @@ export class StmtParser extends ExprParser {
         if (this.match(':')) dim += ':' + this.advance().value
         subcommands.push({ kind: 'in', dimension: dim })
       } else {
-        this.error(`Unexpected token in execute statement: ${this.peek().kind} (${this.peek().value})`)
+        this.error(`Unexpected token in execute statement: '${this.peek().value || this.peek().kind}'. Valid subcommands: as, at, positioned, align, facing, rotated, anchored, if, unless, in, store`)
       }
     }
 
