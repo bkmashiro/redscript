@@ -7,7 +7,7 @@
 import * as http from 'http'
 import { server } from '../repl-server'
 
-const PORT = 3000
+let PORT = 0
 
 function request(
   method: string,
@@ -46,12 +46,11 @@ function request(
 }
 
 beforeAll(done => {
-  // If the server is already listening (e.g. imported elsewhere), just proceed.
-  if (server.listening) {
+  server.listen(0, () => {
+    const addr = server.address() as import('net').AddressInfo
+    PORT = addr.port
     done()
-  } else {
-    server.listen(PORT, done)
-  }
+  })
 })
 
 afterAll(done => {

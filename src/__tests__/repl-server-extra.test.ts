@@ -11,9 +11,9 @@
 import * as http from 'http'
 import { requestHandler } from '../repl-server'
 
-// Use a different port from repl-server.test.ts (3000) to avoid port conflicts
-const PORT = 3001
+// Use port 0 so the OS assigns a free port — avoids port conflicts
 const server = http.createServer(requestHandler)
+let PORT = 0
 
 function rawRequest(
   method: string,
@@ -65,11 +65,11 @@ function jsonRequest(
 }
 
 beforeAll(done => {
-  if (server.listening) {
+  server.listen(0, () => {
+    const addr = server.address() as import('net').AddressInfo
+    PORT = addr.port
     done()
-  } else {
-    server.listen(PORT, done)
-  }
+  })
 })
 
 afterAll(done => {
