@@ -477,21 +477,12 @@ impl Point {
       expect(expr).toEqual({ kind: 'str_lit', value: 'hello' })
     })
 
-    it('parses interpolated string literal', () => {
+    it('parses dollar-brace as plain string literal (no interpolation)', () => {
+      // ${...} in plain strings is NOT interpolated — only f"..." strings support {expr}
       const expr = parseExpr('"Hello ${name}, score is ${score + 1}"')
       expect(expr).toEqual({
-        kind: 'str_interp',
-        parts: [
-          'Hello ',
-          { kind: 'ident', name: 'name' },
-          ', score is ',
-          {
-            kind: 'binary',
-            op: '+',
-            left: { kind: 'ident', name: 'score' },
-            right: { kind: 'int_lit', value: 1 },
-          },
-        ],
+        kind: 'str_lit',
+        value: 'Hello ${name}, score is ${score + 1}',
       })
     })
 

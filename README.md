@@ -164,7 +164,7 @@ import ecs;         // Entity-component system
 // ... and 42 more
 ```
 
-Full list: [Stdlib Documentation](https://redscript-docs.pages.dev/stdlib/)
+Full list: [Stdlib Documentation](https://redscript-docs.pages.dev/en/stdlib/)
 
 ---
 
@@ -181,10 +181,10 @@ More in the [`examples/`](./examples/) directory.
 
 ## Documentation
 
-- **[Getting Started](https://redscript-docs.pages.dev/guide/)** — Installation and first project
-- **[Language Reference](https://redscript-docs.pages.dev/reference/)** — Complete syntax guide
-- **[Stdlib Reference](https://redscript-docs.pages.dev/stdlib/)** — All 50 modules documented
-- **[CLI Reference](https://redscript-docs.pages.dev/cli/)** — Command line options
+- **[Getting Started](https://redscript-docs.pages.dev/en/guide/)** — Installation and first project
+- **[Language Reference](https://redscript-docs.pages.dev/en/reference/)** — Complete syntax guide
+- **[Stdlib Reference](https://redscript-docs.pages.dev/en/stdlib/)** — All 50 modules documented
+- **[CLI Reference](https://redscript-docs.pages.dev/en/cli/)** — Command line options
 
 ---
 

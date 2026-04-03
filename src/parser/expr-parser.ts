@@ -510,52 +510,9 @@ export class ExprParser extends TypeParser {
   // -------------------------------------------------------------------------
 
   private parseStringExpr(token: Token): Expr {
-    if (!token.value.includes('${')) {
-      return this.withLoc({ kind: 'str_lit', value: token.value }, token)
-    }
-
-    const parts: Array<string | Expr> = []
-    let current = ''
-    let index = 0
-
-    while (index < token.value.length) {
-      if (token.value[index] === '$' && token.value[index + 1] === '{') {
-        if (current) {
-          parts.push(current)
-          current = ''
-        }
-
-        index += 2
-        let depth = 1
-        let exprSource = ''
-        let inString = false
-
-        while (index < token.value.length && depth > 0) {
-          const char = token.value[index]
-          if (char === '"' && token.value[index - 1] !== '\\') {
-            inString = !inString
-          }
-          if (!inString) {
-            if (char === '{') depth++
-            else if (char === '}') {
-              depth--
-              if (depth === 0) { index++; break }
-            }
-          }
-          if (depth > 0) exprSource += char
-          index++
-        }
-
-        if (depth !== 0) this.error('Unterminated string interpolation')
-        parts.push(this.parseEmbeddedExpr(exprSource))
-        continue
-      }
-      current += token.value[index]
-      index++
-    }
-
-    if (current) parts.push(current)
-    return this.withLoc({ kind: 'str_interp', parts }, token)
+    // Plain string literals: no interpolation. "${...}" is treated as literal text.
+    // Only f"..." strings (f_string token) support {expr} interpolation.
+    return this.withLoc({ kind: 'str_lit', value: token.value }, token)
   }
 
   private parseFStringExpr(token: Token): Expr {

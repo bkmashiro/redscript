@@ -164,7 +164,7 @@ import ecs;         // 实体组件系统
 // ... 还有 42 个
 ```
 
-完整列表：[标准库文档](https://redscript-docs.pages.dev/stdlib/)
+完整列表：[标准库文档](https://redscript-docs.pages.dev/en/stdlib/)
 
 ---
 
@@ -181,10 +181,10 @@ import ecs;         // 实体组件系统
 
 ## 文档
 
-- **[入门指南](https://redscript-docs.pages.dev/guide/)** — 安装和第一个项目
-- **[语言参考](https://redscript-docs.pages.dev/reference/)** — 完整语法指南
-- **[标准库参考](https://redscript-docs.pages.dev/stdlib/)** — 50 个模块文档
-- **[CLI 参考](https://redscript-docs.pages.dev/cli/)** — 命令行选项
+- **[入门指南](https://redscript-docs.pages.dev/en/guide/)** — 安装和第一个项目
+- **[语言参考](https://redscript-docs.pages.dev/en/reference/)** — 完整语法指南
+- **[标准库参考](https://redscript-docs.pages.dev/en/stdlib/)** — 50 个模块文档
+- **[CLI 参考](https://redscript-docs.pages.dev/en/cli/)** — 命令行选项
 
 ---
 
