@@ -166,6 +166,8 @@ import ecs;         // Entity-component system
 
 Full list: [Stdlib Documentation](https://redscript-docs.pages.dev/en/stdlib/)
 
+> **Attribution:** The `bigint` module's multi-precision arithmetic approach was inspired by [kaer-3058/large_number](https://github.com/kaer-3058/large_number).
+
 ---
 
 ## Examples

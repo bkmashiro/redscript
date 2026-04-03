@@ -2,6 +2,8 @@
 
 Import: `import bigint;`
 
+> **Attribution:** Parts of this module's multi-precision arithmetic approach were inspired by [kaer-3058/large_number](https://github.com/kaer-3058/large_number).
+
 Arbitrary-precision integers represented as base-10000 (万進制) `int` arrays in NBT storage. Arrays are big-endian (index 0 = most significant chunk). Provides 3-chunk (96-bit) helpers and arbitrary-length operations for addition, subtraction, multiplication, division, comparison, and utility functions. Full bigint×bigint multiplication and squaring included.
 
 ## Functions
