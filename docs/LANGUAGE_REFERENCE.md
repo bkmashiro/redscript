@@ -6,7 +6,7 @@ This document describes the syntax and semantics RedScript accepts today.
 
 ## Program Structure
 
-A source file may optionally declare a namespace, followed by any number of `struct` and `fn` declarations.
+A source file may optionally declare a namespace, followed by any number of `struct`, `enum`, and `fn` declarations.
 
 ```rs
 namespace turret;
@@ -64,7 +64,10 @@ Imported names are available globally within the file. Circular imports are not 
 | Type form | Example |
 |:--|:--|
 | Struct | `TurretState` |
+| Enum | `Phase` |
 | Array | `int[]`, `string[]` |
+| Tuple | `(int, int)` |
+| Option | `Option<int>` |
 
 ### Type casting
 
@@ -99,6 +102,45 @@ Type annotations are supported on `let` bindings and function parameters.
 
 ---
 
+## Constants
+
+Use `const` to declare compile-time constants. Constants are inlined at every use site and are exempt from magic-number lint warnings.
+
+```rs
+const MAX_HEALTH: int = 20
+const PI_APPROX: int = 31416
+
+fn reset(health: int) {
+    if (health > MAX_HEALTH) {
+        health = MAX_HEALTH;
+    }
+}
+```
+
+Top-level constants are visible across the entire file. Local constants may also appear inside function bodies.
+
+---
+
+## Global Variables
+
+`let` declarations at the **module level** (outside any function) create persistent global variables backed by scoreboard entries. They are readable and writable from any function in the file.
+
+```rs
+let counter: int = 0;
+
+fn increment() {
+    counter = counter + 1;
+}
+
+fn reset() {
+    counter = 0;
+}
+```
+
+The generated scoreboard entry uses a synthetic name derived from the variable name. Global variables survive across ticks — they are not reset between function calls.
+
+---
+
 ## Functions
 
 Functions use C-style syntax and may return values. Return types follow `->`.
@@ -127,6 +169,99 @@ Some stdlib functions use a type parameter `<T>`:
 ```rs
 fn abs<T>(x: T) -> T { ... }
 fn min<T>(a: T, b: T) -> T { ... }
+```
+
+### Multi-return values (Tuples)
+
+Functions can return multiple values as a tuple. The caller destructs with `let (a, b) = ...`:
+
+```rs
+fn divmod(a: int, b: int) -> (int, int) {
+    return (a / b, a % b);
+}
+
+fn example() {
+    let (quotient, remainder) = divmod(10, 3);
+}
+```
+
+Tuple types with more than two elements are also supported: `(int, bool, int)`.
+
+---
+
+## Enums
+
+Enums define a named set of integer variants. Variants are accessed with the `::` path operator.
+
+```rs
+enum Phase { Idle, Moving, Attacking }
+
+fn start() {
+    let p: Phase = Phase::Idle;
+    p = Phase::Attacking;
+}
+```
+
+By default variants are numbered from `0`. You can assign explicit values; subsequent variants continue from the last assigned value:
+
+```rs
+enum Priority { Low = 10, Medium, High = 30 }
+// Low=10, Medium=11, High=30
+```
+
+Enums can be used as function parameters and return types:
+
+```rs
+fn get_phase(): Phase {
+    return Phase::Moving;
+}
+
+fn handle(p: Phase) {
+    // use match to dispatch on p
+}
+```
+
+Internally enums are scoreboard integers — `Phase::Idle` compiles to `0`, `Phase::Moving` to `1`, etc.
+
+---
+
+## Option\<T\>
+
+`Option<T>` represents a value that may or may not be present. It uses two scoreboard slots internally (`has` and `val`).
+
+```rs
+fn find_score(target: string) -> Option<int> {
+    let val: int = scoreboard_get(target, "kills");
+    if (val >= 0) {
+        return Some(val);
+    }
+    return None;
+}
+```
+
+### Consuming an Option
+
+Use `if let Some(x) = opt { ... }` to bind and use the inner value:
+
+```rs
+fn reward(opt: Option<int>) {
+    if let Some(score) = opt {
+        give(@s, "minecraft:diamond", score);
+    } else {
+        tell(@s, "No score found.");
+    }
+}
+```
+
+Use `match` for exhaustive handling:
+
+```rs
+fn describe(opt: Option<int>) {
+    match opt {
+        Some(v) => { tell(@s, "value present"); }
+        None    => { tell(@s, "empty"); }
+    }
+}
 ```
 
 ---
@@ -158,6 +293,19 @@ fn countdown() {
 }
 ```
 
+### `do-while`
+
+Executes the body at least once before evaluating the condition:
+
+```rs
+fn poll() {
+    let attempts: int = 0;
+    do {
+        attempts += 1;
+    } while (attempts < 3);
+}
+```
+
 ### `for`
 
 RedScript supports C-style `for` loops.
@@ -172,6 +320,38 @@ fn repeat() {
 
 The initializer is optional. Compound assignment is supported in the step clause.
 
+### `for`-range
+
+Iterate over an integer range with `for var in start..end`:
+
+```rs
+fn count_up() {
+    for i in 0..10 {
+        say("counting");
+    }
+}
+```
+
+Use `..=` for an **inclusive** upper bound:
+
+```rs
+fn count_inclusive() {
+    for i in 1..=5 {
+        // i takes values 1, 2, 3, 4, 5
+    }
+}
+```
+
+The bound can be a variable:
+
+```rs
+fn count_to(n: int) {
+    for i in 0..n {
+        say("tick");
+    }
+}
+```
+
 ### `foreach`
 
 `foreach` iterates over a selector. The body is extracted into a helper function and run with `execute as ... run function ...`.
@@ -185,6 +365,98 @@ fn notify_players() {
 ```
 
 Inside the loop body, the bound variable refers to the current entity context (`@s`).
+
+### `break` and `continue`
+
+`break` exits the innermost loop immediately. `continue` skips the rest of the current iteration.
+
+```rs
+fn find_first_even(n: int) -> int {
+    for i in 0..n {
+        if (i % 2 == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+fn skip_odds() {
+    for i in 0..10 {
+        if (i % 2 != 0) {
+            continue;
+        }
+        say("even");
+    }
+}
+```
+
+### Labeled loops
+
+Attach a label to a loop and use `break label` or `continue label` to target an outer loop:
+
+```rs
+fn search() {
+    outer: for i in 0..10 {
+        for j in 0..10 {
+            if (i == j) {
+                break outer;   // exits both loops
+            }
+        }
+    }
+}
+```
+
+---
+
+## Match Expressions
+
+`match` dispatches on the value of an expression. Each arm has a pattern followed by `=> { ... }`. Arms are evaluated top-to-bottom; the first matching arm runs.
+
+### Integer patterns
+
+```rs
+fn describe(n: int) {
+    match n {
+        1 => { tell(@s, "one"); }
+        2 => { tell(@s, "two"); }
+        _ => { tell(@s, "other"); }
+    }
+}
+```
+
+Both `match expr { ... }` (preferred) and `match (expr) { ... }` (legacy) are accepted.
+
+### Enum patterns
+
+```rs
+enum Phase { Idle, Moving, Attacking }
+
+fn handle(p: Phase) {
+    match p {
+        Phase::Idle      => { tell(@s, "idle"); }
+        Phase::Moving    => { tell(@s, "moving"); }
+        Phase::Attacking => { tell(@s, "attacking"); }
+        _                => { }
+    }
+}
+```
+
+### Option patterns
+
+```rs
+fn show(opt: Option<int>) {
+    match opt {
+        Some(v) => { tell(@s, "got value"); }
+        None    => { tell(@s, "nothing"); }
+    }
+}
+```
+
+`Some(binding)` binds the inner value to `binding` for use in the arm body.
+
+### Wildcard
+
+`_` matches anything and does not bind a name. Use it as a catch-all.
 
 ---
 
@@ -213,6 +485,24 @@ Supported operations:
 - Field read / field assignment
 - Compound assignment on fields (`state.health += 5`)
 
+### Singleton structs
+
+Mark a struct `@singleton` to make it a global state object. The compiler synthesises `get()` and `set(gs)` static methods backed by a scoreboard objective.
+
+```rs
+@singleton
+struct GameState {
+    phase: int,
+    tick_count: int,
+}
+
+fn tick() {
+    let gs: GameState = GameState::get();
+    gs.tick_count += 1;
+    GameState::set(gs);
+}
+```
+
 ---
 
 ## Arrays
@@ -238,7 +528,7 @@ Supported operations:
 
 ## Decorators
 
-Decorators attach runtime behaviour to functions.
+Decorators attach compile-time or runtime behaviour to functions and structs.
 
 ### `@tick`
 
@@ -289,6 +579,61 @@ fn delayed_explosion() {
     summon("tnt", "~", "~", "~");
 }
 ```
+
+### `@watch("objective")`
+
+Detects when a scoreboard value changes for any player and calls the function handler. The handler must have no parameters.
+
+```rs
+@watch("rs.kills")
+fn on_kill_change() {
+    let k: int = scoreboard_get("@s", "rs.kills");
+    if (k >= 10) {
+        title(@s, "Achievement Unlocked!");
+    }
+}
+```
+
+The compiler generates a `__watch_<fn>` dispatcher registered in `tick.json`. Each tick it compares the current value against the stored previous value per player, calling the handler only when a change is detected.
+
+### `@throttle(ticks=N)`
+
+Rate-limits a function so that it runs at most once every `N` ticks, regardless of how often it is called. Useful on functions registered to high-frequency events.
+
+```rs
+@throttle(ticks=20)
+fn on_player_move() {
+    say("moved");
+}
+```
+
+The compiler generates a `__throttle_<fn>` dispatcher and a `__throttle` scoreboard objective.
+
+### `@retry(max=N)`
+
+Wraps the function body in retry logic: if the function returns a falsy value it is called again up to `max` total attempts.
+
+```rs
+@retry(max=3)
+fn try_spawn_mob(): int {
+    // return 1 on success, 0 on failure
+    return 0;
+}
+```
+
+### `@memoize`
+
+Caches the result of a single-`int`-parameter function using a scoreboard-backed LRU-1 cache. On a cache hit, the body is skipped and the cached result is returned immediately.
+
+```rs
+@memoize
+fn fib(n: int): int {
+    if (n <= 1) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+```
+
+Constraints: the function must have exactly one `int` parameter.
 
 ### `@coroutine`
 
@@ -345,6 +690,114 @@ fn phase2() { /* runs after phase1 completes */ }
 **Performance note:** `@coroutine` is designed to stay within MC's per-tick command budget (`maxCommandChainLength`, default 65536). Without it, 1000 iterations × 20 commands = 20000 commands/tick — fine. But 10000 iterations × 20 = 200000 — exceeds the limit and causes silent truncation. The `batch` parameter is your throttle valve.
 
 No blocking occurs — other `@tick` functions and game logic continue to run while the coroutine is spread across ticks.
+
+### `@config("key", default: value)`
+
+Injects a compile-time configuration value into a global `let`. The default is used unless `CompileOptions.config` overrides the key.
+
+```rs
+@config("max_players", default: 20)
+let MAX_PLAYERS: int
+
+@config("difficulty", default: 1)
+let DIFFICULTY: int
+
+fn announce() {
+    tell(@a, "Max players:");
+}
+```
+
+Pass overrides at compile time:
+
+```typescript
+compile(source, { namespace: "mygame", config: { max_players: 10, difficulty: 3 } })
+```
+
+This is useful for building the same datapack with different tuning parameters without editing source.
+
+### `@singleton` (on structs)
+
+See [Singleton structs](#singleton-structs) above.
+
+### `@deprecated("message")`
+
+Marks a function as deprecated. Callers emit a compile-time warning.
+
+```rs
+@deprecated("use take_damage() instead")
+fn apply_damage(amount: int) {
+    // old implementation
+}
+```
+
+### `@load`
+
+Marks a function to be called during datapack load (inside `__load.mcfunction`).
+
+```rs
+@load
+fn init() {
+    scoreboard_add_objective("kills", "playerKillCount");
+}
+```
+
+### `@keep`
+
+Prevents dead-code elimination from removing the function, even if no other code calls it.
+
+```rs
+@keep
+fn debug_dump() {
+    // always emitted even if unreferenced
+}
+```
+
+### `@inline` / `@no_inline`
+
+Override the compiler's inlining heuristic for a specific function.
+
+```rs
+@inline
+fn fast_path(x: int): int {
+    return x * 2;
+}
+
+@no_inline
+fn large_helper(x: int): int {
+    // kept as a separate mcfunction even if small
+    return x + 1;
+}
+```
+
+---
+
+## Event Handlers
+
+The `@on(EventType)` decorator wires a function as a handler for a built-in game event. The handler receives a `player` parameter representing the player that triggered the event.
+
+```rs
+@on(PlayerDeath)
+fn on_death(player: Player) {
+    tell(player, "You died!");
+}
+
+@on(PlayerJoin)
+fn on_join(player: Player) {
+    title(player, "Welcome!");
+}
+```
+
+### Supported event types
+
+| Event | Trigger |
+|:--|:--|
+| `PlayerDeath` | Detected via scoreboard kill criterion |
+| `PlayerJoin` | Detected via entity tag on first login |
+| `BlockBreak` | Detected via advancement trigger |
+| `EntityKill` | Detected via scoreboard kill criterion |
+| `ItemUse` | Detected via scoreboard item use criterion |
+
+Each event handler is automatically registered in `tick.json`. Detection logic and handler dispatch are generated by the compiler — no manual wiring needed.
 
 ---
 

@@ -49,6 +49,19 @@ fn foo(): void {
 ### `function-too-long`
 Warns when a function body exceeds the line limit (default: 50 lines). Configurable via `LintOptions.maxFunctionLines`.
 
+```redscript
+// warning if this function body exceeds 50 lines
+fn process_all() {
+    // ... 51+ lines of code ...
+}
+```
+
+Configurable via `LintOptions`:
+
+```typescript
+lintString(source, file, ns, { maxFunctionLines: 100 })
+```
+
 ---
 
 ## New Rules
