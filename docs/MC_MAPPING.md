@@ -234,9 +234,64 @@ Trigger handlers generate:
 
 In command block mode, the compiler emits a JSON description for command block placement instead of a datapack directory. This is meant for command-block-based setups while reusing the same frontend, lowering, and optimization pipeline.
 
+## Match Expressions
+
+`match` expressions lower to a series of `execute if score` comparisons, one branch per arm.
+
+Example:
+
+```rs
+match level {
+    1 => say("Novice"),
+    2 => say("Adept"),
+    _ => say("Master"),
+}
+```
+
+Typical generated pattern:
+
+```mcfunction
+# arm 1
+execute if score $level rs matches 1 run function ns:match_0_arm0
+# arm 2
+execute if score $level rs matches 2 run function ns:match_0_arm1
+# default arm (generated after all literal arms)
+execute unless score $level rs matches 1 \
+    unless score $level rs matches 2 \
+    run function ns:match_0_default
+```
+
+Each arm body is extracted into its own helper function. The compiler performs exhaustiveness checking at compile time and emits a warning if a `match` on an enum type is non-exhaustive.
+
+## Global Variables
+
+Global variables (declared at module scope outside any function) are stored as fake-player entries on the `rs` scoreboard, just like locals, but with a stable name prefix `$g_`.
+
+Example:
+
+```rs
+let score: int = 0;
+
+fn add_score(n: int) {
+    score = score + n;
+}
+```
+
+The compiler emits `score_read` / `score_write` MIR instructions that lower to:
+
+```mcfunction
+# read
+scoreboard players get $g_score rs
+
+# write
+scoreboard players set $g_score rs <value>
+```
+
+Unlike locals (which may be reused across calls), global fake-player names are stable across all functions and persist for the lifetime of the datapack session.
+
 ## Optimizations
 
-The optimizer currently includes three core passes.
+The optimizer currently includes four core passes.
 
 ### Constant folding
 
@@ -267,6 +322,19 @@ can emit fewer scoreboard moves because `y` can reuse the known value of `x`.
 ### Dead code elimination
 
 Assignments whose results are never read are removed before code generation. This reduces scoreboard churn and helps keep generated datapacks smaller and easier to inspect.
+
+### Common Subexpression Elimination (CSE)
+
+Repeated identical sub-expressions within a basic block are computed once and reused.
+
+Example:
+
+```rs
+let a = x * 2 + 1;
+let b = x * 2 + 3;
+```
+
+The compiler recognises that `x * 2` appears twice and emits it once into a temporary, then reuses that temporary for both `a` and `b`.
 
 ## Practical Consequences
 

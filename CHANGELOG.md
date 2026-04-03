@@ -4,6 +4,50 @@ All notable changes to RedScript will be documented in this file.
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-04-03
+
+### Fixed
+
+#### Compiler
+- **Global variables now correctly read/write via scoreboard** — `score_read` / `score_write` MIR instructions are emitted for global variable accesses; previously globals silently used the wrong storage path
+- **Plain strings no longer interpolate `${...}`** — only f-strings (prefixed with `f"..."`) support `{expr}` interpolation; plain string literals are emitted verbatim
+
+#### Tooling
+- **Parser error messages** — actionable hints added to common parse errors (e.g. missing type annotation, unclosed block) to help users diagnose issues faster
+- **REPL server port allocation** — REPL tests now use dynamic port allocation to avoid conflicts with in-use ports on CI
+- **CI: VSCode extension build** — install `editors/vscode` dependencies before build to fix missing `esbuild` binary
+
+#### Internals
+- **`say()` with f-string** — now compiles to `tellraw @a` (and uses Minecraft function macros `$say` for deep interpolation) instead of producing broken raw string concatenation
+- **Scoreboard objective rename** — internal objective was renamed from `__RS__` to `rs`; queue and global-variable code updated accordingly
+- **MC integration test isolation** — all integration tests now use a unified `redscript-test` datapack directory (was previously split across `redscript-test2` through `redscript-test8`)
+
+### Added
+
+#### Language / Compiler
+- **5 new lint rules** — `no-dead-assignment`, `prefer-match-exhaustive`, `no-empty-catch`, `naming-convention`, `no-magic-numbers`; all documented in `docs/lint-rules.md`
+- **Queue stdlib**: `__queue_init` now initialises with the `rs` scoreboard objective; `specialize` passes the objective correctly through specialisation
+
+#### Tooling
+- **`dumpScores` / `dumpStorage` / `assertScoreMap`** — debug helpers added to `MCClient` for inspecting scoreboard and storage state in integration tests
+- **Parser refactor** — the monolithic parser is now split into five focused sub-parsers (`ParserBase`, `TypeParser`, `ExprParser`, `StmtParser`, `DeclParser`) with a thin entry-point composition layer; no behaviour change
+
+#### Tests
+- **66 new tests** — covering LSP rename, CSE optimizer, formatter, and monomorphisation
+- **Global-vars integration suite** — 8 end-to-end tests verifying that global variables compile and round-trip correctly through the scoreboard
+
+## [3.0.1] - 2026-03-25
+
+### Fixed
+
+#### Compiler
+- **f-string syntax** — interpolation delimiters corrected to `{expr}` (not `${expr}`); documentation and examples updated accordingly
+- **Examples cleanup** — removed example programs that referenced unimplemented builtins; added replacement examples demonstrating v3.0 features
+
+#### Documentation
+- **README rewrite** — clearer installation, CLI usage, and feature overview
+- **Playground link** — corrected URL to `https://redscript-ide.pages.dev`
+
 ## [3.0.0] - 2026-03-21
 
 ### Added

@@ -102,6 +102,43 @@ Type annotations are supported on `let` bindings and function parameters.
 
 ---
 
+## F-Strings
+
+F-strings are string literals prefixed with `f` that support runtime expression interpolation using `{expr}` syntax.
+
+```rs
+let name: string = "Alex";
+let hp: int = 20;
+
+tell(@s, f"Hello {name}!");
+say(f"HP remaining: {hp}");
+title(@a, f"Score: {score}");
+```
+
+### Rules
+
+- Only f-strings (prefixed `f"..."`) interpolate `{expr}` expressions. Plain strings (`"..."`) are emitted verbatim.
+- Any expression valid in a `let` binding can appear inside `{...}`.
+- Nested f-strings are not supported.
+- F-strings are only usable as arguments to text-output builtins (`say`, `tell`, `title`, `subtitle`, `actionbar`, `announce`). They cannot be assigned to variables.
+
+### Generated output
+
+When an f-string is passed to a text builtin, the compiler emits a Minecraft JSON text component array:
+
+```mcfunction
+# tell(@s, f"HP: {hp}")
+tellraw @s ["", {"text":"HP: "},{"score":{"name":"$hp","objective":"rs"}}]
+```
+
+For `say()`, the compiler uses a Minecraft function macro (`$say`) when interpolating variables so that the chat message reflects the runtime value:
+
+```mcfunction
+$say HP: $(hp_val)
+```
+
+---
+
 ## Constants
 
 Use `const` to declare compile-time constants. Constants are inlined at every use site and are exempt from magic-number lint warnings.
