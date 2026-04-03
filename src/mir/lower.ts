@@ -136,9 +136,12 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
     else if (c.value.kind === 'float_lit') constValues.set(c.name, Math.round(c.value.value * 10000))
   }
 
+  // Collect module-level global variable names (mutable lets at top level)
+  const globalVarNames = new Set<string>(hir.globals.map(g => g.name))
+
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues, singletonStructs, displayImpls)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues, singletonStructs, displayImpls, globalVarNames)
     allFunctions.push(fn, ...helpers)
   }
 
@@ -146,7 +149,7 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
   for (const ib of hir.implBlocks) {
     if (ib.traitName === 'Display') continue  // Display impls are inlined, not emitted as functions
     for (const m of ib.methods) {
-      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads, constValues)
+      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads, constValues, globalVarNames)
       allFunctions.push(fn, ...helpers)
     }
   }
@@ -226,6 +229,8 @@ class FnContext {
   singletonStructs: Set<string> = new Set()
   /** Display trait impls: typeName → f-string parts from to_string body (inlined at call sites) */
   displayImpls: Map<string, HIRFStringPart[]> = new Map()
+  /** Module-level global variable names — reads/writes must go through scoreboard */
+  globalVarNames: Set<string> = new Set()
 
   constructor(
     namespace: string,
@@ -366,6 +371,7 @@ function lowerFunction(
   constValues: Map<string, number> = new Map(),
   singletonStructs: Set<string> = new Set(),
   displayImpls: Map<string, HIRFStringPart[]> = new Map(),
+  globalVarNames: Set<string> = new Set(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const mirFnName = overrideName ?? fn.name
   const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
@@ -373,6 +379,7 @@ function lowerFunction(
   ctx.constValues = constValues
   ctx.singletonStructs = singletonStructs
   ctx.displayImpls = displayImpls
+  ctx.globalVarNames = globalVarNames
   if (hirFnMap) ctx.hirFunctions = hirFnMap
   if (specializedFnsRegistry) ctx.specializedFnsRegistry = specializedFnsRegistry
   const fnMacroInfo = macroInfo.get(fn.name)
@@ -452,11 +459,13 @@ function lowerImplMethod(
   timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
   enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map(),
   constValues: Map<string, number> = new Map(),
+  globalVarNames: Set<string> = new Set(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
   const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = method.sourceFile ?? sourceFile
   ctx.constValues = constValues
+  ctx.globalVarNames = globalVarNames
   const fields = structDefs.get(typeName) ?? []
   const hasSelf = method.params.length > 0 && method.params[0].name === 'self'
 
@@ -1521,6 +1530,13 @@ function lowerExpr(
       if (ctx.constValues.has(expr.name)) {
         return { kind: 'const', value: ctx.constValues.get(expr.name)! }
       }
+      // Module-level global variable: read from scoreboard slot
+      if (ctx.globalVarNames.has(expr.name)) {
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'score_read', dst: t, player: expr.name, obj: `__${ctx.getNamespace()}` })
+        scope.set(expr.name, t)
+        return { kind: 'temp', name: t }
+      }
       // Unresolved ident — could be a global or external reference
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'copy', dst: t, src: { kind: 'const', value: 0 } })
@@ -1634,6 +1650,16 @@ function lowerExpr(
           ctx.emit({ kind: 'copy', dst: fieldTemp, src: { kind: 'temp', name: `__rf_${fieldName}` } })
           sv.fields.set(fieldName, fieldTemp)
         }
+        return val
+      }
+      // Global variable assignment: write to scoreboard (score_write has side effects, DCE-safe)
+      if (ctx.globalVarNames.has(expr.target)) {
+        const globalObj = `__${ctx.getNamespace()}`
+        ctx.emit({ kind: 'score_write', player: expr.target, obj: globalObj, src: val })
+        // Also update scope temp so subsequent reads in this function see the new value
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'score_read', dst: t, player: expr.target, obj: globalObj })
+        scope.set(expr.target, t)
         return val
       }
       // Reuse the existing temp for this variable so that updates inside
@@ -2331,6 +2357,7 @@ function lowerExpr(
                 ctx.constValues,
                 ctx.singletonStructs,
                 ctx.displayImpls,
+                ctx.globalVarNames,
               )
               ctx.specializedFnsRegistry.set(specializedName, [specFn, ...specHelpers])
             }
