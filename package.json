@@ -1,6 +1,6 @@
 {
   "name": "redscript-mc",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "A high-level programming language that compiles to Minecraft datapacks",
   "main": "dist/src/index.js",
   "bin": {
