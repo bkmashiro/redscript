@@ -186,6 +186,25 @@ describe('emit: direct LIR emission', () => {
     expect(main).toContain('function legacy:plain')
     expect(main).toContain('execute store result score $x __legacy run data get storage legacy:data p 2.0')
     expect(files.find(f => f.path === 'data/minecraft/tags/function/tick.json')).toBeUndefined()
+    // load.json is always emitted because load.mcfunction is unconditionally generated
+    expect(JSON.parse(getFile(files, 'data/minecraft/tags/function/load.json')).values).toEqual(['legacy:load'])
+  })
+
+  test('always emits load.json even when there are no user-defined @load functions', () => {
+    // Regression: || true was accidentally left in a guard that was meant to
+    // be `if (loadFns.length > 0)`. The invariant is that load.json is always
+    // required because load.mcfunction (scoreboard init) is always emitted.
+    const module: LIRModule = {
+      namespace: 'ns',
+      objective: '__ns',
+      functions: [],
+    }
+
+    const files = emit(module, { namespace: 'ns', mcVersion: McVersion.v1_21 })
+
+    const loadJson = files.find(f => f.path === 'data/minecraft/tags/function/load.json')
+    expect(loadJson).toBeDefined()
+    expect(JSON.parse(loadJson!.content).values).toEqual(['ns:load'])
   })
 
   describe('ne operator emission', () => {

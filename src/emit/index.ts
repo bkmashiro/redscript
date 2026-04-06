@@ -272,7 +272,9 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   }
 
   // Tag files for tick/load
-  // Always include load.json — it must reference the load.mcfunction
+  // load.json is always generated because load.mcfunction is always emitted
+  // (it unconditionally creates the scoreboard objective). loadFns are
+  // additional user-defined @load functions appended after the built-in one.
   const loadValues = [`${namespace}:load`, ...loadFns.map(fn => `${namespace}:${fn}`)]
   files.push({
     path: 'data/minecraft/tags/function/load.json',
