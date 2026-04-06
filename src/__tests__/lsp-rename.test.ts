@@ -168,4 +168,37 @@ describe('findRenameRanges — edge cases', () => {
     const ranges = findRenameRanges(src, program, pos(1, 6))
     expect(ranges.length).toBe(3) // decl + assign + use
   })
+
+  it('does not throw when cursor is on whitespace inside a function', () => {
+    const src = 'fn test(): void {\n  let x: int = 1;\n}'
+    const program = parse(src)
+    // Column 0 is indentation — no symbol there
+    expect(() => findRenameRanges(src, program, pos(1, 0))).not.toThrow()
+  })
+
+  it('does not throw for cursor past end of source', () => {
+    const src = 'fn test(): void {}'
+    const program = parse(src)
+    expect(() => findRenameRanges(src, program, pos(99, 99))).not.toThrow()
+  })
+
+  it('handles member access rename without throwing', () => {
+    const src = [
+      'struct Vec { x: int, y: int }',
+      'fn test(): void {',
+      '  let v: Vec = Vec { x: 1, y: 2 };',
+      '  let n: int = v.x;',
+      '}',
+    ].join('\n')
+    const program = parse(src)
+    // Cursor on 'x' in 'v.x' (line 3, char 15)
+    expect(() => findRenameRanges(src, program, pos(3, 15))).not.toThrow()
+  })
+
+  it('returns empty array for empty source', () => {
+    const src = ''
+    const program = parse(src)
+    const ranges = findRenameRanges(src, program, pos(0, 0))
+    expect(ranges).toEqual([])
+  })
 })

@@ -420,11 +420,12 @@ function extractDocComment(source: string, fn: FnDecl): string | null {
  * Uses the next fn's start line as the implicit end when span.endLine is missing.
  */
 function findEnclosingFn(program: Program, curLine: number): import('../ast/types').FnDecl | null {
-  const fns = program.declarations.filter(f => f.span)
+  const fns = program.declarations.filter((f): f is typeof f & { span: NonNullable<typeof f.span> } => f.span != null)
   for (let i = 0; i < fns.length; i++) {
     const fn = fns[i]
-    const startLine = fn.span!.line
-    const endLine = fn.span!.endLine ?? (fns[i + 1]?.span?.line ? fns[i + 1].span!.line - 1 : Infinity)
+    const startLine = fn.span.line
+    const nextSpanLine = fns[i + 1]?.span.line
+    const endLine = fn.span.endLine ?? (nextSpanLine != null ? nextSpanLine - 1 : Infinity)
     if (curLine >= startLine && curLine <= endLine) return fn
   }
   return null

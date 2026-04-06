@@ -3,8 +3,6 @@
  * These test the pure logic (wordAt, buildDefinitionMap, extractDocComment, etc.)
  * without spinning up a real LSP connection.
  */
-import * as path from 'path'
-import * as fs from 'fs'
 
 // We need to import the compiled versions since server.ts isn't a module
 // Instead we test the logic by reimplementing the key functions here
@@ -186,5 +184,90 @@ fn dot(a: int, b: int): int {}`
     const src = `fn bare(): void {}`
     const result = extractDocComment(src, 1)
     expect(result).toBeNull()
+  })
+})
+
+// ── findEnclosingFn (span safety) ────────────────────────────────────────────
+//
+// Mirrors the logic from server.ts to test the guard that replaced span!
+// The key property: declarations without span must be silently skipped,
+// never cause a runtime throw.
+
+interface FnDeclStub {
+  name: string
+  span?: { line: number; col: number; endLine?: number; endCol?: number }
+}
+
+function findEnclosingFn(declarations: FnDeclStub[], curLine: number): FnDeclStub | null {
+  const fns = declarations.filter((f): f is FnDeclStub & { span: NonNullable<FnDeclStub['span']> } => f.span != null)
+  for (let i = 0; i < fns.length; i++) {
+    const fn = fns[i]
+    const startLine = fn.span.line
+    const nextSpanLine = fns[i + 1]?.span.line
+    const endLine = fn.span.endLine ?? (nextSpanLine != null ? nextSpanLine - 1 : Infinity)
+    if (curLine >= startLine && curLine <= endLine) return fn
+  }
+  return null
+}
+
+describe('findEnclosingFn', () => {
+  test('returns null for empty declarations', () => {
+    expect(findEnclosingFn([], 5)).toBeNull()
+  })
+
+  test('returns null when all declarations lack span', () => {
+    const decls: FnDeclStub[] = [{ name: 'foo' }, { name: 'bar' }]
+    expect(findEnclosingFn(decls, 1)).toBeNull()
+  })
+
+  test('skips span-less declarations without throwing', () => {
+    const decls: FnDeclStub[] = [
+      { name: 'noSpan' },
+      { name: 'withSpan', span: { line: 3, col: 1, endLine: 6 } },
+    ]
+    expect(findEnclosingFn(decls, 4)?.name).toBe('withSpan')
+  })
+
+  test('finds enclosing fn when curLine equals startLine', () => {
+    const decls: FnDeclStub[] = [{ name: 'fn1', span: { line: 1, col: 1, endLine: 5 } }]
+    expect(findEnclosingFn(decls, 1)?.name).toBe('fn1')
+  })
+
+  test('finds enclosing fn when curLine equals endLine', () => {
+    const decls: FnDeclStub[] = [{ name: 'fn1', span: { line: 1, col: 1, endLine: 5 } }]
+    expect(findEnclosingFn(decls, 5)?.name).toBe('fn1')
+  })
+
+  test('returns null when curLine is before all fns', () => {
+    const decls: FnDeclStub[] = [{ name: 'fn1', span: { line: 10, col: 1, endLine: 20 } }]
+    expect(findEnclosingFn(decls, 5)).toBeNull()
+  })
+
+  test('uses next fn start as implicit end when endLine is absent', () => {
+    const decls: FnDeclStub[] = [
+      { name: 'fn1', span: { line: 1, col: 1 } },   // no endLine
+      { name: 'fn2', span: { line: 10, col: 1 } },
+    ]
+    // fn1 implicitly ends at line 9 (fn2.line - 1)
+    expect(findEnclosingFn(decls, 5)?.name).toBe('fn1')
+    expect(findEnclosingFn(decls, 9)?.name).toBe('fn1')
+    expect(findEnclosingFn(decls, 10)?.name).toBe('fn2')
+  })
+
+  test('last fn with no endLine extends to Infinity', () => {
+    const decls: FnDeclStub[] = [{ name: 'last', span: { line: 1, col: 1 } }]
+    expect(findEnclosingFn(decls, 99999)?.name).toBe('last')
+  })
+
+  test('selects correct fn among multiple', () => {
+    const decls: FnDeclStub[] = [
+      { name: 'a', span: { line: 1, col: 1, endLine: 4 } },
+      { name: 'b', span: { line: 6, col: 1, endLine: 10 } },
+      { name: 'c', span: { line: 12, col: 1, endLine: 15 } },
+    ]
+    expect(findEnclosingFn(decls, 3)?.name).toBe('a')
+    expect(findEnclosingFn(decls, 5)).toBeNull()  // gap between fns
+    expect(findEnclosingFn(decls, 8)?.name).toBe('b')
+    expect(findEnclosingFn(decls, 13)?.name).toBe('c')
   })
 })
