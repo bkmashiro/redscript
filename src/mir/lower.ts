@@ -1568,11 +1568,10 @@ function lowerExpr(
         scope.set(expr.name, t)
         return { kind: 'temp', name: t }
       }
-      // Unresolved ident — could be a global or external reference
-      const t = ctx.freshTemp()
-      ctx.emit({ kind: 'copy', dst: t, src: { kind: 'const', value: 0 } })
-      scope.set(expr.name, t)
-      return { kind: 'temp', name: t }
+      // Unresolved ident: not in scope, constants, globals, or double vars.
+      // This means an earlier compiler stage failed to resolve the name —
+      // silently emitting zero here would mask that bug entirely.
+      throw new Error(`Unresolved identifier '${expr.name}' at MIR lowering stage — this is a compiler bug`)
     }
 
     case 'binary': {
@@ -2482,7 +2481,22 @@ function lowerExpr(
         }
       }
 
-      const args = expr.args.map(a => lowerExpr(a, ctx, scope))
+      // Generic call: expand struct args field-by-field (same as method-call paths above)
+      const args: Operand[] = []
+      for (const a of expr.args) {
+        if (a.kind === 'ident') {
+          const sv = ctx.structVars.get(a.name)
+          if (sv) {
+            const fields = ctx.structDefs.get(sv.typeName) ?? []
+            for (const fieldName of fields) {
+              const ft = sv.fields.get(fieldName)
+              args.push(ft ? { kind: 'temp' as const, name: ft } : { kind: 'const' as const, value: 0 })
+            }
+            continue
+          }
+        }
+        args.push(lowerExpr(a, ctx, scope))
+      }
       const t = ctx.freshTemp()
       ctx.emit({ kind: 'call', dst: t, fn: expr.fn, args })
       return { kind: 'temp', name: t }
@@ -2623,9 +2637,24 @@ function lowerExpr(
           }
         }
       }
-      const args = expr.args.map(a => lowerExpr(a, ctx, scope))
+      // Generic static call: expand struct args field-by-field
+      const staticArgs: Operand[] = []
+      for (const a of expr.args) {
+        if (a.kind === 'ident') {
+          const sv = ctx.structVars.get(a.name)
+          if (sv) {
+            const fields = ctx.structDefs.get(sv.typeName) ?? []
+            for (const fieldName of fields) {
+              const ft = sv.fields.get(fieldName)
+              staticArgs.push(ft ? { kind: 'temp' as const, name: ft } : { kind: 'const' as const, value: 0 })
+            }
+            continue
+          }
+        }
+        staticArgs.push(lowerExpr(a, ctx, scope))
+      }
       const t = ctx.freshTemp()
-      ctx.emit({ kind: 'call', dst: t, fn: `${expr.type}::${expr.method}`, args })
+      ctx.emit({ kind: 'call', dst: t, fn: `${expr.type}::${expr.method}`, args: staticArgs })
       return { kind: 'temp', name: t }
     }
 

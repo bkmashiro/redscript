@@ -134,7 +134,7 @@ describe('MIR lowering — execute stmt', () => {
     const mod = compileMIR(`
       fn f(): int {
         execute as @a run {
-          raw "say hi";
+          raw("say hi");
         }
         return 0;
       }
@@ -150,7 +150,7 @@ describe('MIR lowering — execute stmt', () => {
     const mod = compileMIR(`
       fn f(): int {
         execute if score @s rs matches 1..10 run {
-          raw "say match";
+          raw("say match");
         }
         return 0;
       }
