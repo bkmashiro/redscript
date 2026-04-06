@@ -103,7 +103,7 @@ function resolveImportPath(
 }
 
 function countLines(source: string): number {
-  return source === '' ? 0 : source.split('\n').length
+  return source === '' ? 0 : source.replace(/\r\n/g, '\n').split('\n').length
 }
 
 function offsetRanges(ranges: SourceRange[], lineOffset: number): SourceRange[] {
