@@ -374,14 +374,15 @@ function emitFunction(
 }
 
 /**
- * Convert a LIR function name to its datapack file path.
+ * Converts a LIR function name to its output `.mcfunction` file path.
  *
- * `::` separators (used for method names) become `/`, and the result is
- * lowercased to match Minecraft's case-insensitive namespace rules.
+ * LIR method names use `::` as a namespace separator (e.g. `Player::heal`).
+ * Minecraft function IDs use `/` (e.g. `player/heal`), so `::` is replaced.
+ * The result is always lower-cased to match MC's case-insensitive function IDs.
  *
- * @param name - LIR function name, e.g. `"MyNS::myFunc"`.
- * @param namespace - Datapack namespace, e.g. `"mypack"`.
- * @returns Relative file path, e.g. `"data/mypack/function/myns/myfunc.mcfunction"`.
+ * @param name - LIR function name, possibly containing `::` separators.
+ * @param namespace - Datapack namespace (e.g. `"rs"`).
+ * @returns Relative datapack path such as `data/rs/function/player/heal.mcfunction`.
  */
 function fnNameToPath(name: string, namespace: string): string {
   // LIR function names may contain :: for methods — convert to /
@@ -390,27 +391,28 @@ function fnNameToPath(name: string, namespace: string): string {
 }
 
 /**
- * Build the fully-qualified MC function reference used inside `.mcfunction` commands.
+ * Produces the fully-qualified Minecraft function reference for a LIR function.
  *
- * Applies the same `::` → `/` and lowercase conversion as {@link fnNameToPath},
- * but returns the `namespace:path` form required by `function` commands.
+ * This is the string used in `function` commands and tag files, e.g. `rs:player/heal`.
+ * `::` separators are normalised to `/` and the name is lower-cased.
  *
- * @param name - LIR function name, e.g. `"MyNS::myFunc"`.
- * @param namespace - Datapack namespace, e.g. `"mypack"`.
- * @returns Qualified reference, e.g. `"mypack:myns/myfunc"`.
+ * @param name - LIR function name, possibly containing `::` separators.
+ * @param namespace - Datapack namespace (e.g. `"rs"`).
+ * @returns Qualified reference such as `"rs:player/heal"`.
  */
 function qualifiedFunctionRef(name: string, namespace: string): string {
   return `${namespace}:${name.replace(/::/g, '/').toLowerCase()}`
 }
 
 /**
- * Derive a readable function name for comment headers.
+ * Extracts a readable display name for a LIR function, used in source-map entries.
  *
- * Prefers the name extracted from the source snippet (`fn myFunc`), falls back
- * to the last `::` segment of the LIR name, and finally to the raw LIR name.
+ * Tries to pull the identifier directly after the `fn` keyword from the stored
+ * source snippet. Falls back to the last component of the `::` path, then to the
+ * raw LIR name when no snippet is available.
  *
- * @param fn - The LIR function whose name is needed.
- * @returns Human-readable function name, e.g. `"myFunc"`.
+ * @param fn - The LIR function whose human name is needed.
+ * @returns A short display name such as `"heal"` or `"Player::heal"`.
  */
 function humanFunctionName(fn: LIRFunction): string {
   const match = fn.sourceSnippet?.match(/^fn\s+([^(]+)/)
@@ -418,13 +420,14 @@ function humanFunctionName(fn: LIRFunction): string {
 }
 
 /**
- * Generate comment lines placed at the top of a `.mcfunction` file.
+ * Emits the comment header lines written at the top of every `.mcfunction` file.
  *
- * Returns an empty array when the function has no source location, so callers
- * can spread the result unconditionally.
+ * Includes a `# Generated from:` line with the source file and line number, and
+ * optionally a `# Source:` line with the original source snippet. Returns an empty
+ * array when the function has no location info (e.g. compiler-generated helpers).
  *
  * @param fn - The LIR function being emitted.
- * @returns Zero, one, or two `# …` comment strings.
+ * @returns Zero or more comment lines to prepend to the function body.
  */
 function emitFunctionHeader(fn: LIRFunction): string[] {
   if (!fn.sourceLoc) return []
@@ -437,71 +440,255 @@ function emitFunctionHeader(fn: LIRFunction): string[] {
 }
 
 /**
- * Format a source location into the compact `file:line` string used in `# src:` comments.
+ * Formats a source location as the `file:line` string used in inline `# src:` markers.
  *
- * @param sourceLoc - Non-null source location from a {@link LIRInstr}.
- * @returns Marker string, e.g. `"src/my_script.rs:42"`.
+ * These markers appear inside `.mcfunction` bodies to correlate generated commands
+ * back to the original source line, aiding debugging without a full source map.
+ *
+ * @param sourceLoc - Non-null source location attached to a LIR instruction.
+ * @returns A string such as `"src/game.rs:42"`.
  */
 function formatSourceMarker(sourceLoc: NonNullable<LIRInstr['sourceLoc']>): string {
   return `${sourceLoc.file}:${sourceLoc.line}`
 }
 
+/**
+ * Returns the name of the tick-registered dispatcher function for a `@watch` function.
+ *
+ * The dispatcher runs every game tick for all players, detects when the watched
+ * scoreboard objective changed value, and calls the user function on those players.
+ * It is registered in `data/minecraft/tags/function/tick.json`.
+ *
+ * Generated file: `data/<ns>/function/__watch_<name>.mcfunction`
+ *
+ * @param name - Base name of the `@watch`-decorated function.
+ * @returns The internal dispatcher function name, e.g. `"__watch_onScore"`.
+ */
 function watchDispatcherName(name: string): string {
   return `__watch_${name}`
 }
 
+/**
+ * Returns the name of the scoreboard objective that stores each player's previous
+ * value of the watched score, used to detect changes between ticks.
+ *
+ * The objective is created in `load.mcfunction` and updated by the watch dispatcher
+ * after each detected change so the next tick starts with the fresh baseline.
+ *
+ * Scoreboard objective name: `__watch_<name>_prev`
+ *
+ * @param name - Base name of the `@watch`-decorated function.
+ * @returns The objective name, e.g. `"__watch_onScore_prev"`.
+ */
 function watchPrevObjective(name: string): string {
   return `__watch_${name}_prev`
 }
 
+/**
+ * Returns the name of the tick-registered dispatcher function for a `@throttle` function.
+ *
+ * The dispatcher increments a per-function counter each tick and only calls the
+ * underlying function once the counter reaches the configured tick interval, then
+ * resets the counter to zero.
+ *
+ * Generated file: `data/<ns>/function/__throttle_<name>.mcfunction`
+ *
+ * @param name - Base name of the `@throttle`-decorated function.
+ * @returns The internal dispatcher function name, e.g. `"__throttle_update"`.
+ */
 function throttleDispatcherName(name: string): string {
   return `__throttle_${name}`
 }
 
-function throttleObjective(name: string): string {
-  return `__throttle_${name}`
+/**
+ * Returns the scoreboard objective used to store the tick counter for all
+ * `@throttle` functions.
+ *
+ * All throttled functions share the single `__throttle` objective; each function
+ * uses a distinct fake-player name (`__throttle_<name>`) as its counter slot.
+ * The objective is created in `load.mcfunction`.
+ *
+ * @param _name - Unused. Accepted for API symmetry with the other naming helpers.
+ * @returns The shared objective name `"__throttle"`.
+ */
+function throttleObjective(_name: string): string {
+  return `__throttle`
 }
 
+/**
+ * Returns the name of the tick-registered dispatcher function for a `@retry` function.
+ *
+ * The dispatcher checks the per-function retry counter each tick. While the counter
+ * is positive it calls the function; the function signals success by writing a
+ * non-zero value to `$ret`, which causes the dispatcher to reset the counter.
+ * On failure (zero `$ret`) the counter is decremented until it reaches zero.
+ *
+ * Generated file: `data/<ns>/function/__retry_<name>.mcfunction`
+ *
+ * @param name - Base name of the `@retry`-decorated function.
+ * @returns The internal dispatcher function name, e.g. `"__retry_fetchData"`.
+ */
 function retryDispatcherName(name: string): string {
   return `__retry_${name}`
 }
 
-function retryObjective(name: string): string {
-  return `__retry_${name}`
+/**
+ * Returns the scoreboard objective used to store the remaining-attempts counter
+ * for all `@retry` functions.
+ *
+ * All retry functions share the single `__retry` objective; each function uses
+ * a distinct fake-player name (`__retry_<name>`) as its counter slot.
+ * The objective is created in `load.mcfunction`.
+ *
+ * @param _name - Unused. Accepted for API symmetry with the other naming helpers.
+ * @returns The shared objective name `"__retry"`.
+ */
+function retryObjective(_name: string): string {
+  return `__retry`
 }
 
+/**
+ * Sanitises a function name for use in scoreboard fake-player names.
+ *
+ * Scoreboard player names in Minecraft may not contain characters outside
+ * `[A-Za-z0-9_]`, so any other character (e.g. `/`, `.`, `-`, `::`) is
+ * replaced with an underscore. This is applied to all profiler/benchmark
+ * player names to avoid command syntax errors.
+ *
+ * @param name - Raw LIR function name, potentially containing special characters.
+ * @returns A sanitised name safe for use in `scoreboard players` commands.
+ */
 function profilerSafeName(name: string): string {
   return name.replace(/[^A-Za-z0-9_]/g, '_')
 }
 
+/**
+ * Returns the fake-player name used to record the game-time at the start of a
+ * profiled function call in the `__time` scoreboard objective.
+ *
+ * The start timestamp is captured with `time query gametime` and subtracted from
+ * the end timestamp to compute the elapsed-tick delta for each invocation.
+ *
+ * Scoreboard slot: `#prof_start_<safeName>` in objective `__time`
+ *
+ * @param name - LIR function name (will be sanitised).
+ * @returns Fake-player name such as `"#prof_start_Player__heal"`.
+ */
 function profilerStartPlayer(name: string): string {
   return `#prof_start_${profilerSafeName(name)}`
 }
 
+/**
+ * Returns the fake-player name used to accumulate the per-call elapsed-tick
+ * delta for a profiled function in the `__time` scoreboard objective.
+ *
+ * Computed as `end_time − start_time` and then added into the total accumulator
+ * via `profilerTotalPlayer`.
+ *
+ * Scoreboard slot: `#prof_delta_<safeName>` in objective `__time`
+ *
+ * @param name - LIR function name (will be sanitised).
+ * @returns Fake-player name such as `"#prof_delta_Player__heal"`.
+ */
 function profilerDeltaPlayer(name: string): string {
   return `#prof_delta_${profilerSafeName(name)}`
 }
 
+/**
+ * Returns the fake-player name used to accumulate the total elapsed ticks across
+ * all calls to a profiled function in the `__profile` scoreboard objective.
+ *
+ * Reset to zero by `__profiler_reset.mcfunction` and read by
+ * `__profiler_report.mcfunction` to display aggregate timing.
+ *
+ * Scoreboard slot: `#prof_total_<safeName>` in objective `__profile`
+ *
+ * @param name - LIR function name (will be sanitised).
+ * @returns Fake-player name such as `"#prof_total_Player__heal"`.
+ */
 function profilerTotalPlayer(name: string): string {
   return `#prof_total_${profilerSafeName(name)}`
 }
 
+/**
+ * Returns the fake-player name used to count the number of times a profiled
+ * function has been called, stored in the `__profile` scoreboard objective.
+ *
+ * Used alongside `profilerTotalPlayer` to compute average ticks-per-call when
+ * the profiler report is displayed.
+ *
+ * Scoreboard slot: `#prof_count_<safeName>` in objective `__profile`
+ *
+ * @param name - LIR function name (will be sanitised).
+ * @returns Fake-player name such as `"#prof_count_Player__heal"`.
+ */
 function profilerCountPlayer(name: string): string {
   return `#prof_count_${profilerSafeName(name)}`
 }
 
+/**
+ * Returns the name of the internal wrapper function generated for a `@benchmark`
+ * function.
+ *
+ * The wrapper measures wall-clock ticks around a single call to the implementation
+ * (`<name>_impl`) and reports the result via `tellraw`. It is distinct from the
+ * persistent `@profile` accumulator — benchmarks measure one call at a time.
+ *
+ * Generated file: `data/<ns>/function/__bench_<name>.mcfunction`
+ *
+ * @param name - Base name of the `@benchmark`-decorated function.
+ * @returns The wrapper function name, e.g. `"__bench_heavyCalc"`.
+ */
 function benchmarkWrapperName(name: string): string {
   return `__bench_${name}`
 }
 
+/**
+ * Returns the fake-player name used to record the game-time at the start of a
+ * single benchmark run in the `__bench` scoreboard objective.
+ *
+ * Analogous to `profilerStartPlayer` but for one-shot benchmark measurement
+ * rather than persistent profiling accumulation.
+ *
+ * Scoreboard slot: `#bench_start_<safeName>` in objective `__bench`
+ *
+ * @param name - LIR function name (will be sanitised).
+ * @returns Fake-player name such as `"#bench_start_heavyCalc"`.
+ */
 function benchmarkStartPlayer(name: string): string {
   return `#bench_start_${profilerSafeName(name)}`
 }
 
+/**
+ * Returns the fake-player name used to store the elapsed-tick delta for a single
+ * benchmark run in the `__bench` scoreboard objective.
+ *
+ * Computed as `end_time − start_time` and immediately reported via `tellraw`
+ * without accumulation (unlike the persistent `__profile` objective).
+ *
+ * Scoreboard slot: `#bench_delta_<safeName>` in objective `__bench`
+ *
+ * @param name - LIR function name (will be sanitised).
+ * @returns Fake-player name such as `"#bench_delta_heavyCalc"`.
+ */
 function benchmarkDeltaPlayer(name: string): string {
   return `#bench_delta_${profilerSafeName(name)}`
 }
 
+/**
+ * Emits the scoreboard commands that capture a start timestamp at the beginning
+ * of a profiled function body.
+ *
+ * The sequence:
+ *   1. Resets the start-player slot to zero (guards against stale data).
+ *   2. Stores the current `gametime` into the start-player slot via `execute store`.
+ *
+ * These lines are prepended to the function body by `emitFunction` when
+ * `isProfiled` is true.
+ *
+ * @param name - LIR function name used to derive the scoreboard player name.
+ * @returns Two or three `.mcfunction` command lines.
+ */
 function profilerStartLines(name: string): string[] {
   return [
     `# __profiler_start_${name}`,
@@ -510,6 +697,23 @@ function profilerStartLines(name: string): string[] {
   ]
 }
 
+/**
+ * Emits the scoreboard commands that capture an end timestamp and accumulate
+ * timing data at the end of a profiled function body.
+ *
+ * The sequence:
+ *   1. Resets the delta-player slot to zero.
+ *   2. Stores the current `gametime` into the delta slot.
+ *   3. Subtracts the start timestamp from the delta slot → elapsed ticks.
+ *   4. Adds the delta into the total accumulator (`__profile` objective).
+ *   5. Increments the call counter by 1.
+ *
+ * These lines are appended to the function body by `emitFunction` when
+ * `isProfiled` is true.
+ *
+ * @param name - LIR function name used to derive all scoreboard player names.
+ * @returns Five or six `.mcfunction` command lines.
+ */
 function profilerEndLines(name: string): string[] {
   return [
     `# __profiler_end_${name}`,
@@ -521,6 +725,17 @@ function profilerEndLines(name: string): string[] {
   ]
 }
 
+/**
+ * Emits the body of `__profiler_reset.mcfunction`, which zeroes the total and
+ * count accumulators for every profiled function.
+ *
+ * Intended to be called manually (e.g. via a command block) to start a fresh
+ * profiling session. Generates two `scoreboard players set … 0` commands per
+ * function.
+ *
+ * @param profiledFns - Names of all `@profile`-decorated functions in the module.
+ * @returns A flat list of `.mcfunction` command lines.
+ */
 function emitProfilerReset(profiledFns: string[]): string[] {
   return profiledFns.flatMap(name => [
     `scoreboard players set ${profilerTotalPlayer(name)} __profile 0`,
@@ -528,6 +743,17 @@ function emitProfilerReset(profiledFns: string[]): string[] {
   ])
 }
 
+/**
+ * Emits the body of `__profiler_report.mcfunction`, which broadcasts accumulated
+ * timing data for every profiled function to all players via `tellraw`.
+ *
+ * Each line reports the function name, total accumulated ticks, and call count
+ * using the `__profile` scoreboard objective. Divide total by count to get the
+ * average ticks-per-call.
+ *
+ * @param profiledFns - Names of all `@profile`-decorated functions in the module.
+ * @returns One `tellraw` command line per profiled function.
+ */
 function emitProfilerReport(profiledFns: string[]): string[] {
   return profiledFns.map(name => (
     `tellraw @a [{"text":"[profile] ${name}: total="},{"score":{"name":"${profilerTotalPlayer(name)}","objective":"__profile"}},{"text":" ticks count="},{"score":{"name":"${profilerCountPlayer(name)}","objective":"__profile"}}]`
