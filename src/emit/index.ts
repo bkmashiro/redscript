@@ -841,14 +841,10 @@ function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersio
       return `execute unless score ${slot(instr.slot)} matches ${instr.range} run function ${instr.fn}`
 
     case 'call_if_score':
-      // 'ne' has no direct MC operator; invert to `unless ... =` for correct semantics.
-      if (instr.op === 'ne') {
-        return `execute unless score ${slot(instr.a)} = ${slot(instr.b)} run function ${instr.fn}`
-      }
-      return `execute if score ${slot(instr.a)} ${cmpToMC(instr.op)} ${slot(instr.b)} run function ${instr.fn}`
+      return `execute ${scoreCondition('if', instr.op, slot(instr.a), slot(instr.b))} run function ${instr.fn}`
 
     case 'call_unless_score':
-      return `execute unless score ${slot(instr.a)} ${cmpToMC(instr.op)} ${slot(instr.b)} run function ${instr.fn}`
+      return `execute ${scoreCondition('unless', instr.op, slot(instr.a), slot(instr.b))} run function ${instr.fn}`
 
     case 'call_context': {
       const subcmds = instr.subcommands.map(emitSubcmd).join(' ')
@@ -900,12 +896,31 @@ function slot(s: Slot): string {
 function cmpToMC(op: CmpOp): string {
   switch (op) {
     case 'eq': return '='
-    case 'ne': return '='  // 'ne' maps to '=' — callers must wrap in `unless` (MC has no != operator)
+    case 'ne': return '='  // ne is expressed via "unless score ... =" rather than a distinct operator
     case 'lt': return '<'
     case 'le': return '<='
     case 'gt': return '>'
     case 'ge': return '>='
   }
+}
+
+/**
+ * Emit a score condition fragment, e.g. "if score $a obj = $b obj".
+ *
+ * MC has no "!=" operator; not-equal is expressed by flipping the if/unless
+ * keyword and using "=" as the operator:
+ *   a != b  →  unless score a = b   (not: if score a = b)
+ *   a == b  →  if score a = b
+ *
+ * The `sense` parameter is the caller's intended polarity ('if' or 'unless').
+ * For 'ne', both the sense and operator are adjusted automatically.
+ */
+function scoreCondition(sense: 'if' | 'unless', op: CmpOp, a: string, b: string): string {
+  if (op === 'ne') {
+    const flipped = sense === 'if' ? 'unless' : 'if'
+    return `${flipped} score ${a} = ${b}`
+  }
+  return `${sense} score ${a} ${cmpToMC(op)} ${b}`
 }
 
 /**
@@ -995,9 +1010,9 @@ function emitSubcmd(sub: ExecuteSubcmd): string {
     case 'anchored':
       return `anchored ${sub.anchor}`
     case 'if_score':
-      return `if score ${sub.a} ${cmpToMC(sub.op)} ${sub.b}`
+      return scoreCondition('if', sub.op, sub.a, sub.b)
     case 'unless_score':
-      return `unless score ${sub.a} ${cmpToMC(sub.op)} ${sub.b}`
+      return scoreCondition('unless', sub.op, sub.a, sub.b)
     case 'if_matches':
       return `if score ${sub.score} matches ${sub.range}`
     case 'unless_matches':
