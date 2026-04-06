@@ -135,7 +135,8 @@ describe('emit: direct LIR emission', () => {
     expect(main).toContain('execute if score $a __emit matches 1..5 run function emitns:matches')
     expect(main).toContain('execute unless score $a __emit matches 0 run function emitns:unless_matches')
     expect(main).toContain('execute if score $a __emit = $b __emit run function emitns:if_score')
-    expect(main).toContain('execute unless score $a __emit = $b __emit run function emitns:unless_score')
+    // call_unless_score with ne: unless(a != b) == if(a == b), so sense flips
+    expect(main).toContain('execute if score $a __emit = $b __emit run function emitns:unless_score')
     expect(main).toContain('execute as @a at @e[type=marker] at @s positioned ~1 ~2 ~3 rotated ~ ~10 in minecraft:the_nether anchored eyes if score $a __emit < $b __emit unless score $a __emit >= $b __emit if score $a __emit matches 1.. unless score $b __emit matches ..0 run function emitns:ctx')
     expect(main).toContain('scoreboard players operation $ret __emit = $a __emit')
     expect(main).toContain('$tp @s $(x) $(y) $(z)')
@@ -245,5 +246,131 @@ describe('emit: direct LIR emission', () => {
       const eqOut = emitSingle({ kind: 'call_if_score', fn: 'nens:target', a, op: 'eq', b, sourceLoc })
       expect(neOut).not.toBe(eqOut)
     })
+  })
+
+  test('call_if_score with ne emits unless score, not if score =', () => {
+    const module: LIRModule = {
+      namespace: 'ns',
+      objective: '__obj',
+      functions: [
+        {
+          name: 'Test',
+          isMacro: false,
+          macroParams: [],
+          instructions: [
+            {
+              kind: 'call_if_score',
+              fn: 'ns:ne_branch',
+              a: { player: '$x', obj: '__obj' },
+              op: 'ne',
+              b: { player: '$y', obj: '__obj' },
+            },
+          ],
+        },
+      ],
+    }
+
+    const files = emit(module, { namespace: 'ns', mcVersion: McVersion.v1_21 })
+    const content = getFile(files, 'data/ns/function/test.mcfunction')
+
+    expect(content).toContain('execute unless score $x __obj = $y __obj run function ns:ne_branch')
+    expect(content).not.toContain('if score $x __obj = $y __obj')
+  })
+
+  test('call_unless_score with ne emits if score (double negation cancels out)', () => {
+    const module: LIRModule = {
+      namespace: 'ns',
+      objective: '__obj',
+      functions: [
+        {
+          name: 'Test',
+          isMacro: false,
+          macroParams: [],
+          instructions: [
+            {
+              kind: 'call_unless_score',
+              fn: 'ns:ne_unless_branch',
+              a: { player: '$x', obj: '__obj' },
+              op: 'ne',
+              b: { player: '$y', obj: '__obj' },
+            },
+          ],
+        },
+      ],
+    }
+
+    const files = emit(module, { namespace: 'ns', mcVersion: McVersion.v1_21 })
+    const content = getFile(files, 'data/ns/function/test.mcfunction')
+
+    // unless (a != b) == if (a == b)
+    expect(content).toContain('execute if score $x __obj = $y __obj run function ns:ne_unless_branch')
+    expect(content).not.toContain('unless score $x __obj = $y __obj run function ns:ne_unless_branch')
+  })
+
+  test('call_if_score with non-ne operators emits if score without flipping', () => {
+    const ops = [
+      { op: 'eq', mc: '=' },
+      { op: 'lt', mc: '<' },
+      { op: 'le', mc: '<=' },
+      { op: 'gt', mc: '>' },
+      { op: 'ge', mc: '>=' },
+    ] as const
+
+    for (const { op, mc } of ops) {
+      const module: LIRModule = {
+        namespace: 'ns',
+        objective: '__obj',
+        functions: [
+          {
+            name: 'Test',
+            isMacro: false,
+            macroParams: [],
+            instructions: [
+              {
+                kind: 'call_if_score',
+                fn: `ns:fn_${op}`,
+                a: { player: '$x', obj: '__obj' },
+                op,
+                b: { player: '$y', obj: '__obj' },
+              },
+            ],
+          },
+        ],
+      }
+
+      const files = emit(module, { namespace: 'ns', mcVersion: McVersion.v1_21 })
+      const content = getFile(files, 'data/ns/function/test.mcfunction')
+
+      expect(content).toContain(`execute if score $x __obj ${mc} $y __obj run function ns:fn_${op}`)
+    }
+  })
+
+  test('if_score subcmd with ne emits unless score in execute chain', () => {
+    const module: LIRModule = {
+      namespace: 'ns',
+      objective: '__obj',
+      functions: [
+        {
+          name: 'Test',
+          isMacro: false,
+          macroParams: [],
+          instructions: [
+            {
+              kind: 'call_context',
+              fn: 'ns:ctx_ne',
+              subcommands: [
+                { kind: 'if_score', a: '$x __obj', op: 'ne', b: '$y __obj' },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+
+    const files = emit(module, { namespace: 'ns', mcVersion: McVersion.v1_21 })
+    const content = getFile(files, 'data/ns/function/test.mcfunction')
+
+    expect(content).toContain('execute unless score $x __obj = $y __obj run function ns:ctx_ne')
+    expect(content).not.toContain('if score $x __obj = $y __obj run function ns:ctx_ne')
   })
 })
