@@ -144,4 +144,63 @@ describe('nbt write coalescing', () => {
     const result = nbtCoalesce(fn)
     expect(result.blocks[0].instrs).toHaveLength(2)
   })
+
+  test('nbt_read_dynamic conservatively prevents deletion of preceding writes', () => {
+    // A dynamic read can alias any path — so the earlier write must be kept
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'nbt_write', ns: 'rs:vars', path: 'Foo', type: 'int', scale: 1, src: c(1) },
+        { kind: 'nbt_write', ns: 'rs:vars', path: 'Bar', type: 'int', scale: 1, src: c(10) },
+        { kind: 'nbt_read_dynamic', dst: 't0', ns: 'rs:vars', pathPrefix: 'F', indexSrc: t('i') },
+        { kind: 'nbt_write', ns: 'rs:vars', path: 'Foo', type: 'int', scale: 1, src: c(2) },
+      ], { kind: 'return', value: null }),
+    ])
+
+    const result = nbtCoalesce(fn)
+    const instrs = result.blocks[0].instrs
+
+    // All 4 instructions kept: dynamic read clears writtenPaths, so the first writes
+    // are not considered redundant when the backward scan processes them.
+    expect(instrs).toHaveLength(4)
+  })
+
+  test('nbt_write_dynamic conservatively prevents coalescing of subsequent writes', () => {
+    // Dynamic write aliases unknown path — cannot assume it overwrites Foo
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'nbt_write', ns: 'rs:vars', path: 'Foo', type: 'int', scale: 1, src: c(1) },
+        { kind: 'nbt_write_dynamic', ns: 'rs:vars', pathPrefix: 'F', indexSrc: t('i'), valueSrc: t('v') },
+        { kind: 'nbt_write', ns: 'rs:vars', path: 'Foo', type: 'int', scale: 1, src: c(2) },
+      ], { kind: 'return', value: null }),
+    ])
+
+    const result = nbtCoalesce(fn)
+    const instrs = result.blocks[0].instrs
+
+    // All 3 kept: the dynamic write clears writtenPaths in the backward pass,
+    // so the write(1) is not seen as dominated by write(2).
+    expect(instrs).toHaveLength(3)
+  })
+
+  test('call_macro interrupts coalescing — write before call_macro is kept', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'nbt_write', ns: 'rs:vars', path: 'X', type: 'int', scale: 1, src: c(1) },
+        {
+          kind: 'call_macro',
+          dst: null,
+          fn: 'test:helper',
+          args: [{ name: 'val', value: t('x'), type: 'int', scale: 1 }],
+        },
+        { kind: 'nbt_write', ns: 'rs:vars', path: 'X', type: 'int', scale: 1, src: c(2) },
+      ], { kind: 'return', value: null }),
+    ])
+
+    const result = nbtCoalesce(fn)
+    const instrs = result.blocks[0].instrs
+
+    expect(instrs).toHaveLength(3)
+    expect(instrs[0]).toMatchObject({ kind: 'nbt_write', src: c(1) })
+    expect(instrs[2]).toMatchObject({ kind: 'nbt_write', src: c(2) })
+  })
 })

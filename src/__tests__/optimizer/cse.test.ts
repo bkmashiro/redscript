@@ -192,4 +192,151 @@ describe('CSE — operand redefinition invalidates', () => {
     expect(instrs[3].kind).toBe('const')
     expect(instrs[4].kind).toBe('add')
   })
+
+  test('reassigning the result temp invalidates its own entry in available', () => {
+    // t0 = x + y          ← recorded: add:t:x:t:y → t0
+    // t0 = const 5        ← t0 is overwritten; old mapping for add:t:x:t:y must be removed
+    // t1 = x + y          ← must NOT be eliminated (t0 no longer holds x+y)
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'add', dst: 't0', a: t('x'), b: t('y') },
+        { kind: 'const', dst: 't0', value: 5 },
+        { kind: 'add', dst: 't1', a: t('x'), b: t('y') },
+      ], { kind: 'return', value: t('t1') }),
+    ])
+    const result = cse(fn)
+    const instrs = result.blocks[0].instrs
+    expect(instrs[0].kind).toBe('add')
+    expect(instrs[1].kind).toBe('const')
+    expect(instrs[2].kind).toBe('add')  // not a copy — t0 was overwritten
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('CSE — self-modifying instructions are not eliminated', () => {
+  test('t0 = t0 + 1 is not CSE-eligible across multiple occurrences', () => {
+    // Each t0 = t0 + 1 uses a different value of t0, so they must not be replaced
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'add', dst: 't0', a: t('t0'), b: c(1) },
+        { kind: 'add', dst: 't0', a: t('t0'), b: c(1) },
+        { kind: 'add', dst: 't0', a: t('t0'), b: c(1) },
+      ], { kind: 'return', value: t('t0') }),
+    ])
+    const result = cse(fn)
+    const instrs = result.blocks[0].instrs
+    expect(instrs).toHaveLength(3)
+    expect(instrs.every(i => i.kind === 'add')).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('CSE — nbt and call_macro side effects clear available', () => {
+  test('nbt_write clears available expressions', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'add', dst: 't0', a: t('x'), b: t('y') },
+        { kind: 'nbt_write', ns: 'test', path: 'p', type: 'int', scale: 1, src: t('x') },
+        { kind: 'add', dst: 't1', a: t('x'), b: t('y') },
+      ], { kind: 'return', value: t('t1') }),
+    ])
+    const result = cse(fn)
+    const instrs = result.blocks[0].instrs
+    expect(instrs[2].kind).toBe('add')  // not a copy
+  })
+
+  test('nbt_write_dynamic clears available expressions', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'add', dst: 't0', a: t('x'), b: t('y') },
+        { kind: 'nbt_write_dynamic', ns: 'test', pathPrefix: 'p', indexSrc: t('i'), valueSrc: t('x') },
+        { kind: 'add', dst: 't1', a: t('x'), b: t('y') },
+      ], { kind: 'return', value: t('t1') }),
+    ])
+    const result = cse(fn)
+    const instrs = result.blocks[0].instrs
+    expect(instrs[2].kind).toBe('add')  // not a copy
+  })
+
+  test('call_macro clears available expressions', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'add', dst: 't0', a: t('x'), b: t('y') },
+        {
+          kind: 'call_macro',
+          dst: null,
+          fn: 'test:macro_helper',
+          args: [{ name: 'val', value: t('x'), type: 'int', scale: 1 }],
+        },
+        { kind: 'add', dst: 't1', a: t('x'), b: t('y') },
+      ], { kind: 'return', value: t('t1') }),
+    ])
+    const result = cse(fn)
+    const instrs = result.blocks[0].instrs
+    expect(instrs[2].kind).toBe('add')  // not a copy
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('CSE — commutativity for and/or, non-commutativity for pow', () => {
+  test('and is commutative: a&&b == b&&a', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'and', dst: 't0', a: t('x'), b: t('y') },
+        { kind: 'and', dst: 't1', a: t('y'), b: t('x') },
+      ], { kind: 'return', value: t('t1') }),
+    ])
+    const result = cse(fn)
+    const instrs = result.blocks[0].instrs
+    expect(instrs[0].kind).toBe('and')
+    expect(instrs[1]).toEqual({ kind: 'copy', dst: 't1', src: { kind: 'temp', name: 't0' } })
+  })
+
+  test('or is commutative: a||b == b||a', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'or', dst: 't0', a: t('x'), b: t('y') },
+        { kind: 'or', dst: 't1', a: t('y'), b: t('x') },
+      ], { kind: 'return', value: t('t1') }),
+    ])
+    const result = cse(fn)
+    const instrs = result.blocks[0].instrs
+    expect(instrs[0].kind).toBe('or')
+    expect(instrs[1]).toEqual({ kind: 'copy', dst: 't1', src: { kind: 'temp', name: 't0' } })
+  })
+
+  test('pow is not commutative: x^2 != 2^x', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'pow', dst: 't0', a: t('x'), b: c(2) },
+        { kind: 'pow', dst: 't1', a: c(2), b: t('x') },
+      ], { kind: 'return', value: t('t1') }),
+    ])
+    const result = cse(fn)
+    const instrs = result.blocks[0].instrs
+    expect(instrs[0].kind).toBe('pow')
+    expect(instrs[1].kind).toBe('pow')  // not eliminated
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('CSE — does not propagate across blocks', () => {
+  test('expression computed in block A is not eliminated in block B', () => {
+    // CSE is intra-block only — block B must recompute x+y even if A did it
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'add', dst: 't0', a: t('x'), b: t('y') },
+      ], { kind: 'jump', target: 'next' }),
+      mkBlock('next', [
+        { kind: 'add', dst: 't1', a: t('x'), b: t('y') },
+      ], { kind: 'return', value: t('t1') }),
+    ])
+    const result = cse(fn)
+    const nextBlock = result.blocks[1]
+    expect(nextBlock.instrs[0].kind).toBe('add')  // not a copy
+  })
 })
