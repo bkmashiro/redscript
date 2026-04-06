@@ -12,6 +12,10 @@
  *   expect(score).toBe(3)
  */
 
+export interface ScoreDumpResult {
+  entries: Record<string, number>
+}
+
 export interface ScoreResult {
   player: string
   obj: string
@@ -271,16 +275,22 @@ export class MCTestClient {
    * Returns { "$p0": 0, "$val": 11, "#result": 42, ... }
    */
   async dumpScores(ns: string): Promise<Record<string, number>> {
-    return this.get('/scoreboard/dump', { ns })
-      .then((r: any) => r.entries ?? {})
+    const r = await this.get<ScoreDumpResult>('/scoreboard/dump', { ns })
+    if (!r.entries) {
+      throw new Error(`dumpScores: response missing 'entries' field for ns="${ns}"`)
+    }
+    return r.entries
   }
 
   /**
    * Dump all scoreboard entries for a specific objective.
    */
   async dumpScoresByObj(obj: string): Promise<Record<string, number>> {
-    return this.get('/scoreboard/dump', { obj })
-      .then((r: any) => r.entries ?? {})
+    const r = await this.get<ScoreDumpResult>('/scoreboard/dump', { obj })
+    if (!r.entries) {
+      throw new Error(`dumpScoresByObj: response missing 'entries' field for obj="${obj}"`)
+    }
+    return r.entries
   }
 
   /**

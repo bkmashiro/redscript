@@ -57,6 +57,41 @@ export interface EmitOptions {
 // Public API
 // ---------------------------------------------------------------------------
 
+/**
+ * Emit a compiled LIR module as a Minecraft datapack.
+ *
+ * Takes the Low-level Intermediate Representation produced by the compiler
+ * back-end and converts it to a flat list of datapack files ready to be
+ * written to disk or bundled into a `.zip`.
+ *
+ * Files produced:
+ * - `pack.mcmeta` — datapack manifest.
+ * - `data/<ns>/function/load.mcfunction` — scoreboard setup run on world load.
+ * - `data/<ns>/function/<fn>.mcfunction` — one file per function in the module.
+ * - `data/minecraft/tags/function/load.json` / `tick.json` — function tags.
+ * - Decorator wrappers: `@schedule`, `@throttle`, `@retry`, `@benchmark`,
+ *   `@memoize`, and `@watch` each generate additional helper `.mcfunction` files.
+ * - Optional source-map sidecars (`*.sourcemap.json`) when
+ *   `options.generateSourceMap` is `true`.
+ *
+ * @param module - The {@link LIRModule} to emit; produced by the LIR lowering pass.
+ * @param options - Emission options:
+ *   - `namespace` *(required)* — Minecraft datapack namespace (e.g. `"mypack"`).
+ *   - `tickFunctions` — function names registered under `minecraft:tick`.
+ *   - `loadFunctions` — extra function names registered under `minecraft:load`.
+ *   - `scheduleFunctions` — functions decorated with `@schedule`.
+ *   - `watchFunctions` — functions decorated with `@watch`.
+ *   - `generateSourceMap` — when `true`, emit `.sourcemap.json` sidecars.
+ *   - `mcVersion` — target Minecraft version; controls macro and execute syntax.
+ *   - `eventHandlers` — map of event type name → handler function references.
+ *   - `singletonObjectives` — scoreboard objectives for `@singleton` struct fields.
+ *   - `profiledFunctions` / `benchmarkFunctions` / `enableProfiling` — profiling support.
+ *   - `throttleFunctions` — functions decorated with `@throttle`.
+ *   - `retryFunctions` — functions decorated with `@retry`.
+ *   - `memoizeFunctions` — functions decorated with `@memoize`.
+ * @returns An array of {@link DatapackFile} objects, each with a `path` and
+ *   `content` string, representing the complete datapack output.
+ */
 export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const { namespace } = options
   const tickFns = options.tickFunctions ?? []

@@ -1283,7 +1283,10 @@ function lowerStmt(
       if (hasStringPats) {
         const matchPath = lowerStringExprToPath(stmt.expr, ctx, scope, 'match')
         if (!matchPath) {
-          throw new DiagnosticError('LoweringError', 'String match requires a string literal or tracked string variable', stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 })
+          const loc = stmt.span && ctx.sourceFile
+            ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col }
+            : { line: 1, col: 1 }
+          throw new DiagnosticError('LoweringError', 'String match requires a string literal or tracked string variable', loc)
         }
 
         const mergeBlock = ctx.newBlock('match_merge')
@@ -1314,7 +1317,10 @@ function lowerStmt(
             continue
           }
 
-          throw new DiagnosticError('LoweringError', `Unsupported string match pattern: ${pat.kind}`, stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 })
+          const loc2 = stmt.span && ctx.sourceFile
+            ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col }
+            : { line: 1, col: 1 }
+          throw new DiagnosticError('LoweringError', `Unsupported string match pattern: ${pat.kind}`, loc2)
         }
 
         if (isPlaceholderTerm(ctx.current().term)) {

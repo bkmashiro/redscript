@@ -1315,20 +1315,31 @@ connection.onRequest(
             paddingLeft: false,
           })
         }
-        // Recurse into nested blocks
-        if (stmt.kind === 'if' || stmt.kind === 'while' || stmt.kind === 'for') {
-          const s = stmt as Record<string, unknown>
-          const then_ = s['then'] as import('../ast/types').Stmt[] | undefined
-          if (Array.isArray(then_)) walkBlock(then_)
-          const else_ = s['else_'] as import('../ast/types').Stmt[] | undefined
-          if (Array.isArray(else_)) walkBlock(else_)
-          const body = s['body'] as import('../ast/types').Stmt[] | undefined
-          if (Array.isArray(body)) walkBlock(body)
-        }
-        if (stmt.kind === 'foreach') {
-          const s = stmt as Record<string, unknown>
-          const body = s['body'] as import('../ast/types').Stmt[] | undefined
-          if (Array.isArray(body)) walkBlock(body)
+        // Recurse into nested blocks — use discriminated union narrowing (no casts needed)
+        if (stmt.kind === 'if' || stmt.kind === 'if_let_some') {
+          walkBlock(stmt.then)
+          if (stmt.else_) walkBlock(stmt.else_)
+        } else if (
+          stmt.kind === 'while' ||
+          stmt.kind === 'do_while' ||
+          stmt.kind === 'repeat' ||
+          stmt.kind === 'for' ||
+          stmt.kind === 'foreach' ||
+          stmt.kind === 'for_range' ||
+          stmt.kind === 'for_in_array' ||
+          stmt.kind === 'for_each' ||
+          stmt.kind === 'while_let_some' ||
+          stmt.kind === 'as_block' ||
+          stmt.kind === 'at_block' ||
+          stmt.kind === 'as_at' ||
+          stmt.kind === 'execute'
+        ) {
+          walkBlock(stmt.body)
+        } else if (stmt.kind === 'labeled_loop') {
+          // labeled_loop wraps a single Stmt, not a Block — recurse via a one-element array
+          walkBlock([stmt.body])
+        } else if (stmt.kind === 'match') {
+          for (const arm of stmt.arms) walkBlock(arm.body)
         }
       }
     }

@@ -114,6 +114,30 @@ function offsetRanges(ranges: SourceRange[], lineOffset: number): SourceRange[] 
   }))
 }
 
+/**
+ * Preprocess RedScript source code, resolving `import "..."` statements and
+ * returning the combined source together with source-range metadata.
+ *
+ * Preprocessing steps performed:
+ * 1. Scans header-position `import "path"` directives (before any non-blank,
+ *    non-comment line) and recursively resolves them relative to `filePath`,
+ *    the stdlib directory, and any extra `includeDirs`.
+ * 2. Files that declare `module library;` are collected separately in
+ *    `libraryImports` instead of being concatenated into `source` — this
+ *    keeps them eligible for dead-code elimination during compilation.
+ * 3. Builds a `ranges` array mapping line numbers in the combined `source`
+ *    back to their original file paths, used for accurate error reporting.
+ *
+ * @param source - The raw RedScript source text to preprocess.
+ * @param options - Optional settings:
+ *   - `filePath`: absolute path of `source` on disk; required for import resolution.
+ *   - `seen`: set of already-visited absolute paths (prevents import cycles).
+ *   - `includeDirs`: additional directories searched when resolving import specifiers.
+ * @returns A {@link PreprocessedSource} containing the concatenated `source`,
+ *   the `ranges` array for source-map lookups, and any `libraryImports`.
+ * @throws {@link DiagnosticError} if an import statement is encountered without
+ *   a `filePath`, or if an import specifier cannot be resolved.
+ */
 export function preprocessSourceWithMetadata(source: string, options: PreprocessOptions = {}): PreprocessedSource {
   const { filePath } = options
   const seen = options.seen ?? new Set<string>()
@@ -208,6 +232,16 @@ export function preprocessSourceWithMetadata(source: string, options: Preprocess
   }
 }
 
+/**
+ * Preprocess RedScript source code and return only the combined source string.
+ *
+ * Convenience wrapper around {@link preprocessSourceWithMetadata} for callers
+ * that do not need the source-range or library-import metadata.
+ *
+ * @param source - The raw RedScript source text to preprocess.
+ * @param options - Same options as {@link preprocessSourceWithMetadata}.
+ * @returns The concatenated source string with all imports inlined.
+ */
 export function preprocessSource(source: string, options: PreprocessOptions = {}): string {
   return preprocessSourceWithMetadata(source, options).source
 }
