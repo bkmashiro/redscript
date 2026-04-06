@@ -143,7 +143,8 @@ export function loadProjectConfig(startDir: string): ProjectConfig | null {
         const content = fs.readFileSync(candidate, 'utf-8')
         const raw = parseToml(content)
         return tomlToConfig(raw)
-      } catch {
+      } catch (err) {
+        console.warn(`Warning: failed to parse ${candidate}: ${(err as Error).message}`)
         return null
       }
     }

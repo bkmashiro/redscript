@@ -163,7 +163,42 @@ dir = "dist/"
 })
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Test 8: buildTomlTemplate generates valid parseable content
+// Test 8: Read error on a found file warns and returns null
+// ──────────────────────────────────────────────────────────────────────────────
+test('warns and returns null when the file exists but cannot be read', () => {
+  const dir = makeTmpDir()
+  const tomlPath = path.join(dir, 'redscript.toml')
+  // Create a directory at the toml path so existsSync returns true but readFileSync throws
+  fs.mkdirSync(tomlPath)
+  const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+
+  const result = loadProjectConfig(dir)
+
+  expect(result).toBeNull()
+  expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(tomlPath))
+
+  warnSpy.mockRestore()
+  fs.rmSync(dir, { recursive: true })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Test 9: Silently returns null (no warn) when no file is found (ENOENT-like)
+// ──────────────────────────────────────────────────────────────────────────────
+test('returns null without warning when no redscript.toml exists anywhere', () => {
+  const dir = makeTmpDir()
+  const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+
+  const result = loadProjectConfig(dir)
+
+  expect(result).toBeNull()
+  expect(warnSpy).not.toHaveBeenCalled()
+
+  warnSpy.mockRestore()
+  fs.rmSync(dir, { recursive: true })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Test 10: buildTomlTemplate generates valid parseable content
 // ──────────────────────────────────────────────────────────────────────────────
 test('buildTomlTemplate generates a parseable template', () => {
   const dir = makeTmpDir()
