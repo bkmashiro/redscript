@@ -344,6 +344,12 @@ class FnContext {
   freshStringVar(varName: string): string {
     return `${this.namespace}_${this.fnName}_${varName}_${this.stringVarCount++}`
   }
+
+  /** Build a SourceLoc for a statement span, or undefined if span/sourceFile is absent */
+  getStmtLoc(stmt: HIRStmt): SourceLoc | undefined {
+    if (!stmt.span || !this.sourceFile) return undefined
+    return { file: this.sourceFile, line: stmt.span.line, col: stmt.span.col }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1071,7 +1077,7 @@ function lowerStmt(
         blocks: helperBlocks,
         entry: 'entry',
         isMacro: false,
-        sourceLoc: stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : undefined,
+        sourceLoc: ctx.getStmtLoc(stmt),
         sourceSnippet: 'foreach helper',
       })
 
@@ -1100,7 +1106,7 @@ function lowerStmt(
         blocks: execBlocks,
         entry: 'entry',
         isMacro: false,
-        sourceLoc: stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : undefined,
+        sourceLoc: ctx.getStmtLoc(stmt),
         sourceSnippet: 'execute helper',
       })
 
