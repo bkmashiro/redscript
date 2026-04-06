@@ -336,6 +336,58 @@ describe('preprocessSourceWithMetadata — transitive library imports', () => {
 })
 
 // ---------------------------------------------------------------------------
+// countLines — CRLF normalization
+// ---------------------------------------------------------------------------
+
+describe('preprocessSourceWithMetadata — CRLF line ending normalization', () => {
+  test('CRLF source produces same line count as LF source', () => {
+    const lf = 'fn f() { }\nfn g() { }\nfn h() { }'
+    const crlf = 'fn f() { }\r\nfn g() { }\r\nfn h() { }'
+
+    const lfResult = preprocessSourceWithMetadata(lf, { filePath: 'test.mcrs' })
+    const crlfResult = preprocessSourceWithMetadata(crlf, { filePath: 'test.mcrs' })
+
+    expect(crlfResult.ranges[0].endLine).toBe(lfResult.ranges[0].endLine)
+  })
+
+  test('single CRLF line is counted as two lines, same as LF', () => {
+    const lf = 'fn f() { }\nfn g() { }'
+    const crlf = 'fn f() { }\r\nfn g() { }'
+
+    const lfResult = preprocessSourceWithMetadata(lf, { filePath: 'test.mcrs' })
+    const crlfResult = preprocessSourceWithMetadata(crlf, { filePath: 'test.mcrs' })
+
+    expect(crlfResult.ranges[0].endLine).toBe(lfResult.ranges[0].endLine)
+  })
+
+  test('CRLF-only source has correct range line count with imports', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-crlf-'))
+    const libFile = path.join(tmpDir, 'crlflib.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(libFile, 'fn lib_fn(): int { return 1; }\n')
+    // Write main with CRLF line endings
+    fs.writeFileSync(mainFile, 'import "crlflib";\r\nfn main(): int { return lib_fn(); }\r\n')
+
+    try {
+      const source = fs.readFileSync(mainFile, 'utf-8')
+      const crlfResult = preprocessSourceWithMetadata(source, { filePath: mainFile })
+
+      // Rewrite main with LF to compare
+      const lfSource = source.replace(/\r\n/g, '\n')
+      const lfResult = preprocessSourceWithMetadata(lfSource, { filePath: mainFile })
+
+      expect(crlfResult.ranges.length).toBe(lfResult.ranges.length)
+      crlfResult.ranges.forEach((range, i) => {
+        expect(range.endLine).toBe(lfResult.ranges[i].endLine)
+      })
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
 // preprocessSource (wrapper)
 // ---------------------------------------------------------------------------
 
