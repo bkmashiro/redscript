@@ -75,7 +75,7 @@ export function checkDetailed(source: string, namespace = 'redscript', filePath?
       return { errors: [err], warnings: [] }
     }
     return {
-      errors: [parseErrorMessage('LoweringError', (err as Error).message, source.split('\n'), filePath)],
+      errors: [parseErrorMessage('LoweringError', err instanceof Error ? err.message || 'unknown error' : String(err), source.split('\n'), filePath)],
       warnings: [],
     }
   }
