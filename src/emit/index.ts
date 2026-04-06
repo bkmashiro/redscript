@@ -560,6 +560,10 @@ function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersio
       return `execute unless score ${slot(instr.slot)} matches ${instr.range} run function ${instr.fn}`
 
     case 'call_if_score':
+      // 'ne' has no direct MC operator; invert to `unless ... =` for correct semantics.
+      if (instr.op === 'ne') {
+        return `execute unless score ${slot(instr.a)} = ${slot(instr.b)} run function ${instr.fn}`
+      }
       return `execute if score ${slot(instr.a)} ${cmpToMC(instr.op)} ${slot(instr.b)} run function ${instr.fn}`
 
     case 'call_unless_score':
@@ -600,7 +604,7 @@ function slot(s: Slot): string {
 function cmpToMC(op: CmpOp): string {
   switch (op) {
     case 'eq': return '='
-    case 'ne': return '='  // ne uses "unless" form, but when used in if score context
+    case 'ne': return '='  // 'ne' maps to '=' — callers must wrap in `unless` (MC has no != operator)
     case 'lt': return '<'
     case 'le': return '<='
     case 'gt': return '>'

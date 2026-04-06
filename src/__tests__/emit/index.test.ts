@@ -187,4 +187,44 @@ describe('emit: direct LIR emission', () => {
     expect(main).toContain('execute store result score $x __legacy run data get storage legacy:data p 2.0')
     expect(files.find(f => f.path === 'data/minecraft/tags/function/tick.json')).toBeUndefined()
   })
+
+  describe('ne operator emission', () => {
+    const sourceLoc = { file: 'src/ne.mcrs', line: 1, col: 1 }
+    const a = { player: '$x', obj: '__ne' }
+    const b = { player: '$y', obj: '__ne' }
+
+    function emitSingle(instr: LIRInstr): string {
+      const mod: LIRModule = {
+        namespace: 'nens',
+        objective: '__ne',
+        functions: [{ name: 'Ne', isMacro: false, macroParams: [], instructions: [instr] }],
+      }
+      const files = emit(mod, { namespace: 'nens', mcVersion: McVersion.v1_21 })
+      return files.find(f => f.path === 'data/nens/function/ne.mcfunction')?.content ?? ''
+    }
+
+    test('call_if_score with ne emits unless form, not if with =', () => {
+      const out = emitSingle({ kind: 'call_if_score', fn: 'nens:target', a, op: 'ne', b, sourceLoc })
+      expect(out).toContain('execute unless score $x __ne = $y __ne run function nens:target')
+      expect(out).not.toContain('execute if score')
+    })
+
+    test('call_unless_score with ne emits unless + = (double-negation = equality check)', () => {
+      // unless score a = b is true when a != b, so unless + ne maps to unless + = which checks equality.
+      // This is the inverse: call_unless_score(ne) means "run unless a != b" = "run if a == b".
+      const out = emitSingle({ kind: 'call_unless_score', fn: 'nens:target', a, op: 'ne', b, sourceLoc })
+      expect(out).toContain('execute unless score $x __ne = $y __ne run function nens:target')
+    })
+
+    test('call_if_score with eq still emits if + = (not affected by ne fix)', () => {
+      const out = emitSingle({ kind: 'call_if_score', fn: 'nens:target', a, op: 'eq', b, sourceLoc })
+      expect(out).toContain('execute if score $x __ne = $y __ne run function nens:target')
+    })
+
+    test('call_if_score with ne and call_if_score with eq produce distinct commands', () => {
+      const neOut = emitSingle({ kind: 'call_if_score', fn: 'nens:target', a, op: 'ne', b, sourceLoc })
+      const eqOut = emitSingle({ kind: 'call_if_score', fn: 'nens:target', a, op: 'eq', b, sourceLoc })
+      expect(neOut).not.toBe(eqOut)
+    })
+  })
 })
