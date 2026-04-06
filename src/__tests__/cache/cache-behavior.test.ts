@@ -601,3 +601,79 @@ describe('compileIncremental — edge cases', () => {
     expect(r.errors.size).toBe(0)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Logging — warn is emitted on error paths
+// ---------------------------------------------------------------------------
+
+describe('FileCache — warn logged on stat failure', () => {
+  test('hasChanged emits console.warn when stat throws', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const cache = new FileCache('/tmp/irrelevant')
+      const fakePath = '/absolutely/nonexistent/warn-test.mcrs'
+      cache.set(fakePath, { hash: 'abc', mtime: 1 })
+      cache.hasChanged(fakePath)
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[cache]'))
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(fakePath))
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+})
+
+describe('FileCache — warn logged on corrupt cache load', () => {
+  test('load emits console.warn when cache.json is corrupt JSON', () => {
+    const tmp = makeTmpDir()
+    const cacheDir = path.join(tmp, '.cache')
+    fs.mkdirSync(cacheDir, { recursive: true })
+    fs.writeFileSync(path.join(cacheDir, 'cache.json'), 'not valid json {{{')
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const cache = new FileCache(cacheDir)
+      cache.load()
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[cache]'))
+      expect(cache.size).toBe(0) // recovery still works
+    } finally {
+      warnSpy.mockRestore()
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  test('load emits console.warn when cache.json is missing', () => {
+    const tmp = makeTmpDir()
+    const cacheDir = path.join(tmp, '.no-cache-dir')
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const cache = new FileCache(cacheDir)
+      cache.load()
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[cache]'))
+      expect(cache.size).toBe(0)
+    } finally {
+      warnSpy.mockRestore()
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('compileIncremental — warn logged when dependency file is unreadable', () => {
+  test('discoverDependencyGraph emits console.warn for missing import target', () => {
+    const tmp = makeTmpDir()
+    const outDir = path.join(tmp, 'out')
+    // File imports a path that does not exist on disk
+    const src = writeFile(tmp, 'main.mcrs', 'import "missing.mcrs";\nfn main() {}')
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const cache = new FileCache(path.join(tmp, '.cache'))
+      const depGraph = new DependencyGraph()
+      compileIncremental([src], cache, depGraph, { output: outDir })
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[cache]'))
+    } finally {
+      warnSpy.mockRestore()
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+})

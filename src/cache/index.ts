@@ -64,7 +64,8 @@ export class FileCache {
     try {
       const stat = fs.statSync(absPath)
       if (stat.mtimeMs === cached.mtime) return false
-    } catch {
+    } catch (err) {
+      console.warn(`[cache] stat failed for ${absPath}: ${(err as Error).message}`)
       return true
     }
 
@@ -149,8 +150,9 @@ export class FileCache {
           dependencies: entry.dependencies,
         })
       }
-    } catch {
+    } catch (err) {
       // No cache or corrupt — start fresh
+      console.warn(`[cache] failed to load cache from ${cachePath}: ${(err as Error).message}`)
     }
   }
 }

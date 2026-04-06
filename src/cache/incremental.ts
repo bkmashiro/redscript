@@ -156,7 +156,8 @@ function discoverDependencyGraph(entries: string[], depGraph: DependencyGraph): 
       for (const imported of imports) {
         if (!visited.has(imported)) queue.push(imported)
       }
-    } catch {
+    } catch (err) {
+      console.warn(`[cache] failed to read ${current} during dependency discovery: ${(err as Error).message}`)
       depGraph.removeFile(current)
     }
   }
