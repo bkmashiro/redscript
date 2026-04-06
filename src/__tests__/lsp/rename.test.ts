@@ -159,3 +159,234 @@ fn make_point(): Point {
     expect(ranges[1].start.line).toBe(6)
   })
 })
+
+describe('LSP rename — struct field member access', () => {
+  test('renames field at declaration and all member-access sites', () => {
+    const source = `struct Player {
+  health: int,
+  mana: int,
+}
+
+fn damage(p: Player, amount: int): void {
+  p.health = p.health - amount;
+}
+
+fn heal(p: Player, amount: int): void {
+  p.health = p.health + amount;
+}
+`
+    const next = rename(source, positionOf(source, 'health', 0), 'hp')
+    expect(next).toContain('  hp: int,')
+    expect(next).toContain('p.hp = p.hp - amount;')
+    expect(next).toContain('p.hp = p.hp + amount;')
+    expect(next).not.toContain('health')
+  })
+
+  test('does not rename a same-named field on a different struct', () => {
+    const source = `struct A {
+  value: int,
+}
+
+struct B {
+  value: int,
+}
+
+fn read_a(a: A): int {
+  return a.value;
+}
+
+fn read_b(b: B): int {
+  return b.value;
+}
+`
+    const next = rename(source, positionOf(source, 'value', 0), 'data')
+    expect(next).toContain('struct A {\n  data: int,\n}')
+    expect(next).toContain('return a.data;')
+    // B.value must be untouched
+    expect(next).toContain('struct B {\n  value: int,\n}')
+    expect(next).toContain('return b.value;')
+  })
+
+  test('renames a field accessed via chained member expressions', () => {
+    const source = `struct Inner {
+  score: int,
+}
+
+struct Outer {
+  inner: Inner,
+}
+
+fn get(o: Outer): int {
+  return o.inner.score;
+}
+`
+    const next = rename(source, positionOf(source, 'score', 0), 'points')
+    expect(next).toContain('  points: int,')
+    expect(next).toContain('return o.inner.points;')
+  })
+
+  test('renames field in struct literal initializer', () => {
+    const source = `struct Vec2 {
+  x: float,
+  y: float,
+}
+
+fn zero(): Vec2 {
+  return Vec2 { x: 0.0, y: 0.0 };
+}
+`
+    const next = rename(source, positionOf(source, 'x', 0), 'horizontal')
+    expect(next).toContain('  horizontal: float,')
+    expect(next).toContain('Vec2 { horizontal: 0.0, y: 0.0 }')
+  })
+})
+
+describe('LSP rename — shadowing and scope isolation', () => {
+  test('renaming the inner shadow does not affect the outer binding', () => {
+    const source = `fn main(): void {
+  let count: int = 10;
+  if true {
+    let count: int = 99;
+    let doubled: int = count * 2;
+  }
+  let result: int = count;
+}
+`
+    // Rename the inner 'count' (second occurrence in the declaration position)
+    const next = rename(source, positionOf(source, 'count', 1), 'inner')
+    expect(next).toContain('let count: int = 10;')
+    expect(next).toContain('let inner: int = 99;')
+    expect(next).toContain('let doubled: int = inner * 2;')
+    expect(next).toContain('let result: int = count;')
+  })
+
+  test('renaming outer does not bleed into nested block that redeclares the name', () => {
+    const source = `fn main(): void {
+  let x: int = 1;
+  if true {
+    let x: int = 2;
+  }
+  let y: int = x;
+}
+`
+    const next = rename(source, positionOf(source, 'x', 0), 'z')
+    expect(next).toContain('let z: int = 1;')
+    expect(next).toContain('let x: int = 2;')
+    expect(next).toContain('let y: int = z;')
+  })
+
+  test('findRenameRanges for inner shadow returns only inner-scope occurrences', () => {
+    const source = `fn main(): void {
+  let value: int = 1;
+  if true {
+    let value: int = 2;
+    let inner: int = value;
+  }
+  let outer: int = value;
+}
+`
+    // Target the declaration on line 3 (0-indexed) — the inner shadow
+    const ranges = findRenameRanges(source, parseProgram(source), positionOf(source, 'value', 1))
+    expect(ranges).toHaveLength(2)
+    expect(ranges[0].start.line).toBe(3)
+    expect(ranges[1].start.line).toBe(4)
+  })
+})
+
+describe('LSP rename — keyword and non-renameable positions', () => {
+  test('returns null when position is not on any symbol', () => {
+    const source = `fn main(): void {
+  let x: int = 1;
+}
+`
+    const program = parseProgram(source)
+    const doc = TextDocument.create('file:///test.mcrs', 'redscript', 1, source)
+    // Position on whitespace / the type annotation 'int' — not a user-defined symbol
+    const result = buildRenameWorkspaceEdit(doc, program, { line: 1, character: 12 }, 'renamed')
+    expect(result).toBeNull()
+  })
+
+  test('findRenameRanges returns empty array for literal value position', () => {
+    const source = `fn main(): void {
+  let x: int = 42;
+}
+`
+    // Position on '42'
+    const ranges = findRenameRanges(source, parseProgram(source), { line: 1, character: 16 })
+    expect(ranges).toHaveLength(0)
+  })
+
+  test('returns null when position is past end of file', () => {
+    const source = `fn main(): void {}\n`
+    const program = parseProgram(source)
+    const doc = TextDocument.create('file:///test.mcrs', 'redscript', 1, source)
+    const result = buildRenameWorkspaceEdit(doc, program, { line: 999, character: 0 }, 'x')
+    expect(result).toBeNull()
+  })
+})
+
+describe('LSP rename — function parameters', () => {
+  test('renames a parameter declaration and all uses in the function body', () => {
+    const source = `fn square(num: int): int {
+  return num * num;
+}
+`
+    const next = rename(source, positionOf(source, 'num', 0), 'value')
+    expect(next).toContain('fn square(value: int): int {')
+    expect(next).toContain('return value * value;')
+  })
+
+  test('parameter rename is isolated to its own function', () => {
+    const source = `fn inc(arg: int): int {
+  return arg + 1;
+}
+
+fn dec(arg: int): int {
+  return arg - 1;
+}
+`
+    // positionOf finds first 'arg' — the param in inc()
+    const next = rename(source, positionOf(source, 'arg', 0), 'value')
+    expect(next).toContain('fn inc(value: int): int {')
+    expect(next).toContain('return value + 1;')
+    // dec's parameter must be untouched — it is a different symbol
+    expect(next).toContain('fn dec(arg: int): int {')
+    expect(next).toContain('return arg - 1;')
+  })
+})
+
+describe('LSP rename — for/foreach loop bindings', () => {
+  test('renames a for-range loop variable inside its scope', () => {
+    const source = `fn sum(nn: int): int {
+  let total: int = 0;
+  for idx in 0 .. nn {
+    total = total + idx;
+  }
+  return total;
+}
+`
+    const next = rename(source, positionOf(source, 'idx', 0), 'counter')
+    expect(next).toContain('for counter in 0 .. nn {')
+    expect(next).toContain('total = total + counter;')
+  })
+})
+
+describe('LSP rename — multiple functions referencing same function', () => {
+  test('renames function call sites across all callers', () => {
+    const source = `fn compute(): int { return 1; }
+
+fn a(): int {
+  return compute();
+}
+
+fn b(): int {
+  return compute() + compute();
+}
+`
+    const next = rename(source, positionOf(source, 'compute', 0), 'calculate')
+    expect(next).toContain('fn calculate(): int {')
+    expect(next).toContain('return calculate();')
+    expect(next).toContain('return calculate() + calculate();')
+    expect(next).not.toContain('compute')
+  })
+})

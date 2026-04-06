@@ -98,6 +98,17 @@ function findFunctionNameToken(cursor: TokenCursor, fn: FnDecl): Token | null {
   return findNextToken(cursor, fnIndex + 1, token => token.kind === 'ident' && token.value === fn.name)
 }
 
+function findBindingToken(cursor: TokenCursor, stmt: { span?: { line: number; col: number } }, bindingName: string): Token | null {
+  if (!stmt.span) return null
+  const startIndex = findTokenIndex(cursor, stmt.span.line, stmt.span.col)
+  if (startIndex === -1) return null
+  return findNextToken(
+    cursor,
+    startIndex + 1,
+    token => token.kind === 'ident' && token.value === bindingName && token.line === stmt.span!.line,
+  )
+}
+
 function findDeclarationNameToken(cursor: TokenCursor, stmt: Extract<Stmt, { kind: 'let' | 'const_decl' }>): Token | null {
   if (!stmt.span) return null
   const startIndex = findTokenIndex(cursor, stmt.span.line, stmt.span.col)
@@ -339,7 +350,7 @@ function buildRenameIndex(source: string, program: Program): RenameSymbol[] {
         walkExpr(stmt.start, scope, null, currentFn)
         walkExpr(stmt.end, scope, null, currentFn)
         const forScope = makeScope(scope)
-        bindLocal(stmt.varName, { kind: 'named', name: 'int' }, null, forScope)
+        bindLocal(stmt.varName, { kind: 'named', name: 'int' }, findBindingToken(cursor, stmt, stmt.varName), forScope)
         walkBlock(stmt.body, forScope, currentFn)
         return
       }
