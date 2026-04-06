@@ -92,8 +92,8 @@ describe('emit/index coverage', () => {
     expect(load).toContain('scoreboard objectives add __watch_watch_hp_prev dummy')
     expect(load).toContain('scoreboard objectives add _s_Game_phase dummy')
     expect(load).toContain('scoreboard objectives add __bench dummy')
-    expect(load).toContain('scoreboard objectives add __throttle dummy')
-    expect(load).toContain('scoreboard objectives add __retry dummy')
+    expect(load).toContain('scoreboard objectives add __throttle_slow_fn dummy')
+    expect(load).toContain('scoreboard objectives add __retry_retry_fn dummy')
     expect(load).toContain('scoreboard objectives add __memo dummy')
 
     const watch = getFile(files, 'data/cov/function/__watch_watch_hp.mcfunction')
@@ -101,13 +101,13 @@ describe('emit/index coverage', () => {
     expect(watch).toContain('execute as @a unless score @s hp = @s __watch_watch_hp_prev run function cov:watch_hp')
 
     const throttle = getFile(files, 'data/cov/function/__throttle_slow_fn.mcfunction')
-    expect(throttle).toContain('scoreboard players add __throttle_slow_fn __throttle 1')
+    expect(throttle).toContain('scoreboard players add __throttle_slow_fn __throttle_slow_fn 1')
     expect(throttle).toContain('function cov:slow_fn_inner')
 
     const retry = getFile(files, 'data/cov/function/__retry_retry_fn.mcfunction')
     expect(retry).toContain('function cov:retry_fn')
-    expect(retry).toContain('if score $ret __retry matches 0')
-    expect(getFile(files, 'data/cov/function/retry_fn_start.mcfunction')).toContain('scoreboard players set __retry_retry_fn __retry 3')
+    expect(retry).toContain('if score $ret __retry_retry_fn matches 0')
+    expect(getFile(files, 'data/cov/function/retry_fn_start.mcfunction')).toContain('scoreboard players set __retry_retry_fn __retry_retry_fn 3')
 
     const memo = getFile(files, 'data/cov/function/memo_fn.mcfunction')
     expect(memo).toContain('# @memoize wrapper for memo_fn (LRU-1 cache)')
@@ -211,8 +211,8 @@ describe('emit/index coverage', () => {
     expect(load).toContain('_s_Game_phase')
     expect(load).toContain('__watch_watch_hp_prev')
     expect(load).toContain('__memo dummy')
-    expect(load).toContain('__throttle dummy')
-    expect(load).toContain('__retry dummy')
+    expect(load).toContain('__throttle_slow_fn dummy')
+    expect(load).toContain('__retry_retry_fn dummy')
     expect(load).toContain('__bench dummy')
 
     expect(getFile(result.files, 'data/fullcov/function/memo_fn.mcfunction')).toContain('function fullcov:memo_fn_impl')
