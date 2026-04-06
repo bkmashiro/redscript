@@ -1,4 +1,5 @@
 import type { Block, Expr, Program, Stmt } from './ast/types'
+import { DiagnosticError } from './diagnostics'
 import { Lexer, type Token } from './lexer'
 import { lintSource } from './lint/index'
 import { Parser } from './parser'
@@ -181,7 +182,7 @@ function evaluateConstNumber(expr: Expr): number | null {
 function findStatementRange(source: string, tokens: Token[], line: number, col: number): StatementRange {
   const startTokenIndex = tokens.findIndex(token => token.line === line && token.col === col && token.kind === 'if')
   if (startTokenIndex === -1) {
-    throw new Error(`Could not locate if statement at ${line}:${col}`)
+    throw new DiagnosticError('LoweringError', `Could not locate if statement`, { line, col })
   }
 
   const thenBraceStart = findThenBraceStart(tokens, startTokenIndex)
@@ -241,7 +242,7 @@ function findThenBraceStart(tokens: Token[], startIndex: number): number {
       return i
     }
   }
-  throw new Error(`Could not locate block for if statement at ${tokens[startIndex].line}:${tokens[startIndex].col}`)
+  throw new DiagnosticError('LoweringError', `Could not locate block for if statement`, { line: tokens[startIndex].line, col: tokens[startIndex].col })
 }
 
 function findMatchingBrace(tokens: Token[], openBraceIndex: number): number {
@@ -254,7 +255,7 @@ function findMatchingBrace(tokens: Token[], openBraceIndex: number): number {
       if (depth === 0) return i
     }
   }
-  throw new Error(`Unmatched '{' at ${tokens[openBraceIndex].line}:${tokens[openBraceIndex].col}`)
+  throw new DiagnosticError('LoweringError', `Unmatched '{'`, { line: tokens[openBraceIndex].line, col: tokens[openBraceIndex].col })
 }
 
 function extractElseReplacement(source: string, tokens: Token[], range: StatementRange, baseIndent: string): string {
