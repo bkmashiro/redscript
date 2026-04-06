@@ -417,7 +417,7 @@ function throttleDispatcherName(name: string): string {
 }
 
 function throttleObjective(name: string): string {
-  return `__throttle`
+  return `__throttle_${name}`
 }
 
 function retryDispatcherName(name: string): string {
@@ -425,7 +425,7 @@ function retryDispatcherName(name: string): string {
 }
 
 function retryObjective(name: string): string {
-  return `__retry`
+  return `__retry_${name}`
 }
 
 function profilerSafeName(name: string): string {
