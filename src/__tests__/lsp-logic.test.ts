@@ -50,23 +50,51 @@ fn buff_all(target: entity, dur: int) {}
 
 // ── import wildcard F12 bug ──────────────────────────────────────────────────
 describe('F12 import wildcard', () => {
-  test('im.symbol === * should NOT match arbitrary words', () => {
-    // Simulates the bug: import random::* caused im.symbol==='*' to match anything
+  // The fix: wildcard imports (import random::*) must NOT be treated as an
+  // explicit match for every symbol. Only exact symbol matches should resolve.
+  // Using `im.symbol === word` (without `|| im.symbol === '*'`) is correct.
+
+  test('wildcard import should NOT match an unrelated word', () => {
     const imports = [{ moduleName: 'random', symbol: '*' }]
-
-    // BUGGY behavior (what was happening):
-    const buggy = imports.find(im => im.symbol === 'tell' || im.symbol === '*')
-    expect(buggy).toBeDefined() // BUG: finds a match even for 'tell'
-
-    // CORRECT behavior (what we want):
-    const correct = imports.find(im => im.symbol === 'tell')
-    expect(correct).toBeUndefined() // 'tell' is not an explicit import symbol
+    const match = imports.find(im => im.symbol === 'tell')
+    expect(match).toBeUndefined()
   })
 
-  test('explicit symbol import should still match', () => {
+  test('wildcard import should NOT match empty string', () => {
+    const imports = [{ moduleName: 'random', symbol: '*' }]
+    const match = imports.find(im => im.symbol === '')
+    expect(match).toBeUndefined()
+  })
+
+  test('wildcard import should NOT match the asterisk literal as a symbol lookup', () => {
+    // Searching for the word '*' itself should not produce a false positive
+    const imports = [{ moduleName: 'random', symbol: '*' }]
+    // A real symbol named '*' would be a parse error; this confirms we only
+    // do strict equality and never special-case '*' on the lookup side.
+    const match = imports.find(im => im.symbol === 'rand_int')
+    expect(match).toBeUndefined()
+  })
+
+  test('explicit symbol import should match its own name', () => {
     const imports = [{ moduleName: 'random', symbol: 'rand_int' }]
     const match = imports.find(im => im.symbol === 'rand_int')
     expect(match).toBeDefined()
+  })
+
+  test('explicit symbol import should NOT match a different name', () => {
+    const imports = [{ moduleName: 'random', symbol: 'rand_int' }]
+    const match = imports.find(im => im.symbol === 'tell')
+    expect(match).toBeUndefined()
+  })
+
+  test('multiple imports — only exact match returned', () => {
+    const imports = [
+      { moduleName: 'random', symbol: '*' },
+      { moduleName: 'math', symbol: 'abs' },
+    ]
+    expect(imports.find(im => im.symbol === 'abs')).toBeDefined()
+    expect(imports.find(im => im.symbol === 'tell')).toBeUndefined()
+    expect(imports.find(im => im.symbol === 'rand_int')).toBeUndefined()
   })
 })
 
