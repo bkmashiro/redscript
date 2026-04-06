@@ -511,8 +511,8 @@ function lowerStmt(stmt: Stmt): HIRStmt | HIRStmt[] {
       }
 
     default: {
-      const _exhaustive: never = stmt
-      throw new Error(`Unknown statement kind: ${(_exhaustive as any).kind}`)
+      const _never: never = stmt
+      throw new Error(`Unknown statement kind: ${JSON.stringify(_never)}`)
     }
   }
 }
@@ -747,8 +747,8 @@ function lowerExpr(expr: Expr): HIRExpr {
     }
 
     default: {
-      const _exhaustive: never = expr
-      throw new Error(`Unknown expression kind: ${(_exhaustive as any).kind}`)
+      const _never: never = expr
+      throw new Error(`Unknown expression kind: ${JSON.stringify(_never)}`)
     }
   }
 }

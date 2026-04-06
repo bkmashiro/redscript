@@ -1597,8 +1597,8 @@ function lowerStmt(
     }
 
     default: {
-      const _exhaustive: never = stmt
-      throw new Error(`Unknown HIR statement kind: ${(_exhaustive as any).kind}`)
+      const _never: never = stmt
+      throw new Error(`Unknown HIR statement kind: ${JSON.stringify(_never)}`)
     }
   }
 }
@@ -2905,8 +2905,8 @@ function lowerExpr(
     }
 
     default: {
-      const _exhaustive: never = expr
-      throw new Error(`Unknown HIR expression kind: ${(_exhaustive as any).kind}`)
+      const _never: never = expr
+      throw new Error(`Unknown HIR expression kind: ${JSON.stringify(_never)}`)
     }
   }
 }
@@ -3172,8 +3172,8 @@ function lowerExecuteSubcmd(sub: HIRExecuteSubcommand): ExecuteSubcmd {
       // These are condition subcommands — pass through as-is for now
       return { kind: 'at_self' }
     default: {
-      const _exhaustive: never = sub
-      throw new Error(`Unknown execute subcommand kind: ${(_exhaustive as any).kind}`)
+      const _never: never = sub
+      throw new Error(`Unknown execute subcommand kind: ${JSON.stringify(_never)}`)
     }
   }
 }
