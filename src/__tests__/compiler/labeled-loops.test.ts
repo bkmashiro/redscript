@@ -255,7 +255,7 @@ describe('labeled loops — MIR lowering', () => {
 // ---------------------------------------------------------------------------
 
 describe('labeled loops — error handling', () => {
-  test('break with unknown label throws error', () => {
+  test('break with unknown label throws error naming the label', () => {
     const src = `
       fn test_fn() {
         while true {
@@ -266,7 +266,7 @@ describe('labeled loops — error handling', () => {
     expect(() => compile(src, { namespace: 'test' })).toThrow(/nonexistent/)
   })
 
-  test('continue with unknown label throws error', () => {
+  test('continue with unknown label throws error naming the label', () => {
     const src = `
       fn test_fn() {
         while true {
@@ -275,5 +275,37 @@ describe('labeled loops — error handling', () => {
       }
     `
     expect(() => compile(src, { namespace: 'test' })).toThrow(/nonexistent/)
+  })
+
+  test('break outside any loop throws error', () => {
+    const src = `
+      fn test_fn() {
+        break
+      }
+    `
+    expect(() => lowerToMIR(lowerToHIR(parse(src)))).toThrow(/break outside loop/)
+  })
+
+  test('continue outside any loop throws error', () => {
+    const src = `
+      fn test_fn() {
+        continue
+      }
+    `
+    expect(() => lowerToMIR(lowerToHIR(parse(src)))).toThrow(/continue outside loop/)
+  })
+
+  test('break with label that names a non-loop statement throws error', () => {
+    // Labels in redscript only attach to loops; a label on a non-loop
+    // produces a parse error and is not registered in the loop stack.
+    // A break_label that targets such a label therefore finds no loop entry.
+    const src = `
+      fn test_fn() {
+        outer: while true {
+          break missing_label
+        }
+      }
+    `
+    expect(() => lowerToMIR(lowerToHIR(parse(src)))).toThrow(/missing_label/)
   })
 })
