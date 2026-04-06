@@ -111,12 +111,13 @@ function findBindingToken(cursor: TokenCursor, stmt: { span?: { line: number; co
 
 function findDeclarationNameToken(cursor: TokenCursor, stmt: Extract<Stmt, { kind: 'let' | 'const_decl' }>): Token | null {
   if (!stmt.span) return null
-  const startIndex = findTokenIndex(cursor, stmt.span.line, stmt.span.col)
+  const { span } = stmt
+  const startIndex = findTokenIndex(cursor, span.line, span.col)
   if (startIndex === -1) return null
   return findNextToken(
     cursor,
     startIndex + 1,
-    token => token.kind === 'ident' && token.value === stmt.name && token.line === stmt.span!.line,
+    token => token.kind === 'ident' && token.value === stmt.name && token.line === span.line,
   )
 }
 
@@ -162,12 +163,13 @@ function findParamToken(cursor: TokenCursor, fn: FnDecl, paramName: string, from
 
 function findFieldAccessToken(cursor: TokenCursor, expr: Extract<Expr, { kind: 'member' | 'member_assign' }>): Token | null {
   if (!expr.span) return null
-  const startIndex = findTokenIndex(cursor, expr.span.line, expr.span.col)
+  const { span } = expr
+  const startIndex = findTokenIndex(cursor, span.line, span.col)
   if (startIndex === -1) return null
   return findNextToken(
     cursor,
     startIndex + 1,
-    (token, index) => token.kind === 'ident' && token.value === expr.field && cursor.tokens[index - 1]?.kind === '.' && token.line === expr.span!.line,
+    (token, index) => token.kind === 'ident' && token.value === expr.field && cursor.tokens[index - 1]?.kind === '.' && token.line === span.line,
   )
 }
 
