@@ -128,6 +128,9 @@ function decodeModifiedUtf8(buffer: Buffer, offset: number): { value: string; of
   const end = offset + byteLength
 
   while (offset < end) {
+    if (offset >= buffer.length) {
+      throw new Error(`Malformed NBT string: unexpected end of buffer at offset ${offset}`)
+    }
     const first = buffer[offset++]
 
     if ((first & 0x80) === 0) {
@@ -136,11 +139,17 @@ function decodeModifiedUtf8(buffer: Buffer, offset: number): { value: string; of
     }
 
     if ((first & 0xe0) === 0xc0) {
+      if (offset >= buffer.length) {
+        throw new Error(`Malformed NBT string: truncated 2-byte sequence at offset ${offset - 1}`)
+      }
       const second = buffer[offset++]
       codeUnits.push(((first & 0x1f) << 6) | (second & 0x3f))
       continue
     }
 
+    if (offset + 1 >= buffer.length) {
+      throw new Error(`Malformed NBT string: truncated 3-byte sequence at offset ${offset - 1}`)
+    }
     const second = buffer[offset++]
     const third = buffer[offset++]
     codeUnits.push(
