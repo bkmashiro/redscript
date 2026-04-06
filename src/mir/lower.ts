@@ -1,8 +1,33 @@
 /**
  * HIR → MIR Lowering — Stage 3 of the RedScript compiler pipeline.
  *
- * Converts structured HIR (if/while/break/continue) into an explicit CFG
- * with 3-address instructions and unlimited fresh temporaries.
+ * Converts structured HIR (if/while/break/continue) into an explicit Control
+ * Flow Graph (CFG) of {@link MIRBlock}s, each terminated by a single
+ * {@link MIRInstr} (jump, branch, or return).  Every sub-expression is
+ * decomposed into 3-address assignments to unlimited fresh temporaries (`t0`,
+ * `t1`, …); no temporary is ever reused or mutated after assignment.
+ *
+ * ## Pipeline position
+ *
+ * ```
+ * Source → Lexer → Parser → HIR → (this file) MIR → LIR → Emit (datapack)
+ * ```
+ *
+ * The MIR produced here is consumed by `lir/lower.ts`, which maps MIR
+ * temporaries to concrete Minecraft scoreboard objectives and NBT storage
+ * paths, and by `mir/verify.ts`, which validates CFG invariants before
+ * further lowering.
+ *
+ * ## Key design decisions
+ *
+ * - **Unlimited temporaries**: avoids register pressure during lowering;
+ *   the LIR pass handles allocation to scoreboard slots.
+ * - **Explicit blocks**: every branch target is a labelled {@link MIRBlock};
+ *   unreachable blocks are pruned after lowering via {@link computeReachable}.
+ * - **Special-cased types**: `double` values live in NBT storage (`rs:d`),
+ *   `string`/`format_string` values live in a separate string-storage
+ *   namespace, and `array` types are passed by NBT path rather than by
+ *   scoreboard value.
  */
 
 import type {
@@ -436,6 +461,52 @@ function lowerFunction(
   globalVarNames: Set<string> = new Set(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const mirFnName = overrideName ?? fn.name
+
+  // ---------------------------------------------------------------------------
+  // Lowering context — owns all mutable state for one function's CFG build.
+  //
+  // Overall strategy
+  // ────────────────
+  // lowerBlock/lowerStmt/lowerExpr walk the HIR tree recursively.  Each call
+  // appends MIR instructions to `ctx.currentBlock` and, when a control-flow
+  // split is needed, allocates new blocks via `ctx.newBlock()` and wires them
+  // together with branch/jump terminators before switching the cursor with
+  // `ctx.switchTo()`.
+  //
+  // Named variables vs. compiler-generated temporaries
+  // ────────────────────────────────────────────────────
+  // Source-level names are resolved to temporaries (`t0`, `t1`, …) through a
+  // lexical `scope: Map<string, Temp>` that is threaded through recursive
+  // calls.  Compiler-generated values (sub-expression results, intermediate
+  // computations) get fresh temporaries from `ctx.freshTemp()` and never
+  // appear in `scope`.  This separation makes it straightforward to identify
+  // which temps correspond to user-visible variables during debugging.
+  //
+  // Typed variable side-channels
+  // ─────────────────────────────
+  // Not all values fit in a scoreboard integer.  Four parallel maps track
+  // variables that require special storage and are excluded from the normal
+  // temp/scope path:
+  //   • `structVars`  — struct instances; each field has its own `Temp`
+  //   • `tupleVars`   — tuple instances; elements are indexed positionally
+  //   • `arrayVars`   — NBT-backed int arrays; identified by (ns, pathPrefix)
+  //   • `stringVars`  — string/format_string values; live in rs:strings NBT
+  //   • `doubleVars`  — IEEE-754 doubles; live in rs:d NBT storage
+  //
+  // Control-flow stack (break / continue / labeled loops)
+  // ──────────────────────────────────────────────────────
+  // `loopStack` is a LIFO stack of `{ header, exit, continueTo, label? }`
+  // entries pushed by `ctx.pushLoop()` on entry to each loop and popped by
+  // `ctx.popLoop()` on exit.
+  //   • `header`     — block to jump back to for the next iteration
+  //   • `exit`       — block to jump to when breaking out of the loop
+  //   • `continueTo` — block to jump to for `continue` (= header for
+  //                    while/for; = the increment block for C-style for-loops)
+  //   • `label`      — optional source-level loop label, enabling
+  //                    `break 'outer` / `continue 'outer` to skip past
+  //                    inner loops by searching from innermost to outermost
+  //                    with `ctx.findLoopByLabel()`
+  // ---------------------------------------------------------------------------
   const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = fn.sourceFile ?? sourceFile
   ctx.constValues = constValues
