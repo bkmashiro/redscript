@@ -519,6 +519,38 @@ describe('MIR→LIR lowering — return', () => {
     const main = lir.functions.find(f => f.name === 'main')!
     expect(main.instructions.find(i => i.kind === 'return_value')).toBeUndefined()
   })
+
+  test('return with constant → materialises const slot, not $ret slot', () => {
+    // Regression: retSlot ($ret) was declared but unused; return_value must
+    // carry the *source* slot, not the destination.
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [], { kind: 'return', value: c(7) }),
+      ]),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+    const ret = main.instructions.find(i => i.kind === 'return_value') as any
+    expect(ret).toBeDefined()
+    // slot must be the materialised const slot, not $ret
+    expect(ret.slot).toEqual({ player: '$__const_7', obj: OBJ })
+    expect(ret.slot.player).not.toBe('$ret')
+  })
+
+  test('return_value slot is never the $ret player (regression guard)', () => {
+    // Ensures the removed retSlot was not accidentally used as the instruction slot.
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [
+          { kind: 'const', dst: 't0', value: 99 },
+        ], { kind: 'return', value: t('t0') }),
+      ]),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+    const ret = main.instructions.find(i => i.kind === 'return_value') as any
+    expect(ret.slot.player).not.toBe('$ret')
+  })
 })
 
 // ---------------------------------------------------------------------------

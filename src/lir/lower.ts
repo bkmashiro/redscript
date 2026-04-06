@@ -636,7 +636,6 @@ function lowerTerminatorInner(
   switch (term.kind) {
     case 'return': {
       if (term.value) {
-        const retSlot: Slot = { player: '$ret', obj: ctx.objective }
         const srcSlot = operandToSlot(term.value, ctx, instrs)
         instrs.push({ kind: 'return_value', slot: srcSlot })
       }
