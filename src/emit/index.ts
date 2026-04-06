@@ -210,40 +210,22 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     })
   }
 
+  /**
+   * Emits the two mcfunctions that implement the `@retry` state machine for `name`:
+   *
+   * - `<name>_tick` (registered as `@tick`): each tick, if the retry counter is > 0 it
+   *   calls the wrapped function and inspects `$ret`. A return value of 0 signals failure
+   *   (decrement counter); any non-zero value signals success (reset counter to 0).
+   * - `<name>_start`: sets the retry counter to `max`, triggering a new retry sequence.
+   *
+   * The scoreboard objective `__retry_<name>` (via `retryObjective`) holds the remaining
+   * attempt count. Callers start a sequence by invoking `<name>_start`; the tick dispatcher
+   * runs automatically until the function succeeds or attempts are exhausted.
+   */
   // @retry wrapper functions
   for (const { name, max } of retryFns) {
     const obj = retryObjective(name)
     const dispatcherName = retryDispatcherName(name)
-    // Dispatcher: if retries remaining > 0, call the function; if it returns 0, decrement counter
-    // We use a two-file approach:
-    //   __retry_<name>: decrements counter then calls the real function
-    //   __retry_<name>_init: sets the counter to max and schedules the first attempt
-    // Runtime logic:
-    //   - On success (fn returns nonzero): reset counter to 0
-    //   - On failure (fn returns 0): counter -= 1, schedule next tick
-    // Since we can't read a function return value in mcfunction directly,
-    // we use a storage-based approach: the function itself sets a "success" flag.
-    // Simpler scoreboard approach (matching task spec):
-    //   __retry_<name> obj tracks remaining attempts
-    //   Each tick, if counter > 0: call fn, if fn "failed" (set counter to 0 from outside) schedule retry
-    // Simplest correct approach:
-    //   generate a tick-registered dispatcher that:
-    //     1. if counter > 0, call the function
-    //     2. function sets __retry_<name>_result to 1 on success (convention)
-    //     3. if result == 0, decrement counter; else reset counter
-    // For simplicity, use the same pattern as @throttle but inverted:
-    //   The user's function sets a score $ret to signal success/failure.
-    //   We wrap it: if counter > 0, run the function.
-    //   After running, check $ret: if 0, keep counter; else reset to 0.
-    //   Next tick the dispatcher will retry if counter > 0.
-    //
-    // Minimal correct implementation (matching task spec — fn returns 0 = failure):
-    //   __retry_<name>_tick: registered as @tick
-    //     execute if score __retry_<name> <obj> matches 1.. run function ns:<name>
-    //     execute if score __retry_<name> <obj> matches 1.. if score $ret <obj> matches 0 run scoreboard players remove __retry_<name> <obj> 1
-    //     execute if score __retry_<name> <obj> matches 1.. unless score $ret <obj> matches 0 run scoreboard players set __retry_<name> <obj> 0
-    //   To start a retry sequence, something must set __retry_<name> <obj> to max.
-    //   We generate __retry_<name>_start: scoreboard players set __retry_<name> <obj> <max>
     files.push({
       path: fnNameToPath(dispatcherName, namespace),
       content: [
@@ -290,14 +272,12 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   }
 
   // Tag files for tick/load
-  if (loadFns.length > 0 || true) {
-    // Always include load.json — it must reference the load.mcfunction
-    const loadValues = [`${namespace}:load`, ...loadFns.map(fn => `${namespace}:${fn}`)]
-    files.push({
-      path: 'data/minecraft/tags/function/load.json',
-      content: JSON.stringify({ values: loadValues }, null, 2) + '\n',
-    })
-  }
+  // Always include load.json — it must reference the load.mcfunction
+  const loadValues = [`${namespace}:load`, ...loadFns.map(fn => `${namespace}:${fn}`)]
+  files.push({
+    path: 'data/minecraft/tags/function/load.json',
+    content: JSON.stringify({ values: loadValues }, null, 2) + '\n',
+  })
 
   const allTickFns = [
     ...tickFns,
