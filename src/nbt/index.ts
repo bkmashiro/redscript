@@ -1,3 +1,23 @@
+/**
+ * Named Binary Tag (NBT) implementation for the Minecraft binary format.
+ *
+ * NBT is the structured binary serialisation format used throughout Minecraft
+ * for world data, network packets, and data-command storage.  The string
+ * encoding follows Java's "Modified UTF-8" variant:
+ *   - U+0000 (null) is encoded as the two-byte sequence 0xC0 0x80 rather than
+ *     the standard single-byte 0x00, ensuring no null byte appears in string
+ *     data.
+ *   - All other code-points follow standard CESU-8 / Java UTF-8 rules (i.e.
+ *     supplementary characters are encoded as two surrogate halves, each three
+ *     bytes, rather than the standard four-byte UTF-8 sequence).
+ *
+ * Public surface area:
+ *   - {@link TagType}  — enum of all fourteen tag type identifiers.
+ *   - {@link NbtTag}   — discriminated union of every possible tag value.
+ *   - {@link writeNbt} — serialise a named root tag to a `Buffer`.
+ *   - {@link readNbt}  — deserialise a `Buffer` back to a named root tag.
+ *   - {@link nbt}      — factory helpers for constructing tag values.
+ */
 export const enum TagType {
   End = 0,
   Byte = 1,
@@ -43,6 +63,25 @@ export type NbtTag =
   | IntArrayTag
   | LongArrayTag
 
+/**
+ * Encode a JavaScript string to Modified UTF-8 inside a length-prefixed buffer.
+ *
+ * The encoding follows the Java / NBT Modified UTF-8 rules:
+ *   - U+0001–U+007F  → single byte (standard ASCII).
+ *   - U+0000         → two-byte sequence `0xC0 0x80` (null-safe encoding).
+ *   - U+0080–U+07FF  → standard two-byte UTF-8.
+ *   - U+0800–U+FFFF  → standard three-byte UTF-8 (including surrogate halves).
+ *
+ * The returned `Buffer` begins with a two-byte big-endian length giving the
+ * number of encoded bytes, followed immediately by those bytes — exactly the
+ * layout required by the NBT `TAG_String` payload.
+ *
+ * @param value - The string to encode.
+ * @returns A `Buffer` containing the 2-byte length prefix followed by the
+ *          Modified UTF-8 bytes.
+ * @throws {Error} If the encoded byte length exceeds 65535 (0xFFFF), which is
+ *         the maximum expressible in the two-byte length field.
+ */
 function encodeModifiedUtf8(value: string): Buffer {
   const bytes: number[] = []
 
@@ -204,6 +243,36 @@ function writeNamedTag(tag: NbtTag, name: string): Buffer {
   ])
 }
 
+/**
+ * Read an NBT payload of the given type from `buffer` starting at `offset`.
+ *
+ * Dispatches on `type` to parse exactly the bytes that belong to that tag
+ * kind, then returns both the parsed tag and the updated buffer cursor so
+ * callers can continue reading subsequent fields without manual accounting.
+ *
+ * Tag dispatch:
+ *   - `End`       — zero bytes consumed; returns a bare `EndTag`.
+ *   - `Byte`      — 1 byte (signed).
+ *   - `Short`     — 2 bytes big-endian signed.
+ *   - `Int`       — 4 bytes big-endian signed.
+ *   - `Long`      — 8 bytes big-endian signed (returned as `bigint`).
+ *   - `Float`     — 4 bytes big-endian IEEE 754.
+ *   - `Double`    — 8 bytes big-endian IEEE 754.
+ *   - `ByteArray` — 4-byte signed length prefix followed by that many bytes.
+ *   - `String`    — Modified UTF-8 via `decodeModifiedUtf8`.
+ *   - `List`      — 1-byte element type + 4-byte count, then N payloads of
+ *                   that type read recursively.
+ *   - `Compound`  — sequence of named tags terminated by a `TAG_End` byte.
+ *   - `IntArray`  — 4-byte count then that many 4-byte big-endian ints.
+ *   - `LongArray` — 4-byte count then that many 8-byte big-endian longs.
+ *
+ * @param type   - The `TagType` identifying which payload layout to parse.
+ * @param buffer - The source `Buffer` to read from.
+ * @param offset - Byte position in `buffer` where the payload begins.
+ * @returns An object containing the parsed `tag` and the `offset` pointing
+ *          to the first byte after the consumed payload.
+ * @throws {Error} If `type` is not one of the fourteen recognised tag IDs.
+ */
 function readPayload(type: TagType, buffer: Buffer, offset: number): { tag: NbtTag; offset: number } {
   switch (type) {
     case TagType.End:
@@ -305,6 +374,36 @@ export function readNbt(buffer: Buffer): { name: string; tag: NbtTag } {
   }
 }
 
+/**
+ * Factory helpers for constructing typed NBT tag values.
+ *
+ * Each helper wraps the given primitive in the appropriate `NbtTag` variant so
+ * call-sites stay readable without manually specifying `type` discriminants.
+ *
+ * @example
+ * ```ts
+ * const tag = nbt.compound({
+ *   x: nbt.int(128),
+ *   label: nbt.string('spawn'),
+ *   flags: nbt.byteArray([1, 0, 1]),
+ * })
+ * const buf = writeNbt(tag, 'data')
+ * ```
+ *
+ * @property byte      - Wraps a signed 8-bit integer (`-128`–`127`).
+ * @property short     - Wraps a signed 16-bit integer.
+ * @property int       - Wraps a signed 32-bit integer.
+ * @property long      - Wraps a signed 64-bit integer (`bigint`).
+ * @property float     - Wraps an IEEE 754 single-precision float.
+ * @property double    - Wraps an IEEE 754 double-precision float.
+ * @property string    - Wraps a string (encoded as Modified UTF-8 on write).
+ * @property list      - Wraps a homogeneous array; `elementType` must match
+ *                       every item in `items`.
+ * @property compound  - Wraps a `Record<string, NbtTag>` as a `Map`-backed
+ *                       compound tag.
+ * @property intArray  - Wraps an array of numbers as an `Int32Array`.
+ * @property byteArray - Wraps an array of numbers as an `Int8Array`.
+ */
 export const nbt = {
   byte: (value: number): ByteTag => ({ type: TagType.Byte, value }),
   short: (value: number): ShortTag => ({ type: TagType.Short, value }),
