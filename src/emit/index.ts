@@ -321,6 +321,22 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
 // Function emission
 // ---------------------------------------------------------------------------
 
+/**
+ * Emit all MC commands for a single LIR function.
+ *
+ * Iterates over the function's instructions, prepending de-duplicated source
+ * markers (`# src: file:line`) and optional profiler instrumentation, then
+ * delegates each instruction to {@link emitInstr} and passes the result through
+ * {@link flattenExecute} to collapse redundant nested `execute` chains.
+ *
+ * @param fn - The LIR function to emit.
+ * @param namespace - Datapack namespace (e.g. `"mypack"`).
+ * @param objective - Scoreboard objective used for temporary score storage.
+ * @param mcVersion - Target Minecraft version; controls which syntax is used.
+ * @param isProfiled - When `true`, wrap the body with profiler start/end lines.
+ * @param builder - Optional source-map builder; receives one entry per emitted line.
+ * @returns Array of raw `.mcfunction` command strings (one per line).
+ */
 function emitFunction(
   fn: LIRFunction,
   namespace: string,
@@ -355,21 +371,59 @@ function emitFunction(
   return lines
 }
 
+/**
+ * Convert a LIR function name to its datapack file path.
+ *
+ * `::` separators (used for method names) become `/`, and the result is
+ * lowercased to match Minecraft's case-insensitive namespace rules.
+ *
+ * @param name - LIR function name, e.g. `"MyNS::myFunc"`.
+ * @param namespace - Datapack namespace, e.g. `"mypack"`.
+ * @returns Relative file path, e.g. `"data/mypack/function/myns/myfunc.mcfunction"`.
+ */
 function fnNameToPath(name: string, namespace: string): string {
   // LIR function names may contain :: for methods — convert to /
   const mcName = name.replace(/::/g, '/').toLowerCase()
   return `data/${namespace}/function/${mcName}.mcfunction`
 }
 
+/**
+ * Build the fully-qualified MC function reference used inside `.mcfunction` commands.
+ *
+ * Applies the same `::` → `/` and lowercase conversion as {@link fnNameToPath},
+ * but returns the `namespace:path` form required by `function` commands.
+ *
+ * @param name - LIR function name, e.g. `"MyNS::myFunc"`.
+ * @param namespace - Datapack namespace, e.g. `"mypack"`.
+ * @returns Qualified reference, e.g. `"mypack:myns/myfunc"`.
+ */
 function qualifiedFunctionRef(name: string, namespace: string): string {
   return `${namespace}:${name.replace(/::/g, '/').toLowerCase()}`
 }
 
+/**
+ * Derive a readable function name for comment headers.
+ *
+ * Prefers the name extracted from the source snippet (`fn myFunc`), falls back
+ * to the last `::` segment of the LIR name, and finally to the raw LIR name.
+ *
+ * @param fn - The LIR function whose name is needed.
+ * @returns Human-readable function name, e.g. `"myFunc"`.
+ */
 function humanFunctionName(fn: LIRFunction): string {
   const match = fn.sourceSnippet?.match(/^fn\s+([^(]+)/)
   return match?.[1] ?? fn.name.split('::').pop() ?? fn.name
 }
 
+/**
+ * Generate comment lines placed at the top of a `.mcfunction` file.
+ *
+ * Returns an empty array when the function has no source location, so callers
+ * can spread the result unconditionally.
+ *
+ * @param fn - The LIR function being emitted.
+ * @returns Zero, one, or two `# …` comment strings.
+ */
 function emitFunctionHeader(fn: LIRFunction): string[] {
   if (!fn.sourceLoc) return []
   const lines: string[] = []
@@ -380,6 +434,12 @@ function emitFunctionHeader(fn: LIRFunction): string[] {
   return lines
 }
 
+/**
+ * Format a source location into the compact `file:line` string used in `# src:` comments.
+ *
+ * @param sourceLoc - Non-null source location from a {@link LIRInstr}.
+ * @returns Marker string, e.g. `"src/my_script.rs:42"`.
+ */
 function formatSourceMarker(sourceLoc: NonNullable<LIRInstr['sourceLoc']>): string {
   return `${sourceLoc.file}:${sourceLoc.line}`
 }
@@ -476,6 +536,19 @@ function emitProfilerReport(profiledFns: string[]): string[] {
 // Instruction emission
 // ---------------------------------------------------------------------------
 
+/**
+ * Emit a single LIR instruction as a raw MC command string.
+ *
+ * This is the core dispatch table for the emitter: each `LIRInstr` variant maps
+ * to one (or occasionally two, for version-gated variants) MC command strings.
+ * The returned string is passed to {@link flattenExecute} before being written.
+ *
+ * @param instr - The LIR instruction to emit.
+ * @param ns - Datapack namespace used for function references.
+ * @param obj - Scoreboard objective for temporary score slots.
+ * @param mcVersion - Target MC version; gates macro and other version-specific syntax.
+ * @returns A single raw MC command (no trailing newline).
+ */
 function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersion): string {
   switch (instr.kind) {
     case 'score_set':
@@ -577,10 +650,25 @@ function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersio
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Render a {@link Slot} as the `<player> <objective>` pair used by scoreboard commands.
+ *
+ * @param s - The slot to render.
+ * @returns String of the form `"<player> <objective>"`.
+ */
 function slot(s: Slot): string {
   return `${s.player} ${s.obj}`
 }
 
+/**
+ * Map a {@link CmpOp} to its MC `scoreboard players operation` operator token.
+ *
+ * Note: `ne` maps to `=` because the "not-equal" sense is expressed by the
+ * surrounding `unless score` subcommand, not by the operator itself.
+ *
+ * @param op - Abstract comparison operator from LIR.
+ * @returns MC operator string (`"="`, `"<"`, `"<="`, `">"`, or `">="`).
+ */
 function cmpToMC(op: CmpOp): string {
   switch (op) {
     case 'eq': return '='
@@ -653,6 +741,15 @@ export function flattenExecute(cmd: string): string {
   return flattenExecute(merged)
 }
 
+/**
+ * Render a single {@link ExecuteSubcmd} as the MC subcommand fragment it represents.
+ *
+ * The returned string is joined with spaces and prefixed with `execute` by
+ * the `call_context` branch of {@link emitInstr}.
+ *
+ * @param sub - The execute subcommand variant to render.
+ * @returns Fragment string, e.g. `"as @e[type=zombie]"` or `"if score $x obj = $y obj"`.
+ */
 function emitSubcmd(sub: ExecuteSubcmd): string {
   switch (sub.kind) {
     case 'as':
