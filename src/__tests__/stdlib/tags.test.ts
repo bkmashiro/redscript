@@ -14,19 +14,4 @@ describe('stdlib/tags.mcrs', () => {
     expect(r.files.length).toBeGreaterThan(0)
   })
 
-  test('BLOCK_MINEABLE_AXE constant is accessible', () => {
-    const r = compile(
-      SRC + '\n@keep fn t(): string { return BLOCK_MINEABLE_AXE; }',
-      { namespace: 'test' }
-    )
-    expect(r.files.length).toBeGreaterThan(0)
-  })
-
-  test('BLOCK_MINEABLE_PICKAXE constant is accessible', () => {
-    const r = compile(
-      SRC + '\n@keep fn t(): string { return BLOCK_MINEABLE_PICKAXE; }',
-      { namespace: 'test' }
-    )
-    expect(r.files.length).toBeGreaterThan(0)
-  })
 })

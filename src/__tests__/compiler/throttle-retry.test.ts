@@ -75,7 +75,7 @@ describe('@throttle decorator', () => {
     `, { namespace: 'throttle_test' })
 
     const load = getFile(result.files, 'data/throttle_test/function/load.mcfunction')
-    expect(load).toContain('scoreboard objectives add __throttle dummy')
+    expect(load).toContain('scoreboard objectives add __throttle_on_player_move dummy')
   })
 
   test('emits throttle dispatcher mcfunction with correct scoreboard commands', () => {
@@ -87,9 +87,9 @@ describe('@throttle decorator', () => {
     `, { namespace: 'throttle_test' })
 
     const dispatcher = getFile(result.files, 'data/throttle_test/function/__throttle_on_player_move.mcfunction')
-    expect(dispatcher).toContain('scoreboard players add __throttle_on_player_move __throttle 1')
-    expect(dispatcher).toContain('execute if score __throttle_on_player_move __throttle matches 20.. run function throttle_test:on_player_move_inner')
-    expect(dispatcher).toContain('execute if score __throttle_on_player_move __throttle matches 20.. run scoreboard players set __throttle_on_player_move __throttle 0')
+    expect(dispatcher).toContain('scoreboard players add __throttle_on_player_move __throttle_on_player_move 1')
+    expect(dispatcher).toContain('execute if score __throttle_on_player_move __throttle_on_player_move matches 20.. run function throttle_test:on_player_move_inner')
+    expect(dispatcher).toContain('execute if score __throttle_on_player_move __throttle_on_player_move matches 20.. run scoreboard players set __throttle_on_player_move __throttle_on_player_move 0')
   })
 
   test('registers throttle dispatcher in tick.json', () => {
@@ -154,7 +154,7 @@ describe('@retry decorator', () => {
     `, { namespace: 'retry_test' })
 
     const load = getFile(result.files, 'data/retry_test/function/load.mcfunction')
-    expect(load).toContain('scoreboard objectives add __retry dummy')
+    expect(load).toContain('scoreboard objectives add __retry_try_spawn_mob dummy')
   })
 
   test('emits retry dispatcher mcfunction with correct scoreboard commands', () => {
@@ -164,9 +164,9 @@ describe('@retry decorator', () => {
     `, { namespace: 'retry_test' })
 
     const dispatcher = getFile(result.files, 'data/retry_test/function/__retry_try_spawn_mob.mcfunction')
-    expect(dispatcher).toContain('execute if score __retry_try_spawn_mob __retry matches 1.. run function retry_test:try_spawn_mob')
-    expect(dispatcher).toContain('execute if score __retry_try_spawn_mob __retry matches 1.. if score $ret __retry matches 0 run scoreboard players remove __retry_try_spawn_mob __retry 1')
-    expect(dispatcher).toContain('execute if score __retry_try_spawn_mob __retry matches 1.. unless score $ret __retry matches 0 run scoreboard players set __retry_try_spawn_mob __retry 0')
+    expect(dispatcher).toContain('execute if score __retry_try_spawn_mob __retry_try_spawn_mob matches 1.. run function retry_test:try_spawn_mob')
+    expect(dispatcher).toContain('execute if score __retry_try_spawn_mob __retry_try_spawn_mob matches 1.. if score $ret __retry_try_spawn_mob matches 0 run scoreboard players remove __retry_try_spawn_mob __retry_try_spawn_mob 1')
+    expect(dispatcher).toContain('execute if score __retry_try_spawn_mob __retry_try_spawn_mob matches 1.. unless score $ret __retry_try_spawn_mob matches 0 run scoreboard players set __retry_try_spawn_mob __retry_try_spawn_mob 0')
   })
 
   test('emits retry start helper function with max count', () => {
@@ -176,7 +176,7 @@ describe('@retry decorator', () => {
     `, { namespace: 'retry_test' })
 
     const start = getFile(result.files, 'data/retry_test/function/try_spawn_mob_start.mcfunction')
-    expect(start).toContain('scoreboard players set __retry_try_spawn_mob __retry 3')
+    expect(start).toContain('scoreboard players set __retry_try_spawn_mob __retry_try_spawn_mob 3')
   })
 
   test('registers retry dispatcher in tick.json', () => {

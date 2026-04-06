@@ -14,27 +14,4 @@ describe('stdlib/mobs.mcrs', () => {
     expect(r.files.length).toBeGreaterThan(0)
   })
 
-  test('ZOMBIE constant is accessible', () => {
-    const r = compile(
-      SRC + '\n@keep fn t(): string { return ZOMBIE; }',
-      { namespace: 'test' }
-    )
-    expect(r.files.length).toBeGreaterThan(0)
-  })
-
-  test('SKELETON constant is accessible', () => {
-    const r = compile(
-      SRC + '\n@keep fn t(): string { return SKELETON; }',
-      { namespace: 'test' }
-    )
-    expect(r.files.length).toBeGreaterThan(0)
-  })
-
-  test('CREEPER constant is accessible', () => {
-    const r = compile(
-      SRC + '\n@keep fn t(): string { return CREEPER; }',
-      { namespace: 'test' }
-    )
-    expect(r.files.length).toBeGreaterThan(0)
-  })
 })

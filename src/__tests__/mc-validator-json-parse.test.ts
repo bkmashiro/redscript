@@ -20,7 +20,7 @@ describe('MCCommandValidator constructor — malformed JSON', () => {
   test('throws with file path in message when JSON is invalid', () => {
     const file = writeTempFile('{ invalid json }')
     expect(() => new MCCommandValidator(file)).toThrow(
-      /Failed to parse Brigadier JSON at .+/
+      /Commands file contains invalid JSON: .+/
     )
     fs.unlinkSync(file)
   })
@@ -45,14 +45,14 @@ describe('MCCommandValidator constructor — malformed JSON', () => {
       fs.unlinkSync(file)
     }
     expect(caught).toBeDefined()
-    expect(caught!.message).toMatch(/Failed to parse Brigadier JSON at/)
-    // Original SyntaxError message is included after the colon
+    expect(caught!.message).toMatch(/Commands file contains invalid JSON:/)
+    // Error message includes the file path after the colon
     expect(caught!.message).toContain(':')
   })
 
   test('empty file throws with diagnostic message', () => {
     const file = writeTempFile('')
-    expect(() => new MCCommandValidator(file)).toThrow(/Failed to parse Brigadier JSON at/)
+    expect(() => new MCCommandValidator(file)).toThrow(/Commands file contains invalid JSON:/)
     fs.unlinkSync(file)
   })
 

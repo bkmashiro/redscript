@@ -34,19 +34,19 @@ describe('@retry decorator code generation', () => {
 
     const dispatcher = getFile(files, 'data/test/function/__retry_try_once.mcfunction')
     // Only fires when counter >= 1
-    expect(dispatcher).toContain('execute if score __retry_try_once __retry matches 1.. run function test:try_once')
+    expect(dispatcher).toContain('execute if score __retry_try_once __retry_try_once matches 1.. run function test:try_once')
     // On failure ($ret == 0): decrement counter
     expect(dispatcher).toContain(
-      'execute if score __retry_try_once __retry matches 1.. if score $ret __retry matches 0 run scoreboard players remove __retry_try_once __retry 1',
+      'execute if score __retry_try_once __retry_try_once matches 1.. if score $ret __retry_try_once matches 0 run scoreboard players remove __retry_try_once __retry_try_once 1',
     )
     // On success ($ret != 0): reset counter to 0 (stops retrying)
     expect(dispatcher).toContain(
-      'execute if score __retry_try_once __retry matches 1.. unless score $ret __retry matches 0 run scoreboard players set __retry_try_once __retry 0',
+      'execute if score __retry_try_once __retry_try_once matches 1.. unless score $ret __retry_try_once matches 0 run scoreboard players set __retry_try_once __retry_try_once 0',
     )
 
     // Start file initialises counter to max (1)
     const start = getFile(files, 'data/test/function/try_once_start.mcfunction')
-    expect(start).toBe('scoreboard players set __retry_try_once __retry 1\n')
+    expect(start).toBe('scoreboard players set __retry_try_once __retry_try_once 1\n')
   })
 
   test('max=3: start file sets counter to 3', () => {
@@ -57,7 +57,7 @@ describe('@retry decorator code generation', () => {
     })
 
     const start = getFile(files, 'data/test/function/retry_action_start.mcfunction')
-    expect(start).toBe('scoreboard players set __retry_retry_action __retry 3\n')
+    expect(start).toBe('scoreboard players set __retry_retry_action __retry_retry_action 3\n')
   })
 
   test('dispatcher is registered as a tick function', () => {
@@ -88,13 +88,13 @@ describe('@retry decorator code generation', () => {
     expect(lines).toHaveLength(3)
 
     const [callLine, failLine, successLine] = lines
-    expect(callLine).toMatch(/^execute if score __retry_flaky __retry matches 1\.\. run function test:flaky$/)
-    expect(failLine).toMatch(/if score \$ret __retry matches 0 run scoreboard players remove __retry_flaky __retry 1$/)
-    expect(successLine).toMatch(/unless score \$ret __retry matches 0 run scoreboard players set __retry_flaky __retry 0$/)
+    expect(callLine).toMatch(/^execute if score __retry_flaky __retry_flaky matches 1\.\. run function test:flaky$/)
+    expect(failLine).toMatch(/if score \$ret __retry_flaky matches 0 run scoreboard players remove __retry_flaky __retry_flaky 1$/)
+    expect(successLine).toMatch(/unless score \$ret __retry_flaky matches 0 run scoreboard players set __retry_flaky __retry_flaky 0$/)
 
     // Both branches are guarded by the same counter check
-    expect(failLine).toContain('execute if score __retry_flaky __retry matches 1..')
-    expect(successLine).toContain('execute if score __retry_flaky __retry matches 1..')
+    expect(failLine).toContain('execute if score __retry_flaky __retry_flaky matches 1..')
+    expect(successLine).toContain('execute if score __retry_flaky __retry_flaky matches 1..')
   })
 
   test('load.mcfunction adds __retry objective', () => {
@@ -105,7 +105,7 @@ describe('@retry decorator code generation', () => {
     })
 
     const load = getFile(files, 'data/test/function/load.mcfunction')
-    expect(load).toContain('scoreboard objectives add __retry dummy')
+    expect(load).toContain('scoreboard objectives add __retry_net_call dummy')
   })
 
   test('multiple retry functions each get independent counters and dispatchers', () => {
@@ -127,10 +127,10 @@ describe('@retry decorator code generation', () => {
     expect(dispB).not.toContain('task_a')
 
     expect(getFile(files, 'data/test/function/task_a_start.mcfunction')).toBe(
-      'scoreboard players set __retry_task_a __retry 2\n',
+      'scoreboard players set __retry_task_a __retry_task_a 2\n',
     )
     expect(getFile(files, 'data/test/function/task_b_start.mcfunction')).toBe(
-      'scoreboard players set __retry_task_b __retry 4\n',
+      'scoreboard players set __retry_task_b __retry_task_b 4\n',
     )
 
     const tick = JSON.parse(getFile(files, 'data/minecraft/tags/function/tick.json'))
@@ -249,11 +249,11 @@ describe('@throttle decorator code generation', () => {
 
     const dispatcher = getFile(files, 'data/test/function/__throttle_heavy_fn.mcfunction')
     // Counter increments every tick regardless
-    expect(dispatcher).toContain('scoreboard players add __throttle_heavy_fn __throttle 1')
+    expect(dispatcher).toContain('scoreboard players add __throttle_heavy_fn __throttle_heavy_fn 1')
     // Only fires when cooldown elapsed
-    expect(dispatcher).toContain('execute if score __throttle_heavy_fn __throttle matches 10.. run function test:heavy_fn_inner')
+    expect(dispatcher).toContain('execute if score __throttle_heavy_fn __throttle_heavy_fn matches 10.. run function test:heavy_fn_inner')
     // Resets counter so cooldown restarts
-    expect(dispatcher).toContain('execute if score __throttle_heavy_fn __throttle matches 10.. run scoreboard players set __throttle_heavy_fn __throttle 0')
+    expect(dispatcher).toContain('execute if score __throttle_heavy_fn __throttle_heavy_fn matches 10.. run scoreboard players set __throttle_heavy_fn __throttle_heavy_fn 0')
   })
 
   test('ticks=1: fires on every tick (minimum cooldown)', () => {
@@ -297,7 +297,7 @@ describe('@throttle decorator code generation', () => {
     })
 
     const load = getFile(files, 'data/test/function/load.mcfunction')
-    expect(load).toContain('scoreboard objectives add __throttle dummy')
+    expect(load).toContain('scoreboard objectives add __throttle_slow2 dummy')
   })
 
   test('reset happens only when threshold is met, not before', () => {

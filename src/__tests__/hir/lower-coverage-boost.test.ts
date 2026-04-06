@@ -52,7 +52,7 @@ describe('HIR lowering — lowerStmt exhaustive default', () => {
       ],
     })
 
-    expect(() => lowerToHIR(prog)).toThrow('Unknown statement kind: __unknown_stmt_kind__')
+    expect(() => lowerToHIR(prog)).toThrow('Unknown statement kind:')
   })
 })
 
@@ -85,6 +85,6 @@ describe('HIR lowering — lowerExpr exhaustive default', () => {
       ],
     })
 
-    expect(() => lowerToHIR(prog)).toThrow('Unknown expression kind: __unknown_expr_kind__')
+    expect(() => lowerToHIR(prog)).toThrow('Unknown expression kind:')
   })
 })

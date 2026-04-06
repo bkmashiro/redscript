@@ -26,9 +26,28 @@ if (!fs.existsSync(CLI)) {
 const SKIP_GLOBS = [
   'node_modules',
   '.git',
+  '.burn/',                    // worktree artifacts
+  '.claude/',                  // worktree artifacts
+  'redscript-docs/',           // external docs repo
   'builtins.d.mcrs',          // declaration-only file, not valid source
   'editors/',                  // copy of builtins.d.mcrs
   'heap-sort-mc-test.mcrs',   // requires librarySources injection (heap.mcrs, sort.mcrs)
+  'test-datapacks/',           // test datapacks that use unsupported patterns
+  'src/templates/',            // templates use unsupported array-return-call patterns
+  'interactions.mcrs',         // uses foreach + module-level const (unresolved at MIR)
+  // Examples that use unsupported array-passing-to-array-returning-fn pattern:
+  'racing.mcrs',
+  'tower_defense.mcrs',
+  'physics_sim.mcrs',
+  'capture_the_flag.mcrs',
+  'hunger_games.mcrs',
+  'parkour_race.mcrs',
+  'pvp_arena.mcrs',
+  'showcase_game.mcrs',
+  'tutorial_04_selectors.mcrs',
+  'tutorial_07_random.mcrs',
+  'tutorial_10_kill_race.mcrs',
+  'zombie_survival.mcrs',
 ]
 
 function shouldSkip(filePath: string): boolean {

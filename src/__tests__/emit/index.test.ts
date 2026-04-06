@@ -135,7 +135,7 @@ describe('emit: direct LIR emission', () => {
     expect(main).toContain('execute if score $a __emit matches 1..5 run function emitns:matches')
     expect(main).toContain('execute unless score $a __emit matches 0 run function emitns:unless_matches')
     expect(main).toContain('execute if score $a __emit = $b __emit run function emitns:if_score')
-    // call_unless_score with ne: unless(a != b) == if(a == b), so sense flips
+    // call_unless_score with ne: unless(a != b) simplifies to if(a == b), so sense flips to "if"
     expect(main).toContain('execute if score $a __emit = $b __emit run function emitns:unless_score')
     expect(main).toContain('execute as @a at @e[type=marker] at @s positioned ~1 ~2 ~3 rotated ~ ~10 in minecraft:the_nether anchored eyes if score $a __emit < $b __emit unless score $a __emit >= $b __emit if score $a __emit matches 1.. unless score $b __emit matches ..0 run function emitns:ctx')
     expect(main).toContain('scoreboard players operation $ret __emit = $a __emit')
@@ -229,11 +229,11 @@ describe('emit: direct LIR emission', () => {
       expect(out).not.toContain('execute if score')
     })
 
-    test('call_unless_score with ne emits unless + = (double-negation = equality check)', () => {
-      // unless score a = b is true when a != b, so unless + ne maps to unless + = which checks equality.
-      // This is the inverse: call_unless_score(ne) means "run unless a != b" = "run if a == b".
+    test('call_unless_score with ne emits if + = (double-negation cancels to equality check)', () => {
+      // call_unless_score(ne) means "run unless a != b" = "run if a == b",
+      // so the double negation flips "unless" to "if" while keeping the "=" operator.
       const out = emitSingle({ kind: 'call_unless_score', fn: 'nens:target', a, op: 'ne', b, sourceLoc })
-      expect(out).toContain('execute unless score $x __ne = $y __ne run function nens:target')
+      expect(out).toContain('execute if score $x __ne = $y __ne run function nens:target')
     })
 
     test('call_if_score with eq still emits if + = (not affected by ne fix)', () => {

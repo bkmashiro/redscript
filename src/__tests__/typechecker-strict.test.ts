@@ -75,9 +75,12 @@ fn test() {
 
   describe('--lenient mode', () => {
     it('does not throw on type errors in lenient mode', () => {
+      // Lenient mode demotes TypeChecker errors to warnings, but undeclared
+      // identifiers also cause an unrecoverable crash at MIR lowering.
+      // Use a type-mismatch (caught by TypeChecker) instead of an undeclared var.
       expect(() => compileLenient(`
 fn test() {
-    let x: int = undeclared;
+    let x: int = "hello";
 }
 `)).not.toThrow()
     })
@@ -85,7 +88,7 @@ fn test() {
     it('returns type errors as warnings in lenient mode', () => {
       const result = compileLenient(`
 fn test() {
-    let x: int = undeclared;
+    let x: int = "hello";
 }
 `)
       expect(result.warnings.length).toBeGreaterThan(0)
