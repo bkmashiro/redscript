@@ -1,33 +1,69 @@
 /**
  * HIR → MIR Lowering — Stage 3 of the RedScript compiler pipeline.
  *
- * Converts structured HIR (if/while/break/continue) into an explicit Control
- * Flow Graph (CFG) of {@link MIRBlock}s, each terminated by a single
- * {@link MIRInstr} (jump, branch, or return).  Every sub-expression is
- * decomposed into 3-address assignments to unlimited fresh temporaries (`t0`,
- * `t1`, …); no temporary is ever reused or mutated after assignment.
+ * ## What is MIR?
  *
- * ## Pipeline position
+ * MIR (Mid-level Intermediate Representation) sits between the HIR tree and
+ * the final LIR/datapack output:
  *
- * ```
- * Source → Lexer → Parser → HIR → (this file) MIR → LIR → Emit (datapack)
- * ```
+ *   Source → AST → HIR → **MIR** → LIR → Minecraft datapack (.mcfunction)
  *
- * The MIR produced here is consumed by `lir/lower.ts`, which maps MIR
- * temporaries to concrete Minecraft scoreboard objectives and NBT storage
- * paths, and by `mir/verify.ts`, which validates CFG invariants before
- * further lowering.
+ * HIR is a typed, structured tree (if/while/for/match with nested blocks).
+ * LIR is a flat sequence of Minecraft commands, one function per `.mcfunction`
+ * file.  MIR is an explicit control-flow graph (CFG) of *basic blocks*, each
+ * containing 3-address instructions that operate on unlimited fresh temporaries
+ * backed by Minecraft scoreboard objectives.  This makes control flow, data
+ * flow, and optimization opportunities explicit before target-specific emission.
  *
- * ## Key design decisions
+ * ## Lowering strategy
  *
- * - **Unlimited temporaries**: avoids register pressure during lowering;
- *   the LIR pass handles allocation to scoreboard slots.
- * - **Explicit blocks**: every branch target is a labelled {@link MIRBlock};
- *   unreachable blocks are pruned after lowering via {@link computeReachable}.
- * - **Special-cased types**: `double` values live in NBT storage (`rs:d`),
- *   `string`/`format_string` values live in a separate string-storage
- *   namespace, and `array` types are passed by NBT path rather than by
- *   scoreboard value.
+ * ### Expressions (`lowerExpr`)
+ * Each HIR expression is recursively lowered to an `Operand` — either an
+ * inline constant (`{ kind: 'const', value }`) or a reference to a temporary
+ * (`{ kind: 'temp', name }`).  Complex sub-expressions emit `copy`/`binop`/
+ * `call` instructions into the *current* basic block and return a temp holding
+ * the result.  Expressions never create new basic blocks; they only emit
+ * instructions into the block that is active at the point of the call.
+ *
+ * ### Statements (`lowerStmt`)
+ * Statements drive control-flow structure.  `if`/`while`/`for`/`match` each
+ * allocate new basic blocks for their branches and continuations, wire up
+ * terminators (`branch`, `jump`, `return`), and call `ctx.switchTo()` to
+ * advance the "current block" cursor as lowering proceeds.
+ *
+ * ## Temporaries and slots
+ *
+ * `FnContext.freshTemp()` allocates a new temporary name (`t0`, `t1`, …).
+ * Each temp maps to a Minecraft scoreboard entry `$tN __<ns>` at emit time.
+ * Struct values are *exploded* into one temp per field, tracked in
+ * `ctx.structVars`.  Doubles use NBT storage (`rs:d`) rather than scoreboard
+ * and are tracked separately in `ctx.doubleVars` (paths like `ns_fn_var_0`).
+ * Strings and format-strings are NBT-backed and recorded in `ctx.stringVars`.
+ *
+ * ## Control flow — basic blocks
+ *
+ * Every function starts with a single `entry` block.  Structured constructs
+ * are desugared into blocks as follows:
+ *
+ *   **if/else** — allocates `then`, `else_` (optional), and `merge` blocks;
+ *   the current block gets a `branch` terminator.
+ *
+ *   **while** — allocates `header`, `body`, and `exit` blocks; the header
+ *   gets a `branch` terminator and the body jumps back to the header.
+ *
+ *   **for** — same shape as while, using a loop-counter temp.
+ *
+ *   **loop / labeled blocks** — `FnContext.pushLoop` records the header and
+ *   exit blocks on a stack, and `break`/`continue` resolve against it.
+ *   Labeled breaks search the stack from innermost outward via
+ *   `ctx.findLoopByLabel`.
+ *
+ *   **match** — one `arm_<i>` block per arm, with equality-test branches
+ *   chained in sequence; payload fields are destructured into temps on entry
+ *   to each arm block.
+ *
+ * Unreachable blocks (dead continuations after `return`/`break`) are pruned
+ * by `computeReachable` before the `MIRFunction` is sealed.
  */
 
 import type {
@@ -741,6 +777,20 @@ function lowerBlock(
   }
 }
 
+/**
+ * Lower a single HIR statement into the builder `ctx`.
+ *
+ * @param stmt  The HIR statement to lower.
+ * @param ctx   Mutable builder state: current block, temp counter, loop stack,
+ *              variable tracking maps.  This function advances `ctx`'s current
+ *              block whenever it allocates new basic blocks (if/while/match …).
+ * @param scope Lexical variable-to-temp map for the enclosing block.  `let`
+ *              bindings extend this map in place; the caller owns the map and
+ *              must pass a fresh copy when entering a new scope.
+ *
+ * Side effects: emits instructions/terminators into `ctx`, may allocate new
+ * basic blocks, and extends `scope` for `let` bindings.
+ */
 function lowerStmt(
   stmt: HIRStmt,
   ctx: FnContext,
@@ -1583,6 +1633,23 @@ function lowerStmt(
 // Expression lowering → produces an Operand (temp or const)
 // ---------------------------------------------------------------------------
 
+/**
+ * Lower a HIR expression to an `Operand` usable in MIR instructions.
+ *
+ * @param expr  The HIR expression to lower.
+ * @param ctx   Builder state.  Instructions for sub-expressions are emitted
+ *              into the *current* basic block.  This function never allocates
+ *              new basic blocks; all branching is handled by `lowerStmt`.
+ * @param scope Current lexical variable-to-temp map.  Used to resolve `ident`
+ *              references and to bind pattern variables when destructuring.
+ * @returns     An `Operand`: either `{ kind: 'const', value }` for a
+ *              compile-time integer constant, or `{ kind: 'temp', name }` for
+ *              a freshly allocated temporary whose value is defined by the most
+ *              recently emitted instruction in the current block.
+ *
+ * Side effects: emits zero or more instructions into `ctx`'s current block
+ * and allocates temporaries via `ctx.freshTemp()`.
+ */
 function lowerExpr(
   expr: HIRExpr,
   ctx: FnContext,
@@ -2899,10 +2966,21 @@ function isDoubleExpr(expr: HIRExpr, ctx: FnContext): boolean {
 }
 
 /**
- * Lower a double HIR expression to its NBT storage path in rs:d.
- * For double_lit, stores the value and returns the path.
- * For double idents, returns the existing path directly.
- * For other expressions, lowers as fixed (×10000) and converts to double.
+ * Lower a double-typed HIR expression to an NBT storage path within `rs:d`.
+ *
+ * @param expr  A HIR expression whose runtime type is `double`.
+ * @param ctx   Builder state.  May emit raw `__raw:` commands and/or `nbt_read`
+ *              instructions into the current block.
+ * @param scope Current lexical variable-to-temp map.
+ * @returns     An NBT storage path string (without the `rs:d ` prefix) whose
+ *              NBT value holds the double at runtime.  The path is either:
+ *              - an existing `ctx.doubleVars` entry (zero instructions emitted),
+ *              - a freshly allocated path after storing a `double_lit` literal, or
+ *              - a freshly allocated path after converting a fixed (×10000)
+ *                scoreboard value to a double via `execute store result storage`.
+ *
+ * Side effects: may emit instructions into `ctx`'s current block and allocate
+ * a new path via `ctx.freshDoubleVar`.
  */
 function lowerDoubleExprToPath(expr: HIRExpr, ctx: FnContext, scope: Map<string, Temp>): string {
   if (expr.kind === 'ident' && ctx.doubleVars.has(expr.name)) {
