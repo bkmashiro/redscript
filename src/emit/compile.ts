@@ -582,7 +582,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
  * leaving 12 chars for struct + field combined.
  * If struct+field exceeds that budget: use first 4 chars of struct, first 8 of field.
  */
-function singletonObjectiveName(structName: string, fieldName: string): string {
+export function singletonObjectiveName(structName: string, fieldName: string): string {
   const PREFIX = '_s_'
   const SEP = '_'
   const MC_LIMIT = 16
