@@ -14,6 +14,7 @@ import type {
   Operand, Temp, CmpOp, ExecuteSubcmd, NBTType, SourceLoc,
 } from './types'
 import { detectMacroFunctions, BUILTIN_SET, type MacroFunctionInfo } from './macro'
+import { DiagnosticError } from '../diagnostics'
 
 function formatTypeNode(type: TypeNode): string {
   switch (type.kind) {
@@ -908,7 +909,11 @@ function lowerStmt(
 
     case 'break': {
       const loop = ctx.currentLoop()
-      if (!loop) throw new Error('break outside loop')
+      if (!loop) throw new DiagnosticError(
+        'LoweringError',
+        'break outside loop',
+        stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 },
+      )
       ctx.terminate({ kind: 'jump', target: loop.exit })
       const dead = ctx.newBlock('post_break')
       ctx.switchTo(dead)
@@ -917,7 +922,11 @@ function lowerStmt(
 
     case 'continue': {
       const loop = ctx.currentLoop()
-      if (!loop) throw new Error('continue outside loop')
+      if (!loop) throw new DiagnosticError(
+        'LoweringError',
+        'continue outside loop',
+        stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 },
+      )
       ctx.terminate({ kind: 'jump', target: loop.continueTo })
       const dead = ctx.newBlock('post_continue')
       ctx.switchTo(dead)
@@ -926,7 +935,11 @@ function lowerStmt(
 
     case 'break_label': {
       const loop = ctx.findLoopByLabel(stmt.label)
-      if (!loop) throw new Error(`break: label '${stmt.label}' not found`)
+      if (!loop) throw new DiagnosticError(
+        'LoweringError',
+        `break: label '${stmt.label}' not found`,
+        stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 },
+      )
       ctx.terminate({ kind: 'jump', target: loop.exit })
       const dead = ctx.newBlock('post_break_label')
       ctx.switchTo(dead)
@@ -935,7 +948,11 @@ function lowerStmt(
 
     case 'continue_label': {
       const loop = ctx.findLoopByLabel(stmt.label)
-      if (!loop) throw new Error(`continue: label '${stmt.label}' not found`)
+      if (!loop) throw new DiagnosticError(
+        'LoweringError',
+        `continue: label '${stmt.label}' not found`,
+        stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 },
+      )
       ctx.terminate({ kind: 'jump', target: loop.continueTo })
       const dead = ctx.newBlock('post_continue_label')
       ctx.switchTo(dead)
