@@ -12,7 +12,10 @@
  */
 
 import * as path from 'path'
+import * as os from 'os'
+import * as fs from 'fs'
 import { MCCommandValidator } from '../mc-validator'
+import { DiagnosticError } from '../diagnostics'
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'mc-commands-1.21.4.json')
 
@@ -248,5 +251,57 @@ describe('MCCommandValidator — extended coverage', () => {
     const result = v.validate('return run')
     expect(result.valid).toBe(false)
     expect(result.error).toContain('return run requires an inner command')
+  })
+})
+
+// ─── MCCommandValidator constructor error handling ─────────────────────────
+
+describe('MCCommandValidator constructor — error handling', () => {
+  test('throws DiagnosticError with file path when commands file is missing', () => {
+    const missingPath = '/nonexistent/path/commands.json'
+    expect(() => new MCCommandValidator(missingPath)).toThrow(DiagnosticError)
+
+    try {
+      new MCCommandValidator(missingPath)
+    } catch (error) {
+      expect(error).toBeInstanceOf(DiagnosticError)
+      const diagnostic = error as DiagnosticError
+      expect(diagnostic.kind).toBe('ParseError')
+      expect(diagnostic.message).toContain(missingPath)
+      expect(diagnostic.location.file).toBe(missingPath)
+    }
+  })
+
+  test('throws DiagnosticError with file path when commands file contains invalid JSON', () => {
+    const tmpFile = path.join(os.tmpdir(), `commands-invalid-${Date.now()}.json`)
+    fs.writeFileSync(tmpFile, '{ not valid json !!!')
+
+    try {
+      expect(() => new MCCommandValidator(tmpFile)).toThrow(DiagnosticError)
+
+      try {
+        new MCCommandValidator(tmpFile)
+      } catch (error) {
+        expect(error).toBeInstanceOf(DiagnosticError)
+        const diagnostic = error as DiagnosticError
+        expect(diagnostic.kind).toBe('ParseError')
+        expect(diagnostic.message).toContain(tmpFile)
+        expect(diagnostic.location.file).toBe(tmpFile)
+      }
+    } finally {
+      fs.unlinkSync(tmpFile)
+    }
+  })
+
+  test('throws DiagnosticError (not generic Error) so callers can detect it', () => {
+    const missingPath = '/no/such/file.json'
+    let thrown: unknown
+    try {
+      new MCCommandValidator(missingPath)
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(DiagnosticError)
+    expect((thrown as DiagnosticError).name).toBe('DiagnosticError')
   })
 })

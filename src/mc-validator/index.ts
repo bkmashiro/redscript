@@ -1,4 +1,5 @@
 import * as fs from 'fs'
+import { DiagnosticError } from '../diagnostics'
 
 interface BrigadierFile {
   root: BrigadierNode
@@ -39,7 +40,28 @@ export class MCCommandValidator {
   private readonly rootChildren: BrigadierNode[]
 
   constructor(commandsPath: string) {
-    const parsed = JSON.parse(fs.readFileSync(commandsPath, 'utf-8')) as BrigadierFile
+    let raw: string
+    try {
+      raw = fs.readFileSync(commandsPath, 'utf-8')
+    } catch {
+      throw new DiagnosticError(
+        'ParseError',
+        `Commands file not found: ${commandsPath}`,
+        { file: commandsPath, line: 1, col: 1 },
+      )
+    }
+
+    let parsed: BrigadierFile
+    try {
+      parsed = JSON.parse(raw) as BrigadierFile
+    } catch {
+      throw new DiagnosticError(
+        'ParseError',
+        `Commands file contains invalid JSON: ${commandsPath}`,
+        { file: commandsPath, line: 1, col: 1 },
+      )
+    }
+
     this.root = parsed.root
     this.rootChildren = parsed.root.children ?? []
   }
