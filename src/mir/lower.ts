@@ -49,6 +49,27 @@ function formatFunctionSignature(fn: HIRFunction): string {
 // Public API
 // ---------------------------------------------------------------------------
 
+/**
+ * Lower a fully-resolved HIR module into a MIR module (Stage 3 of the pipeline).
+ *
+ * @param hir - The HIR module produced by Stage 2 (type-checking / resolution).
+ *   Must have all struct, enum, impl, and function definitions populated.  The
+ *   `namespace` field is forwarded verbatim to the returned `MIRModule`.
+ * @param sourceFile - Optional path to the source `.red` file being compiled.
+ *   When provided it is threaded through `FnContext` so that individual MIR
+ *   instructions can carry `SourceLoc` spans for source-map generation.
+ *   Pass `undefined` when the source path is not known (e.g. in unit tests).
+ * @returns A `MIRModule` whose `functions` array contains one `MIRFunction` per
+ *   HIR function / impl method, plus any helper functions extracted from
+ *   `execute`-block lowering and array-argument monomorphization.
+ *   `namespace` mirrors `hir.namespace`; `objective` is `"__<namespace>"`.
+ *
+ * Invariants:
+ * - Display::to_string impl methods are **not** emitted as standalone
+ *   `MIRFunction`s — they are inlined at every call site instead.
+ * - Specialized (monomorphized) variants of array-parameter functions are
+ *   appended after all regular functions so name resolution is stable.
+ */
 export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
   // Build struct definitions: name → field names
   const structDefs = new Map<string, string[]>()
@@ -172,9 +193,13 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
 // ---------------------------------------------------------------------------
 
 class FnContext {
+  /** Monotonically-increasing counter used to generate unique temp names (`t0`, `t1`, …) */
   private tempCounter = 0
+  /** Monotonically-increasing counter used to generate unique basic-block IDs (`bb0`, `bb1`, …) */
   private blockCounter = 0
+  /** All basic blocks created for this function, in insertion order */
   readonly blocks: MIRBlock[] = []
+  /** The block that `emit`/`terminate` currently appends instructions to */
   private currentBlock: MIRBlock
   /** Stack of (loopHeader, loopExit, continueTo, label?) for break/continue */
   private loopStack: { header: BlockId; exit: BlockId; continueTo: BlockId; label?: string }[] = []
@@ -188,13 +213,31 @@ class FnContext {
   readonly structDefs: Map<string, string[]>
   /** Impl method info: typeName → methodName → { hasSelf, returnStructName? } */
   readonly implMethods: Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>>
-  /** Struct variable tracking: varName → { typeName, fields: fieldName → temp } */
+  /**
+   * Struct variable tracking: varName → { typeName, fields: fieldName → temp }.
+   * Populated when a struct is declared/assigned; each field is stored as an
+   * independent scoreboard temp.  Entries are never removed — shadowed names
+   * overwrite the previous entry.
+   */
   readonly structVars = new Map<string, { typeName: string; fields: Map<string, Temp> }>()
-  /** Tuple variable tracking: varName → array of element temps (index = slot) */
+  /**
+   * Tuple variable tracking: varName → ordered array of element temps.
+   * Index in the array corresponds directly to the tuple slot (0-based).
+   * Populated on tuple-let lowering; overwritten on reassignment.
+   */
   readonly tupleVars = new Map<string, Temp[]>()
-  /** Array variable tracking: varName → { ns, pathPrefix } for NBT-backed int[] */
+  /**
+   * Array variable tracking: varName → { ns, pathPrefix, knownLen? }.
+   * Entries map a RedScript array variable to its NBT-backed int[] storage
+   * (`<ns>:arrays <pathPrefix>[…]`).  `knownLen` is set when the length is
+   * statically known (e.g. array literals), enabling bounds-checked lowering.
+   */
   readonly arrayVars = new Map<string, { ns: string; pathPrefix: string; knownLen?: number }>()
-  /** String variable tracking: varName → storage path within rs:strings */
+  /**
+   * String variable tracking: varName → storage path within the `rs:strings`
+   * NBT storage namespace.  Inserted when a string variable is declared;
+   * overwritten on reassignment.
+   */
   readonly stringVars = new Map<string, string>()
   /** Macro function info for all functions in the module */
   readonly macroInfo: Map<string, MacroFunctionInfo>
@@ -214,11 +257,23 @@ class FnContext {
   readonly timerCounter: { count: number; timerId: number }
   /** Tracks temps whose values are known compile-time constants (for Timer static ID propagation) */
   readonly constTemps = new Map<Temp, number>()
-  /** Tracks temps that hold fixed (×10000 fixed-point) values — for mul/div scale correction */
+  /**
+   * Tracks temps whose scoreboard value is a ×10000 fixed-point integer.
+   * A temp is added here when it is produced by a float literal, float
+   * variable load, or float arithmetic result.  Used by mul/div lowering
+   * to insert the compensating ÷10000 scale-correction instruction.
+   */
   readonly floatTemps = new Set<Temp>()
-  /** Tracks double variables: varName → NBT storage path (without "rs:d " prefix) */
+  /**
+   * Double variable tracking: varName → NBT storage path (the segment that
+   * follows the `"rs:d "` namespace prefix, e.g. `"myns_myFn_x_0"`).
+   * Populated by `freshDoubleVar`; overwritten when a double variable is
+   * reassigned.  Paths are unique per (namespace, function, varName, counter).
+   */
   readonly doubleVars = new Map<string, string>()
+  /** Counter for generating unique double-var NBT path suffixes within this function */
   private doubleVarCount = 0
+  /** Counter for generating unique string-var storage path suffixes within this function */
   private stringVarCount = 0
   /** HIR function definitions for array-arg monomorphization */
   hirFunctions: Map<string, HIRFunction> = new Map()
