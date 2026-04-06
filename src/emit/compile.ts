@@ -572,14 +572,18 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 /**
  * Compute a scoreboard objective name for a @singleton struct field.
  * Format: _s_<struct>_<field>, truncated so total length ≤ 16 chars.
- * If struct+field combined (with _s_ and _) exceeds 16:
- *   use first 4 chars of struct, first 8 chars of field.
+ * MC scoreboard objective names are limited to 16 characters.
+ * The prefix "_s_" (3 chars) and separator "_" (1 char) consume 4 chars,
+ * leaving 12 chars for struct + field combined.
+ * If struct+field exceeds that budget: use first 4 chars of struct, first 8 of field.
  */
 function singletonObjectiveName(structName: string, fieldName: string): string {
-  const overhead = 5 // "_s_" (3) + "_" (1) = 4, +1 for safety  -- actually "_s_" + "_" = 4
-  // Budget: 16 - 4 = 12 chars for struct + field combined
-  if (structName.length + fieldName.length <= 12) {
-    return `_s_${structName}_${fieldName}`
+  const PREFIX = '_s_'
+  const SEP = '_'
+  const MC_LIMIT = 16
+  const maxNameLength = MC_LIMIT - PREFIX.length - SEP.length
+  if (structName.length + fieldName.length <= maxNameLength) {
+    return `${PREFIX}${structName}${SEP}${fieldName}`
   }
-  return `_s_${structName.slice(0, 4)}_${fieldName.slice(0, 8)}`
+  return `${PREFIX}${structName.slice(0, 4)}${SEP}${fieldName.slice(0, 8)}`
 }

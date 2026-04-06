@@ -156,11 +156,69 @@ describe('@singleton: emit — load.mcfunction', () => {
     `)
     const load = getFile(files, 'load.mcfunction') ?? ''
     expect(load).toContain('scoreboard objectives add')
-    // Each field gets its own objective (truncated to ≤16 chars: _s_<4ofStruct>_<field>)
-    // GameState → prefix "_s_Game_" (8 chars), then field name up to 8 chars
+    // MC scoreboard objective names are limited to 16 chars.
+    // "_s_" (3) + "_" (1) = 4 fixed chars, leaving 12 for struct+field combined.
+    // GameState (9) + field > 12 → truncated: _s_ + Game(4) + _ + field.slice(0,8)
     expect(load).toContain('_s_Game_phase')
     expect(load).toContain('_s_Game_tick_cou')
     expect(load).toContain('_s_Game_player_c')
+  })
+
+  test('objective name fits exactly at the 12-char budget — no truncation', () => {
+    // "Foo" (3) + "val_field" (9) = 12 → fits: _s_Foo_val_field (16 chars total)
+    const files = compileAndGetFiles(`
+      @singleton
+      struct Foo {
+        val_field: int,
+      }
+      @keep fn dummy(): void {}
+    `)
+    const load = getFile(files, 'load.mcfunction') ?? ''
+    expect(load).toContain('_s_Foo_val_field')
+  })
+
+  test('objective name one over budget — truncation kicks in', () => {
+    // "FooB" (4) + "val_field" (9) = 13 > 12 → truncated: _s_FooB_val_fiel (16 chars)
+    const files = compileAndGetFiles(`
+      @singleton
+      struct FooB {
+        val_field: int,
+      }
+      @keep fn dummy(): void {}
+    `)
+    const load = getFile(files, 'load.mcfunction') ?? ''
+    expect(load).toContain('_s_FooB_val_fiel')
+    expect(load).not.toContain('_s_FooB_val_field')
+  })
+
+  test('all generated objective names are at most 16 characters', () => {
+    const files = compileAndGetFiles(`
+      @singleton
+      struct VeryLongStructName {
+        very_long_field_name: int,
+        another_long_field: int,
+      }
+      @keep fn dummy(): void {}
+    `)
+    const load = getFile(files, 'load.mcfunction') ?? ''
+    const objectiveNames = [...load.matchAll(/scoreboard objectives add (\S+)/g)].map(m => m[1])
+    expect(objectiveNames.length).toBeGreaterThan(0)
+    for (const name of objectiveNames) {
+      expect(name.length).toBeLessThanOrEqual(16)
+    }
+  })
+
+  test('short struct and field names produce no truncation', () => {
+    // "Ab" (2) + "x" (1) = 3 → _s_Ab_x (7 chars, well under limit)
+    const files = compileAndGetFiles(`
+      @singleton
+      struct Ab {
+        x: int,
+      }
+      @keep fn dummy(): void {}
+    `)
+    const load = getFile(files, 'load.mcfunction') ?? ''
+    expect(load).toContain('_s_Ab_x')
   })
 })
 
