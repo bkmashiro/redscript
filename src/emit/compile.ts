@@ -10,6 +10,11 @@ import { Lexer } from '../lexer'
 import { Parser } from '../parser'
 import { preprocessSourceWithMetadata } from '../compile'
 import { CheckFailedError, DiagnosticBundleError, DiagnosticError, parseErrorMessage } from '../diagnostics'
+
+function extractErrorMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.trim() || 'unknown error'
+}
 import { lowerToHIR } from '../hir/lower'
 import { monomorphize } from '../hir/monomorphize'
 import { checkDeprecatedCalls } from '../hir/deprecated'
@@ -559,13 +564,13 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       }
       const sourceLines = processedSource.split('\n')
       throw new CheckFailedError(
-        [parseErrorMessage('LoweringError', (err as Error).message, sourceLines, filePath)],
+        [parseErrorMessage('LoweringError', extractErrorMessage(err), sourceLines, filePath)],
         warnings,
       )
     }
     if (err instanceof DiagnosticError) throw err
     const sourceLines = processedSource.split('\n')
-    throw parseErrorMessage('LoweringError', (err as Error).message, sourceLines, filePath)
+    throw parseErrorMessage('LoweringError', extractErrorMessage(err), sourceLines, filePath)
   }
 }
 
