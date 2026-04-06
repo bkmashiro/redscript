@@ -1041,11 +1041,7 @@ function lowerStmt(
 
     case 'break': {
       const loop = ctx.currentLoop()
-      if (!loop) throw new DiagnosticError(
-        'LoweringError',
-        'break outside loop',
-        stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 },
-      )
+      if (!loop) throw new DiagnosticError('LoweringError', 'break outside loop', stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 })
       ctx.terminate({ kind: 'jump', target: loop.exit })
       const dead = ctx.newBlock('post_break')
       ctx.switchTo(dead)
@@ -1054,11 +1050,7 @@ function lowerStmt(
 
     case 'continue': {
       const loop = ctx.currentLoop()
-      if (!loop) throw new DiagnosticError(
-        'LoweringError',
-        'continue outside loop',
-        stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 },
-      )
+      if (!loop) throw new DiagnosticError('LoweringError', 'continue outside loop', stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 })
       ctx.terminate({ kind: 'jump', target: loop.continueTo })
       const dead = ctx.newBlock('post_continue')
       ctx.switchTo(dead)
@@ -1067,11 +1059,7 @@ function lowerStmt(
 
     case 'break_label': {
       const loop = ctx.findLoopByLabel(stmt.label)
-      if (!loop) throw new DiagnosticError(
-        'LoweringError',
-        `break: label '${stmt.label}' not found`,
-        stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 },
-      )
+      if (!loop) throw new DiagnosticError('LoweringError', `break: label '${stmt.label}' not found`, stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 })
       ctx.terminate({ kind: 'jump', target: loop.exit })
       const dead = ctx.newBlock('post_break_label')
       ctx.switchTo(dead)
@@ -1080,11 +1068,7 @@ function lowerStmt(
 
     case 'continue_label': {
       const loop = ctx.findLoopByLabel(stmt.label)
-      if (!loop) throw new DiagnosticError(
-        'LoweringError',
-        `continue: label '${stmt.label}' not found`,
-        stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 },
-      )
+      if (!loop) throw new DiagnosticError('LoweringError', `continue: label '${stmt.label}' not found`, stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 })
       ctx.terminate({ kind: 'jump', target: loop.continueTo })
       const dead = ctx.newBlock('post_continue_label')
       ctx.switchTo(dead)
@@ -1247,11 +1231,7 @@ function lowerStmt(
       if (hasStringPats) {
         const matchPath = lowerStringExprToPath(stmt.expr, ctx, scope, 'match')
         if (!matchPath) {
-          throw new DiagnosticError(
-            'LoweringError',
-            'String match requires a string literal or tracked string variable',
-            stmt.span ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { file: ctx.sourceFile, line: 1, col: 1 },
-          )
+          throw new DiagnosticError('LoweringError', 'String match requires a string literal or tracked string variable', stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 })
         }
 
         const mergeBlock = ctx.newBlock('match_merge')
@@ -1282,11 +1262,7 @@ function lowerStmt(
             continue
           }
 
-          throw new DiagnosticError(
-            'LoweringError',
-            `Unsupported string match pattern: ${pat.kind}`,
-            stmt.span ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { file: ctx.sourceFile, line: 1, col: 1 },
-          )
+          throw new DiagnosticError('LoweringError', `Unsupported string match pattern: ${pat.kind}`, stmt.span && ctx.sourceFile ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col } : { line: 1, col: 1 })
         }
 
         if (isPlaceholderTerm(ctx.current().term)) {
@@ -1597,8 +1573,8 @@ function lowerStmt(
     }
 
     default: {
-      const _never: never = stmt
-      throw new Error(`Unknown HIR statement kind: ${JSON.stringify(_never)}`)
+      const _exhaustive: never = stmt
+      throw new DiagnosticError('LoweringError', `Unknown HIR statement kind: ${(_exhaustive as any).kind}`, ctx.currentSourceLoc ?? { line: 1, col: 1 })
     }
   }
 }
@@ -1775,7 +1751,7 @@ function lowerExpr(
       } else if (expr.op in cmpOps) {
         ctx.emit({ kind: 'cmp', dst: t, op: cmpOps[expr.op], a: left, b: right })
       } else {
-        throw new Error(`Unknown binary op: ${expr.op}`)
+        throw new DiagnosticError('LoweringError', `Unknown binary op: ${expr.op}`, expr.span && ctx.sourceFile ? { file: ctx.sourceFile, line: expr.span.line, col: expr.span.col } : ctx.currentSourceLoc ?? { line: 1, col: 1 })
       }
       return { kind: 'temp', name: t }
     }
@@ -2905,8 +2881,8 @@ function lowerExpr(
     }
 
     default: {
-      const _never: never = expr
-      throw new Error(`Unknown HIR expression kind: ${JSON.stringify(_never)}`)
+      const _exhaustive: never = expr
+      throw new DiagnosticError('LoweringError', `Unknown HIR expression kind: ${(_exhaustive as any).kind}`, ctx.currentSourceLoc ?? { line: 1, col: 1 })
     }
   }
 }
@@ -3172,8 +3148,8 @@ function lowerExecuteSubcmd(sub: HIRExecuteSubcommand): ExecuteSubcmd {
       // These are condition subcommands — pass through as-is for now
       return { kind: 'at_self' }
     default: {
-      const _never: never = sub
-      throw new Error(`Unknown execute subcommand kind: ${JSON.stringify(_never)}`)
+      const _exhaustive: never = sub
+      throw new DiagnosticError('LoweringError', `Unknown execute subcommand kind: ${(_exhaustive as any).kind}`, { line: 1, col: 1 })
     }
   }
 }
