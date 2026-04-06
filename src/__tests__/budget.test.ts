@@ -264,6 +264,183 @@ describe('analyzeBudget', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Edge cases: estimateCommandCount
+// ---------------------------------------------------------------------------
+
+describe('estimateCommandCount — edge cases', () => {
+  test('empty module returns 0 for any name', () => {
+    const mod = mkModule([])
+    expect(estimateCommandCount('anything', mod)).toBe(0)
+  })
+
+  test('function with zero instructions returns 0', () => {
+    const mod = mkModule([mkFn('noop', [])])
+    expect(estimateCommandCount('noop', mod)).toBe(0)
+  })
+
+  test('store_cmd_to_score counts as 1 (not 2)', () => {
+    // The outer execute-store wrapper and inner command together count as 1
+    const fn = mkFn('main', [
+      {
+        kind: 'store_cmd_to_score',
+        dst: slot('$r'),
+        cmd: { kind: 'score_set', dst: slot('$tmp'), value: 0 },
+      },
+    ])
+    const mod = mkModule([fn])
+    expect(estimateCommandCount('main', mod)).toBe(1)
+  })
+
+  test('call_unless_matches range bound is used for loop iteration estimate', () => {
+    // call_unless_matches with range "..49" should give 50 iterations
+    const header = mkFn('loop__header', [
+      { kind: 'call_unless_matches', fn: `${NS}:loop__body`, slot: slot('$done'), range: '..49' },
+    ])
+    const body = mkFn('loop__body', [
+      { kind: 'score_add', dst: slot('$i'), src: slot('$one') },
+      { kind: 'call', fn: `${NS}:loop__header` },
+    ])
+    const mod = mkModule([header, body])
+    // Cycle: 1 + 2 = 3 cmds × 50 iters = 150
+    expect(estimateCommandCount('loop__header', mod)).toBe(150)
+  })
+
+  test('range with explicit lower bound "0..99" extracts upper bound 100', () => {
+    const header = mkFn('loop__header', [
+      { kind: 'call_if_matches', fn: `${NS}:loop__body`, slot: slot('$i'), range: '0..99' },
+    ])
+    const body = mkFn('loop__body', [
+      { kind: 'call', fn: `${NS}:loop__header` },
+    ])
+    const mod = mkModule([header, body])
+    // Cycle: 1 + 1 = 2 cmds × 100 iters = 200
+    expect(estimateCommandCount('loop__header', mod)).toBe(200)
+  })
+
+  test('self-recursive function (direct self-call) is treated as a loop', () => {
+    // A single-node SCC where the function calls itself
+    const fn = mkFn('recurse', [
+      { kind: 'call_if_matches', fn: `${NS}:recurse`, slot: slot('$n'), range: '..9' },
+      { kind: 'score_set', dst: slot('$a'), value: 1 },
+    ])
+    const mod = mkModule([fn])
+    // SCC = [recurse], self-call detected → cyclic
+    // local = 2, 10 iters → 20
+    expect(estimateCommandCount('recurse', mod)).toBe(20)
+  })
+
+  test('diamond call graph (shared callee) counts callee cost once per call site', () => {
+    // shared is called by both branch_a and branch_b; main calls both
+    const shared = mkFn('shared', [
+      { kind: 'score_set', dst: slot('$s'), value: 0 },
+    ])
+    const branchA = mkFn('branch_a', [
+      { kind: 'call', fn: `${NS}:shared` },
+    ])
+    const branchB = mkFn('branch_b', [
+      { kind: 'call', fn: `${NS}:shared` },
+    ])
+    const main = mkFn('main', [
+      { kind: 'call', fn: `${NS}:branch_a` },
+      { kind: 'call', fn: `${NS}:branch_b` },
+    ])
+    const mod = mkModule([main, branchA, branchB, shared])
+    // shared=1, branchA=1+1=2, branchB=1+1=2, main=2+2+2=6
+    expect(estimateCommandCount('main', mod)).toBe(6)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Edge cases: analyzeBudget
+// ---------------------------------------------------------------------------
+
+describe('analyzeBudget — edge cases', () => {
+  test('empty module returns no diagnostics', () => {
+    expect(analyzeBudget(mkModule([]))).toEqual([])
+  })
+
+  test('_coro_ prefixed functions are skipped', () => {
+    // Compiler-generated coroutine continuations must never be analyzed
+    const bodyInstrs: LIRInstr[] = []
+    for (let i = 0; i < 98; i++) {
+      bodyInstrs.push({ kind: 'score_set', dst: slot(`$v${i}`), value: i })
+    }
+    bodyInstrs.push({ kind: 'call', fn: `${NS}:_coro_bigfn` })
+
+    const fn = mkFn('_coro_bigfn', [
+      { kind: 'call_if_matches', fn: `${NS}:_coro_bigfn__body`, slot: slot('$i'), range: '..999' },
+    ])
+    const body = mkFn('_coro_bigfn__body', bodyInstrs)
+    const mod = mkModule([fn, body])
+    expect(analyzeBudget(mod)).toEqual([])
+  })
+
+  test('function at exactly BUDGET_WARN_THRESHOLD → no diagnostic', () => {
+    // Build a function with exactly BUDGET_WARN_THRESHOLD local instructions
+    const instrs: LIRInstr[] = []
+    for (let i = 0; i < BUDGET_WARN_THRESHOLD; i++) {
+      instrs.push({ kind: 'score_set', dst: slot(`$v${i % 1000}`), value: i })
+    }
+    const fn = mkFn('exact_warn', instrs)
+    const mod = mkModule([fn])
+    // estimateCommandCount returns exactly 32768, which is NOT > threshold
+    expect(analyzeBudget(mod)).toEqual([])
+  })
+
+  test('function at exactly BUDGET_ERROR_THRESHOLD → warning, not error', () => {
+    const instrs: LIRInstr[] = []
+    for (let i = 0; i < BUDGET_ERROR_THRESHOLD; i++) {
+      instrs.push({ kind: 'score_set', dst: slot(`$v${i % 1000}`), value: i })
+    }
+    const fn = mkFn('exact_error', instrs)
+    const mod = mkModule([fn])
+    // Exactly 65536 is NOT > BUDGET_ERROR_THRESHOLD, but IS > BUDGET_WARN_THRESHOLD
+    const diags = analyzeBudget(mod)
+    expect(diags).toHaveLength(1)
+    expect(diags[0].level).toBe('warning')
+  })
+
+  test('function one over BUDGET_ERROR_THRESHOLD → error', () => {
+    const instrs: LIRInstr[] = []
+    for (let i = 0; i <= BUDGET_ERROR_THRESHOLD; i++) {
+      instrs.push({ kind: 'score_set', dst: slot(`$v${i % 1000}`), value: i })
+    }
+    const fn = mkFn('over_error', instrs)
+    const mod = mkModule([fn])
+    const diags = analyzeBudget(mod)
+    expect(diags).toHaveLength(1)
+    expect(diags[0].level).toBe('error')
+    expect(diags[0].fnName).toBe('over_error')
+    expect(diags[0].message).toContain('crash')
+  })
+
+  test('error diagnostic message mentions the function name', () => {
+    const instrs: LIRInstr[] = []
+    for (let i = 0; i <= BUDGET_ERROR_THRESHOLD; i++) {
+      instrs.push({ kind: 'score_set', dst: slot(`$v${i % 1000}`), value: i })
+    }
+    const fn = mkFn('my_fn', instrs)
+    const mod = mkModule([fn])
+    const diags = analyzeBudget(mod)
+    expect(diags[0].message).toContain('my_fn')
+  })
+
+  test('multiple functions each get their own diagnostic', () => {
+    const makeHeavyFn = (name: string): LIRFunction => {
+      const instrs: LIRInstr[] = []
+      for (let i = 0; i <= BUDGET_ERROR_THRESHOLD; i++) {
+        instrs.push({ kind: 'score_set', dst: slot(`$v${i % 1000}`), value: i })
+      }
+      return mkFn(name, instrs)
+    }
+    const mod = mkModule([makeHeavyFn('fn_a'), makeHeavyFn('fn_b')])
+    const diags = analyzeBudget(mod)
+    expect(diags).toHaveLength(2)
+    expect(diags.map(d => d.fnName).sort()).toEqual(['fn_a', 'fn_b'])
+  })
+})
+
+// ---------------------------------------------------------------------------
 // E2E: compile pipeline integration
 // ---------------------------------------------------------------------------
 

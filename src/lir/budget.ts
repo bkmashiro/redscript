@@ -14,12 +14,37 @@ import type { LIRModule, LIRFunction, LIRInstr } from './types'
 /** Default estimated iteration count when the upper bound is unknown */
 const DEFAULT_LOOP_ITERATIONS = 100
 
-/** Warning threshold: suggest @coroutine */
+/**
+ * Warning threshold for estimated command count.
+ *
+ * When a function's estimated command count exceeds this value (32768), a
+ * `'warning'` diagnostic is emitted suggesting the function be annotated with
+ * `@coroutine` to spread execution across multiple ticks.
+ *
+ * Set to half of {@link BUDGET_ERROR_THRESHOLD} to give authors headroom.
+ */
 export const BUDGET_WARN_THRESHOLD = 32768
 
-/** Error threshold: likely exceeds maxCommandChainLength */
+/**
+ * Error threshold for estimated command count.
+ *
+ * Minecraft's `maxCommandChainLength` game rule defaults to 65536. When a
+ * function's estimated command count exceeds this value an `'error'` diagnostic
+ * is emitted, because the function will likely crash at runtime by hitting that
+ * hard limit.
+ */
 export const BUDGET_ERROR_THRESHOLD = 65536
 
+/**
+ * A single diagnostic produced by {@link analyzeBudget}.
+ *
+ * - `level` — `'warning'` when the estimate exceeds {@link BUDGET_WARN_THRESHOLD};
+ *   `'error'` when it exceeds {@link BUDGET_ERROR_THRESHOLD}.
+ * - `fnName` — the unqualified (no namespace prefix) function name.
+ * - `estimatedCommands` — the estimated total MC command count, including all
+ *   transitive callees and loop-iteration multipliers.
+ * - `message` — a human-readable string suitable for display in the CLI or IDE.
+ */
 export interface BudgetDiagnostic {
   level: 'warning' | 'error'
   fnName: string
@@ -183,11 +208,40 @@ function estimateLoopIterations(cycleFns: LIRFunction[]): number {
 }
 
 /**
- * Estimate the total command count for a function, including callees.
+ * Estimate the total number of MC commands a function will execute at runtime,
+ * including all transitive callees and loop-body repetitions.
  *
- * @param fnName - Name of the function to estimate
- * @param mod - The LIR module
- * @returns Estimated number of MC commands
+ * **Algorithm overview**
+ * 1. Build a module-local call graph (cross-namespace calls are ignored and
+ *    contribute 0 to the estimate).
+ * 2. Decompose the graph into strongly-connected components (SCCs) via
+ *    Tarjan's algorithm. Each SCC with more than one node, or a single node
+ *    that calls itself, represents a loop.
+ * 3. For each cyclic SCC the cost is:
+ *    `(sum of local commands across all SCC members + external callee cost) × iterations`
+ *    where `iterations` is inferred from `call_if_matches` / `call_unless_matches`
+ *    range bounds (e.g. `..99` → 100) or {@link DEFAULT_LOOP_ITERATIONS} (100)
+ *    when no bound is found.
+ * 4. For non-cyclic functions the cost is the local command count plus the
+ *    recursively estimated cost of each callee.
+ * 5. Results are memoized per function name to avoid redundant work.
+ *
+ * **Edge cases**
+ * - If `fnName` does not exist in `mod`, returns `0`.
+ * - Cross-namespace calls (those whose namespace prefix doesn't match
+ *   `mod.namespace`) are treated as 0-cost leaf nodes.
+ * - `store_cmd_to_score` wraps an inner instruction; both are counted as
+ *   1 command each (the outer `execute store … run` always executes exactly
+ *   one command regardless of the inner result).
+ * - Mutually-recursive functions that form a cycle are all assigned the same
+ *   estimated cost (the whole cycle cost), so calling any member of the cycle
+ *   from outside yields the same estimate.
+ *
+ * @param fnName - Unqualified (no namespace prefix) name of the function to
+ *   estimate.  Must match `LIRFunction.name` exactly.
+ * @param mod - The LIR module that contains the function and all its callees.
+ * @returns Estimated number of MC `function` commands (≥ 0).  The value is a
+ *   heuristic — it may over- or under-estimate for highly dynamic code.
  */
 export function estimateCommandCount(fnName: string, mod: LIRModule): number {
   const fnMap = new Map<string, LIRFunction>()
@@ -274,11 +328,37 @@ export function estimateCommandCount(fnName: string, mod: LIRModule): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Analyze all "top-level" functions in the module for tick budget violations.
+ * Analyze all user-defined top-level functions in a module for tick-budget
+ * violations, returning one diagnostic per offending function.
  *
- * @param mod - The LIR module to analyze
- * @param coroutineFunctions - Set of function names marked @coroutine (skip these)
- * @returns Array of budget diagnostics (warnings and errors)
+ * **What counts as a "top-level" function?**
+ * Only functions whose names pass all three of the following filters are
+ * analyzed — the rest are skipped silently:
+ * 1. Not in `coroutineFunctions` — functions annotated `@coroutine` are
+ *    intentionally spread across ticks and cannot exceed the per-tick budget.
+ * 2. Name does not contain `__` — compiler-generated helper blocks such as
+ *    `myloop__header` and `myloop__body` are internal implementation details;
+ *    they are reachable only via their parent function, which *is* analyzed.
+ * 3. Name does not start with `_coro_` — coroutine continuation functions
+ *    emitted by the compiler are also exempt.
+ *
+ * For each surviving function, {@link estimateCommandCount} is called and the
+ * result compared against the two thresholds:
+ * - `> BUDGET_ERROR_THRESHOLD` (65536) → `'error'`
+ * - `> BUDGET_WARN_THRESHOLD`  (32768) → `'warning'`
+ *
+ * **Ordering** — diagnostics are returned in the same order as
+ * `mod.functions`, with at most one diagnostic per function.  An `'error'`
+ * takes precedence: a function that exceeds both thresholds only gets an
+ * error, never a warning as well.
+ *
+ * @param mod - The LIR module to analyze.  All functions in the module are
+ *   used for call-graph construction even if they are individually skipped.
+ * @param coroutineFunctions - Optional set of unqualified function names that
+ *   are marked `@coroutine` and should be excluded from budget checking.
+ *   Defaults to an empty set.
+ * @returns An array of {@link BudgetDiagnostic} objects.  Empty when no
+ *   function exceeds the warning threshold.
  */
 export function analyzeBudget(
   mod: LIRModule,
