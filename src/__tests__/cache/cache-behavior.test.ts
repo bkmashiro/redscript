@@ -395,6 +395,129 @@ describe('DependencyGraph — edge cases', () => {
 })
 
 // ---------------------------------------------------------------------------
+// parseImports — edge cases
+// ---------------------------------------------------------------------------
+
+describe('parseImports — edge cases', () => {
+  let tmpDir: string
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir()
+  })
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  test('empty source returns empty array', () => {
+    const imports = parseImports(path.join(tmpDir, 'empty.mcrs'), '')
+    expect(imports).toHaveLength(0)
+  })
+
+  test('source with only blank lines and comments returns empty array', () => {
+    const source = `// just a comment\n\n// another comment\n`
+    const imports = parseImports(path.join(tmpDir, 'comments.mcrs'), source)
+    expect(imports).toHaveLength(0)
+  })
+
+  test('import without trailing semicolon is parsed', () => {
+    const source = `import "no-semi.mcrs"\nfn main() {}`
+    const imports = parseImports(path.join(tmpDir, 'main.mcrs'), source)
+    expect(imports).toHaveLength(1)
+    expect(imports[0]).toBe(path.resolve(tmpDir, 'no-semi.mcrs'))
+  })
+
+  test('non-import line after imports stops parsing (does not include later imports)', () => {
+    // A second import block buried inside function body must not be collected
+    const source = `import "first.mcrs";\nfn body() {}\nimport "hidden.mcrs";`
+    const imports = parseImports(path.join(tmpDir, 'main.mcrs'), source)
+    expect(imports).toHaveLength(1)
+    expect(imports[0]).toBe(path.resolve(tmpDir, 'first.mcrs'))
+  })
+
+  test('reads file from disk when source is omitted', () => {
+    const filePath = writeFile(tmpDir, 'disk.mcrs', `import "lib.mcrs";\nfn disk() {}`)
+    const imports = parseImports(filePath)
+    expect(imports).toHaveLength(1)
+    expect(imports[0]).toBe(path.resolve(tmpDir, 'lib.mcrs'))
+  })
+
+  test('throws when file does not exist and source is omitted', () => {
+    const missing = path.join(tmpDir, 'ghost.mcrs')
+    expect(() => parseImports(missing)).toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DependencyGraph — additional edge cases
+// ---------------------------------------------------------------------------
+
+describe('DependencyGraph — getDependents and computeDirtySet edge cases', () => {
+  let tmpDir: string
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir()
+  })
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  test('getDependents returns empty set for file with no reverse deps', () => {
+    const a = writeFile(tmpDir, 'a.mcrs', 'fn a() {}')
+    const graph = new DependencyGraph()
+    graph.addFile(a)
+    expect(graph.getDependents(a).size).toBe(0)
+  })
+
+  test('getDependents includes transitive reverse dependents', () => {
+    // chain: c → b → a  (c imports b, b imports a)
+    const a = path.resolve(tmpDir, 'a.mcrs')
+    const b = path.resolve(tmpDir, 'b.mcrs')
+    const c = path.resolve(tmpDir, 'c.mcrs')
+    writeFile(tmpDir, 'a.mcrs', 'fn a() {}')
+    writeFile(tmpDir, 'b.mcrs', 'fn b() {}')
+    writeFile(tmpDir, 'c.mcrs', 'fn c() {}')
+
+    const graph = new DependencyGraph()
+    graph.addFile(a)
+    graph.addFile(b, `import "a.mcrs";\nfn b() {}`)
+    graph.addFile(c, `import "b.mcrs";\nfn c() {}`)
+
+    const dependents = graph.getDependents(a)
+    expect(dependents.has(b)).toBe(true)
+    expect(dependents.has(c)).toBe(true)
+  })
+
+  test('computeDirtySet with empty changed set returns empty set', () => {
+    const a = writeFile(tmpDir, 'a.mcrs', 'fn a() {}')
+    const graph = new DependencyGraph()
+    graph.addFile(a)
+    expect(graph.computeDirtySet(new Set()).size).toBe(0)
+  })
+
+  test('computeDirtySet includes changed file itself plus its dependents', () => {
+    const a = path.resolve(tmpDir, 'a.mcrs')
+    const b = path.resolve(tmpDir, 'b.mcrs')
+    writeFile(tmpDir, 'a.mcrs', 'fn a() {}')
+    writeFile(tmpDir, 'b.mcrs', 'fn b() {}')
+
+    const graph = new DependencyGraph()
+    graph.addFile(a)
+    graph.addFile(b, `import "a.mcrs";\nfn b() {}`)
+
+    const dirty = graph.computeDirtySet(new Set([a]))
+    expect(dirty.has(a)).toBe(true)
+    expect(dirty.has(b)).toBe(true)
+  })
+
+  test('getTransitiveDeps returns empty set for unknown file', () => {
+    const graph = new DependencyGraph()
+    expect(graph.getTransitiveDeps('/nonexistent.mcrs').size).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // compileIncremental — uncovered branches (lines 67, 113)
 // ---------------------------------------------------------------------------
 
@@ -440,7 +563,7 @@ describe('compileIncremental — edge cases', () => {
     expect(r1.recompiled).toBe(1)
 
     // Now add a new dep to a — simulate by modifying a to import lib, then compile
-    const lib = writeFile(tmpDir, 'lib.mcrs', 'fn lib_fn() { let l: int = 0; }')
+    writeFile(tmpDir, 'lib.mcrs', 'fn lib_fn() { let l: int = 0; }')
     modifyFile(a, `import "lib.mcrs";\nfn a_func() { lib_fn(); }`)
 
     // Second compile: a now has one dep → depHashes.size mismatch triggers recompile
