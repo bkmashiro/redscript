@@ -32,7 +32,7 @@ describe('getStmtLoc — execute helper', () => {
     const mod = compileMIR(
       `fn f(): int {
         execute as @a run {
-          raw "say hi";
+          raw("say hi");
         }
         return 0;
       }`,
@@ -51,7 +51,7 @@ describe('getStmtLoc — execute helper', () => {
     const mod = compileMIR(
       `fn f(): int {
         execute as @a run {
-          raw "say hi";
+          raw("say hi");
         }
         return 0;
       }`,
@@ -70,7 +70,7 @@ describe('getStmtLoc — foreach helper', () => {
     const mod = compileMIR(
       `fn f(): int {
         foreach (p in @a) {
-          raw "say hi";
+          raw("say hi");
         }
         return 0;
       }`,
@@ -89,7 +89,7 @@ describe('getStmtLoc — foreach helper', () => {
     const mod = compileMIR(
       `fn f(): int {
         foreach (p in @a) {
-          raw "say hi";
+          raw("say hi");
         }
         return 0;
       }`,
@@ -108,10 +108,10 @@ describe('getStmtLoc — multiple helpers in one function', () => {
     const mod = compileMIR(
       `fn f(): int {
         execute as @a run {
-          raw "say exec";
+          raw("say exec");
         }
         foreach (p in @a) {
-          raw "say foreach";
+          raw("say foreach");
         }
         return 0;
       }`,

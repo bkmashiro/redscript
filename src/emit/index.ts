@@ -501,18 +501,18 @@ function throttleDispatcherName(name: string): string {
 }
 
 /**
- * Returns the scoreboard objective used to store the tick counter for all
- * `@throttle` functions.
+ * Returns the scoreboard objective used to store the tick counter for the
+ * given `@throttle` function.
  *
- * All throttled functions share the single `__throttle` objective; each function
- * uses a distinct fake-player name (`__throttle_<name>`) as its counter slot.
+ * Each throttled function gets its own objective `__throttle_<name>` to
+ * avoid objective collisions when multiple functions are throttled.
  * The objective is created in `load.mcfunction`.
  *
- * @param _name - Unused. Accepted for API symmetry with the other naming helpers.
- * @returns The shared objective name `"__throttle"`.
+ * @param name - Base name of the `@throttle`-decorated function.
+ * @returns The per-function objective name, e.g. `"__throttle_update"`.
  */
-function throttleObjective(_name: string): string {
-  return `__throttle`
+function throttleObjective(name: string): string {
+  return `__throttle_${name}`
 }
 
 /**
@@ -534,17 +534,17 @@ function retryDispatcherName(name: string): string {
 
 /**
  * Returns the scoreboard objective used to store the remaining-attempts counter
- * for all `@retry` functions.
+ * for the given `@retry` function.
  *
- * All retry functions share the single `__retry` objective; each function uses
- * a distinct fake-player name (`__retry_<name>`) as its counter slot.
+ * Each retried function gets its own objective `__retry_<name>` to avoid
+ * objective collisions when multiple functions use `@retry`.
  * The objective is created in `load.mcfunction`.
  *
- * @param _name - Unused. Accepted for API symmetry with the other naming helpers.
- * @returns The shared objective name `"__retry"`.
+ * @param name - Base name of the `@retry`-decorated function.
+ * @returns The per-function objective name, e.g. `"__retry_fetchData"`.
  */
-function retryObjective(_name: string): string {
-  return `__retry`
+function retryObjective(name: string): string {
+  return `__retry_${name}`
 }
 
 /**
