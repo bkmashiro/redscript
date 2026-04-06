@@ -1070,8 +1070,10 @@ function lowerStmt(
         // Check if returning an option struct var
         const sv = ctx.structVars.get(stmt.value.name)
         if (sv && sv.typeName === '__option') {
-          const hasT = sv.fields.get('has')!
-          const valT = sv.fields.get('val')!
+          const hasT = sv.fields.get('has')
+          const valT = sv.fields.get('val')
+          if (!hasT) throw new Error(`__option struct var '${stmt.value.name}' is missing 'has' field`)
+          if (!valT) throw new Error(`__option struct var '${stmt.value.name}' is missing 'val' field`)
           ctx.emit({ kind: 'copy', dst: '__rf_has', src: { kind: 'temp', name: hasT } })
           ctx.emit({ kind: 'copy', dst: '__rf_val', src: { kind: 'temp', name: valT } })
           ctx.terminate({ kind: 'return', value: null })
@@ -1338,8 +1340,12 @@ function lowerStmt(
         if (stmt.expr.kind === 'ident') {
           const sv = ctx.structVars.get(stmt.expr.name)
           if (sv && sv.typeName === '__option') {
-            optHasOp = { kind: 'temp', name: sv.fields.get('has')! }
-            optValTemp = sv.fields.get('val')!
+            const optHas = sv.fields.get('has')
+            const optVal = sv.fields.get('val')
+            if (!optHas) throw new Error(`__option struct var '${stmt.expr.name}' is missing 'has' field`)
+            if (!optVal) throw new Error(`__option struct var '${stmt.expr.name}' is missing 'val' field`)
+            optHasOp = { kind: 'temp', name: optHas }
+            optValTemp = optVal
           } else {
             // Fall back: evaluate and use __rf_has/__rf_val convention
             lowerExpr(stmt.expr, ctx, scope)
@@ -1527,8 +1533,10 @@ function lowerStmt(
       let valTemp: Temp | undefined
 
       if (sv && sv.typeName === '__option') {
-        const hasT = sv.fields.get('has')!
-        const valT = sv.fields.get('val')!
+        const hasT = sv.fields.get('has')
+        const valT = sv.fields.get('val')
+        if (!hasT) throw new Error(`__option struct var '${(stmt.init as { name: string }).name}' is missing 'has' field`)
+        if (!valT) throw new Error(`__option struct var '${(stmt.init as { name: string }).name}' is missing 'val' field`)
         hasOp = { kind: 'temp', name: hasT }
         valTemp = valT
       } else {
@@ -1591,8 +1599,10 @@ function lowerStmt(
       })()
 
       if (sv && sv.typeName === '__option') {
-        const hasT = sv.fields.get('has')!
-        const valT = sv.fields.get('val')!
+        const hasT = sv.fields.get('has')
+        const valT = sv.fields.get('val')
+        if (!hasT) throw new Error(`__option struct var '${(stmt.init as { name: string }).name}' is missing 'has' field`)
+        if (!valT) throw new Error(`__option struct var '${(stmt.init as { name: string }).name}' is missing 'val' field`)
         hasOp = { kind: 'temp', name: hasT }
         valTemp = valT
       } else {
@@ -1716,7 +1726,8 @@ function lowerExpr(
     case 'ident': {
       // If this is a double variable, load it as ×10000 fixed into a fresh temp
       if (ctx.doubleVars.has(expr.name)) {
-        const path = ctx.doubleVars.get(expr.name)!
+        const path = ctx.doubleVars.get(expr.name)
+        if (!path) throw new Error(`doubleVars has '${expr.name}' but get() returned undefined`)
         const t = ctx.freshTemp()
         // Load double NBT as ×10000 fixed-point score via nbt_read (LIR renames dst properly)
         ctx.emit({ kind: 'nbt_read', dst: t, ns: 'rs:d', path, scale: 10000.0 })
@@ -1728,7 +1739,9 @@ function lowerExpr(
       if (temp) return { kind: 'temp', name: temp }
       // Module-level const: inline the literal value directly (no scoreboard slot)
       if (ctx.constValues.has(expr.name)) {
-        return { kind: 'const', value: ctx.constValues.get(expr.name)! }
+        const constVal = ctx.constValues.get(expr.name)
+        if (constVal === undefined) throw new Error(`constValues has '${expr.name}' but get() returned undefined`)
+        return { kind: 'const', value: constVal }
       }
       // Module-level global variable: read from scoreboard slot
       if (ctx.globalVarNames.has(expr.name)) {
@@ -1929,7 +1942,9 @@ function lowerExpr(
       if (expr.obj.kind === 'ident') {
         const enumVariants = ctx.enumDefs.get(expr.obj.name)
         if (enumVariants && enumVariants.has(expr.field)) {
-          return { kind: 'const', value: enumVariants.get(expr.field)! }
+          const variantVal = enumVariants.get(expr.field)
+          if (variantVal === undefined) throw new Error(`enum '${expr.obj.name}' has variant '${expr.field}' but get() returned undefined`)
+          return { kind: 'const', value: variantVal }
         }
       }
       // Struct field access: v.x → return v's x temp
@@ -2522,7 +2537,9 @@ function lowerExpr(
             if (arg.kind === 'ident' && ctx.arrayVars.has(arg.name)) {
               const paramName = targetHirFn.params[i]?.name
               if (paramName) {
-                arrayArgBindings.set(paramName, ctx.arrayVars.get(arg.name)!)
+                const arrayBinding = ctx.arrayVars.get(arg.name)
+                if (!arrayBinding) throw new Error(`arrayVars has '${arg.name}' but get() returned undefined`)
+                arrayArgBindings.set(paramName, arrayBinding)
               }
             }
           }
@@ -2625,7 +2642,8 @@ function lowerExpr(
                 const arg = expr.args[i]
                 if (arg.kind === 'ident' && ctx.doubleVars.has(arg.name)) {
                   // Arg is already a double var — copy NBT path directly
-                  const srcPath = ctx.doubleVars.get(arg.name)!
+                  const srcPath = ctx.doubleVars.get(arg.name)
+                  if (!srcPath) throw new Error(`doubleVars has '${arg.name}' but get() returned undefined`)
                   ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d __dp${doubleSlot} set from storage rs:d ${srcPath}`, args: [] })
                 } else {
                   // Arg is an expression — lower it as fixed (×10000), store as double
@@ -2873,8 +2891,10 @@ function lowerExpr(
       let valTemp: Temp | undefined
 
       if (sv && sv.typeName === '__option') {
-        const hasT = sv.fields.get('has')!
-        const valT = sv.fields.get('val')!
+        const hasT = sv.fields.get('has')
+        const valT = sv.fields.get('val')
+        if (!hasT) throw new Error(`__option struct var '${(expr.opt as { name: string }).name}' is missing 'has' field`)
+        if (!valT) throw new Error(`__option struct var '${(expr.opt as { name: string }).name}' is missing 'val' field`)
         hasOp = { kind: 'temp', name: hasT }
         valTemp = valT
       } else {
@@ -2922,7 +2942,8 @@ function lowerExpr(
         // expr as fixed (or int): check if expr is a double variable
         if (expr.expr.kind === 'ident' && ctx.doubleVars.has(expr.expr.name)) {
           // Load double NBT as ×10000 fixed-point score via nbt_read (LIR renames dst properly)
-          const path = ctx.doubleVars.get(expr.expr.name)!
+          const path = ctx.doubleVars.get(expr.expr.name)
+          if (!path) throw new Error(`doubleVars has '${expr.expr.name}' but get() returned undefined`)
           const t = ctx.freshTemp()
           ctx.emit({ kind: 'nbt_read', dst: t, ns: 'rs:d', path, scale: 10000.0 })
           if (targetName === 'fixed' || targetName === 'float') {
@@ -2984,7 +3005,9 @@ function isDoubleExpr(expr: HIRExpr, ctx: FnContext): boolean {
  */
 function lowerDoubleExprToPath(expr: HIRExpr, ctx: FnContext, scope: Map<string, Temp>): string {
   if (expr.kind === 'ident' && ctx.doubleVars.has(expr.name)) {
-    return ctx.doubleVars.get(expr.name)!
+    const path = ctx.doubleVars.get(expr.name)
+    if (!path) throw new Error(`doubleVars has '${expr.name}' but get() returned undefined`)
+    return path
   }
   if (expr.kind === 'double_lit') {
     const path = ctx.freshDoubleVar('dlit')
@@ -3253,7 +3276,8 @@ function lowerStringExprToPath(
       return ctx.stringVars.get(expr.name) ?? null
     case 'assign': {
       if (!ctx.stringVars.has(expr.target)) return null
-      const dstPath = ctx.stringVars.get(expr.target)!
+      const dstPath = ctx.stringVars.get(expr.target)
+      if (!dstPath) throw new Error(`stringVars has '${expr.target}' but get() returned undefined`)
       const srcPath = lowerStringExprToPath(expr.value, ctx, scope, expr.target)
       if (!srcPath || srcPath === dstPath) return dstPath
       ctx.emit({
@@ -3341,7 +3365,8 @@ function precomputeFStringParts(
       const argName = (inner.args[0] as { kind: 'ident'; name: string }).name
       const sv = ctx.structVars.get(argName)
       if (sv && ctx.displayImpls.has(sv.typeName)) {
-        const displayParts = ctx.displayImpls.get(sv.typeName)!
+        const displayParts = ctx.displayImpls.get(sv.typeName)
+        if (!displayParts) throw new Error(`displayImpls has '${sv.typeName}' but get() returned undefined`)
         // Expand Display impl parts, substituting self.<field> with the actual struct field temps
         for (const dp of displayParts) {
           if (dp.kind === 'text') {
