@@ -401,7 +401,12 @@ function compileSingleModule(
         if (file.path === loadPath) {
           file.path = newLoadPath
         } else if (file.path === loadTagPath) {
-          const tag = JSON.parse(file.content) as { values: string[] }
+          let tag: { values: string[] }
+          try {
+            tag = JSON.parse(file.content) as { values: string[] }
+          } catch (err) {
+            throw new Error(`Failed to parse tag file at ${file.path}: ${(err as Error).message}`)
+          }
           tag.values = tag.values.map(v =>
             v === `${namespace}:load` ? `${namespace}:${moduleName}/_load` : v
           )
@@ -424,8 +429,18 @@ function mergeTagFile(files: DatapackFile[], newFile: DatapackFile): void {
     files.push(newFile)
     return
   }
-  const existingJson = JSON.parse(existing.content) as { values: string[] }
-  const newJson = JSON.parse(newFile.content) as { values: string[] }
+  let existingJson: { values: string[] }
+  let newJson: { values: string[] }
+  try {
+    existingJson = JSON.parse(existing.content) as { values: string[] }
+  } catch (err) {
+    throw new Error(`Failed to parse tag file at ${existing.path}: ${(err as Error).message}`)
+  }
+  try {
+    newJson = JSON.parse(newFile.content) as { values: string[] }
+  } catch (err) {
+    throw new Error(`Failed to parse tag file at ${newFile.path}: ${(err as Error).message}`)
+  }
   existingJson.values.push(...newJson.values)
   existing.content = JSON.stringify(existingJson, null, 2) + '\n'
 }
