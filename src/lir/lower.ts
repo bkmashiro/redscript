@@ -213,6 +213,19 @@ class LoweringContext {
 // Function lowering
 // ---------------------------------------------------------------------------
 
+/**
+ * Lower a single MIR function to one or more LIR functions.
+ *
+ * The entry block becomes the main function body. Parameter operands are
+ * copied from the shared `$p0`…`$pN` slots into the callee's own temp slots
+ * at the top of that body. Any block that has more than one predecessor is
+ * extracted into its own LIR function (named `<fnName>__<blockId>`) so that
+ * it can be called from multiple call sites without duplicating code.
+ *
+ * @param fn  - The MIR function to lower.
+ * @param ctx - Shared lowering context; the resulting {@link LIRFunction}s are
+ *              appended to `ctx.functions` as a side effect.
+ */
 function lowerFunction(fn: MIRFunction, ctx: LoweringContext): void {
   ctx.analyzeBlocks(fn)
 
@@ -282,6 +295,22 @@ function lowerBlock(
 // Instruction lowering
 // ---------------------------------------------------------------------------
 
+/**
+ * Lower a single MIR instruction to zero or more LIR instructions.
+ *
+ * Delegates to {@link lowerInstrInner} for the actual translation and then
+ * stamps every newly emitted instruction with the source location carried by
+ * `instr` (if any), enabling downstream diagnostic and source-map passes to
+ * trace generated MC commands back to RedScript source.
+ *
+ * @param instr  - The MIR instruction to lower.
+ * @param fn     - The enclosing MIR function (needed for slot naming).
+ * @param ctx    - Shared lowering context.
+ * @param instrs - Output list; translated LIR instructions are appended here
+ *                 as a side effect. May emit multiple instructions for a
+ *                 single MIR instruction (e.g. 3-address → 2-address copy +
+ *                 op, or dynamic-array macro setup sequences).
+ */
 function lowerInstr(
   instr: MIRInstr,
   fn: MIRFunction,
@@ -614,6 +643,29 @@ function lowerInstrInner(
 // Terminator lowering
 // ---------------------------------------------------------------------------
 
+/**
+ * Lower a MIR block terminator to LIR control-flow instructions.
+ *
+ * Handles three terminator kinds:
+ * - `return`  — emits a `return_value` instruction when a value is returned.
+ * - `jump`    — either inlines the target block (single-predecessor) or emits
+ *               a `call` to the extracted target function (multi-predecessor).
+ * - `branch`  — emits a conditional `return run function` for the *then* path
+ *               (so execution stops if the branch is taken) followed by an
+ *               unconditional `call` for the *else* path; each path is first
+ *               emitted as its own LIR function via {@link emitBranchTarget}.
+ *
+ * Like {@link lowerInstr}, all newly emitted instructions are tagged with the
+ * source location of `term` as a side effect.
+ *
+ * @param term    - The MIR terminator instruction for the current block.
+ * @param fn      - The enclosing MIR function.
+ * @param ctx     - Shared lowering context; new branch-target functions are
+ *                  added to `ctx.functions` as a side effect.
+ * @param instrs  - Output list; translated LIR instructions are appended here.
+ * @param visited - Set of already-visited block IDs; updated to prevent
+ *                  duplicate emission of inlined or extracted blocks.
+ */
 function lowerTerminator(
   term: MIRInstr,
   fn: MIRFunction,
@@ -758,7 +810,20 @@ function lowerOperandToSlotDirect(
   }
 }
 
-/** Get a slot for an operand, emitting a score_set for constants into a temp */
+/**
+ * Resolve an operand to a {@link Slot} that can be used as a score source.
+ *
+ * - `temp` operands map directly to their named slot via `ctx.slot()`.
+ * - `const` operands have no persistent slot, so a fresh temporary slot
+ *   (`$__const_<value>`) is materialised by delegating to {@link constSlot},
+ *   which emits a `score_set` instruction as a side effect.
+ *
+ * @param op     - The MIR operand to resolve.
+ * @param ctx    - Shared lowering context used for temp-name → slot mapping.
+ * @param instrs - Output list; a `score_set` is appended when `op` is a
+ *                 constant (side effect).
+ * @returns The resolved {@link Slot}.
+ */
 function operandToSlot(
   op: Operand,
   ctx: LoweringContext,
@@ -771,7 +836,23 @@ function operandToSlot(
   return constSlot(op.value, ctx, instrs)
 }
 
-/** Create a constant slot with a given value */
+/**
+ * Materialise a numeric constant as a named scoreboard slot.
+ *
+ * Constants have no pre-existing slot, so this function synthesises one with a
+ * deterministic name (`$__const_<value>`) and immediately emits a `score_set`
+ * instruction to load the value into it.
+ *
+ * Note: the same constant may be set multiple times within a function body if
+ * it appears in several operand positions. The optimizer's copy-propagation and
+ * CSE passes are expected to eliminate the redundant sets.
+ *
+ * @param value  - The integer constant to materialise.
+ * @param ctx    - Shared lowering context used for the objective name.
+ * @param instrs - Output list; a `score_set` instruction is always appended as
+ *                 a side effect.
+ * @returns The {@link Slot} that holds the constant.
+ */
 function constSlot(value: number, ctx: LoweringContext, instrs: LIRInstr[]): Slot {
   const slot: Slot = { player: `$__const_${value}`, obj: ctx.objective }
   instrs.push({ kind: 'score_set', dst: slot, value })
