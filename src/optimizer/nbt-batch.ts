@@ -41,6 +41,19 @@ function deduplicateBlock(block: MIRBlock): MIRBlock {
         }
       }
       instrs.push(instr)
+    } else if (instr.kind === 'nbt_write_dynamic') {
+      for (const key of [...cache.keys()]) {
+        if (key.startsWith(instr.ns + '\0')) {
+          cache.delete(key)
+        }
+      }
+      instrs.push(instr)
+    } else if (instr.kind === 'call' || instr.kind === 'call_macro' || instr.kind === 'call_context') {
+      // Conservative: function calls may mutate any NBT storage, especially
+      // after auto-inlining/specialization of array helpers. Do not reuse a
+      // pre-call data get across a call boundary.
+      cache.clear()
+      instrs.push(instr)
     } else {
       instrs.push(instr)
     }

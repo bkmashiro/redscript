@@ -184,9 +184,8 @@ describe('MIR lower — storage_get_int', () => {
 // ── is_check expr ───────────────────────────────────────────────────────────
 
 describe('MIR lower — is_check expr', () => {
-  test('entity is check from foreach compiles', () => {
-    // is_check requires entity from selector loop, not Entity param
-    expect(() => compile(`
+  test('entity is check from foreach compiles to a real entity type predicate', () => {
+    const result = compile(`
       fn find_zombies(): void {
         foreach (e in @e) {
           if (e is Zombie) {
@@ -194,7 +193,51 @@ describe('MIR lower — is_check expr', () => {
           }
         }
       }
-    `, { namespace: 'ischeck' })).not.toThrow()
+    `, { namespace: 'ischeck' })
+
+    const emitted = result.files.map(file => file.content).join('\n')
+    expect(emitted).toContain('execute store success score $ret __ischeck if entity @s[type=minecraft:zombie]')
+    expect(emitted).toContain('scoreboard players add #zombie_count rs 1')
+  })
+})
+
+describe('MIR lower — library array-param functions', () => {
+  test('array-param library functions lower through call-site specialization only', () => {
+    const result = compile(`
+      namespace lib_array_use
+
+      fn first_two_sum(): int {
+        let h: int[] = heap_new()
+        h = heap_push(h, 5)
+        h = heap_push(h, 1)
+        return heap_peek(h) + heap_size(h)
+      }
+    `, {
+      namespace: 'lib_array_use',
+      librarySources: [`
+        module library
+        fn heap_new(): int[] {
+          let h: int[] = []
+          h.push(0)
+          return h
+        }
+        fn heap_push(h: int[], val: int): int[] {
+          h.push(val)
+          return h
+        }
+        fn heap_peek(h: int[]): int {
+          return h[1]
+        }
+        fn heap_size(h: int[]): int {
+          return h[0]
+        }
+      `],
+    })
+
+    const paths = result.files.map(file => file.path).join('\n')
+    expect(paths).toContain('heap_push__arr_')
+    expect(paths).toContain('heap_peek__arr_')
+    expect(paths).toContain('heap_size__arr_')
   })
 })
 

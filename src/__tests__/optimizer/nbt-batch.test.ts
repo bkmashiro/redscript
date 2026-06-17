@@ -107,6 +107,20 @@ describe('nbtBatchRead', () => {
     expect(result.blocks[0].instrs[1].kind).toBe('nbt_read')
   })
 
+  test('invalidates cache across calls that may mutate NBT', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'nbt_read', dst: 't0', ns: 'rs:arrays', path: 'h[1]', scale: 1 },
+        { kind: 'call', dst: null, fn: 'mutate_heap', args: [] },
+        { kind: 'nbt_read', dst: 't1', ns: 'rs:arrays', path: 'h[1]', scale: 1 },
+      ], { kind: 'return', value: null }),
+    ])
+    const result = nbtBatchRead(fn)
+    expect(result.blocks[0].instrs[0].kind).toBe('nbt_read')
+    expect(result.blocks[0].instrs[1].kind).toBe('call')
+    expect(result.blocks[0].instrs[2].kind).toBe('nbt_read')
+  })
+
   test('no change when no duplicates', () => {
     const fn = mkFn([
       mkBlock('entry', [
