@@ -180,7 +180,44 @@ describe('loop-invariant code motion (LICM)', () => {
     expect(body.instrs).toHaveLength(1)
   })
 
-  // Test 5: score_write inside loop is NOT hoisted
+  // Test 7: score_read inside loop is NOT hoisted (mutable external read)
+  test('does not hoist score_read from within a loop', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'const', dst: 'cond', value: 1 },
+        { kind: 'const', dst: 'i', value: 10 },
+      ], { kind: 'jump', target: 'loop_header' }),
+
+      mkBlock('loop_header', [],
+        { kind: 'branch', cond: t('cond'), then: 'loop_body', else: 'loop_exit' },
+        ['entry', 'loop_latch']),
+
+      mkBlock('loop_body', [
+        // score_read should be treated like mutable external state and not hoisted
+        { kind: 'mul', dst: 'pre', a: c(3), b: c(4) },
+        { kind: 'score_read', dst: 's', player: '@s', obj: 'steps' },
+        { kind: 'sub', dst: 'i', a: t('i'), b: c(1) },
+        { kind: 'score_write', player: '@s', obj: 'steps', src: c(0) },
+      ], { kind: 'jump', target: 'loop_latch' }, ['loop_header']),
+
+      mkBlock('loop_latch', [],
+        { kind: 'jump', target: 'loop_header' }, ['loop_body']),
+
+      mkBlock('loop_exit', [],
+        { kind: 'return', value: t('s') }, ['loop_header']),
+    ])
+
+    const result = licm(fn)
+
+    const preheader = getBlock(result, 'loop_preheader')
+
+    // The invariant mul should hoist, but score_read should remain in loop body.
+    expect(preheader.instrs.some(i => i.kind === 'mul' && i.dst === 'pre')).toBe(true)
+    const body = getBlock(result, 'loop_body')
+    expect(body.instrs.some(i => i.kind === 'score_read' && i.dst === 's')).toBe(true)
+  })
+
+  // Test 8: score_write inside loop is NOT hoisted
   test('does not hoist score_write (side-effectful)', () => {
     const fn = mkFn([
       mkBlock('entry', [
@@ -208,7 +245,43 @@ describe('loop-invariant code motion (LICM)', () => {
     expect(preheader).toBeUndefined()
   })
 
-  // Test 6: multiple invariant instructions are all hoisted
+  // Test 9: mutable NBT reads are NOT hoisted
+  test('does not hoist mutable nbt reads from within a loop', () => {
+    const fn = mkFn([
+      mkBlock('entry', [
+        { kind: 'const', dst: 'cond', value: 1 },
+      ], { kind: 'jump', target: 'loop_header' }),
+
+      mkBlock('loop_header', [],
+        { kind: 'branch', cond: t('cond'), then: 'loop_body', else: 'loop_exit' },
+        ['entry', 'loop_latch']),
+
+      mkBlock('loop_body', [
+        { kind: 'nbt_read', dst: 'r', ns: 'ns', path: 'p', scale: 1 },
+        { kind: 'nbt_read_dynamic', dst: 'rd', ns: 'ns', pathPrefix: 'p', indexSrc: c(0) },
+        { kind: 'nbt_list_len', dst: 'll', ns: 'ns', path: 'arr' },
+      ], { kind: 'jump', target: 'loop_latch' }, ['loop_header']),
+
+      mkBlock('loop_latch', [],
+        { kind: 'jump', target: 'loop_header' }, ['loop_body']),
+
+      mkBlock('loop_exit', [],
+        { kind: 'return', value: t('ll') }, ['loop_header']),
+    ])
+
+    const result = licm(fn)
+
+    // No preheader should appear since all loop reads are mutable external reads.
+    const preheader = result.blocks.find(b => b.id === 'loop_preheader')
+    expect(preheader).toBeUndefined()
+
+    const body = getBlock(result, 'loop_body')
+    expect(body.instrs.some(i => i.kind === 'nbt_read')).toBe(true)
+    expect(body.instrs.some(i => i.kind === 'nbt_read_dynamic')).toBe(true)
+    expect(body.instrs.some(i => i.kind === 'nbt_list_len')).toBe(true)
+  })
+
+  // Test 10: multiple invariant instructions are all hoisted
   test('hoists multiple independent invariant instructions', () => {
     const fn = mkFn([
       mkBlock('entry', [
@@ -246,7 +319,7 @@ describe('loop-invariant code motion (LICM)', () => {
     expect(body.instrs).toHaveLength(1)  // only the variant add remains
   })
 
-  // Test 7: chained invariants (t2 depends on t1; both should be hoisted)
+  // Test 11: chained invariants (t2 depends on t1; both should be hoisted)
   test('hoists chained invariant instructions (iterative)', () => {
     // t1 = a + b  (invariant)
     // t2 = t1 * c  (invariant once t1 is hoisted)
@@ -287,7 +360,7 @@ describe('loop-invariant code motion (LICM)', () => {
     expect(body.instrs).toHaveLength(1)  // only variant i increment remains
   })
 
-  // Test 8: nested loops — inner invariant hoisted to inner preheader,
+  // Test 12: nested loops — inner invariant hoisted to inner preheader,
   //         outer invariant hoisted to outer preheader
   test('correctly handles nested loops', () => {
     // Outer loop: loop_header / loop_body_outer / loop_latch

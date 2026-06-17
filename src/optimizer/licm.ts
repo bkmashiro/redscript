@@ -12,7 +12,7 @@
  *   2. Collect all temps defined anywhere in the loop (variant set).
  *   3. Walk each loop block's instructions; an instruction is loop-invariant
  *      when:
- *        a. It has no side effects (no call, nbt_write, score_write, etc.).
+ *        a. It has no side effects (no call, nbt_write, nbt_read, score_write, score_read, etc.).
  *        b. Every operand is either a constant OR a temp not in the variant set.
  *   4. Insert a fresh preheader block before the loop header, redirect the
  *      predecessor(s) of the header (excluding the back-edge latch) to the
@@ -386,6 +386,10 @@ function hasSideEffects(instr: MIRInstr): boolean {
     instr.kind === 'call_context' ||
     instr.kind === 'nbt_write' ||
     instr.kind === 'nbt_write_dynamic' ||
+    instr.kind === 'nbt_read' ||
+    instr.kind === 'nbt_read_dynamic' ||
+    instr.kind === 'nbt_list_len' ||
+    instr.kind === 'score_read' ||
     instr.kind === 'score_write'
   )
 }
