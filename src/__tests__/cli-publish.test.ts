@@ -12,6 +12,7 @@ import * as os from 'os'
 import * as path from 'path'
 import { spawnSync } from 'child_process'
 import AdmZip from 'adm-zip'
+import { mcVersionToPackFormat, parseMcVersion } from '../types/mc-version'
 
 // We need adm-zip to inspect the zip — install as dev dependency if missing.
 // The test will skip gracefully if the zip can't be opened.
@@ -88,7 +89,7 @@ fn heartbeat(): void {
 
     const zip = new AdmZip(outZip)
     const content = JSON.parse(zip.readAsText(zip.getEntry('pack.mcmeta')!))
-    expect(content.pack.pack_format).toBe(48)
+    expect(content.pack.pack_format).toBe(mcVersionToPackFormat(parseMcVersion('1.21.4')))
   })
 
   it('pack_format is 45 for mc 1.21', () => {
@@ -97,7 +98,7 @@ fn heartbeat(): void {
 
     const zip = new AdmZip(outZip)
     const content = JSON.parse(zip.readAsText(zip.getEntry('pack.mcmeta')!))
-    expect(content.pack.pack_format).toBe(45)
+    expect(content.pack.pack_format).toBe(mcVersionToPackFormat(parseMcVersion('1.21')))
   })
 
   it('pack_format is 26 for mc 1.20.4', () => {
@@ -106,7 +107,7 @@ fn heartbeat(): void {
 
     const zip = new AdmZip(outZip)
     const content = JSON.parse(zip.readAsText(zip.getEntry('pack.mcmeta')!))
-    expect(content.pack.pack_format).toBe(26)
+    expect(content.pack.pack_format).toBe(mcVersionToPackFormat(parseMcVersion('1.20.4')))
   })
 
   it('pack_format is 18 for mc 1.20.1', () => {
@@ -115,7 +116,7 @@ fn heartbeat(): void {
 
     const zip = new AdmZip(outZip)
     const content = JSON.parse(zip.readAsText(zip.getEntry('pack.mcmeta')!))
-    expect(content.pack.pack_format).toBe(18)
+    expect(content.pack.pack_format).toBe(mcVersionToPackFormat(parseMcVersion('1.20.1')))
   })
 
   it('zip contains compiled mcfunction files', () => {
@@ -162,7 +163,7 @@ fn heartbeat(): void {
 
     const zip = new AdmZip(outZip)
     const mcmeta = JSON.parse(zip.readAsText(zip.getEntry('pack.mcmeta')!))
-    expect(mcmeta.pack.pack_format).toBe(48)
+    expect(mcmeta.pack.pack_format).toBe(mcVersionToPackFormat(parseMcVersion('1.21.4')))
     expect(mcmeta.pack.description).toBe('Config-driven pack')
 
     const entries = zip.getEntries().map((e: AdmZip.IZipEntry) => e.entryName)

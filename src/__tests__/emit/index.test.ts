@@ -1,6 +1,6 @@
 import { emit } from '../../emit'
 import type { LIRModule, LIRFunction, LIRInstr } from '../../lir/types'
-import { McVersion } from '../../types/mc-version'
+import { McVersion, mcVersionToPackFormat } from '../../types/mc-version'
 
 function getFile(files: { path: string; content: string }[], path: string): string {
   const file = files.find(f => f.path === path)
@@ -111,6 +111,7 @@ describe('emit: direct LIR emission', () => {
     })
 
     expect(JSON.parse(getFile(files, 'pack.mcmeta')).pack.description).toContain('emitns')
+    expect(JSON.parse(getFile(files, 'pack.mcmeta')).pack.pack_format).toBe(mcVersionToPackFormat(McVersion.v1_21))
     expect(getFile(files, 'data/emitns/function/load.mcfunction')).toBe('scoreboard objectives add __emit dummy\n')
 
     const main = getFile(files, 'data/emitns/function/main/run.mcfunction')

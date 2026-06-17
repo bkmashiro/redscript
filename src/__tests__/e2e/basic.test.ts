@@ -7,6 +7,7 @@
  */
 
 import { compile } from '../../emit/compile'
+import { DEFAULT_MC_VERSION, mcVersionToPackFormat } from '../../types/mc-version'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
   const f = files.find(f => f.path.includes(pathSubstr))
@@ -29,13 +30,13 @@ describe('e2e: basic compilation', () => {
     expect(addFn).toContain('__test')
   })
 
-  test('pack.mcmeta is generated with pack_format 26', () => {
+  test('pack.mcmeta is generated with the version-derived pack_format', () => {
     const source = `fn noop(): void {}`
     const result = compile(source, { namespace: 'demo' })
     const meta = getFile(result.files, 'pack.mcmeta')
     expect(meta).toBeDefined()
     const parsed = JSON.parse(meta!)
-    expect(parsed.pack.pack_format).toBe(26)
+    expect(parsed.pack.pack_format).toBe(mcVersionToPackFormat(DEFAULT_MC_VERSION))
   })
 
   test('load.mcfunction creates scoreboard objective', () => {

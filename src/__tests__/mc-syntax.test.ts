@@ -17,8 +17,6 @@ function getCommands(source: string, namespace = 'test'): string[] {
     .flatMap(file => file.content.split('\n'))
     .filter(line => line.trim().length > 0)
     .filter(line => !line.startsWith('#'))                     // skip comments
-    .filter(line => !line.startsWith('$'))                     // skip MC macro lines ($say, $data, etc.)
-    .filter(line => !/ with storage /.test(line))              // skip macro function calls
 }
 
 function validateSource(
@@ -103,5 +101,25 @@ fn choose() {
 `, 'matching')
 
     expect(errors).toHaveLength(0)
+  })
+
+  test('accepts macro template commands', () => {
+    const result = validator.validate('$tp @s $(x) $(y) $(z)')
+    expect(result.valid).toBe(true)
+  })
+
+  test('accepts function commands with storage arguments', () => {
+    const result = validator.validate('function rs:macro_target with storage rs:macro_args')
+    expect(result.valid).toBe(true)
+  })
+
+  test('rejects malformed function commands with storage', () => {
+    const missingStorageArg = validator.validate('function rs:macro_target with storage')
+    expect(missingStorageArg.valid).toBe(false)
+    expect(missingStorageArg.error).toContain('function with storage expects exactly 5 tokens')
+
+    const missingFunctionId = validator.validate('function macro_target with storage rs:macro_args')
+    expect(missingFunctionId.valid).toBe(false)
+    expect(missingFunctionId.error).toContain('must be namespaced ids')
   })
 })

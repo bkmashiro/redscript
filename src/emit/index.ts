@@ -13,7 +13,7 @@ import {
   serializeSourceMap,
   sourceMapPath,
 } from './sourcemap'
-import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
+import { mcVersionToPackFormat, McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 
 export interface DatapackFile {
   path: string
@@ -114,7 +114,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   files.push({
     path: 'pack.mcmeta',
     content: JSON.stringify({
-      pack: { pack_format: 26, description: `RedScript datapack: ${namespace}` },
+      pack: { pack_format: mcVersionToPackFormat(mcVersion), description: `RedScript datapack: ${namespace}` },
     }, null, 2) + '\n',
   })
 
