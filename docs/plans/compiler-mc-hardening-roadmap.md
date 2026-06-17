@@ -58,7 +58,7 @@ Refactor only after behavior is pinned by tests. Do not move directories in one 
 - [x] Integrate the safe subset of `codex/comp-harness-offline-hardening` into `main`.
 - [x] Confirm `npm run build` passes.
 - [x] Confirm `npm test -- --runInBand` passes locally, noting real MC integration skips when Paper is offline.
-- [ ] Keep the original `review-report.md` outside the repo as local reference only.
+- [x] Keep the original `review-report.md` outside the repo as local reference only (`~/.hermes/context/redscript/review-report.md`).
 
 **Verification:**
 
@@ -95,7 +95,7 @@ Tasks:
   - Validate the resulting root command path where possible.
   - Keep unsupported templates as warning/diagnostic, not silent pass.
 - [ ] Add static tests for generated `execute + scoreboard` combinations from small `.mcrs` programs.
-- [ ] Add function/tag reference validation: every generated function reference and tag value should resolve inside the datapack artifact.
+- [x] Add function/tag reference validation: every generated function reference and tag value should resolve inside the datapack artifact (`src/testing/datapack-artifact-validator.ts`).
 
 Suggested files:
 
@@ -148,8 +148,14 @@ Tasks:
   - keep legacy `/run` + `/score` fallback.
 - [x] Add offline fake-harness tests for endpoint selection and fallback behavior.
 - [ ] Add a case descriptor schema and runner that compiles, installs, reloads, runs, and asserts.
+  - Initial `src/__tests__/mc-core.test.ts` oracle now covers scoreboard arithmetic, execute/if-score branching, function helper calls, macro `function ... with storage`, and load/tick lifecycle via `npm run test:mc-core`.
+  - Future work: split inline cases into descriptor files if the suite grows.
+- [x] Use the live Paper oracle to catch and fix known core semantic bugs before extracting the runner:
+  - LICM no longer hoists mutable MC state reads (`score_read`, NBT reads, list length).
+  - `is_check` lowers to real selector type predicates.
+  - array-param stdlib calls and NBT batch cache invalidation are covered by live heap/sort tests.
 - [ ] Make the harness reload/command path return structured errors/log snippets; do not rely on “request succeeded” as semantic proof.
-- [ ] Add a local/manual command to run only core MC oracle cases.
+- [x] Add a local/manual command to run only core MC oracle cases (`npm run test:mc-core`).
 - [ ] Add CI separation:
   - unit/static always
   - offline integration allowed to skip
