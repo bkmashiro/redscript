@@ -75,20 +75,24 @@ Follow the priorities from `review-report.md` on branch `codex/comp-harness-offl
 5. `src/emit/compile.ts` is an overloaded orchestration point; refactor by extracting stages, not by doing a big-bang directory move.
 6. Keep work incremental and verifiable: add tests/validators before large semantic changes.
 
-## Highest-priority backlog from the report
+## Active roadmap
 
-Prefer these slices before broader language redesign:
+The active roadmap is `docs/plans/compiler-mc-hardening-roadmap.md`. Follow that document before starting new implementation slices.
 
-1. Align `redscript test --mc-url` / `src/testing/runner.ts` with the actual Paper harness protocol (`/command`, `/scoreboard`, etc.), or add explicit compatibility endpoints in the harness.
-2. Stop hardcoding compile-output `pack.mcmeta` `pack_format`; centralize Minecraft-version behavior in a `VersionProfile`/mapping used by both compile and publish paths.
-3. Strengthen `mc-syntax`/`MCCommandValidator` to cover function macros and `function ... with storage`, rather than skipping them.
-4. Add a small golden-test framework for generated datapack files, starting with hello/load, function call, scoreboard, if/else, and tick cases.
-5. Add an artifact validator for datapack structure, JSON validity, function/tag references, namespace/path collisions, and objective/storage references.
-6. Add lint/static-warning treatment for unsafe raw commands; raw commands bypass much of the typed pipeline and should be visible in diagnostics.
-7. Make Paper harness reload/command results structured enough to be a CI oracle: return success, feedback, error log snippets, and tick/duration metadata.
-8. Separate CI/test labels clearly: unit/static/offline integration/real Paper integration. Do not let graceful offline skips imply real server coverage.
-9. Add stage dump/snapshot support (`AST`, `HIR`, `MIR`, `LIR`, command/artifact output) to make pipeline refactors reviewable.
-10. Track command count/tick budget regressions after the static/golden harness is in place.
+Current priority order:
+
+1. Harden the core generated Minecraft command logic first: `execute`, `scoreboard`, `function`, `function ... with storage`, `$...` macro bodies, storage/NBT, and load/tick entrypoints.
+2. Use static validators and small golden outputs to pin command/artifact shape.
+3. Use a real Paper/TestHarnessPlugin oracle for deterministic core semantics. Offline skips are useful smoke coverage but are not real MC proof.
+4. Treat world/visual side-effect commands (`setblock`, `fill`, particles, title, sound, bossbar, entity spawning) as secondary boundary coverage after compiler-semantic commands are hard.
+5. Refactor overloaded compiler files only after behavior is pinned. Known responsibility-heavy files include `src/typechecker/index.ts`, `src/emit/index.ts`, `src/cli.ts`, `src/emit/compile.ts`, and `src/ast/types.ts`.
+6. Syntax sugar work comes after the core command oracle: add lowering/codegen tests, not just parser tests.
+
+Completed from the report:
+
+- `redscript test --mc-url` now prefers harness `/command` + `/scoreboard` and keeps legacy `/run` + `/score` fallback.
+- compile-output `pack.mcmeta` now uses centralized `mcVersionToPackFormat()`.
+- `mc-syntax` no longer skips `function ... with storage` and has initial macro/function-with-storage tests.
 
 ## Testing expectations
 
