@@ -19,6 +19,28 @@ const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-c
 
 const CORE_NS = 'core_oracle_mc'
 const CORE_OBJ = 'core_oracle'
+const CORE_PLAYERS = [
+  '#arith_input',
+  '#arith_sum',
+  '#arith_product',
+  '#branch_input',
+  '#branch_result',
+  '#chain_input',
+  '#call_stage_a',
+  '#call_chain',
+  '#macro_result',
+  '#macro_loop_result',
+  '#loop_return_input',
+  '#loop_return',
+  '#nested_loop_rows',
+  '#nested_loop_cols',
+  '#nested_loop_result',
+  '#if_loop_result',
+  '#storage_nbt_rw_result',
+  '#foreach_is_check',
+  '#tick_marker',
+  '#load_marker',
+]
 
 let serverOnline = false
 let mc: MCTestClient
@@ -68,6 +90,52 @@ fn test_call_chain() {
   _chain_step_b(stepped)
 }
 
+fn _triangular_sum(limit: int): int {
+  let acc: int = 0
+  for i in 0..limit {
+    acc = acc + i
+  }
+  return acc
+}
+
+fn test_loop_with_function_return() {
+  let limit: int = scoreboard_get("#loop_return_input", "${CORE_OBJ}")
+  let total: int = _triangular_sum(limit)
+  scoreboard_set("#loop_return", "${CORE_OBJ}", total)
+}
+
+fn _nested_tmp_sum(rows: int, cols: int): int {
+  let grand_total: int = 0
+  for row in 0..rows {
+    let row_total: int = 0
+    for col in 0..cols {
+      let cell: int = row * 10 + col
+      row_total = row_total + cell
+    }
+    grand_total = grand_total + row_total
+  }
+  return grand_total
+}
+
+fn test_nested_loop_temp_isolation() {
+  let rows: int = scoreboard_get("#nested_loop_rows", "${CORE_OBJ}")
+  let cols: int = scoreboard_get("#nested_loop_cols", "${CORE_OBJ}")
+  let total: int = _nested_tmp_sum(rows, cols)
+  scoreboard_set("#nested_loop_result", "${CORE_OBJ}", total)
+}
+
+fn test_if_inside_loop_mutable_scoreboard() {
+  scoreboard_set("#if_loop_result", "${CORE_OBJ}", 0)
+  for i in 0..5 {
+    let cur: int = scoreboard_get("#if_loop_result", "${CORE_OBJ}")
+    if (i % 2 == 0) {
+      scoreboard_set("#if_loop_result", "${CORE_OBJ}", cur + i)
+    } else {
+      scoreboard_set("#if_loop_result", "${CORE_OBJ}", cur - i)
+    }
+  }
+}
+
 @keep
 fn __macro_apply() {
   raw("$scoreboard players set #macro_result ${CORE_OBJ} $(value)")
@@ -76,6 +144,63 @@ fn __macro_apply() {
 fn test_macro_with_storage() {
   raw("data modify storage rs:core_oracle value set value 77")
   raw("function __NS__:__macro_apply with storage rs:core_oracle")
+}
+
+fn test_macro_with_storage_in_loop() {
+  raw("scoreboard players set #macro_loop_result ${CORE_OBJ} 0")
+  for i in 0..3 {
+    if (i == 0) {
+      raw("data modify storage rs:core_oracle value set value 1")
+    }
+    if (i == 1) {
+      raw("data modify storage rs:core_oracle value set value 3")
+    }
+    if (i == 2) {
+      raw("data modify storage rs:core_oracle value set value 5")
+    }
+
+    raw("function ${CORE_NS}:__macro_apply with storage rs:core_oracle")
+    let delta: int = scoreboard_get("#macro_loop_result", "${CORE_OBJ}")
+    scoreboard_set("#macro_loop_result", "${CORE_OBJ}", delta + 1)
+  }
+}
+
+fn test_storage_nbt_rw_in_loop() {
+  storage_set_array("rs:core_oracle", "nbt_rw", "[1, 2, 3]")
+  scoreboard_set("#storage_nbt_rw_result", "${CORE_OBJ}", 0)
+
+  for i in 0..3 {
+    if (i == 0) {
+      storage_set_array("rs:core_oracle", "nbt_rw", "[1, 3, 5]")
+    }
+    if (i == 1) {
+      storage_set_array("rs:core_oracle", "nbt_rw", "[2, 4, 6]")
+    }
+    if (i == 2) {
+      storage_set_array("rs:core_oracle", "nbt_rw", "[3, 6, 9]")
+    }
+
+    let current: int = storage_get_int("rs:core_oracle", "nbt_rw", i)
+    let total: int = scoreboard_get("#storage_nbt_rw_result", "${CORE_OBJ}")
+    scoreboard_set("#storage_nbt_rw_result", "${CORE_OBJ}", total + current)
+  }
+}
+
+fn test_foreach_is_check_scores() {
+  raw("kill @e[type=armor_stand,tag=core_oracle_foreach]")
+  raw("summon minecraft:armor_stand 0 65 0 {Tags:['core_oracle_foreach'],NoGravity:1b}")
+  raw("summon minecraft:armor_stand 3 65 0 {Tags:['core_oracle_foreach'],NoGravity:1b}")
+  raw("summon minecraft:armor_stand 6 65 0 {Tags:['core_oracle_foreach'],NoGravity:1b}")
+
+  scoreboard_set("#foreach_is_check", "${CORE_OBJ}", 0)
+  foreach (ent in @e[type=armor_stand,tag=core_oracle_foreach]) {
+    if (ent is ArmorStand) {
+      let current: int = scoreboard_get("#foreach_is_check", "${CORE_OBJ}")
+      scoreboard_set("#foreach_is_check", "${CORE_OBJ}", current + 1)
+    }
+  }
+
+  raw("kill @e[type=armor_stand,tag=core_oracle_foreach]")
 }
 `
 
@@ -95,7 +220,8 @@ function writeFixture(source: string, namespace: string): void {
     )
   }
 
-  const result = compile(source, { namespace })
+  const sourcePath = path.join(DATAPACK_DIR, `${namespace}.mcrs`)
+  const result = compile(source, { namespace, filePath: sourcePath })
 
   for (const file of result.files ?? []) {
     if (file.path === 'pack.mcmeta') continue
@@ -157,17 +283,9 @@ beforeAll(async () => {
 describe('MC Core Oracle (RedScript runtime)', () => {
   beforeEach(async () => {
     if (!serverOnline) return
-    await mc.command(`/scoreboard players set #arith_input ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #arith_sum ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #arith_product ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #branch_input ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #branch_result ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #chain_input ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #call_stage_a ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #call_chain ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #macro_result ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #tick_marker ${CORE_OBJ} 0`)
-    await mc.command(`/scoreboard players set #load_marker ${CORE_OBJ} 0`)
+    for (const player of CORE_PLAYERS) {
+      await mc.command(`/scoreboard players set ${player} ${CORE_OBJ} 0`)
+    }
   })
 
   test('scoreboard arithmetic compiles and runs', async () => {
@@ -209,6 +327,70 @@ describe('MC Core Oracle (RedScript runtime)', () => {
     console.log('  call chain case: _chain_step_a -> _chain_step_b -> _chain_step_c ✓')
   }, 20_000)
 
+  test('loop + function return path is stable', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/scoreboard players set #loop_return_input ${CORE_OBJ} 5`)
+    await mc.command(`/function ${CORE_NS}:test_loop_with_function_return`)
+    await mc.ticks(4)
+
+    expect(await mc.scoreboard('#loop_return', CORE_OBJ)).toBe(10)
+    console.log('  loop+return case: triangular sum for 0..5 is 10 ✓')
+  }, 20_000)
+
+  test('nested loop temporary variables remain isolated', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/scoreboard players set #nested_loop_rows ${CORE_OBJ} 2`)
+    await mc.command(`/scoreboard players set #nested_loop_cols ${CORE_OBJ} 3`)
+    await mc.command(`/function ${CORE_NS}:test_nested_loop_temp_isolation`)
+    await mc.ticks(4)
+
+    expect(await mc.scoreboard('#nested_loop_result', CORE_OBJ)).toBe(36)
+    console.log('  nested loop case: 2x3 accumulation is 36 ✓')
+  }, 20_000)
+
+  test('if inside loop mutates mutable scoreboard state', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/function ${CORE_NS}:test_if_inside_loop_mutable_scoreboard`)
+    await mc.ticks(4)
+
+    expect(await mc.scoreboard('#if_loop_result', CORE_OBJ)).toBe(2)
+    console.log('  loop+if case: scoreboard read/write accumulator result is 2 ✓')
+  }, 20_000)
+
+  test('macro with storage works when executed in a loop', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/function ${CORE_NS}:test_macro_with_storage_in_loop`)
+    await mc.ticks(6)
+
+    expect(await mc.scoreboard('#macro_loop_result', CORE_OBJ)).toBe(3)
+    expect(await mc.scoreboard('#macro_result', CORE_OBJ)).toBe(5)
+    console.log('  macro-in-loop case: repeated with storage writes is stable ✓')
+  }, 20_000)
+
+  test('storage nbt read-write loop is consistent', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/function ${CORE_NS}:test_storage_nbt_rw_in_loop`)
+    await mc.ticks(8)
+
+    expect(await mc.scoreboard('#storage_nbt_rw_result', CORE_OBJ)).toBe(14)
+    console.log('  storage/NBT case: looped read/write accumulation is 14 ✓')
+  }, 20_000)
+
+  test('foreach + is-check counts matching entities', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/function ${CORE_NS}:test_foreach_is_check_scores`)
+    await mc.ticks(6)
+
+    expect(await mc.scoreboard('#foreach_is_check', CORE_OBJ)).toBe(3)
+    console.log('  foreach+is-check case: 3 armor_stand entities counted ✓')
+  }, 20_000)
+
   test('macro function with storage substitutes runtime argument', async () => {
     if (!serverOnline) return
 
@@ -216,7 +398,7 @@ describe('MC Core Oracle (RedScript runtime)', () => {
     await mc.ticks(3)
 
     expect(await mc.scoreboard('#macro_result', CORE_OBJ)).toBe(77)
-    console.log('  macro case: function ... with storage substituted $(value) ✓')
+    console.log('  baseline macro case: function ... with storage substituted $(value) ✓')
   }, 20_000)
 
   test('load and tick lifecycle hooks are present and deterministic', async () => {
@@ -237,12 +419,15 @@ describe('MC Core Oracle (RedScript runtime)', () => {
   test('compile() supports core constructs used in this suite', () => {
     expect(() =>
       compile(`
-        fn compile_smoke() {
-          let a: int = 2
-          let b: int = 3
-          if (a + b > 4) {
-            a = a * b
+        fn compile_smoke(): int {
+          let seed: int = 3
+          let acc: int = 0
+          for i in 0..seed {
+            if (i > 1) {
+              acc = acc + i
+            }
           }
+          return acc
         }
       `, { namespace: 'core_oracle_smoke' })
     ).not.toThrow()
