@@ -44,6 +44,87 @@ export interface TestRunResult {
   output: string
 }
 
+const HARNESS = {
+  objective: 'rs.meta',
+  failedPlayer: 'rs.test_failed',
+  runnerFunction: '__run_all_tests',
+} as const
+
+type HarnessMode = 'primary' | 'legacy'
+
+type HarnessMethod = 'GET' | 'POST'
+
+export interface HarnessRunPayloadPrimary {
+  cmd: string
+}
+
+export interface HarnessRunPayloadLegacy {
+  command: string
+}
+
+export type HarnessRunPayload = HarnessRunPayloadPrimary | HarnessRunPayloadLegacy
+
+export interface HarnessScorePayload {
+  objective: string
+  player: string
+}
+
+interface HarnessRequestDescriptor {
+  url: string
+  method: HarnessMethod
+  body?: string
+}
+
+interface HarnessProtocol {
+  mode: HarnessMode
+  runEndpoint: '/command' | '/run'
+  scoreEndpoint: '/scoreboard' | '/score'
+  buildRunPayload: (namespace: string) => string
+  buildFailedCountRequest: (baseUrl: string) => HarnessRequestDescriptor
+}
+
+const HARNESS_PROTOCOLS: ReadonlyArray<HarnessProtocol> = [
+  {
+    mode: 'primary',
+    runEndpoint: '/command',
+    scoreEndpoint: '/scoreboard',
+    buildRunPayload: (namespace: string): string => {
+      const payload: HarnessRunPayloadPrimary = { cmd: `function ${namespace}:${HARNESS.runnerFunction}` }
+      return JSON.stringify(payload)
+    },
+    buildFailedCountRequest: (baseUrl: string): HarnessRequestDescriptor => {
+      const objective = encodeURIComponent(HARNESS.objective)
+      const player = encodeURIComponent(HARNESS.failedPlayer)
+      return {
+        url: `${baseUrl}/scoreboard?player=${player}&obj=${objective}`,
+        method: 'GET',
+      }
+    },
+  },
+  {
+    mode: 'legacy',
+    runEndpoint: '/run',
+    scoreEndpoint: '/score',
+    buildRunPayload: (namespace: string): string => {
+      const payload: HarnessRunPayloadLegacy = {
+        command: `function ${namespace}:${HARNESS.runnerFunction}`,
+      }
+      return JSON.stringify(payload)
+    },
+    buildFailedCountRequest: (baseUrl: string): HarnessRequestDescriptor => {
+      const payload: HarnessScorePayload = {
+        objective: HARNESS.objective,
+        player: HARNESS.failedPlayer,
+      }
+      return {
+        url: `${baseUrl}/score`,
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    },
+  },
+]
+
 // ---------------------------------------------------------------------------
 // Parse @test decorators from source (without full compilation)
 // ---------------------------------------------------------------------------
@@ -88,11 +169,11 @@ function buildTestRunnerSource(source: string, tests: TestInfo[], namespace: str
   const runnerFn = `
 @load
 fn __rs_test_init(): void {
-  scoreboard_add_objective("rs.meta", "dummy");
+  scoreboard_add_objective("${HARNESS.objective}", "dummy");
 }
 
 @keep
-fn __run_all_tests(): void {
+fn ${HARNESS.runnerFunction}(): void {
 ${testCalls}
 }
 `
@@ -163,35 +244,170 @@ export function formatTestOutput(
 }
 
 // ---------------------------------------------------------------------------
-// HTTP POST helper for MC server integration
+// HTTP helper for MC server integration
 // ---------------------------------------------------------------------------
 
-function httpPost(url: string, body: string): Promise<string> {
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '')
+}
+
+export function normalizeHarnessBaseUrl(value: string): string {
+  return stripTrailingSlash(value)
+}
+
+export function buildHarnessRunPayload(namespace: string, mode: HarnessMode = 'primary'): string {
+  const protocol = HARNESS_PROTOCOLS.find(p => p.mode === mode)
+  if (!protocol) {
+    throw new Error(`Unknown harness mode: ${mode}`)
+  }
+  return protocol.buildRunPayload(namespace)
+}
+
+export function buildFailedCountRequest(
+  baseUrl: string,
+  mode: HarnessMode = 'primary',
+): HarnessRequestDescriptor {
+  const normalizedBaseUrl = normalizeHarnessBaseUrl(baseUrl)
+  const protocol = HARNESS_PROTOCOLS.find(p => p.mode === mode)
+  if (!protocol) {
+    throw new Error(`Unknown harness mode: ${mode}`)
+  }
+  return protocol.buildFailedCountRequest(normalizedBaseUrl)
+}
+
+function requestText(url: string, options: { method: 'GET' | 'POST'; body?: string }): Promise<string> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url)
     const lib = parsed.protocol === 'https:' ? https : http
-    const data = Buffer.from(body, 'utf-8')
+    const data = options.body ?? ''
+    const headers: Record<string, string> = {}
+    if (options.method === 'POST') {
+      headers['Content-Type'] = 'application/json'
+      headers['Content-Length'] = String(Buffer.from(data).length)
+    }
+
     const req = lib.request(
       {
         hostname: parsed.hostname,
         port: parsed.port,
-        path: parsed.pathname,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': data.length,
-        },
+        path: `${parsed.pathname}${parsed.search}`,
+        method: options.method,
+        headers,
       },
       res => {
         let body = ''
         res.on('data', chunk => { body += chunk })
-        res.on('end', () => resolve(body))
+        res.on('end', () => {
+          if (res.statusCode !== undefined && (res.statusCode < 200 || res.statusCode >= 300)) {
+            reject(new Error(`HTTP ${options.method} ${url} failed ${res.statusCode}: ${body}`))
+            return
+          }
+          resolve(body)
+        })
       },
     )
     req.on('error', reject)
-    req.write(data)
+    if (options.method === 'POST' && data) {
+      req.write(data)
+    }
     req.end()
   })
+}
+
+export function parseScoreValue(raw: string): number {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`Invalid scoreboard response JSON: ${message}`)
+  }
+  const parseCandidate = (value: unknown): number | undefined => {
+    if (typeof value === 'number') {
+      return value
+    }
+    if (typeof value === 'string') {
+      const parsedNumber = Number(value)
+      if (!Number.isNaN(parsedNumber)) {
+        return parsedNumber
+      }
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const extracted = parseCandidate(item)
+        if (extracted !== undefined) {
+          return extracted
+        }
+      }
+      return undefined
+    }
+
+    if (value === null || typeof value !== 'object') {
+      return undefined
+    }
+
+    const obj = value as Record<string, unknown>
+    const candidates = [
+      obj.value,
+      (obj.result as { value?: unknown })?.value,
+      (obj.data as { value?: unknown })?.value,
+      (obj.score as { value?: unknown })?.value,
+      (obj as { valueObj?: { value?: unknown } }).valueObj?.value,
+      (obj as { scoreResult?: { value?: unknown } }).scoreResult?.value,
+      obj.payload,
+      obj.result,
+      obj.score,
+      obj.body,
+    ]
+
+    for (const candidate of candidates) {
+      const extracted = parseCandidate(candidate)
+      if (extracted !== undefined) {
+        return extracted
+      }
+    }
+
+    return undefined
+  }
+
+  const value = parseCandidate(parsed)
+  if (value === undefined) {
+    throw new Error(`Unexpected scoreboard response: ${raw}`)
+  }
+
+  return value
+}
+
+async function runAllTestsWithHarness(baseUrl: string, namespace: string): Promise<void> {
+  for (const protocol of HARNESS_PROTOCOLS) {
+    try {
+      const payload = protocol.buildRunPayload(namespace)
+      await requestText(`${baseUrl}${protocol.runEndpoint}`, { method: 'POST', body: payload })
+      return
+    } catch (err) {
+      if (protocol.mode === 'legacy') {
+        throw err
+      }
+    }
+  }
+}
+
+async function readFailedCountWithHarness(baseUrl: string): Promise<number> {
+  let lastError: unknown
+  for (const protocol of HARNESS_PROTOCOLS) {
+    const request = protocol.buildFailedCountRequest(baseUrl)
+    try {
+      const body = await requestText(request.url, { method: request.method, body: request.body })
+      return parseScoreValue(body)
+    } catch (err) {
+      lastError = err
+      if (protocol.mode === 'legacy') {
+        throw err
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Unable to read failed test count from harness')
 }
 
 // ---------------------------------------------------------------------------
@@ -244,16 +460,9 @@ export async function runTests(options: TestRunnerOptions): Promise<void> {
 
   // Push datapack and run tests via MC server API
   try {
-    const runPayload = JSON.stringify({
-      command: `function ${namespace}:__run_all_tests`,
-    })
-    await httpPost(`${mcUrl}/run`, runPayload)
-
-    // Poll test results
-    const resultPayload = JSON.stringify({ objective: 'rs.meta', player: 'rs.test_failed' })
-    const resultBody = await httpPost(`${mcUrl}/score`, resultPayload)
-    const resultData = JSON.parse(resultBody) as { value?: number }
-    const failedCount = resultData.value ?? 0
+    const base = normalizeHarnessBaseUrl(mcUrl)
+    await runAllTestsWithHarness(base, namespace)
+    const failedCount = await readFailedCountWithHarness(base)
     const passedCount = tests.length - failedCount
 
     for (const t of tests) {

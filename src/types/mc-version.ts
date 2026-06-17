@@ -43,4 +43,17 @@ export function compareMcVersion(a: McVersion, b: McVersion): number {
   return a - b
 }
 
+/**
+ * Map a Minecraft version to the corresponding pack_format integer.
+ * See https://minecraft.wiki/w/Pack_format
+ */
+export function mcVersionToPackFormat(version: McVersion): number {
+  if (version >= McVersion.v1_21_4) return 48
+  if (version >= McVersion.v1_21)   return 45
+  if (version >= McVersion.v1_20_4) return 26
+  if (version >= McVersion.v1_20_2) return 22
+  if (version >= McVersion.v1_20)   return 18
+  return 15 // 1.19 and below
+}
+
 export const DEFAULT_MC_VERSION = McVersion.v1_21

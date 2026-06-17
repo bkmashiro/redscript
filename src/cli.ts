@@ -12,7 +12,7 @@
 
 import { compile, checkDetailed } from './index'
 import { DiagnosticError, formatError } from './diagnostics'
-import { parseMcVersion, DEFAULT_MC_VERSION, McVersion } from './types/mc-version'
+import { parseMcVersion, DEFAULT_MC_VERSION, McVersion, mcVersionToPackFormat } from './types/mc-version'
 import { startRepl } from './repl'
 import { generateDts } from './builtins/metadata'
 import { FileCache } from './cache/index'
@@ -701,20 +701,6 @@ function watchCommand(dir: string, output: string, namespace?: string, hotReload
       }, 100)
     }
   })
-}
-
-/**
- * Map a McVersion enum value to the corresponding pack_format integer.
- * https://minecraft.wiki/w/Pack_format
- */
-function mcVersionToPackFormat(version: McVersion): number {
-  // Use a threshold-based mapping (≥ version → pack_format)
-  if (version >= McVersion.v1_21_4) return 48
-  if (version >= McVersion.v1_21)   return 45
-  if (version >= McVersion.v1_20_4) return 26
-  if (version >= McVersion.v1_20_2) return 22
-  if (version >= McVersion.v1_20)   return 18
-  return 15 // 1.19 and below
 }
 
 /**

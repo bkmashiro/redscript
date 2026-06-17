@@ -6,10 +6,24 @@
  * - assert builtin compilation output
  * - test runner command arguments
  * - dry-run mode output
+ * - harness contract helpers and response parsing
+ * - offline harness protocol execution behavior
  */
 
+import * as http from 'http'
+import * as os from 'os'
+import * as fs from 'fs'
+import * as path from 'path'
 import { compile } from '../../emit/compile'
-import { parseTestFunctions, dryRunTests } from '../../testing/runner'
+import {
+  parseTestFunctions,
+  dryRunTests,
+  normalizeHarnessBaseUrl,
+  buildHarnessRunPayload,
+  buildFailedCountRequest,
+  parseScoreValue,
+  runTests,
+} from '../../testing/runner'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -204,5 +218,234 @@ describe('dry-run mode', () => {
     expect(tests).toHaveLength(2)
     const result = dryRunTests(source, 'test.mcrs', 'test', tests)
     expect(result.ok).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4. Harness contract and response parsing helpers (offline)
+// ---------------------------------------------------------------------------
+
+describe('harness contract helpers', () => {
+  test('normalizeHarnessBaseUrl strips trailing slash', () => {
+    expect(normalizeHarnessBaseUrl('http://localhost:25561/')).toBe('http://localhost:25561')
+    expect(normalizeHarnessBaseUrl('https://localhost:25561///')).toBe('https://localhost:25561')
+    expect(normalizeHarnessBaseUrl('https://localhost:25561')).toBe('https://localhost:25561')
+  })
+
+  test('buildHarnessRunPayload emits primary command payload by default', () => {
+    expect(JSON.parse(buildHarnessRunPayload('arena'))).toEqual({
+      cmd: 'function arena:__run_all_tests',
+    })
+  })
+
+  test('buildHarnessRunPayload emits legacy command payload', () => {
+    expect(JSON.parse(buildHarnessRunPayload('arena', 'legacy'))).toEqual({
+      command: 'function arena:__run_all_tests',
+    })
+  })
+
+  test('buildFailedCountRequest emits primary GET scoreboard URL', () => {
+    expect(buildFailedCountRequest('http://localhost:25561/', 'primary')).toEqual({
+      url: 'http://localhost:25561/scoreboard?player=rs.test_failed&obj=rs.meta',
+      method: 'GET',
+      body: undefined,
+    })
+  })
+
+  test('buildFailedCountRequest emits legacy POST scoreboard payload', () => {
+    expect(buildFailedCountRequest('http://localhost:25561', 'legacy')).toEqual({
+      url: 'http://localhost:25561/score',
+      method: 'POST',
+      body: JSON.stringify({ objective: 'rs.meta', player: 'rs.test_failed' }),
+    })
+  })
+})
+
+describe('score value parsing', () => {
+  test('parseScoreValue parses top-level primitives', () => {
+    expect(parseScoreValue('5')).toBe(5)
+  })
+
+  test('parseScoreValue parses common object variants', () => {
+    expect(parseScoreValue('{ "value": 3 }')).toBe(3)
+    expect(parseScoreValue('{ "result": { "value": "4" } }')).toBe(4)
+    expect(parseScoreValue('{ "result": { "value": { "value": "9" } } }')).toBe(9)
+  })
+
+  test('parseScoreValue scans arrays and nested response variants', () => {
+    expect(parseScoreValue('[{ "ok": true }, { "result": "7" }]')).toBe(7)
+  })
+
+  test('parseScoreValue throws on malformed payload shape', () => {
+    expect(() => parseScoreValue('{ "status": "ok" }')).toThrow('Unexpected scoreboard response')
+  })
+
+  test('parseScoreValue throws when JSON is not parseable', () => {
+    expect(() => parseScoreValue('not json')).toThrow('Invalid scoreboard response JSON')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 5. Offline protocol execution behavior (fake harness server)
+// ---------------------------------------------------------------------------
+
+type RequestRecord = {
+  method: string
+  url: string
+  body: string
+}
+
+function startFakeHarnessServer(handlers: {
+  command?: { status: number; body?: string }
+  run?: { status: number; body?: string }
+  scoreboard?: { status: number; body?: string }
+  score?: { status: number; body?: string }
+}) {
+  const requests: RequestRecord[] = []
+  const server = http.createServer((req, res) => {
+    const chunks: Buffer[] = []
+    req.on('data', chunk => chunks.push(chunk))
+    req.on('end', () => {
+      const body = Buffer.concat(chunks).toString()
+      requests.push({
+        method: req.method ?? '',
+        url: req.url ?? '',
+        body,
+      })
+
+      const route = req.url?.split('?')[0] ?? ''
+      if (route === '/command' && handlers.command) {
+        res.statusCode = handlers.command.status
+        res.end(handlers.command.body ?? '')
+        return
+      }
+      if (route === '/run' && handlers.run) {
+        res.statusCode = handlers.run.status
+        res.end(handlers.run.body ?? '')
+        return
+      }
+      if (route === '/scoreboard' && handlers.scoreboard) {
+        res.statusCode = handlers.scoreboard.status
+        res.end(handlers.scoreboard.body ?? '')
+        return
+      }
+      if (route === '/score' && handlers.score) {
+        res.statusCode = handlers.score.status
+        res.end(handlers.score.body ?? '')
+        return
+      }
+
+      res.statusCode = 404
+      res.end('{}')
+    })
+  })
+
+  return new Promise<{ server: http.Server; requests: RequestRecord[]; port: number }>((resolve, reject) => {
+    server.listen(0, () => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        reject(new Error('Failed to bind fake harness server'))
+        return
+      }
+      resolve({ server, requests, port: address.port })
+    })
+  })
+}
+
+function createTempSourceFile(source: string, namespace = 'runnersuite') {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `${namespace}-`))
+  const srcPath = path.join(dir, `${namespace}.mcrs`)
+  fs.writeFileSync(srcPath, source, 'utf-8')
+  const outDir = path.join(dir, 'dist')
+  return { dir, srcPath, outDir }
+}
+
+describe('offline harness protocol execution', () => {
+  const source = `
+    @test("passes")
+    fn test_pass(): void {
+      let x: int = 1;
+      assert(x == 1);
+    }
+  `
+
+  test('runTests prefers primary /command + /scoreboard when both succeed', async () => {
+    const { server, requests, port } = await startFakeHarnessServer({
+      command: { status: 200 },
+      scoreboard: { status: 200, body: JSON.stringify({ value: 0 }) },
+      run: { status: 200 },
+      score: { status: 200, body: JSON.stringify({ value: 0 }) },
+    })
+
+    const { srcPath, outDir, dir } = createTempSourceFile(source)
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never)
+
+    try {
+      await runTests({
+        filePath: srcPath,
+        mcUrl: `http://127.0.0.1:${port}`,
+        outputDir: outDir,
+      })
+
+      expect(requests.map(r => r.url)).toEqual([
+        '/command',
+        '/scoreboard?player=rs.test_failed&obj=rs.meta',
+      ])
+      expect(requests.find(r => r.url.startsWith('/run'))).toBeUndefined()
+      expect(requests.find(r => r.url === '/score')).toBeUndefined()
+      expect(exitSpy).not.toHaveBeenCalled()
+
+      const commandRequest = requests.find(r => r.url === '/command')
+      expect(commandRequest?.method).toBe('POST')
+      expect(JSON.parse(commandRequest?.body ?? '{}')).toEqual({ cmd: 'function runnersuite:__run_all_tests' })
+
+      const scoreboardRequest = requests.find(r => r.url.startsWith('/scoreboard'))
+      expect(scoreboardRequest?.method).toBe('GET')
+    } finally {
+      exitSpy.mockRestore()
+      server.close()
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('runTests falls back to legacy /run + /score when primary endpoints fail', async () => {
+    const { server, requests, port } = await startFakeHarnessServer({
+      command: { status: 500, body: 'primary command failed' },
+      scoreboard: { status: 503, body: 'primary scoreboard failed' },
+      run: { status: 200 },
+      score: { status: 200, body: JSON.stringify({ value: 0 }) },
+    })
+
+    const { srcPath, outDir, dir } = createTempSourceFile(source, 'runnersuite2')
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never)
+
+    try {
+      await runTests({
+        filePath: srcPath,
+        mcUrl: `http://127.0.0.1:${port}`,
+        outputDir: outDir,
+      })
+
+      expect(requests.map(r => r.url)).toContain('/command')
+      expect(requests.map(r => r.url)).toContain('/score')
+      expect(requests.map(r => r.url)).toContain('/run')
+      expect(requests.map(r => r.url)).toContain('/scoreboard?player=rs.test_failed&obj=rs.meta')
+      expect(exitSpy).not.toHaveBeenCalled()
+
+      const runRequest = requests.find(r => r.url === '/run')
+      expect(runRequest?.method).toBe('POST')
+      expect(JSON.parse(runRequest?.body ?? '{}')).toEqual({ command: 'function runnersuite2:__run_all_tests' })
+
+      const scoreRequest = requests.find(r => r.url === '/score')
+      expect(scoreRequest?.method).toBe('POST')
+      expect(JSON.parse(scoreRequest?.body ?? '{}')).toEqual({
+        objective: 'rs.meta',
+        player: 'rs.test_failed',
+      })
+    } finally {
+      exitSpy.mockRestore()
+      server.close()
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

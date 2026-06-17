@@ -13,6 +13,7 @@
 
 import { compile } from '../../emit/compile'
 import { MCRuntime } from '../../runtime'
+import { DEFAULT_MC_VERSION, mcVersionToPackFormat } from '../../types/mc-version'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -85,11 +86,11 @@ describe('v2 migration: compilation smoke', () => {
 // ===========================================================================
 
 describe('v2 migration: output structure', () => {
-  test('pack.mcmeta present with pack_format 26', () => {
+  test('pack.mcmeta present with version-derived pack_format', () => {
     const result = compile('fn noop(): void {}', { namespace: NS })
     const meta = getFile(result.files, 'pack.mcmeta')
     expect(meta).toBeDefined()
-    expect(JSON.parse(meta!).pack.pack_format).toBe(26)
+    expect(JSON.parse(meta!).pack.pack_format).toBe(mcVersionToPackFormat(DEFAULT_MC_VERSION))
   })
 
   test('load.mcfunction creates scoreboard objective', () => {

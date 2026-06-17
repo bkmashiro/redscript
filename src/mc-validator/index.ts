@@ -25,6 +25,7 @@ export interface ValidationResult {
 }
 
 const FUNCTION_ID_RE = /^[0-9a-z_.-]+:[0-9a-z_./-]+$/i
+const FUNCTION_WITH_STORAGE_MIN_TOKENS = 5
 const INTEGER_RE = /^-?\d+$/
 const SCORE_RANGE_RE = /^-?\d+\.\.$|^\.\.-?\d+$|^-?\d+\.\.-?\d+$|^-?\d+$/
 const COMMENT_PREFIXES = [
@@ -68,7 +69,7 @@ export class MCCommandValidator {
 
   validate(line: string): ValidationResult {
     const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#') || COMMENT_PREFIXES.some(prefix => trimmed.startsWith(prefix))) {
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('$') || COMMENT_PREFIXES.some(prefix => trimmed.startsWith(prefix))) {
       return { valid: true }
     }
 
@@ -168,6 +169,16 @@ export class MCCommandValidator {
   }
 
   private validateFunction(tokens: string[]): ValidationResult {
+    if (tokens[2] === 'with' && tokens[3] === 'storage') {
+      if (tokens.length !== FUNCTION_WITH_STORAGE_MIN_TOKENS) {
+        return { valid: false, error: 'function with storage expects exactly 5 tokens' }
+      }
+      if (!FUNCTION_ID_RE.test(tokens[1]) || !FUNCTION_ID_RE.test(tokens[4])) {
+        return { valid: false, error: 'function and storage identifiers must be namespaced ids' }
+      }
+      return { valid: true }
+    }
+
     if (tokens.length !== 2 || !FUNCTION_ID_RE.test(tokens[1])) {
       return { valid: false, error: 'function requires a namespaced function id' }
     }
