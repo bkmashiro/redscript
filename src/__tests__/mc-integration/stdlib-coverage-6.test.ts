@@ -90,7 +90,6 @@ async function getSingleEntity(selector: string) {
 
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping stdlib coverage 6 integration tests')
     return
   }
 
@@ -107,7 +106,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping stdlib coverage 6 tests`)
     return
   }
 
@@ -116,10 +114,6 @@ beforeAll(async () => {
     botOnline = status.connected === true
   } catch {
     botOnline = false
-  }
-
-  if (!botOnline) {
-    console.warn('⚠ TestBot not running — player-dependent coverage 6 tests will be skipped')
   }
 
   for (const tagFile of [
@@ -373,7 +367,7 @@ beforeAll(async () => {
 
 describe('stdlib coverage 6 — interactions', () => {
   test('interactions_init creates scoreboard objectives', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set #inter_init_done sc6_result 0')
     await mc.command('/function stdlib_interactions6_test:test_interactions_init')
@@ -391,7 +385,7 @@ describe('stdlib coverage 6 — interactions', () => {
   }, 30_000)
 
   test('example_right_click consumes click and emits chat', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.reset()
     await mc.command(`/scoreboard players set ${BOT_NAME} rs.click 0`)
@@ -405,7 +399,7 @@ describe('stdlib coverage 6 — interactions', () => {
   }, 30_000)
 
   test('is_sneaking returns 1 when rs.sneak > 0', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command('/scoreboard players set #inter_is_sneaking sc6_result 0')
     await mc.command('/function stdlib_interactions6_test:test_is_sneaking')
@@ -416,7 +410,7 @@ describe('stdlib coverage 6 — interactions', () => {
   }, 30_000)
 
   test('on_sneak_start tags only fresh sneakers', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command(`tag ${BOT_NAME} remove rs.sneak_start`).catch(() => {})
     await mc.command('/function stdlib_interactions6_test:test_on_sneak_start')
@@ -427,7 +421,7 @@ describe('stdlib coverage 6 — interactions', () => {
   }, 30_000)
 
   test('check_look_up/down/straight set tags from player pitch', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command(`tag ${BOT_NAME} remove rs.look_up`).catch(() => {})
     await mc.command(`tag ${BOT_NAME} remove rs.look_down`).catch(() => {})
@@ -453,7 +447,7 @@ describe('stdlib coverage 6 — interactions', () => {
   }, 30_000)
 
   test('check_holding_item advertises manual execute-if-data path', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.reset()
     await mc.command('/scoreboard players set #inter_holding_done sc6_result 0')
@@ -466,7 +460,7 @@ describe('stdlib coverage 6 — interactions', () => {
   }, 30_000)
 
   test('on_right_click resets rs.click and tags player', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command(`tag ${BOT_NAME} remove rs.clicked`).catch(() => {})
     await mc.command(`/scoreboard players set ${BOT_NAME} rs.click 0`)
@@ -480,7 +474,7 @@ describe('stdlib coverage 6 — interactions', () => {
   }, 30_000)
 
   test('on_sneak_click tags combo users and normal clickers separately', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command(`tag ${BOT_NAME} remove rs.sneak_click`).catch(() => {})
     await mc.command(`tag ${BOT_NAME} remove rs.clicked`).catch(() => {})
@@ -501,7 +495,7 @@ describe('stdlib coverage 6 — interactions', () => {
   }, 30_000)
 
   test('on_double_sneak tags player when within the double-tap window', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command(`tag ${BOT_NAME} remove rs.double_sneak`).catch(() => {})
     await mc.command('/function stdlib_interactions6_test:test_on_double_sneak')
@@ -519,7 +513,7 @@ describe('stdlib coverage 6 — inventory', () => {
   })
 
   test('clear_inventory removes items from TestBot', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command(`give ${BOT_NAME} minecraft:diamond 4`)
     await botPost('/wait', { ticks: 10 })
@@ -532,7 +526,7 @@ describe('stdlib coverage 6 — inventory', () => {
   }, 30_000)
 
   test('give_kit_warrior gives sword, armor, shield, and food', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command('/function stdlib_inventory6_test:test_give_kit_warrior')
     await botPost('/wait', { ticks: 10 })
@@ -546,7 +540,7 @@ describe('stdlib coverage 6 — inventory', () => {
   }, 30_000)
 
   test('give_kit_archer gives bow, arrows, armor, and food', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command('/function stdlib_inventory6_test:test_give_kit_archer')
     await botPost('/wait', { ticks: 10 })
@@ -560,7 +554,7 @@ describe('stdlib coverage 6 — inventory', () => {
   }, 30_000)
 
   test('give_kit_mage gives sword, pearls, apples, potion, and food', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command('/function stdlib_inventory6_test:test_give_kit_mage')
     await botPost('/wait', { ticks: 10 })
@@ -573,7 +567,7 @@ describe('stdlib coverage 6 — inventory', () => {
   }, 30_000)
 
   test('remove_item clears a specific item while leaving others', async () => {
-    if (!serverOnline || !botOnline) { console.warn('  SKIP: server or TestBot offline'); return }
+    if (!serverOnline || !botOnline) return
 
     await mc.command('/function stdlib_inventory6_test:test_give_kit_archer')
     await botPost('/wait', { ticks: 10 })
@@ -595,7 +589,7 @@ describe('stdlib coverage 6 — world', () => {
   })
 
   test('set_noon sets daytime to 6000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set #world_time_noon sc6_result 0')
     await mc.command('/function stdlib_world6_test:test_set_noon')
@@ -606,7 +600,7 @@ describe('stdlib coverage 6 — world', () => {
   }, 30_000)
 
   test('set_midnight sets daytime to 18000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set #world_time_midnight sc6_result 0')
     await mc.command('/function stdlib_world6_test:test_set_midnight')
@@ -617,7 +611,7 @@ describe('stdlib coverage 6 — world', () => {
   }, 30_000)
 
   test('weather_rain, weather_thunder, and gamerule toggles execute cleanly', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     for (const player of ['#weather_rain_done', '#weather_thunder_done', '#mob_griefing_done', '#fire_tick_done']) {
       await mc.command(`/scoreboard players set ${player} sc6_result 0`)
@@ -636,7 +630,7 @@ describe('stdlib coverage 6 — world', () => {
   }, 30_000)
 
   test('barrier_wall fills the requested cuboid with barriers', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_world6_test:test_barrier_wall')
     await mc.ticks(3)
@@ -646,7 +640,7 @@ describe('stdlib coverage 6 — world', () => {
   }, 30_000)
 
   test('clear_area replaces blocks with air', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/fill 0 70 0 1 71 1 minecraft:stone')
     await mc.command('/function stdlib_world6_test:test_clear_area')
@@ -657,7 +651,7 @@ describe('stdlib coverage 6 — world', () => {
   }, 30_000)
 
   test('glass_box leaves a hollow air interior', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_world6_test:test_glass_box')
     await mc.ticks(3)
@@ -668,7 +662,7 @@ describe('stdlib coverage 6 — world', () => {
   }, 30_000)
 
   test('sun_altitude at midnight is -900000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set #sun_alt_midnight sc6_result 0')
     await mc.command('/function stdlib_world6_test:test_sun_altitude_midnight')
@@ -692,7 +686,7 @@ describe('stdlib coverage 6 — particles', () => {
   ] as const
 
   test.each(particleCases)('%s executes without runtime errors on a live server', async (_label, player, command) => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command(`/scoreboard players set ${player} sc6_result 0`)
     await mc.command(command)
@@ -711,7 +705,7 @@ describe('stdlib coverage 6 — spawn', () => {
   })
 
   test('teleport_to_entity moves the source entity onto the destination', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/summon minecraft:armor_stand 1 64 1 {NoGravity:1b,Tags:["sc6_spawn_src"]}')
     await mc.command('/summon minecraft:armor_stand 7 70 9 {NoGravity:1b,Tags:["sc6_spawn_dst"]}')
@@ -728,7 +722,7 @@ describe('stdlib coverage 6 — spawn', () => {
   }, 30_000)
 
   test('spread_players emits its placeholder chat message', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.reset()
     await mc.command('/scoreboard players set #spawn_spread_done sc6_result 0')
@@ -740,7 +734,7 @@ describe('stdlib coverage 6 — spawn', () => {
   }, 30_000)
 
   test('launch_up moves the target upward by the requested relative height', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/summon minecraft:armor_stand 3 64 3 {NoGravity:1b,Tags:["sc6_launch_target"]}')
     await mc.command('/scoreboard players set #spawn_launch_done sc6_result 0')

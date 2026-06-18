@@ -53,7 +53,6 @@ function writeFixture(source: string, namespace: string): void {
 
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping syntax-coverage integration tests')
     return
   }
 
@@ -70,7 +69,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running — all syntax-coverage tests will be skipped`)
     return
   }
 

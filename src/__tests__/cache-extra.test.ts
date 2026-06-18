@@ -152,18 +152,28 @@ describe('FileCache — save/load', () => {
   })
 
   test('load silently ignores missing cache file', () => {
-    const tmp = makeTmpDir()
-    const cache = new FileCache(tmp)
-    expect(() => cache.load()).not.toThrow()
-    expect(cache.size).toBe(0)
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const tmp = makeTmpDir()
+      const cache = new FileCache(tmp)
+      expect(() => cache.load()).not.toThrow()
+      expect(cache.size).toBe(0)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   test('load silently ignores corrupt cache file', () => {
-    const tmp = makeTmpDir()
-    fs.writeFileSync(path.join(tmp, 'cache.json'), 'not valid json{{{')
-    const cache = new FileCache(tmp)
-    expect(() => cache.load()).not.toThrow()
-    expect(cache.size).toBe(0)
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const tmp = makeTmpDir()
+      fs.writeFileSync(path.join(tmp, 'cache.json'), 'not valid json{{{')
+      const cache = new FileCache(tmp)
+      expect(() => cache.load()).not.toThrow()
+      expect(cache.size).toBe(0)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   test('load ignores wrong version', () => {

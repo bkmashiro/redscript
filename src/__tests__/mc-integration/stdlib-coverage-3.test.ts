@@ -67,7 +67,6 @@ function readStdlib(name: string): string {
 
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping stdlib-coverage-3 integration tests')
     return
   }
 
@@ -84,7 +83,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping stdlib-coverage-3 tests`)
     return
   }
 
@@ -494,7 +492,7 @@ beforeAll(async () => {
 
 describe('MC Integration — stdlib: sort.mcrs', () => {
   test('insertion_sort: [30,10,50,20,40] → arr[0]==10', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#sort_ins_asc_0" stdlib3_result 0')
     await mc.command('/function stdlib_sort_test:test_insertion_sort_asc')
     await mc.ticks(3)
@@ -504,7 +502,7 @@ describe('MC Integration — stdlib: sort.mcrs', () => {
   }, 30_000)
 
   test('insertion_sort: [30,10,50,20,40] → arr[4]==50', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#sort_ins_asc_4" stdlib3_result 0')
     await mc.command('/function stdlib_sort_test:test_insertion_sort_asc')
     await mc.ticks(3)
@@ -514,7 +512,7 @@ describe('MC Integration — stdlib: sort.mcrs', () => {
   }, 30_000)
 
   test('insertion_sort_desc: arr[0]==50 (largest first)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#sort_ins_desc_0" stdlib3_result 0')
     await mc.command('/function stdlib_sort_test:test_insertion_sort_desc')
     await mc.ticks(3)
@@ -524,7 +522,7 @@ describe('MC Integration — stdlib: sort.mcrs', () => {
   }, 30_000)
 
   test('insertion_sort_desc: arr[4]==10 (smallest last)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#sort_ins_desc_4" stdlib3_result 0')
     await mc.command('/function stdlib_sort_test:test_insertion_sort_desc')
     await mc.ticks(3)
@@ -534,7 +532,7 @@ describe('MC Integration — stdlib: sort.mcrs', () => {
   }, 30_000)
 
   test('sort_merge: merged[0]==10 (min of both)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#sort_merge_0" stdlib3_result 0')
     await mc.command('/function stdlib_sort_test:test_sort_merge')
     await mc.ticks(3)
@@ -544,7 +542,7 @@ describe('MC Integration — stdlib: sort.mcrs', () => {
   }, 30_000)
 
   test('sort_merge: merged[5]==60 (max of both)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#sort_merge_5" stdlib3_result 0')
     await mc.command('/function stdlib_sort_test:test_sort_merge')
     await mc.ticks(3)
@@ -554,7 +552,7 @@ describe('MC Integration — stdlib: sort.mcrs', () => {
   }, 30_000)
 
   test('sort_merge: merged length == 6', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#sort_merge_len" stdlib3_result 0')
     await mc.command('/function stdlib_sort_test:test_sort_merge')
     await mc.ticks(3)
@@ -564,7 +562,7 @@ describe('MC Integration — stdlib: sort.mcrs', () => {
   }, 30_000)
 
   test('insertion_sort single element: [42] unchanged', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#sort_single" stdlib3_result 0')
     await mc.command('/function stdlib_sort_test:test_insertion_sort_single')
     await mc.ticks(3)
@@ -574,7 +572,7 @@ describe('MC Integration — stdlib: sort.mcrs', () => {
   }, 30_000)
 
   test('insertion_sort already sorted: first=1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#sort_presorted_0" stdlib3_result 0')
     await mc.command('/function stdlib_sort_test:test_insertion_sort_already_sorted')
     await mc.ticks(3)
@@ -590,7 +588,7 @@ describe('MC Integration — stdlib: sort.mcrs', () => {
 
 describe('MC Integration — stdlib: bits.mcrs', () => {
   test('bit_and(12, 10) == 8', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#bits_and" stdlib3_result 0')
     await mc.command('/function stdlib_bits_test:test_bit_and')
     await mc.ticks(3)
@@ -600,7 +598,7 @@ describe('MC Integration — stdlib: bits.mcrs', () => {
   }, 30_000)
 
   test('bit_or(12, 10) == 14', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#bits_or" stdlib3_result 0')
     await mc.command('/function stdlib_bits_test:test_bit_or')
     await mc.ticks(3)
@@ -610,7 +608,7 @@ describe('MC Integration — stdlib: bits.mcrs', () => {
   }, 30_000)
 
   test('bit_xor(12, 10) == 6', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#bits_xor" stdlib3_result 0')
     await mc.command('/function stdlib_bits_test:test_bit_xor')
     await mc.ticks(3)
@@ -620,7 +618,7 @@ describe('MC Integration — stdlib: bits.mcrs', () => {
   }, 30_000)
 
   test('bit_shl(1, 4) == 16', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#bits_shl" stdlib3_result 0')
     await mc.command('/function stdlib_bits_test:test_bit_shl')
     await mc.ticks(3)
@@ -630,7 +628,7 @@ describe('MC Integration — stdlib: bits.mcrs', () => {
   }, 30_000)
 
   test('bit_shr(16, 2) == 4', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#bits_shr" stdlib3_result 0')
     await mc.command('/function stdlib_bits_test:test_bit_shr')
     await mc.ticks(3)
@@ -640,7 +638,7 @@ describe('MC Integration — stdlib: bits.mcrs', () => {
   }, 30_000)
 
   test('bit_get(8, 3) == 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#bits_get" stdlib3_result 0')
     await mc.command('/function stdlib_bits_test:test_bit_get')
     await mc.ticks(3)
@@ -650,7 +648,7 @@ describe('MC Integration — stdlib: bits.mcrs', () => {
   }, 30_000)
 
   test('bit_set(0, 2) == 4', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#bits_set" stdlib3_result 0')
     await mc.command('/function stdlib_bits_test:test_bit_set')
     await mc.ticks(3)
@@ -660,7 +658,7 @@ describe('MC Integration — stdlib: bits.mcrs', () => {
   }, 30_000)
 
   test('bit_clear(8, 3) == 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#bits_clear" stdlib3_result 0')
     await mc.command('/function stdlib_bits_test:test_bit_clear')
     await mc.ticks(3)
@@ -670,7 +668,7 @@ describe('MC Integration — stdlib: bits.mcrs', () => {
   }, 30_000)
 
   test('popcount(7) == 3', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#bits_popcount" stdlib3_result 0')
     await mc.command('/function stdlib_bits_test:test_popcount')
     await mc.ticks(3)
@@ -686,7 +684,7 @@ describe('MC Integration — stdlib: bits.mcrs', () => {
 
 describe('MC Integration — stdlib: math.mcrs', () => {
   test('abs(42) == 42', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_abs_pos" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_abs_positive')
     await mc.ticks(3)
@@ -696,7 +694,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('abs(-99) == 99', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_abs_neg" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_abs_negative')
     await mc.ticks(3)
@@ -706,7 +704,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('min(7, 3) == 3', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_min" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_min')
     await mc.ticks(3)
@@ -716,7 +714,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('max(7, 3) == 7', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_max" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_max')
     await mc.ticks(3)
@@ -726,7 +724,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('clamp(-5, 0, 100) == 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_clamp_low" stdlib3_result 999')
     await mc.command('/function stdlib_math_test:test_clamp_below')
     await mc.ticks(3)
@@ -736,7 +734,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('clamp(150, 0, 100) == 100', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_clamp_high" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_clamp_above')
     await mc.ticks(3)
@@ -746,7 +744,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('lerp(0, 1000, 500) == 500', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_lerp_mid" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_lerp_mid')
     await mc.ticks(3)
@@ -756,7 +754,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('lerp(100, 200, 1000) == 200', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_lerp_full" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_lerp_full')
     await mc.ticks(3)
@@ -766,7 +764,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('isqrt(25) == 5', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_isqrt" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_isqrt')
     await mc.ticks(3)
@@ -776,7 +774,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('pow_int(2, 10) == 1024', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_pow" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_pow_int')
     await mc.ticks(3)
@@ -786,7 +784,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
   }, 30_000)
 
   test('gcd(12, 8) == 4', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#math_gcd" stdlib3_result 0')
     await mc.command('/function stdlib_math_test:test_gcd')
     await mc.ticks(3)
@@ -802,7 +800,7 @@ describe('MC Integration — stdlib: math.mcrs', () => {
 
 describe('MC Integration — stdlib: random.mcrs', () => {
   test('next_lcg(12345) is non-zero', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#rand_lcg" stdlib3_result 0')
     await mc.command('/function stdlib_random_test:test_next_lcg_nonzero')
     await mc.ticks(3)
@@ -812,7 +810,7 @@ describe('MC Integration — stdlib: random.mcrs', () => {
   }, 30_000)
 
   test('random_range produces value in [0, 10)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#rand_range" stdlib3_result -1')
     await mc.command('/function stdlib_random_test:test_random_range')
     await mc.ticks(3)
@@ -823,7 +821,7 @@ describe('MC Integration — stdlib: random.mcrs', () => {
   }, 30_000)
 
   test('random_bool returns 0 or 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#rand_bool" stdlib3_result -1')
     await mc.command('/function stdlib_random_test:test_random_bool')
     await mc.ticks(3)
@@ -833,7 +831,7 @@ describe('MC Integration — stdlib: random.mcrs', () => {
   }, 30_000)
 
   test('random_range deterministic: same seed → same result', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#rand_det" stdlib3_result -1')
     await mc.command('/function stdlib_random_test:test_random_range_deterministic')
     await mc.ticks(3)
@@ -852,7 +850,7 @@ describe('MC Integration — stdlib: random.mcrs', () => {
 
 describe('MC Integration — stdlib: timer.mcrs', () => {
   test('tick_to_seconds(40) == 2', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#timer_to_sec" stdlib3_result 0')
     await mc.command('/function stdlib_timer_test:test_tick_to_seconds')
     await mc.ticks(3)
@@ -862,7 +860,7 @@ describe('MC Integration — stdlib: timer.mcrs', () => {
   }, 30_000)
 
   test('tick_to_ms(10) == 500', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#timer_to_ms" stdlib3_result 0')
     await mc.command('/function stdlib_timer_test:test_tick_to_ms')
     await mc.ticks(3)
@@ -872,7 +870,7 @@ describe('MC Integration — stdlib: timer.mcrs', () => {
   }, 30_000)
 
   test('seconds_to_ticks(3) == 60', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#timer_to_ticks" stdlib3_result 0')
     await mc.command('/function stdlib_timer_test:test_seconds_to_ticks')
     await mc.ticks(3)
@@ -882,7 +880,7 @@ describe('MC Integration — stdlib: timer.mcrs', () => {
   }, 30_000)
 
   test('format_time_s(100) == 5', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#timer_fmt_s" stdlib3_result 0')
     await mc.command('/function stdlib_timer_test:test_format_time_s')
     await mc.ticks(3)
@@ -892,7 +890,7 @@ describe('MC Integration — stdlib: timer.mcrs', () => {
   }, 30_000)
 
   test('format_time_m(1200) == 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#timer_fmt_m" stdlib3_result 0')
     await mc.command('/function stdlib_timer_test:test_format_time_m')
     await mc.ticks(3)
@@ -908,7 +906,7 @@ describe('MC Integration — stdlib: timer.mcrs', () => {
 
 describe('MC Integration — stdlib: cooldown.mcrs', () => {
   test('cooldown_ready returns 0 immediately after cooldown_start', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#cd_not_ready" stdlib3_result -1')
     await mc.command('/function stdlib_cooldown_test:test_cooldown_start_and_not_ready')
     await mc.ticks(3)
@@ -918,7 +916,7 @@ describe('MC Integration — stdlib: cooldown.mcrs', () => {
   }, 30_000)
 
   test('cooldown_ready returns 1 after all ticks expired', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#cd_expired" stdlib3_result -1')
     await mc.command('/function stdlib_cooldown_test:test_cooldown_tick_and_expire')
     await mc.ticks(3)
@@ -928,7 +926,7 @@ describe('MC Integration — stdlib: cooldown.mcrs', () => {
   }, 30_000)
 
   test('cooldown_ready returns 1 when no cooldown active', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#cd_fresh" stdlib3_result -1')
     await mc.command('/function stdlib_cooldown_test:test_cooldown_ready_initially')
     await mc.ticks(3)
@@ -944,7 +942,7 @@ describe('MC Integration — stdlib: cooldown.mcrs', () => {
 
 describe('MC Integration — stdlib: list.mcrs', () => {
   test('sort2_min(7, 3) == 3', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_sort2_min" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_sort2_min')
     await mc.ticks(3)
@@ -954,7 +952,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('sort2_max(7, 3) == 7', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_sort2_max" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_sort2_max')
     await mc.ticks(3)
@@ -964,7 +962,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_min3(5, 1, 9) == 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_min3" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_list_min3')
     await mc.ticks(3)
@@ -974,7 +972,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_max3(5, 1, 9) == 9', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_max3" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_list_max3')
     await mc.ticks(3)
@@ -984,7 +982,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_sum5(1,2,3,4,5) == 15', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_sum5" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_list_sum5')
     await mc.ticks(3)
@@ -994,7 +992,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('avg3(10, 20, 30) == 20', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_avg3" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_avg3')
     await mc.ticks(3)
@@ -1004,7 +1002,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('sort3(9,3,6, pos=0) == 3 (min)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_sort3_min" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_sort3_min')
     await mc.ticks(3)
@@ -1014,7 +1012,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('sort3(9,3,6, pos=2) == 9 (max)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_sort3_max" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_sort3_max')
     await mc.ticks(3)
@@ -1024,7 +1022,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_sum([10,20,30,40], 4) == 100', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_sum_dyn" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_list_sum_dynamic')
     await mc.ticks(3)
@@ -1034,7 +1032,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_min([50,10,30,20], 4) == 10', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_min_dyn" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_list_min_dynamic')
     await mc.ticks(3)
@@ -1044,7 +1042,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_max([50,10,30,20], 4) == 50', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_max_dyn" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_list_max_dynamic')
     await mc.ticks(3)
@@ -1054,7 +1052,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_contains([10,20,30], 3, 20) == 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_contains_yes" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_list_contains_yes')
     await mc.ticks(3)
@@ -1064,7 +1062,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_contains([10,20,30], 3, 99) == 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_contains_no" stdlib3_result -1')
     await mc.command('/function stdlib_list_test:test_list_contains_no')
     await mc.ticks(3)
@@ -1074,7 +1072,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_index_of([10,20,30], 3, 20) == 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_index_of" stdlib3_result -1')
     await mc.command('/function stdlib_list_test:test_list_index_of')
     await mc.ticks(3)
@@ -1084,7 +1082,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_sort_asc([40,10,30,20]) → arr[0]==10', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_sort_asc_0" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_list_sort_asc')
     await mc.ticks(3)
@@ -1094,7 +1092,7 @@ describe('MC Integration — stdlib: list.mcrs', () => {
   }, 30_000)
 
   test('list_sort_asc([40,10,30,20]) → arr[3]==40', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set "#list_sort_asc_3" stdlib3_result 0')
     await mc.command('/function stdlib_list_test:test_list_sort_asc')
     await mc.ticks(3)

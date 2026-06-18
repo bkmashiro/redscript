@@ -90,7 +90,6 @@ async function botGet(endpoint: string): Promise<any> {
 
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping ItemUse/EntityKill integration tests')
     return
   }
 
@@ -108,7 +107,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping ItemUse/EntityKill tests`)
     return
   }
 
@@ -118,10 +116,6 @@ beforeAll(async () => {
     botOnline = data.connected === true
   } catch {
     botOnline = false
-  }
-
-  if (!botOnline) {
-    console.warn('⚠ TestBot not running — event-trigger tests will be skipped')
   }
 
   // ── Compile & deploy ──────────────────────────────────────────────────────
@@ -169,7 +163,6 @@ beforeAll(async () => {
 describe('MC Integration — ItemUse event (@on(ItemUse))', () => {
   test('datapack loads without error', async () => {
     if (!serverOnline) {
-      console.warn('  SKIP: server offline')
       return
     }
     // If reload succeeded in beforeAll, server is healthy
@@ -179,7 +172,6 @@ describe('MC Integration — ItemUse event (@on(ItemUse))', () => {
 
   test('ItemUse: simulating stat increment fires on_item_use handler (+1 to rs.item_use)', async () => {
     if (!serverOnline || !botOnline) {
-      console.warn('  SKIP: server or TestBot offline')
       return
     }
 
@@ -205,7 +197,6 @@ describe('MC Integration — ItemUse event (@on(ItemUse))', () => {
 
   test('ItemUse: multiple triggers accumulate correctly', async () => {
     if (!serverOnline || !botOnline) {
-      console.warn('  SKIP: server or TestBot offline')
       return
     }
 
@@ -229,7 +220,6 @@ describe('MC Integration — ItemUse event (@on(ItemUse))', () => {
 describe('MC Integration — EntityKill event (@on(EntityKill))', () => {
   test('EntityKill: simulating kill stat fires on_entity_kill handler (+1 to rs.kills)', async () => {
     if (!serverOnline || !botOnline) {
-      console.warn('  SKIP: server or TestBot offline')
       return
     }
 
@@ -249,7 +239,6 @@ describe('MC Integration — EntityKill event (@on(EntityKill))', () => {
 
   test('EntityKill: spawning and killing an armor stand increments rs.kills via real kill', async () => {
     if (!serverOnline || !botOnline) {
-      console.warn('  SKIP: server or TestBot offline')
       return
     }
 
@@ -283,7 +272,6 @@ describe('MC Integration — EntityKill event (@on(EntityKill))', () => {
 
   test('EntityKill: multiple kills accumulate correctly', async () => {
     if (!serverOnline || !botOnline) {
-      console.warn('  SKIP: server or TestBot offline')
       return
     }
 

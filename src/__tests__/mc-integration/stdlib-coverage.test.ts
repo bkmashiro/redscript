@@ -67,7 +67,6 @@ function readStdlib(name: string): string {
 
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping stdlib coverage integration tests')
     return
   }
 
@@ -84,7 +83,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping stdlib coverage tests`)
     return
   }
 
@@ -315,7 +313,7 @@ beforeAll(async () => {
 
 describe('MC Integration — stdlib: vec.mcrs', () => {
   test('dot2d(3,4, 3,4) == 25', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set #stdlib_vec stdlib_result 0')
     await mc.command('/function stdlib_vec_test:test_dot2d')
@@ -327,7 +325,7 @@ describe('MC Integration — stdlib: vec.mcrs', () => {
   }, 30_000)
 
   test('dot3d(3,4,0, 3,4,0) == 25', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_vec3d_dot" stdlib_result 0')
     await mc.command('/function stdlib_vec_test:test_dot3d')
@@ -339,7 +337,7 @@ describe('MC Integration — stdlib: vec.mcrs', () => {
   }, 30_000)
 
   test('length2d_fixed(3,4) == 5000 (√25 × 1000)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_vec_len2d" stdlib_result 0')
     await mc.command('/function stdlib_vec_test:test_length2d')
@@ -352,7 +350,7 @@ describe('MC Integration — stdlib: vec.mcrs', () => {
   }, 30_000)
 
   test('length3d_fixed(3,4,0) == 5000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_vec_len3d" stdlib_result 0')
     await mc.command('/function stdlib_vec_test:test_length3d')
@@ -365,7 +363,7 @@ describe('MC Integration — stdlib: vec.mcrs', () => {
   }, 30_000)
 
   test('add3d x/y/z component-wise addition', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_vec_test:test_add3d')
     await mc.ticks(3)
@@ -380,7 +378,7 @@ describe('MC Integration — stdlib: vec.mcrs', () => {
   }, 30_000)
 
   test('sub3d_x(10, 3) == 7', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_vec_test:test_sub3d')
     await mc.ticks(3)
@@ -391,7 +389,7 @@ describe('MC Integration — stdlib: vec.mcrs', () => {
   }, 30_000)
 
   test('scale3d_x(2000, 500) == 1000 (2.0 × 0.5 = 1.0, fixed ×1000)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_vec_test:test_scale3d')
     await mc.ticks(3)
@@ -408,7 +406,7 @@ describe('MC Integration — stdlib: vec.mcrs', () => {
 
 describe('MC Integration — stdlib: color.mcrs', () => {
   test('rgb_pack(255, 128, 0) == 255*65536 + 128*256 + 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_color_pack" stdlib_result 0')
     await mc.command('/function stdlib_color_test:test_rgb_pack')
@@ -421,7 +419,7 @@ describe('MC Integration — stdlib: color.mcrs', () => {
   }, 30_000)
 
   test('rgb_r(rgb_pack(255,128,64)) round-trips to 255', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_color_test:test_rgb_r')
     await mc.ticks(3)
@@ -432,7 +430,7 @@ describe('MC Integration — stdlib: color.mcrs', () => {
   }, 30_000)
 
   test('rgb_g(rgb_pack(255,128,64)) round-trips to 128', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_color_test:test_rgb_g')
     await mc.ticks(3)
@@ -443,7 +441,7 @@ describe('MC Integration — stdlib: color.mcrs', () => {
   }, 30_000)
 
   test('rgb_b(rgb_pack(255,128,64)) round-trips to 64', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_color_test:test_rgb_b')
     await mc.ticks(3)
@@ -462,7 +460,7 @@ describe('MC Integration — stdlib: easing.mcrs', () => {
   // Scale: t ∈ [0, 10000] (×10000 fixed-point)
 
   test('ease_in_quad(0) == 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_ease_quad0" stdlib_result -1')
     await mc.command('/function stdlib_easing_test:test_ease_in_quad_0')
@@ -474,7 +472,7 @@ describe('MC Integration — stdlib: easing.mcrs', () => {
   }, 30_000)
 
   test('ease_in_quad(10000) == 10000 (t=1.0 → output=1.0)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_ease_quad1" stdlib_result -1')
     await mc.command('/function stdlib_easing_test:test_ease_in_quad_10000')
@@ -486,7 +484,7 @@ describe('MC Integration — stdlib: easing.mcrs', () => {
   }, 30_000)
 
   test('ease_in_quad(5000) ≈ 2500 (t=0.5 → t²=0.25)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_ease_quad_half" stdlib_result -1')
     await mc.command('/function stdlib_easing_test:test_ease_in_quad_5000')
@@ -499,7 +497,7 @@ describe('MC Integration — stdlib: easing.mcrs', () => {
   }, 30_000)
 
   test('ease_out_quad(0) == 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_ease_out_quad0" stdlib_result -1')
     await mc.command('/function stdlib_easing_test:test_ease_out_quad_0')
@@ -511,7 +509,7 @@ describe('MC Integration — stdlib: easing.mcrs', () => {
   }, 30_000)
 
   test('ease_out_quad(10000) == 10000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_ease_out_quad1" stdlib_result -1')
     await mc.command('/function stdlib_easing_test:test_ease_out_quad_10000')
@@ -523,7 +521,7 @@ describe('MC Integration — stdlib: easing.mcrs', () => {
   }, 30_000)
 
   test('ease_linear(7500) == 7500 (identity)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_ease_linear" stdlib_result -1')
     await mc.command('/function stdlib_easing_test:test_ease_linear')
@@ -541,7 +539,7 @@ describe('MC Integration — stdlib: easing.mcrs', () => {
 
 describe('MC Integration — stdlib: geometry.mcrs', () => {
   test('aabb_contains: point (5,5,5) inside [0,0,0]–[10,10,10] → 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_aabb_in" stdlib_result -1')
     await mc.command('/function stdlib_geom_test:test_aabb_inside')
@@ -553,7 +551,7 @@ describe('MC Integration — stdlib: geometry.mcrs', () => {
   }, 30_000)
 
   test('aabb_contains: point (15,5,5) outside [0,0,0]–[10,10,10] → 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_aabb_out" stdlib_result -1')
     await mc.command('/function stdlib_geom_test:test_aabb_outside')
@@ -565,7 +563,7 @@ describe('MC Integration — stdlib: geometry.mcrs', () => {
   }, 30_000)
 
   test('sphere_contains: (6,8,0) on boundary of sphere r=10 at origin → 1 (≤)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_sphere_in" stdlib_result -1')
     await mc.command('/function stdlib_geom_test:test_sphere_inside')
@@ -577,7 +575,7 @@ describe('MC Integration — stdlib: geometry.mcrs', () => {
   }, 30_000)
 
   test('sphere_contains: (11,0,0) outside sphere r=10 → 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_sphere_out" stdlib_result -1')
     await mc.command('/function stdlib_geom_test:test_sphere_outside')
@@ -589,7 +587,7 @@ describe('MC Integration — stdlib: geometry.mcrs', () => {
   }, 30_000)
 
   test('midpoint(4, 10) == 7', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_midpoint" stdlib_result -1')
     await mc.command('/function stdlib_geom_test:test_midpoint')
@@ -607,7 +605,7 @@ describe('MC Integration — stdlib: geometry.mcrs', () => {
 
 describe('MC Integration — stdlib: combat.mcrs', () => {
   test('weapon_damage(10, 5) == 15', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_combat_dmg" stdlib_result -1')
     await mc.command('/function stdlib_combat_test:test_weapon_damage')
@@ -619,7 +617,7 @@ describe('MC Integration — stdlib: combat.mcrs', () => {
   }, 30_000)
 
   test('apply_damage: health 100 - 30 == 70', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard objectives add health dummy').catch(() => {})
     await mc.command('/function stdlib_combat_test:test_apply_damage')
@@ -631,7 +629,7 @@ describe('MC Integration — stdlib: combat.mcrs', () => {
   }, 30_000)
 
   test('apply_damage: damage exceeds health → clamped to 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard objectives add health dummy').catch(() => {})
     await mc.command('/function stdlib_combat_test:test_apply_damage_clamp')
@@ -649,7 +647,7 @@ describe('MC Integration — stdlib: combat.mcrs', () => {
 
 describe('MC Integration — stdlib: noise.mcrs', () => {
   test('hash_1d(42) returns a non-zero int (no crash)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_noise_hash" stdlib_result 0')
     await mc.command('/function stdlib_noise_test:test_hash_1d')
@@ -663,7 +661,7 @@ describe('MC Integration — stdlib: noise.mcrs', () => {
   }, 30_000)
 
   test('hash_1d_pos(42) ∈ [0, 10000]', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#stdlib_noise_hash_pos" stdlib_result -1')
     await mc.command('/function stdlib_noise_test:test_hash_1d_pos')
@@ -676,7 +674,7 @@ describe('MC Integration — stdlib: noise.mcrs', () => {
   }, 30_000)
 
   test('value_noise_1d is deterministic (same input → same output)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_noise_test:test_value_noise_deterministic_a')
     await mc.ticks(3)
@@ -691,7 +689,7 @@ describe('MC Integration — stdlib: noise.mcrs', () => {
   }, 30_000)
 
   test('value_noise_1d result ∈ [0, 10000]', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/function stdlib_noise_test:test_value_noise_range')
     await mc.ticks(3)

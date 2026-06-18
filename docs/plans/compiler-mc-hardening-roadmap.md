@@ -397,7 +397,7 @@ npm run build
 npm run validate-mc
 ```
 
-Status: Phase 6 is closed for the current hardening pass. Phase 7 (event runtime manifest boundary) is now underway and keeps gameplay behavior on the stdlib/runtime boundary.
+Status: Phase 6 is closed for the current hardening pass. Phase 7 (event runtime manifest boundary) is now implemented, and Phase 8 (runtime-asset stage extraction) keeps event-runtime behavior isolated and test-driven.
 
 ## Phase 7 — Event runtime manifest boundary
 
@@ -417,6 +417,24 @@ Future sugar work should open a new phase/slice with a specific behavior oracle 
 
 ---
 
+## Phase 8 — Runtime asset planner/merge stage extraction
+
+Status: ✅ Implemented in code, with focused coverage and `compile()` wired through the extracted helpers.
+
+- [x] Extract runtime event planning from `compile()` into `planEventRuntimeAssets(program, options)`.
+- [x] Add `mergeRuntimeAssetsStage(ast, options)` to resolve runtime asset paths, parse+merge runtime sources, and report event/asset metadata.
+- [x] Preserve safe path resolution order (package-owned compiler assets before cwd), with a clear diagnostic if a required runtime asset is missing.
+- [x] Update the compile pipeline to consume the extracted stage and preserve behavior.
+- [x] Add focused helper coverage for planner determinism, merge behavior, and no-op/no-handler cases.
+
+Verification for Phase 8:
+
+```bash
+npm test -- src/__tests__/emit/compile.test.ts src/__tests__/events-manifest.test.ts src/__tests__/e2e/events-stdlib.test.ts --runInBand --testTimeout=120000
+```
+
+---
+
 ## Decision rules for future agents
 
 - Prefer test/oracle hardening before broad refactors.
@@ -433,8 +451,8 @@ Future sugar work should open a new phase/slice with a specific behavior oracle 
 
 The next implementation slice should be:
 
-1. Add a small runtime-asset installer/planner abstraction if future manifests need more than `src/stdlib/events.mcrs`; keep it artifact-level and test it offline first.
-2. If new gameplay behavior is needed, land the stdlib/runtime asset and live/static oracle first, then add a manifest entry that references it.
-3. Run `npm run build`, event/typechecker tests, `npm run validate-mc`, and full suite before broader event/runtime changes.
+1. Keep extracting `compile()` boundaries where behavior is now stable, with each extraction covered by stage tests and artifact shape checks.
+2. If gameplay runtime behavior continues to grow, prefer stdlib/runtime assets + manifests over compiler-hardcoded cases.
+3. Run `npm run build`, event/runtime tests, `npm run validate-mc`, and full suite before broader event/runtime changes.
 
 This keeps compiler-owned behavior limited to safe manifest validation and datapack artifact wiring.

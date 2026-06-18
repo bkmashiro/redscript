@@ -8,7 +8,9 @@ import {
   finalizeRuntimeLIRStage,
   lowerAndOptimizeStages,
   lowerToHIRStage,
+  mergeRuntimeAssetsStage,
   parseSourceStage,
+  planEventRuntimeAssets,
   preprocessSourceStage,
   runTypecheckStage,
   singletonObjectiveName,
@@ -135,6 +137,120 @@ describe('emit: compile coverage', () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true })
     }
+  })
+
+  test('planEventRuntimeAssets deduplicates and sorts runtime event types + assets', () => {
+    const source = `
+      namespace runtime_planner
+      @on(PlayerJoin) fn joined(): void {}
+      @on(PlayerDeath) fn died(): void {}
+      @on(PlayerJoin) fn greeted(): void {}
+    `
+    const ast = parseSourceStage(source, 'runtime_planner').ast
+
+    const planned = planEventRuntimeAssets(ast, {
+      manifests: [
+        {
+          name: 'PlayerJoin',
+          tag: 'rs.just_joined',
+          handlerTag: 'rs:on_player_join',
+          params: ['player: Player'],
+          detection: 'tag',
+          executorContext: { kind: 'entity', entityType: 'Player' },
+          runtimeAssets: ['src/stdlib/zeta.mcrs', 'src/stdlib/alpha.mcrs', 'src/stdlib/zeta.mcrs'],
+        },
+        {
+          name: 'PlayerDeath',
+          tag: 'rs.just_died',
+          handlerTag: 'rs:on_player_death',
+          params: ['player: Player'],
+          detection: 'scoreboard',
+          executorContext: { kind: 'entity', entityType: 'Player' },
+          runtimeAssets: ['src/stdlib/gamma.mcrs'],
+        },
+      ],
+    })
+
+    expect(planned.runtimeEventTypes).toEqual(['PlayerDeath', 'PlayerJoin'])
+    expect(planned.runtimeAssetPaths).toEqual(['src/stdlib/alpha.mcrs', 'src/stdlib/gamma.mcrs', 'src/stdlib/zeta.mcrs'])
+  })
+
+  test('mergeRuntimeAssetsStage reads and merges runtime assets through explicit resolver and deduplicates declarations', () => {
+    const source = `
+      namespace runtime_assets_merge
+      @on(PlayerJoin) fn joined(): void {}
+      fn runtime_asset(): int { return 1 }
+    `
+    const ast = parseSourceStage(source, 'runtime_assets_merge').ast
+
+    const runtimeAssetSource = `
+      fn runtime_asset(): int { return 2 }
+      fn runtime_helper(): int { return 3 }
+    `
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-runtime-assets-'))
+    try {
+      const assetDir = path.join(tmpDir, 'src', 'stdlib')
+      fs.mkdirSync(assetDir, { recursive: true })
+      const runtimeAssetPath = path.join(assetDir, 'asset.mcrs')
+      fs.writeFileSync(runtimeAssetPath, runtimeAssetSource)
+
+      const result = mergeRuntimeAssetsStage(ast, {
+        namespace: 'runtime_assets_merge',
+        sourceLines: source.split('\n'),
+        manifests: [
+          {
+            name: 'PlayerJoin',
+            tag: 'rs.just_joined',
+            handlerTag: 'rs:on_player_join',
+            params: ['player: Player'],
+            detection: 'tag',
+            executorContext: { kind: 'entity', entityType: 'Player' },
+            runtimeAssets: ['src/stdlib/asset.mcrs'],
+          },
+        ],
+        resolveRuntimeAssetPath: assetPath => path.resolve(assetDir, '..', '..', assetPath),
+      })
+
+      expect(result.runtimeEventTypes).toEqual(['PlayerJoin'])
+      expect(result.runtimeAssetPaths).toEqual(['src/stdlib/asset.mcrs'])
+      expect(result.warnings).toEqual([])
+
+      const runtimeFns = ast.declarations.filter(fn => fn.name === 'runtime_asset')
+      expect(runtimeFns).toHaveLength(1)
+      expect(ast.declarations.map(fn => fn.name)).toContain('runtime_helper')
+      const runtimeHelper = ast.declarations.find(fn => fn.name === 'runtime_helper')
+      expect(runtimeHelper?.isLibraryFn).toBe(true)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  test('mergeRuntimeAssetsStage does nothing when no runtime event decorators exist', () => {
+    const source = `
+      namespace runtime_assets_none
+      fn plain(): void {}
+    `
+    const ast = parseSourceStage(source, 'runtime_assets_none').ast
+    const result = mergeRuntimeAssetsStage(ast, {
+      namespace: 'runtime_assets_none',
+      sourceLines: source.split('\n'),
+      manifests: [
+        {
+          name: 'PlayerJoin',
+          tag: 'rs.just_joined',
+          handlerTag: 'rs:on_player_join',
+          params: ['player: Player'],
+          detection: 'tag',
+          executorContext: { kind: 'entity', entityType: 'Player' },
+          runtimeAssets: ['src/stdlib/unused.mcrs'],
+        },
+      ],
+    })
+
+    expect(result.runtimeEventTypes).toEqual([])
+    expect(result.runtimeAssetPaths).toEqual([])
+    expect(result.warnings).toEqual([])
   })
 
   test('runTypecheckStage returns typechecker warnings without emitting files', () => {

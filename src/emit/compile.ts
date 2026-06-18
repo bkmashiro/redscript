@@ -31,7 +31,7 @@ import { TypeChecker } from '../typechecker'
 import { isEventTypeName } from '../events/types'
 import type { Program } from '../ast/types'
 import type { HIRModule, HIRStruct } from '../hir/types'
-import { EVENT_RUNTIME_MANIFESTS, getAllEventRuntimeAssets } from '../events/manifest'
+import { EVENT_RUNTIME_MANIFESTS, getAllEventRuntimeAssets, type EventRuntimeManifest } from '../events/manifest'
 
 export interface CompileOptions {
   namespace?: string
@@ -105,8 +105,14 @@ export function preprocessSourceStage(
   }
 }
 
-function resolveRuntimeAssetPath(assetPath: string, sourceLines: string[], filePath?: string): string {
-  const candidates = [
+function resolveRuntimeAssetPathWithCandidateRoots(
+  assetPath: string,
+  sourceLines: string[],
+  filePath?: string,
+  options: { candidateRoots?: string[]; existsSync?: (path: string) => boolean } = {},
+): string {
+  const existsSync = options.existsSync ?? fs.existsSync
+  const candidateRoots = options.candidateRoots ?? [
     // Prefer the package/repo that owns this compiler before falling back to the
     // caller's cwd; otherwise a user project with a matching src/stdlib path
     // could shadow compiler-owned runtime assets.
@@ -115,9 +121,13 @@ function resolveRuntimeAssetPath(assetPath: string, sourceLines: string[], fileP
     process.cwd(),
   ]
 
+  const candidates = [
+    ...candidateRoots,
+  ]
+
   for (const candidate of candidates) {
     const resolved = path.resolve(candidate, assetPath)
-    if (fs.existsSync(resolved)) {
+    if (existsSync(resolved)) {
       return resolved
     }
   }
@@ -231,6 +241,80 @@ export function parseSourceStage(
 
 export interface RunTypecheckStageResult {
   warnings: string[]
+}
+
+export interface RuntimeAssetPlan {
+  runtimeEventTypes: string[]
+  runtimeAssetPaths: string[]
+}
+
+export interface MergeRuntimeAssetsStageOptions {
+  filePath?: string
+  namespace: string
+  sourceLines: string[]
+  stopAfterCheck?: boolean
+  manifests?: readonly EventRuntimeManifest[]
+  resolveRuntimeAssetPath?: (assetPath: string, sourceLines: string[], filePath?: string) => string
+  readRuntimeAssetFile?: (filePath: string, encoding: BufferEncoding) => string
+}
+
+export interface MergeRuntimeAssetsStageResult {
+  warnings: string[]
+  runtimeAssetPaths: string[]
+  runtimeEventTypes: string[]
+}
+
+export function planEventRuntimeAssets(
+  program: Program,
+  options: { manifests?: MergeRuntimeAssetsStageOptions['manifests'] } = {},
+): RuntimeAssetPlan {
+  const runtimeEventTypes = collectEventRuntimeTypesFromProgram(program)
+  const runtimeAssetPaths = [...getAllEventRuntimeAssets(
+    options.manifests ?? EVENT_RUNTIME_MANIFESTS,
+    {},
+    runtimeEventTypes,
+  )].sort()
+
+  return {
+    runtimeEventTypes: [...runtimeEventTypes].sort(),
+    runtimeAssetPaths,
+  }
+}
+
+export function mergeRuntimeAssetsStage(
+  ast: Program,
+  options: MergeRuntimeAssetsStageOptions,
+): MergeRuntimeAssetsStageResult {
+  const {
+    filePath,
+    namespace,
+    sourceLines,
+    stopAfterCheck,
+    manifests = EVENT_RUNTIME_MANIFESTS,
+    resolveRuntimeAssetPath = (assetPath, resolveSourceLines, resolveFilePath) =>
+      resolveRuntimeAssetPathWithCandidateRoots(assetPath, resolveSourceLines, resolveFilePath),
+    readRuntimeAssetFile = fs.readFileSync,
+  } = options
+
+  const warnings: string[] = []
+  const { runtimeEventTypes, runtimeAssetPaths } = planEventRuntimeAssets(ast, { manifests })
+
+  for (const assetPath of runtimeAssetPaths) {
+    const resolvedAssetPath = resolveRuntimeAssetPath(assetPath, sourceLines, filePath)
+    const assetSource = readRuntimeAssetFile(resolvedAssetPath, 'utf-8')
+    mergeParsedLibrarySource(ast, assetSource, warnings, {
+      filePath: resolvedAssetPath,
+      namespace,
+      stopAfterCheck,
+      dedupeDeclarations: true,
+    })
+  }
+
+  return {
+    warnings,
+    runtimeAssetPaths,
+    runtimeEventTypes,
+  }
 }
 
 export interface CollectRuntimeMetadataStageResult {
@@ -851,22 +935,13 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     {
-      const runtimeEventTypes = collectEventRuntimeTypesFromProgram(ast)
-      const runtimeAssets = getAllEventRuntimeAssets(
-        EVENT_RUNTIME_MANIFESTS,
-        {},
-        runtimeEventTypes,
-      )
-      for (const assetPath of runtimeAssets) {
-        const resolvedAssetPath = resolveRuntimeAssetPath(assetPath, processedSource.split('\n'), filePath)
-        const assetSource = fs.readFileSync(resolvedAssetPath, 'utf-8')
-        mergeParsedLibrarySource(ast, assetSource, warnings, {
-          filePath: resolvedAssetPath,
-          namespace,
-          stopAfterCheck,
-          dedupeDeclarations: true,
-        })
-      }
+      const plannedRuntimeAssets = mergeRuntimeAssetsStage(ast, {
+        namespace,
+        sourceLines: processedSource.split('\n'),
+        filePath,
+        stopAfterCheck,
+      })
+      warnings.push(...plannedRuntimeAssets.warnings)
     }
 
     {

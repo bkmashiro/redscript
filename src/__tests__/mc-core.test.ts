@@ -347,13 +347,11 @@ beforeAll(async () => {
   mc = new MCTestClient(MC_HOST, MC_PORT)
 
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping MC core oracle tests')
     return
   }
 
   serverOnline = await waitForServer()
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping MC core oracle tests`)
     return
   }
 

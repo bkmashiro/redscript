@@ -48,28 +48,38 @@ function modifyFile(filePath: string, newContent: string): void {
 
 describe('FileCache — stat throws on cached file (branch coverage)', () => {
   test('hasChanged returns true when stat throws after entry is cached', () => {
-    const cache = new FileCache('/tmp/test-no-file')
-    // Manually insert an entry for a path that does NOT exist on disk
-    const fakePath = '/absolutely/nonexistent/ghost.mcrs'
-    cache.set(fakePath, { hash: 'deadbeef', mtime: 12345 })
-    // stat will throw → branch at line 53 returns true
-    expect(cache.hasChanged(fakePath)).toBe(true)
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const cache = new FileCache('/tmp/test-no-file')
+      // Manually insert an entry for a path that does NOT exist on disk
+      const fakePath = '/absolutely/nonexistent/ghost.mcrs'
+      cache.set(fakePath, { hash: 'deadbeef', mtime: 12345 })
+      // stat will throw → branch at line 53 returns true
+      expect(cache.hasChanged(fakePath)).toBe(true)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   test('update on nonexistent file removes entry (catch branch)', () => {
-    const tmp = makeTmpDir()
-    const cache = new FileCache(tmp)
-    // First create file, cache it
-    const filePath = writeFile(tmp, 'ghost.mcrs', 'fn ghost() {}')
-    cache.update(filePath)
-    expect(cache.size).toBe(1)
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const tmp = makeTmpDir()
+      const cache = new FileCache(tmp)
+      // First create file, cache it
+      const filePath = writeFile(tmp, 'ghost.mcrs', 'fn ghost() {}')
+      cache.update(filePath)
+      expect(cache.size).toBe(1)
 
-    // Delete the file — now update should catch the error and delete the entry
-    fs.unlinkSync(filePath)
-    // Manually wipe mtime so hasChanged considers it changed
-    cache.set(filePath, { hash: 'stale', mtime: 0 })
-    cache.update(filePath) // stat throws inside update → delete branch
-    expect(cache.get(filePath)).toBeUndefined()
+      // Delete the file — now update should catch the error and delete the entry
+      fs.unlinkSync(filePath)
+      // Manually wipe mtime so hasChanged considers it changed
+      cache.set(filePath, { hash: 'stale', mtime: 0 })
+      cache.update(filePath) // stat throws inside update → delete branch
+      expect(cache.get(filePath)).toBeUndefined()
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 
@@ -538,18 +548,23 @@ describe('compileIncremental — edge cases', () => {
   })
 
   test('deleted entry file is removed from dep graph gracefully', () => {
-    // Write a file, then delete it before compileIncremental runs
-    const ghost = path.join(tmpDir, 'ghost.mcrs')
-    fs.writeFileSync(ghost, 'fn ghost() {}')
-    fs.unlinkSync(ghost)
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      // Write a file, then delete it before compileIncremental runs
+      const ghost = path.join(tmpDir, 'ghost.mcrs')
+      fs.writeFileSync(ghost, 'fn ghost() {}')
+      fs.unlinkSync(ghost)
 
-    const cache = new FileCache(cacheDir)
-    const depGraph = new DependencyGraph()
+      const cache = new FileCache(cacheDir)
+      const depGraph = new DependencyGraph()
 
-    // Should not throw; error captured in result
-    const r = compileIncremental([ghost], cache, depGraph, { output: outDir })
-    // Either an error is captured or the file is skipped
-    expect(r.recompiled + r.errors.size).toBeGreaterThanOrEqual(0)
+      // Should not throw; error captured in result
+      const r = compileIncremental([ghost], cache, depGraph, { output: outDir })
+      // Either an error is captured or the file is skipped
+      expect(r.recompiled + r.errors.size).toBeGreaterThanOrEqual(0)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   test('dep count change triggers recompile (depHashes.size mismatch branch)', () => {

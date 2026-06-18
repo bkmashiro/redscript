@@ -67,7 +67,6 @@ function readStdlib(name: string): string {
 
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping stdlib-coverage-2 integration tests')
     return
   }
 
@@ -84,7 +83,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping stdlib-coverage-2 tests`)
     return
   }
 
@@ -385,7 +383,7 @@ beforeAll(async () => {
 
 describe('MC Integration — stdlib: calculus.mcrs', () => {
   test('deriv_forward(20000, 10000, 10000) == 10000 (slope = 1.0 ×10000)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_deriv_fwd" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_deriv_forward')
@@ -397,7 +395,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
   }, 30_000)
 
   test('deriv_central(30000, 10000, 10000) == 10000 (slope = 1.0)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_deriv_cen" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_deriv_central')
@@ -409,7 +407,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
   }, 30_000)
 
   test('deriv_central on f=2x: (12000-8000)*10000/(2*1000) == 20000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_deriv_linear" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_deriv_central_linear')
@@ -421,7 +419,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
   }, 30_000)
 
   test('integrate_trapezoid([0,5000,10000], 3, 10000) == 10000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_trap" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_integrate_trapezoid')
@@ -433,7 +431,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
   }, 30_000)
 
   test('integrate_trapezoid([10000,10000,10000], 3, 10000) == 20000 (constant f=1)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_trap_const" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_integrate_trapezoid_constant')
@@ -445,7 +443,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
   }, 30_000)
 
   test('integrate_simpson([0,5000,10000], 3, 10000) == 10000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_simp" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_integrate_simpson')
@@ -457,7 +455,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
   }, 30_000)
 
   test('running_mean: first sample (n=1) returns new_val = 20000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_mean1" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_running_mean_first')
@@ -469,7 +467,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
   }, 30_000)
 
   test('running_mean(20000, 40000, n=2) == 30000 (average of 2.0 and 4.0)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_mean2" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_running_mean_second')
@@ -481,7 +479,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
   }, 30_000)
 
   test('running_m2(0, 20000, 30000, 40000) == 20000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_m2" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_running_m2')
@@ -493,7 +491,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
   }, 30_000)
 
   test('variance_from_m2(20000, 2) == 20000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#calc_var" stdlib2_result -1')
     await mc.command('/function stdlib_calculus_test:test_variance_from_m2')
@@ -511,7 +509,7 @@ describe('MC Integration — stdlib: calculus.mcrs', () => {
 
 describe('MC Integration — stdlib: matrix.mcrs', () => {
   test('scale_x(30000, 20000) == 60000 (3.0 × 2.0 = 6.0 ×10000)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat_scale_x" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_scale_x')
@@ -523,7 +521,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('uniform_scale(15000, 30000) == 45000 (1.5 × 3.0)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat_unif_scale" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_uniform_scale')
@@ -535,7 +533,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('billboard_y(900000) == 2700000 (90° → opposite face 270°)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat_billboard" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_billboard_y')
@@ -547,7 +545,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('billboard_y(3000000) == 1200000 (wraps correctly)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat_billboard_wrap" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_billboard_y_wrap')
@@ -559,7 +557,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('lerp_angle(0, 10000, 5000) == 5000 (midpoint)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat_lerp_half" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_lerp_angle_half')
@@ -571,7 +569,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('lerp_angle(0, 10000, 10000) == 10000 (full)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat_lerp_full" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_lerp_angle_full')
@@ -583,7 +581,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('mat3_mul_elem: I × I element [0][0] == 10000 (= 1.0)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat3_id_00" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_mat3_identity_elem')
@@ -595,7 +593,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('mat3_mul_elem: I × I element [0][1] == 0 (off-diagonal)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat3_id_01" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_mat3_identity_off_diag')
@@ -607,7 +605,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('mat3_mul_vec3_elem: scale(2,3,4) × (1,2,3) → x component == 20000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat3_vec_x" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_mat3_mul_vec3')
@@ -619,7 +617,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('mat3_mul_vec3_elem: scale(2,3,4) × (1,2,3) → y component == 60000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat3_vec_y" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_mat3_mul_vec3_y')
@@ -631,7 +629,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
   }, 30_000)
 
   test('rotate2d_x(10000, 0, angle=0) == 10000 (no rotation)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#mat_rot2d_id" stdlib2_result -1')
     await mc.command('/function stdlib_matrix_test:test_rotate2d_identity')
@@ -650,7 +648,7 @@ describe('MC Integration — stdlib: matrix.mcrs', () => {
 
 describe('MC Integration — stdlib: signal.mcrs', () => {
   test('bernoulli(seed, p=10000) == 1 (100% probability)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_bern_1" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_bernoulli_certain')
@@ -662,7 +660,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('bernoulli(seed, p=0) == 0 (0% probability)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_bern_0" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_bernoulli_impossible')
@@ -674,7 +672,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('weighted2(seed, 100, 0) == 0 (all weight on first)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_w2_first" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_weighted2_all_first')
@@ -686,7 +684,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('weighted2(seed, 0, 100) == 1 (all weight on second)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_w2_second" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_weighted2_all_second')
@@ -698,7 +696,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('weighted3(seed, 100, 0, 0) == 0 (all weight on first)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_w3_first" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_weighted3_all_first')
@@ -710,7 +708,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('weighted3(seed, 0, 0, 100) == 2 (all weight on last)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_w3_last" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_weighted3_all_last')
@@ -722,7 +720,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('uniform_frac(seed) ∈ [0, 10000]', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_ufrac" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_uniform_frac_range')
@@ -735,7 +733,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('uniform_int(seed, 5, 10) ∈ [5, 10]', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_uint" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_uniform_int_range')
@@ -748,7 +746,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('normal_approx12 ∈ [-60000, 60000]', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_normal" stdlib2_result 0')
     await mc.command('/function stdlib_signal_test:test_normal_approx_range')
@@ -761,7 +759,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('_sin45(2) == 10000 (sin(90°) = 1.0 ×10000)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_sin45_2" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_sin45_known')
@@ -773,7 +771,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('_sin45(0) == 0 (sin(0°) = 0)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_sin45_0" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_sin45_zero')
@@ -785,7 +783,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('_cos45(0) == 10000 (cos(0°) = 1.0 ×10000)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_cos45_0" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_cos45_identity')
@@ -797,7 +795,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('dft_real DC bin of constant signal [1,1,1,1] × n=4 == 10000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_dft_dc" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_dft_dc_bin')
@@ -809,7 +807,7 @@ describe('MC Integration — stdlib: signal.mcrs', () => {
   }, 30_000)
 
   test('dft_imag DC bin of constant signal == 0 (no imaginary component)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
 
     await mc.command('/scoreboard players set "#sig_dft_imag_dc" stdlib2_result -1')
     await mc.command('/function stdlib_signal_test:test_dft_imag_dc')

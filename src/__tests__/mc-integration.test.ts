@@ -76,7 +76,6 @@ beforeAll(async () => {
   mc = new MCTestClient(MC_HOST, MC_PORT)
   serverOnline = await waitForServer(mc)
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping integration tests`)
     console.warn(`  Run: MC_SERVER_DIR=~/mc-test-server npx ts-node src/mc-test/setup.ts`)
     console.warn(`  Then restart the MC server and re-run tests.`)
     return
@@ -1367,9 +1366,6 @@ describe('player-facing: bot setup', () => {
   })
 
   test('mineflayer TestBot is connected', () => {
-    if (!botOnline) {
-      console.warn('  ⚠ TestBot not running — skipping player-facing tests')
-    }
     // Non-fatal: skip rather than fail if bot is not up
     expect(typeof botOnline).toBe('boolean')
   })

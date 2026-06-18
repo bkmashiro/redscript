@@ -65,7 +65,6 @@ function readStdlib(name: string): string {
 // ---------------------------------------------------------------------------
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping stdlib coverage 7 integration tests')
     return
   }
 
@@ -82,7 +81,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping stdlib coverage 7 tests`)
     return
   }
 
@@ -391,7 +389,7 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 describe('stdlib coverage 7 — scheduler', () => {
   test('gtask_ready returns 1 when counter is already 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard objectives add rs.g0 dummy').catch(() => {})
     await mc.command('/scoreboard players set #rs rs.g0 1')
     await mc.command('/scoreboard players set #gtask_ready sc7_result 99')
@@ -406,7 +404,7 @@ describe('stdlib coverage 7 — scheduler', () => {
   }, 30_000)
 
   test('gtask_schedule sets counter to delay value', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard objectives add rs.g1 dummy').catch(() => {})
     await mc.command('/scoreboard players set #gtask_val sc7_result 0')
     await mc.command('/function stdlib_scheduler_test:test_gtask_schedule_sets_counter')
@@ -417,7 +415,7 @@ describe('stdlib coverage 7 — scheduler', () => {
   }, 30_000)
 
   test('gtask_cancel zeroes the counter', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard objectives add rs.g2 dummy').catch(() => {})
     await mc.command('/scoreboard players set #gtask_cancel sc7_result 99')
     await mc.command('/function stdlib_scheduler_test:test_gtask_cancel_clears_counter')
@@ -428,7 +426,7 @@ describe('stdlib coverage 7 — scheduler', () => {
   }, 30_000)
 
   test('scheduler_tick decrements global counter by 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard objectives add rs.g3 dummy').catch(() => {})
     await mc.command('/scoreboard players set #scheduler_tick sc7_result 0')
     await mc.command('/function stdlib_scheduler_test:test_scheduler_tick_decrements')
@@ -441,7 +439,7 @@ describe('stdlib coverage 7 — scheduler', () => {
   }, 30_000)
 
   test('gtask_ready returns 0 when not yet fired', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard objectives add rs.g4 dummy').catch(() => {})
     await mc.command('/scoreboard players set #gtask_not_ready sc7_result 99')
     await mc.command('/function stdlib_scheduler_test:test_gtask_ready_not_fired')
@@ -458,7 +456,7 @@ describe('stdlib coverage 7 — scheduler', () => {
 // ---------------------------------------------------------------------------
 describe('stdlib coverage 7 — state', () => {
   test('set_state and get_state round-trip', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard objectives add rs.state dummy').catch(() => {})
     await mc.command('/scoreboard players set #state_get sc7_result 0')
     await mc.command('/function stdlib_state_test:test_set_and_get_state')
@@ -469,7 +467,7 @@ describe('stdlib coverage 7 — state', () => {
   }, 30_000)
 
   test('is_state returns 1 when state matches', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #state_is_match sc7_result 0')
     await mc.command('/function stdlib_state_test:test_is_state_match')
     await mc.ticks(3)
@@ -479,7 +477,7 @@ describe('stdlib coverage 7 — state', () => {
   }, 30_000)
 
   test('is_state returns 0 when state does not match', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #state_no_match sc7_result 99')
     await mc.command('/function stdlib_state_test:test_is_state_no_match')
     await mc.ticks(3)
@@ -489,7 +487,7 @@ describe('stdlib coverage 7 — state', () => {
   }, 30_000)
 
   test('transition returns 1 on success', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #state_trans_ok sc7_result 0')
     await mc.command('/function stdlib_state_test:test_transition_success')
     await mc.ticks(3)
@@ -499,7 +497,7 @@ describe('stdlib coverage 7 — state', () => {
   }, 30_000)
 
   test('transition returns 0 when precondition fails', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #state_trans_fail sc7_result 99')
     await mc.command('/function stdlib_state_test:test_transition_fail')
     await mc.ticks(3)
@@ -509,7 +507,7 @@ describe('stdlib coverage 7 — state', () => {
   }, 30_000)
 
   test('state value updated after successful transition', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #state_after_trans sc7_result 0')
     await mc.command('/function stdlib_state_test:test_state_after_transition')
     await mc.ticks(3)
@@ -524,7 +522,7 @@ describe('stdlib coverage 7 — state', () => {
 // ---------------------------------------------------------------------------
 describe('stdlib coverage 7 — dialog', () => {
   test('dialog_broadcast runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dialog_broadcast sc7_result 0')
     await mc.command('/function stdlib_dialog_test:test_dialog_broadcast')
     await mc.ticks(3)
@@ -534,7 +532,7 @@ describe('stdlib coverage 7 — dialog', () => {
   }, 30_000)
 
   test('dialog_say_color red runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dialog_color_red sc7_result 0')
     await mc.command('/function stdlib_dialog_test:test_dialog_say_color_red')
     await mc.ticks(3)
@@ -544,7 +542,7 @@ describe('stdlib coverage 7 — dialog', () => {
   }, 30_000)
 
   test('dialog_say_color green runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dialog_color_green sc7_result 0')
     await mc.command('/function stdlib_dialog_test:test_dialog_say_color_green')
     await mc.ticks(3)
@@ -554,7 +552,7 @@ describe('stdlib coverage 7 — dialog', () => {
   }, 30_000)
 
   test('dialog_say_color gold runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dialog_color_gold sc7_result 0')
     await mc.command('/function stdlib_dialog_test:test_dialog_say_color_gold')
     await mc.ticks(3)
@@ -564,7 +562,7 @@ describe('stdlib coverage 7 — dialog', () => {
   }, 30_000)
 
   test('dialog_say_color white (fallback) runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dialog_color_white sc7_result 0')
     await mc.command('/function stdlib_dialog_test:test_dialog_say_color_white')
     await mc.ticks(3)
@@ -574,7 +572,7 @@ describe('stdlib coverage 7 — dialog', () => {
   }, 30_000)
 
   test('dialog_title runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dialog_title sc7_result 0')
     await mc.command('/function stdlib_dialog_test:test_dialog_title')
     await mc.ticks(3)
@@ -584,7 +582,7 @@ describe('stdlib coverage 7 — dialog', () => {
   }, 30_000)
 
   test('dialog_title_clear runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dialog_title_clear sc7_result 0')
     await mc.command('/function stdlib_dialog_test:test_dialog_title_clear')
     await mc.ticks(3)
@@ -594,7 +592,7 @@ describe('stdlib coverage 7 — dialog', () => {
   }, 30_000)
 
   test('dialog_actionbar runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dialog_actionbar sc7_result 0')
     await mc.command('/function stdlib_dialog_test:test_dialog_actionbar')
     await mc.ticks(3)
@@ -609,7 +607,7 @@ describe('stdlib coverage 7 — dialog', () => {
 // ---------------------------------------------------------------------------
 describe('stdlib coverage 7 — map', () => {
   test('map_set and map_get round-trip', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #map_get_val sc7_result 0')
     await mc.command('/function stdlib_map_test:test_map_set_and_get')
     await mc.ticks(5)
@@ -620,7 +618,7 @@ describe('stdlib coverage 7 — map', () => {
   }, 30_000)
 
   test('map_has returns 1 for existing key', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #map_has_yes sc7_result 0')
     await mc.command('/function stdlib_map_test:test_map_has_existing_key')
     await mc.ticks(5)
@@ -630,7 +628,7 @@ describe('stdlib coverage 7 — map', () => {
   }, 30_000)
 
   test('map_has returns 0 for missing key', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #map_has_no sc7_result 99')
     await mc.command('/function stdlib_map_test:test_map_has_missing_key')
     await mc.ticks(5)
@@ -640,7 +638,7 @@ describe('stdlib coverage 7 — map', () => {
   }, 30_000)
 
   test('map_delete removes the key', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #map_delete sc7_result 99')
     await mc.command('/function stdlib_map_test:test_map_delete')
     await mc.ticks(5)
@@ -651,7 +649,7 @@ describe('stdlib coverage 7 — map', () => {
   }, 30_000)
 
   test('map_clear removes all keys', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #map_clear sc7_result 99')
     await mc.command('/function stdlib_map_test:test_map_clear')
     await mc.ticks(5)
@@ -661,7 +659,7 @@ describe('stdlib coverage 7 — map', () => {
   }, 30_000)
 
   test('map_set overwrites existing key', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #map_overwrite sc7_result 0')
     await mc.command('/function stdlib_map_test:test_map_overwrite')
     await mc.ticks(5)
@@ -676,7 +674,7 @@ describe('stdlib coverage 7 — map', () => {
 // ---------------------------------------------------------------------------
 describe('stdlib coverage 7 — set_int', () => {
   test('set_add and set_has for existing member', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #set_has_yes sc7_result 0')
     await mc.command('/function stdlib_set_int_test:test_set_add_and_has')
     await mc.ticks(5)
@@ -686,7 +684,7 @@ describe('stdlib coverage 7 — set_int', () => {
   }, 30_000)
 
   test('set_has returns 0 for missing member', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #set_has_no sc7_result 99')
     await mc.command('/function stdlib_set_int_test:test_set_has_missing')
     await mc.ticks(5)
@@ -696,7 +694,7 @@ describe('stdlib coverage 7 — set_int', () => {
   }, 30_000)
 
   test('set_add deduplicates members', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #set_dedup sc7_result 0')
     await mc.command('/function stdlib_set_int_test:test_set_add_no_duplicates')
     await mc.ticks(5)
@@ -707,7 +705,7 @@ describe('stdlib coverage 7 — set_int', () => {
   }, 30_000)
 
   test('set_remove removes a member', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #set_remove sc7_result 99')
     await mc.command('/function stdlib_set_int_test:test_set_remove')
     await mc.ticks(5)
@@ -725,7 +723,7 @@ describe('stdlib coverage 7 — set_int', () => {
   }, 30_000)
 
   test('set_size returns element count', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #set_size sc7_result 0')
     await mc.command('/function stdlib_set_int_test:test_set_size')
     await mc.ticks(5)
@@ -735,7 +733,7 @@ describe('stdlib coverage 7 — set_int', () => {
   }, 30_000)
 
   test('set_union merges two sets', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #set_union_size sc7_result 0')
     await mc.command('/function stdlib_set_int_test:test_set_union')
     await mc.ticks(5)
@@ -746,7 +744,7 @@ describe('stdlib coverage 7 — set_int', () => {
   }, 30_000)
 
   test('set_union contains all members from both sets', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     // Run union first then check members
     await mc.command('/function stdlib_set_int_test:test_set_union')
     await mc.ticks(5)
@@ -760,7 +758,7 @@ describe('stdlib coverage 7 — set_int', () => {
   }, 30_000)
 
   test('set_clear empties the set', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #set_clear sc7_result 99')
     await mc.command('/function stdlib_set_int_test:test_set_clear')
     await mc.ticks(5)

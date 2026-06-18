@@ -60,7 +60,6 @@ async function runAndRead(fn: string, player: string): Promise<number> {
 
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping stdlib coverage 8 integration tests')
     return
   }
 
@@ -80,7 +79,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping stdlib coverage 8 tests`)
     return
   }
 
@@ -273,35 +271,35 @@ beforeAll(async () => {
 
 describe('stdlib coverage 8 — queue', () => {
   test('queue_push grows queue size', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_queue8_test:test_queue_push_and_size', '#queue_size')
     expect(r).toBeGreaterThanOrEqual(2)
     expect(r).toBeLessThanOrEqual(2)
   }, 30_000)
 
   test('queue_peek returns current front', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_queue8_test:test_queue_peek_front', '#queue_peek')
     expect(r).toBeGreaterThanOrEqual(7)
     expect(r).toBeLessThanOrEqual(7)
   }, 30_000)
 
   test('queue_pop returns the first pushed value', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_queue8_test:test_queue_pop_front', '#queue_pop')
     expect(r).toBeGreaterThanOrEqual(15)
     expect(r).toBeLessThanOrEqual(15)
   }, 30_000)
 
   test('queue_pop advances head for the next peek', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_queue8_test:test_queue_pop_advances_head', '#queue_next')
     expect(r).toBeGreaterThanOrEqual(8)
     expect(r).toBeLessThanOrEqual(8)
   }, 30_000)
 
   test('queue_clear resets logical size to zero', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_queue8_test:test_queue_clear_resets_size', '#queue_clear')
     expect(r).toBeGreaterThanOrEqual(0)
     expect(r).toBeLessThanOrEqual(0)
@@ -310,35 +308,35 @@ describe('stdlib coverage 8 — queue', () => {
 
 describe('stdlib coverage 8 — cooldown', () => {
   test('cooldown_start writes tick count', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_start_sets_ticks', '#cooldown_ticks')
     expect(r).toBeGreaterThanOrEqual(6)
     expect(r).toBeLessThanOrEqual(6)
   }, 30_000)
 
   test('cooldown_ready is false immediately after start', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_ready_after_start', '#cooldown_ready_start')
     expect(r).toBeGreaterThanOrEqual(0)
     expect(r).toBeLessThanOrEqual(0)
   }, 30_000)
 
   test('cooldown_tick decrements remaining ticks', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_tick_decrements', '#cooldown_after_tick')
     expect(r).toBeGreaterThanOrEqual(2)
     expect(r).toBeLessThanOrEqual(2)
   }, 30_000)
 
   test('cooldown_ready becomes true after expiry', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_expires_after_tick', '#cooldown_expired')
     expect(r).toBeGreaterThanOrEqual(1)
     expect(r).toBeLessThanOrEqual(1)
   }, 30_000)
 
   test('inactive cooldown remains ready', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_inactive_stays_ready', '#cooldown_inactive')
     expect(r).toBeGreaterThanOrEqual(1)
     expect(r).toBeLessThanOrEqual(1)
@@ -347,35 +345,35 @@ describe('stdlib coverage 8 — cooldown', () => {
 
 describe('stdlib coverage 8 — timer', () => {
   test('Timer.elapsed reflects completed ticks', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_timer8_test:test_timer_elapsed_after_ticks', '#timer_elapsed')
     expect(r).toBeGreaterThanOrEqual(2)
     expect(r).toBeLessThanOrEqual(2)
   }, 30_000)
 
   test('Timer.remaining decreases as time advances', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_timer8_test:test_timer_remaining_after_ticks', '#timer_remaining')
     expect(r).toBeGreaterThanOrEqual(1)
     expect(r).toBeLessThanOrEqual(1)
   }, 30_000)
 
   test('Timer.pause stops further progress', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_timer8_test:test_timer_pause_stops_progress', '#timer_pause')
     expect(r).toBeGreaterThanOrEqual(1)
     expect(r).toBeLessThanOrEqual(1)
   }, 30_000)
 
   test('Timer.reset clears elapsed ticks', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_timer8_test:test_timer_reset_clears_elapsed', '#timer_reset')
     expect(r).toBeGreaterThanOrEqual(0)
     expect(r).toBeLessThanOrEqual(0)
   }, 30_000)
 
   test('Timer.done returns true after full duration', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_timer8_test:test_timer_done_after_full_duration', '#timer_done')
     expect(r).toBeGreaterThanOrEqual(1)
     expect(r).toBeLessThanOrEqual(1)
@@ -384,35 +382,35 @@ describe('stdlib coverage 8 — timer', () => {
 
 describe('stdlib coverage 8 — bits', () => {
   test('bit_toggle flips an unset bit on', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_bits8_test:test_bit_toggle', '#bits_toggle')
     expect(r).toBeGreaterThanOrEqual(7)
     expect(r).toBeLessThanOrEqual(7)
   }, 30_000)
 
   test('bit_not(0) fills all 31 non-sign bits', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_bits8_test:test_bit_not_zero', '#bits_not')
     expect(r).toBeGreaterThanOrEqual(2147483647)
     expect(r).toBeLessThanOrEqual(2147483647)
   }, 30_000)
 
   test('popcount counts set bits', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_bits8_test:test_popcount_255', '#bits_popcount')
     expect(r).toBeGreaterThanOrEqual(8)
     expect(r).toBeLessThanOrEqual(8)
   }, 30_000)
 
   test('bit_set is idempotent for an already-set bit', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_bits8_test:test_bit_set_idempotent', '#bits_set_idempotent')
     expect(r).toBeGreaterThanOrEqual(5)
     expect(r).toBeLessThanOrEqual(5)
   }, 30_000)
 
   test('bit_clear leaves a missing bit unchanged', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     const r = await runAndRead('stdlib_bits8_test:test_bit_clear_missing_bit', '#bits_clear_missing')
     expect(r).toBeGreaterThanOrEqual(2)
     expect(r).toBeLessThanOrEqual(2)

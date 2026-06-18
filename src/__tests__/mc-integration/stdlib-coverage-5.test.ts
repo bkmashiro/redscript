@@ -66,7 +66,6 @@ function readStdlib(name: string): string {
 // ---------------------------------------------------------------------------
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping stdlib coverage 5 integration tests')
     return
   }
 
@@ -83,7 +82,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn(`⚠ MC server not running at ${MC_HOST}:${MC_PORT} — skipping stdlib coverage 5 tests`)
     return
   }
 
@@ -609,7 +607,7 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 describe('stdlib coverage 5 — player', () => {
   test('heal increases scoreboard health by amount', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #player_heal sc5_result 0')
     await mc.command('/function stdlib_player_test:test_heal')
     await mc.ticks(3)
@@ -620,7 +618,7 @@ describe('stdlib coverage 5 — player', () => {
   }, 30_000)
 
   test('damage decreases scoreboard health by amount', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #player_damage sc5_result 0')
     await mc.command('/function stdlib_player_test:test_damage_positive')
     await mc.ticks(3)
@@ -631,7 +629,7 @@ describe('stdlib coverage 5 — player', () => {
   }, 30_000)
 
   test('damage clamps to 0 when amount > health', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #player_damage_zero sc5_result 99')
     await mc.command('/function stdlib_player_test:test_damage_to_zero')
     await mc.ticks(3)
@@ -641,7 +639,7 @@ describe('stdlib coverage 5 — player', () => {
   }, 30_000)
 
   test('is_op returns 0 for player without op tag', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #is_op sc5_result 99')
     await mc.command('/function stdlib_player_test:test_is_op_without_tag')
     await mc.ticks(3)
@@ -653,7 +651,7 @@ describe('stdlib coverage 5 — player', () => {
 
 describe('stdlib coverage 5 — effects', () => {
   test('buff_all runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #buff_done sc5_result 0')
     await mc.command('/function stdlib_effects_test:test_buff_all')
     await mc.ticks(3)
@@ -663,7 +661,7 @@ describe('stdlib coverage 5 — effects', () => {
   }, 30_000)
 
   test('clear_effects runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #clear_done sc5_result 0')
     await mc.command('/function stdlib_effects_test:test_clear_effects')
     await mc.ticks(3)
@@ -673,7 +671,7 @@ describe('stdlib coverage 5 — effects', () => {
   }, 30_000)
 
   test('speed applies successfully', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #speed_done sc5_result 0')
     await mc.command('/function stdlib_effects_test:test_speed')
     await mc.ticks(3)
@@ -685,7 +683,7 @@ describe('stdlib coverage 5 — effects', () => {
 
 describe('stdlib coverage 5 — bossbar', () => {
   test('update_bar_color high percent sets green', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #bar_color_high sc5_result 0')
     await mc.command('/function stdlib_bossbar_test:test_update_bar_color_high')
     await mc.ticks(3)
@@ -695,7 +693,7 @@ describe('stdlib coverage 5 — bossbar', () => {
   }, 30_000)
 
   test('update_bar_color mid percent sets yellow', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #bar_color_mid sc5_result 0')
     await mc.command('/function stdlib_bossbar_test:test_update_bar_color_mid')
     await mc.ticks(3)
@@ -705,7 +703,7 @@ describe('stdlib coverage 5 — bossbar', () => {
   }, 30_000)
 
   test('update_bar_color low percent sets red', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #bar_color_low sc5_result 0')
     await mc.command('/function stdlib_bossbar_test:test_update_bar_color_low')
     await mc.ticks(3)
@@ -715,7 +713,7 @@ describe('stdlib coverage 5 — bossbar', () => {
   }, 30_000)
 
   test('create_timer_bar runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #timer_bar_done sc5_result 0')
     await mc.command('/function stdlib_bossbar_test:test_create_timer_bar')
     await mc.ticks(3)
@@ -725,7 +723,7 @@ describe('stdlib coverage 5 — bossbar', () => {
   }, 30_000)
 
   test('create_health_bar runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #health_bar_done sc5_result 0')
     await mc.command('/function stdlib_bossbar_test:test_create_health_bar')
     await mc.ticks(3)
@@ -735,7 +733,7 @@ describe('stdlib coverage 5 — bossbar', () => {
   }, 30_000)
 
   test('create_progress_bar runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #prog_bar_done sc5_result 0')
     await mc.command('/function stdlib_bossbar_test:test_create_progress_bar')
     await mc.ticks(3)
@@ -745,7 +743,7 @@ describe('stdlib coverage 5 — bossbar', () => {
   }, 30_000)
 
   test('hide and show bar run without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #hide_show_done sc5_result 0')
     await mc.command('/function stdlib_bossbar_test:test_hide_show_bar')
     await mc.ticks(3)
@@ -755,7 +753,7 @@ describe('stdlib coverage 5 — bossbar', () => {
   }, 30_000)
 
   test('update_bar runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #update_bar_done sc5_result 0')
     await mc.command('/function stdlib_bossbar_test:test_update_bar')
     await mc.ticks(3)
@@ -767,7 +765,7 @@ describe('stdlib coverage 5 — bossbar', () => {
 
 describe('stdlib coverage 5 — teams', () => {
   test('create_team runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #team_created sc5_result 0')
     await mc.command('/function stdlib_teams_test:test_create_team')
     await mc.ticks(3)
@@ -777,7 +775,7 @@ describe('stdlib coverage 5 — teams', () => {
   }, 30_000)
 
   test('setup_two_teams runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #two_teams_done sc5_result 0')
     await mc.command('/function stdlib_teams_test:test_setup_two_teams')
     await mc.ticks(3)
@@ -787,7 +785,7 @@ describe('stdlib coverage 5 — teams', () => {
   }, 30_000)
 
   test('setup_four_teams runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #four_teams_done sc5_result 0')
     await mc.command('/function stdlib_teams_test:test_setup_four_teams')
     await mc.ticks(3)
@@ -797,7 +795,7 @@ describe('stdlib coverage 5 — teams', () => {
   }, 30_000)
 
   test('add_to_team and remove_from_teams run without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #add_remove_done sc5_result 0')
     await mc.command('/function stdlib_teams_test:test_add_remove_from_teams')
     await mc.ticks(3)
@@ -809,7 +807,7 @@ describe('stdlib coverage 5 — teams', () => {
 
 describe('stdlib coverage 5 — mobs', () => {
   test('mob constants compile correctly', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #mob_const_ok sc5_result 0')
     await mc.command('/function stdlib_mobs_test:test_mob_constants')
     await mc.ticks(3)
@@ -821,7 +819,7 @@ describe('stdlib coverage 5 — mobs', () => {
 
 describe('stdlib coverage 5 — spawn', () => {
   test('teleport_to runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #tp_to_done sc5_result 0')
     await mc.command('/function stdlib_spawn_test:test_teleport_to')
     await mc.ticks(3)
@@ -831,7 +829,7 @@ describe('stdlib coverage 5 — spawn', () => {
   }, 30_000)
 
   test('gather_all runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #gather_done sc5_result 0')
     await mc.command('/function stdlib_spawn_test:test_gather_all')
     await mc.ticks(3)
@@ -841,7 +839,7 @@ describe('stdlib coverage 5 — spawn', () => {
   }, 30_000)
 
   test('goto_lobby teleports and shows title', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #lobby_done sc5_result 0')
     await mc.command('/function stdlib_spawn_test:test_goto_lobby')
     await mc.ticks(3)
@@ -851,7 +849,7 @@ describe('stdlib coverage 5 — spawn', () => {
   }, 30_000)
 
   test('goto_arena teleports and shows title', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #arena_done sc5_result 0')
     await mc.command('/function stdlib_spawn_test:test_goto_arena')
     await mc.ticks(3)
@@ -863,7 +861,7 @@ describe('stdlib coverage 5 — spawn', () => {
 
 describe('stdlib coverage 5 — world', () => {
   test('set_day runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #day_done sc5_result 0')
     await mc.command('/function stdlib_world_test:test_set_day')
     await mc.ticks(3)
@@ -873,7 +871,7 @@ describe('stdlib coverage 5 — world', () => {
   }, 30_000)
 
   test('weather_clear runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #weather_clear_done sc5_result 0')
     await mc.command('/function stdlib_world_test:test_weather_clear')
     await mc.ticks(3)
@@ -883,7 +881,7 @@ describe('stdlib coverage 5 — world', () => {
   }, 30_000)
 
   test('enable/disable keepInventory runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #keepinv_done sc5_result 0')
     await mc.command('/function stdlib_world_test:test_gamerule_keep_inventory')
     await mc.ticks(3)
@@ -893,7 +891,7 @@ describe('stdlib coverage 5 — world', () => {
   }, 30_000)
 
   test('difficulty functions run without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #difficulty_done sc5_result 0')
     await mc.command('/function stdlib_world_test:test_difficulty')
     await mc.ticks(3)
@@ -903,7 +901,7 @@ describe('stdlib coverage 5 — world', () => {
   }, 30_000)
 
   test('sun_altitude at noon is 900000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #sun_alt_noon sc5_result 0')
     await mc.command('/function stdlib_world_test:test_sun_altitude_noon')
     await mc.ticks(3)
@@ -913,7 +911,7 @@ describe('stdlib coverage 5 — world', () => {
   }, 30_000)
 
   test('sun_azimuth at tick 0 is 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #sun_az_zero sc5_result 99')
     await mc.command('/function stdlib_world_test:test_sun_azimuth_zero')
     await mc.ticks(3)
@@ -923,7 +921,7 @@ describe('stdlib coverage 5 — world', () => {
   }, 30_000)
 
   test('sun_azimuth at half day is 1800000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #sun_az_half sc5_result 0')
     await mc.command('/function stdlib_world_test:test_sun_azimuth_half_day')
     await mc.ticks(3)
@@ -935,7 +933,7 @@ describe('stdlib coverage 5 — world', () => {
 
 describe('stdlib coverage 5 — interactions', () => {
   test('interactions_init runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #inter_init_done sc5_result 0')
     await mc.command('/function stdlib_interactions_test:test_interactions_init')
     await mc.ticks(3)
@@ -947,7 +945,7 @@ describe('stdlib coverage 5 — interactions', () => {
 
 describe('stdlib coverage 5 — inventory', () => {
   test('give_kit_warrior runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #kit_warrior_done sc5_result 0')
     await mc.command('/function stdlib_inventory_test:test_give_kit_warrior')
     await mc.ticks(3)
@@ -957,7 +955,7 @@ describe('stdlib coverage 5 — inventory', () => {
   }, 30_000)
 
   test('give_kit_archer runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #kit_archer_done sc5_result 0')
     await mc.command('/function stdlib_inventory_test:test_give_kit_archer')
     await mc.ticks(3)
@@ -967,7 +965,7 @@ describe('stdlib coverage 5 — inventory', () => {
   }, 30_000)
 
   test('give_kit_mage runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #kit_mage_done sc5_result 0')
     await mc.command('/function stdlib_inventory_test:test_give_kit_mage')
     await mc.ticks(3)
@@ -979,7 +977,7 @@ describe('stdlib coverage 5 — inventory', () => {
 
 describe('stdlib coverage 5 — particles', () => {
   test('hearts_at runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #hearts_done sc5_result 0')
     await mc.command('/function stdlib_particles_test:test_hearts_at')
     await mc.ticks(3)
@@ -989,7 +987,7 @@ describe('stdlib coverage 5 — particles', () => {
   }, 30_000)
 
   test('explosion_effect runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #explosion_done sc5_result 0')
     await mc.command('/function stdlib_particles_test:test_explosion_effect')
     await mc.ticks(3)
@@ -999,7 +997,7 @@ describe('stdlib coverage 5 — particles', () => {
   }, 30_000)
 
   test('portal_effect runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #portal_done sc5_result 0')
     await mc.command('/function stdlib_particles_test:test_portal_effect')
     await mc.ticks(3)
@@ -1011,7 +1009,7 @@ describe('stdlib coverage 5 — particles', () => {
 
 describe('stdlib coverage 5 — ode', () => {
   test('ode_mul_fx(10000, 5000) == 5000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ode_mul sc5_result 0')
     await mc.command('/function stdlib_ode_test:test_ode_mul_fx')
     await mc.ticks(3)
@@ -1021,7 +1019,7 @@ describe('stdlib coverage 5 — ode', () => {
   }, 30_000)
 
   test('ode_weighted_increment(10000, 60000) == 10000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ode_winc sc5_result 0')
     await mc.command('/function stdlib_ode_test:test_ode_weighted_increment')
     await mc.ticks(3)
@@ -1031,7 +1029,7 @@ describe('stdlib coverage 5 — ode', () => {
   }, 30_000)
 
   test('ode_run exponential decay y decreases', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ode_decay_y sc5_result 99999')
     await mc.command('/function stdlib_ode_test:test_ode_run_decay')
     await mc.ticks(5)
@@ -1043,7 +1041,7 @@ describe('stdlib coverage 5 — ode', () => {
   }, 30_000)
 
   test('ode_run exponential growth y increases', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ode_growth_y sc5_result 0')
     await mc.command('/function stdlib_ode_test:test_ode_run_growth')
     await mc.ticks(5)
@@ -1053,7 +1051,7 @@ describe('stdlib coverage 5 — ode', () => {
   }, 30_000)
 
   test('ode_get_system returns system id after ode_run', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ode_system sc5_result 0')
     await mc.command('/function stdlib_ode_test:test_ode_getters')
     await mc.ticks(5)
@@ -1065,7 +1063,7 @@ describe('stdlib coverage 5 — ode', () => {
 
 describe('stdlib coverage 5 — fft', () => {
   test('dft_noop runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dft_noop_done sc5_result 0')
     await mc.command('/function stdlib_fft_test:test_dft_noop')
     await mc.ticks(3)
@@ -1075,7 +1073,7 @@ describe('stdlib coverage 5 — fft', () => {
   }, 30_000)
 
   test('dft_magnitude([10000,0,0,0], 0) == 10000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dft_mag sc5_result 0')
     await mc.command('/function stdlib_fft_test:test_dft_magnitude')
     await mc.ticks(3)
@@ -1085,7 +1083,7 @@ describe('stdlib coverage 5 — fft', () => {
   }, 30_000)
 
   test('dft_power([10000,0,0,0], 0) == 10000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dft_power sc5_result 0')
     await mc.command('/function stdlib_fft_test:test_dft_power')
     await mc.ticks(3)
@@ -1096,7 +1094,7 @@ describe('stdlib coverage 5 — fft', () => {
   }, 30_000)
 
   test('dft_freq_bin(44100, 4, 1) == 11025', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #dft_freq_bin sc5_result 0')
     await mc.command('/function stdlib_fft_test:test_dft_freq_bin')
     await mc.ticks(3)
@@ -1108,7 +1106,7 @@ describe('stdlib coverage 5 — fft', () => {
 
 describe('stdlib coverage 5 — ecs', () => {
   test('ecs_health_init gives full HP', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_hp_init sc5_result 0')
     await mc.command('/function stdlib_ecs_test:test_ecs_health_init')
     await mc.ticks(3)
@@ -1118,7 +1116,7 @@ describe('stdlib coverage 5 — ecs', () => {
   }, 30_000)
 
   test('ecs_health_damage reduces HP', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_hp_damage sc5_result 0')
     await mc.command('/function stdlib_ecs_test:test_ecs_health_damage')
     await mc.ticks(3)
@@ -1128,7 +1126,7 @@ describe('stdlib coverage 5 — ecs', () => {
   }, 30_000)
 
   test('ecs_health_heal increases HP', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_hp_heal sc5_result 0')
     await mc.command('/function stdlib_ecs_test:test_ecs_health_heal')
     await mc.ticks(3)
@@ -1138,7 +1136,7 @@ describe('stdlib coverage 5 — ecs', () => {
   }, 30_000)
 
   test('ecs_health_is_dead returns 1 when HP is 0', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_is_dead sc5_result 0')
     await mc.command('/function stdlib_ecs_test:test_ecs_health_is_dead')
     await mc.ticks(3)
@@ -1148,7 +1146,7 @@ describe('stdlib coverage 5 — ecs', () => {
   }, 30_000)
 
   test('ecs_health_pct returns 50 at half health', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_pct sc5_result 0')
     await mc.command('/function stdlib_ecs_test:test_ecs_health_pct')
     await mc.ticks(3)
@@ -1158,7 +1156,7 @@ describe('stdlib coverage 5 — ecs', () => {
   }, 30_000)
 
   test('ecs_vel_init vx is set correctly', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_vel_x sc5_result 0')
     await mc.command('/function stdlib_ecs_test:test_ecs_vel_init')
     await mc.ticks(3)
@@ -1168,7 +1166,7 @@ describe('stdlib coverage 5 — ecs', () => {
   }, 30_000)
 
   test('ecs_vel_speed (3,4) = 5000', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_vel_speed sc5_result 0')
     await mc.command('/function stdlib_ecs_test:test_ecs_vel_speed')
     await mc.ticks(3)
@@ -1178,7 +1176,7 @@ describe('stdlib coverage 5 — ecs', () => {
   }, 30_000)
 
   test('ecs_vel_apply_gravity reduces vy', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_vel_vy sc5_result 99999')
     await mc.command('/function stdlib_ecs_test:test_ecs_vel_apply_gravity')
     await mc.ticks(3)
@@ -1188,7 +1186,7 @@ describe('stdlib coverage 5 — ecs', () => {
   }, 30_000)
 
   test('ecs_registry_new + register + is_registered returns 1', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_reg sc5_result 0')
     await mc.command('/function stdlib_ecs_test:test_ecs_registry')
     await mc.ticks(3)
@@ -1198,7 +1196,7 @@ describe('stdlib coverage 5 — ecs', () => {
   }, 30_000)
 
   test('ecs_is_registered returns 0 for unknown component', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #ecs_not_reg sc5_result 1')
     await mc.command('/function stdlib_ecs_test:test_ecs_is_not_registered')
     await mc.ticks(3)
@@ -1210,7 +1208,7 @@ describe('stdlib coverage 5 — ecs', () => {
 
 describe('stdlib coverage 5 — strings', () => {
   test('str_len compiles and returns a value', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #str_len_res sc5_result 0')
     await mc.command('/function stdlib_strings_test:test_str_len')
     await mc.ticks(3)
@@ -1221,7 +1219,7 @@ describe('stdlib coverage 5 — strings', () => {
   }, 30_000)
 
   test('str_contains always returns 0 (MC limitation)', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #str_contains_res sc5_result 99')
     await mc.command('/function stdlib_strings_test:test_str_contains_returns_zero')
     await mc.ticks(3)
@@ -1231,7 +1229,7 @@ describe('stdlib coverage 5 — strings', () => {
   }, 30_000)
 
   test('str_concat compiles and runs without error', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #str_concat_done sc5_result 0')
     await mc.command('/function stdlib_strings_test:test_str_concat_compiles')
     await mc.ticks(3)
@@ -1243,7 +1241,7 @@ describe('stdlib coverage 5 — strings', () => {
 
 describe('stdlib coverage 5 — tags constants', () => {
   test('tags constants compile and run', async () => {
-    if (!serverOnline) { console.warn('  SKIP: server offline'); return }
+    if (!serverOnline) return
     await mc.command('/scoreboard players set #tags_ok sc5_result 0')
     await mc.command('/function stdlib_tags_test:test_tag_constants_compile')
     await mc.ticks(3)

@@ -50,7 +50,6 @@ function writeFixture(source: string, namespace: string): void {
 
 beforeAll(async () => {
   if (process.env.MC_OFFLINE === 'true') {
-    console.warn('⚠ MC_OFFLINE=true — skipping say-fstring integration tests')
     return
   }
 
@@ -67,7 +66,6 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
-    console.warn('⚠ MC server not running — say-fstring runtime tests will be skipped')
     return
   }
 
