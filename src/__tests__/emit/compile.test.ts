@@ -531,43 +531,103 @@ describe('emit: compile coverage', () => {
       fn tagged(): void {}
     `, {
       namespace: 'snapshot_stage_test',
-      snapshotStages: ['parse', 'runtimeMetadata'],
+      snapshotStages: [
+        'parse',
+        'lowerToHIR',
+        'runtimeMetadata',
+        'lowerAndOptimize',
+        'finalizeRuntimeLIR',
+        'emitDatapack',
+      ],
       stageSnapshots,
     })
 
     expect(result.success).toBe(true)
     expect(result.files.length).toBeGreaterThan(0)
-    expect(stageSnapshots).toEqual([
-      {
-        stage: 'parse',
-        summary: {
-          namespace: 'snapshot_stage_test',
-          functions: ['ticked', 'tagged'],
-          structs: [],
-          imports: 0,
-          warnings: 0,
-        },
-      },
-      {
-        stage: 'runtimeMetadata',
-        summary: {
-          tickFunctions: ['ticked'],
-          loadFunctions: [],
-          watchFunctions: [],
-          inlineFunctions: [],
-          noInlineFunctions: [],
-          coroutineFunctions: [],
-          scheduleFunctions: [],
-          profiledFunctions: [],
-          benchmarkFunctions: [],
-          throttleFunctions: [],
-          retryFunctions: [],
-          memoizeFunctions: [],
-          eventHandlers: {},
-          functionTags: { 'custom:handlers': ['snapshot_stage_test:tagged'] },
-        },
-      },
+    expect(stageSnapshots.map(snapshot => snapshot.stage)).toEqual([
+      'parse',
+      'lowerToHIR',
+      'runtimeMetadata',
+      'lowerAndOptimize',
+      'finalizeRuntimeLIR',
+      'emitDatapack',
     ])
+
+    expect(stageSnapshots[0]).toEqual({
+      stage: 'parse',
+      summary: {
+        namespace: 'snapshot_stage_test',
+        functions: ['ticked', 'tagged'],
+        structs: [],
+        imports: 0,
+        warnings: 0,
+      },
+    })
+
+    expect(stageSnapshots[1]).toEqual({
+      stage: 'lowerToHIR',
+      summary: expect.objectContaining({
+        namespace: 'snapshot_stage_test',
+        functions: expect.arrayContaining(['ticked', 'tagged']),
+        structs: [],
+        libraryFilePaths: [],
+        warnings: 0,
+      }),
+    })
+
+    expect(stageSnapshots[2]).toEqual({
+      stage: 'runtimeMetadata',
+      summary: {
+        tickFunctions: ['ticked'],
+        loadFunctions: [],
+        watchFunctions: [],
+        inlineFunctions: [],
+        noInlineFunctions: [],
+        coroutineFunctions: [],
+        scheduleFunctions: [],
+        profiledFunctions: [],
+        benchmarkFunctions: [],
+        throttleFunctions: [],
+        retryFunctions: [],
+        memoizeFunctions: [],
+        eventHandlers: {},
+        functionTags: { 'custom:handlers': ['snapshot_stage_test:tagged'] },
+      },
+    })
+
+    expect(stageSnapshots[3]).toEqual({
+      stage: 'lowerAndOptimize',
+      summary: expect.objectContaining({
+        namespace: 'snapshot_stage_test',
+        functions: expect.arrayContaining(['ticked', 'tagged']),
+        libraryFilePaths: [],
+        generatedTickFunctions: [],
+        warnings: 0,
+      }),
+    })
+
+    expect(stageSnapshots[4]).toEqual({
+      stage: 'finalizeRuntimeLIR',
+      summary: expect.objectContaining({
+        namespace: 'snapshot_stage_test',
+        functions: expect.arrayContaining(['ticked', 'tagged']),
+        singletonObjectives: [],
+        warnings: 0,
+      }),
+    })
+
+    expect(stageSnapshots[5]).toEqual({
+      stage: 'emitDatapack',
+      summary: expect.objectContaining({
+        files: result.files.length,
+        paths: expect.arrayContaining([
+          'data/snapshot_stage_test/function/ticked.mcfunction',
+          'data/snapshot_stage_test/function/tagged.mcfunction',
+          'data/minecraft/tags/function/tick.json',
+          'data/custom/tags/function/handlers.json',
+        ]),
+      }),
+    })
   })
 
   test('control-flow statements generate emit-time branching artifacts', () => {

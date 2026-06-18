@@ -71,7 +71,15 @@ export interface CompileResult {
   readonly success: true
 }
 
-export type CompileStageName = 'preprocess' | 'parse' | 'typecheck' | 'runtimeMetadata'
+export type CompileStageName =
+  | 'preprocess'
+  | 'parse'
+  | 'typecheck'
+  | 'lowerToHIR'
+  | 'runtimeMetadata'
+  | 'lowerAndOptimize'
+  | 'finalizeRuntimeLIR'
+  | 'emitDatapack'
 
 export interface CompileStageSnapshot {
   stage: CompileStageName
@@ -557,6 +565,42 @@ function summarizeRuntimeMetadataStage(stage: CollectRuntimeMetadataStageResult)
   }
 }
 
+function summarizeLowerToHIRStage(stage: LowerToHIRStageResult): Record<string, unknown> {
+  return {
+    namespace: stage.hir.namespace,
+    functions: stage.hir.functions.map(fn => fn.name),
+    structs: stage.hir.structs.map(s => s.name),
+    libraryFilePaths: [...stage.libraryFilePaths].sort(),
+    warnings: stage.warnings.length,
+  }
+}
+
+function summarizeLowerAndOptimizeStages(stage: LowerAndOptimizeStagesResult): Record<string, unknown> {
+  return {
+    namespace: stage.lirOpt.namespace,
+    functions: stage.lirOpt.functions.map(fn => fn.name),
+    libraryFilePaths: [...stage.libraryFilePaths].sort(),
+    generatedTickFunctions: stage.generatedTickFunctions,
+    warnings: stage.warnings.length,
+  }
+}
+
+function summarizeFinalizeRuntimeLIRStage(stage: FinalizeRuntimeLIRStageResult): Record<string, unknown> {
+  return {
+    namespace: stage.lir.namespace,
+    functions: stage.lir.functions.map(fn => fn.name),
+    singletonObjectives: stage.singletonObjectives,
+    warnings: stage.warnings.length,
+  }
+}
+
+function summarizeEmitDatapackStage(stage: EmitDatapackStageResult): Record<string, unknown> {
+  return {
+    files: stage.files.length,
+    paths: stage.files.map(file => file.path).sort(),
+  }
+}
+
 function annotateFunctionSourceFiles(
   program: {
     declarations: Array<{ sourceFile?: string }>
@@ -765,6 +809,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     const hirStage = lowerToHIRStage(ast, namespace)
+    recordStageSnapshot(options, 'lowerToHIR', () => summarizeLowerToHIRStage(hirStage))
     warnings.push(...hirStage.warnings)
 
     if (stopAfterCheck) {
@@ -799,6 +844,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       noInlineFunctions,
       coroutineInfos,
     })
+    recordStageSnapshot(options, 'lowerAndOptimize', () => summarizeLowerAndOptimizeStages(lowered))
     const lirOpt = lowered.lirOpt
     const libraryFilePaths = lowered.libraryFilePaths
     tickFunctions.push(...lowered.generatedTickFunctions)
@@ -811,12 +857,13 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       coroutineInfos,
       filePath,
     })
+    recordStageSnapshot(options, 'finalizeRuntimeLIR', () => summarizeFinalizeRuntimeLIRStage(lirRuntime))
     const finalizedLIR = lirRuntime.lir
     const singletonObjectives = lirRuntime.singletonObjectives
     warnings.push(...lirRuntime.warnings)
 
     // Stage 7: LIR → .mcfunction
-    const { files } = emitDatapackStage(finalizedLIR, {
+    const emitted = emitDatapackStage(finalizedLIR, {
       namespace,
       tickFunctions,
       loadFunctions,
@@ -835,8 +882,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       memoizeFunctions,
       libraryFilePaths,
     })
+    recordStageSnapshot(options, 'emitDatapack', () => summarizeEmitDatapackStage(emitted))
 
-    return { files, warnings, success: true as const }
+    return { files: emitted.files, warnings, success: true as const }
   } catch (err) {
     if (stopAfterCheck) {
       if (err instanceof CheckFailedError) throw err

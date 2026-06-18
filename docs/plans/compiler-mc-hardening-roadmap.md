@@ -294,7 +294,7 @@ Tasks:
 - [x] Extract final emit/prune behavior into `emitDatapackStage`.
   - Added `emitDatapackStage` to own `emit(...)` wiring and library function pruning; compile still returns `{ files, warnings, success }` unchanged.
 - [x] Add dump/snapshot support for selected stages after the extraction points exist.
-  - `CompileOptions.snapshotStages` plus caller-owned `stageSnapshots` can now collect deterministic summaries for extracted stages (`preprocess`, `parse`, `typecheck`, and `runtimeMetadata`) without changing `CompileResult` or emitting extra files.
+  - `CompileOptions.snapshotStages` plus caller-owned `stageSnapshots` can now collect deterministic summaries for all extracted compile stages (`preprocess`, `parse`, `typecheck`, `lowerToHIR`, `runtimeMetadata`, `lowerAndOptimize`, `finalizeRuntimeLIR`, and `emitDatapack`) without changing `CompileResult` or emitting extra files.
 
 Suggested files:
 
