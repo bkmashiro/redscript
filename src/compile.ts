@@ -13,7 +13,13 @@ import { DiagnosticError } from './diagnostics'
 // Re-export v2 compile
 // ---------------------------------------------------------------------------
 
-export { compile, CompileOptions, CompileResult } from './emit/compile'
+export {
+  compile,
+  CompileOptions,
+  CompileResult,
+  CompileStageName,
+  CompileStageSnapshot,
+} from './emit/compile'
 export type { DatapackFile } from './emit/index'
 
 // ---------------------------------------------------------------------------

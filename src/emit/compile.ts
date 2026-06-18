@@ -57,6 +57,10 @@ export interface CompileOptions {
   stopAfterCheck?: boolean
   /** When true, enable debug-only helpers such as @profile instrumentation. */
   debug?: boolean
+  /** Optional selected stage names to snapshot when `stageSnapshots` is provided. */
+  snapshotStages?: CompileStageName[]
+  /** Optional caller-owned sink for deterministic compile stage summaries. */
+  stageSnapshots?: CompileStageSnapshot[]
 }
 
 export interface CompileResult {
@@ -64,6 +68,13 @@ export interface CompileResult {
   warnings: string[]
   /** Always true — v1 compat shim (compile() throws on error) */
   readonly success: true
+}
+
+export type CompileStageName = 'preprocess' | 'parse' | 'typecheck' | 'runtimeMetadata'
+
+export interface CompileStageSnapshot {
+  stage: CompileStageName
+  summary: Record<string, unknown>
 }
 
 export interface PreprocessSourceStageResult {
@@ -239,6 +250,63 @@ export function runTypecheckStage(
   return { warnings }
 }
 
+function recordStageSnapshot(
+  options: Pick<CompileOptions, 'snapshotStages' | 'stageSnapshots'>,
+  stage: CompileStageName,
+  summarize: () => Record<string, unknown>,
+): void {
+  if (!options.stageSnapshots) return
+  if (options.snapshotStages && !options.snapshotStages.includes(stage)) return
+  options.stageSnapshots.push({ stage, summary: summarize() })
+}
+
+function mapToObject(map: Map<string, string[]>): Record<string, string[]> {
+  return Object.fromEntries([...map.entries()].sort(([a], [b]) => a.localeCompare(b)))
+}
+
+function summarizePreprocessStage(stage: PreprocessSourceStageResult): Record<string, unknown> {
+  return {
+    processedLength: stage.processedSource.length,
+    ranges: stage.ranges.length,
+    libraryImports: stage.libraryImports?.map(imp => imp.filePath) ?? [],
+  }
+}
+
+function summarizeParseStage(stage: ParseSourceStageResult): Record<string, unknown> {
+  return {
+    namespace: stage.ast.namespace,
+    functions: stage.ast.declarations.map(fn => fn.name),
+    structs: stage.ast.structs.map(s => s.name),
+    imports: stage.ast.imports.length,
+    warnings: stage.warnings.length,
+  }
+}
+
+function summarizeTypecheckStage(stage: RunTypecheckStageResult): Record<string, unknown> {
+  return {
+    warnings: stage.warnings.length,
+  }
+}
+
+function summarizeRuntimeMetadataStage(stage: CollectRuntimeMetadataStageResult): Record<string, unknown> {
+  return {
+    tickFunctions: stage.tickFunctions,
+    loadFunctions: stage.loadFunctions,
+    watchFunctions: stage.watchFunctions,
+    inlineFunctions: [...stage.inlineFunctions],
+    noInlineFunctions: [...stage.noInlineFunctions],
+    coroutineFunctions: stage.coroutineInfos.map(info => info.fnName),
+    scheduleFunctions: stage.scheduleFunctions,
+    profiledFunctions: stage.profiledFunctions,
+    benchmarkFunctions: stage.benchmarkFunctions,
+    throttleFunctions: stage.throttleFunctions,
+    retryFunctions: stage.retryFunctions,
+    memoizeFunctions: stage.memoizeFunctions,
+    eventHandlers: mapToObject(stage.eventHandlers),
+    functionTags: mapToObject(stage.functionTags),
+  }
+}
+
 function annotateFunctionSourceFiles(
   program: {
     declarations: Array<{ sourceFile?: string }>
@@ -319,11 +387,13 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
   // Preprocess: resolve import directives, merge imported sources
   const preprocessed = preprocessSourceStage(source, { filePath, includeDirs })
+  recordStageSnapshot(options, 'preprocess', () => summarizePreprocessStage(preprocessed))
   const processedSource = preprocessed.processedSource
 
   try {
     // Stage 1: Lex + Parse → AST
     const parsed = parseSourceStage(processedSource, namespace, { filePath, stopAfterCheck })
+    recordStageSnapshot(options, 'parse', () => summarizeParseStage(parsed))
     const ast = parsed.ast
     warnings.push(...parsed.warnings)
 
@@ -440,6 +510,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     {
       const typechecked = runTypecheckStage(ast, processedSource, { filePath, lenient, stopAfterCheck })
+      recordStageSnapshot(options, 'typecheck', () => summarizeTypecheckStage(typechecked))
       warnings.push(...typechecked.warnings)
     }
 
@@ -464,6 +535,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     // Extract decorator/runtime metadata before HIR lowering discards it.
     const runtimeMetadata = collectRuntimeMetadataStage(hir, namespace)
+    recordStageSnapshot(options, 'runtimeMetadata', () => summarizeRuntimeMetadataStage(runtimeMetadata))
     const {
       tickFunctions,
       loadFunctions,

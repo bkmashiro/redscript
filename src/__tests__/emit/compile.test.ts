@@ -11,6 +11,7 @@ import {
 import { DiagnosticBundleError, DiagnosticError } from '../../diagnostics'
 import { lowerToHIR } from '../../hir/lower'
 import { monomorphize } from '../../hir/monomorphize'
+import type { CompileStageSnapshot } from '../../emit/compile'
 import type { HIRModule } from '../../hir/types'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
@@ -183,6 +184,55 @@ describe('emit: compile coverage', () => {
     const metadata = collectRuntimeMetadataStage(hir, 'metadata_stage_test')
 
     expect(metadata.watchFunctions).toEqual([{ name: 'watched', objective: 'rs.kills' }])
+  })
+
+  test('compile can collect selected stage snapshots without changing output shape', () => {
+    const stageSnapshots: CompileStageSnapshot[] = []
+    const result = compile(`
+      @tick
+      fn ticked(): void {}
+
+      @function_tag("custom:handlers")
+      fn tagged(): void {}
+    `, {
+      namespace: 'snapshot_stage_test',
+      snapshotStages: ['parse', 'runtimeMetadata'],
+      stageSnapshots,
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.files.length).toBeGreaterThan(0)
+    expect(stageSnapshots).toEqual([
+      {
+        stage: 'parse',
+        summary: {
+          namespace: 'snapshot_stage_test',
+          functions: ['ticked', 'tagged'],
+          structs: [],
+          imports: 0,
+          warnings: 0,
+        },
+      },
+      {
+        stage: 'runtimeMetadata',
+        summary: {
+          tickFunctions: ['ticked'],
+          loadFunctions: [],
+          watchFunctions: [],
+          inlineFunctions: [],
+          noInlineFunctions: [],
+          coroutineFunctions: [],
+          scheduleFunctions: [],
+          profiledFunctions: [],
+          benchmarkFunctions: [],
+          throttleFunctions: [],
+          retryFunctions: [],
+          memoizeFunctions: [],
+          eventHandlers: {},
+          functionTags: { 'custom:handlers': ['snapshot_stage_test:tagged'] },
+        },
+      },
+    ])
   })
 
   test('control-flow statements generate emit-time branching artifacts', () => {
