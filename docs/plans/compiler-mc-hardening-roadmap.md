@@ -198,9 +198,9 @@ Golden tests should be small and readable. Start with:
 
 Tasks:
 
-- [ ] Add a golden test helper that compiles `.mcrs` input and snapshots normalized files.
-- [ ] Normalize volatile details in snapshots if necessary; do not snapshot generated docs or VSCode compiled output.
-- [ ] Keep snapshots small; prefer one feature per case.
+- [x] Add a golden test helper that compiles `.mcrs` input and checks normalized command files (`src/__tests__/golden/core-command-golden.test.ts`).
+- [x] Normalize volatile details in golden assertions; do not check generated docs or VSCode compiled output.
+- [x] Keep snapshots small; prefer one feature per case.
 - [ ] Add review guidance: if a golden changes, the PR must explain whether the command shape changed intentionally.
 
 Suggested files:
