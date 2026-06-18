@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { compile, parseSourceStage, preprocessSourceStage } from '../../emit/compile'
+import { compile, parseSourceStage, preprocessSourceStage, runTypecheckStage } from '../../emit/compile'
 import { DiagnosticBundleError, DiagnosticError } from '../../diagnostics'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
@@ -71,6 +71,38 @@ describe('emit: compile coverage', () => {
       }
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  test('runTypecheckStage returns typechecker warnings without emitting files', () => {
+    const source = `
+      fn main(a: float, b: float): float {
+        return a + b;
+      }
+    `
+    const parsed = parseSourceStage(source, 'typecheck_stage_test')
+
+    const stage = runTypecheckStage(parsed.ast, source)
+
+    expect(stage.warnings.some(warning => warning.includes('[FloatArithmetic]'))).toBe(true)
+  })
+
+  test('runTypecheckStage preserves diagnostic bundling and source file for decorator errors', () => {
+    const filePath = '/tmp/typecheck-stage-test.mcrs'
+    const source = `
+      @watch("rs.kills")
+      fn watched(value: int): void {}
+    `
+    const parsed = parseSourceStage(source, 'typecheck_stage_test', { filePath })
+
+    try {
+      runTypecheckStage(parsed.ast, source, { filePath, stopAfterCheck: true })
+      throw new Error('expected runTypecheckStage to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(DiagnosticBundleError)
+      const bundle = err as DiagnosticBundleError
+      expect(bundle.diagnostics[0].location.file).toBe(filePath)
+      expect(bundle.diagnostics[0].message).toContain('@watch')
     }
   })
 

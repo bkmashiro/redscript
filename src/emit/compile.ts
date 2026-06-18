@@ -104,6 +104,30 @@ export function parseSourceStage(
   return { ast, warnings: [...parser.warnings] }
 }
 
+export interface RunTypecheckStageResult {
+  warnings: string[]
+}
+
+export function runTypecheckStage(
+  ast: Program,
+  source: string,
+  options: { filePath?: string; lenient?: boolean; stopAfterCheck?: boolean } = {},
+): RunTypecheckStageResult {
+  const checker = new TypeChecker(source, options.filePath)
+  const typeErrors = checker.check(ast)
+  const warnings = [...checker.getWarnings()]
+  if (typeErrors.length > 0) {
+    if (options.lenient) {
+      for (const e of typeErrors) {
+        warnings.push(`[TypeError] line ${e.location.line}, col ${e.location.col}: ${e.message}`)
+      }
+    } else {
+      throw options.stopAfterCheck ? new DiagnosticBundleError(typeErrors) : typeErrors[0]
+    }
+  }
+  return { warnings }
+}
+
 function annotateFunctionSourceFiles(
   program: {
     declarations: Array<{ sourceFile?: string }>
@@ -304,18 +328,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     {
-      const checker = new TypeChecker(processedSource, filePath)
-      const typeErrors = checker.check(ast)
-      warnings.push(...checker.getWarnings())
-      if (typeErrors.length > 0) {
-        if (lenient) {
-          for (const e of typeErrors) {
-            warnings.push(`[TypeError] line ${e.location.line}, col ${e.location.col}: ${e.message}`)
-          }
-        } else {
-          throw stopAfterCheck ? new DiagnosticBundleError(typeErrors) : typeErrors[0]
-        }
-      }
+      const typechecked = runTypecheckStage(ast, processedSource, { filePath, lenient, stopAfterCheck })
+      warnings.push(...typechecked.warnings)
     }
 
     // Stage 2: AST → HIR

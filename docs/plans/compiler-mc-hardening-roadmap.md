@@ -283,7 +283,8 @@ Tasks:
 - [x] Extract `parseSourceStage` as the first pure orchestration helper with targeted tests.
 - [x] Extract import/preprocess stage first; verify spans/errors do not regress.
   - `preprocessSourceStage` now wraps import/preprocess metadata for compile orchestration and has focused tests for source ranges, library imports, and import diagnostic file/line preservation.
-- [ ] Extract typecheck/decorator metadata handling next.
+- [x] Extract typecheck/decorator metadata handling next.
+  - `runTypecheckStage` now owns TypeChecker invocation, warning collection, lenient type-error warning coercion, and stop-after-check diagnostic bundling; focused tests pin float lint warnings and decorator-error source-file preservation.
 - [ ] Extract runtime helper metadata collection out of compile orchestration.
 - [ ] Add dump/snapshot support for selected stages after the extraction points exist.
 
