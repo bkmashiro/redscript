@@ -7,7 +7,7 @@
 
 import type { Program, FnDecl, Stmt, Expr, TypeNode, Block, EntityTypeName, EntitySelector, InterfaceDecl, InterfaceMethod } from '../ast/types'
 import { DiagnosticError, DiagnosticCollector } from '../diagnostics'
-import { getEventParamSpecs, isEventTypeName } from '../events/types'
+import { getEventExecutorContext, getEventParamSpecs, isEventTypeName } from '../events/types'
 import { expandStructDeclarations } from '../structs/expand'
 
 interface ScopeSymbol {
@@ -386,7 +386,27 @@ export class TypeChecker {
     }
 
     // Check body
-    this.checkBlock(fn.body)
+    const onDecorator = fn.decorators.find(decorator => decorator.name === 'on')
+    const eventType = onDecorator?.args?.eventType
+    const hasEventContext = !!(eventType && isEventTypeName(eventType))
+
+    if (hasEventContext) {
+      const executorContext = getEventExecutorContext(eventType)
+      const shouldPushContext = executorContext.kind === 'entity'
+
+      if (shouldPushContext) {
+        this.pushSelfType(executorContext.entityType)
+        try {
+          this.checkBlock(fn.body)
+        } finally {
+          this.popSelfType()
+        }
+      } else {
+        this.checkBlock(fn.body)
+      }
+    } else {
+      this.checkBlock(fn.body)
+    }
 
     this.currentFn = null
     this.currentReturnType = null
@@ -1647,6 +1667,10 @@ export class TypeChecker {
     return false
   }
 
+  private isKnownEntityType(entityType: string): entityType is EntityTypeName {
+    return entityType in ENTITY_HIERARCHY
+  }
+
   /** Push a new self type context */
   private pushSelfType(entityType: EntityTypeName): void {
     this.selfTypeStack.push(entityType)
@@ -1689,18 +1713,27 @@ export class TypeChecker {
       return true
     }
 
-    // Selector/entity cross-kind compatibility (must come before kind guard)
+    // Selector/entity cross-kind compatibility (must come before kind guard).
+    // A selector is only a valid typed entity context when its inferred executor
+    // type is known to be a subtype of the expected entity. This keeps plain @s
+    // (selector<entity>) from masquerading as Player outside an execution
+    // context, while @on(PlayerDeath) can narrow @s through selfTypeStack.
     if (expected.kind === 'selector' && actual.kind === 'entity') {
-      return true  // entity is a valid selector
+      if (!expected.entityType) return true
+      return this.isKnownEntityType(expected.entityType) &&
+        this.isEntitySubtype(actual.entityType, expected.entityType)
     }
     if (expected.kind === 'entity' && actual.kind === 'selector') {
-      return true  // selector is a valid entity context
+      if (!actual.entityType || !this.isKnownEntityType(actual.entityType)) return false
+      return this.isEntitySubtype(actual.entityType, expected.entityType)
     }
     if (expected.kind === 'entity' && actual.kind === 'entity') {
       return this.isEntitySubtype(actual.entityType, expected.entityType)
     }
     if (expected.kind === 'selector' && actual.kind === 'selector') {
-      return true  // any entity subtype is compatible
+      if (!expected.entityType) return true
+      if (!actual.entityType || !this.isKnownEntityType(expected.entityType) || !this.isKnownEntityType(actual.entityType)) return false
+      return this.isEntitySubtype(actual.entityType, expected.entityType)
     }
     // Fake player names (#name) are mc_name tokens typed as string — allow them
     // where a selector is expected, since MC scoreboards accept fake player names.
@@ -1780,7 +1813,7 @@ export class TypeChecker {
       case 'entity':
         return type.entityType
       case 'selector':
-        return 'selector'
+        return type.entityType ? `selector<${type.entityType}>` : 'selector'
       case 'tuple':
         return `(${type.elements.map(e => this.typeToString(e)).join(', ')})`
       case 'option':

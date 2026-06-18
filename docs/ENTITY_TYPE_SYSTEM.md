@@ -77,7 +77,13 @@ foreach (z in @e[type=zombie]) {
 ```mcrs
 // Top-level: @s is entity (conservative)
 @tick fn tick() {
-    @s.kill();  // ✅ entity method only
+    let p: Player = @s;  // ❌ no executor context proves @s is a Player
+}
+
+// Runtime event handlers: @s is narrowed from the event registry executorContext
+@on(PlayerDeath)
+fn on_death() {
+    let p: Player = @s;  // ✅ stdlib dispatches PlayerDeath as @a[...] executor
 }
 
 // Inside foreach @a: @s is Player
@@ -85,7 +91,6 @@ foreach (p in @a) {
     @s.give("diamond", 1);  // ✅ @s is Player
     p.give("diamond", 1);   // ✅ Same as @s
 }
-
 // Inside as block: @s changes
 foreach (p in @a) {
     // @s: Player

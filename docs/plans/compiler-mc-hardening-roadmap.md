@@ -354,7 +354,7 @@ npm test -- --runInBand
 
 **Objective:** Fix sugar and high-level language constructs only after core command semantics are pinned.
 
-Event/runtime boundary note: gameplay decorators such as `@on(PlayerDeath)` should not keep growing as compiler-hardcoded event enums. Prefer generic datapack artifact primitives (`@function_tag("namespace:path")`) plus stdlib/runtime-owned event dispatch; `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` merge through the same tag files as `@tick`/`@load`, and legacy `@on` tag ids are centralized in the event registry rather than duplicated in emit. See `docs/plans/event-runtime-boundary.md`.
+Event/runtime boundary note: gameplay decorators such as `@on(PlayerDeath)` should not keep growing as compiler-hardcoded event enums. Prefer generic datapack artifact primitives (`@function_tag("namespace:path")`) plus stdlib/runtime-owned event dispatch; `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` merge through the same tag files as `@tick`/`@load`. Legacy `@on` tag ids and executor contexts are centralized in the event registry (`handlerTag`, `executorContext`), so emit no longer carries a separate event-to-tag table and the typechecker narrows `@s` from runtime-dispatch context rather than fake parameters. See `docs/plans/event-runtime-boundary.md`.
 
 Focus areas:
 
@@ -397,9 +397,9 @@ npm test -- src/__tests__/hir src/__tests__/mir src/__tests__/e2e --runInBand
 
 The next implementation slice should be:
 
-1. Extract typecheck/decorator metadata handling from `compile()` into a named stage while keeping the public `compile()` API stable.
-2. Add focused tests that pin type-error bundling (`stopAfterCheck`), lenient warning conversion, checker warnings, and config-global-to-const rewriting.
-3. Keep runtime decorator metadata collection (`tick`, `load`, `watch`, coroutine/schedule/profile/etc.) as the following slice unless the typecheck seam makes a tiny shared helper obvious.
-4. Run `npm run build` and the focused compile/typecheck tests before broader refactors.
+1. Decide whether to keep legacy `player: Player` event parameters as a deprecated alias for `@s`, then pin the lowering with a focused compile test so no `$p0`-style fake parameter slot is required for function-tag dispatch.
+2. If more event sugar is needed, introduce a small manifest format that supplies `handlerTag` + `executorContext` + runtime assets, rather than adding new compiler-hardcoded gameplay enums.
+3. Keep `@function_tag(...)` as the generic artifact primitive; any new gameplay behavior should live in stdlib/runtime assets first.
+4. Run `npm run build`, event/typechecker tests, `npm run validate-mc`, and full suite before broader refactors.
 
-This is lower-risk than starting with a `typechecker/index.ts` split and continues to clarify `src/emit/compile.ts` stage boundaries under existing behavior.
+This keeps the runtime boundary honest before any broader `typechecker/index.ts` split.

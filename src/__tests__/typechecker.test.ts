@@ -675,6 +675,26 @@ fn handle_death() {
 `)
       expect(errors).toHaveLength(0)
     })
+
+    it('narrows @s to Player inside legacy @on handlers', () => {
+      const errors = typeCheck(`
+@on(PlayerDeath)
+fn handle_death() {
+    let p: Player = @s
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('does not narrow @s in ordinary functions without an executor context', () => {
+      const errors = typeCheck(`
+fn plain() {
+    let p: Player = @s
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('expected Player, got selector<entity>')
+    })
   })
 
 })

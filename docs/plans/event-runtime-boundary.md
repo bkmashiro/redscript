@@ -19,7 +19,7 @@
 - `src/emit/index.ts` knows event-to-tag mappings such as `PlayerDeath -> data/rs/tags/function/on_player_death.json`.
 - `src/emit/compile.ts` collects `@on(...)` handlers as compiler metadata.
 
-These event names are Minecraft runtime/game-behavior policy, not core language semantics. The current parameter shape is also misleading: Minecraft function tags cannot pass event parameters. Handler functions run through an execution context such as `execute as @a[...] run function ...`, so `@s` is the honest boundary unless RedScript later grows an explicit runtime event-context object.
+These event names are Minecraft runtime/game-behavior policy, not core language semantics. The current parameter shape is also misleading: Minecraft function tags cannot pass event parameters. Handler functions run through an execution context such as `execute as @a[...] run function ...`, so `@s` is the honest boundary unless RedScript later grows an explicit runtime event-context object. Legacy event registry entries now carry an explicit `executorContext` (currently `Player` for the built-in runtime events) so the typechecker can narrow `@s` inside `@on` handlers without pretending the function tag passed a parameter.
 
 ## Boundary rule
 
@@ -66,7 +66,7 @@ This only means: add `namespace:function_name` to `data/rs/tags/function/on_play
 {
   "events:player_death": {
     "handlerTag": "rs:on_player_death",
-    "context": "execute_as_player",
+    "executorContext": { "kind": "entity", "entityType": "Player" },
     "runtimeAssets": [
       "functions/events/player_death_tick.mcfunction",
       "tags/function/tick.json"
@@ -112,5 +112,6 @@ That legacy form can remain for compatibility, but new runtime docs should teach
 - Centralized legacy `@on(EventType)` handler tag ids in the shared event registry (`EVENT_TYPES.*.handlerTag`) so emit no longer carries a separate event-to-tag table.
 - Removed `BlockBreak` from built-in `@on(EventType)` because the runtime dispatcher never implemented block-break detection; users can still compose block-break behavior explicitly with `@function_tag(...)` and their own datapack assets.
 - Allowed legacy `@on(EventType)` handlers to declare zero parameters so users can write runtime-honest handlers around `@s`; the old single `Player` parameter form remains accepted for compatibility.
+- Added explicit legacy event executor context metadata (`EVENT_TYPES.*.executorContext`) and typechecker injection so `@s` narrows to the runtime dispatcher's executor type inside `@on` handlers, while plain functions do not silently treat generic `@s` as `Player`.
 - Added tests proving `@function_tag("rs:on_player_death")` can produce the same handler tag file without compiler knowing a gameplay event name.
 - Added compatibility tests proving `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` use the same generated tag files as `@tick` and `@load`.

@@ -6,28 +6,40 @@ export const EVENT_TYPES = {
     handlerTag: 'rs:on_player_death',
     params: ['player: Player'],
     detection: 'scoreboard',
+    executorContext: { kind: 'entity', entityType: 'Player' },
   },
   PlayerJoin: {
     tag: 'rs.just_joined',
     handlerTag: 'rs:on_player_join',
     params: ['player: Player'],
     detection: 'tag',
+    executorContext: { kind: 'entity', entityType: 'Player' },
   },
   EntityKill: {
     tag: 'rs.just_killed',
     handlerTag: 'rs:on_entity_kill',
     params: ['player: Player'],
     detection: 'scoreboard',
+    executorContext: { kind: 'entity', entityType: 'Player' },
   },
   ItemUse: {
     tag: 'rs.just_used_item',
     handlerTag: 'rs:on_item_use',
     params: ['player: Player'],
     detection: 'scoreboard',
+    executorContext: { kind: 'entity', entityType: 'Player' },
   },
 } as const
 
 export type EventTypeName = keyof typeof EVENT_TYPES
+
+export interface EventTypeSpec {
+  tag: string
+  handlerTag: string
+  params: readonly string[]
+  detection: string
+  executorContext: TypeNode
+}
 
 export interface EventParamSpec {
   name: string
@@ -36,6 +48,10 @@ export interface EventParamSpec {
 
 export function isEventTypeName(value: string): value is EventTypeName {
   return value in EVENT_TYPES
+}
+
+export function getEventExecutorContext(eventType: EventTypeName): TypeNode {
+  return EVENT_TYPES[eventType].executorContext
 }
 
 export function getEventParamSpecs(eventType: EventTypeName): EventParamSpec[] {

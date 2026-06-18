@@ -6,6 +6,7 @@ import {
   isEventTypeName,
   getEventParamSpecs,
   getEventHandlerTagId,
+  getEventExecutorContext,
   EVENT_TYPES,
 } from '../events/types'
 
@@ -69,5 +70,19 @@ describe('events/types — handler tag registry', () => {
     expect(getEventHandlerTagId('PlayerJoin')).toBe('rs:on_player_join')
     expect(getEventHandlerTagId('EntityKill')).toBe('rs:on_entity_kill')
     expect(getEventHandlerTagId('ItemUse')).toBe('rs:on_item_use')
+  })
+})
+
+describe('events/types — executor context', () => {
+  test('getEventExecutorContext returns Player executor for PlayerDeath', () => {
+    const context = getEventExecutorContext('PlayerDeath')
+    expect(context).toEqual({ kind: 'entity', entityType: 'Player' })
+  })
+
+  test('all current events are Player executor context', () => {
+    for (const name of Object.keys(EVENT_TYPES)) {
+      const eventType = name as keyof typeof EVENT_TYPES
+      expect(getEventExecutorContext(eventType)).toEqual({ kind: 'entity', entityType: 'Player' })
+    }
   })
 })
