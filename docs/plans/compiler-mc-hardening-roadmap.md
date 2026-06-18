@@ -345,10 +345,15 @@ Prioritized splits:
 Tasks:
 
 - [x] Start typechecker split by extracting function decorator/event validation into `src/typechecker/decorators.ts` with focused pure-helper tests; `TypeChecker` delegates wrapper decorators and legacy `@on(...)` validation through that seam.
-- [ ] Before each split, add focused tests around the behavior being moved.
-- [ ] Move one responsibility per PR.
-- [ ] Preserve public exports or add compatibility re-exports.
-- [ ] Run full test suite after each split.
+- [x] Finish Phase 5 helper seams with focused tests:
+  - `src/typechecker/entities.ts` centralizes entity hierarchy, Minecraft entity-id mapping, selector-context inference, and subtype predicates.
+  - `src/emit/paths.ts` centralizes function path/ref normalization and source-map header/source-marker helpers.
+  - `src/cli/args.ts` centralizes CLI argument parsing plus namespace/project-name sanitizers.
+  - `src/ast/decorators.ts` centralizes decorator names and the `DecoratorName` type consumed by `ast/types.ts`.
+- [x] Before each split, add focused tests around the behavior being moved.
+- [x] Move one responsibility per PR-sized slice; Phase 5 intentionally stops at low-risk seams instead of deep expression/statement checker moves.
+- [x] Preserve public exports or add compatibility re-exports.
+- [x] Run full test suite after each split.
 
 Verification:
 

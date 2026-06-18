@@ -5,6 +5,8 @@
  * The AST is produced by the parser and consumed by the lowering pass.
  */
 
+import type { DecoratorName } from './decorators'
+
 // ---------------------------------------------------------------------------
 // Binary / comparison operators (shared across AST, HIR, MIR)
 // ---------------------------------------------------------------------------
@@ -273,7 +275,7 @@ export type Block = Stmt[]
 // ---------------------------------------------------------------------------
 
 export interface Decorator {
-  name: 'tick' | 'load' | 'watch' | 'on' | 'function_tag' | 'on_trigger' | 'on_advancement' | 'on_craft' | 'on_death' | 'on_login' | 'on_join_team' | 'keep' | 'require_on_load' | 'coroutine' | 'schedule' | 'deprecated' | 'inline' | 'no-inline' | 'config' | 'singleton' | 'profile' | 'benchmark' | 'throttle' | 'retry' | 'memoize' | 'test'
+  name: DecoratorName
   args?: {
     rate?: number
     objective?: string

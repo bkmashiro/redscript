@@ -10,6 +10,7 @@ import { DiagnosticError, DiagnosticCollector } from '../diagnostics'
 import { getEventExecutorContext, isEventTypeName } from '../events/types'
 import { expandStructDeclarations } from '../structs/expand'
 import { validateFunctionDecorators } from './decorators'
+import { ENTITY_HIERARCHY, inferEntityTypeFromSelector, isEntitySubtype, isKnownEntityType } from './entities'
 
 interface ScopeSymbol {
   type: TypeNode
@@ -19,88 +20,6 @@ interface ScopeSymbol {
 interface BuiltinSignature {
   params: TypeNode[]
   return: TypeNode
-}
-
-// Entity type hierarchy for subtype checking
-const ENTITY_HIERARCHY: Record<EntityTypeName, EntityTypeName | null> = {
-  'entity': null,
-  'Player': 'entity',
-  'Mob': 'entity',
-  'HostileMob': 'Mob',
-  'PassiveMob': 'Mob',
-  'Zombie': 'HostileMob',
-  'Skeleton': 'HostileMob',
-  'Creeper': 'HostileMob',
-  'Spider': 'HostileMob',
-  'Enderman': 'HostileMob',
-  'Blaze': 'HostileMob',
-  'Witch': 'HostileMob',
-  'Slime': 'HostileMob',
-  'ZombieVillager': 'HostileMob',
-  'Husk': 'HostileMob',
-  'Drowned': 'HostileMob',
-  'Stray': 'HostileMob',
-  'WitherSkeleton': 'HostileMob',
-  'CaveSpider': 'HostileMob',
-  'Pig': 'PassiveMob',
-  'Cow': 'PassiveMob',
-  'Sheep': 'PassiveMob',
-  'Chicken': 'PassiveMob',
-  'Villager': 'PassiveMob',
-  'WanderingTrader': 'PassiveMob',
-  'ArmorStand': 'entity',
-  'Item': 'entity',
-  'Arrow': 'entity',
-}
-
-// Map Minecraft type names to entity types
-const MC_TYPE_TO_ENTITY: Record<string, EntityTypeName> = {
-  'zombie': 'Zombie',
-  'minecraft:zombie': 'Zombie',
-  'skeleton': 'Skeleton',
-  'minecraft:skeleton': 'Skeleton',
-  'creeper': 'Creeper',
-  'minecraft:creeper': 'Creeper',
-  'spider': 'Spider',
-  'minecraft:spider': 'Spider',
-  'enderman': 'Enderman',
-  'minecraft:enderman': 'Enderman',
-  'blaze': 'Blaze',
-  'minecraft:blaze': 'Blaze',
-  'witch': 'Witch',
-  'minecraft:witch': 'Witch',
-  'slime': 'Slime',
-  'minecraft:slime': 'Slime',
-  'zombie_villager': 'ZombieVillager',
-  'minecraft:zombie_villager': 'ZombieVillager',
-  'husk': 'Husk',
-  'minecraft:husk': 'Husk',
-  'drowned': 'Drowned',
-  'minecraft:drowned': 'Drowned',
-  'stray': 'Stray',
-  'minecraft:stray': 'Stray',
-  'wither_skeleton': 'WitherSkeleton',
-  'minecraft:wither_skeleton': 'WitherSkeleton',
-  'cave_spider': 'CaveSpider',
-  'minecraft:cave_spider': 'CaveSpider',
-  'pig': 'Pig',
-  'minecraft:pig': 'Pig',
-  'cow': 'Cow',
-  'minecraft:cow': 'Cow',
-  'sheep': 'Sheep',
-  'minecraft:sheep': 'Sheep',
-  'chicken': 'Chicken',
-  'minecraft:chicken': 'Chicken',
-  'villager': 'Villager',
-  'minecraft:villager': 'Villager',
-  'wandering_trader': 'WanderingTrader',
-  'minecraft:wandering_trader': 'WanderingTrader',
-  'armor_stand': 'ArmorStand',
-  'minecraft:armor_stand': 'ArmorStand',
-  'item': 'Item',
-  'minecraft:item': 'Item',
-  'arrow': 'Arrow',
-  'minecraft:arrow': 'Arrow',
 }
 
 const VOID_TYPE: TypeNode = { kind: 'named', name: 'void' }
@@ -1481,24 +1400,7 @@ export class TypeChecker {
 
   /** Infer entity type from a selector */
   private inferEntityTypeFromSelector(selector: EntitySelector): EntityTypeName {
-    // @a, @p, @r always return Player
-    if (selector.kind === '@a' || selector.kind === '@p' || selector.kind === '@r') {
-      return 'Player'
-    }
-    
-    // @e or @s with type= filter
-    if (selector.filters?.type) {
-      const mcType = selector.filters.type.toLowerCase()
-      return MC_TYPE_TO_ENTITY[mcType] ?? 'entity'
-    }
-    
-    // @s uses current context
-    if (selector.kind === '@s') {
-      return this.selfTypeStack[this.selfTypeStack.length - 1]
-    }
-    
-    // Default to entity
-    return 'entity'
+    return inferEntityTypeFromSelector(selector, this.getCurrentSelfType())
   }
 
   // Reverse map: parser sometimes remaps method names (e.g. add→set_add) for builtins.
@@ -1535,22 +1437,6 @@ export class TypeChecker {
     }
 
     return method
-  }
-
-  /** Check if childType is a subtype of parentType */
-  private isEntitySubtype(childType: EntityTypeName, parentType: EntityTypeName): boolean {
-    if (childType === parentType) return true
-    
-    let current: EntityTypeName | null = childType
-    while (current !== null) {
-      if (current === parentType) return true
-      current = ENTITY_HIERARCHY[current]
-    }
-    return false
-  }
-
-  private isKnownEntityType(entityType: string): entityType is EntityTypeName {
-    return entityType in ENTITY_HIERARCHY
   }
 
   /** Push a new self type context */
@@ -1602,20 +1488,20 @@ export class TypeChecker {
     // context, while @on(PlayerDeath) can narrow @s through selfTypeStack.
     if (expected.kind === 'selector' && actual.kind === 'entity') {
       if (!expected.entityType) return true
-      return this.isKnownEntityType(expected.entityType) &&
-        this.isEntitySubtype(actual.entityType, expected.entityType)
+      return isKnownEntityType(expected.entityType) &&
+        isEntitySubtype(actual.entityType, expected.entityType)
     }
     if (expected.kind === 'entity' && actual.kind === 'selector') {
-      if (!actual.entityType || !this.isKnownEntityType(actual.entityType)) return false
-      return this.isEntitySubtype(actual.entityType, expected.entityType)
+      if (!actual.entityType || !isKnownEntityType(actual.entityType)) return false
+      return isEntitySubtype(actual.entityType, expected.entityType)
     }
     if (expected.kind === 'entity' && actual.kind === 'entity') {
-      return this.isEntitySubtype(actual.entityType, expected.entityType)
+      return isEntitySubtype(actual.entityType, expected.entityType)
     }
     if (expected.kind === 'selector' && actual.kind === 'selector') {
       if (!expected.entityType) return true
-      if (!actual.entityType || !this.isKnownEntityType(expected.entityType) || !this.isKnownEntityType(actual.entityType)) return false
-      return this.isEntitySubtype(actual.entityType, expected.entityType)
+      if (!actual.entityType || !isKnownEntityType(expected.entityType) || !isKnownEntityType(actual.entityType)) return false
+      return isEntitySubtype(actual.entityType, expected.entityType)
     }
     // Fake player names (#name) are mc_name tokens typed as string — allow them
     // where a selector is expected, since MC scoreboards accept fake player names.

@@ -15,6 +15,7 @@ import {
 } from './sourcemap'
 import { mcVersionToPackFormat, McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 import { getEventHandlerTagId, isEventTypeName } from '../events/types'
+import { emitFunctionHeader, fnNameToPath, formatSourceMarker, humanFunctionName, qualifiedFunctionRef } from './paths'
 
 export interface DatapackFile {
   path: string
@@ -433,85 +434,6 @@ function emitFunction(
     for (const line of profilerEndLines(fn.name)) pushLine(line)
   }
   return lines
-}
-
-/**
- * Converts a LIR function name to its output `.mcfunction` file path.
- *
- * LIR method names use `::` as a namespace separator (e.g. `Player::heal`).
- * Minecraft function IDs use `/` (e.g. `player/heal`), so `::` is replaced.
- * The result is always lower-cased to match MC's case-insensitive function IDs.
- *
- * @param name - LIR function name, possibly containing `::` separators.
- * @param namespace - Datapack namespace (e.g. `"rs"`).
- * @returns Relative datapack path such as `data/rs/function/player/heal.mcfunction`.
- */
-function fnNameToPath(name: string, namespace: string): string {
-  // LIR function names may contain :: for methods — convert to /
-  const mcName = name.replace(/::/g, '/').toLowerCase()
-  return `data/${namespace}/function/${mcName}.mcfunction`
-}
-
-/**
- * Produces the fully-qualified Minecraft function reference for a LIR function.
- *
- * This is the string used in `function` commands and tag files, e.g. `rs:player/heal`.
- * `::` separators are normalised to `/` and the name is lower-cased.
- *
- * @param name - LIR function name, possibly containing `::` separators.
- * @param namespace - Datapack namespace (e.g. `"rs"`).
- * @returns Qualified reference such as `"rs:player/heal"`.
- */
-function qualifiedFunctionRef(name: string, namespace: string): string {
-  return `${namespace}:${name.replace(/::/g, '/').toLowerCase()}`
-}
-
-/**
- * Extracts a readable display name for a LIR function, used in source-map entries.
- *
- * Tries to pull the identifier directly after the `fn` keyword from the stored
- * source snippet. Falls back to the last component of the `::` path, then to the
- * raw LIR name when no snippet is available.
- *
- * @param fn - The LIR function whose human name is needed.
- * @returns A short display name such as `"heal"` or `"Player::heal"`.
- */
-function humanFunctionName(fn: LIRFunction): string {
-  const match = fn.sourceSnippet?.match(/^fn\s+([^(]+)/)
-  return match?.[1] ?? fn.name.split('::').pop() ?? fn.name
-}
-
-/**
- * Emits the comment header lines written at the top of every `.mcfunction` file.
- *
- * Includes a `# Generated from:` line with the source file and line number, and
- * optionally a `# Source:` line with the original source snippet. Returns an empty
- * array when the function has no location info (e.g. compiler-generated helpers).
- *
- * @param fn - The LIR function being emitted.
- * @returns Zero or more comment lines to prepend to the function body.
- */
-function emitFunctionHeader(fn: LIRFunction): string[] {
-  if (!fn.sourceLoc) return []
-  const lines: string[] = []
-  lines.push(`# Generated from: ${fn.sourceLoc.file}:${fn.sourceLoc.line} (fn ${humanFunctionName(fn)})`)
-  if (fn.sourceSnippet) {
-    lines.push(`# Source: ${fn.sourceSnippet}`)
-  }
-  return lines
-}
-
-/**
- * Formats a source location as the `file:line` string used in inline `# src:` markers.
- *
- * These markers appear inside `.mcfunction` bodies to correlate generated commands
- * back to the original source line, aiding debugging without a full source map.
- *
- * @param sourceLoc - Non-null source location attached to a LIR instruction.
- * @returns A string such as `"src/game.rs:42"`.
- */
-function formatSourceMarker(sourceLoc: NonNullable<LIRInstr['sourceLoc']>): string {
-  return `${sourceLoc.file}:${sourceLoc.line}`
 }
 
 /**
