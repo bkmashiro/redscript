@@ -148,7 +148,8 @@ Tasks:
   - keep legacy `/run` + `/score` fallback.
 - [x] Add offline fake-harness tests for endpoint selection and fallback behavior.
 - [ ] Add a case descriptor schema and runner that compiles, installs, reloads, runs, and asserts.
-  - Initial `src/__tests__/mc-core.test.ts` interaction-matrix coverage now includes loop return + nested loop isolation, in-loop mutation, macro-in-loop, storage/NBT read-write loop, and foreach + is-check entity counting.
+  - Initial `src/__tests__/mc-core.test.ts` interaction-matrix coverage now includes execute/as/at/@s context + helper usage, branch+loop+function-return paths, objective/player isolation, storage+NBT read-after-call flow, and controlled tick lifecycle assertions.
+  - Deepening coverage has also added deterministic loop+loop-return, storage/NBT read-write loop, foreach + is-check entity counting, macro-in-loop and storage/NBT read-after-call behavior.
   - Initial oracle coverage also includes arithmetic, execute/if-score branching, function helper, macro-with-storage, and load/tick lifecycle baseline checks via `npm run test:mc-core`.
   - Future work: split inline cases into descriptor files if the suite grows.
 - [x] Use the live Paper oracle to catch and fix known core semantic bugs before extracting the runner:

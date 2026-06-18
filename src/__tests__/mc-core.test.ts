@@ -25,6 +25,8 @@ const CORE_PLAYERS = [
   '#arith_product',
   '#branch_input',
   '#branch_result',
+  '#branch_loop_input',
+  '#branch_loop_result',
   '#chain_input',
   '#call_stage_a',
   '#call_chain',
@@ -36,6 +38,10 @@ const CORE_PLAYERS = [
   '#nested_loop_cols',
   '#nested_loop_result',
   '#if_loop_result',
+  '#execute_ctx_total',
+  '#objective_player_isolation_result',
+  '#storage_nbt_after_fn_result',
+  '#tick_control_result',
   '#storage_nbt_rw_result',
   '#foreach_is_check',
   '#tick_marker',
@@ -134,6 +140,88 @@ fn test_if_inside_loop_mutable_scoreboard() {
       scoreboard_set("#if_loop_result", "${CORE_OBJ}", cur - i)
     }
   }
+}
+
+fn _execute_ctx_count_marked() {
+  let observer: int = scoreboard_get("#execute_ctx_total", "${CORE_OBJ}")
+  let source: int = scoreboard_get("@s", "${CORE_OBJ}")
+  scoreboard_set("#execute_ctx_total", "${CORE_OBJ}", observer + source)
+}
+
+fn test_execute_context_and_helper() {
+  raw("kill @e[type=armor_stand,tag=core_oracle_exec_ctx_a]")
+  raw("kill @e[type=armor_stand,tag=core_oracle_exec_ctx_b]")
+
+  raw("summon minecraft:armor_stand 8 65 0 {Tags:['core_oracle_exec_ctx_a'],NoGravity:1b}")
+  raw("summon minecraft:armor_stand 10 65 0 {Tags:['core_oracle_exec_ctx_b'],NoGravity:1b}")
+  raw("scoreboard players set @e[type=armor_stand,tag=core_oracle_exec_ctx_a] ${CORE_OBJ} 3")
+  raw("scoreboard players set @e[type=armor_stand,tag=core_oracle_exec_ctx_b] ${CORE_OBJ} 4")
+  raw("scoreboard players set #execute_ctx_total ${CORE_OBJ} 0")
+
+  as @e[type=armor_stand,tag=core_oracle_exec_ctx_a] at @s {
+    _execute_ctx_count_marked()
+  }
+  as @e[type=armor_stand,tag=core_oracle_exec_ctx_b] at @s {
+    _execute_ctx_count_marked()
+  }
+
+  raw("kill @e[type=armor_stand,tag=core_oracle_exec_ctx_a]")
+  raw("kill @e[type=armor_stand,tag=core_oracle_exec_ctx_b]")
+}
+
+fn _branch_loop_term(i: int): int {
+  if (i % 2 == 0) {
+    return 1
+  }
+  return -1
+}
+
+fn _branch_loop_fold(limit: int): int {
+  let out: int = 0
+  for i in 0..limit {
+    if (i > 0) {
+      let sign: int = _branch_loop_term(i)
+      if (sign > 0) {
+        out = out + i
+      } else {
+        out = out - i
+      }
+    }
+  }
+  return out
+}
+
+fn test_branch_loop_function_return() {
+  let limit: int = scoreboard_get("#branch_loop_input", "${CORE_OBJ}")
+  let computed: int = _branch_loop_fold(limit)
+  scoreboard_set("#branch_loop_result", "${CORE_OBJ}", computed)
+}
+
+fn _storage_nbt_after_call(seed: int): int {
+  if (seed == 0) {
+    storage_set_array("rs:core_oracle", "nbt_after_call", "[1, 2, 3]")
+  }
+  if (seed == 1) {
+    storage_set_array("rs:core_oracle", "nbt_after_call", "[4, 5, 6]")
+  }
+  return storage_get_int("rs:core_oracle", "nbt_after_call", 1)
+}
+
+fn test_storage_nbt_read_after_call() {
+  storage_set_array("rs:core_oracle", "nbt_after_call", "[0, 0, 0]")
+  let first: int = _storage_nbt_after_call(0)
+  let second: int = _storage_nbt_after_call(1)
+  scoreboard_set("#storage_nbt_after_fn_result", "${CORE_OBJ}", first + second)
+}
+
+fn test_scoreboard_objective_player_isolation() {
+  let p1a: int = scoreboard_get("#iso_p1", "iso_obj_a")
+  let p1b: int = scoreboard_get("#iso_p1", "iso_obj_b")
+  let p2a: int = scoreboard_get("#iso_p2", "iso_obj_a")
+  let p2b: int = scoreboard_get("#iso_p2", "iso_obj_b")
+
+  scoreboard_set("#objective_player_isolation_result", "${CORE_OBJ}", p1a + p1b + p2a + p2b)
+  scoreboard_set("#iso_p1", "iso_obj_a", p1a + 1)
 }
 
 @keep
@@ -315,6 +403,49 @@ describe('MC Core Oracle (RedScript runtime)', () => {
     console.log('  branch case: if/else path verified ✓')
   }, 20_000)
 
+  test('execute as/at/@s context with helper is deterministic', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/function ${CORE_NS}:test_execute_context_and_helper`)
+    await mc.ticks(4)
+    expect(await mc.scoreboard('#execute_ctx_total', CORE_OBJ)).toBe(7)
+
+    console.log('  execute context helper case: as/at over two tagged entities gives 7 ✓')
+  }, 20_000)
+
+  test('branch + loop + function return composes stable output', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/scoreboard players set #branch_loop_input ${CORE_OBJ} 5`)
+    await mc.command(`/function ${CORE_NS}:test_branch_loop_function_return`)
+    await mc.ticks(3)
+    expect(await mc.scoreboard('#branch_loop_result', CORE_OBJ)).toBe(2)
+
+    console.log('  branch+loop+return case: 0..5 alternating sum = 2 ✓')
+  }, 20_000)
+
+  test('scoreboard player/objective isolation is preserved', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/scoreboard objectives add iso_obj_a dummy').catch(() => {})
+    await mc.command('/scoreboard objectives add iso_obj_b dummy').catch(() => {})
+    await mc.command('/scoreboard players set #iso_p1 iso_obj_a 10')
+    await mc.command('/scoreboard players set #iso_p1 iso_obj_b 100')
+    await mc.command('/scoreboard players set #iso_p2 iso_obj_a 200')
+    await mc.command('/scoreboard players set #iso_p2 iso_obj_b 50')
+    await mc.command(`/scoreboard players set #objective_player_isolation_result ${CORE_OBJ} 0`)
+
+    await mc.command(`/function ${CORE_NS}:test_scoreboard_objective_player_isolation`)
+    await mc.ticks(4)
+    expect(await mc.scoreboard('#objective_player_isolation_result', CORE_OBJ)).toBe(360)
+    expect(await mc.scoreboard('#iso_p1', 'iso_obj_a')).toBe(11)
+    expect(await mc.scoreboard('#iso_p1', 'iso_obj_b')).toBe(100)
+    expect(await mc.scoreboard('#iso_p2', 'iso_obj_a')).toBe(200)
+    expect(await mc.scoreboard('#iso_p2', 'iso_obj_b')).toBe(50)
+
+    console.log('  isolation case: player/objective reads stay separated and only iso_obj_a/#iso_p1 mutates ✓')
+  }, 20_000)
+
   test('function helper call chain executes through multiple helpers', async () => {
     if (!serverOnline) return
 
@@ -381,6 +512,16 @@ describe('MC Core Oracle (RedScript runtime)', () => {
     console.log('  storage/NBT case: looped read/write accumulation is 14 ✓')
   }, 20_000)
 
+  test('storage read after function-call mutation is deterministic', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/function ${CORE_NS}:test_storage_nbt_read_after_call`)
+    await mc.ticks(5)
+
+    expect(await mc.scoreboard('#storage_nbt_after_fn_result', CORE_OBJ)).toBe(7)
+    console.log('  storage-after-call case: [1,2,3] then [4,5,6] second index total is 7 ✓')
+  }, 20_000)
+
   test('foreach + is-check counts matching entities', async () => {
     if (!serverOnline) return
 
@@ -414,6 +555,23 @@ describe('MC Core Oracle (RedScript runtime)', () => {
     expect(ticked).toBeGreaterThanOrEqual(4)
 
     console.log(`  lifecycle case: load=${41}, tick=${ticked} ✓`)
+  }, 20_000)
+
+  test('tick lifecycle can be controlled with freeze + step', async () => {
+    if (!serverOnline) return
+
+    await mc.command(`/scoreboard players set #tick_marker ${CORE_OBJ} 0`)
+
+    await mc.withTickControl(async step => {
+      await step(5)
+    })
+
+    const stepped = await mc.scoreboard('#tick_marker', CORE_OBJ)
+    await mc.command(`/scoreboard players set #tick_control_result ${CORE_OBJ} ${stepped}`)
+    expect(stepped).toBeGreaterThanOrEqual(5)
+    expect(await mc.scoreboard('#tick_control_result', CORE_OBJ)).toBe(stepped)
+
+    console.log(`  controlled lifecycle case: step(5) yields tick_marker=${stepped} ✓`)
   }, 20_000)
 
   test('compile() supports core constructs used in this suite', () => {
