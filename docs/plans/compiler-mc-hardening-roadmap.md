@@ -285,7 +285,8 @@ Tasks:
   - `preprocessSourceStage` now wraps import/preprocess metadata for compile orchestration and has focused tests for source ranges, library imports, and import diagnostic file/line preservation.
 - [x] Extract typecheck/decorator metadata handling next.
   - `runTypecheckStage` now owns TypeChecker invocation, warning collection, lenient type-error warning coercion, and stop-after-check diagnostic bundling; focused tests pin float lint warnings and decorator-error source-file preservation.
-- [ ] Extract runtime helper metadata collection out of compile orchestration.
+- [x] Extract runtime helper metadata collection out of compile orchestration.
+  - `collectRuntimeMetadataStage` now owns decorator-derived runtime helper/tag metadata (`@tick`, `@load`, inline controls, coroutine/schedule/profile/benchmark/throttle/retry/memoize wrappers, legacy event handlers, and generic function tags) with focused tests that do not emit datapack files.
 - [ ] Add dump/snapshot support for selected stages after the extraction points exist.
 
 Suggested files:

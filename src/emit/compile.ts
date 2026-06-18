@@ -29,6 +29,7 @@ import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 import { TypeChecker } from '../typechecker'
 import { isEventTypeName } from '../events/types'
 import type { Program } from '../ast/types'
+import type { HIRModule } from '../hir/types'
 
 export interface CompileOptions {
   namespace?: string
@@ -106,6 +107,116 @@ export function parseSourceStage(
 
 export interface RunTypecheckStageResult {
   warnings: string[]
+}
+
+export interface CollectRuntimeMetadataStageResult {
+  tickFunctions: string[]
+  loadFunctions: string[]
+  watchFunctions: Array<{ name: string; objective: string }>
+  inlineFunctions: Set<string>
+  noInlineFunctions: Set<string>
+  coroutineInfos: CoroutineInfo[]
+  scheduleFunctions: Array<{ name: string; ticks: number }>
+  profiledFunctions: string[]
+  benchmarkFunctions: string[]
+  throttleFunctions: Array<{ name: string; ticks: number }>
+  retryFunctions: Array<{ name: string; max: number }>
+  memoizeFunctions: string[]
+  eventHandlers: Map<string, string[]>
+  functionTags: Map<string, string[]>
+}
+
+export function collectRuntimeMetadataStage(
+  hir: HIRModule,
+  namespace: string,
+): CollectRuntimeMetadataStageResult {
+  const tickFunctions: string[] = []
+  const loadFunctions: string[] = []
+  const watchFunctions: Array<{ name: string; objective: string }> = []
+  const inlineFunctions = new Set<string>()
+  const noInlineFunctions = new Set<string>()
+  const coroutineInfos: CoroutineInfo[] = []
+  const scheduleFunctions: Array<{ name: string; ticks: number }> = []
+  const profiledFunctions: string[] = []
+  const benchmarkFunctions: string[] = []
+  const throttleFunctions: Array<{ name: string; ticks: number }> = []
+  const retryFunctions: Array<{ name: string; max: number }> = []
+  const memoizeFunctions: string[] = []
+  const eventHandlers = new Map<string, string[]>()
+  const functionTags = new Map<string, string[]>()
+
+  for (const fn of hir.functions) {
+    if (fn.watchObjective) {
+      watchFunctions.push({ name: fn.name, objective: fn.watchObjective })
+    } else {
+      // Fallback: extract from decorator if watchObjective not propagated.
+      const watchDec = fn.decorators?.find(d => d.name === 'watch' && d.args?.objective)
+      if (watchDec?.args?.objective) {
+        watchFunctions.push({ name: fn.name, objective: watchDec.args.objective })
+      }
+    }
+
+    for (const dec of fn.decorators) {
+      if (dec.name === 'tick') tickFunctions.push(fn.name)
+      if (dec.name === 'load') loadFunctions.push(fn.name)
+      if (dec.name === 'inline') inlineFunctions.add(fn.name)
+      if (dec.name === 'no-inline') noInlineFunctions.add(fn.name)
+      if (dec.name === 'coroutine') {
+        coroutineInfos.push({
+          fnName: fn.name,
+          batch: dec.args?.batch ?? 10,
+          onDone: dec.args?.onDone,
+        })
+      }
+      if (dec.name === 'schedule') {
+        scheduleFunctions.push({ name: fn.name, ticks: dec.args?.ticks ?? 1 })
+      }
+      if (dec.name === 'profile') {
+        profiledFunctions.push(fn.name)
+      }
+      if (dec.name === 'benchmark') {
+        benchmarkFunctions.push(fn.name)
+      }
+      if (dec.name === 'throttle' && dec.args?.ticks) {
+        throttleFunctions.push({ name: fn.name, ticks: dec.args.ticks })
+      }
+      if (dec.name === 'retry' && dec.args?.max) {
+        retryFunctions.push({ name: fn.name, max: dec.args.max })
+      }
+      if (dec.name === 'memoize') {
+        memoizeFunctions.push(fn.name)
+      }
+      if (dec.name === 'on' && dec.args?.eventType) {
+        const evType = dec.args.eventType as string
+        if (isEventTypeName(evType)) {
+          if (!eventHandlers.has(evType)) eventHandlers.set(evType, [])
+          eventHandlers.get(evType)!.push(`${namespace}:${fn.name}`)
+        }
+      }
+      if (dec.name === 'function_tag' && dec.args?.functionTag) {
+        const tagId = dec.args.functionTag
+        if (!functionTags.has(tagId)) functionTags.set(tagId, [])
+        functionTags.get(tagId)!.push(`${namespace}:${fn.name}`)
+      }
+    }
+  }
+
+  return {
+    tickFunctions,
+    loadFunctions,
+    watchFunctions,
+    inlineFunctions,
+    noInlineFunctions,
+    coroutineInfos,
+    scheduleFunctions,
+    profiledFunctions,
+    benchmarkFunctions,
+    throttleFunctions,
+    retryFunctions,
+    memoizeFunctions,
+    eventHandlers,
+    functionTags,
+  }
 }
 
 export function runTypecheckStage(
@@ -351,75 +462,24 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       return { files: [], warnings, success: true as const }
     }
 
-    // Extract decorator metadata before HIR lowering discards it.
-    const tickFunctions: string[] = []
-    const loadFunctions: string[] = []
-    const watchFunctions: Array<{ name: string; objective: string }> = []
-    const inlineFunctions = new Set<string>()
-    const noInlineFunctions = new Set<string>()
-    const coroutineInfos: CoroutineInfo[] = []
-    const scheduleFunctions: Array<{ name: string; ticks: number }> = []
-    const profiledFunctions: string[] = []
-    const benchmarkFunctions: string[] = []
-    const throttleFunctions: Array<{ name: string; ticks: number }> = []
-    const retryFunctions: Array<{ name: string; max: number }> = []
-    const memoizeFunctions: string[] = []
-    const eventHandlers = new Map<string, string[]>()
-    const functionTags = new Map<string, string[]>()
-    for (const fn of hir.functions) {
-      if (fn.watchObjective) {
-        watchFunctions.push({ name: fn.name, objective: fn.watchObjective })
-      } else {
-        // Fallback: extract from decorator if watchObjective not propagated
-        const watchDec = fn.decorators?.find(d => d.name === 'watch' && d.args?.objective)
-        if (watchDec?.args?.objective) {
-          watchFunctions.push({ name: fn.name, objective: watchDec.args.objective })
-        }
-      }
-      for (const dec of fn.decorators) {
-        if (dec.name === 'tick') tickFunctions.push(fn.name)
-        if (dec.name === 'load') loadFunctions.push(fn.name)
-        if (dec.name === 'inline') inlineFunctions.add(fn.name)
-        if (dec.name === 'no-inline') noInlineFunctions.add(fn.name)
-        if (dec.name === 'coroutine') {
-          coroutineInfos.push({
-            fnName: fn.name,
-            batch: dec.args?.batch ?? 10,
-            onDone: dec.args?.onDone,
-          })
-        }
-        if (dec.name === 'schedule') {
-          scheduleFunctions.push({ name: fn.name, ticks: dec.args?.ticks ?? 1 })
-        }
-        if (dec.name === 'profile') {
-          profiledFunctions.push(fn.name)
-        }
-        if (dec.name === 'benchmark') {
-          benchmarkFunctions.push(fn.name)
-        }
-        if (dec.name === 'throttle' && dec.args?.ticks) {
-          throttleFunctions.push({ name: fn.name, ticks: dec.args.ticks })
-        }
-        if (dec.name === 'retry' && dec.args?.max) {
-          retryFunctions.push({ name: fn.name, max: dec.args.max })
-        }
-        if (dec.name === 'memoize') {
-          memoizeFunctions.push(fn.name)
-        }
-        if (dec.name === 'on' && dec.args?.eventType) {
-          const evType = dec.args.eventType as string
-          if (isEventTypeName(evType)) {
-            if (!eventHandlers.has(evType)) eventHandlers.set(evType, [])
-            eventHandlers.get(evType)!.push(`${namespace}:${fn.name}`)
-          }
-        }
-        if (dec.name === 'function_tag' && dec.args?.functionTag) {
-          const tagId = dec.args.functionTag
-          if (!functionTags.has(tagId)) functionTags.set(tagId, [])
-          functionTags.get(tagId)!.push(`${namespace}:${fn.name}`)
-        }
-      }
-    }
+    // Extract decorator/runtime metadata before HIR lowering discards it.
+    const runtimeMetadata = collectRuntimeMetadataStage(hir, namespace)
+    const {
+      tickFunctions,
+      loadFunctions,
+      watchFunctions,
+      inlineFunctions,
+      noInlineFunctions,
+      coroutineInfos,
+      scheduleFunctions,
+      profiledFunctions,
+      benchmarkFunctions,
+      throttleFunctions,
+      retryFunctions,
+      memoizeFunctions,
+      eventHandlers,
+      functionTags,
+    } = runtimeMetadata
 
     // Stage 3: HIR → MIR
     const mir = lowerToMIR(hir, filePath)

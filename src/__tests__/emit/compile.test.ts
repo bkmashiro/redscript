@@ -1,11 +1,25 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { compile, parseSourceStage, preprocessSourceStage, runTypecheckStage } from '../../emit/compile'
+import {
+  collectRuntimeMetadataStage,
+  compile,
+  parseSourceStage,
+  preprocessSourceStage,
+  runTypecheckStage,
+} from '../../emit/compile'
 import { DiagnosticBundleError, DiagnosticError } from '../../diagnostics'
+import { lowerToHIR } from '../../hir/lower'
+import { monomorphize } from '../../hir/monomorphize'
+import type { HIRModule } from '../../hir/types'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
   return files.find(f => f.path.includes(pathSubstr))?.content
+}
+
+function collectRuntimeMetadataFromSource(source: string, namespace = 'metadata_stage_test') {
+  const parsed = parseSourceStage(source, namespace)
+  return collectRuntimeMetadataStage(monomorphize(lowerToHIR(parsed.ast)), namespace)
 }
 
 describe('emit: compile coverage', () => {
@@ -104,6 +118,71 @@ describe('emit: compile coverage', () => {
       expect(bundle.diagnostics[0].location.file).toBe(filePath)
       expect(bundle.diagnostics[0].message).toContain('@watch')
     }
+  })
+
+  test('collectRuntimeMetadataStage extracts runtime decorators without emitting files', () => {
+    const metadata = collectRuntimeMetadataFromSource(`
+      @tick
+      @inline
+      fn ticked(): void {}
+
+      @load
+      @no-inline
+      fn loaded(): void {}
+
+      @coroutine(batch=4, onDone="done")
+      @schedule(ticks=20)
+      fn scheduled(): void {}
+
+      @profile
+      @benchmark
+      @throttle(ticks=3)
+      @retry(max=2)
+      @memoize
+      fn wrapped(n: int): int { return n; }
+
+      @on(PlayerDeath)
+      fn death(): void {}
+
+      @function_tag("custom:handlers")
+      fn tagged(): void {}
+    `)
+
+    expect(metadata.tickFunctions).toEqual(['ticked'])
+    expect(metadata.loadFunctions).toEqual(['loaded'])
+    expect([...metadata.inlineFunctions]).toEqual(['ticked'])
+    expect([...metadata.noInlineFunctions]).toEqual(['loaded'])
+    expect(metadata.coroutineInfos).toEqual([{ fnName: 'scheduled', batch: 4, onDone: 'done' }])
+    expect(metadata.scheduleFunctions).toEqual([{ name: 'scheduled', ticks: 20 }])
+    expect(metadata.profiledFunctions).toEqual(['wrapped'])
+    expect(metadata.benchmarkFunctions).toEqual(['wrapped'])
+    expect(metadata.throttleFunctions).toEqual([{ name: 'wrapped', ticks: 3 }])
+    expect(metadata.retryFunctions).toEqual([{ name: 'wrapped', max: 2 }])
+    expect(metadata.memoizeFunctions).toEqual(['wrapped'])
+    expect(metadata.eventHandlers.get('PlayerDeath')).toEqual(['metadata_stage_test:death'])
+    expect(metadata.functionTags.get('custom:handlers')).toEqual(['metadata_stage_test:tagged'])
+  })
+
+  test('collectRuntimeMetadataStage preserves watchObjective fallback behavior', () => {
+    const hir: HIRModule = {
+      namespace: 'metadata_stage_test',
+      globals: [],
+      structs: [],
+      implBlocks: [],
+      enums: [],
+      consts: [],
+      functions: [{
+        name: 'watched',
+        params: [],
+        returnType: { kind: 'named', name: 'void' },
+        body: [],
+        decorators: [{ name: 'watch', args: { objective: 'rs.kills' } }],
+      }],
+    }
+
+    const metadata = collectRuntimeMetadataStage(hir, 'metadata_stage_test')
+
+    expect(metadata.watchFunctions).toEqual([{ name: 'watched', objective: 'rs.kills' }])
   })
 
   test('control-flow statements generate emit-time branching artifacts', () => {
