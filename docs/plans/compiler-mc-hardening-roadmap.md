@@ -354,7 +354,7 @@ npm test -- --runInBand
 
 **Objective:** Fix sugar and high-level language constructs only after core command semantics are pinned.
 
-Event/runtime boundary note: gameplay decorators such as `@on(PlayerDeath)` should not keep growing as compiler-hardcoded event enums. Prefer generic datapack artifact primitives (`@function_tag("namespace:path")`) plus stdlib/runtime-owned event dispatch; `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` merge through the same tag files as `@tick`/`@load`. See `docs/plans/event-runtime-boundary.md`.
+Event/runtime boundary note: gameplay decorators such as `@on(PlayerDeath)` should not keep growing as compiler-hardcoded event enums. Prefer generic datapack artifact primitives (`@function_tag("namespace:path")`) plus stdlib/runtime-owned event dispatch; `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` merge through the same tag files as `@tick`/`@load`, and legacy `@on` tag ids are centralized in the event registry rather than duplicated in emit. See `docs/plans/event-runtime-boundary.md`.
 
 Focus areas:
 

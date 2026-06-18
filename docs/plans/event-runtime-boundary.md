@@ -109,5 +109,6 @@ That legacy form can remain for compatibility, but new runtime docs should teach
 - Added `@function_tag("namespace:path")` decorator parsing.
 - Emits generic function tag JSON files from compiler metadata.
 - Keeps existing `@on(EventType)` behavior untouched for compatibility.
+- Centralized legacy `@on(EventType)` handler tag ids in the shared event registry (`EVENT_TYPES.*.handlerTag`) so emit no longer carries a separate event-to-tag table.
 - Added tests proving `@function_tag("rs:on_player_death")` can produce the same handler tag file without compiler knowing a gameplay event name.
 - Added compatibility tests proving `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` use the same generated tag files as `@tick` and `@load`.

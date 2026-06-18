@@ -5,6 +5,7 @@
 import {
   isEventTypeName,
   getEventParamSpecs,
+  getEventHandlerTagId,
   EVENT_TYPES,
 } from '../events/types'
 
@@ -62,5 +63,15 @@ describe('events/types — getEventParamSpecs', () => {
       expect(Array.isArray(info.params)).toBe(true)
       expect(info.detection).toBeTruthy()
     }
+  })
+})
+
+describe('events/types — handler tag registry', () => {
+  test('legacy @on event tags come from the shared registry', () => {
+    expect(getEventHandlerTagId('PlayerDeath')).toBe('rs:on_player_death')
+    expect(getEventHandlerTagId('PlayerJoin')).toBe('rs:on_player_join')
+    expect(getEventHandlerTagId('BlockBreak')).toBe('rs:on_block_break')
+    expect(getEventHandlerTagId('EntityKill')).toBe('rs:on_entity_kill')
+    expect(getEventHandlerTagId('ItemUse')).toBe('rs:on_item_use')
   })
 })

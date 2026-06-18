@@ -3,16 +3,19 @@ import type { TypeNode } from '../ast/types'
 export const EVENT_TYPES = {
   PlayerDeath: {
     tag: 'rs.just_died',
+    handlerTag: 'rs:on_player_death',
     params: ['player: Player'],
     detection: 'scoreboard',
   },
   PlayerJoin: {
     tag: 'rs.just_joined',
+    handlerTag: 'rs:on_player_join',
     params: ['player: Player'],
     detection: 'tag',
   },
   BlockBreak: {
     tag: 'rs.just_broke_block',
+    handlerTag: 'rs:on_block_break',
     params: ['player: Player'],
     detection: 'advancement',
     // Note: block type is NOT available as a runtime parameter — MC has no mechanism
@@ -21,11 +24,13 @@ export const EVENT_TYPES = {
   },
   EntityKill: {
     tag: 'rs.just_killed',
+    handlerTag: 'rs:on_entity_kill',
     params: ['player: Player'],
     detection: 'scoreboard',
   },
   ItemUse: {
     tag: 'rs.just_used_item',
+    handlerTag: 'rs:on_item_use',
     params: ['player: Player'],
     detection: 'scoreboard',
   },
@@ -44,6 +49,10 @@ export function isEventTypeName(value: string): value is EventTypeName {
 
 export function getEventParamSpecs(eventType: EventTypeName): EventParamSpec[] {
   return EVENT_TYPES[eventType].params.map(parseEventParam)
+}
+
+export function getEventHandlerTagId(eventType: EventTypeName): string {
+  return EVENT_TYPES[eventType].handlerTag
 }
 
 function parseEventParam(spec: string): EventParamSpec {

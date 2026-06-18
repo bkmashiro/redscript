@@ -14,6 +14,7 @@ import {
   sourceMapPath,
 } from './sourcemap'
 import { mcVersionToPackFormat, McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
+import { getEventHandlerTagId, isEventTypeName } from '../events/types'
 
 export interface DatapackFile {
   path: string
@@ -343,24 +344,14 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     })
   }
 
-  // Event handler tag files: data/rs/tags/function/on_<event>.json
-  const EVENT_TAG_NAMES: Record<string, string> = {
-    PlayerJoin: 'on_player_join',
-    PlayerDeath: 'on_player_death',
-    EntityKill: 'on_entity_kill',
-    ItemUse: 'on_item_use',
-    BlockBreak: 'on_block_break',
-  }
-
+  // Legacy @on(EventType) handler tags are translated through the shared event
+  // registry, then emitted through the same generic function-tag path as
+  // @function_tag("namespace:path"). Keep gameplay semantics out of emit.
   if (options.eventHandlers) {
     for (const [evType, handlers] of options.eventHandlers) {
-      const tagName = EVENT_TAG_NAMES[evType]
-      if (tagName && handlers.length > 0) {
-        files.push({
-          path: `data/rs/tags/function/${tagName}.json`,
-          content: JSON.stringify({ values: handlers }, null, 2) + '\n',
-        })
-      }
+      if (!isEventTypeName(evType) || handlers.length === 0) continue
+      const tagId = getEventHandlerTagId(evType)
+      functionTags.set(tagId, uniqueValues([...(functionTags.get(tagId) ?? []), ...handlers]))
     }
   }
 
