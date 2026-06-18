@@ -4,6 +4,11 @@ All notable changes to RedScript will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+#### Events
+- **`@on(BlockBreak)` removed from built-in legacy events** — there was no implemented runtime dispatcher or live MC coverage for block-break detection. Users can build block-break behavior explicitly with `@function_tag(...)` and their own scoreboard/advancement datapack assets instead of relying on unsupported compiler sugar.
+
 ## [3.0.2] - 2026-04-03
 
 ### Fixed

@@ -659,8 +659,8 @@ fn handle(player: Player) {}
 
     it('rejects mismatched event signatures', () => {
       const errors = typeCheck(`
-@on(BlockBreak)
-fn handle_break() {}
+@on(PlayerDeath)
+fn handle_death() {}
 `)
       expect(errors.length).toBeGreaterThan(0)
       expect(errors[0].message).toContain('must declare 1 parameter(s)')

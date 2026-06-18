@@ -14,7 +14,7 @@
 
 `@on(EventType)` currently crosses the compiler/runtime boundary:
 
-- `src/events/types.ts` hardcodes gameplay events such as `PlayerDeath`, `PlayerJoin`, `BlockBreak`, `EntityKill`, and `ItemUse`.
+- `src/events/types.ts` hardcodes legacy gameplay events such as `PlayerDeath`, `PlayerJoin`, `EntityKill`, and `ItemUse`.
 - `src/typechecker/index.ts` knows event names and handler parameter signatures.
 - `src/emit/index.ts` knows event-to-tag mappings such as `PlayerDeath -> data/rs/tags/function/on_player_death.json`.
 - `src/emit/compile.ts` collects `@on(...)` handlers as compiler metadata.
@@ -108,7 +108,8 @@ That legacy form can remain for compatibility, but new runtime docs should teach
 
 - Added `@function_tag("namespace:path")` decorator parsing.
 - Emits generic function tag JSON files from compiler metadata.
-- Keeps existing `@on(EventType)` behavior untouched for compatibility.
+- Keeps implemented legacy `@on(EventType)` behavior for compatibility.
 - Centralized legacy `@on(EventType)` handler tag ids in the shared event registry (`EVENT_TYPES.*.handlerTag`) so emit no longer carries a separate event-to-tag table.
+- Removed `BlockBreak` from built-in `@on(EventType)` because the runtime dispatcher never implemented block-break detection; users can still compose block-break behavior explicitly with `@function_tag(...)` and their own datapack assets.
 - Added tests proving `@function_tag("rs:on_player_death")` can produce the same handler tag file without compiler knowing a gameplay event name.
 - Added compatibility tests proving `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` use the same generated tag files as `@tick` and `@load`.

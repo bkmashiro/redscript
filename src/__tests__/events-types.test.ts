@@ -13,9 +13,12 @@ describe('events/types — isEventTypeName', () => {
   test('returns true for known event types', () => {
     expect(isEventTypeName('PlayerDeath')).toBe(true)
     expect(isEventTypeName('PlayerJoin')).toBe(true)
-    expect(isEventTypeName('BlockBreak')).toBe(true)
     expect(isEventTypeName('EntityKill')).toBe(true)
     expect(isEventTypeName('ItemUse')).toBe(true)
+  })
+
+  test('returns false for unsupported BlockBreak runtime event', () => {
+    expect(isEventTypeName('BlockBreak')).toBe(false)
   })
 
   test('returns false for unknown strings', () => {
@@ -35,12 +38,6 @@ describe('events/types — getEventParamSpecs', () => {
 
   test('PlayerJoin returns player param', () => {
     const specs = getEventParamSpecs('PlayerJoin')
-    expect(specs).toHaveLength(1)
-    expect(specs[0].name).toBe('player')
-  })
-
-  test('BlockBreak returns player param', () => {
-    const specs = getEventParamSpecs('BlockBreak')
     expect(specs).toHaveLength(1)
     expect(specs[0].name).toBe('player')
   })
@@ -70,7 +67,6 @@ describe('events/types — handler tag registry', () => {
   test('legacy @on event tags come from the shared registry', () => {
     expect(getEventHandlerTagId('PlayerDeath')).toBe('rs:on_player_death')
     expect(getEventHandlerTagId('PlayerJoin')).toBe('rs:on_player_join')
-    expect(getEventHandlerTagId('BlockBreak')).toBe('rs:on_block_break')
     expect(getEventHandlerTagId('EntityKill')).toBe('rs:on_entity_kill')
     expect(getEventHandlerTagId('ItemUse')).toBe('rs:on_item_use')
   })

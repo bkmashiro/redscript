@@ -18,7 +18,7 @@ import {
 
 describe('events/types — isEventTypeName exhaustive', () => {
   test('all event type names return true', () => {
-    const known: string[] = ['PlayerDeath', 'PlayerJoin', 'BlockBreak', 'EntityKill', 'ItemUse']
+    const known: string[] = ['PlayerDeath', 'PlayerJoin', 'EntityKill', 'ItemUse']
     for (const name of known) {
       expect(isEventTypeName(name)).toBe(true)
     }
@@ -34,6 +34,7 @@ describe('events/types — isEventTypeName exhaustive', () => {
     expect(isEventTypeName('PLAYERDEATH')).toBe(false)
     expect(isEventTypeName('PlayerDeaths')).toBe(false)
     expect(isEventTypeName('PlayerJoins')).toBe(false)
+    expect(isEventTypeName('BlockBreak')).toBe(false)
     expect(isEventTypeName('BlockBreaks')).toBe(false)
   })
 
@@ -94,10 +95,6 @@ describe('events/types — EVENT_TYPES structure', () => {
     for (const [, info] of Object.entries(EVENT_TYPES)) {
       expect(info.params.length).toBeGreaterThan(0)
     }
-  })
-
-  test('BlockBreak uses advancement detection', () => {
-    expect(EVENT_TYPES.BlockBreak.detection).toBe('advancement')
   })
 
   test('PlayerJoin uses tag detection', () => {

@@ -43,6 +43,4 @@ module events
     // ItemUse (carrot_on_a_stick by default)
     raw("execute as @a[scores={rs.item_use=1..}] run function #rs:on_item_use")
     raw("scoreboard players set @a rs.item_use 0")
-
-    // BlockBreak requires advancement JSON (not yet implemented)
 }

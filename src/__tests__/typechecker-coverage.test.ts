@@ -309,7 +309,7 @@ describe('event handler errors', () => {
   it('reports error for multiple @on decorators', () => {
     const errors = typeCheck(`
 @on(PlayerDeath)
-@on(BlockBreak)
+@on(EntityKill)
 fn handle(player: Player) {}
 `)
     expect(errors.length).toBeGreaterThan(0)
@@ -565,12 +565,13 @@ fn handle(player: Player) {
     expect(errors).toHaveLength(0)
   })
 
-  it('detects mismatched entity subtypes', () => {
+  it('rejects unsupported BlockBreak event', () => {
     const errors = typeCheck(`
 @on(BlockBreak)
 fn handle(player: Player) {}
 `)
-    expect(errors).toHaveLength(0) // BlockBreak expects Player — valid
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].message).toContain("Unknown event type 'BlockBreak'")
   })
 })
 
