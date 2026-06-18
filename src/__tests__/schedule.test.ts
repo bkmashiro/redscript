@@ -150,6 +150,24 @@ describe('setTimeout / setInterval codegen', () => {
     expect(cb0).toContain('say a')
     expect(cb1).toContain('say b')
   })
+
+  test('dynamic setTimeout ticks are rejected', () => {
+    const source = `
+      fn start(n: int) {
+        setTimeout(n, () => { say("dynamic"); });
+      }
+    `
+    expect(() => compile(source, { namespace: 'ns' })).toThrow(/literal tick duration/)
+  })
+
+  test('dynamic setInterval ticks are rejected', () => {
+    const source = `
+      fn start(n: int) {
+        setInterval(n, () => { say("dynamic"); });
+      }
+    `
+    expect(() => compile(source, { namespace: 'ns' })).toThrow(/literal tick duration/)
+  })
 })
 
 const TIMER_STRUCT = `
@@ -179,8 +197,10 @@ fn init() {
 `
     const result = compile(source, { namespace: 'ns' })
     const initFn = getFile(result.files, 'init.mcfunction')
-    expect(initFn).toContain('scoreboard players set __timer_0_ticks ns 0')
-    expect(initFn).toContain('scoreboard players set __timer_0_active ns 0')
+    expect(initFn).toContain('scoreboard players set __timer_0_ticks __ns 0')
+    expect(initFn).toContain('scoreboard players set __timer_0_active __ns 0')
+    expect(initFn).toContain('scoreboard players set __timer_0_duration __ns 20')
+    expect(initFn).not.toContain('scoreboard players set __timer_0_ticks ns 0')
   })
 
   test('Timer.start() inlines to scoreboard set active=1', () => {
@@ -192,7 +212,7 @@ fn init() {
 `
     const result = compile(source, { namespace: 'ns' })
     const initFn = getFile(result.files, 'init.mcfunction')
-    expect(initFn).toContain('scoreboard players set __timer_0_active ns 1')
+    expect(initFn).toContain('scoreboard players set __timer_0_active __ns 1')
     expect(initFn).not.toContain('function ns:timer/start')
   })
 
@@ -211,7 +231,7 @@ fn init() {
     expect(initFn).toContain('__timer_0_ticks')
     expect(initFn).toContain('__timer_1_ticks')
     // Both started with unique slot names
-    expect(initFn).toContain('scoreboard players set __timer_0_active ns 1')
-    expect(initFn).toContain('scoreboard players set __timer_1_active ns 1')
+    expect(initFn).toContain('scoreboard players set __timer_0_active __ns 1')
+    expect(initFn).toContain('scoreboard players set __timer_1_active __ns 1')
   })
 })

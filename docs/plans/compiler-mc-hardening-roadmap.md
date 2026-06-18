@@ -216,6 +216,39 @@ npm test -- src/__tests__/golden --runInBand
 
 ---
 
+### Phase 3.5 — Stdlib/runtime intrinsic hardening
+
+**Objective:** Keep stdlib behavior green while clarifying which APIs are normal `.mcrs` library code and which APIs are compiler/runtime intrinsics.
+
+Timer is the current priority because it is implemented through MIR lowering special cases and scoreboard resources, not through the apparent `src/stdlib/timer.mcrs` method bodies. Queue is currently lower priority: it is ugly but mostly a stdlib/NBT-array implementation on top of existing array/storage behavior, so track it for later cleanup rather than mixing it into Timer work.
+
+Tasks:
+
+- [ ] Track queue cleanup separately; do not mix it into Timer v2:
+  - Document current queue behavior as NBT-list + logical head pointer.
+  - Later decide whether the public API needs multi-instance Queue support or only global FIFO helpers.
+  - Add more queue tests only if behavior regresses or multi-instance support becomes a goal.
+- [x] Timer v2 Phase 1: centralize timer objective/slot naming and command emission helpers in `src/mir/lower.ts`.
+- [x] Timer v2 Phase 2: fail fast when a Timer method call cannot be statically tied to a `Timer::new()` allocation.
+- [x] Timer v2 Phase 3: mark `src/stdlib/timer.mcrs` as compiler-intrinsic-backed API/stub documentation.
+- [x] Timer v2 Phase 4: decide `setTimeout`/`setInterval` dynamic tick semantics explicitly instead of leaving a best-effort fallback.
+- [x] Timer v2 Phase 5: run full Timer live oracle and update roadmap state.
+
+Detailed plan: `docs/plans/timer-v2-intrinsic-plan.md`.
+
+Verification:
+
+```bash
+npm test -- src/__tests__/mir/lower-extra4.test.ts --runInBand -t 'Timer'
+npm test -- src/__tests__/mc-integration/stdlib-coverage-8.test.ts --runInBand --testTimeout=120000
+npm run build
+npm run validate-mc
+MC_OFFLINE=true npm run test:mc-core
+git diff --check
+```
+
+---
+
 ### Phase 4 — Extract compiler orchestration stages
 
 **Objective:** Reduce responsibility concentration in `src/emit/compile.ts` without changing behavior.

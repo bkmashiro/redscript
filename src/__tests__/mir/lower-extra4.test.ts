@@ -421,15 +421,14 @@ describe('MIR lower — setTimeout/setInterval', () => {
     expect(schedCall).toBeDefined()
   })
 
-  test('setTimeout with dynamic ticks uses fallback path', () => {
-    const mod = compileMIR(`
+  test('setTimeout with dynamic ticks is rejected', () => {
+    expect(() => compileMIR(`
       fn f(n: int): void {
         setTimeout(n, () => {
           raw("say dynamic");
         });
       }
-    `)
-    expect(verifyMIR(mod)).toEqual([])
+    `)).toThrow(/literal tick duration/)
   })
 })
 
@@ -443,9 +442,13 @@ describe('MIR lower — Timer::new static call', () => {
       }
     `)
     expect(result.success).toBe(true)
-    // Should produce scoreboard set instructions for __timer_N_ticks and __timer_N_active
+    // Should produce scoreboard set instructions for __timer_N_ticks/__timer_N_active/__timer_N_duration
+    // in the generated __<namespace> objective, not in the bare namespace objective.
     const fnFile = result.files.find(f => f.path.includes('/f.mcfunction'))
-    expect(fnFile?.content).toContain('__timer_')
+    expect(fnFile?.content).toContain('scoreboard players set __timer_0_ticks __test 0')
+    expect(fnFile?.content).toContain('scoreboard players set __timer_0_active __test 0')
+    expect(fnFile?.content).toContain('scoreboard players set __timer_0_duration __test 100')
+    expect(fnFile?.content).not.toContain('scoreboard players set __timer_0_ticks test 0')
   })
 
   test('two Timer::new calls get distinct IDs', () => {
@@ -549,8 +552,22 @@ describe('MIR lower — Timer instance methods', () => {
     const fnFile = result.files.find(f => f.path.includes('/f.mcfunction'))
     expect(fnFile?.content).toContain('execute if score __timer_')
     expect(fnFile?.content).toContain('run scoreboard players add __timer_')
+    expect(fnFile?.content).toContain('__test')
     expect(fnFile?.content).toContain('#elapsed')
     expect(fnFile?.content).not.toContain('return run function')
+  })
+
+  test('Timer methods reject returned values without a static Timer::new id', () => {
+    expect(() => compileWithTimer(`
+      fn make_timer(): Timer {
+        return Timer::new(3);
+      }
+
+      @keep fn use_timer(): void {
+        let t: Timer = make_timer();
+        t.start();
+      }
+    `)).toThrow(/statically allocated Timer/)
   })
 })
 

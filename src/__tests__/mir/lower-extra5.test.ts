@@ -159,15 +159,14 @@ describe('MIR lower — setInterval', () => {
 // ── setTimeout with dynamic ticks ────────────────────────────────────────
 
 describe('MIR lower — setTimeout dynamic ticks', () => {
-  test('setTimeout with variable ticks emits best-effort schedule', () => {
-    const mod = compileMIR(`
+  test('setTimeout with variable ticks is rejected', () => {
+    expect(() => compileMIR(`
       fn f(n: int): void {
         setTimeout(n, () => {
           raw("say dynamic");
         });
       }
-    `)
-    expect(verifyMIR(mod)).toEqual([])
+    `)).toThrow(/literal tick duration/)
   })
 })
 

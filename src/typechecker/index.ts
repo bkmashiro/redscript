@@ -1049,6 +1049,12 @@ export class TypeChecker {
             expr
           )
         }
+        if (expr.args[0]?.kind !== 'int_lit') {
+          this.report(
+            `${expr.fn}() requires a literal tick duration; dynamic tick values are not supported.`,
+            expr
+          )
+        }
       }
       this.checkFunctionCallArgs(expr.args, builtin.params, expr.fn, expr)
       return

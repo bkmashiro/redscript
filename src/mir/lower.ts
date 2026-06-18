@@ -2291,11 +2291,17 @@ function lowerExpr(
         const id = ctx.timerCounter.count++
         const callbackName = `__timeout_callback_${id}`
 
-        // Extract ticks value for the schedule command
-        let ticksLiteral: number | null = null
-        if (ticksArg.kind === 'int_lit') {
-          ticksLiteral = ticksArg.value
+        // Extract ticks value for the schedule command. Minecraft schedule
+        // durations are command literals here; dynamic scoreboard-backed delays
+        // are rejected instead of pretending to schedule with a 1t fallback.
+        if (ticksArg.kind !== 'int_lit') {
+          throw new DiagnosticError(
+            'LoweringError',
+            `${expr.fn}() requires a literal tick duration; dynamic tick values are not supported.`,
+            ctx.currentSourceLoc ?? { line: 1, col: 1 },
+          )
         }
+        const ticksLiteral = ticksArg.value
 
         // Build the callback MIRFunction from the lambda body
         if (callbackArg.kind === 'lambda') {
@@ -2342,13 +2348,7 @@ function lowerExpr(
         }
 
         // Emit: schedule function ns:callbackName ticksT
-        if (ticksLiteral !== null) {
-          ctx.emit({ kind: 'call', dst: null, fn: `__raw:schedule function ${ns}:${callbackName} ${ticksLiteral}t`, args: [] })
-        } else {
-          // Dynamic ticks: lower ticks operand and emit a raw schedule (best-effort)
-          const ticksOp = lowerExpr(ticksArg, ctx, scope)
-          ctx.emit({ kind: 'call', dst: null, fn: `__raw:schedule function ${ns}:${callbackName} 1t`, args: [ticksOp] })
-        }
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:schedule function ${ns}:${callbackName} ${ticksLiteral}t`, args: [] })
 
         // setTimeout returns void (0), setInterval returns an int ID (0 for now)
         const t = ctx.freshTemp()
@@ -2498,13 +2498,12 @@ function lowerExpr(
             ctx.emit({ kind: 'const', dst: t, value: 0 })
             return { kind: 'temp', name: t }
           }
-          // Intercept Timer method calls when _id is a known compile-time constant
+          // Intercept Timer method calls. Timer methods are compiler intrinsics and
+          // require a statically allocated Timer::new() ID; never silently fall back
+          // to the stdlib stub bodies.
           if (sv.typeName === 'Timer') {
-            const idTemp = sv.fields.get('_id')
-            const timerId = idTemp !== undefined ? ctx.constTemps.get(idTemp) : undefined
-            if (timerId !== undefined) {
-              return lowerTimerMethod(expr.fn, timerId, sv, ctx, scope, expr.args.slice(1))
-            }
+            const timerId = requireStaticTimerId(expr.fn, sv.fields.get('_id'), ctx)
+            return lowerTimerMethod(expr.fn, timerId, sv, ctx, scope, expr.args.slice(1))
           }
           // Try direct name, then try reverse-mapped name (for parser-remapped builtins)
           const originalMethodName = PARSER_METHOD_REMAP[expr.fn] ?? expr.fn
@@ -2788,13 +2787,12 @@ function lowerExpr(
             ctx.emit({ kind: 'const', dst: t, value: 0 })
             return { kind: 'temp', name: t }
           }
-          // Intercept Timer method calls when _id is a known compile-time constant
+          // Intercept Timer method calls. Timer methods are compiler intrinsics and
+          // require a statically allocated Timer::new() ID; never silently fall back
+          // to the stdlib stub bodies.
           if (sv.typeName === 'Timer') {
-            const idTemp = sv.fields.get('_id')
-            const timerId = idTemp !== undefined ? ctx.constTemps.get(idTemp) : undefined
-            if (timerId !== undefined) {
-              return lowerTimerMethod(expr.callee.field, timerId, sv, ctx, scope, expr.args)
-            }
+            const timerId = requireStaticTimerId(expr.callee.field, sv.fields.get('_id'), ctx)
+            return lowerTimerMethod(expr.callee.field, timerId, sv, ctx, scope, expr.args)
           }
           const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.callee.field)
           if (methodInfo?.hasSelf) {
@@ -2854,14 +2852,13 @@ function lowerExpr(
       if (expr.type === 'Timer' && expr.method === 'new' && expr.args.length === 1) {
         const id = ctx.timerCounter.timerId++
         const ns = ctx.getNamespace()
-        const playerName = `__timer_${id}`
         // Emit scoreboard initialization: ticks=0, active=0, duration=<arg>
-        const timerObj = `__${ns}`
-        ctx.emit({ kind: 'score_write', player: `${playerName}_ticks`, obj: timerObj, src: { kind: 'const', value: 0 } })
-        ctx.emit({ kind: 'score_write', player: `${playerName}_active`, obj: timerObj, src: { kind: 'const', value: 0 } })
+        const timerObj = timerObjective(ns)
+        ctx.emit({ kind: 'score_write', player: timerSlot(id, 'ticks'), obj: timerObj, src: { kind: 'const', value: 0 } })
+        ctx.emit({ kind: 'score_write', player: timerSlot(id, 'active'), obj: timerObj, src: { kind: 'const', value: 0 } })
         // Lower the duration argument
         const durationOp = lowerExpr(expr.args[0], ctx, scope)
-        ctx.emit({ kind: 'score_write', player: `${playerName}_duration`, obj: timerObj, src: durationOp })
+        ctx.emit({ kind: 'score_write', player: timerSlot(id, 'duration'), obj: timerObj, src: durationOp })
         // Return fields via __rf_ slots (Timer has fields: _id, _duration)
         ctx.emit({ kind: 'const', dst: '__rf__id', value: id })
         ctx.constTemps.set('__rf__id', id)
@@ -3156,6 +3153,32 @@ function lowerShortCircuitOr(
 // Timer method inlining
 // ---------------------------------------------------------------------------
 
+type TimerSlotField = 'ticks' | 'active' | 'duration'
+
+function timerObjective(namespace: string): string {
+  return `__${namespace}`
+}
+
+function timerSlotPrefix(timerId: number): string {
+  return `__timer_${timerId}`
+}
+
+function timerSlot(timerId: number, field: TimerSlotField): string {
+  return `${timerSlotPrefix(timerId)}_${field}`
+}
+
+function requireStaticTimerId(method: string, idTemp: Temp | undefined, ctx: FnContext): number {
+  const timerId = idTemp !== undefined ? ctx.constTemps.get(idTemp) : undefined
+  if (timerId === undefined) {
+    throw new DiagnosticError(
+      'LoweringError',
+      `Timer method '${method}' requires a statically allocated Timer from Timer::new(); avoid passing Timer through unsupported dynamic paths.`,
+      ctx.currentSourceLoc ?? { line: 1, col: 1 },
+    )
+  }
+  return timerId
+}
+
 /**
  * Infer the struct type name returned by a chained invoke/call expression.
  * Used to support method chaining: v.scale(2).add(...) where scale() returns Vec2.
@@ -3197,18 +3220,20 @@ function lowerTimerMethod(
   extraArgs: HIRExpr[],
 ): Operand {
   const ns = ctx.getNamespace()
-  const timerObj = `__${ns}`
-  const player = `__timer_${timerId}`
+  const timerObj = timerObjective(ns)
+  const ticksSlot = timerSlot(timerId, 'ticks')
+  const activeSlot = timerSlot(timerId, 'active')
+  const durationSlot = timerSlot(timerId, 'duration')
   const t = ctx.freshTemp()
 
   if (method === 'start') {
-    ctx.emit({ kind: 'score_write', player: `${player}_active`, obj: timerObj, src: { kind: 'const', value: 1 } })
+    ctx.emit({ kind: 'score_write', player: activeSlot, obj: timerObj, src: { kind: 'const', value: 1 } })
     ctx.emit({ kind: 'const', dst: t, value: 0 })
   } else if (method === 'pause') {
-    ctx.emit({ kind: 'score_write', player: `${player}_active`, obj: timerObj, src: { kind: 'const', value: 0 } })
+    ctx.emit({ kind: 'score_write', player: activeSlot, obj: timerObj, src: { kind: 'const', value: 0 } })
     ctx.emit({ kind: 'const', dst: t, value: 0 })
   } else if (method === 'reset') {
-    ctx.emit({ kind: 'score_write', player: `${player}_ticks`, obj: timerObj, src: { kind: 'const', value: 0 } })
+    ctx.emit({ kind: 'score_write', player: ticksSlot, obj: timerObj, src: { kind: 'const', value: 0 } })
     ctx.emit({ kind: 'const', dst: t, value: 0 })
   } else if (method === 'tick') {
     const durationTemp = sv.fields.get('_duration')
@@ -3216,7 +3241,7 @@ function lowerTimerMethod(
       ctx.emit({
         kind: 'call',
         dst: null,
-        fn: `__raw:execute if score ${player}_active ${timerObj} matches 1 if score ${player}_ticks ${timerObj} < ${player}_duration ${timerObj} run scoreboard players add ${player}_ticks ${timerObj} 1`,
+        fn: `__raw:execute if score ${activeSlot} ${timerObj} matches 1 if score ${ticksSlot} ${timerObj} < ${durationSlot} ${timerObj} run scoreboard players add ${ticksSlot} ${timerObj} 1`,
         args: [],
       })
     }
@@ -3224,32 +3249,29 @@ function lowerTimerMethod(
   } else if (method === 'done') {
     const durationTemp = sv.fields.get('_duration')
     const ticksTemp = ctx.freshTemp()
-    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: timerObj })
+    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: ticksSlot, obj: timerObj })
     if (durationTemp) {
       ctx.emit({ kind: 'cmp', op: 'ge', dst: t, a: { kind: 'temp', name: ticksTemp }, b: { kind: 'temp', name: durationTemp } })
     } else {
       ctx.emit({ kind: 'const', dst: t, value: 0 })
     }
   } else if (method === 'elapsed') {
-    ctx.emit({ kind: 'score_read', dst: t, player: `${player}_ticks`, obj: timerObj })
+    ctx.emit({ kind: 'score_read', dst: t, player: ticksSlot, obj: timerObj })
   } else if (method === 'remaining') {
     const durationTemp = sv.fields.get('_duration')
     const ticksTemp = ctx.freshTemp()
-    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: timerObj })
+    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: ticksSlot, obj: timerObj })
     if (durationTemp) {
       ctx.emit({ kind: 'sub', dst: t, a: { kind: 'temp', name: durationTemp }, b: { kind: 'temp', name: ticksTemp } })
     } else {
       ctx.emit({ kind: 'const', dst: t, value: 0 })
     }
   } else {
-    // Unknown Timer method — emit regular call
-    const fields = ['_id', '_duration']
-    const selfArgs: Operand[] = fields.map(f => {
-      const temp = sv.fields.get(f)
-      return temp ? { kind: 'temp' as const, name: temp } : { kind: 'const' as const, value: 0 }
-    })
-    const explicitArgs = extraArgs.map(a => lowerExpr(a, ctx, scope))
-    ctx.emit({ kind: 'call', dst: t, fn: `Timer::${method}`, args: [...selfArgs, ...explicitArgs] })
+    throw new DiagnosticError(
+      'LoweringError',
+      `Unknown Timer intrinsic method '${method}'.`,
+      ctx.currentSourceLoc ?? { line: 1, col: 1 },
+    )
   }
   return { kind: 'temp', name: t }
 }
