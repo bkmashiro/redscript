@@ -281,7 +281,8 @@ Tasks:
 
 - [x] Add first stage result type (`ParseSourceStageResult`) and keep existing `compile()` API stable.
 - [x] Extract `parseSourceStage` as the first pure orchestration helper with targeted tests.
-- [ ] Extract import/preprocess stage first; verify spans/errors do not regress.
+- [x] Extract import/preprocess stage first; verify spans/errors do not regress.
+  - `preprocessSourceStage` now wraps import/preprocess metadata for compile orchestration and has focused tests for source ranges, library imports, and import diagnostic file/line preservation.
 - [ ] Extract typecheck/decorator metadata handling next.
 - [ ] Extract runtime helper metadata collection out of compile orchestration.
 - [ ] Add dump/snapshot support for selected stages after the extraction points exist.
@@ -393,11 +394,9 @@ npm test -- src/__tests__/hir src/__tests__/mir src/__tests__/e2e --runInBand
 
 The next implementation slice should be:
 
-1. Add an artifact validator MVP for function/tag references and path legality.
-2. Wire it into a focused test, not the default compile path yet.
-3. Add two small generated datapack cases:
-   - normal function call/reference resolves
-   - broken/missing reference fails validator
-4. Then decide whether to run validator by default or behind a CLI/check flag.
+1. Extract typecheck/decorator metadata handling from `compile()` into a named stage while keeping the public `compile()` API stable.
+2. Add focused tests that pin type-error bundling (`stopAfterCheck`), lenient warning conversion, checker warnings, and config-global-to-const rewriting.
+3. Keep runtime decorator metadata collection (`tick`, `load`, `watch`, coroutine/schedule/profile/etc.) as the following slice unless the typecheck seam makes a tiny shared helper obvious.
+4. Run `npm run build` and the focused compile/typecheck tests before broader refactors.
 
-This is lower-risk than starting with a typechecker split, and it supports later refactors by catching generated artifact regressions.
+This is lower-risk than starting with a `typechecker/index.ts` split and continues to clarify `src/emit/compile.ts` stage boundaries under existing behavior.

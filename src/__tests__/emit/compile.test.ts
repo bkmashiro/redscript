@@ -1,5 +1,8 @@
-import { compile, parseSourceStage } from '../../emit/compile'
-import { DiagnosticBundleError } from '../../diagnostics'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
+import { compile, parseSourceStage, preprocessSourceStage } from '../../emit/compile'
+import { DiagnosticBundleError, DiagnosticError } from '../../diagnostics'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
   return files.find(f => f.path.includes(pathSubstr))?.content
@@ -22,6 +25,53 @@ describe('emit: compile coverage', () => {
   test('parseSourceStage preserves stopAfterCheck parse-error bundling', () => {
     expect(() => parseSourceStage('fn broken(: void {', 'parse_stage_test', { stopAfterCheck: true }))
       .toThrow(DiagnosticBundleError)
+  })
+
+  test('preprocessSourceStage returns processed source, ranges, and library imports', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-emit-preprocess-'))
+    const mainPath = path.join(tmpDir, 'main.mcrs')
+    const helperPath = path.join(tmpDir, 'helpers.mcrs')
+    const libPath = path.join(tmpDir, 'mylib.mcrs')
+
+    fs.writeFileSync(helperPath, 'fn helper(): int { return 2; }\n')
+    fs.writeFileSync(libPath, 'module library;\nfn lib_value(): int { return 3; }\n')
+    fs.writeFileSync(mainPath, 'import "helpers";\nimport "mylib";\nfn main(): int { return helper(); }\n')
+
+    try {
+      const stage = preprocessSourceStage(fs.readFileSync(mainPath, 'utf-8'), { filePath: mainPath })
+
+      expect(stage.processedSource).toContain('fn helper()')
+      expect(stage.processedSource).toContain('fn main()')
+      expect(stage.ranges.map(range => range.filePath)).toContain(path.resolve(helperPath))
+      expect(stage.ranges.map(range => range.filePath)).toContain(path.resolve(mainPath))
+      expect(stage.libraryImports).toHaveLength(1)
+      expect(stage.libraryImports?.[0].filePath).toBe(path.resolve(libPath))
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  test('preprocessSourceStage preserves import diagnostics with source file and line', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-emit-preprocess-error-'))
+    const mainPath = path.join(tmpDir, 'main.mcrs')
+    fs.writeFileSync(mainPath, 'import "missing_module";\nfn main(): int { return 1; }\n')
+
+    try {
+      expect(() => preprocessSourceStage(fs.readFileSync(mainPath, 'utf-8'), { filePath: mainPath }))
+        .toThrow(DiagnosticError)
+
+      try {
+        preprocessSourceStage(fs.readFileSync(mainPath, 'utf-8'), { filePath: mainPath })
+      } catch (err) {
+        expect(err).toBeInstanceOf(DiagnosticError)
+        const diag = err as DiagnosticError
+        expect(diag.location.file).toBe(mainPath)
+        expect(diag.location.line).toBe(1)
+        expect(diag.message).toContain("Cannot import 'missing_module'")
+      }
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 
   test('control-flow statements generate emit-time branching artifacts', () => {

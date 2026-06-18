@@ -8,7 +8,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
-import { preprocessSourceWithMetadata } from '../compile'
+import { preprocessSourceWithMetadata, type PreprocessedSource, type SourceRange } from '../compile'
 import { CheckFailedError, DiagnosticBundleError, DiagnosticError, parseErrorMessage } from '../diagnostics'
 
 function extractErrorMessage(err: unknown): string {
@@ -63,6 +63,24 @@ export interface CompileResult {
   warnings: string[]
   /** Always true — v1 compat shim (compile() throws on error) */
   readonly success: true
+}
+
+export interface PreprocessSourceStageResult {
+  processedSource: string
+  ranges: SourceRange[]
+  libraryImports?: PreprocessedSource['libraryImports']
+}
+
+export function preprocessSourceStage(
+  source: string,
+  options: { filePath?: string; includeDirs?: string[] } = {},
+): PreprocessSourceStageResult {
+  const preprocessed = preprocessSourceWithMetadata(source, options)
+  return {
+    processedSource: preprocessed.source,
+    ranges: preprocessed.ranges,
+    libraryImports: preprocessed.libraryImports,
+  }
 }
 
 export interface ParseSourceStageResult {
@@ -165,8 +183,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const warnings: string[] = []
 
   // Preprocess: resolve import directives, merge imported sources
-  const preprocessed = preprocessSourceWithMetadata(source, { filePath, includeDirs })
-  const processedSource = preprocessed.source
+  const preprocessed = preprocessSourceStage(source, { filePath, includeDirs })
+  const processedSource = preprocessed.processedSource
 
   try {
     // Stage 1: Lex + Parse → AST
