@@ -365,6 +365,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const retryFunctions: Array<{ name: string; max: number }> = []
     const memoizeFunctions: string[] = []
     const eventHandlers = new Map<string, string[]>()
+    const functionTags = new Map<string, string[]>()
     for (const fn of hir.functions) {
       if (fn.watchObjective) {
         watchFunctions.push({ name: fn.name, objective: fn.watchObjective })
@@ -411,6 +412,11 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
             if (!eventHandlers.has(evType)) eventHandlers.set(evType, [])
             eventHandlers.get(evType)!.push(`${namespace}:${fn.name}`)
           }
+        }
+        if (dec.name === 'function_tag' && dec.args?.functionTag) {
+          const tagId = dec.args.functionTag
+          if (!functionTags.has(tagId)) functionTags.set(tagId, [])
+          functionTags.get(tagId)!.push(`${namespace}:${fn.name}`)
         }
       }
     }
@@ -576,6 +582,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       generateSourceMap,
       mcVersion,
       eventHandlers,
+      functionTags,
       singletonObjectives,
       profiledFunctions,
       benchmarkFunctions,

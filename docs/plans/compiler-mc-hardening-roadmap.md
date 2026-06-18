@@ -354,6 +354,8 @@ npm test -- --runInBand
 
 **Objective:** Fix sugar and high-level language constructs only after core command semantics are pinned.
 
+Event/runtime boundary note: gameplay decorators such as `@on(PlayerDeath)` should not keep growing as compiler-hardcoded event enums. Prefer generic datapack artifact primitives (`@function_tag("namespace:path")`) plus stdlib/runtime-owned event dispatch. See `docs/plans/event-runtime-boundary.md`.
+
 Focus areas:
 
 - `foreach` lowering over selectors and arrays

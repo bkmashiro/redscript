@@ -44,6 +44,19 @@ test('@on(PlayerDeath) generates on_player_death tag', () => {
   expect(tag.values).toContain('test_events:on_death')
 })
 
+test('@function_tag registers a handler tag without compiler event semantics', () => {
+  const src = `
+    namespace test_events
+    @function_tag("rs:on_player_death")
+    fn on_death(): void { raw("say dead") }
+  `
+  const result = compile(src, { namespace: 'test_events' })
+  const tagFile = result.files.find(f => f.path === 'data/rs/tags/function/on_player_death.json')
+  expect(tagFile).toBeDefined()
+  const tag = JSON.parse(tagFile!.content)
+  expect(tag.values).toEqual(['test_events:on_death'])
+})
+
 test('events.mcrs compiles without errors', () => {
   const result = compile(EVENTS_SRC.replace(/^module.*$/m, 'namespace rs_events'), { namespace: 'rs_events' })
   expect(result.success).toBe(true)

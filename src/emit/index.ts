@@ -37,6 +37,8 @@ export interface EmitOptions {
   mcVersion?: McVersion
   /** Map of EventTypeName → list of fully-qualified function references for @on handlers */
   eventHandlers?: Map<string, string[]>
+  /** Map of function tag id (`namespace:path`) → fully-qualified function references. */
+  functionTags?: Map<string, string[]>
   /** Scoreboard objective names for @singleton struct fields — added to load.mcfunction */
   singletonObjectives?: string[]
   /** Functions decorated with @profile. */
@@ -84,6 +86,7 @@ export interface EmitOptions {
  *   - `generateSourceMap` — when `true`, emit `.sourcemap.json` sidecars.
  *   - `mcVersion` — target Minecraft version; controls macro and execute syntax.
  *   - `eventHandlers` — map of event type name → handler function references.
+ *   - `functionTags` — map of datapack function tag id → function references.
  *   - `singletonObjectives` — scoreboard objectives for `@singleton` struct fields.
  *   - `profiledFunctions` / `benchmarkFunctions` / `enableProfiling` — profiling support.
  *   - `throttleFunctions` — functions decorated with `@throttle`.
@@ -351,7 +354,26 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     }
   }
 
+  if (options.functionTags) {
+    for (const [tagId, handlers] of options.functionTags) {
+      if (handlers.length === 0) continue
+      const tagPath = functionTagFilePath(tagId)
+      files.push({
+        path: tagPath,
+        content: JSON.stringify({ values: handlers }, null, 2) + '\n',
+      })
+    }
+  }
+
   return files
+}
+
+function functionTagFilePath(tagId: string): string {
+  const match = tagId.match(/^([a-z0-9_.-]+):([a-z0-9_./-]+)$/)
+  if (!match) {
+    throw new Error(`Invalid function tag id '${tagId}'. Expected namespace:path`)
+  }
+  return `data/${match[1]}/tags/function/${match[2]}.json`
 }
 
 // ---------------------------------------------------------------------------

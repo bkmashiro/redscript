@@ -280,6 +280,15 @@ export class DeclParser extends StmtParser {
       }
     }
 
+    if (name === 'function_tag') {
+      const strMatch = argsStr.match(/^"([^"]+)"$/)
+      if (strMatch) {
+        args.functionTag = strMatch[1]
+        return { name, args }
+      }
+      this.error('Invalid @function_tag syntax. Expected: @function_tag("namespace:path")')
+    }
+
     if (name === 'watch' || name === 'on_trigger' || name === 'on_advancement' || name === 'on_craft' || name === 'on_join_team') {
       const strMatch = argsStr.match(/^"([^"]*)"$/)
       if (strMatch) {
