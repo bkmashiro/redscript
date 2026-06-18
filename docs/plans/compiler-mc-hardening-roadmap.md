@@ -344,6 +344,7 @@ Prioritized splits:
 
 Tasks:
 
+- [x] Start typechecker split by extracting function decorator/event validation into `src/typechecker/decorators.ts` with focused pure-helper tests; `TypeChecker` delegates wrapper decorators and legacy `@on(...)` validation through that seam.
 - [ ] Before each split, add focused tests around the behavior being moved.
 - [ ] Move one responsibility per PR.
 - [ ] Preserve public exports or add compatibility re-exports.
