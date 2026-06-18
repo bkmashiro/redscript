@@ -44,6 +44,18 @@ test('@on(PlayerDeath) generates on_player_death tag', () => {
   expect(tag.values).toContain('test_events:on_death')
 })
 
+test('@on(PlayerDeath) supports no-parameter handlers using @s context', () => {
+  const src = `
+    namespace test_events
+    @on(PlayerDeath) fn on_death() { raw("say dead") }
+  `
+  const result = compile(src, { namespace: 'test_events', librarySources: [EVENTS_SRC] })
+  const tagFile = result.files.find(f => f.path === 'data/rs/tags/function/on_player_death.json')
+  expect(tagFile).toBeDefined()
+  const tag = JSON.parse(tagFile!.content)
+  expect(tag.values).toContain('test_events:on_death')
+})
+
 test('@function_tag registers a handler tag without compiler event semantics', () => {
   const src = `
     namespace test_events

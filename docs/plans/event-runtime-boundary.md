@@ -111,5 +111,6 @@ That legacy form can remain for compatibility, but new runtime docs should teach
 - Keeps implemented legacy `@on(EventType)` behavior for compatibility.
 - Centralized legacy `@on(EventType)` handler tag ids in the shared event registry (`EVENT_TYPES.*.handlerTag`) so emit no longer carries a separate event-to-tag table.
 - Removed `BlockBreak` from built-in `@on(EventType)` because the runtime dispatcher never implemented block-break detection; users can still compose block-break behavior explicitly with `@function_tag(...)` and their own datapack assets.
+- Allowed legacy `@on(EventType)` handlers to declare zero parameters so users can write runtime-honest handlers around `@s`; the old single `Player` parameter form remains accepted for compatibility.
 - Added tests proving `@function_tag("rs:on_player_death")` can produce the same handler tag file without compiler knowing a gameplay event name.
 - Added compatibility tests proving `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` use the same generated tag files as `@tick` and `@load`.

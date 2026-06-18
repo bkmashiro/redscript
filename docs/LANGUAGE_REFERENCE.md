@@ -810,12 +810,12 @@ fn large_helper(x: int): int {
 
 ## Event Handlers
 
-The `@on(EventType)` decorator wires a function as a handler for a built-in game event. The handler receives a `player` parameter representing the player that triggered the event.
+The `@on(EventType)` decorator wires a function as a handler for a built-in game event. Prefer no-parameter handlers that use Minecraft's `@s` execution context; a legacy single `player: Player` parameter is still accepted for compatibility.
 
 ```rs
 @on(PlayerDeath)
-fn on_death(player: Player) {
-    tell(player, "You died!");
+fn on_death() {
+    tell(@s, "You died!");
 }
 
 @on(PlayerJoin)

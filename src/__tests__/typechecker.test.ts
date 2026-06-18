@@ -660,10 +660,20 @@ fn handle(player: Player) {}
     it('rejects mismatched event signatures', () => {
       const errors = typeCheck(`
 @on(PlayerDeath)
-fn handle_death() {}
+fn handle_death(a: Player, b: Player) {}
 `)
       expect(errors.length).toBeGreaterThan(0)
-      expect(errors[0].message).toContain('must declare 1 parameter(s)')
+      expect(errors[0].message).toContain('must declare either 0 parameter(s) or 1 parameter(s)')
+    })
+
+    it('accepts no-parameter @on handlers that use @s runtime context', () => {
+      const errors = typeCheck(`
+@on(PlayerDeath)
+fn handle_death() {
+    raw("scoreboard players add @s ev_obj 1");
+}
+`)
+      expect(errors).toHaveLength(0)
     })
   })
 

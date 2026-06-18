@@ -496,15 +496,19 @@ export class TypeChecker {
     }
 
     const expectedParams = getEventParamSpecs(eventType)
-    if (fn.params.length !== expectedParams.length) {
+    // Runtime-dispatched event handlers are invoked via Minecraft function tags,
+    // which cannot pass real arguments. Prefer zero-parameter handlers that use
+    // @s as the execution context, but keep the legacy single Player parameter
+    // form for compatibility.
+    if (fn.params.length !== 0 && fn.params.length !== expectedParams.length) {
       this.report(
-        `Event handler '${fn.name}' for ${eventType} must declare ${expectedParams.length} parameter(s), got ${fn.params.length}`,
+        `Event handler '${fn.name}' for ${eventType} must declare either 0 parameter(s) or ${expectedParams.length} parameter(s), got ${fn.params.length}`,
         fn
       )
       return
     }
 
-    for (let i = 0; i < expectedParams.length; i++) {
+    for (let i = 0; i < fn.params.length; i++) {
       const actual = this.normalizeType(fn.params[i].type)
       const expected = this.normalizeType(expectedParams[i].type)
       if (!this.typesMatch(expected, actual)) {
