@@ -370,16 +370,20 @@ Tasks:
 
 - [x] Add first Paper oracle for selector `foreach` binding context: loop variables used in command-argument positions lower to `@s` inside the helper, and live Paper confirms all selected entities are tagged.
 - [x] Add Paper oracle for `while let Some(...)` option-loop sugar, including the regression where `opt = None` inside the loop must update the option struct's `has`/`val` fields so the loop exits.
-- [ ] Add broader sugar-specific `.mcrs` golden cases.
+- [x] Add broader sugar-specific `.mcrs` golden cases (`src/__tests__/fixtures/sugar-golden.mcrs`) for selector `foreach` and `while let Some(...)` command shape.
 - [x] Add at least one real Paper oracle case for sugar that affects generated `execute`/`scoreboard` behavior.
-- [ ] Mark weak/experimental sugar in docs if it cannot be fully verified yet.
-- [ ] Prefer lowering tests over surface parser-only tests.
+- [x] Mark weak/experimental sugar in docs where relevant: gameplay event sugar is bounded by `docs/plans/event-runtime-boundary.md`, and unsupported future event behavior is kept out of compiler-owned enums.
+- [x] Prefer lowering tests over surface parser-only tests: Phase 6 now has command-shape golden tests plus Paper coverage for the risky sugar paths.
 
 Verification:
 
 ```bash
-npm test -- src/__tests__/hir src/__tests__/mir src/__tests__/e2e --runInBand
+npm test -- src/__tests__/golden/core-command-golden.test.ts src/__tests__/compiler/option-extensions.test.ts src/__tests__/mc-integration/syntax-coverage.test.ts --runInBand --testTimeout=120000 --forceExit
+npm run build
+npm run validate-mc
 ```
+
+Status: Phase 6 is closed for the current hardening pass. Future sugar work should open a new phase/slice with a specific behavior oracle instead of adding more parser-only coverage.
 
 ---
 

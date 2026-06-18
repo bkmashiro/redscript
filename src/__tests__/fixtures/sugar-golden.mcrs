@@ -1,0 +1,15 @@
+module golden_sugar
+
+fn while_let_option() {
+  let opt: Option<int> = Some(7)
+  while let Some(v) = opt {
+    scoreboard_set("#while", "golden_obj", v)
+    opt = None
+  }
+}
+
+fn selector_foreach() {
+  foreach (e in @e[type=armor_stand,tag=golden_sugar]) {
+    tag_add(e, "seen")
+  }
+}

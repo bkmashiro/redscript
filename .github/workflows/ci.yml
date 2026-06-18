@@ -1,42 +1,30 @@
 name: CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  test:
+  compiler:
+    name: Compiler build + unit/static gates
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout redscript-docs
-        uses: actions/checkout@v4
-        with:
-          repository: bkmashiro/redscript-docs
-          path: redscript-docs
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - run: npm install
-      - run: npm install --prefix editors/vscode
+
+      - run: npm ci
       - run: npm run build
-      - run: npm test
-      - name: Run MC integration tests (offline - graceful skip)
-        run: npx jest --testPathPattern="mc-integration" --forceExit
+      - name: Unit tests only (no Paper / external docs checkout)
+        run: npx jest --selectProjects unit --runInBand
         env:
           MC_OFFLINE: "true"
-      - name: Check stdlib docs are up to date
-        run: npx ts-node scripts/gen-docs.ts --check --docs-dir redscript-docs
-
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm install
-      - run: npm run build
+      - name: Static MC command syntax gate
+        run: npm run validate-mc

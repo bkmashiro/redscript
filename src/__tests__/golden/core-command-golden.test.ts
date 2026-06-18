@@ -1,3 +1,5 @@
+import fs from 'fs'
+import path from 'path'
 import { compile } from '../../compile'
 import type { DatapackFile } from '../../emit'
 
@@ -22,6 +24,10 @@ function pick(files: DatapackFile[], paths: string[]): Record<string, string> {
   }
 
   return out
+}
+
+function fixture(name: string): string {
+  return fs.readFileSync(path.join(__dirname, '..', 'fixtures', name), 'utf8')
 }
 
 describe('core command golden outputs', () => {
@@ -171,6 +177,38 @@ describe('core command golden outputs', () => {
         '  ]',
         '}',
       ].join('\n'),
+    })
+  })
+
+  test('syntax sugar fixture command shape stays stable', () => {
+    const result = compile(fixture('sugar-golden.mcrs'), { namespace: 'golden_sugar' })
+
+    expect(pick(result.files, [
+      'data/golden_sugar/function/while_let_option.mcfunction',
+      'data/golden_sugar/function/while_let_option__whl_header_0.mcfunction',
+      'data/golden_sugar/function/while_let_option__whl_body_1.mcfunction',
+      'data/golden_sugar/function/selector_foreach.mcfunction',
+      'data/golden_sugar/function/selector_foreach__foreach_t0.mcfunction',
+    ])).toEqual({
+      'data/golden_sugar/function/while_let_option.mcfunction': [
+        'scoreboard players set $while_let_option___opt_opt_has __golden_sugar 1',
+        'scoreboard players set $while_let_option___opt_opt_val __golden_sugar 7',
+        'function golden_sugar:while_let_option__whl_header_0',
+      ].join('\n'),
+      'data/golden_sugar/function/while_let_option__whl_header_0.mcfunction': [
+        'execute if score $while_let_option___opt_opt_has __golden_sugar matches 1 run return run function golden_sugar:while_let_option__whl_body_1',
+        'function golden_sugar:while_let_option__whl_exit_2',
+      ].join('\n'),
+      'data/golden_sugar/function/while_let_option__whl_body_1.mcfunction': [
+        'execute store result score #while golden_obj run scoreboard players get $while_let_option___opt_opt_val __golden_sugar',
+        'scoreboard players set $ret_has __golden_sugar 0',
+        'scoreboard players set $ret_val __golden_sugar 0',
+        'scoreboard players set $while_let_option___opt_opt_has __golden_sugar 0',
+        'scoreboard players set $while_let_option___opt_opt_val __golden_sugar 0',
+        'function golden_sugar:while_let_option__whl_header_0',
+      ].join('\n'),
+      'data/golden_sugar/function/selector_foreach.mcfunction': 'execute as @e[type=armor_stand,tag=golden_sugar] run function golden_sugar:selector_foreach__foreach_t0',
+      'data/golden_sugar/function/selector_foreach__foreach_t0.mcfunction': 'tag @s add seen',
     })
   })
 })
