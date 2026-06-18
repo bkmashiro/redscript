@@ -368,8 +368,9 @@ Focus areas:
 
 Tasks:
 
-- [ ] Add sugar-specific `.mcrs` golden cases.
-- [ ] Add at least one real Paper oracle case for sugar that affects generated `execute`/`scoreboard` behavior.
+- [x] Add first Paper oracle for selector `foreach` binding context: loop variables used in command-argument positions lower to `@s` inside the helper, and live Paper confirms all selected entities are tagged.
+- [ ] Add broader sugar-specific `.mcrs` golden cases.
+- [x] Add at least one real Paper oracle case for sugar that affects generated `execute`/`scoreboard` behavior.
 - [ ] Mark weak/experimental sugar in docs if it cannot be fully verified yet.
 - [ ] Prefer lowering tests over surface parser-only tests.
 

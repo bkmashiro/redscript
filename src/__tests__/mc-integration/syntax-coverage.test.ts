@@ -105,6 +105,13 @@ describe('Syntax: for-each (for x in arr)', () => {
         }
         scoreboard_set("#foreach_out", "sc_out", total)
       }
+
+      fn test_selector_foreach_binding() {
+        foreach (e in @e[type=armor_stand,tag=rs_foreach_probe]) {
+          tag_add(e, "rs_foreach_seen")
+          raw("scoreboard players add #foreach_entities sc_out 1")
+        }
+      }
     `, FNS)
     await mc.reload()
     await mc.ticks(5)
@@ -129,6 +136,28 @@ describe('Syntax: for-each (for x in arr)', () => {
     const score = await mc.scoreboard('#foreach_out', 'sc_out')
     expect(score).toBe(15)
     console.log(`  for-each: sum([1..5]) = ${score} ✓`)
+  }, 30_000)
+
+  test('runtime: selector foreach binds loop variable to @s command context', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/scoreboard players set #foreach_entities sc_out 0')
+    await mc.command('/kill @e[tag=rs_foreach_probe]').catch(() => {})
+    await mc.command('/kill @e[tag=rs_foreach_seen]').catch(() => {})
+    await mc.ticks(2)
+    await mc.command('/summon armor_stand 0 70 0 {Tags:["rs_foreach_probe"],NoGravity:1b}')
+    await mc.command('/summon armor_stand 1 70 0 {Tags:["rs_foreach_probe"],NoGravity:1b}')
+    await mc.command('/summon armor_stand 2 70 0 {Tags:["rs_foreach_probe"],NoGravity:1b}')
+    await mc.ticks(2)
+
+    await mc.command(`/function ${FNS}:test_selector_foreach_binding`)
+    await mc.ticks(5)
+
+    const count = await mc.scoreboard('#foreach_entities', 'sc_out')
+    const seen = await mc.entities('@e[type=armor_stand,tag=rs_foreach_seen]')
+    expect(count).toBe(3)
+    expect(seen).toHaveLength(3)
+    console.log(`  selector foreach: tagged ${seen.length} entities, count=${count} ✓`)
   }, 30_000)
 })
 

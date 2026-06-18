@@ -1308,6 +1308,9 @@ function lowerStmt(
 
       // Build helper function body as MIR
       const helperCtx = ctx.createHelperContext(helperName)
+      if (stmt.iterable.kind === 'selector') {
+        helperCtx.commandArgAliases.set(stmt.binding, '@s')
+      }
       const helperScope = new Map(scope)
       lowerBlock(stmt.body, helperCtx, helperScope)
       if (isPlaceholderTerm(helperCtx.current().term)) {

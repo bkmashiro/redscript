@@ -199,6 +199,20 @@ describe('MIR lower — is_check expr', () => {
     expect(emitted).toContain('execute store success score $ret __ischeck if entity @s[type=minecraft:zombie]')
     expect(emitted).toContain('scoreboard players add #zombie_count rs 1')
   })
+  test('selector foreach binding lowers command arguments as @s in helper context', () => {
+    const result = compile(`
+      fn mark_entities(): void {
+        foreach (e in @e[type=armor_stand,tag=probe]) {
+          tag_add(e, "seen");
+        }
+      }
+    `, { namespace: 'foreachbind' })
+
+    const emitted = result.files.map(file => file.content).join('\n')
+    expect(emitted).toContain('execute as @e[type=armor_stand,tag=probe] run function foreachbind:mark_entities__foreach_')
+    expect(emitted).toContain('tag @s add seen')
+    expect(emitted).not.toContain('tag e add seen')
+  })
 })
 
 describe('MIR lower — library array-param functions', () => {
