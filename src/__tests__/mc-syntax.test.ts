@@ -103,6 +103,32 @@ fn choose() {
     expect(errors).toHaveLength(0)
   })
 
+  test('generated execute + scoreboard combinations validate statically', () => {
+    const source = `
+fn compare_and_branch() {
+    let input: int = scoreboard_get("#input", "core_static")
+    if (input > 5) {
+        scoreboard_set("#out", "core_static", input + 1)
+    } else {
+        scoreboard_set("#out", "core_static", input - 1)
+    }
+}
+`
+    const commands = getCommands(source, 'exec_score_static')
+    const errors = commands
+      .map(cmd => ({ cmd, result: validator.validate(cmd) }))
+      .filter(entry => !entry.result.valid)
+      .map(entry => ({ cmd: entry.cmd, error: entry.result.error }))
+
+    expect(errors).toHaveLength(0)
+    expect(commands).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^execute store result score \$compare_and_branch_t\d+ __exec_score_static run scoreboard players get #input core_static$/),
+      expect.stringMatching(/^execute store success score \$compare_and_branch_t\d+ __exec_score_static if score \$compare_and_branch_t\d+ __exec_score_static > \$__const_5 __exec_score_static$/),
+      expect.stringMatching(/^execute if score \$compare_and_branch_t\d+ __exec_score_static matches 1 run return run function exec_score_static:compare_and_branch__then_\d+$/),
+      expect.stringMatching(/^execute store result score #out core_static run scoreboard players get \$compare_and_branch_t\d+ __exec_score_static$/),
+    ]))
+  })
+
   test('accepts macro template commands', () => {
     const teleport = validator.validate('$tp @s $(x) $(y) $(z)')
     expect(teleport.valid).toBe(true)

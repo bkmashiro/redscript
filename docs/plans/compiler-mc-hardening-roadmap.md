@@ -94,7 +94,7 @@ Tasks:
   - Replace `$(name)` placeholders with safe placeholder literals for validation.
   - Validate the resulting root command path where possible.
   - Keep unsupported or malformed templates as diagnostics, not silent pass.
-- [ ] Add static tests for generated `execute + scoreboard` combinations from small `.mcrs` programs.
+- [x] Add static tests for generated `execute + scoreboard` combinations from small `.mcrs` programs.
 - [x] Add function/tag reference validation: every generated function reference and tag value should resolve inside the datapack artifact (`src/testing/datapack-artifact-validator.ts`).
 
 Suggested files:
