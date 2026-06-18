@@ -382,6 +382,28 @@ class FnContext {
     this.currentBlock = entry
   }
 
+  createHelperContext(helperName: string): FnContext {
+    const helperCtx = new FnContext(
+      this.namespace,
+      helperName,
+      this.structDefs,
+      this.implMethods,
+      this.macroInfo,
+      this.fnParamInfo,
+      this.enumDefs,
+      this.timerCounter,
+      this.enumPayloads,
+    )
+    helperCtx.sourceFile = this.sourceFile
+    helperCtx.hirFunctions = this.hirFunctions
+    helperCtx.specializedFnsRegistry = this.specializedFnsRegistry
+    helperCtx.constValues = this.constValues
+    helperCtx.singletonStructs = this.singletonStructs
+    helperCtx.displayImpls = this.displayImpls
+    helperCtx.globalVarNames = this.globalVarNames
+    return helperCtx
+  }
+
   freshTemp(): Temp {
     return `t${this.tempCounter++}`
   }
@@ -1237,7 +1259,7 @@ function lowerStmt(
       }
 
       // Build helper function body as MIR
-      const helperCtx = new FnContext(ctx.getNamespace(), helperName, ctx.structDefs, ctx.implMethods)
+      const helperCtx = ctx.createHelperContext(helperName)
       const helperScope = new Map(scope)
       lowerBlock(stmt.body, helperCtx, helperScope)
       if (isPlaceholderTerm(helperCtx.current().term)) {
@@ -1266,7 +1288,7 @@ function lowerStmt(
       const helperName = `${ctx.getFnName()}__exec_${ctx.freshTemp()}`
       const subcommands = stmt.subcommands.map(lowerExecuteSubcmd)
 
-      const helperCtx = new FnContext(ctx.getNamespace(), helperName, ctx.structDefs, ctx.implMethods)
+      const helperCtx = ctx.createHelperContext(helperName)
       const helperScope = new Map(scope)
       lowerBlock(stmt.body, helperCtx, helperScope)
       if (isPlaceholderTerm(helperCtx.current().term)) {

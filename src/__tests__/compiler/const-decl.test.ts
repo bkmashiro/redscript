@@ -62,6 +62,30 @@ describe('top-level const declarations', () => {
   test('end-to-end compile accepts const declarations', () => {
     expect(() => compile(TOP_LEVEL_CONST_SOURCE, { namespace: 'test' })).not.toThrow()
   })
+
+  test('top-level consts are visible inside lowered helper functions', () => {
+    expect(() => compile(`
+      const WINDOW: int = 10
+
+      fn foreach_helper() {
+        foreach (p in @a) {
+          let diff: int = 4;
+          if (diff < WINDOW) {
+            scoreboard_set(p, "rs.ok", 1);
+          }
+        }
+      }
+
+      fn execute_helper() {
+        execute as @a run {
+          let diff: int = 4;
+          if (diff < WINDOW) {
+            scoreboard_set(@s, "rs.ok", 1);
+          }
+        }
+      }
+    `, { namespace: 'test' })).not.toThrow()
+  })
 })
 
 // ---------------------------------------------------------------------------
