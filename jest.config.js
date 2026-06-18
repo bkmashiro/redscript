@@ -1,12 +1,13 @@
+const tsJestTransform = {
+  '^.+\\.tsx?$': ['ts-jest', { diagnostics: false }],
+}
+
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
-  // Retry flaky MC integration tests (depend on live server)
   projects: [
     {
       displayName: 'mc-integration',
-      preset: 'ts-jest',
       testEnvironment: 'node',
       roots: ['<rootDir>/src'],
       testMatch: [
@@ -14,24 +15,15 @@ module.exports = {
         '**/__tests__/mc-integration/**/*.test.ts',
       ],
       testEnvironmentOptions: {},
-      retryTimes: 2,
-      globals: {
-        'ts-jest': {
-          diagnostics: false,
-        },
-      },
+      setupFilesAfterEnv: ['<rootDir>/jest.setup.mc-integration.js'],
+      transform: tsJestTransform,
     },
     {
       displayName: 'unit',
-      preset: 'ts-jest',
       testEnvironment: 'node',
       roots: ['<rootDir>/src'],
       testPathIgnorePatterns: ['mc-integration.test.ts', 'mc-integration/'],
-      globals: {
-        'ts-jest': {
-          diagnostics: false,
-        },
-      },
+      transform: tsJestTransform,
     },
   ],
-};
+}

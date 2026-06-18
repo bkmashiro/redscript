@@ -397,7 +397,21 @@ npm run build
 npm run validate-mc
 ```
 
-Status: Phase 6 is closed for the current hardening pass. Future sugar work should open a new phase/slice with a specific behavior oracle instead of adding more parser-only coverage.
+Status: Phase 6 is closed for the current hardening pass. Phase 7 (event runtime manifest boundary) is now underway and keeps gameplay behavior on the stdlib/runtime boundary.
+
+## Phase 7 — Event runtime manifest boundary
+
+Status: ✅ Implemented in code, with focused tests.
+
+- [x] Add a small manifest seam in `src/events/manifest.ts` with event metadata including `handlerTag`, `executorContext`, and optional `runtimeAssets`.
+- [x] Derive `EVENT_TYPES` in `src/events/types.ts` from manifest records via helper functions.
+- [x] Preserve existing public event API behavior and decorator/emit behavior through the same `@function_tag`-based artifact mechanism.
+- [x] Add event manifest-focused coverage in `src/__tests__/events-manifest.test.ts`.
+- [ ] Add new gameplay events only through manifest+runtime assets in `src/stdlib/events.mcrs`.
+
+Verification for Phase 7: `npm test -- src/__tests__/events-manifest.test.ts src/__tests__/events-types.test.ts src/__tests__/events-types-extra.test.ts --runInBand --testTimeout=120000`
+
+Future sugar work should open a new phase/slice with a specific behavior oracle instead of adding more parser-only coverage.
 
 ---
 
@@ -417,8 +431,8 @@ Status: Phase 6 is closed for the current hardening pass. Future sugar work shou
 
 The next implementation slice should be:
 
-1. If more event sugar is needed, introduce a small manifest format that supplies `handlerTag` + `executorContext` + runtime assets, rather than adding new compiler-hardcoded gameplay enums.
-2. Keep `@function_tag(...)` as the generic artifact primitive; any new gameplay behavior should live in stdlib/runtime assets first.
-3. Run `npm run build`, event/typechecker tests, `npm run validate-mc`, and full suite before broader refactors.
+1. Add validation/consumption for `runtimeAssets` in event manifests before introducing any new gameplay event.
+2. Keep `@function_tag(...)` as the generic artifact primitive; new gameplay behavior should first land in stdlib/runtime assets and then be referenced by a manifest.
+3. Run `npm run build`, event/typechecker tests, `npm run validate-mc`, and full suite before broader event/runtime changes.
 
-This keeps the runtime boundary honest before any broader `typechecker/index.ts` split.
+This keeps the runtime boundary honest now that Phase 7 has established the manifest seam.

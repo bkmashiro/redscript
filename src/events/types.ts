@@ -1,35 +1,7 @@
 import type { TypeNode } from '../ast/types'
+import { EVENT_RUNTIME_MANIFESTS, eventTypesFromManifests } from './manifest'
 
-export const EVENT_TYPES = {
-  PlayerDeath: {
-    tag: 'rs.just_died',
-    handlerTag: 'rs:on_player_death',
-    params: ['player: Player'],
-    detection: 'scoreboard',
-    executorContext: { kind: 'entity', entityType: 'Player' },
-  },
-  PlayerJoin: {
-    tag: 'rs.just_joined',
-    handlerTag: 'rs:on_player_join',
-    params: ['player: Player'],
-    detection: 'tag',
-    executorContext: { kind: 'entity', entityType: 'Player' },
-  },
-  EntityKill: {
-    tag: 'rs.just_killed',
-    handlerTag: 'rs:on_entity_kill',
-    params: ['player: Player'],
-    detection: 'scoreboard',
-    executorContext: { kind: 'entity', entityType: 'Player' },
-  },
-  ItemUse: {
-    tag: 'rs.just_used_item',
-    handlerTag: 'rs:on_item_use',
-    params: ['player: Player'],
-    detection: 'scoreboard',
-    executorContext: { kind: 'entity', entityType: 'Player' },
-  },
-} as const
+export const EVENT_TYPES = eventTypesFromManifests(EVENT_RUNTIME_MANIFESTS)
 
 export type EventTypeName = keyof typeof EVENT_TYPES
 
@@ -39,6 +11,7 @@ export interface EventTypeSpec {
   params: readonly string[]
   detection: string
   executorContext: TypeNode
+  runtimeAssets?: readonly string[]
 }
 
 export interface EventParamSpec {
