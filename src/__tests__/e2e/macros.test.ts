@@ -125,6 +125,31 @@ describe('e2e: macro call site generation', () => {
     expect(callerFn).toContain('rs:macro_args')
     expect(callerFn).toContain('with storage')
   })
+
+  test('macro callees preserve non-macro params and storage through branch helpers', () => {
+    const source = `
+      fn set_color(id: string, percent: int) {
+        if (percent > 66) {
+          bossbar_set_color(id, "green");
+        } else {
+          bossbar_set_color(id, "red");
+        }
+      }
+
+      fn caller() {
+        set_color("test:bar", 80);
+      }
+    `
+    const result = compile(source, { namespace: 'test' })
+    const callerFn = getFile(result.files, 'caller.mcfunction') ?? ''
+    const calleeFn = getFile(result.files, 'set_color.mcfunction') ?? ''
+    const thenFn = getFile(result.files, 'set_color__then') ?? ''
+
+    expect(callerFn).toContain('storage rs:macro_args percent int 1')
+    expect(calleeFn).toContain('data get storage rs:macro_args percent')
+    expect(calleeFn).toContain('with storage rs:macro_args')
+    expect(thenFn).toContain('$bossbar set $(id) color green')
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -37,7 +37,7 @@ fn give_kit_mage(target: selector) {
     give(target, "minecraft:wooden_sword", 1);
     give(target, "minecraft:golden_apple", 8);
     give(target, "minecraft:ender_pearl", 16);
-    give(target, "minecraft:splash_potion{Potion:\"minecraft:harming\"}", 8);
+    give(target, "minecraft:splash_potion[potion_contents={potion:\"minecraft:harming\"}]", 8);
     give(target, "minecraft:cooked_beef", 16);
 }
 

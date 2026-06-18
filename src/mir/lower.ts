@@ -619,8 +619,24 @@ function lowerFunction(
       return
     }
     const t = ctx.freshTemp()
-    params.push({ name: t, isMacroParam: fnMacroInfo?.macroParams.has(p.name) ?? false })
     scope.set(p.name, t)
+    if (fnMacroInfo) {
+      // Macro functions are invoked with `function ... with storage`, so
+      // ordinary scoreboard parameters are not available as `$pN` slots.
+      // Load scalar non-string parameters from the same storage object that
+      // backs `$(...)` macro substitutions.
+      const isFloat = p.type.kind === 'named' && p.type.name === 'float'
+      const isFixed = p.type.kind === 'named' && p.type.name === 'fixed'
+      ctx.emit({
+        kind: 'nbt_read',
+        dst: t,
+        ns: 'rs:macro_args',
+        path: p.name,
+        scale: isFloat ? 0.01 : isFixed ? 0.0001 : 1,
+      })
+    } else {
+      params.push({ name: t, isMacroParam: false })
+    }
   })
 
   lowerBlock(fn.body, ctx, scope)
@@ -2535,41 +2551,39 @@ function lowerExpr(
         const macroArgs: { name: string; value: Operand; type: NBTType; scale: number }[] = []
         for (let i = 0; i < targetParams.length && i < expr.args.length; i++) {
           const paramName = targetParams[i].name
-          if (targetMacro.macroParams.has(paramName)) {
-            const paramTypeName = targetMacro.paramTypes.get(paramName) ?? 'int'
-            const isString = paramTypeName === 'string' || paramTypeName === 'format_string'
-            const isSelector = paramTypeName === 'selector'
-            if (isString) {
-              // String macro params: store directly to rs:macro_args as NBT string
-              const srcPath = lowerStringExprToPath(expr.args[i], ctx, scope, paramName)
-              if (srcPath) {
-                ctx.emit({
-                  kind: 'call',
-                  dst: null,
-                  fn: `__raw:data modify storage rs:macro_args ${paramName} set from storage rs:strings ${srcPath}`,
-                  args: [],
-                })
-              }
-            } else if (isSelector) {
-              // Selector macro params: store the selector string as an NBT string in rs:macro_args
-              const arg = expr.args[i]
-              const selStr = arg.kind === 'selector' ? arg.raw : '@s'
+          const paramTypeName = targetMacro.paramTypes.get(paramName) ?? 'int'
+          const isString = paramTypeName === 'string' || paramTypeName === 'format_string'
+          const isSelector = paramTypeName === 'selector'
+          if (isString) {
+            // String macro params: store directly to rs:macro_args as NBT string
+            const srcPath = lowerStringExprToPath(expr.args[i], ctx, scope, paramName)
+            if (srcPath) {
               ctx.emit({
                 kind: 'call',
                 dst: null,
-                fn: `__raw:data modify storage rs:macro_args ${paramName} set value ${JSON.stringify(selStr)}`,
+                fn: `__raw:data modify storage rs:macro_args ${paramName} set from storage rs:strings ${srcPath}`,
                 args: [],
               })
-            } else {
-              const isFloat = paramTypeName === 'float'
-              const isFixed = paramTypeName === 'fixed'
-              macroArgs.push({
-                name: paramName,
-                value: lowerExpr(expr.args[i], ctx, scope),
-                type: (isFloat || isFixed) ? 'double' : 'int',
-                scale: isFloat ? 0.01 : isFixed ? 0.0001 : 1,
-              })
             }
+          } else if (isSelector) {
+            // Selector macro params: store the selector string as an NBT string in rs:macro_args
+            const arg = expr.args[i]
+            const selStr = arg.kind === 'selector' ? arg.raw : '@s'
+            ctx.emit({
+              kind: 'call',
+              dst: null,
+              fn: `__raw:data modify storage rs:macro_args ${paramName} set value ${JSON.stringify(selStr)}`,
+              args: [],
+            })
+          } else {
+            const isFloat = paramTypeName === 'float'
+            const isFixed = paramTypeName === 'fixed'
+            macroArgs.push({
+              name: paramName,
+              value: lowerExpr(expr.args[i], ctx, scope),
+              type: (isFloat || isFixed) ? 'double' : 'int',
+              scale: isFloat ? 0.01 : isFixed ? 0.0001 : 1,
+            })
           }
         }
         const t = ctx.freshTemp()

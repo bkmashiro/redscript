@@ -247,8 +247,8 @@ function lowerFunction(fn: MIRFunction, ctx: LoweringContext): void {
       ctx.addFunction({
         name: ctx.getBlockFnName(blockId),
         instructions: blockInstrs,
-        isMacro: false,
-        macroParams: [],
+        isMacro: fn.isMacro,
+        macroParams: fn.params.filter(p => p.isMacroParam).map(p => p.name),
         sourceLoc: fn.sourceLoc,
         sourceSnippet: fn.sourceSnippet,
       })
@@ -661,14 +661,21 @@ function lowerTerminatorInner(
       // This prevents fallthrough to the else-branch even when recursive calls
       // (e.g. continue → loop header → loop body) clobber the condition slot.
       const thenFnName = emitBranchTarget(term.then, fn, ctx, visited)
+      const thenCall = fn.isMacro
+        ? `function ${ctx.qualifiedName(thenFnName)} with storage rs:macro_args`
+        : `function ${ctx.qualifiedName(thenFnName)}`
       instrs.push({
         kind: 'raw',
-        cmd: `execute if score ${condSlot.player} ${condSlot.obj} matches 1 run return run function ${ctx.qualifiedName(thenFnName)}`,
+        cmd: `execute if score ${condSlot.player} ${condSlot.obj} matches 1 run return run ${thenCall}`,
       })
 
       // Else branch: if we reach here, cond was not 1 (the then-path returned).
       const elseFnName = emitBranchTarget(term.else, fn, ctx, visited)
-      instrs.push({ kind: 'call', fn: ctx.qualifiedName(elseFnName) })
+      if (fn.isMacro) {
+        instrs.push({ kind: 'call_macro', fn: ctx.qualifiedName(elseFnName), storage: 'rs:macro_args' })
+      } else {
+        instrs.push({ kind: 'call', fn: ctx.qualifiedName(elseFnName) })
+      }
       break
     }
   }
@@ -694,8 +701,8 @@ function emitBranchTarget(
       ctx.addFunction({
         name: ctx.getBlockFnName(blockId),
         instructions: blockInstrs,
-        isMacro: false,
-        macroParams: [],
+        isMacro: fn.isMacro,
+        macroParams: fn.params.filter(p => p.isMacroParam).map(p => p.name),
         sourceLoc: fn.sourceLoc,
         sourceSnippet: fn.sourceSnippet,
       })
@@ -713,8 +720,8 @@ function emitBranchTarget(
   ctx.addFunction({
     name: branchFnName,
     instructions: blockInstrs,
-    isMacro: false,
-    macroParams: [],
+    isMacro: fn.isMacro,
+    macroParams: fn.params.filter(p => p.isMacroParam).map(p => p.name),
     sourceLoc: fn.sourceLoc,
     sourceSnippet: fn.sourceSnippet,
   })

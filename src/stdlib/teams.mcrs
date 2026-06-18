@@ -45,7 +45,7 @@ fn create_yellow_team() {
 /// @param target     Target selector to join the team
 /// @param team_name  Existing team name
 fn add_to_team(target: selector, team_name: string) {
-    team_join(target, team_name);
+    team_join(team_name, target);
 }
 
 /// Removes an entity or player selector from all teams.

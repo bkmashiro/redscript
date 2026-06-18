@@ -2,21 +2,21 @@
 // Usage: import "stdlib/bossbar.mcrs"
 
 /// Creates a visible timer bossbar for all players.
-/// The bossbar max and current value are initialized to `max_seconds * 20`
-/// so callers can update it directly in game ticks.
-/// @param id           Bossbar identifier, usually `<namespace>:<name>`
-/// @param name         Display name shown on the bossbar
-/// @param max_seconds  Duration in seconds; converted to ticks internally
+/// The bossbar max and current value are initialized to `max_ticks`.
+/// Callers can pass seconds * 20 if they need second-based durations at the call site.
+/// @param id         Bossbar identifier, usually `<namespace>:<name>`
+/// @param name       Display name shown on the bossbar
+/// @param max_ticks  Duration in game ticks
 /// @example
 /// create_timer_bar("game:round", "Round Timer", 90)
-fn create_timer_bar(id: string, name: string, max_seconds: int) {
+fn create_timer_bar(id: string, name: string, max_ticks: int) {
     bossbar_add(id, name);
-    bossbar_set_max(id, max_seconds * 20);
-    bossbar_set_value(id, max_seconds * 20);
+    bossbar_set_max(id, max_ticks);
+    bossbar_set_value(id, max_ticks);
     bossbar_set_color(id, "green");
     bossbar_set_style(id, "progress");
     bossbar_set_players(id, @a);
-    bossbar_set_visible(id, 1);
+    bossbar_set_visible(id, true);
 }
 
 /// Creates a visible red bossbar initialized at full value.
@@ -33,7 +33,7 @@ fn create_health_bar(id: string, name: string, max_val: int) {
     bossbar_set_color(id, "red");
     bossbar_set_style(id, "progress");
     bossbar_set_players(id, @a);
-    bossbar_set_visible(id, 1);
+    bossbar_set_visible(id, true);
 }
 
 /// Creates a visible blue progress bossbar starting at zero.
@@ -50,7 +50,7 @@ fn create_progress_bar(id: string, name: string, max_val: int) {
     bossbar_set_color(id, "blue");
     bossbar_set_style(id, "progress");
     bossbar_set_players(id, @a);
-    bossbar_set_visible(id, 1);
+    bossbar_set_visible(id, true);
 }
 
 /// Sets the current value of an existing bossbar.
@@ -64,13 +64,13 @@ fn update_bar(id: string, value: int) {
 /// Hides an existing bossbar from all assigned players.
 /// @param id  Bossbar identifier
 fn hide_bar(id: string) {
-    bossbar_set_visible(id, 0);
+    bossbar_set_visible(id, false);
 }
 
 /// Shows an existing bossbar to all assigned players.
 /// @param id  Bossbar identifier
 fn show_bar(id: string) {
-    bossbar_set_visible(id, 1);
+    bossbar_set_visible(id, true);
 }
 
 /// Removes an existing bossbar entirely.

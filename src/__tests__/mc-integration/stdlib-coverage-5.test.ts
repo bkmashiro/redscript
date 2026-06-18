@@ -87,6 +87,15 @@ beforeAll(async () => {
     return
   }
 
+  // Start from a clean generated-test datapack tree. Function names can change
+  // as lowering changes; leaving stale generated .mcfunction files behind can
+  // make Paper keep the previous function library if /reload hits parse errors.
+  for (const entry of fs.readdirSync(path.dirname(DATAPACK_DIR))) {
+    if (/^redscript-test\d*$/.test(entry)) {
+      fs.rmSync(path.join(path.dirname(DATAPACK_DIR), entry), { recursive: true, force: true })
+    }
+  }
+
   // Clear stale minecraft tag files
   for (const tagFile of [
     'data/minecraft/tags/function/tick.json',
