@@ -535,17 +535,22 @@ describe('MIR lower — Timer instance methods', () => {
     expect(result.success).toBe(true)
   })
 
-  test('t.tick() emits branching logic for increment', () => {
+  test('t.tick() emits inline guarded increment without early-return helper', () => {
     const result = compileWithTimer(`
       @keep fn f(): void {
         let t: Timer = Timer::new(100);
         t.start();
         t.tick();
+        let elapsed: int = t.elapsed();
+        scoreboard_set("#elapsed", #rs, elapsed);
       }
     `)
     expect(result.success).toBe(true)
-    // tick() should expand to multiple mcfunctions or inline branches
-    expect(result.files.length).toBeGreaterThan(0)
+    const fnFile = result.files.find(f => f.path.includes('/f.mcfunction'))
+    expect(fnFile?.content).toContain('execute if score __timer_')
+    expect(fnFile?.content).toContain('run scoreboard players add __timer_')
+    expect(fnFile?.content).toContain('#elapsed')
+    expect(fnFile?.content).not.toContain('return run function')
   })
 })
 

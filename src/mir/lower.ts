@@ -2855,11 +2855,13 @@ function lowerExpr(
         const id = ctx.timerCounter.timerId++
         const ns = ctx.getNamespace()
         const playerName = `__timer_${id}`
-        // Emit scoreboard initialization: ticks=0, active=0
-        ctx.emit({ kind: 'score_write', player: `${playerName}_ticks`, obj: ns, src: { kind: 'const', value: 0 } })
-        ctx.emit({ kind: 'score_write', player: `${playerName}_active`, obj: ns, src: { kind: 'const', value: 0 } })
+        // Emit scoreboard initialization: ticks=0, active=0, duration=<arg>
+        const timerObj = `__${ns}`
+        ctx.emit({ kind: 'score_write', player: `${playerName}_ticks`, obj: timerObj, src: { kind: 'const', value: 0 } })
+        ctx.emit({ kind: 'score_write', player: `${playerName}_active`, obj: timerObj, src: { kind: 'const', value: 0 } })
         // Lower the duration argument
         const durationOp = lowerExpr(expr.args[0], ctx, scope)
+        ctx.emit({ kind: 'score_write', player: `${playerName}_duration`, obj: timerObj, src: durationOp })
         // Return fields via __rf_ slots (Timer has fields: _id, _duration)
         ctx.emit({ kind: 'const', dst: '__rf__id', value: id })
         ctx.constTemps.set('__rf__id', id)
@@ -3195,63 +3197,45 @@ function lowerTimerMethod(
   extraArgs: HIRExpr[],
 ): Operand {
   const ns = ctx.getNamespace()
+  const timerObj = `__${ns}`
   const player = `__timer_${timerId}`
   const t = ctx.freshTemp()
 
   if (method === 'start') {
-    ctx.emit({ kind: 'score_write', player: `${player}_active`, obj: ns, src: { kind: 'const', value: 1 } })
+    ctx.emit({ kind: 'score_write', player: `${player}_active`, obj: timerObj, src: { kind: 'const', value: 1 } })
     ctx.emit({ kind: 'const', dst: t, value: 0 })
   } else if (method === 'pause') {
-    ctx.emit({ kind: 'score_write', player: `${player}_active`, obj: ns, src: { kind: 'const', value: 0 } })
+    ctx.emit({ kind: 'score_write', player: `${player}_active`, obj: timerObj, src: { kind: 'const', value: 0 } })
     ctx.emit({ kind: 'const', dst: t, value: 0 })
   } else if (method === 'reset') {
-    ctx.emit({ kind: 'score_write', player: `${player}_ticks`, obj: ns, src: { kind: 'const', value: 0 } })
+    ctx.emit({ kind: 'score_write', player: `${player}_ticks`, obj: timerObj, src: { kind: 'const', value: 0 } })
     ctx.emit({ kind: 'const', dst: t, value: 0 })
   } else if (method === 'tick') {
     const durationTemp = sv.fields.get('_duration')
-    const activeTemp = ctx.freshTemp()
-    const ticksTemp = ctx.freshTemp()
-    ctx.emit({ kind: 'score_read', dst: activeTemp, player: `${player}_active`, obj: ns })
-    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: ns })
-    const innerThen = ctx.newBlock('timer_tick_inner')
-    const innerMerge = ctx.newBlock('timer_tick_after_lt')
-    const outerMerge = ctx.newBlock('timer_tick_done')
-    const activeCheck = ctx.freshTemp()
-    ctx.emit({ kind: 'cmp', op: 'eq', dst: activeCheck, a: { kind: 'temp', name: activeTemp }, b: { kind: 'const', value: 1 } })
-    ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: activeCheck }, then: innerThen.id, else: outerMerge.id })
-    ctx.switchTo(innerThen)
-    const lessCheck = ctx.freshTemp()
     if (durationTemp) {
-      ctx.emit({ kind: 'cmp', op: 'lt', dst: lessCheck, a: { kind: 'temp', name: ticksTemp }, b: { kind: 'temp', name: durationTemp } })
-    } else {
-      ctx.emit({ kind: 'const', dst: lessCheck, value: 0 })
+      ctx.emit({
+        kind: 'call',
+        dst: null,
+        fn: `__raw:execute if score ${player}_active ${timerObj} matches 1 if score ${player}_ticks ${timerObj} < ${player}_duration ${timerObj} run scoreboard players add ${player}_ticks ${timerObj} 1`,
+        args: [],
+      })
     }
-    const doIncBlock = ctx.newBlock('timer_tick_inc')
-    ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: lessCheck }, then: doIncBlock.id, else: innerMerge.id })
-    ctx.switchTo(doIncBlock)
-    const newTicks = ctx.freshTemp()
-    ctx.emit({ kind: 'add', dst: newTicks, a: { kind: 'temp', name: ticksTemp }, b: { kind: 'const', value: 1 } })
-    ctx.emit({ kind: 'score_write', player: `${player}_ticks`, obj: ns, src: { kind: 'temp', name: newTicks } })
-    ctx.terminate({ kind: 'jump', target: innerMerge.id })
-    ctx.switchTo(innerMerge)
-    ctx.terminate({ kind: 'jump', target: outerMerge.id })
-    ctx.switchTo(outerMerge)
     ctx.emit({ kind: 'const', dst: t, value: 0 })
   } else if (method === 'done') {
     const durationTemp = sv.fields.get('_duration')
     const ticksTemp = ctx.freshTemp()
-    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: ns })
+    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: timerObj })
     if (durationTemp) {
       ctx.emit({ kind: 'cmp', op: 'ge', dst: t, a: { kind: 'temp', name: ticksTemp }, b: { kind: 'temp', name: durationTemp } })
     } else {
       ctx.emit({ kind: 'const', dst: t, value: 0 })
     }
   } else if (method === 'elapsed') {
-    ctx.emit({ kind: 'score_read', dst: t, player: `${player}_ticks`, obj: ns })
+    ctx.emit({ kind: 'score_read', dst: t, player: `${player}_ticks`, obj: timerObj })
   } else if (method === 'remaining') {
     const durationTemp = sv.fields.get('_duration')
     const ticksTemp = ctx.freshTemp()
-    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: ns })
+    ctx.emit({ kind: 'score_read', dst: ticksTemp, player: `${player}_ticks`, obj: timerObj })
     if (durationTemp) {
       ctx.emit({ kind: 'sub', dst: t, a: { kind: 'temp', name: durationTemp }, b: { kind: 'temp', name: ticksTemp } })
     } else {
