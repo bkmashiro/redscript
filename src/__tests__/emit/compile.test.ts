@@ -4,9 +4,11 @@ import * as path from 'path'
 import {
   collectRuntimeMetadataStage,
   compile,
+  finalizeRuntimeLIRStage,
   parseSourceStage,
   preprocessSourceStage,
   runTypecheckStage,
+  singletonObjectiveName,
 } from '../../emit/compile'
 import { DiagnosticBundleError, DiagnosticError } from '../../diagnostics'
 import { lowerToHIR } from '../../hir/lower'
@@ -184,6 +186,153 @@ describe('emit: compile coverage', () => {
     const metadata = collectRuntimeMetadataStage(hir, 'metadata_stage_test')
 
     expect(metadata.watchFunctions).toEqual([{ name: 'watched', objective: 'rs.kills' }])
+  })
+
+  test('finalizeRuntimeLIRStage injects @singleton get/set helpers and objective list', () => {
+    const stage = finalizeRuntimeLIRStage(
+      {
+        namespace: 'singleton_stage_test',
+        objective: '__ret',
+        functions: [
+          {
+            name: 'main',
+            isMacro: false,
+            macroParams: [],
+            instructions: [{ kind: 'score_set', dst: { player: '$ret', obj: '__ret' }, value: 0 }],
+          },
+        ],
+      },
+      {
+        singletonStructs: [
+          {
+            name: 'GameState',
+            fields: [
+              { name: 'phase', type: { kind: 'named', name: 'int' } },
+              { name: 'tick_count', type: { kind: 'named', name: 'int' } },
+            ],
+            isSingleton: true,
+          },
+        ],
+      },
+    )
+
+    expect(stage.singletonObjectives).toEqual([
+      singletonObjectiveName('GameState', 'phase'),
+      singletonObjectiveName('GameState', 'tick_count'),
+    ])
+    const names = stage.lir.functions.map(f => f.name)
+    expect(names).toContain('GameState::get')
+    expect(names).toContain('GameState::set')
+
+    const getFn = stage.lir.functions.find(f => f.name === 'GameState::get')
+    const setFn = stage.lir.functions.find(f => f.name === 'GameState::set')
+
+    expect(getFn).toBeDefined()
+    expect(setFn).toBeDefined()
+
+    expect(getFn?.instructions).toEqual(
+      expect.arrayContaining([
+        {
+          kind: 'score_copy',
+          dst: { player: '$__rf_phase', obj: '__ret' },
+          src: { player: '__sng', obj: singletonObjectiveName('GameState', 'phase') },
+        },
+        {
+          kind: 'score_copy',
+          dst: { player: '$__rf_tick_count', obj: '__ret' },
+          src: { player: '__sng', obj: singletonObjectiveName('GameState', 'tick_count') },
+        },
+      ],
+    ))
+
+    expect(setFn?.instructions).toEqual(
+      expect.arrayContaining([
+        {
+          kind: 'score_copy',
+          dst: { player: '__sng', obj: singletonObjectiveName('GameState', 'phase') },
+          src: { player: '$p0', obj: '__ret' },
+        },
+        {
+          kind: 'score_copy',
+          dst: { player: '__sng', obj: singletonObjectiveName('GameState', 'tick_count') },
+          src: { player: '$p1', obj: '__ret' },
+        },
+      ],
+    ))
+  })
+
+  test('finalizeRuntimeLIRStage rewrites memoize/benchmark functions to <fn>_impl and rewrites self-calls', () => {
+    const stage = finalizeRuntimeLIRStage(
+      {
+        namespace: 'memo_bench_stage_test',
+        objective: '__ret',
+        functions: [
+          {
+            name: 'memoized',
+            isMacro: false,
+            macroParams: [],
+            instructions: [
+              { kind: 'call', fn: 'memoized' },
+              { kind: 'call', fn: 'helper' },
+            ],
+          },
+          {
+            name: 'bench',
+            isMacro: false,
+            macroParams: [],
+            instructions: [{ kind: 'call', fn: 'bench' }],
+          },
+          {
+            name: 'helper',
+            isMacro: false,
+            macroParams: [],
+            instructions: [{ kind: 'score_set', dst: { player: '$ret', obj: '__ret' }, value: 1 }],
+          },
+        ],
+      },
+      {
+        memoizeFunctions: ['memoized'],
+        benchmarkFunctions: ['bench'],
+      },
+    )
+
+    expect(stage.lir.functions.map(f => f.name)).toEqual(
+      expect.arrayContaining(['memoized_impl', 'bench_impl', 'helper']),
+    )
+    expect(stage.lir.functions.some(f => f.name === 'memoized')).toBe(false)
+    expect(stage.lir.functions.some(f => f.name === 'bench')).toBe(false)
+
+    const memo = stage.lir.functions.find(f => f.name === 'memoized_impl')
+    const bench = stage.lir.functions.find(f => f.name === 'bench_impl')
+    expect(memo).toBeDefined()
+    expect(bench).toBeDefined()
+    expect(memo?.instructions[0]).toMatchObject({ kind: 'call', fn: 'memoized_impl' })
+    expect(bench?.instructions[0]).toMatchObject({ kind: 'call', fn: 'bench_impl' })
+  })
+
+  test('finalizeRuntimeLIRStage warns on LIR score_set int32 overflow', () => {
+    const { warnings } = finalizeRuntimeLIRStage(
+      {
+        namespace: 'overflow_stage_test',
+        objective: '__ret',
+        functions: [
+          {
+            name: 'overflow_fn',
+            isMacro: false,
+            macroParams: [],
+            instructions: [
+              { kind: 'score_set', dst: { player: '$ret', obj: '__ret' }, value: 2147483647 },
+              { kind: 'score_set', dst: { player: '$ret', obj: '__ret' }, value: 2147483648 },
+              { kind: 'score_set', dst: { player: '$ret', obj: '__ret' }, value: -2147483649 },
+            ],
+          },
+        ],
+      },
+    )
+
+    expect(warnings).toHaveLength(2)
+    expect(warnings[0]).toContain('outside MC int32 range')
+    expect(warnings[1]).toContain('outside MC int32 range')
   })
 
   test('compile can collect selected stage snapshots without changing output shape', () => {

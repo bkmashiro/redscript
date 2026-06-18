@@ -25,11 +25,12 @@ import { lirOptimizeModule } from '../optimizer/lir/pipeline'
 import { emit, type DatapackFile } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import { analyzeBudget } from '../lir/budget'
+import type { LIRModule, LIRInstr } from '../lir/types'
 import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 import { TypeChecker } from '../typechecker'
 import { isEventTypeName } from '../events/types'
 import type { Program } from '../ast/types'
-import type { HIRModule } from '../hir/types'
+import type { HIRModule, HIRStruct } from '../hir/types'
 
 export interface CompileOptions {
   namespace?: string
@@ -135,6 +136,150 @@ export interface CollectRuntimeMetadataStageResult {
   memoizeFunctions: string[]
   eventHandlers: Map<string, string[]>
   functionTags: Map<string, string[]>
+}
+
+export interface FinalizeRuntimeLIRStageOptions {
+  singletonStructs?: readonly HIRStruct[]
+  memoizeFunctions?: readonly string[]
+  benchmarkFunctions?: readonly string[]
+  coroutineInfos?: readonly CoroutineInfo[]
+  filePath?: string
+}
+
+export interface FinalizeRuntimeLIRStageResult {
+  lir: LIRModule
+  singletonObjectives: string[]
+  warnings: string[]
+}
+
+export function finalizeRuntimeLIRStage(
+  lir: LIRModule,
+  options: FinalizeRuntimeLIRStageOptions = {},
+): FinalizeRuntimeLIRStageResult {
+  const {
+    singletonStructs = [],
+    memoizeFunctions = [],
+    benchmarkFunctions = [],
+    coroutineInfos = [],
+    filePath,
+  } = options
+
+  const warnings: string[] = []
+
+  const finalizedLIR: LIRModule = {
+    ...lir,
+    functions: lir.functions.map(fn => ({
+      ...fn,
+      instructions: fn.instructions.map(instr => ({ ...instr })),
+    })),
+  }
+
+  // Stage 6: LIR optimization results are already in `lir`.
+  // Stage 6a: Static tick budget analysis
+  const coroutineNames = new Set(coroutineInfos.map(c => c.fnName))
+  const budgetDiags = analyzeBudget(finalizedLIR, coroutineNames)
+  for (const diag of budgetDiags) {
+    if (diag.level === 'error') {
+      throw new DiagnosticError(
+        'LoweringError',
+        diag.message,
+        { line: 1, col: 1, file: filePath },
+      )
+    }
+    warnings.push(diag.message)
+  }
+
+  // Stage 6b: Validate LIR score_set values are in MC int32 range
+  const INT32_MAX = 2147483647
+  const INT32_MIN = -2147483648
+  for (const fn of finalizedLIR.functions) {
+    for (const instr of fn.instructions) {
+      if (instr.kind === 'score_set' && (instr.value > INT32_MAX || instr.value < INT32_MIN)) {
+        warnings.push(
+          `[ConstantOverflow] function '${fn.name}': ` +
+            `scoreboard immediate ${instr.value} is outside MC int32 range [${INT32_MIN}, ${INT32_MAX}]. ` +
+            `This indicates a constant-folding overflow bug — please report this.`,
+        )
+      }
+    }
+  }
+
+  // Stage 6.9: Inject synthetic LIR functions for @singleton structs
+  const singletonObjectives: string[] = []
+  for (const s of singletonStructs) {
+    if (!s.isSingleton) continue
+    const structName = s.name
+    const objective = finalizedLIR.objective
+
+    // Build _get function: reads each field from its own scoreboard objective
+    // and returns struct fields via __rf_<field> slots in the main objective.
+    const getInstrs: LIRInstr[] = []
+    for (const field of s.fields) {
+      const fieldObj = singletonObjectiveName(structName, field.name)
+      if (!singletonObjectives.includes(fieldObj)) {
+        singletonObjectives.push(fieldObj)
+      }
+      getInstrs.push({
+        kind: 'score_copy',
+        dst: { player: `$__rf_${field.name}`, obj: objective },
+        src: { player: `__sng`, obj: fieldObj },
+      })
+    }
+    getInstrs.push({ kind: 'score_set', dst: { player: '$ret', obj: objective }, value: 0 })
+
+    finalizedLIR.functions.push({
+      name: `${structName}::get`,
+      instructions: getInstrs,
+      isMacro: false,
+      macroParams: [],
+    })
+
+    // Build _set function: writes each field back to its scoreboard objective.
+    const setInstrs: LIRInstr[] = []
+    for (let i = 0; i < s.fields.length; i++) {
+      const field = s.fields[i]
+      const fieldObj = singletonObjectiveName(structName, field.name)
+      setInstrs.push({
+        kind: 'score_copy',
+        dst: { player: `__sng`, obj: fieldObj },
+        src: { player: `$p${i}`, obj: objective },
+      })
+    }
+    setInstrs.push({ kind: 'score_set', dst: { player: '$ret', obj: objective }, value: 0 })
+
+    finalizedLIR.functions.push({
+      name: `${structName}::set`,
+      instructions: setInstrs,
+      isMacro: false,
+      macroParams: [],
+    })
+  }
+
+  const renameToImpl = (fnName: string): void => {
+    const lirFn = finalizedLIR.functions.find(f => f.name === fnName)
+    if (!lirFn) return
+    const implName = `${fnName}_impl`
+    lirFn.name = implName
+
+    // Rewrite recursive self-calls for wrapper wiring.
+    for (const instr of lirFn.instructions) {
+      if ('fn' in instr && instr.fn === fnName) {
+        ;(instr as { fn: string }).fn = implName
+      }
+    }
+  }
+
+  // Stage 6.95: Rename @memoize functions to <fn>_impl in LIR.
+  for (const fnName of memoizeFunctions) {
+    renameToImpl(fnName)
+  }
+
+  // Stage 6.96: Rename @benchmark functions to <fn>_impl in LIR.
+  for (const fnName of benchmarkFunctions) {
+    renameToImpl(fnName)
+  }
+
+  return { lir: finalizedLIR, singletonObjectives, warnings }
 }
 
 export function collectRuntimeMetadataStage(
@@ -585,127 +730,19 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Stage 6: LIR optimization
     const lirOpt = lirOptimizeModule(lir)
 
-    // Static tick budget analysis
-    const coroutineNames = new Set(coroutineInfos.map(c => c.fnName))
-    const budgetDiags = analyzeBudget(lirOpt, coroutineNames)
-    for (const diag of budgetDiags) {
-      if (diag.level === 'error') {
-        throw new DiagnosticError(
-          'LoweringError',
-          diag.message,
-          { line: 1, col: 1, file: filePath },
-        )
-      }
-      warnings.push(diag.message)
-    }
-
-    // Stage 6.5: Validate LIR score_set values are in MC int32 range
-    const INT32_MAX = 2147483647
-    const INT32_MIN = -2147483648
-    for (const fn of lirOpt.functions) {
-      for (const instr of fn.instructions) {
-        if (instr.kind === 'score_set' && (instr.value > INT32_MAX || instr.value < INT32_MIN)) {
-          warnings.push(
-            `[ConstantOverflow] function '${fn.name}': ` +
-            `scoreboard immediate ${instr.value} is outside MC int32 range [${INT32_MIN}, ${INT32_MAX}]. ` +
-            `This indicates a constant-folding overflow bug — please report this.`
-          )
-        }
-      }
-    }
-
-    // Stage 6.9: Inject synthetic LIR functions for @singleton structs
-    // Each @singleton struct gets:
-    //   - A "<StructName>_get" function that reads all fields from scoreboard
-    //   - A "<StructName>_set" function that writes all fields back to scoreboard
-    // Fields are stored in scoreboard objectives named "_sng_<StructName>_<fieldName>"
-    // (max 16 chars for objective name — truncated with hash suffix if needed)
-    const singletonObjectives: string[] = []
-    for (const s of hir.structs) {
-      if (!s.isSingleton) continue
-      const structName = s.name
-      const objective = lirOpt.objective  // the main ns objective for return values
-
-      // Build _get function: reads each field from its own scoreboard objective
-      // Return struct fields via __rf_<field> slots in the main objective
-      const getInstrs: import('../lir/types').LIRInstr[] = []
-      for (const field of s.fields) {
-        const fieldObj = singletonObjectiveName(structName, field.name)
-        if (!singletonObjectives.includes(fieldObj)) {
-          singletonObjectives.push(fieldObj)
-        }
-        // copy: scoreboard players operation $__rf_<field> <obj> = __sng_<S>_<f> <fieldObj>
-        getInstrs.push({
-          kind: 'score_copy',
-          dst: { player: `$__rf_${field.name}`, obj: objective },
-          src: { player: `__sng`, obj: fieldObj },
-        })
-      }
-      // Return value placeholder
-      getInstrs.push({ kind: 'score_set', dst: { player: '$ret', obj: objective }, value: 0 })
-
-      // Use `::` naming so it matches how static_call `GameState::get` is qualified
-      // fnNameToPath converts `GameState::get` → `data/<ns>/function/gamestate/get.mcfunction`
-      lirOpt.functions.push({
-        name: `${structName}::get`,
-        instructions: getInstrs,
-        isMacro: false,
-        macroParams: [],
-      })
-
-      // Build _set function: writes each field back to its scoreboard objective
-      // Parameters come in via $p0..$pN slots (one per field)
-      const setInstrs: import('../lir/types').LIRInstr[] = []
-      for (let i = 0; i < s.fields.length; i++) {
-        const field = s.fields[i]
-        const fieldObj = singletonObjectiveName(structName, field.name)
-        setInstrs.push({
-          kind: 'score_copy',
-          dst: { player: `__sng`, obj: fieldObj },
-          src: { player: `$p${i}`, obj: objective },
-        })
-      }
-      setInstrs.push({ kind: 'score_set', dst: { player: '$ret', obj: objective }, value: 0 })
-
-      lirOpt.functions.push({
-        name: `${structName}::set`,
-        instructions: setInstrs,
-        isMacro: false,
-        macroParams: [],
-      })
-    }
-
-    // Stage 6.95: Rename @memoize functions to <fn>_impl in LIR,
-    // rewriting recursive self-calls so the wrapper becomes the public entry point.
-    for (const fnName of memoizeFunctions) {
-      const lirFn = lirOpt.functions.find(f => f.name === fnName)
-      if (!lirFn) continue
-      const implName = `${fnName}_impl`
-      lirFn.name = implName
-      // Rewrite recursive calls: any call to fnName inside this function → implName
-      for (const instr of lirFn.instructions) {
-        if ('fn' in instr && instr.fn === fnName) {
-          ;(instr as { fn: string }).fn = implName
-        }
-      }
-    }
-
-    // Stage 6.96: Rename @benchmark functions to <fn>_impl in LIR,
-    // rewriting recursive self-calls so public and benchmark wrappers can target the implementation.
-    for (const fnName of benchmarkFunctions) {
-      const lirFn = lirOpt.functions.find(f => f.name === fnName)
-      if (!lirFn) continue
-      const implName = `${fnName}_impl`
-      lirFn.name = implName
-      for (const instr of lirFn.instructions) {
-        if ('fn' in instr && instr.fn === fnName) {
-          ;(instr as { fn: string }).fn = implName
-        }
-      }
-    }
+    const lirRuntime = finalizeRuntimeLIRStage(lirOpt, {
+      singletonStructs: hir.structs,
+      memoizeFunctions,
+      benchmarkFunctions,
+      coroutineInfos,
+      filePath,
+    })
+    const finalizedLIR = lirRuntime.lir
+    const singletonObjectives = lirRuntime.singletonObjectives
+    warnings.push(...lirRuntime.warnings)
 
     // Stage 7: LIR → .mcfunction
-    const files = emit(lirOpt, {
+    const files = emit(finalizedLIR, {
       namespace,
       tickFunctions,
       loadFunctions,

@@ -287,6 +287,8 @@ Tasks:
   - `runTypecheckStage` now owns TypeChecker invocation, warning collection, lenient type-error warning coercion, and stop-after-check diagnostic bundling; focused tests pin float lint warnings and decorator-error source-file preservation.
 - [x] Extract runtime helper metadata collection out of compile orchestration.
   - `collectRuntimeMetadataStage` now owns decorator-derived runtime helper/tag metadata (`@tick`, `@load`, inline controls, coroutine/schedule/profile/benchmark/throttle/retry/memoize wrappers, legacy event handlers, and generic function tags) with focused tests that do not emit datapack files.
+- [x] Extract final runtime LIR post-processing into a dedicated pure helper.
+  - Added `finalizeRuntimeLIRStage` to own tick-budget checks, int32 overflow warnings, @singleton helper injection, and memoize/benchmark impl renaming with focused coverage in `compile.test.ts`.
 - [x] Add dump/snapshot support for selected stages after the extraction points exist.
   - `CompileOptions.snapshotStages` plus caller-owned `stageSnapshots` can now collect deterministic summaries for extracted stages (`preprocess`, `parse`, `typecheck`, and `runtimeMetadata`) without changing `CompileResult` or emitting extra files.
 
