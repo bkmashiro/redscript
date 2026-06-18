@@ -6,6 +6,8 @@ import {
   compile,
   emitDatapackStage,
   finalizeRuntimeLIRStage,
+  lowerAndOptimizeStages,
+  lowerToHIRStage,
   parseSourceStage,
   preprocessSourceStage,
   runTypecheckStage,
@@ -28,6 +30,48 @@ function collectRuntimeMetadataFromSource(source: string, namespace = 'metadata_
 }
 
 describe('emit: compile coverage', () => {
+  test('lowerToHIRStage returns monomorphized HIR plus library prune paths and deprecated warnings', () => {
+    const parsed = parseSourceStage(`
+      @deprecated("use plain_identity instead")
+      fn old<T>(x: T): T {
+        return x
+      }
+
+      fn plain_identity<T>(x: T): T {
+        return x
+      }
+
+      @inline
+      fn decorated_lib(x: int): int {
+        return x
+      }
+
+      fn lib_plain(x: int): int {
+        return x
+      }
+
+      fn main(): void {
+        old<int>(1)
+        let _: int = plain_identity<int>(1)
+        let _: int = lib_plain(2)
+        let _: int = decorated_lib(3)
+      }
+    `, 'hir_stage_compile')
+
+    const ast = parsed.ast
+    ast.declarations.find(fn => fn.name === 'lib_plain')!.isLibraryFn = true
+    ast.declarations.find(fn => fn.name === 'decorated_lib')!.isLibraryFn = true
+
+    const stage = lowerToHIRStage(ast, 'hir_stage_compile')
+
+    expect(stage.hir.functions.some(fn => fn.name === 'plain_identity_int')).toBe(true)
+    expect(stage.hir.functions.some(fn => fn.name === 'plain_identity')).toBe(false)
+    expect(stage.libraryFilePaths).toEqual(new Set(['data/hir_stage_compile/function/lib_plain.mcfunction']))
+    expect(stage.warnings).toHaveLength(1)
+    expect(stage.warnings[0]).toContain('[DeprecatedUsage]')
+    expect(stage.warnings[0]).toContain('old')
+  })
+
   test('parseSourceStage returns AST and parser warnings without emitting files', () => {
     const parsed = parseSourceStage(`
       fn main(): void {
@@ -106,8 +150,65 @@ describe('emit: compile coverage', () => {
     expect(stage.warnings.some(warning => warning.includes('[FloatArithmetic]'))).toBe(true)
   })
 
+  test('lowerAndOptimizeStages respects inline/no-inline and keepInOutput library pruning', () => {
+    const hir: HIRModule = {
+      namespace: 'lower_opt_stage',
+      globals: [],
+      structs: [],
+      implBlocks: [],
+      enums: [],
+      consts: [],
+      functions: [
+        {
+          name: 'small_library',
+          params: [],
+          returnType: { kind: 'named', name: 'void' },
+          decorators: [],
+          body: [{ kind: 'return' }],
+          isLibraryFn: true,
+        },
+        {
+          name: 'pinned_library',
+          params: [],
+          returnType: { kind: 'named', name: 'void' },
+          decorators: [],
+          body: [{ kind: 'return' }],
+          isLibraryFn: true,
+        },
+        {
+          name: 'entry',
+          params: [],
+          returnType: { kind: 'named', name: 'void' },
+          decorators: [],
+          body: [
+            { kind: 'expr', expr: { kind: 'call', fn: 'small_library', args: [] } },
+            { kind: 'expr', expr: { kind: 'call', fn: 'pinned_library', args: [] } },
+            { kind: 'return' },
+          ],
+        },
+      ],
+    }
+
+    const stage = lowerAndOptimizeStages(hir, {
+      namespace: 'lower_opt_stage',
+      libraryFilePaths: new Set([
+        'data/lower_opt_stage/function/small_library.mcfunction',
+        'data/lower_opt_stage/function/pinned_library.mcfunction',
+      ]),
+      inlineFunctions: new Set(['small_library']),
+      noInlineFunctions: new Set(['pinned_library']),
+      coroutineInfos: [],
+    })
+
+    expect(stage.generatedTickFunctions).toEqual([])
+    expect(stage.lirOpt.functions.map(fn => fn.name)).toContain('entry')
+    expect(stage.libraryFilePaths.has('data/lower_opt_stage/function/small_library.mcfunction')).toBe(false)
+    expect(stage.libraryFilePaths.has('data/lower_opt_stage/function/pinned_library.mcfunction')).toBe(true)
+  })
+
   test('runTypecheckStage preserves diagnostic bundling and source file for decorator errors', () => {
     const filePath = '/tmp/typecheck-stage-test.mcrs'
+
     const source = `
       @watch("rs.kills")
       fn watched(value: int): void {}

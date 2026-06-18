@@ -96,6 +96,29 @@ export function preprocessSourceStage(
   }
 }
 
+export interface LowerToHIRStageResult {
+  hir: HIRModule
+  libraryFilePaths: Set<string>
+  warnings: string[]
+}
+
+export function lowerToHIRStage(ast: Program, namespace: string): LowerToHIRStageResult {
+  const hirRaw = lowerToHIR(ast)
+  const hir = monomorphize(hirRaw)
+
+  const libraryFilePaths = new Set(
+    hir.functions
+      .filter(fn => fn.isLibraryFn && fn.decorators.length === 0)
+      .map(fn => `data/${namespace}/function/${fn.name}.mcfunction`),
+  )
+
+  return {
+    hir,
+    libraryFilePaths,
+    warnings: checkDeprecatedCalls(hir),
+  }
+}
+
 export interface ParseSourceStageResult {
   ast: Program
   warnings: string[]
@@ -136,6 +159,71 @@ export interface CollectRuntimeMetadataStageResult {
   memoizeFunctions: string[]
   eventHandlers: Map<string, string[]>
   functionTags: Map<string, string[]>
+}
+
+export interface LowerAndOptimizeStagesOptions {
+  namespace: string
+  filePath?: string
+  libraryFilePaths: ReadonlySet<string>
+  inlineFunctions: ReadonlySet<string>
+  noInlineFunctions: ReadonlySet<string>
+  coroutineInfos: readonly CoroutineInfo[]
+}
+
+export interface LowerAndOptimizeStagesResult {
+  hir: HIRModule
+  lirOpt: LIRModule
+  libraryFilePaths: Set<string>
+  generatedTickFunctions: string[]
+  warnings: string[]
+}
+
+export function lowerAndOptimizeStages(
+  hir: HIRModule,
+  options: LowerAndOptimizeStagesOptions,
+): LowerAndOptimizeStagesResult {
+  const {
+    namespace,
+    filePath,
+    libraryFilePaths: incomingLibraryFilePaths,
+    inlineFunctions,
+    noInlineFunctions,
+    coroutineInfos,
+  } = options
+
+  const warnings: string[] = []
+
+  const mir = lowerToMIR(hir, filePath)
+  if (inlineFunctions.size > 0) {
+    mir.inlineFunctions = new Set(inlineFunctions)
+  }
+  if (noInlineFunctions.size > 0) {
+    mir.noInlineFunctions = new Set(noInlineFunctions)
+  }
+
+  const mirOpt = optimizeModule(mir)
+
+  const libraryFilePaths = new Set(incomingLibraryFilePaths)
+  if (mirOpt.keepInOutput && mirOpt.keepInOutput.size > 0) {
+    for (const fnName of mirOpt.keepInOutput) {
+      libraryFilePaths.delete(`data/${namespace}/function/${fnName}.mcfunction`)
+    }
+  }
+
+  const coroResult = coroutineTransform(mirOpt, Array.from(coroutineInfos))
+  warnings.push(...coroResult.warnings)
+  const mirFinal = coroResult.module
+
+  const lir = lowerToLIR(mirFinal)
+  const lirOpt = lirOptimizeModule(lir)
+
+  return {
+    hir,
+    lirOpt,
+    libraryFilePaths,
+    generatedTickFunctions: [...coroResult.generatedTickFunctions],
+    warnings,
+  }
 }
 
 export interface FinalizeRuntimeLIRStageOptions {
@@ -676,27 +764,15 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       warnings.push(...typechecked.warnings)
     }
 
-    // Stage 2: AST → HIR
-    const hirRaw = lowerToHIR(ast)
-
-    // Stage 2b: Monomorphize generic functions
-    const hir = monomorphize(hirRaw)
-
-    const libraryFilePaths = new Set(
-      hir.functions
-        .filter(fn => fn.isLibraryFn && fn.decorators.length === 0)
-        .map(fn => `data/${namespace}/function/${fn.name}.mcfunction`)
-    )
-
-    // Stage 2c: Deprecated usage check — emit warnings for calls to @deprecated functions
-    warnings.push(...checkDeprecatedCalls(hir))
+    const hirStage = lowerToHIRStage(ast, namespace)
+    warnings.push(...hirStage.warnings)
 
     if (stopAfterCheck) {
       return { files: [], warnings, success: true as const }
     }
 
     // Extract decorator/runtime metadata before HIR lowering discards it.
-    const runtimeMetadata = collectRuntimeMetadataStage(hir, namespace)
+    const runtimeMetadata = collectRuntimeMetadataStage(hirStage.hir, namespace)
     recordStageSnapshot(options, 'runtimeMetadata', () => summarizeRuntimeMetadataStage(runtimeMetadata))
     const {
       tickFunctions,
@@ -715,40 +791,21 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       functionTags,
     } = runtimeMetadata
 
-    // Stage 3: HIR → MIR
-    const mir = lowerToMIR(hir, filePath)
-    if (inlineFunctions.size > 0) {
-      mir.inlineFunctions = inlineFunctions
-    }
-    if (noInlineFunctions.size > 0) {
-      mir.noInlineFunctions = noInlineFunctions
-    }
-
-    // Stage 4: MIR optimization
-    const mirOpt = optimizeModule(mir)
-
-    // Remove auto-inlined functions from the library-prune set so their
-    // .mcfunction files are still emitted (external callers may use them).
-    if (mirOpt.keepInOutput && mirOpt.keepInOutput.size > 0) {
-      for (const fnName of mirOpt.keepInOutput) {
-        libraryFilePaths.delete(`data/${namespace}/function/${fnName}.mcfunction`)
-      }
-    }
-
-    // Stage 4b: Coroutine transform (opt-in, only for @coroutine functions)
-    const coroResult = coroutineTransform(mirOpt, coroutineInfos)
-    const mirFinal = coroResult.module
-    tickFunctions.push(...coroResult.generatedTickFunctions)
-    warnings.push(...coroResult.warnings)
-
-    // Stage 5: MIR → LIR
-    const lir = lowerToLIR(mirFinal)
-
-    // Stage 6: LIR optimization
-    const lirOpt = lirOptimizeModule(lir)
+    const lowered = lowerAndOptimizeStages(hirStage.hir, {
+      namespace,
+      filePath,
+      libraryFilePaths: hirStage.libraryFilePaths,
+      inlineFunctions,
+      noInlineFunctions,
+      coroutineInfos,
+    })
+    const lirOpt = lowered.lirOpt
+    const libraryFilePaths = lowered.libraryFilePaths
+    tickFunctions.push(...lowered.generatedTickFunctions)
+    warnings.push(...lowered.warnings)
 
     const lirRuntime = finalizeRuntimeLIRStage(lirOpt, {
-      singletonStructs: hir.structs,
+      singletonStructs: hirStage.hir.structs,
       memoizeFunctions,
       benchmarkFunctions,
       coroutineInfos,

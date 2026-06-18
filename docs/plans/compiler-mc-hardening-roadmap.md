@@ -285,6 +285,8 @@ Tasks:
   - `preprocessSourceStage` now wraps import/preprocess metadata for compile orchestration and has focused tests for source ranges, library imports, and import diagnostic file/line preservation.
 - [x] Extract typecheck/decorator metadata handling next.
   - `runTypecheckStage` now owns TypeChecker invocation, warning collection, lenient type-error warning coercion, and stop-after-check diagnostic bundling; focused tests pin float lint warnings and decorator-error source-file preservation.
+- [x] Extract HIR/MIR/LIR lowering and optimization orchestration stages.
+  - `lowerToHIRStage` now owns HIR lowering, monomorphization, library prune-path collection, and deprecated-call warnings; `lowerAndOptimizeStages` now owns MIR lowering, inline/no-inline wiring, MIR optimization, keep-in-output library pruning, coroutine transform, LIR lowering, and LIR optimization.
 - [x] Extract runtime helper metadata collection out of compile orchestration.
   - `collectRuntimeMetadataStage` now owns decorator-derived runtime helper/tag metadata (`@tick`, `@load`, inline controls, coroutine/schedule/profile/benchmark/throttle/retry/memoize wrappers, legacy event handlers, and generic function tags) with focused tests that do not emit datapack files.
 - [x] Extract final runtime LIR post-processing into a dedicated pure helper.
