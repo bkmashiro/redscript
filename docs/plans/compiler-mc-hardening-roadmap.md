@@ -354,7 +354,7 @@ npm test -- --runInBand
 
 **Objective:** Fix sugar and high-level language constructs only after core command semantics are pinned.
 
-Event/runtime boundary note: gameplay decorators such as `@on(PlayerDeath)` should not keep growing as compiler-hardcoded event enums. Prefer generic datapack artifact primitives (`@function_tag("namespace:path")`) plus stdlib/runtime-owned event dispatch; `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` merge through the same tag files as `@tick`/`@load`. Legacy `@on` tag ids and executor contexts are centralized in the event registry (`handlerTag`, `executorContext`), so emit no longer carries a separate event-to-tag table and the typechecker narrows `@s` from runtime-dispatch context rather than fake parameters. See `docs/plans/event-runtime-boundary.md`.
+Event/runtime boundary note: gameplay decorators such as `@on(PlayerDeath)` should not keep growing as compiler-hardcoded event enums. Prefer generic datapack artifact primitives (`@function_tag("namespace:path")`) plus stdlib/runtime-owned event dispatch; `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` merge through the same tag files as `@tick`/`@load`. Legacy `@on` tag ids and executor contexts are centralized in the event registry (`handlerTag`, `executorContext`), so emit no longer carries a separate event-to-tag table and the typechecker narrows `@s` from runtime-dispatch context rather than fake parameters. The old single `player: Player` handler form is now only a compatibility alias to `@s` during command lowering and does not allocate a `$p0` event argument slot. See `docs/plans/event-runtime-boundary.md`.
 
 Focus areas:
 
@@ -397,9 +397,8 @@ npm test -- src/__tests__/hir src/__tests__/mir src/__tests__/e2e --runInBand
 
 The next implementation slice should be:
 
-1. Decide whether to keep legacy `player: Player` event parameters as a deprecated alias for `@s`, then pin the lowering with a focused compile test so no `$p0`-style fake parameter slot is required for function-tag dispatch.
-2. If more event sugar is needed, introduce a small manifest format that supplies `handlerTag` + `executorContext` + runtime assets, rather than adding new compiler-hardcoded gameplay enums.
-3. Keep `@function_tag(...)` as the generic artifact primitive; any new gameplay behavior should live in stdlib/runtime assets first.
-4. Run `npm run build`, event/typechecker tests, `npm run validate-mc`, and full suite before broader refactors.
+1. If more event sugar is needed, introduce a small manifest format that supplies `handlerTag` + `executorContext` + runtime assets, rather than adding new compiler-hardcoded gameplay enums.
+2. Keep `@function_tag(...)` as the generic artifact primitive; any new gameplay behavior should live in stdlib/runtime assets first.
+3. Run `npm run build`, event/typechecker tests, `npm run validate-mc`, and full suite before broader refactors.
 
 This keeps the runtime boundary honest before any broader `typechecker/index.ts` split.

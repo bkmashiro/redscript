@@ -56,6 +56,24 @@ test('@on(PlayerDeath) supports no-parameter handlers using @s context', () => {
   expect(tag.values).toContain('test_events:on_death')
 })
 
+test('@on(PlayerDeath) legacy Player parameter lowers as @s context alias', () => {
+  const src = `
+    namespace test_events
+    @on(PlayerDeath) fn on_death(player: Player) {
+      tell(player, "dead")
+      let deaths: int = scoreboard_get(player, "rs.deaths")
+      scoreboard_set(player, "rs.seen_deaths", deaths)
+    }
+  `
+  const result = compile(src, { namespace: 'test_events', librarySources: [EVENTS_SRC] })
+  const handler = result.files.find(f => f.path === 'data/test_events/function/on_death.mcfunction')
+  expect(handler).toBeDefined()
+  expect(handler!.content).not.toContain('$p0')
+  expect(handler!.content).toContain('tellraw @s {"text":"dead"}')
+  expect(handler!.content).toContain('scoreboard players get @s rs.deaths')
+  expect(handler!.content).toContain('execute store result score @s rs.seen_deaths run scoreboard players get')
+})
+
 test('@function_tag registers a handler tag without compiler event semantics', () => {
   const src = `
     namespace test_events

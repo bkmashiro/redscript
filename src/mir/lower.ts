@@ -77,6 +77,7 @@ import type {
 } from './types'
 import { detectMacroFunctions, BUILTIN_SET, type MacroFunctionInfo } from './macro'
 import { DiagnosticError } from '../diagnostics'
+import { getEventExecutorContext, isEventTypeName } from '../events/types'
 
 function formatTypeNode(type: TypeNode): string {
   switch (type.kind) {
@@ -314,6 +315,8 @@ class FnContext {
   readonly fnParamInfo: Map<string, HIRParam[]>
   /** Macro params for the current function being lowered */
   readonly currentMacroParams: Set<string>
+  /** Source identifiers that lower directly to command selectors in this context. */
+  readonly commandArgAliases = new Map<string, string>()
   /** Enum definitions: enumName → variantName → integer value */
   readonly enumDefs: Map<string, Map<string, number>>
   /** Enum payload fields: enumName → variantName → field list */
@@ -502,6 +505,27 @@ class FnContext {
 // Function lowering
 // ---------------------------------------------------------------------------
 
+function getLegacyEventExecutorAliases(fn: HIRFunction): Set<string> {
+  const aliases = new Set<string>()
+  const onDecorator = fn.decorators.find(dec => dec.name === 'on')
+  const eventType = onDecorator?.args?.eventType
+  if (!eventType || !isEventTypeName(eventType) || fn.params.length !== 1) {
+    return aliases
+  }
+
+  const executorContext = getEventExecutorContext(eventType)
+  const [param] = fn.params
+  const executorEntityType = executorContext.kind === 'entity' ? String(executorContext.entityType) : undefined
+  const paramMatchesContext = executorEntityType !== undefined && (
+    (param.type.kind === 'entity' && String(param.type.entityType) === executorEntityType) ||
+    (param.type.kind === 'struct' && param.type.name === executorEntityType)
+  )
+  if (paramMatchesContext) {
+    aliases.add(param.name)
+  }
+  return aliases
+}
+
 function lowerFunction(
   fn: HIRFunction,
   namespace: string,
@@ -590,13 +614,21 @@ function lowerFunction(
     }
   }
 
-  // Create temps for parameters, skipping array-type params that are pre-bound
-  // and double-type params (which are passed via NBT __dp<i> slots instead of scoreboard)
+  // Create temps for parameters, skipping array-type params that are pre-bound,
+  // legacy event executor aliases, and double-type params (which are passed via
+  // NBT __dp<i> slots instead of scoreboard).
   const params: { name: Temp; isMacroParam: boolean }[] = []
   const scope = new Map<string, Temp>()
+  const eventExecutorAliases = getLegacyEventExecutorAliases(fn)
+  for (const paramName of eventExecutorAliases) {
+    ctx.commandArgAliases.set(paramName, '@s')
+  }
   let doubleParamSlot = 0
   let stringParamSlot = 0
   fn.params.forEach((p) => {
+    if (eventExecutorAliases.has(p.name)) {
+      return
+    }
     if (p.type.kind === 'array' && arrayArgBindings?.has(p.name)) {
       // Array param already bound via arrayVars; it does not consume a scoreboard
       // parameter, but keep a sentinel temp in scope so scalar contexts such as
@@ -1818,6 +1850,13 @@ function lowerExpr(
         scope.set(expr.name, t)
         return { kind: 'temp', name: t }
       }
+      // Legacy event executor aliases are command-context values (`@s`), not
+      // scoreboard values. In value positions (for example forwarding the
+      // alias through an old helper call) emit an inert placeholder; command
+      // formatting paths use commandArgAliases to write the real selector.
+      if (ctx.commandArgAliases.has(expr.name)) {
+        return { kind: 'const', value: 0 }
+      }
       // Unresolved ident: not in scope, constants, globals, or double vars.
       // This means an earlier compiler stage failed to resolve the name —
       // silently emitting zero here would mask that bug entirely.
@@ -2107,7 +2146,7 @@ function lowerExpr(
 
       // Handle scoreboard_get / score — read from vanilla MC scoreboard
       if (expr.fn === 'scoreboard_get' || expr.fn === 'score') {
-        const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams)
+        const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams, ctx.commandArgAliases)
         // If the arg is a plain ident (Player variable, not a macro param), use @s —
         // event handlers are always called via `execute as <player> run function ...`
         // so @s correctly refers to the player in context.
@@ -2122,7 +2161,7 @@ function lowerExpr(
 
       // Handle scoreboard_set — write to vanilla MC scoreboard
       if (expr.fn === 'scoreboard_set') {
-        const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams)
+        const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams, ctx.commandArgAliases)
         const player = (!playerArg.isMacro && expr.args[0].kind === 'ident')
           ? '@s'
           : (playerArg.str || '@s')
@@ -2472,7 +2511,7 @@ function lowerExpr(
             arg.kind === 'f_string' ? precomputeFStringParts(arg, ctx, scope) : arg
           )
         }
-        const cmd = formatBuiltinCall(expr.fn, resolvedArgs, ctx.currentMacroParams, ctx.getNamespace())
+        const cmd = formatBuiltinCall(expr.fn, resolvedArgs, ctx.currentMacroParams, ctx.getNamespace(), ctx.commandArgAliases)
         ctx.emit({ kind: 'call', dst: null, fn: `__raw:${cmd}`, args: [] })
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'const', dst: t, value: 0 })
@@ -3564,15 +3603,16 @@ function formatBuiltinCall(
   args: HIRExpr[],
   macroParams: Set<string>,
   namespace = '',
+  commandArgAliases: Map<string, string> = new Map(),
 ): string {
   // For text-display builtins, the message arg may be an f_string — convert to JSON text
   const TEXT_BUILTINS = new Set(['tell', 'tellraw', 'title', 'subtitle', 'actionbar', 'announce'])
   const resolveTextArg = (arg: HIRExpr): string => {
     if (arg.kind === 'f_string') return fStringToJsonText(arg, namespace)
-    return JSON.stringify({ text: exprToCommandArg(arg, macroParams).str })
+    return JSON.stringify({ text: exprToCommandArg(arg, macroParams, commandArgAliases).str })
   }
 
-  const fmtArgs = args.map(a => exprToCommandArg(a, macroParams))
+  const fmtArgs = args.map(a => exprToCommandArg(a, macroParams, commandArgAliases))
   const strs = fmtArgs.map(a => a.str)
   const hasMacro = fmtArgs.some(a => a.isMacro)
 
@@ -3711,6 +3751,7 @@ function coordStr(c: import('../ast/types').CoordComponent): string {
 function exprToCommandArg(
   expr: HIRExpr,
   macroParams: Set<string>,
+  commandArgAliases: Map<string, string> = new Map(),
 ): { str: string; isMacro: boolean } {
   switch (expr.kind) {
     case 'int_lit': return { str: String(expr.value), isMacro: false }
@@ -3724,6 +3765,7 @@ function exprToCommandArg(
     case 'mc_name': return { str: expr.value, isMacro: false }
     case 'selector': return { str: expr.raw, isMacro: false }
     case 'ident':
+      if (commandArgAliases.has(expr.name)) return { str: commandArgAliases.get(expr.name)!, isMacro: false }
       if (macroParams.has(expr.name)) return { str: `$(${expr.name})`, isMacro: true }
       return { str: expr.name, isMacro: false }
     case 'local_coord': {
