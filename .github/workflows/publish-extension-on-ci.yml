@@ -16,13 +16,13 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Need full history to detect changes and push version bump
           fetch-depth: 0
           token: ${{ secrets.IDE_DISPATCH_TOKEN }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
