@@ -283,9 +283,17 @@ describe('fft.mcrs — dft_real (requires trig stub)', () => {
 // ===========================================================================
 
 describe('fft.mcrs — dft_coro (compile test)', () => {
+  const DFT_CORO_CALLER = `
+    fn start(): void {
+      let input: int[] = [1, 2, 3, 4];
+      let out_re: int[] = [0, 0, 0, 0];
+      let out_im: int[] = [0, 0, 0, 0];
+      dft_coro(input, 4, out_re, out_im);
+    }
+  `
+
   test('@coroutine(batch=4) generates tick dispatcher', () => {
-    const source = `fn noop(): void { let x: int = 0; }`
-    const result = compile(source, {
+    const result = compile(DFT_CORO_CALLER, {
       namespace: NS,
       librarySources: [MATH_SRC, FFT_SRC],
     })
@@ -300,8 +308,7 @@ describe('fft.mcrs — dft_coro (compile test)', () => {
   })
 
   test('dft_coro generates continuation mcfunction files', () => {
-    const source = `fn noop(): void { let x: int = 0; }`
-    const result = compile(source, {
+    const result = compile(DFT_CORO_CALLER, {
       namespace: NS,
       librarySources: [MATH_SRC, FFT_SRC],
     })

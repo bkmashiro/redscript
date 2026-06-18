@@ -201,7 +201,14 @@ Tasks:
 - [x] Add a golden test helper that compiles `.mcrs` input and checks normalized command files (`src/__tests__/golden/core-command-golden.test.ts`).
 - [x] Normalize volatile details in golden assertions; do not check generated docs or VSCode compiled output.
 - [x] Keep snapshots small; prefer one feature per case.
-- [ ] Add review guidance: if a golden changes, the PR must explain whether the command shape changed intentionally.
+- [x] Add review guidance: if a golden changes, the PR must explain whether the command shape changed intentionally.
+
+Review guidance:
+
+- Golden diffs are command-shape diffs, not formatting noise by default.
+- Any PR that updates `src/__tests__/golden/*.test.ts` snapshots should state whether the emitted command shape changed intentionally.
+- If the change is intentional, mention the semantic reason and the corresponding live/static oracle that still covers behavior.
+- If the change is incidental, prefer tightening normalization or splitting the snapshot before accepting broad churn.
 
 Suggested files:
 
@@ -224,8 +231,8 @@ Timer is the current priority because it is implemented through MIR lowering spe
 
 Tasks:
 
-- [ ] Track queue cleanup separately; do not mix it into Timer v2:
-  - Document current queue behavior as NBT-list + logical head pointer.
+- [x] Track queue cleanup separately; do not mix it into Timer v2:
+  - Document current queue behavior as NBT-list + logical head pointer (`docs/plans/queue-runtime-cleanup.md`).
   - Later decide whether the public API needs multi-instance Queue support or only global FIFO helpers.
   - Add more queue tests only if behavior regresses or multi-instance support becomes a goal.
 - [x] Timer v2 Phase 1: centralize timer objective/slot naming and command emission helpers in `src/mir/lower.ts`.
@@ -272,7 +279,8 @@ Target stage functions:
 
 Tasks:
 
-- [ ] Add stage result types and keep existing `compile()` API stable.
+- [x] Add first stage result type (`ParseSourceStageResult`) and keep existing `compile()` API stable.
+- [x] Extract `parseSourceStage` as the first pure orchestration helper with targeted tests.
 - [ ] Extract import/preprocess stage first; verify spans/errors do not regress.
 - [ ] Extract typecheck/decorator metadata handling next.
 - [ ] Extract runtime helper metadata collection out of compile orchestration.

@@ -289,7 +289,30 @@ beforeAll(async () => {
     }
   `, 'rmw_test')
 
-  writeFixtureFile('impl-test.mcrs', 'impl_test')
+  writeFixture(`
+    struct Timer {
+      _id: int,
+      _duration: int
+    }
+    impl Timer {
+      fn new(duration: int) -> Timer { return { _id: 0, _duration: duration }; }
+      fn start(self) {}
+      fn tick(self) {}
+      fn done(self) -> bool { return false; }
+      fn elapsed(self) -> int { return 0; }
+    }
+    fn test() {
+      let t: Timer = Timer::new(3);
+      t.start();
+      t.tick();
+      t.tick();
+      t.tick();
+      if (t.done()) {
+        scoreboard_set("#impl", #done, 1);
+      }
+      scoreboard_set("#impl", #ticks, t.elapsed());
+    }
+  `, 'impl_test')
   writeFixtureFile('timeout-test.mcrs', 'timeout_test')
   writeFixtureFile('interval-test.mcrs', 'interval_test')
   writeFixtureFile('is-check-test.mcrs', 'is_check_test')
@@ -725,15 +748,14 @@ describe('MC Integration - New Features', () => {
     if (!serverOnline) return
 
     await mc.command('/scoreboard players set #impl done 0')
-    await mc.command('/scoreboard players set timer_ticks rs 0')
-    await mc.command('/scoreboard players set timer_active rs 0')
+    await mc.command('/scoreboard players set #impl ticks 0')
 
     await mc.command('/function impl_test:__load').catch(() => {})
     await mc.command('/function impl_test:test')
     await mc.ticks(5)
 
     const done = await mc.scoreboard('#impl', 'done')
-    const ticks = await mc.scoreboard('timer_ticks', 'rs')
+    const ticks = await mc.scoreboard('#impl', 'ticks')
     expect(done).toBe(1)
     expect(ticks).toBe(3)
   })

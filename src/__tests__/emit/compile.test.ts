@@ -1,10 +1,29 @@
-import { compile } from '../../emit/compile'
+import { compile, parseSourceStage } from '../../emit/compile'
+import { DiagnosticBundleError } from '../../diagnostics'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
   return files.find(f => f.path.includes(pathSubstr))?.content
 }
 
 describe('emit: compile coverage', () => {
+  test('parseSourceStage returns AST and parser warnings without emitting files', () => {
+    const parsed = parseSourceStage(`
+      fn main(): void {
+        let value: int = 1;
+      }
+    `, 'parse_stage_test', { filePath: '/tmp/parse-stage-test.mcrs' })
+
+    expect(parsed.ast.namespace).toBe('parse_stage_test')
+    expect(parsed.ast.declarations.map(fn => fn.name)).toContain('main')
+    expect(parsed.ast.declarations.find(fn => fn.name === 'main')?.sourceFile).toBe('/tmp/parse-stage-test.mcrs')
+    expect(parsed.warnings).toEqual([])
+  })
+
+  test('parseSourceStage preserves stopAfterCheck parse-error bundling', () => {
+    expect(() => parseSourceStage('fn broken(: void {', 'parse_stage_test', { stopAfterCheck: true }))
+      .toThrow(DiagnosticBundleError)
+  })
+
   test('control-flow statements generate emit-time branching artifacts', () => {
     const source = `
       fn flow(): void {

@@ -2501,7 +2501,7 @@ function lowerExpr(
           // Intercept Timer method calls. Timer methods are compiler intrinsics and
           // require a statically allocated Timer::new() ID; never silently fall back
           // to the stdlib stub bodies.
-          if (sv.typeName === 'Timer') {
+          if (isIntrinsicTimerStruct(sv)) {
             const timerId = requireStaticTimerId(expr.fn, sv.fields.get('_id'), ctx)
             return lowerTimerMethod(expr.fn, timerId, sv, ctx, scope, expr.args.slice(1))
           }
@@ -2790,7 +2790,7 @@ function lowerExpr(
           // Intercept Timer method calls. Timer methods are compiler intrinsics and
           // require a statically allocated Timer::new() ID; never silently fall back
           // to the stdlib stub bodies.
-          if (sv.typeName === 'Timer') {
+          if (isIntrinsicTimerStruct(sv)) {
             const timerId = requireStaticTimerId(expr.callee.field, sv.fields.get('_id'), ctx)
             return lowerTimerMethod(expr.callee.field, timerId, sv, ctx, scope, expr.args)
           }
@@ -3177,6 +3177,10 @@ function requireStaticTimerId(method: string, idTemp: Temp | undefined, ctx: FnC
     )
   }
   return timerId
+}
+
+function isIntrinsicTimerStruct(sv: { typeName: string; fields: Map<string, Temp> }): boolean {
+  return sv.typeName === 'Timer' && sv.fields.has('_id') && sv.fields.has('_duration')
 }
 
 /**

@@ -61,7 +61,7 @@ export function coroutineTransform(
   const warnings: string[] = []
 
   for (const fn of mod.functions) {
-    const info = infoMap.get(fn.name)
+    const info = infoMap.get(fn.name) ?? infos.find(i => fn.name.startsWith(`${i.fnName}__`))
     if (!info) {
       newFunctions.push(fn)
       continue

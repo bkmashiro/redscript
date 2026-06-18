@@ -28,6 +28,7 @@ import { analyzeBudget } from '../lir/budget'
 import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 import { TypeChecker } from '../typechecker'
 import { isEventTypeName } from '../events/types'
+import type { Program } from '../ast/types'
 
 export interface CompileOptions {
   namespace?: string
@@ -62,6 +63,27 @@ export interface CompileResult {
   warnings: string[]
   /** Always true — v1 compat shim (compile() throws on error) */
   readonly success: true
+}
+
+export interface ParseSourceStageResult {
+  ast: Program
+  warnings: string[]
+}
+
+export function parseSourceStage(
+  source: string,
+  namespace: string,
+  options: { filePath?: string; stopAfterCheck?: boolean } = {},
+): ParseSourceStageResult {
+  const lexer = new Lexer(source, options.filePath)
+  const tokens = lexer.tokenize()
+  const parser = new Parser(tokens, source, options.filePath)
+  const ast = parser.parse(namespace)
+  annotateFunctionSourceFiles(ast, options.filePath)
+  if (parser.parseErrors.length > 0) {
+    throw options.stopAfterCheck ? new DiagnosticBundleError(parser.parseErrors) : parser.parseErrors[0]
+  }
+  return { ast, warnings: [...parser.warnings] }
 }
 
 function annotateFunctionSourceFiles(
@@ -148,15 +170,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
   try {
     // Stage 1: Lex + Parse → AST
-    const lexer = new Lexer(processedSource)
-    const tokens = lexer.tokenize()
-    const parser = new Parser(tokens, processedSource, filePath)
-    const ast = parser.parse(namespace)
-    annotateFunctionSourceFiles(ast, filePath)
-    warnings.push(...parser.warnings)
-    if (parser.parseErrors.length > 0) {
-      throw stopAfterCheck ? new DiagnosticBundleError(parser.parseErrors) : parser.parseErrors[0]
-    }
+    const parsed = parseSourceStage(processedSource, namespace, { filePath, stopAfterCheck })
+    const ast = parsed.ast
+    warnings.push(...parsed.warnings)
 
     // Resolve whole-module file imports: `import player_utils;` (no `::` symbol)
     const seenModuleImports = new Set<string>()
@@ -183,14 +199,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       seenModuleImports.add(modFilePath)
       const modSource = fs.readFileSync(modFilePath, 'utf-8')
       const modPreprocessed = preprocessSourceWithMetadata(modSource, { filePath: modFilePath, includeDirs })
-      const modTokens = new Lexer(modPreprocessed.source, modFilePath).tokenize()
-      const modParser = new Parser(modTokens, modPreprocessed.source, modFilePath)
-      const modAst = modParser.parse(namespace)
-      annotateFunctionSourceFiles(modAst, modFilePath)
-      warnings.push(...modParser.warnings)
-      if (modParser.parseErrors.length > 0) {
-        throw stopAfterCheck ? new DiagnosticBundleError(modParser.parseErrors) : modParser.parseErrors[0]
-      }
+      const modParsed = parseSourceStage(modPreprocessed.source, namespace, { filePath: modFilePath, stopAfterCheck })
+      const modAst = modParsed.ast
+      warnings.push(...modParsed.warnings)
       for (const fn of modAst.declarations) fn.isLibraryFn = true
       for (const imp of modAst.imports) {
         if (imp.symbol !== undefined) continue
@@ -224,14 +235,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     for (const li of preprocessed.libraryImports ?? []) {
       const libPreprocessed = preprocessSourceWithMetadata(li.source, { filePath: li.filePath })
-      const libTokens = new Lexer(libPreprocessed.source, li.filePath).tokenize()
-      const libParser = new Parser(libTokens, libPreprocessed.source, li.filePath)
-      const libAst = libParser.parse(namespace)
-      annotateFunctionSourceFiles(libAst, li.filePath)
-      warnings.push(...libParser.warnings)
-      if (libParser.parseErrors.length > 0) {
-        throw stopAfterCheck ? new DiagnosticBundleError(libParser.parseErrors) : libParser.parseErrors[0]
-      }
+      const libParsed = parseSourceStage(libPreprocessed.source, namespace, { filePath: li.filePath, stopAfterCheck })
+      const libAst = libParsed.ast
+      warnings.push(...libParsed.warnings)
       for (const fn of libAst.declarations) fn.isLibraryFn = true
       ast.declarations.push(...libAst.declarations)
       ast.structs.push(...libAst.structs)
@@ -243,13 +249,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     if (options.librarySources) {
       for (const libSrc of options.librarySources) {
-        const libTokens = new Lexer(libSrc).tokenize()
-        const libParser = new Parser(libTokens, libSrc)
-        const libAst = libParser.parse(namespace)
-        warnings.push(...libParser.warnings)
-        if (libParser.parseErrors.length > 0) {
-          throw stopAfterCheck ? new DiagnosticBundleError(libParser.parseErrors) : libParser.parseErrors[0]
-        }
+        const libParsed = parseSourceStage(libSrc, namespace, { stopAfterCheck })
+        const libAst = libParsed.ast
+        warnings.push(...libParsed.warnings)
         for (const fn of libAst.declarations) fn.isLibraryFn = true
         ast.declarations.push(...libAst.declarations)
         ast.structs.push(...libAst.structs)
