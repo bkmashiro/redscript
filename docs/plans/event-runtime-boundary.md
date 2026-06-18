@@ -51,12 +51,14 @@ fn on_death(): void {
 
 This only means: add `namespace:function_name` to `data/rs/tags/function/on_player_death.json`.
 
-3. Treat `@tick` and `@load` as eventual aliases of function-tag registration:
+3. Treat `@tick` and `@load` as aliases of function-tag registration:
 
 ```rs
 @tick  // equivalent to @function_tag("minecraft:tick")
 @load  // equivalent to @function_tag("minecraft:load")
 ```
+
+`@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` now merge into the same generated tag files as the built-in decorators instead of emitting duplicate JSON artifacts.
 
 4. Later, introduce stdlib/runtime event manifests if needed:
 
@@ -102,9 +104,10 @@ fn on_death(player: Player): void {}
 
 That legacy form can remain for compatibility, but new runtime docs should teach `@s` context or a future explicit context object instead.
 
-## Immediate implementation slice
+## Completed implementation slices
 
-- Add `@function_tag("namespace:path")` decorator parsing.
-- Emit generic function tag JSON files from compiler metadata.
-- Keep existing `@on(EventType)` behavior untouched for compatibility.
-- Add tests proving `@function_tag("rs:on_player_death")` can produce the same handler tag file without compiler knowing a gameplay event name.
+- Added `@function_tag("namespace:path")` decorator parsing.
+- Emits generic function tag JSON files from compiler metadata.
+- Keeps existing `@on(EventType)` behavior untouched for compatibility.
+- Added tests proving `@function_tag("rs:on_player_death")` can produce the same handler tag file without compiler knowing a gameplay event name.
+- Added compatibility tests proving `@function_tag("minecraft:tick")` and `@function_tag("minecraft:load")` use the same generated tag files as `@tick` and `@load`.

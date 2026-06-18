@@ -112,6 +112,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const mcVersion = options.mcVersion ?? DEFAULT_MC_VERSION
   const files: DatapackFile[] = []
   const namespaceMapBuilder = genSourceMap ? new NamespaceSourceMapBuilder() : null
+  const functionTags = new Map(options.functionTags ?? [])
 
   // pack.mcmeta
   files.push({
@@ -313,7 +314,12 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   // load.json is always generated because load.mcfunction is always emitted
   // (it unconditionally creates the scoreboard objective). loadFns are
   // additional user-defined @load functions appended after the built-in one.
-  const loadValues = [`${namespace}:load`, ...loadFns.map(fn => `${namespace}:${fn}`)]
+  const loadValues = uniqueValues([
+    `${namespace}:load`,
+    ...loadFns.map(fn => `${namespace}:${fn}`),
+    ...(functionTags.get('minecraft:load') ?? []),
+  ])
+  functionTags.delete('minecraft:load')
   files.push({
     path: 'data/minecraft/tags/function/load.json',
     content: JSON.stringify({ values: loadValues }, null, 2) + '\n',
@@ -325,8 +331,12 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     ...throttleFns.map(t => throttleDispatcherName(t.name)),
     ...retryFns.map(r => retryDispatcherName(r.name)),
   ]
-  if (allTickFns.length > 0) {
-    const tickValues = allTickFns.map(fn => `${namespace}:${fn}`)
+  const tickValues = uniqueValues([
+    ...allTickFns.map(fn => `${namespace}:${fn}`),
+    ...(functionTags.get('minecraft:tick') ?? []),
+  ])
+  functionTags.delete('minecraft:tick')
+  if (tickValues.length > 0) {
     files.push({
       path: 'data/minecraft/tags/function/tick.json',
       content: JSON.stringify({ values: tickValues }, null, 2) + '\n',
@@ -354,8 +364,8 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     }
   }
 
-  if (options.functionTags) {
-    for (const [tagId, handlers] of options.functionTags) {
+  if (functionTags.size > 0) {
+    for (const [tagId, handlers] of functionTags) {
       if (handlers.length === 0) continue
       const tagPath = functionTagFilePath(tagId)
       files.push({
@@ -366,6 +376,10 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   }
 
   return files
+}
+
+function uniqueValues(values: string[]): string[] {
+  return [...new Set(values)]
 }
 
 function functionTagFilePath(tagId: string): string {

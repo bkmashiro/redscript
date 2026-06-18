@@ -75,6 +75,31 @@ describe('e2e: basic compilation', () => {
     expect(parsed.values).toContain('loadtest:load')
   })
 
+  test('@function_tag("minecraft:tick") uses the same tag file as @tick', () => {
+    const source = `
+      @function_tag("minecraft:tick")
+      fn game_tick(): void { let x: int = 1; }
+    `
+    const result = compile(source, { namespace: 'tagtick' })
+    const tickTags = result.files.filter(f => f.path === 'data/minecraft/tags/function/tick.json')
+    expect(tickTags).toHaveLength(1)
+    const parsed = JSON.parse(tickTags[0].content)
+    expect(parsed.values).toContain('tagtick:game_tick')
+  })
+
+  test('@function_tag("minecraft:load") merges with built-in load tag', () => {
+    const source = `
+      @function_tag("minecraft:load")
+      fn setup(): void { let x: int = 42; }
+    `
+    const result = compile(source, { namespace: 'tagload' })
+    const loadTags = result.files.filter(f => f.path === 'data/minecraft/tags/function/load.json')
+    expect(loadTags).toHaveLength(1)
+    const parsed = JSON.parse(loadTags[0].content)
+    expect(parsed.values).toContain('tagload:load')
+    expect(parsed.values).toContain('tagload:setup')
+  })
+
   test('if/else produces conditional call pattern', () => {
     const source = `
       fn check(x: int): int {
