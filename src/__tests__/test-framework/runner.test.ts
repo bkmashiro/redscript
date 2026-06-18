@@ -22,6 +22,7 @@ import {
   buildHarnessRunPayload,
   buildFailedCountRequest,
   parseScoreValue,
+  formatHarnessHttpError,
   runTests,
 } from '../../testing/runner'
 
@@ -285,6 +286,38 @@ describe('score value parsing', () => {
   })
 })
 
+describe('harness structured error formatting', () => {
+  test('formats JSON errors with command and log snippets', () => {
+    const formatted = formatHarnessHttpError(
+      'POST',
+      'http://localhost:25561/command',
+      500,
+      JSON.stringify({
+        error: 'Unknown function core:missing',
+        command: 'function core:missing',
+        logs: [
+          '[Server thread/ERROR]: Function core:missing not found',
+          '[Server thread/WARN]: datapack reload kept old function index',
+        ],
+      }),
+    )
+
+    expect(formatted).toContain('POST http://localhost:25561/command failed 500')
+    expect(formatted).toContain('Unknown function core:missing')
+    expect(formatted).toContain('command: function core:missing')
+    expect(formatted).toContain('Function core:missing not found')
+    expect(formatted).toContain('datapack reload kept old function index')
+  })
+
+  test('truncates long plain-text harness responses', () => {
+    const formatted = formatHarnessHttpError('POST', 'http://localhost:25561/reload', 500, 'x'.repeat(900))
+
+    expect(formatted.length).toBeLessThan(700)
+    expect(formatted).toContain('xxx')
+    expect(formatted).toContain('…')
+  })
+})
+
 // ---------------------------------------------------------------------------
 // 5. Offline protocol execution behavior (fake harness server)
 // ---------------------------------------------------------------------------
@@ -443,6 +476,47 @@ describe('offline harness protocol execution', () => {
         player: 'rs.test_failed',
       })
     } finally {
+      exitSpy.mockRestore()
+      server.close()
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('runTests surfaces structured harness errors with log snippets when command execution fails', async () => {
+    const { server, requests, port } = await startFakeHarnessServer({
+      command: { status: 500, body: JSON.stringify({ error: 'primary route failed' }) },
+      run: {
+        status: 500,
+        body: JSON.stringify({
+          error: 'Unknown function runnersuite3:__run_all_tests',
+          command: 'function runnersuite3:__run_all_tests',
+          logs: ['[Server thread/ERROR]: Unknown function runnersuite3:__run_all_tests'],
+        }),
+      },
+    })
+
+    const { srcPath, outDir, dir } = createTempSourceFile(source, 'runnersuite3')
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never)
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await runTests({
+        filePath: srcPath,
+        mcUrl: `http://127.0.0.1:${port}`,
+        outputDir: outDir,
+      })
+
+      expect(requests.map(r => r.url)).toEqual(['/command', '/run'])
+      expect(exitSpy).toHaveBeenCalledWith(1)
+      const output = errorSpy.mock.calls.flat().join('\n')
+      expect(output).toContain('MC server error')
+      expect(output).toContain('POST http://127.0.0.1')
+      expect(output).toContain('/run failed 500')
+      expect(output).toContain('Unknown function runnersuite3:__run_all_tests')
+      expect(output).toContain('command: function runnersuite3:__run_all_tests')
+      expect(output).toContain('[Server thread/ERROR]')
+    } finally {
+      errorSpy.mockRestore()
       exitSpy.mockRestore()
       server.close()
       fs.rmSync(dir, { recursive: true, force: true })

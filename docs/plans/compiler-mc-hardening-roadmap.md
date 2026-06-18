@@ -156,7 +156,7 @@ Tasks:
   - LICM no longer hoists mutable MC state reads (`score_read`, NBT reads, list length).
   - `is_check` lowers to real selector type predicates.
   - array-param stdlib calls and NBT batch cache invalidation are covered by live heap/sort tests.
-- [ ] Make the harness reload/command path return structured errors/log snippets; do not rely on “request succeeded” as semantic proof.
+- [x] Make the harness reload/command path return structured errors/log snippets; do not rely on “request succeeded” as semantic proof.
 - [x] Add a local/manual command to run only core MC oracle cases (`npm run test:mc-core`).
 - [ ] Add CI separation:
   - unit/static always

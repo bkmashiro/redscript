@@ -275,6 +275,80 @@ export function buildFailedCountRequest(
   return protocol.buildFailedCountRequest(normalizedBaseUrl)
 }
 
+function truncateHarnessText(value: string, maxLength = 500): string {
+  if (value.length <= maxLength) {
+    return value
+  }
+  return `${value.slice(0, maxLength)}…`
+}
+
+function stringField(obj: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = obj[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function logLines(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string')
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.split('\n').filter(line => line.trim().length > 0)
+  }
+  return []
+}
+
+export function formatHarnessHttpError(
+  method: HarnessMethod,
+  url: string,
+  status: number,
+  body: string,
+): string {
+  const header = `${method} ${url} failed ${status}`
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    const snippet = truncateHarnessText(body.trim())
+    return snippet ? `${header}: ${snippet}` : header
+  }
+
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return `${header}: ${truncateHarnessText(body.trim())}`
+  }
+
+  const obj = parsed as Record<string, unknown>
+  const details: string[] = []
+  const message = stringField(obj, ['error', 'message', 'detail', 'details'])
+  if (message) {
+    details.push(message)
+  }
+
+  const command = stringField(obj, ['command', 'cmd'])
+  if (command) {
+    details.push(`command: ${command}`)
+  }
+
+  const logs = [
+    ...logLines(obj.logs),
+    ...logLines(obj.log),
+    ...logLines(obj.snippet),
+  ].slice(-8)
+  if (logs.length > 0) {
+    details.push(`logs:\n${logs.map(line => `  ${truncateHarnessText(line, 240)}`).join('\n')}`)
+  }
+
+  if (details.length === 0) {
+    details.push(truncateHarnessText(body.trim()))
+  }
+
+  return `${header}: ${details.join('\n')}`
+}
+
 function requestText(url: string, options: { method: 'GET' | 'POST'; body?: string }): Promise<string> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url)
@@ -299,7 +373,7 @@ function requestText(url: string, options: { method: 'GET' | 'POST'; body?: stri
         res.on('data', chunk => { body += chunk })
         res.on('end', () => {
           if (res.statusCode !== undefined && (res.statusCode < 200 || res.statusCode >= 300)) {
-            reject(new Error(`HTTP ${options.method} ${url} failed ${res.statusCode}: ${body}`))
+            reject(new Error(formatHarnessHttpError(options.method, url, res.statusCode, body)))
             return
           }
           resolve(body)
