@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:package-vscode": "npm run build && REDSCRIPT_PACKAGE_VSCODE=1 node scripts/postbuild.js",
     "dev": "tsc -w",
     "test": "jest",
     "test:mc-core": "jest src/__tests__/mc-core.test.ts --runInBand --testTimeout=120000",

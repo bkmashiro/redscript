@@ -1963,7 +1963,9 @@ function lowerExpr(
       // from the __rf_<field> return slots that the callee populated.
       const sv = ctx.structVars.get(expr.target)
       if (sv) {
-        const fields = ctx.structDefs.get(sv.typeName) ?? []
+        const fields = sv.typeName === '__option'
+          ? ['has', 'val']
+          : (ctx.structDefs.get(sv.typeName) ?? [])
         for (const fieldName of fields) {
           const existingFieldTemp = sv.fields.get(fieldName)
           // Reuse the existing field temp if it exists (so scoreboard slot stays stable),

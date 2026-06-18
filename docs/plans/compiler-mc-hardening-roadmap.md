@@ -369,6 +369,7 @@ Focus areas:
 Tasks:
 
 - [x] Add first Paper oracle for selector `foreach` binding context: loop variables used in command-argument positions lower to `@s` inside the helper, and live Paper confirms all selected entities are tagged.
+- [x] Add Paper oracle for `while let Some(...)` option-loop sugar, including the regression where `opt = None` inside the loop must update the option struct's `has`/`val` fields so the loop exits.
 - [ ] Add broader sugar-specific `.mcrs` golden cases.
 - [x] Add at least one real Paper oracle case for sugar that affects generated `execute`/`scoreboard` behavior.
 - [ ] Mark weak/experimental sugar in docs if it cannot be fully verified yet.

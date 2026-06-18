@@ -270,6 +270,22 @@ describe('Syntax: Option<T> and if let Some(x)', () => {
           scoreboard_set("#opt_out", "sc_out", v)
         }
       }
+
+      fn test_while_some() {
+        let o: Option<int> = Some(7)
+        scoreboard_set("#while_out", "sc_out", 0)
+        while let Some(v) = o {
+          scoreboard_set("#while_out", "sc_out", v)
+          o = None
+        }
+      }
+
+      fn test_while_none() {
+        let o: Option<int> = None
+        while let Some(v) = o {
+          scoreboard_set("#while_none_out", "sc_out", v)
+        }
+      }
     `, FNS)
     await mc.reload()
     await mc.ticks(5)
@@ -277,9 +293,9 @@ describe('Syntax: Option<T> and if let Some(x)', () => {
     await mc.ticks(3)
   }, 30_000)
 
-  test('compile: Option<int>, Some(v), None, if let Some(x) = opt succeeds', () => {
+  test('compile: Option<int>, Some(v), None, if/while let Some(x) succeeds', () => {
     expect(() =>
-      compile(`fn f(): Option<int> { return Some(1) } fn g() { let o: Option<int> = f(); if let Some(v) = o { } }`, { namespace: 'tmp' })
+      compile(`fn f(): Option<int> { return Some(1) } fn g() { let o: Option<int> = f(); if let Some(v) = o { } while let Some(w) = o { o = None } }`, { namespace: 'tmp' })
     ).not.toThrow()
   })
 
@@ -307,6 +323,32 @@ describe('Syntax: Option<T> and if let Some(x)', () => {
     const score = await mc.scoreboard('#opt_out', 'sc_out')
     expect(score).toBe(999)
     console.log(`  Option None: score stays ${score} ✓`)
+  }, 30_000)
+
+  test('runtime: while let Some(v) binds value and exits when option becomes None', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/scoreboard players set #while_out sc_out 0')
+    await mc.ticks(2)
+    await mc.command(`/function ${FNS}:test_while_some`)
+    await mc.ticks(5)
+
+    const score = await mc.scoreboard('#while_out', 'sc_out')
+    expect(score).toBe(7)
+    console.log(`  while let Some(7): #while_out = ${score} ✓`)
+  }, 30_000)
+
+  test('runtime: while let None skips body', async () => {
+    if (!serverOnline) return
+
+    await mc.command('/scoreboard players set #while_none_out sc_out 999')
+    await mc.ticks(2)
+    await mc.command(`/function ${FNS}:test_while_none`)
+    await mc.ticks(5)
+
+    const score = await mc.scoreboard('#while_none_out', 'sc_out')
+    expect(score).toBe(999)
+    console.log(`  while let None: score stays ${score} ✓`)
   }, 30_000)
 })
 

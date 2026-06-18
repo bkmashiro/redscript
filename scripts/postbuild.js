@@ -15,9 +15,12 @@ for (const [outPath, target] of shims) {
 }
 console.log('postbuild: shims written')
 
-// Auto-package VSCode extension after every build
+const shouldPackageVSCode = process.env.REDSCRIPT_PACKAGE_VSCODE === '1'
 const vscodeDir = path.join(__dirname, '..', 'editors', 'vscode')
-if (fs.existsSync(vscodeDir)) {
+
+if (!shouldPackageVSCode) {
+  console.log('postbuild: vscode packaging skipped (set REDSCRIPT_PACKAGE_VSCODE=1 to package)')
+} else if (fs.existsSync(vscodeDir)) {
   try {
     console.log('postbuild: packaging VSCode extension...')
     execSync('npm run package', { cwd: vscodeDir, stdio: 'pipe' })

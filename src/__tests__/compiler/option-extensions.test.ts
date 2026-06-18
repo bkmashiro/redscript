@@ -173,6 +173,9 @@ describe('while let: E2E', () => {
       f.content.includes('execute if score') || f.content.includes('scoreboard')
     )
     expect(hasConditional).toBe(true)
+    const body = result.files.find(f => f.path.includes('test__whl_body'))?.content ?? ''
+    expect(body).toContain('scoreboard players set $test___opt_opt_has __test 0')
+    expect(body).toContain('scoreboard players set $test___opt_opt_val __test 0')
   })
 
   it('compiles while let Some(x) = opt with None — loop body never runs', () => {
