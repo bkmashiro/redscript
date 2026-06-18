@@ -1,3 +1,4 @@
+import path from 'path'
 import type { TypeNode } from '../ast/types'
 
 export interface EventRuntimeManifest {
@@ -19,6 +20,90 @@ export interface EventRuntimeSpec {
   readonly runtimeAssets: readonly string[]
 }
 
+export interface RuntimeAssetValidationOptions {
+  /**
+   * Optional file-existence predicate. When provided, validation checks each
+   * normalized asset path via this predicate.
+   */
+  fileExists?: (path: string) => boolean
+  /**
+   * Optional root directory used to resolve relative runtime assets for existence checks.
+   */
+  rootPath?: string
+}
+
+const STDLIB_RUNTIME_ASSET_PREFIX = 'src/stdlib/'
+
+function validateRuntimeAssetPath(value: string, options: RuntimeAssetValidationOptions = {}): string {
+  if (value.includes('\\')) {
+    throw new Error(`Invalid runtime asset path '${value}': backslashes are not allowed`)
+  }
+
+  if (value === '') {
+    throw new Error('Invalid runtime asset path: empty path is not allowed')
+  }
+
+  if (path.isAbsolute(value) || /^[A-Za-z]:/i.test(value) || value.startsWith('~/')) {
+    throw new Error(`Invalid runtime asset path '${value}': absolute paths are not allowed`)
+  }
+
+  const normalized = value
+  const segments = normalized.split('/')
+  if (segments.includes('..')) {
+    throw new Error(`Invalid runtime asset path '${value}': traversal segment '..' is not allowed`)
+  }
+
+  if (!segments.every(segment => segment.length > 0 && segment !== '.')) {
+    throw new Error(`Invalid runtime asset path '${value}': empty or '.' segments are not allowed`)
+  }
+
+  if (!normalized.startsWith(STDLIB_RUNTIME_ASSET_PREFIX)) {
+    throw new Error(
+      `Invalid runtime asset path '${value}': runtime assets must be under '${STDLIB_RUNTIME_ASSET_PREFIX}'`
+    )
+  }
+
+  const resolved = options.rootPath ? path.resolve(options.rootPath, normalized) : normalized
+  const fileExists = options.fileExists
+  if (fileExists && !fileExists(resolved)) {
+    throw new Error(`Invalid runtime asset path '${value}': file does not exist at ${resolved}`)
+  }
+
+  return normalized
+}
+
+export function getEventRuntimeAssets(
+  manifest: EventRuntimeManifest,
+  options: RuntimeAssetValidationOptions = {},
+): readonly string[] {
+  const assets = manifest.runtimeAssets ?? []
+  const normalized = new Set<string>()
+
+  for (const asset of assets) {
+    normalized.add(validateRuntimeAssetPath(asset, options))
+  }
+
+  return [...normalized]
+}
+
+export function getAllEventRuntimeAssets(
+  manifests: readonly EventRuntimeManifest[],
+  options: RuntimeAssetValidationOptions = {},
+  eventTypeNames?: readonly string[],
+): readonly string[] {
+  const wanted = eventTypeNames ? new Set(eventTypeNames) : null
+  const normalized = new Set<string>()
+
+  for (const manifest of manifests) {
+    if (wanted && !wanted.has(manifest.name)) continue
+    for (const runtimeAsset of getEventRuntimeAssets(manifest, options)) {
+      normalized.add(runtimeAsset)
+    }
+  }
+
+  return [...normalized]
+}
+
 export const EVENT_RUNTIME_MANIFESTS = [
   {
     name: 'PlayerDeath',
@@ -27,6 +112,7 @@ export const EVENT_RUNTIME_MANIFESTS = [
     params: ['player: Player'],
     detection: 'scoreboard',
     executorContext: { kind: 'entity', entityType: 'Player' },
+    runtimeAssets: ['src/stdlib/events.mcrs'],
   },
   {
     name: 'PlayerJoin',
@@ -35,6 +121,7 @@ export const EVENT_RUNTIME_MANIFESTS = [
     params: ['player: Player'],
     detection: 'tag',
     executorContext: { kind: 'entity', entityType: 'Player' },
+    runtimeAssets: ['src/stdlib/events.mcrs'],
   },
   {
     name: 'EntityKill',
@@ -43,6 +130,7 @@ export const EVENT_RUNTIME_MANIFESTS = [
     params: ['player: Player'],
     detection: 'scoreboard',
     executorContext: { kind: 'entity', entityType: 'Player' },
+    runtimeAssets: ['src/stdlib/events.mcrs'],
   },
   {
     name: 'ItemUse',
@@ -51,6 +139,7 @@ export const EVENT_RUNTIME_MANIFESTS = [
     params: ['player: Player'],
     detection: 'scoreboard',
     executorContext: { kind: 'entity', entityType: 'Player' },
+    runtimeAssets: ['src/stdlib/events.mcrs'],
   },
 ] as const
 
@@ -61,7 +150,7 @@ export function eventTypeFromManifest(manifest: EventRuntimeManifest): EventRunt
     params: manifest.params,
     detection: manifest.detection,
     executorContext: manifest.executorContext,
-    runtimeAssets: manifest.runtimeAssets ?? [],
+    runtimeAssets: getEventRuntimeAssets(manifest),
   }
 }
 

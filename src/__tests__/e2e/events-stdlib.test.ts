@@ -32,6 +32,40 @@ test('multiple @on(PlayerJoin) handlers all appear in tag', () => {
   expect(tag.values).toContain('test_events:give_kit')
 })
 
+test('compile auto-includes runtime assets for @on decorators from manifest declarations', () => {
+  const src = `
+    namespace test_events_auto
+    @on(PlayerJoin) fn welcome(p: Player) { raw("say hi") }
+  `
+  const result = compile(src, { namespace: 'test_events_auto' })
+
+  const tagFile = result.files.find(f => f.path === 'data/rs/tags/function/on_player_join.json')
+  expect(tagFile).toBeDefined()
+  const tag = JSON.parse(tagFile!.content)
+  expect(tag.values).toContain('test_events_auto:welcome')
+
+  expect(result.files.filter(f => f.path === 'data/test_events_auto/function/__events_load.mcfunction')).toHaveLength(1)
+  expect(result.files.filter(f => f.path === 'data/test_events_auto/function/__events_tick.mcfunction')).toHaveLength(1)
+
+  const loadTagFile = result.files.find(f => f.path === 'data/minecraft/tags/function/load.json')
+  const tickTagFile = result.files.find(f => f.path === 'data/minecraft/tags/function/tick.json')
+  expect(loadTagFile).toBeDefined()
+  expect(tickTagFile).toBeDefined()
+  expect(JSON.parse(loadTagFile!.content).values.filter((value: string) => value === 'test_events_auto:__events_load')).toHaveLength(1)
+  expect(JSON.parse(tickTagFile!.content).values.filter((value: string) => value === 'test_events_auto:__events_tick')).toHaveLength(1)
+})
+
+test('compile does not include event runtime assets without @on decorators', () => {
+  const src = `
+    namespace test_events_auto
+    fn hello() { raw("say hi") }
+  `
+  const result = compile(src, { namespace: 'test_events_auto' })
+
+  expect(result.files.find(f => f.path === 'data/test_events_auto/function/__events_load.mcfunction')).toBeUndefined()
+  expect(result.files.find(f => f.path === 'data/test_events_auto/function/__events_tick.mcfunction')).toBeUndefined()
+})
+
 test('@on(PlayerDeath) generates on_player_death tag', () => {
   const src = `
     namespace test_events

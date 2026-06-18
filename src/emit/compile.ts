@@ -31,6 +31,7 @@ import { TypeChecker } from '../typechecker'
 import { isEventTypeName } from '../events/types'
 import type { Program } from '../ast/types'
 import type { HIRModule, HIRStruct } from '../hir/types'
+import { EVENT_RUNTIME_MANIFESTS, getAllEventRuntimeAssets } from '../events/manifest'
 
 export interface CompileOptions {
   namespace?: string
@@ -102,6 +103,86 @@ export function preprocessSourceStage(
     ranges: preprocessed.ranges,
     libraryImports: preprocessed.libraryImports,
   }
+}
+
+function resolveRuntimeAssetPath(assetPath: string, sourceLines: string[], filePath?: string): string {
+  const candidates = [
+    // Prefer the package/repo that owns this compiler before falling back to the
+    // caller's cwd; otherwise a user project with a matching src/stdlib path
+    // could shadow compiler-owned runtime assets.
+    path.resolve(__dirname, '../..'),
+    path.resolve(__dirname, '../../..'),
+    process.cwd(),
+  ]
+
+  for (const candidate of candidates) {
+    const resolved = path.resolve(candidate, assetPath)
+    if (fs.existsSync(resolved)) {
+      return resolved
+    }
+  }
+
+  throw new DiagnosticError(
+    'LoweringError',
+    `Event runtime asset '${assetPath}' does not exist. Runtime assets declared in event manifests must be present before compiling @on handlers.`,
+    { file: filePath, line: 1, col: 1 },
+    sourceLines,
+  )
+}
+
+function collectEventRuntimeTypesFromProgram(program: Program): string[] {
+  const eventTypes = new Set<string>()
+
+  for (const fn of program.declarations) {
+    for (const dec of fn.decorators) {
+      if (dec.name === 'on' && typeof dec.args?.eventType === 'string') {
+        eventTypes.add(dec.args.eventType)
+      }
+    }
+  }
+
+  for (const impl of program.implBlocks) {
+    for (const method of impl.methods) {
+      for (const dec of method.decorators) {
+        if (dec.name === 'on' && typeof dec.args?.eventType === 'string') {
+          eventTypes.add(dec.args.eventType)
+        }
+      }
+    }
+  }
+
+  return [...eventTypes]
+}
+
+function mergeParsedLibrarySource(
+  ast: Program,
+  source: string,
+  warnings: string[],
+  options: { filePath?: string; namespace: string; stopAfterCheck?: boolean; dedupeDeclarations: boolean },
+): void {
+  const libParsed = parseSourceStage(source, options.namespace, {
+    filePath: options.filePath,
+    stopAfterCheck: options.stopAfterCheck,
+  })
+  const libAst = libParsed.ast
+  warnings.push(...libParsed.warnings)
+
+  const existingFnNames = new Set(ast.declarations.map(fn => fn.name))
+
+  for (const fn of libAst.declarations) {
+    if (options.dedupeDeclarations && existingFnNames.has(fn.name)) {
+      continue
+    }
+    fn.isLibraryFn = true
+    ast.declarations.push(fn)
+    existingFnNames.add(fn.name)
+  }
+
+  ast.structs.push(...libAst.structs)
+  ast.implBlocks.push(...libAst.implBlocks)
+  ast.enums.push(...libAst.enums)
+  ast.consts.push(...libAst.consts)
+  ast.globals.push(...libAst.globals)
 }
 
 export interface LowerToHIRStageResult {
@@ -751,31 +832,40 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     for (const li of preprocessed.libraryImports ?? []) {
-      const libPreprocessed = preprocessSourceWithMetadata(li.source, { filePath: li.filePath })
-      const libParsed = parseSourceStage(libPreprocessed.source, namespace, { filePath: li.filePath, stopAfterCheck })
-      const libAst = libParsed.ast
-      warnings.push(...libParsed.warnings)
-      for (const fn of libAst.declarations) fn.isLibraryFn = true
-      ast.declarations.push(...libAst.declarations)
-      ast.structs.push(...libAst.structs)
-      ast.implBlocks.push(...libAst.implBlocks)
-      ast.enums.push(...libAst.enums)
-      ast.consts.push(...libAst.consts)
-      ast.globals.push(...libAst.globals)
+      mergeParsedLibrarySource(ast, li.source, warnings, {
+        filePath: li.filePath,
+        namespace,
+        stopAfterCheck,
+        dedupeDeclarations: false,
+      })
     }
 
     if (options.librarySources) {
       for (const libSrc of options.librarySources) {
-        const libParsed = parseSourceStage(libSrc, namespace, { stopAfterCheck })
-        const libAst = libParsed.ast
-        warnings.push(...libParsed.warnings)
-        for (const fn of libAst.declarations) fn.isLibraryFn = true
-        ast.declarations.push(...libAst.declarations)
-        ast.structs.push(...libAst.structs)
-        ast.implBlocks.push(...libAst.implBlocks)
-        ast.enums.push(...libAst.enums)
-        ast.consts.push(...libAst.consts)
-        ast.globals.push(...libAst.globals)
+        mergeParsedLibrarySource(ast, libSrc, warnings, {
+          namespace,
+          stopAfterCheck,
+          dedupeDeclarations: false,
+        })
+      }
+    }
+
+    {
+      const runtimeEventTypes = collectEventRuntimeTypesFromProgram(ast)
+      const runtimeAssets = getAllEventRuntimeAssets(
+        EVENT_RUNTIME_MANIFESTS,
+        {},
+        runtimeEventTypes,
+      )
+      for (const assetPath of runtimeAssets) {
+        const resolvedAssetPath = resolveRuntimeAssetPath(assetPath, processedSource.split('\n'), filePath)
+        const assetSource = fs.readFileSync(resolvedAssetPath, 'utf-8')
+        mergeParsedLibrarySource(ast, assetSource, warnings, {
+          filePath: resolvedAssetPath,
+          namespace,
+          stopAfterCheck,
+          dedupeDeclarations: true,
+        })
       }
     }
 

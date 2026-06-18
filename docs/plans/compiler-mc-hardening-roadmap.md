@@ -401,15 +401,17 @@ Status: Phase 6 is closed for the current hardening pass. Phase 7 (event runtime
 
 ## Phase 7 — Event runtime manifest boundary
 
-Status: ✅ Implemented in code, with focused tests.
+Status: ✅ Implemented in code, with focused tests and runtime asset validation/consumption.
 
 - [x] Add a small manifest seam in `src/events/manifest.ts` with event metadata including `handlerTag`, `executorContext`, and optional `runtimeAssets`.
 - [x] Derive `EVENT_TYPES` in `src/events/types.ts` from manifest records via helper functions.
 - [x] Preserve existing public event API behavior and decorator/emit behavior through the same `@function_tag`-based artifact mechanism.
 - [x] Add event manifest-focused coverage in `src/__tests__/events-manifest.test.ts`.
-- [ ] Add new gameplay events only through manifest+runtime assets in `src/stdlib/events.mcrs`.
+- [x] Add runtime asset validation helpers: manifest assets must be safe relative paths under `src/stdlib/`, reject traversal/absolute/backslash paths, and can enforce existence via injected predicates.
+- [x] Consume runtime asset declarations in `compile(...)`: legacy `@on(...)` decorators auto-include the required stdlib runtime asset (`src/stdlib/events.mcrs`) before typecheck/emit, while deduping shared assets across events.
+- [x] Keep new gameplay events constrained to manifest + runtime assets in `src/stdlib/events.mcrs`; do not add compiler-only event enums.
 
-Verification for Phase 7: `npm test -- src/__tests__/events-manifest.test.ts src/__tests__/events-types.test.ts src/__tests__/events-types-extra.test.ts --runInBand --testTimeout=120000`
+Verification for Phase 7: `npm test -- src/__tests__/events-manifest.test.ts src/__tests__/events-types.test.ts src/__tests__/events-types-extra.test.ts src/__tests__/e2e/events-stdlib.test.ts --runInBand --testTimeout=120000`
 
 Future sugar work should open a new phase/slice with a specific behavior oracle instead of adding more parser-only coverage.
 
@@ -431,8 +433,8 @@ Future sugar work should open a new phase/slice with a specific behavior oracle 
 
 The next implementation slice should be:
 
-1. Add validation/consumption for `runtimeAssets` in event manifests before introducing any new gameplay event.
-2. Keep `@function_tag(...)` as the generic artifact primitive; new gameplay behavior should first land in stdlib/runtime assets and then be referenced by a manifest.
+1. Add a small runtime-asset installer/planner abstraction if future manifests need more than `src/stdlib/events.mcrs`; keep it artifact-level and test it offline first.
+2. If new gameplay behavior is needed, land the stdlib/runtime asset and live/static oracle first, then add a manifest entry that references it.
 3. Run `npm run build`, event/typechecker tests, `npm run validate-mc`, and full suite before broader event/runtime changes.
 
-This keeps the runtime boundary honest now that Phase 7 has established the manifest seam.
+This keeps compiler-owned behavior limited to safe manifest validation and datapack artifact wiring.
