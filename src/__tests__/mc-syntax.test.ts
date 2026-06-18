@@ -104,8 +104,21 @@ fn choose() {
   })
 
   test('accepts macro template commands', () => {
-    const result = validator.validate('$tp @s $(x) $(y) $(z)')
-    expect(result.valid).toBe(true)
+    const teleport = validator.validate('$tp @s $(x) $(y) $(z)')
+    expect(teleport.valid).toBe(true)
+
+    const scoreboard = validator.validate('$scoreboard players set #macro_result core_oracle $(value)')
+    expect(scoreboard.valid).toBe(true)
+  })
+
+  test('rejects malformed macro template commands instead of accepting all $ lines', () => {
+    const unknownRoot = validator.validate('$definitely_not_a_command $(value)')
+    expect(unknownRoot.valid).toBe(false)
+    expect(unknownRoot.error).toContain('Unknown root command')
+
+    const malformedScoreboard = validator.validate('$scoreboard players set #macro_result core_oracle $(value) extra')
+    expect(malformedScoreboard.valid).toBe(false)
+    expect(malformedScoreboard.error).toContain('scoreboard players set requires target, objective, and value')
   })
 
   test('accepts function commands with storage arguments', () => {

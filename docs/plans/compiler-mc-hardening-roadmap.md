@@ -89,11 +89,11 @@ Tasks:
 - [x] Stop skipping `function ... with storage` in `mc-syntax` collection.
 - [x] Add minimal validator support for `function ... with storage`.
 - [x] Add explicit tests for macro template acceptance and malformed macro function calls.
-- [ ] Replace “accept all `$...` macro lines” with lightweight macro-template validation:
+- [x] Replace “accept all `$...` macro lines” with lightweight macro-template validation:
   - Strip leading `$`.
-  - Replace `$(name)` placeholders with safe placeholder literals for the command type.
+  - Replace `$(name)` placeholders with safe placeholder literals for validation.
   - Validate the resulting root command path where possible.
-  - Keep unsupported templates as warning/diagnostic, not silent pass.
+  - Keep unsupported or malformed templates as diagnostics, not silent pass.
 - [ ] Add static tests for generated `execute + scoreboard` combinations from small `.mcrs` programs.
 - [x] Add function/tag reference validation: every generated function reference and tag value should resolve inside the datapack artifact (`src/testing/datapack-artifact-validator.ts`).
 

@@ -69,8 +69,12 @@ export class MCCommandValidator {
 
   validate(line: string): ValidationResult {
     const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('$') || COMMENT_PREFIXES.some(prefix => trimmed.startsWith(prefix))) {
+    if (!trimmed || trimmed.startsWith('#') || COMMENT_PREFIXES.some(prefix => trimmed.startsWith(prefix))) {
       return { valid: true }
+    }
+
+    if (trimmed.startsWith('$')) {
+      return this.validateMacroTemplate(trimmed)
     }
 
     const tokens = tokenize(trimmed)
@@ -100,6 +104,20 @@ export class MCCommandValidator {
 
   private hasRootCommand(command: string): boolean {
     return this.rootChildren.some(child => child.type === 'literal' && child.name === command)
+  }
+
+  private validateMacroTemplate(line: string): ValidationResult {
+    const template = line.slice(1).trim()
+    if (!template) {
+      return { valid: false, error: 'Macro template command is empty' }
+    }
+
+    const substituted = template.replace(/\$\([A-Za-z_][A-Za-z0-9_]*\)/g, '0')
+    if (substituted.includes('$(')) {
+      return { valid: false, error: `Malformed macro placeholder in: ${line}` }
+    }
+
+    return this.validate(substituted)
   }
 
   private validateExecute(tokens: string[]): ValidationResult {
