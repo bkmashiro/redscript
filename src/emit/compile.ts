@@ -22,7 +22,7 @@ import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
 import { lowerToLIR } from '../lir/lower'
 import { lirOptimizeModule } from '../optimizer/lir/pipeline'
-import { emit, type DatapackFile } from './index'
+import { emit, type DatapackFile, type EmitOptions } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import { analyzeBudget } from '../lir/budget'
 import type { LIRModule, LIRInstr } from '../lir/types'
@@ -150,6 +150,23 @@ export interface FinalizeRuntimeLIRStageResult {
   lir: LIRModule
   singletonObjectives: string[]
   warnings: string[]
+}
+
+export interface EmitDatapackStageOptions extends EmitOptions {
+  libraryFilePaths: ReadonlySet<string>
+}
+
+export interface EmitDatapackStageResult {
+  files: DatapackFile[]
+}
+
+export function emitDatapackStage(
+  finalizedLIR: LIRModule,
+  options: EmitDatapackStageOptions,
+): EmitDatapackStageResult {
+  const { libraryFilePaths, ...emitOptions } = options
+  const files = emit(finalizedLIR, emitOptions)
+  return { files: pruneLibraryFunctionFiles(files, new Set(libraryFilePaths)) }
 }
 
 export function finalizeRuntimeLIRStage(
@@ -742,7 +759,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     warnings.push(...lirRuntime.warnings)
 
     // Stage 7: LIR → .mcfunction
-    const files = emit(finalizedLIR, {
+    const { files } = emitDatapackStage(finalizedLIR, {
       namespace,
       tickFunctions,
       loadFunctions,
@@ -759,10 +776,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       throttleFunctions,
       retryFunctions,
       memoizeFunctions,
+      libraryFilePaths,
     })
-    const prunedFiles = pruneLibraryFunctionFiles(files, libraryFilePaths)
 
-    return { files: prunedFiles, warnings, success: true as const }
+    return { files, warnings, success: true as const }
   } catch (err) {
     if (stopAfterCheck) {
       if (err instanceof CheckFailedError) throw err

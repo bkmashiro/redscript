@@ -289,6 +289,8 @@ Tasks:
   - `collectRuntimeMetadataStage` now owns decorator-derived runtime helper/tag metadata (`@tick`, `@load`, inline controls, coroutine/schedule/profile/benchmark/throttle/retry/memoize wrappers, legacy event handlers, and generic function tags) with focused tests that do not emit datapack files.
 - [x] Extract final runtime LIR post-processing into a dedicated pure helper.
   - Added `finalizeRuntimeLIRStage` to own tick-budget checks, int32 overflow warnings, @singleton helper injection, and memoize/benchmark impl renaming with focused coverage in `compile.test.ts`.
+- [x] Extract final emit/prune behavior into `emitDatapackStage`.
+  - Added `emitDatapackStage` to own `emit(...)` wiring and library function pruning; compile still returns `{ files, warnings, success }` unchanged.
 - [x] Add dump/snapshot support for selected stages after the extraction points exist.
   - `CompileOptions.snapshotStages` plus caller-owned `stageSnapshots` can now collect deterministic summaries for extracted stages (`preprocess`, `parse`, `typecheck`, and `runtimeMetadata`) without changing `CompileResult` or emitting extra files.
 

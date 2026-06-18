@@ -4,6 +4,7 @@ import * as path from 'path'
 import {
   collectRuntimeMetadataStage,
   compile,
+  emitDatapackStage,
   finalizeRuntimeLIRStage,
   parseSourceStage,
   preprocessSourceStage,
@@ -15,6 +16,7 @@ import { lowerToHIR } from '../../hir/lower'
 import { monomorphize } from '../../hir/monomorphize'
 import type { CompileStageSnapshot } from '../../emit/compile'
 import type { HIRModule } from '../../hir/types'
+import type { LIRModule } from '../../lir/types'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
   return files.find(f => f.path.includes(pathSubstr))?.content
@@ -186,6 +188,89 @@ describe('emit: compile coverage', () => {
     const metadata = collectRuntimeMetadataStage(hir, 'metadata_stage_test')
 
     expect(metadata.watchFunctions).toEqual([{ name: 'watched', objective: 'rs.kills' }])
+  })
+
+  test('emitDatapackStage emits load/tick/function tags and forwards singleton/function-tag options', () => {
+    const finalizedLIR: LIRModule = {
+      namespace: 'emit_stage_test',
+      objective: '__emit_stage',
+      functions: [
+        {
+          name: 'start',
+          isMacro: false,
+          macroParams: [],
+          instructions: [{ kind: 'score_set', dst: { player: '$ret', obj: '__emit_stage' }, value: 0 }],
+        },
+      ],
+    }
+
+    const { files } = emitDatapackStage(finalizedLIR, {
+      namespace: 'emit_stage_test',
+      tickFunctions: ['start'],
+      loadFunctions: ['bootstrap'],
+      functionTags: new Map([['custom:handlers', ['emit_stage_test:start']]]),
+      singletonObjectives: ['__singleton_obj'],
+      libraryFilePaths: new Set<string>(),
+    })
+
+    const load = files.find(file => file.path === 'data/emit_stage_test/function/load.mcfunction')
+    expect(load).toBeDefined()
+    expect(load?.content).toContain('scoreboard objectives add __emit_stage dummy')
+    expect(load?.content).toContain('scoreboard objectives add __singleton_obj dummy')
+
+    const tickTag = files.find(file => file.path === 'data/minecraft/tags/function/tick.json')
+    expect(tickTag).toBeDefined()
+    expect(JSON.parse(tickTag!.content).values).toContain('emit_stage_test:start')
+
+    const loadTag = files.find(file => file.path === 'data/minecraft/tags/function/load.json')
+    expect(loadTag).toBeDefined()
+    expect(JSON.parse(loadTag!.content).values).toEqual(
+      expect.arrayContaining(['emit_stage_test:load', 'emit_stage_test:bootstrap']),
+    )
+
+    const functionTag = files.find(file => file.path === 'data/custom/tags/function/handlers.json')
+    expect(functionTag).toBeDefined()
+    expect(JSON.parse(functionTag!.content).values).toEqual(['emit_stage_test:start'])
+  })
+
+  test('emitDatapackStage prunes library files only when caller marks them for pruning', () => {
+    const finalizedLIR: LIRModule = {
+      namespace: 'emit_stage_prune',
+      objective: '__emit_stage_prune',
+      functions: [
+        {
+          name: 'library_fn',
+          isMacro: false,
+          macroParams: [],
+          instructions: [{ kind: 'score_set', dst: { player: '$ret', obj: '__emit_stage_prune' }, value: 1 }],
+        },
+        {
+          name: 'kept_fn',
+          isMacro: false,
+          macroParams: [],
+          instructions: [{ kind: 'score_set', dst: { player: '$ret', obj: '__emit_stage_prune' }, value: 2 }],
+        },
+      ],
+    }
+
+    const libraryFile = 'data/emit_stage_prune/function/library_fn.mcfunction'
+    const keptFile = 'data/emit_stage_prune/function/kept_fn.mcfunction'
+
+    const full = emitDatapackStage(finalizedLIR, {
+      namespace: 'emit_stage_prune',
+      libraryFilePaths: new Set<string>(),
+    })
+    const fullPaths = full.files.map(file => file.path)
+    expect(fullPaths).toContain(libraryFile)
+    expect(fullPaths).toContain(keptFile)
+
+    const pruned = emitDatapackStage(finalizedLIR, {
+      namespace: 'emit_stage_prune',
+      libraryFilePaths: new Set([libraryFile]),
+    })
+    const prunedPaths = pruned.files.map(file => file.path)
+    expect(prunedPaths).not.toContain(libraryFile)
+    expect(prunedPaths).toContain(keptFile)
   })
 
   test('finalizeRuntimeLIRStage injects @singleton get/set helpers and objective list', () => {
