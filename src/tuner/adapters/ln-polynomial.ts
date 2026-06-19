@@ -34,6 +34,9 @@ export const defaultParams: Record<string, number> = {
 export const lnPolynomialAdapter: TunerAdapter = {
   name: 'ln-polynomial',
   description: 'ln(x) atanh series approximation using fixed-point int32 arithmetic',
+  input: { min: 100, max: 1_000_000, scale: SCALE, unit: 'fixed×10000' },
+  output: { scale: SCALE, unit: 'fixed×10000' },
+  overflowPolicy: 'simulate Minecraft scoreboard int32 arithmetic; non-finite/overflow results are penalized as Infinity',
 
   params: [
     { name: 'A1', range: [18000, 22000], integer: true } as ParamSpec,

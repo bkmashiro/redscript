@@ -126,6 +126,12 @@ describe('lnPolynomialAdapter — metadata', () => {
   test('has 3 params', () => {
     expect(lnPolynomialAdapter.params.length).toBe(3)
   })
+
+  test('declares input range, scale, and overflow policy for manifest output', () => {
+    expect(lnPolynomialAdapter.input).toEqual({ min: 100, max: 1000000, scale: 10000, unit: 'fixed×10000' })
+    expect(lnPolynomialAdapter.output).toEqual({ scale: 10000, unit: 'fixed×10000' })
+    expect(lnPolynomialAdapter.overflowPolicy).toContain('int32')
+  })
 })
 
 // ── sqrtNewtonAdapter ──────────────────────────────────────────────────────
@@ -228,5 +234,11 @@ describe('sqrtNewtonAdapter — metadata', () => {
 
   test('has 2 params', () => {
     expect(sqrtNewtonAdapter.params.length).toBe(2)
+  })
+
+  test('declares input range, scale, and overflow policy for manifest output', () => {
+    expect(sqrtNewtonAdapter.input).toEqual({ min: 1, max: 1000000, scale: 10000, unit: 'fixed×10000' })
+    expect(sqrtNewtonAdapter.output).toEqual({ scale: 10000, unit: 'fixed×10000' })
+    expect(sqrtNewtonAdapter.overflowPolicy).toContain('int32')
   })
 })

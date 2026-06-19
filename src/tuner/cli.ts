@@ -1,6 +1,6 @@
 /**
  * CLI entry point for `redscript tune`.
- * Usage: redscript tune --adapter <name> [--budget N] [--out path]
+ * Usage: redscript tune --adapter <name> [--budget N] [--out path] [--manifest-out path]
  */
 
 import * as fs from 'fs';
@@ -8,7 +8,7 @@ import * as path from 'path';
 import { search, searchSA } from './engine';
 import { lnPolynomialAdapter } from './adapters/ln-polynomial';
 import { sqrtNewtonAdapter } from './adapters/sqrt-newton';
-import { TunerAdapter, ResultMeta } from './types';
+import { TunerAdapter, ResultMeta, TunerManifest } from './types';
 
 const ADAPTERS: Record<string, TunerAdapter> = {
   'ln-polynomial': lnPolynomialAdapter,
@@ -16,7 +16,7 @@ const ADAPTERS: Record<string, TunerAdapter> = {
 };
 
 function printUsage(): void {
-  console.log(`Usage: redscript tune --adapter <name> [--budget N] [--out path]
+  console.log(`Usage: redscript tune --adapter <name> [--budget N] [--out path] [--manifest-out path]
 
 Available adapters:
 ${Object.entries(ADAPTERS)
@@ -27,6 +27,7 @@ Options:
   --adapter <name>   Adapter to use (required)
   --budget <N>       Max optimizer iterations (default: 10000)
   --out <path>       Output .mcrs file path (optional)
+  --manifest-out <p> Output machine-readable tune manifest JSON (optional)
 `);
 }
 
@@ -34,9 +35,10 @@ function parseArgs(args: string[]): {
   adapter?: string;
   budget: number;
   out?: string;
+  manifestOut?: string;
   strategy: 'nm' | 'sa';
 } {
-  const result: { adapter?: string; budget: number; out?: string; strategy: 'nm' | 'sa' } = { budget: 10000, strategy: 'nm' };
+  const result: { adapter?: string; budget: number; out?: string; manifestOut?: string; strategy: 'nm' | 'sa' } = { budget: 10000, strategy: 'nm' };
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--adapter' && args[i + 1]) {
@@ -45,6 +47,8 @@ function parseArgs(args: string[]): {
       result.budget = parseInt(args[++i]!, 10);
     } else if (args[i] === '--out' && args[i + 1]) {
       result.out = args[++i] as string;
+    } else if (args[i] === '--manifest-out' && args[i + 1]) {
+      result.manifestOut = args[++i] as string;
     } else if (args[i] === '--strategy' && args[i + 1]) {
       const s = args[++i];
       if (s === 'nm' || s === 'sa') result.strategy = s;
@@ -60,6 +64,62 @@ function renderProgressBar(fraction: number, width = 30): string {
   return `[${bar}]`;
 }
 
+function writeTextFile(filePath: string, content: string): string {
+  const outPath = path.resolve(filePath);
+  const dir = path.dirname(outPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(outPath, content, 'utf8');
+  return outPath;
+}
+
+function buildManifest(
+  adapter: TunerAdapter,
+  strategy: 'nm' | 'sa',
+  budget: number,
+  params: Record<string, number>,
+  meta: ResultMeta,
+  codePath?: string,
+): TunerManifest {
+  const command = [
+    'redscript tune',
+    '--adapter', adapter.name,
+    '--budget', String(budget),
+    '--strategy', strategy,
+    ...(codePath ? ['--out', codePath] : []),
+  ].join(' ');
+
+  return {
+    schemaVersion: 1,
+    adapter: adapter.name,
+    description: adapter.description,
+    generatedAt: meta.tuneDate,
+    strategy,
+    input: adapter.input,
+    output: adapter.output,
+    overflowPolicy: adapter.overflowPolicy,
+    params,
+    paramSpecs: adapter.params,
+    metrics: {
+      maxError: meta.maxError,
+      mae: meta.mae,
+      rmse: meta.rmse,
+    },
+    budget: {
+      requested: budget,
+      used: meta.budgetUsed,
+    },
+    samples: {
+      count: adapter.sampleInputs().length,
+    },
+    artifact: {
+      codePath,
+      command,
+    },
+  };
+}
+
 export async function runTunerCli(rawArgs = process.argv.slice(2)): Promise<void> {
   // Skip 'node', 'ts-node', 'cli.ts' etc from argv
   // Support `redscript tune` prefix (first arg might be 'tune')
@@ -70,7 +130,7 @@ export async function runTunerCli(rawArgs = process.argv.slice(2)): Promise<void
     process.exit(0);
   }
 
-  const { adapter: adapterName, budget, out, strategy } = parseArgs(args);
+  const { adapter: adapterName, budget, out, manifestOut, strategy } = parseArgs(args);
 
   if (!adapterName) {
     console.error('Error: --adapter is required');
@@ -134,19 +194,21 @@ export async function runTunerCli(rawArgs = process.argv.slice(2)): Promise<void
 
   const code = adapter.generateCode(result.params, meta);
 
+  let codePath: string | undefined;
   if (out) {
-    const outPath = path.resolve(out);
-    const dir = path.dirname(outPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(outPath, code, 'utf8');
-    console.log(`\nWrote: ${outPath}`);
+    codePath = writeTextFile(out, code);
+    console.log(`\nWrote: ${codePath}`);
   } else {
     console.log(`\n${'─'.repeat(60)}`);
     console.log('Generated code:');
     console.log('─'.repeat(60));
     console.log(code);
+  }
+
+  if (manifestOut) {
+    const manifest = buildManifest(adapter, strategy, budget, result.params, meta, codePath);
+    const manifestPath = writeTextFile(manifestOut, `${JSON.stringify(manifest, null, 2)}\n`);
+    console.log(`Wrote manifest: ${manifestPath}`);
   }
 }
 
