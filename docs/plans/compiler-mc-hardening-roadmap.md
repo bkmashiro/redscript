@@ -478,7 +478,7 @@ Context from the numeric audit:
 | Area | Current representation | Notes |
 |---|---:|---|
 | Compiler `fixed` / decimal literals | ×10000 | Lowering stores decimal literals as `Math.round(value * 10000)`; fixed casts use `0.0001` / `10000.0`. |
-| `double` | NBT-backed Java double | Arithmetic is helper-specific: add/div use entity tricks, mul is currently scoreboard approximation, casts round-trip through ×10000 when converted to scoreboards. |
+| `double` | NBT-backed Java double | Arithmetic is helper-specific: add/div use entity tricks, mul uses the macro-scale double path, casts round-trip through ×10000 when converted to scoreboards. |
 | `src/stdlib/math.mcrs` legacy fixed helpers | ×1000 | `sqrt_fixed`, `sin_fixed`, `cos_fixed`, `lerp` document/use ×1000-era conventions. |
 | `src/stdlib/math_hp.mcrs` | mostly ×10000 | High-precision trig/div/log helpers document ×10000; some helpers rely on entity rotation/SVD tricks. |
 | `src/stdlib/signal.mcrs` | mostly ×10000 | Probability/statistics/DFT helpers use explicit `_fx`-style integer scale conventions. |
@@ -530,7 +530,7 @@ Planned tasks:
 - [x] Document double helper precision tiers:
   - `double_add` and `double_div` are NBT/entity-backed high-precision paths,
   - `double_sub` includes a ×10000 negation round-trip,
-  - `double_mul` is currently scoreboard approximation,
+  - `double_mul` uses the macro-scale double path and avoids the old int32 scoreboard product,
   - `double_mul_fixed` uses a macro scale trick and has different precision/overflow characteristics.
 
 Verification for Phase 11 slices:
@@ -547,7 +547,7 @@ npm run docs:check
 
 ## Phase 12 — Helper-level numeric tuner infrastructure
 
-Status: In progress. Phase 12 keeps language `fixed` frozen at ×10000 and focuses on reviewable helper-level tuning for stdlib numeric approximations. The first production target is an explicit `sqrt_fx10000` helper generated/reviewed through the tuner path, not a migration of legacy `sqrt_fixed` / `sqrt_fx1000` behavior.
+Status: Complete. Phase 12 keeps language `fixed` frozen at ×10000 and focuses on reviewable helper-level tuning for stdlib numeric approximations. The first production target is an explicit `sqrt_fx10000` helper generated/reviewed through the tuner path, not a migration of legacy `sqrt_fixed` / `sqrt_fx1000` behavior.
 
 Design boundary:
 
@@ -603,12 +603,32 @@ npm test -- --runInBand
 
 ---
 
+## Phase 13 — `double_mul` precision/overflow audit
+
+Status: Started. Phase 13 replaces the old `double_mul` int32 scoreboard product with the shared macro-scale double path used by `double_mul_fixed`, while keeping language-level `fixed` frozen at ×10000.
+
+Scope:
+
+- [x] Add RED coverage proving `double_mul` no longer emits `$dmul_a *= $dmul_b` scoreboard multiplication.
+- [x] Route `double_mul(a, b)` through `__dmul_apply_scale` by copying `b` directly into the macro scale argument.
+- [x] Update stdlib and numeric policy docs to describe the new helper tier and NaN/Infinity non-goal.
+- [ ] Add a Paper runtime oracle for representative `double_mul` values and a larger-value regression that would have overflowed the old scoreboard product.
+- [ ] Decide whether a future true IEEE multiplication path needs a separate helper or can replace this macro tier after live validation.
+
+Verification for the first Phase 13 slice:
+
+```bash
+npm test -- src/__tests__/double.test.ts --runInBand -t "double_mul uses macro-scale"
+npm test -- src/__tests__/double.test.ts --runInBand
+npm run build
+npm run validate-mc
+npm test -- --runInBand
+```
+
+---
+
 ## Short next slice recommendation
 
-Phase 11 is complete. The next numeric work should be a new phase, not a continuation of the policy baseline:
-
-1. If improving DX, design explicit conversion helpers or scale-specific syntax (`as fx3 round/trunc`, target typing, or `numeric fx4 { ... }`) with RED parser/typechecker tests first.
-2. If improving precision, treat `double_mul` replacement as its own implementation phase with runtime oracle coverage and overflow/NaN policy.
-3. If changing any stdlib scale, keep compatibility wrappers and add helper-level unit/Paper tests before migrating examples.
+Continue Phase 13 by adding Paper/runtime oracle coverage for `double_mul` rather than changing language-level numeric scale. If improving DX instead, design explicit conversion helpers or scale-specific syntax (`as fx3 round/trunc`, target typing, or `numeric fx4 { ... }`) with RED parser/typechecker tests first.
 
 This keeps compiler-owned numeric behavior safe while acknowledging that Minecraft precision and int32 overflow tradeoffs require multiple explicit scale families.

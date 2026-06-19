@@ -348,13 +348,13 @@ describe('double_sub — negate-then-add', () => {
   })
 })
 
-describe('double_mul — scoreboard approximation', () => {
+describe('double_mul — macro-scale double path', () => {
   const mathHpSrc = fs.readFileSync(
     path.join(__dirname, '../stdlib/math_hp.mcrs'),
     'utf-8',
   )
 
-  test('double_mul emits data get ×10000 for both operands', () => {
+  test('double_mul uses macro-scale double path instead of scoreboard product', () => {
     const source = mathHpSrc + `
       @keep fn test_dmul() {
         let a: double = 3.0d;
@@ -364,13 +364,12 @@ describe('double_mul — scoreboard approximation', () => {
     `
     const result = compile(source, { namespace: 'dmultest2' })
     const all = getAllMcContent(result.files)
-    // Both operands converted to ×10000 scores
-    expect(all).toContain('$dmul_a')
-    expect(all).toContain('$dmul_b')
-    // Result stored back as double × 0.0001
-    expect(all).toContain('double 0.0001')
-    // Scoreboard multiply
-    expect(all).toContain('$dmul_a __rs_math_hp *= $dmul_b __rs_math_hp')
+    // The second double operand should be copied directly into the macro scale
+    // argument, avoiding the old int32 scoreboard product envelope.
+    expect(all).toContain('data modify storage rs:math_hp __dmul_args.scale set from storage rs:d __dp1')
+    expect(all).toContain('function dmultest2:__dmul_apply_scale with storage rs:math_hp __dmul_args')
+    expect(all).toContain('$execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 1')
+    expect(all).not.toContain('$dmul_a __rs_math_hp *= $dmul_b __rs_math_hp')
   })
 })
 

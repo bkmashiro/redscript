@@ -347,44 +347,34 @@ fn double_sub(a: double, b: double): double {
     return a;
 }
 
-// ─── double_mul: scoreboard 4-decimal approximation ───────────────────────────
+// ─── double_mul: macro-scale double path ──────────────────────────────────────
 //
-// double_mul(a, b): a × b — scoreboard integer approximation.
+// double_mul(a, b): a × b using the same macro-scale path as double_mul_fixed.
 //
 // Algorithm:
-//   score_a = floor(a × 10000)  [stored as int32 via data get × 10000]
-//   score_b = floor(b × 10000)
-//   result_score = (score_a × score_b) / 10000   [integer division]
-//   result = result_score as double × 0.0001
+//   1. Copy b from rs:d __dp1 into rs:math_hp __dmul_args.scale.
+//   2. Call __dmul_apply_scale with storage macro arguments.
+//   3. The helper stores __dp0 through `double $(scale)`, so the old int32
+//      scoreboard product (`score_a * score_b`) is avoided.
 //
-// ⚠ Limitations:
-//   - Overflow: score_a and score_b are Java int (32-bit signed).
-//     |a| × 10000 must fit in int32: safe for |a|, |b| ≤ ~214748.
-//     Products score_a × score_b overflow int32 for |a|×|b| > ~21474.
-//     For larger values use double_mul_fixed on log/exp decomposition.
-//   - Precision: ~4 decimal digits (10000× scale). Not full double precision.
-//   - Negative values: correctly handled by signed scoreboard arithmetic.
-//
-// For true double-precision multiplication, use the ln/exp approach once
-// double-precision ln/exp are available.
+// ⚠ Precision / runtime policy:
+//   - Avoids the old scoreboard product overflow envelope entirely.
+//   - Still inherits Minecraft command-result/data-get behaviour from the
+//     shared __dmul_apply_scale macro trick; this is the reviewed double helper
+//     tier until a future true IEEE multiplication oracle replaces it.
+//   - NaN/Infinity behaviour is intentionally not promised by this helper.
 //
 
-/// Multiply two doubles via scoreboard integer approximation (~4 decimal digits).
-/// ⚠ Overflows for |a| × |b| > ~21474. Use `double_mul_fixed` for higher precision.
+/// Multiply two doubles via macro-scale double path, avoiding int32 scoreboard products.
 /// @since 1.3.0
-/// @param a First factor (double)
-/// @param b Second factor (double)
-/// @returns a × b (scoreboard approximation, ~4 sig. figs.)
+/// @param a First factor (double, stored in `__dp0`)
+/// @param b Second factor (double, stored in `__dp1`)
+/// @returns a × b through the shared `__dmul_apply_scale` macro helper
 fn double_mul(a: double, b: double): double {
-    // Convert a and b to ×10000 integer scores
-    raw("execute store result score $dmul_a __rs_math_hp run data get storage rs:d __dp0 10000");
-    raw("execute store result score $dmul_b __rs_math_hp run data get storage rs:d __dp1 10000");
-    // Multiply: result = score_a * score_b / 10000
-    raw("scoreboard players operation $dmul_a __rs_math_hp *= $dmul_b __rs_math_hp");
-    raw("scoreboard players set $dmul_div __rs_math_hp 10000");
-    raw("scoreboard players operation $dmul_a __rs_math_hp /= $dmul_div __rs_math_hp");
-    // Store result back as double × 0.0001
-    raw("execute store result storage rs:d __dp0 double 0.0001 run scoreboard players get $dmul_a __rs_math_hp");
+    // Copy b directly as the macro scale argument. This avoids converting both
+    // operands to ×10000 scores and multiplying them on an int32 scoreboard.
+    raw("data modify storage rs:math_hp __dmul_args.scale set from storage rs:d __dp1");
+    raw("function __NS__:__dmul_apply_scale with storage rs:math_hp __dmul_args");
     return a;
 }
 

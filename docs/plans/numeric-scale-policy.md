@@ -71,7 +71,7 @@ Current documented tiers:
 | `double_add` | NBT/entity double | Uses the entity position trick and keeps arithmetic in Java double precision. |
 | `double_div` | NBT/display-entity double | Uses display-entity SVD and keeps the division in Java double precision; division by zero follows Java double/MC NBT failure modes and is not safe to read back. |
 | `double_sub` | scale-crossing double | Negates the subtrahend through a ×10000 score read/write before using the add path; expect fixed-scale rounding/truncation at that boundary. |
-| `double_mul` | scoreboard approximation | Converts operands to ×10000 int scores, multiplies/divides on scoreboard, then stores back as double; this is not full IEEE multiplication and has int32 overflow limits. |
+| `double_mul` | macro-scale double path | Copies the second operand directly into the shared `__dmul_apply_scale` macro argument and scales the first operand through NBT-backed double storage; avoids the old ×10000 int32 scoreboard product envelope, but still needs Paper/runtime oracle coverage for production-sensitive ranges and does not promise NaN/Infinity behaviour. |
 | `double_mul_fixed` | NBT double × ×10000 fixed | Uses a macro scale trick so the double operand stays in NBT and is multiplied by a ×10000 fixed integer scale. |
 
 Docs and API names should say when a helper is true NBT/double precision versus approximate or scale-crossing.
@@ -157,8 +157,8 @@ Before changing any numeric scale or helper precision:
 ## Near-term roadmap
 
 1. Use the explicit ×1000 aliases in new examples and docs when touching legacy helpers; keep old names as compatibility wrappers.
-2. Use the documented double precision tiers when writing docs/examples: `double_add`/`double_div` are NBT-backed high precision paths, `double_sub` crosses a ×10000 score boundary, `double_mul` is a scoreboard approximation, and `double_mul_fixed` is NBT double × ×10000 fixed.
-3. Treat helper auto-tuning as a separate phase: expose it through `redscript tune`, generate reviewable `.mcrs` overlays, and keep it bounded to helper-level coefficients/variants.
+2. Use the documented double precision tiers when writing docs/examples: `double_add`/`double_div` are NBT-backed high precision paths, `double_sub` crosses a ×10000 score boundary, `double_mul` uses the macro-scale double path, and `double_mul_fixed` is NBT double × ×10000 fixed.
+3. Helper auto-tuning is now exposed through `redscript tune`; generated `.mcrs` overlays/manifests remain review artifacts, bounded to helper-level coefficients/variants.
 4. Future ergonomic conversion helpers or scale-specific syntax can build on this baseline, but should be a new phase with explicit RED tests.
 
 Completed audit note: `math.mcrs`, `math_hp.mcrs`, `signal.mcrs`, and `geometry.mcrs` now carry file-level scale policy comments that preserve existing semantics while making legacy ×1000, ×10000, NBT double, and geometry ×100 boundaries explicit. Phase 11 also locks language `fixed` to ×10000, rejects mixed numeric arithmetic, pins fixed lowering scale behavior, adds explicit ×1000 aliases, and records double helper precision tiers.
