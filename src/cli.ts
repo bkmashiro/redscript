@@ -28,6 +28,7 @@ import { loadProjectConfig, buildTomlTemplate } from './config/project-config'
 import { docsCommand } from './docs'
 import { applyCheckFixes } from './check-fix'
 import { deriveNamespace, parseArgs, sanitizeProjectName } from './cli/args'
+import { runTunerCli } from './tuner/cli'
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -47,6 +48,7 @@ Usage:
   redscript fmt <file.mcrs> [file2.mcrs ...]
   redscript generate-dts [-o <file>]
   redscript docs [module] [--list]
+  redscript tune --adapter <name> [--budget N] [--out path]
   redscript repl
   redscript version
 
@@ -61,6 +63,7 @@ Commands:
   fmt           Auto-format RedScript source files
   generate-dts  Generate builtin function declaration file (builtins.d.mcrs)
   docs          Open the stdlib documentation website in your browser
+  tune          Tune numeric stdlib helper parameters and generate .mcrs code
   repl          Start an interactive RedScript REPL
   version       Print the RedScript version
   upgrade       Upgrade to the latest version (npm install -g redscript-mc@latest)
@@ -73,6 +76,9 @@ Options:
   --source-map           Generate .sourcemap.json files alongside .mcfunction output
   --snapshot-stages <s>  Comma-separated compile stages to snapshot, or "all"
   --snapshot-output <p>  Write selected compile stage snapshots to JSON file
+  --adapter <name>       (tune) Tuner adapter to run
+  --budget <N>           (tune) Optimizer iteration budget
+  --strategy <nm|sa>     (tune) Search strategy: Nelder-Mead or simulated annealing
   --mc-version <ver>     Target Minecraft version (default: 1.21). Affects codegen features.
                          e.g. --mc-version 1.20.2, --mc-version 1.19
   --lenient              Treat type errors as warnings instead of blocking compilation
@@ -780,7 +786,7 @@ async function main(): Promise<void> {
 
   // Background update check — non-blocking, only shows notice if newer version exists
   // Skip for repl/upgrade/version to avoid double-printing
-  const noCheckCmds = new Set(['upgrade', 'update', 'version', 'repl', 'docs'])
+  const noCheckCmds = new Set(['upgrade', 'update', 'version', 'repl', 'docs', 'tune'])
   if (!process.env.REDSCRIPT_NO_UPDATE_CHECK && !noCheckCmds.has(parsed.command ?? '')) {
     checkForUpdates().catch(() => { /* ignore */ })
   }
@@ -1004,6 +1010,10 @@ async function main(): Promise<void> {
     case 'docs':
       // parsed.file holds the positional argument after the command (module name)
       docsCommand(parsed.file, parsed.list ?? false)
+      break
+
+    case 'tune':
+      await runTunerCli(args)
       break
 
     default:

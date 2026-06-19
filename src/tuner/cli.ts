@@ -60,10 +60,8 @@ function renderProgressBar(fraction: number, width = 30): string {
   return `[${bar}]`;
 }
 
-async function main(): Promise<void> {
+export async function runTunerCli(rawArgs = process.argv.slice(2)): Promise<void> {
   // Skip 'node', 'ts-node', 'cli.ts' etc from argv
-  const rawArgs = process.argv.slice(2);
-
   // Support `redscript tune` prefix (first arg might be 'tune')
   const args = rawArgs[0] === 'tune' ? rawArgs.slice(1) : rawArgs;
 
@@ -152,7 +150,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  runTunerCli().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}
