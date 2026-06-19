@@ -231,6 +231,54 @@ describe('CLI API', () => {
       expect(manifest.params).toHaveProperty('A1')
       expect(manifest.metrics.maxError).toEqual(expect.any(Number))
     })
+
+    it('honors custom tuning range and sample count in manifest output', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-tune-cli-range-'))
+      const outPath = path.join(tempDir, 'sqrt_tuned.mcrs')
+      const manifestPath = path.join(tempDir, 'sqrt_tuned.tune.json')
+
+      const result = spawnSync(
+        process.execPath,
+        [
+          '-r',
+          ...cliRunner,
+          cliPath,
+          'tune',
+          '--adapter',
+          'sqrt-newton',
+          '--budget',
+          '0',
+          '--strategy',
+          'nm',
+          '--range',
+          '10000:40000',
+          '--samples',
+          '4',
+          '--out',
+          outPath,
+          '--manifest-out',
+          manifestPath,
+        ],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(result.status).toBe(0)
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+      expect(manifest.sampleSource).toEqual({ kind: 'custom-range', min: 10000, max: 40000, count: 4 })
+      expect(manifest.samples).toMatchObject({
+        count: 4,
+        uniqueCount: 4,
+        min: 10000,
+        max: 40000,
+        containsDeclaredMin: true,
+        containsDeclaredMax: true,
+        outOfRangeCount: 0,
+      })
+      expect(manifest.artifact.command).toContain('--range 10000:40000 --samples 4')
+    })
   })
 
   describe('compile CLI', () => {

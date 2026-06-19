@@ -1,6 +1,6 @@
 /**
  * CLI entry point for `redscript tune`.
- * Usage: redscript tune --adapter <name> [--budget N] [--out path] [--manifest-out path]
+ * Usage: redscript tune --adapter <name> [--budget N] [--range min:max] [--samples N] [--out path] [--manifest-out path]
  */
 
 import * as fs from 'fs';
@@ -9,7 +9,7 @@ import { search, searchSA } from './engine';
 import { buildSimulationReport } from './metrics';
 import { lnPolynomialAdapter } from './adapters/ln-polynomial';
 import { sqrtNewtonAdapter } from './adapters/sqrt-newton';
-import { TunerAdapter, ResultMeta, TunerManifest } from './types';
+import { TunerAdapter, ResultMeta, TunerManifest, TunerInputContract } from './types';
 
 const ADAPTERS: Record<string, TunerAdapter> = {
   'ln-polynomial': lnPolynomialAdapter,
@@ -17,7 +17,7 @@ const ADAPTERS: Record<string, TunerAdapter> = {
 };
 
 function printUsage(): void {
-  console.log(`Usage: redscript tune --adapter <name> [--budget N] [--out path] [--manifest-out path]
+  console.log(`Usage: redscript tune --adapter <name> [--budget N] [--range min:max] [--samples N] [--out path] [--manifest-out path]
 
 Available adapters:
 ${Object.entries(ADAPTERS)
@@ -27,9 +27,46 @@ ${Object.entries(ADAPTERS)
 Options:
   --adapter <name>   Adapter to use (required)
   --budget <N>       Max optimizer iterations (default: 10000)
+  --range <min:max>  Override adapter sample range for this tune run
+  --samples <N>      Number of evenly spaced samples for --range (default: adapter samples)
   --out <path>       Output .mcrs file path (optional)
   --manifest-out <p> Output machine-readable tune manifest JSON (optional)
 `);
+}
+
+type SampleSource =
+  | { kind: 'adapter' }
+  | { kind: 'custom-range'; min: number; max: number; count: number };
+
+function parseRangeSpec(spec: string): TunerInputContract {
+  const match = spec.match(/^(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?)$/);
+  if (!match) {
+    throw new Error(`invalid --range "${spec}"; expected min:max`);
+  }
+  const min = Number(match[1]);
+  const max = Number(match[2]);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) {
+    throw new Error(`invalid --range "${spec}"; min and max must be finite and min <= max`);
+  }
+  return { min, max, scale: 10000, unit: 'fixed×10000' };
+}
+
+function buildRangeSamples(min: number, max: number, count: number): number[] {
+  if (!Number.isInteger(count) || count < 2) {
+    throw new Error('--samples must be an integer >= 2 when --range is provided');
+  }
+  if (count === 2) return [min, max];
+  const step = (max - min) / (count - 1);
+  return Array.from({ length: count }, (_, i) => Math.round(min + step * i));
+}
+
+function withCustomSamples(adapter: TunerAdapter, input: TunerInputContract, sampleCount: number): TunerAdapter {
+  const samples = buildRangeSamples(input.min, input.max, sampleCount);
+  return {
+    ...adapter,
+    input: { ...adapter.input, ...input },
+    sampleInputs: () => samples,
+  };
 }
 
 function parseArgs(args: string[]): {
@@ -38,14 +75,20 @@ function parseArgs(args: string[]): {
   out?: string;
   manifestOut?: string;
   strategy: 'nm' | 'sa';
+  sampleRange?: TunerInputContract;
+  samples?: number;
 } {
-  const result: { adapter?: string; budget: number; out?: string; manifestOut?: string; strategy: 'nm' | 'sa' } = { budget: 10000, strategy: 'nm' };
+  const result: { adapter?: string; budget: number; out?: string; manifestOut?: string; strategy: 'nm' | 'sa'; sampleRange?: TunerInputContract; samples?: number } = { budget: 10000, strategy: 'nm' };
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--adapter' && args[i + 1]) {
       result.adapter = args[++i] as string;
     } else if (args[i] === '--budget' && args[i + 1]) {
       result.budget = parseInt(args[++i]!, 10);
+    } else if (args[i] === '--range' && args[i + 1]) {
+      result.sampleRange = parseRangeSpec(args[++i] as string);
+    } else if (args[i] === '--samples' && args[i + 1]) {
+      result.samples = parseInt(args[++i]!, 10);
     } else if (args[i] === '--out' && args[i + 1]) {
       result.out = args[++i] as string;
     } else if (args[i] === '--manifest-out' && args[i + 1]) {
@@ -82,12 +125,17 @@ function buildManifest(
   params: Record<string, number>,
   meta: ResultMeta,
   codePath?: string,
+  sampleSource: SampleSource = { kind: 'adapter' },
 ): TunerManifest {
   const command = [
     'redscript tune',
     '--adapter', adapter.name,
     '--budget', String(budget),
     '--strategy', strategy,
+    ...(sampleSource.kind === 'custom-range' ? [
+      '--range', `${sampleSource.min}:${sampleSource.max}`,
+      '--samples', String(sampleSource.count),
+    ] : []),
     ...(codePath ? ['--out', codePath] : []),
   ].join(' ');
 
@@ -99,6 +147,7 @@ function buildManifest(
     description: adapter.description,
     generatedAt: meta.tuneDate,
     strategy,
+    sampleSource,
     input: adapter.input,
     output: adapter.output,
     overflowPolicy: adapter.overflowPolicy,
@@ -132,7 +181,7 @@ export async function runTunerCli(rawArgs = process.argv.slice(2)): Promise<void
     process.exit(0);
   }
 
-  const { adapter: adapterName, budget, out, manifestOut, strategy } = parseArgs(args);
+  const { adapter: adapterName, budget, out, manifestOut, strategy, sampleRange, samples } = parseArgs(args);
 
   if (!adapterName) {
     console.error('Error: --adapter is required');
@@ -140,10 +189,20 @@ export async function runTunerCli(rawArgs = process.argv.slice(2)): Promise<void
     process.exit(1);
   }
 
-  const adapter = ADAPTERS[adapterName];
+  let adapter = ADAPTERS[adapterName];
   if (!adapter) {
     console.error(`Error: unknown adapter "${adapterName}"`);
     console.error(`Available: ${Object.keys(ADAPTERS).join(', ')}`);
+    process.exit(1);
+  }
+
+  let sampleSource: SampleSource = { kind: 'adapter' };
+  if (sampleRange) {
+    const sampleCount = samples ?? adapter.sampleInputs().length;
+    adapter = withCustomSamples(adapter, sampleRange, sampleCount);
+    sampleSource = { kind: 'custom-range', min: sampleRange.min, max: sampleRange.max, count: sampleCount };
+  } else if (samples !== undefined) {
+    console.error('Error: --samples requires --range');
     process.exit(1);
   }
 
@@ -208,7 +267,7 @@ export async function runTunerCli(rawArgs = process.argv.slice(2)): Promise<void
   }
 
   if (manifestOut) {
-    const manifest = buildManifest(adapter, strategy, budget, result.params, meta, codePath);
+    const manifest = buildManifest(adapter, strategy, budget, result.params, meta, codePath, sampleSource);
     const manifestPath = writeTextFile(manifestOut, `${JSON.stringify(manifest, null, 2)}\n`);
     console.log(`Wrote manifest: ${manifestPath}`);
   }

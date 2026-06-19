@@ -75,6 +75,9 @@ export interface TunerManifest {
   description: string;
   generatedAt: string;
   strategy: 'nm' | 'sa';
+  sampleSource?:
+    | { kind: 'adapter' }
+    | { kind: 'custom-range'; min: number; max: number; count: number };
   input?: TunerInputContract;
   output?: TunerValueContract;
   overflowPolicy?: string;

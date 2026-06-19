@@ -570,6 +570,7 @@ Current baseline:
 Planned tasks:
 
 - [x] Wire existing tuner infrastructure into the main CLI as `redscript tune --adapter <name> [--budget N] [--strategy nm|sa] [--out path]`.
+- [x] Allow user-scoped tuning domains with `--range min:max --samples N`; manifests record the effective custom sample source and range report.
 - [x] Add a stable metadata sidecar or machine-readable manifest for generated tuner artifacts.
 - [x] Audit current adapters against Phase 11 scale policy:
   - `ln-polynomial` is a ×10000 integer helper and should remain helper-level.

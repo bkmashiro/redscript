@@ -187,7 +187,7 @@ All notable changes to RedScript will be documented in this file.
 - `src/tuner/`: hyperparameter search framework (Nelder-Mead + Simulated Annealing) for stdlib coefficient optimization
   - `adapters/ln-polynomial.ts`: atanh series adapter
   - `adapters/sqrt-newton.ts`: Newton iteration adapter
-  - CLI: `redscript tune --adapter <name> [--strategy nm|sa] [--budget N] [--out path]`
+  - CLI: `redscript tune --adapter <name> [--strategy nm|sa] [--budget N] [--range min:max] [--samples N] [--out path]`
 
 ### Changed
 - `stdlib/vec.mcrs`: added 2D/3D add/sub/scale/neg component helpers
