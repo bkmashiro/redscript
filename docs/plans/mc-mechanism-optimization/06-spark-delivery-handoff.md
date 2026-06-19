@@ -79,6 +79,18 @@ npm run build
 
 **Objective:** Test bounded unary ALU possibilities for lookup/square/fraction/exponent.
 
+**Status:** Implemented a dedicated live-probe scaffold in
+`src/__tests__/mc-integration/enchantment-level-based-alu-probe.test.ts`.
+The probe is version-gated (`MC_LIVE_PROBES=true` required), writes representative
+level-based value resource JSON + commands, and explicitly skips when offline.
+Offline skip is not MC proof.
+
+**Assumptions for scaffold (verify in target MC):**
+
+- `data/<ns>/enchantment/...` vs `data/<ns>/enchantments/...` registry shape can differ by version.
+- Enchantment effect schema for level-based values (`lookup`, `levels_squared`, `fraction`, `exponent`) is version-sensitive and may shift.
+- Exponent path is expected only on 1.21.11+; this file marks exponent check as version-gated.
+
 **Probe cases:**
 - `lookup` for small bounded input;
 - `levels_squared` sum of squares;
