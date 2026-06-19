@@ -64,6 +64,8 @@ npm run build
 
 **Objective:** Test whether item modifier + attribute read can implement fused affine/dot reductions with same-tick readback.
 
+**Status:** Implemented live probe scaffold `src/__tests__/mc-integration/item-modifier-alu-probe.test.ts` (version-gated item modifier resource schema, MC_LIVE_PROBES-gated execution, same-tick + next-tick readback checks, and batch N=1/N=2 count checks). Offline/off switch remains explicit in-suite only.
+
 **Probe cases:**
 - one carrier with fixed base and replace:true modifier;
 - signed/bias range;
