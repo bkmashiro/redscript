@@ -197,7 +197,9 @@ Behavioral regression:
 Implemented first slice:
 
 1. `src/optimizer/lir/rmw.ts` adds `scoreboardRmwPass`.
-2. It implements only adjacent three-instruction output-copy collapse:
+2. It implements two adjacent conservative patterns:
+
+   Output-copy collapse:
 
    ```text
    score_copy tmp <- src
@@ -211,6 +213,23 @@ Implemented first slice:
    score_copy out <- src
    score_<op> out <- rhs
    ```
+
+   Return collapse:
+
+   ```text
+   score_copy tmp <- src
+   score_<op> tmp <- rhs
+   return_value tmp
+   ```
+
+   becomes:
+
+   ```text
+   score_copy $ret <- src
+   score_<op> $ret <- rhs
+   ```
+
+   Both patterns require the temporary to be unprotected and unused outside the local window.
 
 3. It is integrated into `src/optimizer/lir/pipeline.ts` after module-level dead-slot cleanup and before peephole/const-immediate folding.
 4. `benchmarks/arithmetic-probes.ts` now reports `commands.scoreCopy` so future runs can track copy-pressure changes.

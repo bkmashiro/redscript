@@ -79,9 +79,9 @@ function instructionMentionsSlot(instr: LIRInstr, slot: Slot): boolean {
   }
 }
 
-function tempOnlyAppearsInWindow(instrs: LIRInstr[], temp: Slot, start: number): boolean {
+function tempOnlyAppearsInWindow(instrs: LIRInstr[], temp: Slot, start: number, length = 3): boolean {
   for (let i = 0; i < instrs.length; i++) {
-    if (i >= start && i <= start + 2) continue
+    if (i >= start && i < start + length) continue
     if (instructionMentionsSlot(instrs[i], temp)) return false
   }
   return true
@@ -99,6 +99,19 @@ function canCollapse(copyIn: LIRInstr, op: LIRInstr, copyOut: LIRInstr, instrs: 
   if (sameSlot(copyOut.dst, op.src) && !sameSlot(copyOut.dst, copyIn.src)) return false
 
   return tempOnlyAppearsInWindow(instrs, copyIn.dst, index)
+}
+
+function canCollapseReturn(copyIn: LIRInstr, op: LIRInstr, ret: LIRInstr, instrs: LIRInstr[], index: number): boolean {
+  if (copyIn.kind !== 'score_copy' || !isRmwOp(op) || ret.kind !== 'return_value') return false
+  if (!sameSlot(copyIn.dst, op.dst)) return false
+  if (!sameSlot(ret.slot, copyIn.dst)) return false
+  if (isProtectedSlot(copyIn.dst)) return false
+  if (copyIn.dst.obj !== copyIn.src.obj || op.src.obj !== copyIn.dst.obj) return false
+
+  const retSlot: Slot = { player: '$ret', obj: ret.slot.obj }
+  if (sameSlot(retSlot, op.src) && !sameSlot(retSlot, copyIn.src)) return false
+
+  return tempOnlyAppearsInWindow(instrs, copyIn.dst, index, 3)
 }
 
 function remapTemp(slot: Slot, temp: Slot, out: Slot): Slot {
@@ -121,6 +134,19 @@ export function scoreboardRmwPass(fn: LIRFunction): LIRFunction {
 
       out.push({ kind: 'score_copy', dst: copyOut.dst, src: copyIn.src, sourceLoc: copyIn.sourceLoc })
       out.push({ ...op, dst: copyOut.dst, src: remapTemp(op.src, copyIn.dst, copyOut.dst) })
+      i += 2
+      changed = true
+      continue
+    }
+
+    if (second && third && canCollapseReturn(first, second, third, fn.instructions, i)) {
+      const copyIn = first as Extract<LIRInstr, { kind: 'score_copy' }>
+      const op = second as Extract<LIRInstr, { kind: 'score_add' | 'score_sub' | 'score_mul' | 'score_div' | 'score_mod' | 'score_min' | 'score_max' }>
+      const ret = third as Extract<LIRInstr, { kind: 'return_value' }>
+      const retSlot: Slot = { player: '$ret', obj: ret.slot.obj }
+
+      out.push({ kind: 'score_copy', dst: retSlot, src: copyIn.src, sourceLoc: copyIn.sourceLoc })
+      out.push({ ...op, dst: retSlot, src: remapTemp(op.src, copyIn.dst, retSlot) })
       i += 2
       changed = true
       continue

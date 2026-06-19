@@ -86,6 +86,24 @@ describe('LIR optimization pipeline', () => {
     ])
   })
 
+  test('runs scoreboard RMW return collapse before later LIR passes', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+        { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$rhs') },
+        { kind: 'return_value', slot: mkSlot('$tmp') },
+      ]),
+    ])
+
+    const result = lirOptimizeModule(mod)
+    const instrs = result.functions[0].instructions
+
+    expect(instrs).toEqual([
+      { kind: 'score_copy', dst: mkSlot('$ret'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$ret'), src: mkSlot('$rhs') },
+    ])
+  })
+
   test('preserves module when no optimizations apply', () => {
     const mod = mkModule([
       mkFn('main', [
