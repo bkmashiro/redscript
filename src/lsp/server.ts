@@ -270,12 +270,13 @@ const DECORATOR_DOCS: Record<string, string> = {
   schedule:     'Schedules the function to run after a delay.\n\n**Required arg:** `ticks=N`\n\nExample: `@schedule(ticks=100) fn delayed() {}`',
   on_trigger:   'Runs when a player executes `/trigger <name>`.\n\n**Required arg:** trigger objective name.\n\nExample: `@on_trigger("shop") fn open_shop() {}`',
   keep:         'Prevents dead-code elimination. Use for exported entry points not referenced in the same file.\n\nExample: `@keep fn public_api() {}`',
-  on:           'Generic event handler. Arg: event name.\n\nExample: `@on("custom:event") fn handler() {}`',
+  on:           'Legacy event handler using runtime event dispatch: `@on(EventType)`.\n\nExamples: `@on(PlayerDeath)` and `@on(PlayerJoin)`.\n\nPrefer zero-parameter handlers that rely on `@s` as the execution context:\n\n`@on(PlayerDeath) fn on_death() { say(@s, "You died!") }`\n\nA legacy single `player: Player` parameter is still accepted for compatibility: `@on(PlayerJoin) fn welcome(player: Player) {}`',
   on_advancement: 'Runs when a player earns an advancement.\n\n**Arg:** advancement id (e.g. `"story/mine_diamond"`).\n\nExample: `@on_advancement("story/mine_diamond") fn reward() {}`',
   on_craft:     'Runs when a player crafts an item.\n\n**Arg:** item id (e.g. `"minecraft:diamond_sword"`).\n\nExample: `@on_craft("minecraft:diamond_sword") fn on_craft_sword() {}`',
-  on_death:     'Runs when a player dies.\n\nExample: `@on_death fn on_player_death() {}`',
+  on_death:     'Legacy decorator for player-death handlers. Prefer `@on(PlayerDeath)` with a zero-parameter handler using `@s` as executor context.\n\nExample: `@on(PlayerDeath) fn on_death() { tell(@s, "You died!") }`',
   on_join_team: 'Runs when a player joins a team.\n\n**Arg:** team name.\n\nExample: `@on_join_team("red") fn joined_red() {}`',
-  on_login:     'Runs when a player logs into the server.\n\nExample: `@on_login fn welcome() { tell(@s, f"Welcome back!") }`',
+  on_login:     'Legacy decorator for player-login handlers. Prefer the runtime manifest event form where available, or explicit function tags/runtime dispatch.\n\nExample: `@on(PlayerJoin) fn welcome() { tell(@s, "Welcome back!") }`',
+  function_tag: 'Attach this function to a named function tag.\n\nSyntax: `@function_tag("namespace:path")`\n\nExample: `@function_tag("minecraft:tick") fn do_tick() { ... }`',
 }
 
 // ---------------------------------------------------------------------------
@@ -484,18 +485,17 @@ const TYPE_COMPLETIONS: CompletionItem[] = [
 // VSCode will keep the completion open as user types more letters (filter by label).
 const DECORATOR_COMPLETIONS: CompletionItem[] = [
   { label: '@tick',           detail: 'Run every game tick (~20 Hz)',          insertText: 'tick' },
-  { label: '@watch',          detail: 'Run when a scoreboard objective changes', insertText: 'watch' },
   { label: '@load',           detail: 'Run on /reload (initialization)',        insertText: 'load' },
+  { label: '@watch',          detail: 'Run when a scoreboard objective changes', insertText: 'watch' },
+  { label: '@function_tag',    detail: 'Attach this function to a function tag', insertText: 'function_tag' },
   { label: '@on_trigger',     detail: 'Run when a player uses /trigger',        insertText: 'on_trigger' },
   { label: '@schedule',       detail: 'Schedule function after N ticks',        insertText: 'schedule' },
   { label: '@coroutine',      detail: 'Spread loop across ticks (batch=N)',      insertText: 'coroutine' },
   { label: '@keep',           detail: 'Prevent dead-code elimination',          insertText: 'keep' },
-  { label: '@on',             detail: 'Generic event handler',                  insertText: 'on' },
+  { label: '@on',             detail: 'Legacy runtime event handler: @on(EventType)', insertText: 'on' },
   { label: '@on_advancement', detail: 'Run on advancement earned',              insertText: 'on_advancement' },
   { label: '@on_craft',       detail: 'Run on item craft',                      insertText: 'on_craft' },
-  { label: '@on_death',       detail: 'Run on player death',                    insertText: 'on_death' },
   { label: '@on_join_team',   detail: 'Run on team join',                       insertText: 'on_join_team' },
-  { label: '@on_login',       detail: 'Run on player login',                    insertText: 'on_login' },
   { label: '@require_on_load',detail: 'Ensure a fn runs on load (stdlib)',       insertText: 'require_on_load' },
 ].map(d => ({ ...d, kind: CompletionItemKind.Event }))
 

@@ -67,8 +67,10 @@ const BUILTIN_FUNCTIONS: BuiltinFunction[] = [
   { name: 'team_leave', detail: 'team_leave(target: selector)', doc: 'Remove entities from their team.' },
   { name: 'team_option', detail: 'team_option(name: string, option: string, value: string)', doc: 'Set a team option.' },
   { name: 'tick', detail: '@tick  |  @tick(rate: int)', doc: 'Run this function every tick (rate=1) or every N ticks.', insertText: '@tick', kind: vscode.CompletionItemKind.Event },
+  { name: 'load', detail: '@load', doc: 'Run this function once during datapack load/reload.', insertText: '@load', kind: vscode.CompletionItemKind.Event },
+  { name: 'function_tag', detail: '@function_tag("namespace:path")', doc: 'Attach this function to a function tag (e.g. `@function_tag("minecraft:tick")`).', insertText: '@function_tag', kind: vscode.CompletionItemKind.Event },
+  { name: 'on', detail: '@on(EventType)', doc: 'Legacy event handler. Prefer zero-arg handlers and `@s` for executor context; `@on(EventType) fn handler()`.', insertText: '@on', kind: vscode.CompletionItemKind.Event },
   { name: 'on_advancement', detail: '@on_advancement(id: string)', doc: 'Trigger when a player earns an advancement.', insertText: '@on_advancement', kind: vscode.CompletionItemKind.Event },
-  { name: 'on_death', detail: '@on_death', doc: 'Trigger when the executing entity dies.', insertText: '@on_death', kind: vscode.CompletionItemKind.Event },
   { name: 'on_craft', detail: '@on_craft(item: string)', doc: 'Trigger when a player crafts an item.', insertText: '@on_craft', kind: vscode.CompletionItemKind.Event },
 ]
 

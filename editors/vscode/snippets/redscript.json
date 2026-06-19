@@ -32,11 +32,22 @@
     "prefix": "on",
     "body": [
       "@on(${1:PlayerDeath})",
-      "fn ${2:handle_${1/(.*)/${1:/downcase}/}}(${3:player}: ${4:Player}) {",
+      "fn ${2:handle_${1/(.*)/${1:/downcase}/}}() {",
+      "    tell(@s, \"${3:Handled event}\");",
       "    $0",
       "}"
     ],
     "description": "Define an @on(EventType) event handler"
+  },
+  "Function Tag": {
+    "prefix": "function_tag",
+    "body": [
+      "@function_tag(${1:\"minecraft:custom/handler\"})",
+      "fn ${2:handle_handler}() {",
+      "    $0",
+      "}"
+    ],
+    "description": "Attach a function to a datapack function tag"
   },
   "Load Function": {
     "prefix": ["fnload", "load"],

@@ -9,7 +9,6 @@
         { "include": "#comments" },
         { "include": "#decorators" },
         { "include": "#fstring" },
-        { "include": "#string-interpolation" },
         { "include": "#strings" },
         { "include": "#keywords" },
         { "include": "#selectors" },
@@ -62,7 +61,7 @@
       "patterns": [
         {
           "comment": "Decorator with arguments: @tick(rate=20)",
-          "begin": "(@(?:tick|load|keep|on|on_advancement|on_craft|on_death|on_trigger|on_join_team|on_login))\\s*(\\()",
+          "begin": "(@(?:tick|load|keep|on|function_tag|on_advancement|on_craft|on_death|on_join_team|on_login|on_trigger|watch|coroutine|schedule|require_on_load|deprecated|inline|no-inline|config|singleton|profile|benchmark|throttle|retry|memoize|test))\\s*(\\()",
           "beginCaptures": {
             "1": { "name": "entity.name.function.decorator.redscript" },
             "2": { "name": "punctuation.definition.parameters.redscript" }
@@ -85,9 +84,9 @@
           ]
         },
         {
-          "comment": "Bare decorator: @on_death",
+          "comment": "Bare decorator",
           "name": "entity.name.function.decorator.redscript",
-          "match": "@(?:tick|load|keep|on|on_advancement|on_craft|on_death|on_trigger|on_join_team|on_login)\\b"
+          "match": "@(?:tick|load|keep|on|function_tag|on_advancement|on_craft|on_death|on_join_team|on_login|on_trigger|watch|coroutine|schedule|require_on_load|deprecated|inline|no-inline|config|singleton|profile|benchmark|throttle|retry|memoize|test)\\b"
         }
       ]
     },
@@ -115,31 +114,6 @@
             { "include": "#selectors" },
             { "include": "#numbers" },
             { "include": "#fn-call" },
-            {
-              "name": "variable.other.redscript",
-              "match": "[a-zA-Z_][a-zA-Z0-9_]*"
-            }
-          ]
-        },
-        { "name": "constant.character.escape.redscript", "match": "\\\\." }
-      ]
-    },
-
-    "string-interpolation": {
-      "comment": "Interpolated string with ${expr} — highlight the expression inside",
-      "begin": "\"(?=[^\"]*\\$\\{)",
-      "end": "\"",
-      "name": "string.quoted.double.redscript",
-      "patterns": [
-        {
-          "begin": "\\$\\{",
-          "end": "\\}",
-          "beginCaptures": { "0": { "name": "punctuation.definition.template-expression.begin.redscript" } },
-          "endCaptures":   { "0": { "name": "punctuation.definition.template-expression.end.redscript" } },
-          "contentName": "meta.embedded.expression.redscript",
-          "patterns": [
-            { "include": "#selectors" },
-            { "include": "#numbers" },
             {
               "name": "variable.other.redscript",
               "match": "[a-zA-Z_][a-zA-Z0-9_]*"

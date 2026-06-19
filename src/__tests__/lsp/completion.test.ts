@@ -127,6 +127,8 @@ const BUILTIN_FN_COMPLETIONS: CompletionItem[] = [
 const DECORATOR_COMPLETIONS: CompletionItem[] = [
   { label: '@tick', insertText: 'tick', kind: CompletionItemKind.Event },
   { label: '@load', insertText: 'load', kind: CompletionItemKind.Event },
+  { label: '@function_tag', insertText: 'function_tag', kind: CompletionItemKind.Event },
+  { label: '@on', insertText: 'on', kind: CompletionItemKind.Event },
   { label: '@on_trigger', insertText: 'on_trigger', kind: CompletionItemKind.Event },
   { label: '@schedule', insertText: 'schedule', kind: CompletionItemKind.Event },
   { label: '@coroutine', insertText: 'coroutine', kind: CompletionItemKind.Event },
@@ -395,6 +397,8 @@ describe('LSP completion — decorators', () => {
     const labels = response.result.items.map(i => i.label)
     expect(labels).toContain('@tick')
     expect(labels).toContain('@load')
+    expect(labels).toContain('@function_tag')
+    expect(labels).toContain('@on')
     expect(labels).toContain('@keep')
   })
 
