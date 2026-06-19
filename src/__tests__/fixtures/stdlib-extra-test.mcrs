@@ -138,6 +138,21 @@
     raw("execute store result score #dmul_result rshp run data get storage rs:d __dp0 10000.0");
 }
 
+@keep fn test_double_mul() {
+    // Representative fractional case: 2.5 × 1.25 = 3.125.
+    let a: double = 2.5d;
+    let b: double = 1.25d;
+    double_mul(a, b);
+    raw("execute store result score #dmul_small_result rshp run data get storage rs:d __dp0 10000.0");
+
+    // Regression case for the old int32 scoreboard-product path:
+    // old fixed intermediates would multiply 5,000,000 × 50,000 before rescaling.
+    let large_a: double = 500.0d;
+    let large_b: double = 5.0d;
+    double_mul(large_a, large_b);
+    raw("execute store result score #dmul_overflow_result rshp run data get storage rs:d __dp0 10000.0");
+}
+
 // ─── list.mcrs: dynamic aggregates ──────────────────────────────────────────
 
 @keep fn test_list_aggregates() {

@@ -605,14 +605,14 @@ npm test -- --runInBand
 
 ## Phase 13 — `double_mul` precision/overflow audit
 
-Status: Started. Phase 13 replaces the old `double_mul` int32 scoreboard product with the shared macro-scale double path used by `double_mul_fixed`, while keeping language-level `fixed` frozen at ×10000.
+Status: Complete for the macro-scale tier. Phase 13 replaces the old `double_mul` int32 scoreboard product with the shared macro-scale path used by `double_mul_fixed`, while keeping language-level `fixed` frozen at ×10000. Live Paper oracle coverage now pins a fractional representative case and a larger-value case that would have overflowed the old product; a future true IEEE multiplication helper remains a separate design question.
 
 Scope:
 
 - [x] Add RED coverage proving `double_mul` no longer emits `$dmul_a *= $dmul_b` scoreboard multiplication.
-- [x] Route `double_mul(a, b)` through `__dmul_apply_scale` by copying `b` directly into the macro scale argument.
-- [x] Update stdlib and numeric policy docs to describe the new helper tier and NaN/Infinity non-goal.
-- [ ] Add a Paper runtime oracle for representative `double_mul` values and a larger-value regression that would have overflowed the old scoreboard product.
+- [x] Route `double_mul(a, b)` through `__dmul_apply_scale` by reading `b` through a ×10000 score into a macro-safe scale argument.
+- [x] Update stdlib and numeric policy docs to describe the macro-scale tier, `b` rounding/envelope, and NaN/Infinity non-goal.
+- [x] Add a Paper runtime oracle for representative `double_mul` values and a larger-value regression that would have overflowed the old scoreboard product.
 - [ ] Decide whether a future true IEEE multiplication path needs a separate helper or can replace this macro tier after live validation.
 
 Verification for the first Phase 13 slice:

@@ -224,10 +224,10 @@ fn norm3_hp(x: int, y: int, z: int): int {
 // Returns: double result = d × (f / 10000)
 //
 // Algorithm (function-macro trick):
-//   1. Compute scale = f × 0.0001 and store as a double in rs:math_hp __dmul_args.scale
+//   1. Compute scale = f × 0.00000001 and store as a double in rs:math_hp __dmul_args.scale
 //   2. Call __dmul_apply_scale via 'with storage' macro so $(scale) is substituted
-//   3. Helper does: $execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 1
-//      = __dp0 ← __dp0 × scale   (pure double arithmetic, no integer intermediate)
+//   3. Helper does: $execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 10000
+//      = __dp0 ← round(d × 10000) × (f / 100000000), preserving ×10000 fractional input
 //   4. Return __dp0 (now contains d × (f/10000)) as a double for the caller
 //
 // No integer overflow risk; no truncation of d before multiplication.
@@ -237,7 +237,7 @@ fn norm3_hp(x: int, y: int, z: int): int {
 // Called via: function __NS__:__dmul_apply_scale with storage rs:math_hp __dmul_args
 // Reads $(scale) from rs:math_hp __dmul_args.scale, multiplies __dp0 by it in-place.
 fn __dmul_apply_scale() {
-    raw("$execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 1");
+    raw("$execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 10000");
 }
 
 /// Multiply a double-precision value `d` by a fixed-point integer `f` (× 10000)
@@ -249,10 +249,10 @@ fn __dmul_apply_scale() {
 /// @example
 /// let r: double = double_mul_fixed(3.14d, 20000); // 6.28  (3.14 × 2.0)
 fn double_mul_fixed(d: double, f: int): double {
-    // Step 1: store f into math_hp scoreboard, then compute scale = f × 0.0001
+    // Step 1: store f into math_hp scoreboard, then compute scale = f × 0.00000001
     scoreboard_set("$dmul_f", "__rs_math_hp", f);
     // Store scale as double into the macro-args compound (path must use dot notation)
-    raw("execute store result storage rs:math_hp __dmul_args.scale double 0.0001 run scoreboard players get $dmul_f __rs_math_hp");
+    raw("execute store result storage rs:math_hp __dmul_args.scale double 0.00000001 run scoreboard players get $dmul_f __rs_math_hp");
     // Step 2: d is already in __dp0 (first double param convention)
     // Step 3: call macro helper — overwrites __dp0 with d × (f/10000) in IEEE 754 double
     raw("function __NS__:__dmul_apply_scale with storage rs:math_hp __dmul_args");
@@ -352,13 +352,19 @@ fn double_sub(a: double, b: double): double {
 // double_mul(a, b): a × b using the same macro-scale path as double_mul_fixed.
 //
 // Algorithm:
-//   1. Copy b from rs:d __dp1 into rs:math_hp __dmul_args.scale.
-//   2. Call __dmul_apply_scale with storage macro arguments.
-//   3. The helper stores __dp0 through `double $(scale)`, so the old int32
+//   1. Read b from rs:d __dp1 into a ×10000 score ($dmul_f).
+//   2. Store $dmul_f back into rs:math_hp __dmul_args.scale as a double with
+//      scale 0.00000001, producing a macro-safe decimal scale literal that pairs
+//      with __dmul_apply_scale's `data get __dp0 10000` read.
+//   3. Call __dmul_apply_scale with storage macro arguments.
+//   4. The helper stores __dp0 through `double $(scale)`, so the old int32
 //      scoreboard product (`score_a * score_b`) is avoided.
 //
 // ⚠ Precision / runtime policy:
 //   - Avoids the old scoreboard product overflow envelope entirely.
+//   - The second operand crosses a ×10000 score boundary to make the macro
+//     argument command-parseable; b is therefore rounded/truncated to 1e-4 and
+//     must fit the int32 fixed-score envelope when scaled by 10000.
 //   - Still inherits Minecraft command-result/data-get behaviour from the
 //     shared __dmul_apply_scale macro trick; this is the reviewed double helper
 //     tier until a future true IEEE multiplication oracle replaces it.
@@ -368,12 +374,13 @@ fn double_sub(a: double, b: double): double {
 /// Multiply two doubles via macro-scale double path, avoiding int32 scoreboard products.
 /// @since 1.3.0
 /// @param a First factor (double, stored in `__dp0`)
-/// @param b Second factor (double, stored in `__dp1`)
+/// @param b Second factor (double, stored in `__dp1`, rounded to ×10000 for macro scale)
 /// @returns a × b through the shared `__dmul_apply_scale` macro helper
 fn double_mul(a: double, b: double): double {
-    // Copy b directly as the macro scale argument. This avoids converting both
-    // operands to ×10000 scores and multiplying them on an int32 scoreboard.
-    raw("data modify storage rs:math_hp __dmul_args.scale set from storage rs:d __dp1");
+    // Convert b to a ×10000 score and then to a macro-safe decimal scale.
+    // This avoids multiplying two fixed-score operands on an int32 scoreboard.
+    raw("execute store result score $dmul_f __rs_math_hp run data get storage rs:d __dp1 10000.0");
+    raw("execute store result storage rs:math_hp __dmul_args.scale double 0.00000001 run scoreboard players get $dmul_f __rs_math_hp");
     raw("function __NS__:__dmul_apply_scale with storage rs:math_hp __dmul_args");
     return a;
 }

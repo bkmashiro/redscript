@@ -1272,13 +1272,18 @@ describe('MC Integration - stdlib extra (random/bits/list/bigint)', () => {
 
 // ─── stdlib math_hp integration ───────────────────────────────────────────────
 
-describe('MC Integration - math_hp (ln_hp, double_mul_fixed)', () => {
+describe('MC Integration - math_hp (ln_hp, double_mul_fixed, double_mul)', () => {
   beforeAll(async () => {
     if (!serverOnline) return
-    // stdextra is already written with MATH_HP_SRC in the previous describe's beforeAll.
-    // Just need the scoreboard and a fresh reload.
+    // Keep this describe self-contained so focused `-t double_mul` runs install
+    // the stdextra datapack even when the earlier stdlib-extra describe is skipped.
+    writeFixtureWithLibs('stdlib-extra-test.mcrs', 'stdextra',
+      [MATH_SRC, MATH_HP_SRC, RANDOM_SRC, BITS_SRC, LIST_SRC, BIGINT_SRC])
     await mc.command('/scoreboard objectives add rshp dummy').catch(() => {})
-    await mc.ticks(2)
+    await mc.reload()
+    await mc.ticks(10)
+    await mc.command('/function stdextra:__load').catch(() => {})
+    await mc.ticks(5)
   })
 
   // ─── ln_hp ─────────────────────────────────────────────────────────────────
@@ -1333,6 +1338,26 @@ describe('MC Integration - math_hp (ln_hp, double_mul_fixed)', () => {
     expect(v).toBeGreaterThanOrEqual(29990)
     expect(v).toBeLessThanOrEqual(30010)
     console.log(`  double_mul_fixed(2.0d, 15000) as fixed = ${v} (expect ≈30000) ✓`)
+  })
+
+  test('double_mul(2.5d, 1.25d) ≈ 31250  [as fixed]', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_double_mul')
+    await mc.ticks(5)
+    const v = await mc.scoreboard('#dmul_small_result', 'rshp')
+    expect(v).toBeGreaterThanOrEqual(31240)
+    expect(v).toBeLessThanOrEqual(31260)
+    console.log(`  double_mul(2.5d, 1.25d) as fixed = ${v} (expect ≈31250) ✓`)
+  })
+
+  test('double_mul avoids old int32 product overflow envelope', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdextra:test_double_mul')
+    await mc.ticks(5)
+    const v = await mc.scoreboard('#dmul_overflow_result', 'rshp')
+    expect(v).toBeGreaterThanOrEqual(24_999_900)
+    expect(v).toBeLessThanOrEqual(25_000_100)
+    console.log(`  double_mul(500.0d, 5.0d) as fixed = ${v} (expect ≈25000000) ✓`)
   })
 })
 

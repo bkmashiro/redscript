@@ -364,11 +364,12 @@ describe('double_mul — macro-scale double path', () => {
     `
     const result = compile(source, { namespace: 'dmultest2' })
     const all = getAllMcContent(result.files)
-    // The second double operand should be copied directly into the macro scale
-    // argument, avoiding the old int32 scoreboard product envelope.
-    expect(all).toContain('data modify storage rs:math_hp __dmul_args.scale set from storage rs:d __dp1')
+    // The second double operand crosses only a single ×10000 score boundary to
+    // produce a command-parseable macro scale; it must not multiply two scores.
+    expect(all).toContain('execute store result score $dmul_f __rs_math_hp run data get storage rs:d __dp1 10000.0')
+    expect(all).toContain('execute store result storage rs:math_hp __dmul_args.scale double 0.00000001 run scoreboard players get $dmul_f __rs_math_hp')
     expect(all).toContain('function dmultest2:__dmul_apply_scale with storage rs:math_hp __dmul_args')
-    expect(all).toContain('$execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 1')
+    expect(all).toContain('$execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 10000')
     expect(all).not.toContain('$dmul_a __rs_math_hp *= $dmul_b __rs_math_hp')
   })
 })
@@ -445,8 +446,8 @@ describe('double_mul_fixed — true double precision via function macro', () => 
     expect(all).toContain('with storage rs:math_hp __dmul_args')
     // Helper must contain the $ macro line
     expect(all).toContain('$execute store result storage rs:d __dp0 double $(scale)')
-    // Scale must be stored as double 0.0001 factor
-    expect(all).toContain('scale double 0.0001')
+    // Scale must be stored as double 0.00000001 factor paired with a ×10000 read
+    expect(all).toContain('scale double 0.00000001')
   })
 
   test('double_mul_fixed emits __dmul_apply_scale helper function', () => {

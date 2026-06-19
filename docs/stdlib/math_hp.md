@@ -128,11 +128,11 @@ Summon the AEC marker entity for `double_add`/`double_sub`. Called automatically
 
 ### `double_mul(a: double, b: double): double`
 
-> **Precision:** Macro-scale double helper tier; avoids the old int32 scoreboard product
-> **Cost:** ~5 commands
-> **Note:** NaN/Infinity behaviour is not promised; use Paper/runtime oracle coverage for production-sensitive ranges
+> **Precision:** Macro-scale double helper tier; avoids the old int32 scoreboard product, but rounds/truncates both operands through ×10000 command-result boundaries
+> **Cost:** ~6 commands
+> **Note:** NaN/Infinity behaviour is not promised; each operand ×10000 must fit the command/score envelope
 
-`a × b` by copying `b` into the shared `__dmul_apply_scale` macro argument and scaling `a` through the NBT-backed double path. This avoids converting both operands to ×10000 scores and multiplying them on an int32 scoreboard.
+`a × b` by reading `b` through a ×10000 score into the shared `__dmul_apply_scale` macro argument and scaling a ×10000 read of `a` through the NBT-backed double path. This avoids converting both operands to ×10000 scores and multiplying them on an int32 scoreboard.
 
 ---
 

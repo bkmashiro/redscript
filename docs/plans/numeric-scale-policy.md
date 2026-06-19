@@ -71,7 +71,7 @@ Current documented tiers:
 | `double_add` | NBT/entity double | Uses the entity position trick and keeps arithmetic in Java double precision. |
 | `double_div` | NBT/display-entity double | Uses display-entity SVD and keeps the division in Java double precision; division by zero follows Java double/MC NBT failure modes and is not safe to read back. |
 | `double_sub` | scale-crossing double | Negates the subtrahend through a ×10000 score read/write before using the add path; expect fixed-scale rounding/truncation at that boundary. |
-| `double_mul` | macro-scale double path | Copies the second operand directly into the shared `__dmul_apply_scale` macro argument and scales the first operand through NBT-backed double storage; avoids the old ×10000 int32 scoreboard product envelope, but still needs Paper/runtime oracle coverage for production-sensitive ranges and does not promise NaN/Infinity behaviour. |
+| `double_mul` | macro-scale double path | Reads the second operand through a ×10000 score to build the shared `__dmul_apply_scale` macro argument, then scales a ×10000 read of the first operand through NBT-backed double storage; avoids the old ×10000 int32 scoreboard product envelope, but rounds/truncates operands at 1e-4, requires each operand ×10000 to fit the command/score envelope, and does not promise NaN/Infinity behaviour. |
 | `double_mul_fixed` | NBT double × ×10000 fixed | Uses a macro scale trick so the double operand stays in NBT and is multiplied by a ×10000 fixed integer scale. |
 
 Docs and API names should say when a helper is true NBT/double precision versus approximate or scale-crossing.
