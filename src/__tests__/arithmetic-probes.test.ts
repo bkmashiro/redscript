@@ -34,6 +34,7 @@ describe('arithmetic probe benchmark tooling', () => {
       {
         path: 'data/test/function/probe.mcfunction',
         content: [
+          'scoreboard players operation $tmp obj = $src obj',
           'scoreboard players operation $a obj += $b obj',
           'execute as @e[tag=rs_div,limit=1] run tp @s ^ ^ ^1',
           '$execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 10000',
@@ -43,8 +44,9 @@ describe('arithmetic probe benchmark tooling', () => {
       },
     ])
 
-    expect(summary.total).toBe(5)
-    expect(summary.scoreboard).toBe(1)
+    expect(summary.total).toBe(6)
+    expect(summary.scoreboard).toBe(2)
+    expect(summary.scoreCopy).toBe(1)
     expect(summary.execute).toBe(2)
     expect(summary.data).toBe(1)
     expect(summary.functionCall).toBe(1)

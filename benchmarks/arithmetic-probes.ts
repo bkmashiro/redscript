@@ -20,6 +20,7 @@ export interface ArithmeticProbeCase {
 export interface CommandCategorySummary {
   total: number
   scoreboard: number
+  scoreCopy: number
   execute: number
   data: number
   functionCall: number
@@ -408,6 +409,7 @@ export function summarizeCommandCategories(files: Array<{ path: string; content:
   return {
     total: lines.length,
     scoreboard: count(line => line.startsWith('scoreboard ')),
+    scoreCopy: count(line => /^scoreboard players operation \S+ \S+ = \S+ \S+$/.test(line)),
     execute: count(line => line.startsWith('execute ') || line.startsWith('$execute ')),
     data: count(line => line.startsWith('data ') || line.includes(' run data ')),
     functionCall: count(line => line.startsWith('function ') || line.includes(' run function ')),

@@ -28,7 +28,7 @@ RedScript ships benchmark entrypoints under `benchmarks/`.
 - Compiles focused arithmetic/helper probe snippets.
 - Optionally includes stdlib modules such as `math` or `math_hp`.
 - Reports emitted `.mcfunction` file count, instruction count, bytes, and command
-  categories (`scoreboard`, `execute`, `data`, `function`, `storage`, selector,
+  categories (`scoreboard`, `scoreCopy`, `execute`, `data`, `function`, `storage`, selector,
   macro, summon, teleport).
 - Compares `O0`/`O1`/`O2` when invoked with `--opt all`.
 - Adds a static `estimatedCost` section with:

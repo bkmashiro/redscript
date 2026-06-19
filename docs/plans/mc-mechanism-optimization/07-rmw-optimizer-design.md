@@ -1,6 +1,6 @@
 # 7. Lane 6 — Scoreboard RMW Optimizer Design
 
-Status: design-only handoff. No implementation in this lane.
+Status: first conservative implementation landed. This document remains the design baseline for future, more aggressive RMW/liveness work.
 
 This lane replaces another speculative Minecraft mechanism probe with a lower-risk compiler/backend optimization: reduce redundant scoreboard copy/temporary traffic before emitting `.mcfunction` lines.
 
@@ -194,31 +194,30 @@ Behavioral regression:
 
 ## Minimal implementation slice
 
-Recommended first implementation:
+Implemented first slice:
 
-1. Create `src/optimizer/lir/rmw.ts` with a pure function, e.g.
+1. `src/optimizer/lir/rmw.ts` adds `scoreboardRmwPass`.
+2. It implements only adjacent three-instruction output-copy collapse:
 
-   ```ts
-   export function scoreboardRmwPass(fn: LIRFunction): LIRFunction
+   ```text
+   score_copy tmp <- src
+   score_<op> tmp <- rhs
+   score_copy out <- tmp
    ```
 
-2. Implement only adjacent two/three-instruction rewrites.
-3. Add tests before pipeline integration.
-4. Integrate into `src/optimizer/lir/pipeline.ts` after module-level dead-slot cleanup and before peephole/const-immediate folding.
-5. Run:
+   becomes:
 
-   ```bash
-   npm test -- src/__tests__/optimizer/lir/rmw.test.ts --runInBand
-   npm test -- src/__tests__/optimizer/lir/pipeline.test.ts --runInBand
-   npm run build
-   npm run validate-mc
-   npm test -- --runInBand
-   git diff --check
+   ```text
+   score_copy out <- src
+   score_<op> out <- rhs
    ```
 
-## Promotion criteria
+3. It is integrated into `src/optimizer/lir/pipeline.ts` after module-level dead-slot cleanup and before peephole/const-immediate folding.
+4. `benchmarks/arithmetic-probes.ts` now reports `commands.scoreCopy` so future runs can track copy-pressure changes.
 
-This lane can be promoted from design to implementation only if:
+## Future implementation criteria
+
+Promote a more aggressive next slice only if:
 
 - the first pass is local and conservative;
 - tests prove non-rewrite cases as strongly as rewrite cases;
@@ -229,6 +228,5 @@ This lane can be promoted from design to implementation only if:
 ## Open questions for implementation
 
 - Whether Pattern A requires full local liveness before it is safe enough.
-- Whether Pattern B should be implemented first because it avoids mutating original operands.
 - Whether protected slot detection should become a shared helper across LIR passes.
-- Whether the arithmetic probe cost model should include a dedicated `scoreCopy` counter to track this pass directly.
+- Whether Pattern B's command-count improvement appears in larger real arithmetic probes or mainly in targeted compiler shapes.
