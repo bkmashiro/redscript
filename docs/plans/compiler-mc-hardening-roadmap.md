@@ -629,6 +629,8 @@ npm test -- --runInBand
 
 ## Short next slice recommendation
 
-Continue Phase 13 by adding Paper/runtime oracle coverage for `double_mul` rather than changing language-level numeric scale. If improving DX instead, design explicit conversion helpers or scale-specific syntax (`as fx3 round/trunc`, target typing, or `numeric fx4 { ... }`) with RED parser/typechecker tests first.
+Phase 13's macro-scale `double_mul` runtime oracle is complete, and live Paper integration output is quiet by default (`MC_VERBOSE=1` opts success breadcrumbs back in). The remaining numeric decision is whether a future true-IEEE multiply should be a separate helper or eventually replace the macro tier; do not change language-level `fixed` scale as part of that decision.
+
+If improving DX instead, design explicit conversion helpers or scale-specific syntax (`as fx3 round/trunc`, target typing, or `numeric fx4 { ... }`) with RED parser/typechecker tests first.
 
 This keeps compiler-owned numeric behavior safe while acknowledging that Minecraft precision and int32 overflow tradeoffs require multiple explicit scale families.
