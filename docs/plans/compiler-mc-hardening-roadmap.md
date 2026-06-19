@@ -606,7 +606,9 @@ npm test -- --runInBand
 
 ## Phase 13 — `double_mul` precision/overflow audit
 
-Status: Complete for the macro-scale tier. Phase 13 replaces the old `double_mul` int32 scoreboard product with the shared macro-scale path used by `double_mul_fixed`, while keeping language-level `fixed` frozen at ×10000. Live Paper oracle coverage now pins a fractional representative case and a larger-value case that would have overflowed the old product; a future true IEEE multiplication helper remains a separate design question.
+Status: Complete for the macro-scale tier. Phase 13 replaces the old `double_mul` int32 scoreboard product with the shared macro-scale path used by `double_mul_fixed`, while keeping language-level `fixed` frozen at ×10000. Live Paper oracle coverage now pins a fractional representative case and a larger-value case that would have overflowed the old product.
+
+Decision: keep `double_mul` on the reviewed macro-scale tier. A future true-IEEE multiplication path, if implemented, should be exposed as a separate opt-in helper such as `double_mul_ieee` until it has its own command-shape tests, Paper runtime oracle, docs, and compatibility plan. Do not silently replace `double_mul` with a new true-IEEE path because current callers now rely on the documented macro-scale rounding/envelope contract.
 
 Scope:
 
@@ -614,7 +616,7 @@ Scope:
 - [x] Route `double_mul(a, b)` through `__dmul_apply_scale` by reading `b` through a ×10000 score into a macro-safe scale argument.
 - [x] Update stdlib and numeric policy docs to describe the macro-scale tier, `b` rounding/envelope, and NaN/Infinity non-goal.
 - [x] Add a Paper runtime oracle for representative `double_mul` values and a larger-value regression that would have overflowed the old scoreboard product.
-- [ ] Decide whether a future true IEEE multiplication path needs a separate helper or can replace this macro tier after live validation.
+- [x] Decide whether a future true IEEE multiplication path needs a separate helper or can replace this macro tier after live validation: reserve it for a separate opt-in helper such as `double_mul_ieee` first.
 
 Verification for the first Phase 13 slice:
 
@@ -630,7 +632,7 @@ npm test -- --runInBand
 
 ## Short next slice recommendation
 
-Phase 13's macro-scale `double_mul` runtime oracle is complete, and live Paper integration output is quiet by default (`MC_VERBOSE=1` opts success breadcrumbs back in). The remaining numeric decision is whether a future true-IEEE multiply should be a separate helper or eventually replace the macro tier; do not change language-level `fixed` scale as part of that decision.
+Phase 13's macro-scale `double_mul` runtime oracle is complete, live Paper integration output is quiet by default (`MC_VERBOSE=1` opts success breadcrumbs back in), and the true-IEEE decision is recorded: add a future `double_mul_ieee`-style helper separately before considering any replacement of `double_mul`. Do not change language-level `fixed` scale as part of that work.
 
 If improving DX instead, design explicit conversion helpers or scale-specific syntax (`as fx3 round/trunc`, target typing, or `numeric fx4 { ... }`) with RED parser/typechecker tests first.
 

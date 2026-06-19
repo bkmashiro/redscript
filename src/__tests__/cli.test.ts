@@ -167,6 +167,23 @@ describe('CLI API', () => {
   })
 
   describe('tune CLI', () => {
+    it('documents reviewable tuner artifact options in the main help output', () => {
+      const result = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, '--help'],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('redscript tune --adapter <name> [--budget N] [--range min:max] [--samples N] [--out path] [--manifest-out path]')
+      expect(result.stdout).toContain('--range <min:max>')
+      expect(result.stdout).toContain('--samples <N>')
+      expect(result.stdout).toContain('reviewable .mcrs overlay')
+    })
+
     it('runs an existing tuner adapter through the main redscript CLI and writes generated mcrs', () => {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-tune-cli-'))
       const outPath = path.join(tempDir, 'ln_tuned.mcrs')

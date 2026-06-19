@@ -48,7 +48,7 @@ Usage:
   redscript fmt <file.mcrs> [file2.mcrs ...]
   redscript generate-dts [-o <file>]
   redscript docs [module] [--list]
-  redscript tune --adapter <name> [--budget N] [--out path]
+  redscript tune --adapter <name> [--budget N] [--range min:max] [--samples N] [--out path] [--manifest-out path]
   redscript repl
   redscript version
 
@@ -63,7 +63,7 @@ Commands:
   fmt           Auto-format RedScript source files
   generate-dts  Generate builtin function declaration file (builtins.d.mcrs)
   docs          Open the stdlib documentation website in your browser
-  tune          Tune numeric stdlib helper parameters and generate .mcrs code
+  tune          Tune numeric stdlib helper parameters and generate a reviewable .mcrs overlay
   repl          Start an interactive RedScript REPL
   version       Print the RedScript version
   upgrade       Upgrade to the latest version (npm install -g redscript-mc@latest)
@@ -79,6 +79,8 @@ Options:
   --adapter <name>       (tune) Tuner adapter to run
   --budget <N>           (tune) Optimizer iteration budget
   --strategy <nm|sa>     (tune) Search strategy: Nelder-Mead or simulated annealing
+  --range <min:max>      (tune) Override adapter sample range for this tune run
+  --samples <N>          (tune) Evenly spaced sample count for --range
   --manifest-out <path>  (tune) Write machine-readable tune manifest JSON
   --mc-version <ver>     Target Minecraft version (default: 1.21). Affects codegen features.
                          e.g. --mc-version 1.20.2, --mc-version 1.19

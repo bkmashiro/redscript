@@ -144,7 +144,10 @@ redscript lint <file>      # Static analysis
 redscript test <file>      # Run @test functions
 redscript watch <dir>      # Watch mode with hot reload
 redscript docs [module]    # Open stdlib docs
+redscript tune --adapter sqrt-newton --range 10000:400000 --samples 128 --out tuned.mcrs --manifest-out tuned.tune.json
 ```
+
+`redscript tune` is helper-level numeric tooling: it writes a reviewable `.mcrs` overlay plus an optional `.tune.json` manifest for the sample range, metrics, overflow report, and regeneration command. It does **not** change the language-level `fixed` scale or silently rewrite checked-in stdlib files.
 
 ---
 

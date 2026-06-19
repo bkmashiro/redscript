@@ -76,6 +76,8 @@ Current documented tiers:
 
 Docs and API names should say when a helper is true NBT/double precision versus approximate or scale-crossing.
 
+Do not silently replace `double_mul` with an unproven true-IEEE path. The current `double_mul` contract is the reviewed macro-scale tier above; a future native/true-IEEE multiply should first ship as a separate opt-in helper such as `double_mul_ieee`, with its own command-shape tests, Paper oracle, docs, and compatibility plan before any default-helper migration is considered.
+
 ## Stdlib scale families
 
 ### Legacy ×1000 helpers (`math.mcrs`)

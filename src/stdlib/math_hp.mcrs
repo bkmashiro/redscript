@@ -367,7 +367,9 @@ fn double_sub(a: double, b: double): double {
 //     must fit the int32 fixed-score envelope when scaled by 10000.
 //   - Still inherits Minecraft command-result/data-get behaviour from the
 //     shared __dmul_apply_scale macro trick; this is the reviewed double helper
-//     tier until a future true IEEE multiplication oracle replaces it.
+//     tier. A future true IEEE multiply should start as a separate opt-in
+//     helper (for example double_mul_ieee) instead of silently replacing this
+//     contract.
 //   - NaN/Infinity behaviour is intentionally not promised by this helper.
 //
 

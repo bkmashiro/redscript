@@ -4,7 +4,15 @@ All notable changes to RedScript will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+#### Tooling
+- **Numeric helper tuner workflow** — `redscript tune --adapter sqrt-newton --range 10000:400000 --samples 128 --out tuned.mcrs --manifest-out tuned.tune.json` documents the reviewable overlay + manifest path for helper-level tuning. The tuner remains helper-scoped and does not change language `fixed` semantics.
+
 ### Changed
+
+#### Standard Library
+- **`double_mul` precision policy** — the current helper remains on the reviewed macro-scale double tier. A future true-IEEE multiplication path, if implemented, should be an explicit opt-in helper such as `double_mul_ieee` rather than a silent contract change to `double_mul`.
 
 #### Events
 - **`@on(BlockBreak)` removed from built-in legacy events** — there was no implemented runtime dispatcher or live MC coverage for block-break detection. Users can build block-break behavior explicitly with `@function_tag(...)` and their own scoreboard/advancement datapack assets instead of relying on unsupported compiler sugar.
