@@ -81,6 +81,39 @@ describe('stdlib/math.mcrs', () => {
     expect(files.some(f => f.path.includes('sqrt_fx') || f.path.includes('isqrt'))).toBe(true)
   })
 
+  test('explicit legacy ×1000 helper aliases compile', () => {
+    const files = compileWith(`
+      @keep fn t(): int {
+        let a: int = sqrt_fx1000(2000);
+        let b: int = lerp_t1000(0, 1000, 500);
+        let c: int = mul_fx1000(500, 707);
+        let d: int = div_fx1000(1, 3);
+        let e: int = smoothstep_t1000(0, 100, 50);
+        let f: int = smootherstep_t1000(0, 100, 50);
+        return a + b + c + d + e + f;
+      }
+    `)
+    const allContent = getAllContent(files)
+    expect(allContent).toContain('sqrt_fx1000')
+    expect(allContent).toContain('lerp_t1000')
+    expect(allContent).toContain('mul_fx1000')
+    expect(allContent).toContain('div_fx1000')
+    expect(allContent).toContain('smoothstep_t1000')
+    expect(allContent).toContain('smootherstep_t1000')
+  })
+
+  test('explicit legacy ×1000 trig aliases compile and keep load requirement', () => {
+    const files = compileWith(`
+      @keep fn t(): int {
+        return sin_fx1000(30) + cos_fx1000(60);
+      }
+    `)
+    const allContent = getAllContent(files)
+    expect(allContent).toContain('sin_fx1000')
+    expect(allContent).toContain('cos_fx1000')
+    expect(files.some(f => f.path.endsWith('/load.mcfunction'))).toBe(true)
+  })
+
   test('quadratic_disc function is emitted', () => {
     const files = compileWith(`@keep fn t() { let a: int=1; let b: int=-5; let c: int=6; scoreboard_set("#r","t",quadratic_disc(a,b,c)); }`)
     expect(files.some(f => f.path.includes('quadratic_disc'))).toBe(true)

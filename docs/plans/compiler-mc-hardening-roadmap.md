@@ -521,9 +521,9 @@ Planned tasks:
   - `src/stdlib/math_hp.mcrs` ×10000 helpers,
   - `src/stdlib/signal.mcrs` ×10000 helpers,
   - `src/stdlib/geometry.mcrs` ×100 / ×10000 split.
-- [ ] Decide naming/deprecation strategy for legacy ×1000 helpers:
-  - either keep names but document them as legacy scale-specific APIs,
-  - or introduce explicit names such as `sqrt_fixed1000` / `sin_fixed1000` before deprecating old names.
+- [x] Decide naming/deprecation strategy for legacy ×1000 helpers:
+  - keep old names as compatibility wrappers,
+  - introduce explicit additive aliases such as `sqrt_fx1000`, `sin_fx1000`, `cos_fx1000`, `lerp_t1000`, `mul_fx1000`, `div_fx1000`, `smoothstep_t1000`, and `smootherstep_t1000` for new code/docs.
 - [ ] Decide whether compiler `fixed` should remain ×10000 or move to a lower scale; if changed, do it as a major semantic migration with broad golden/runtime tests, not as opportunistic cleanup.
 - [ ] Document double helper precision tiers:
   - `double_add` and `double_div` are high-precision entity/NBT tricks,

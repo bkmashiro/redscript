@@ -84,7 +84,7 @@ Keep these semantics unless a deliberate migration plan replaces them:
 - `sin_fixed(deg)` / `cos_fixed(deg)` return ×1000.
 - `lerp(a, b, t)` uses `t` in `[0, 1000]`.
 
-Because these names contain `fixed` but do not match language `fixed` ×10000, they should be documented as legacy scale-specific integer helpers. A future naming pass may introduce explicit names such as `sqrt_fx1000`, `sin_fx1000`, or `lerp_t1000` before deprecating the old names.
+Because these names contain `fixed` but do not match language `fixed` ×10000, they should be documented as legacy scale-specific integer helpers. New code can use the explicit additive aliases (`sqrt_fx1000`, `sin_fx1000`, `cos_fx1000`, `lerp_t1000`, `mul_fx1000`, `div_fx1000`, `smoothstep_t1000`, and `smootherstep_t1000`) to make the scale visible. The old names remain available for compatibility and are not deprecated by this policy document alone.
 
 ### High-precision ×10000 helpers (`math_hp.mcrs`)
 
@@ -135,7 +135,7 @@ Before changing any numeric scale or helper precision:
 
 ## Near-term roadmap
 
-1. Decide whether legacy ×1000 helpers should be renamed with explicit suffixes before deprecation.
+1. Use the explicit ×1000 aliases in new examples and docs when touching legacy helpers; keep old names as compatibility wrappers.
 2. Decide how much `double` precision can be promised per helper and document approximate paths honestly.
 3. Only after the above, consider ergonomic conversion helpers or scale-specific syntax.
 
