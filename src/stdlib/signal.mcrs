@@ -1,6 +1,11 @@
 // signal.mcrs — Statistical distributions and probability helpers.
 //
-// All functions use integer arithmetic with ×10000 scale where noted.
+// Scale policy note:
+//   Probability, distribution, and DFT helpers in this module use explicit
+//   integer fixed-point parameters where noted, almost always ×10000. The `_fx`
+//   suffix and parameter names such as `p_fx` / `lambda_fx` mean "scaled int",
+//   not the language-level `fixed` type. Keep these labels explicit so callers
+//   do not mix plain counts, probabilities, and language `fixed` implicitly.
 // For game logic: loot tables, mob spawn weights, particle density, etc.
 //
 // Requires: import "stdlib/random" for seed-based RNG

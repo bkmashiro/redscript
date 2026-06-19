@@ -1,9 +1,19 @@
-// math.mcrs — Integer & fixed-point math helpers for RedScript datapacks.
+// math.mcrs — Integer and scale-specific fixed-point helpers for RedScript datapacks.
 //
-// Fixed-point convention: scale = 1000
+// Scale policy note:
+//   The language-level `fixed` type is compiler-owned and currently uses ×10000.
+//   This stdlib file predates that contract and intentionally contains two
+//   scale families:
+//     • legacy helpers such as `sqrt_fixed`, `sin_fixed`, `cos_fixed`, `lerp`,
+//       `mulfix`, `divfix`, `smoothstep`, and `smootherstep` use ×1000;
+//     • newer `_fx` / logarithm / polynomial helpers use ×10000 and document
+//       that scale at each API boundary.
+//   Do not treat every function with "fixed" in its name as language `fixed`.
+//   See docs/plans/numeric-scale-policy.md before renaming or migrating scales.
+//
+// Legacy ×1000 convention examples:
 //   1.0  → 1000
 //   3.14 → 3140
-//   Use `sqrt_fixed` / `lerp` for sub-integer precision.
 //
 // Phase 1: basic integer helpers (abs, sign, min, max, clamp, lerp)
 // Phase 2: iterative algorithms (isqrt, sqrt_fixed, pow_int, gcd)
@@ -291,20 +301,20 @@ fn log2_int(n: int) -> int {
     return result;
 }
 
-// ─── Phase 5: Fixed-point arithmetic & easing ────────────────────────────────
+// ─── Phase 5: Legacy ×1000 fixed-point arithmetic & easing ───────────────────
 // Vector functions (dot2d, cross2d, length2d_fixed, manhattan, chebyshev,
 // atan2_fixed, rotate2d, normalize2d, etc.) have moved to vec.mcrs.
 
-// Fixed-point multiply: (a × b) / 1000
-// Use instead of a*b when both operands are fixed-point (scale=1000),
+// Legacy ×1000 fixed-point multiply: (a × b) / 1000
+// Use instead of a*b when both operands use the legacy ×1000 scale,
 // e.g. mulfix(sin_fixed(30), cos_fixed(45)) instead of sin*cos which overflows.
 // mulfix(500, 707) == 353   (≈ 0.5 × 0.707)
 fn mulfix(a: int, b: int) -> int {
     return a * b / 1000;
 }
 
-// Fixed-point divide: (a × 1000) / b
-// Inverse of mulfix; produces a fixed-point result from two integers.
+// Legacy ×1000 fixed-point divide: (a × 1000) / b
+// Inverse of mulfix; produces a legacy ×1000 fixed-point result from two integers.
 // divfix(1, 3) == 333   (≈ 0.333)
 fn divfix(a: int, b: int) -> int {
     if (b == 0) { return 0; }

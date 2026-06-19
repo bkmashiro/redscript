@@ -4,8 +4,15 @@
 // By teleporting a Marker entity one block in its local forward direction,
 // Pos[0] = cos(θ) and Pos[2] = sin(θ) with ~15 significant figures.
 //
-// SCALE: angles in degrees × 10000 (e.g. 900000 = 90°)
-//        outputs × 10000 (e.g. 10000 = 1.0, -7071 ≈ sin 45°)
+// SCALE POLICY:
+//   This module generally uses explicit ×10000 integer fixed-point at API
+//   boundaries, plus NBT-backed Java double helpers where the type is `double`.
+//   The ×10000 integer inputs/outputs intentionally match language `fixed`
+//   scale, but these functions still accept plain `int` parameters unless the
+//   signature says `double`. Keep that distinction visible in docs and examples.
+//
+//   Angles in degrees × 10000 (e.g. 900000 = 90°)
+//   Outputs × 10000 (e.g. 10000 = 1.0, -7071 ≈ sin 45°)
 //
 // ⚠ SETUP REQUIRED: Call init_trig() in your @load function:
 //     @load fn setup() { init_trig(); }
@@ -221,7 +228,7 @@ fn norm3_hp(x: int, y: int, z: int): int {
 //   2. Call __dmul_apply_scale via 'with storage' macro so $(scale) is substituted
 //   3. Helper does: $execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 1
 //      = __dp0 ← __dp0 × scale   (pure double arithmetic, no integer intermediate)
-//   4. Return __dp0 (now contains d × (f/10000)) as fixed for the caller
+//   4. Return __dp0 (now contains d × (f/10000)) as a double for the caller
 //
 // No integer overflow risk; no truncation of d before multiplication.
 //
@@ -249,7 +256,7 @@ fn double_mul_fixed(d: double, f: int): double {
     // Step 2: d is already in __dp0 (first double param convention)
     // Step 3: call macro helper — overwrites __dp0 with d × (f/10000) in IEEE 754 double
     raw("function __NS__:__dmul_apply_scale with storage rs:math_hp __dmul_args");
-    // Step 4: __dp0 now holds d × (f/10000). Return it (read as ×10000 fixed for caller).
+    // Step 4: __dp0 now holds d × (f/10000). Return it as NBT-backed double.
     return d;
 }
 

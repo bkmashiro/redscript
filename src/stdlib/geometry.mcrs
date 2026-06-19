@@ -1,7 +1,14 @@
 // geometry.mcrs — 3D geometry helpers for Minecraft datapacks.
 //
-// Fixed-point convention: coordinates × 100 (so 1.0 block = 100 units)
-// Angles in degrees × 10000
+// Scale policy note:
+//   Geometry intentionally mixes scale families for overflow headroom:
+//     • legacy projectile / coarse coordinate helpers use coordinates ×100
+//       (1.0 block = 100 units);
+//     • angle helpers use degrees ×10000;
+//     • selector/shape predicates later in this file use coordinates ×10000
+//       and document tighter radius/range limits.
+//   Do not normalize this file to language `fixed` ×10000 without a separate
+//   migration plan and overflow analysis.
 //
 // Requires: import "stdlib/math" (for sqrt_fx, sin_fixed, cos_fixed, abs)
 

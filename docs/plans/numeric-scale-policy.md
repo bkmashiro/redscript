@@ -135,7 +135,8 @@ Before changing any numeric scale or helper precision:
 
 ## Near-term roadmap
 
-1. Audit stdlib docs/comments for scale labels without changing semantics.
-2. Decide whether legacy ×1000 helpers should be renamed with explicit suffixes before deprecation.
-3. Decide how much `double` precision can be promised per helper and document approximate paths honestly.
-4. Only after the above, consider ergonomic conversion helpers or scale-specific syntax.
+1. Decide whether legacy ×1000 helpers should be renamed with explicit suffixes before deprecation.
+2. Decide how much `double` precision can be promised per helper and document approximate paths honestly.
+3. Only after the above, consider ergonomic conversion helpers or scale-specific syntax.
+
+Completed audit note: `math.mcrs`, `math_hp.mcrs`, `signal.mcrs`, and `geometry.mcrs` now carry file-level scale policy comments that preserve existing semantics while making legacy ×1000, ×10000, NBT double, and geometry ×100 boundaries explicit.

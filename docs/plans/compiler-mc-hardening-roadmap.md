@@ -516,7 +516,7 @@ Planned tasks:
   - NBT-backed `double`,
   - scale-specific stdlib integer helper APIs (`*_fx`, `*_hp`, or explicit suffixes),
   - overflow envelopes and recommended ranges.
-- [ ] Audit stdlib docs/comments for scale labels without changing semantics first:
+- [x] Audit stdlib docs/comments for scale labels without changing semantics first:
   - `src/stdlib/math.mcrs` ×1000 helpers,
   - `src/stdlib/math_hp.mcrs` ×10000 helpers,
   - `src/stdlib/signal.mcrs` ×10000 helpers,
