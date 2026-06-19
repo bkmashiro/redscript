@@ -452,6 +452,23 @@ npm test -- src/__tests__/emit/compile.test.ts --runInBand -t "runtime asset mer
 
 ---
 
+## Phase 10 — CLI compile stage snapshot export
+
+Status: ✅ Implemented in code, with CLI-level coverage.
+
+- [x] Expose selected compile stage snapshots through `redscript compile --snapshot-stages <stages|all> --snapshot-output <path>`.
+- [x] Keep snapshots opt-in and file-backed so normal human compile output remains stable.
+- [x] Validate snapshot stage names before compiling, with a clear error listing valid stages.
+- [x] Add CLI coverage proving selected snapshots include runtime asset and emit summaries for an `@on(PlayerJoin)` program.
+
+Verification for Phase 10:
+
+```bash
+npm test -- src/__tests__/cli.test.ts src/__tests__/cli/args.test.ts --runInBand -t "stage snapshots|arg helpers"
+```
+
+---
+
 ## Decision rules for future agents
 
 - Prefer test/oracle hardening before broad refactors.

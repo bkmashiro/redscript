@@ -20,6 +20,8 @@ export interface ParsedArgs {
   dryRun?: boolean
   mcUrl?: string
   list?: boolean
+  snapshotStages?: string
+  snapshotOutput?: string
 }
 
 export function parseArgs(args: string[]): ParsedArgs {
@@ -83,6 +85,12 @@ export function parseArgs(args: string[]): ParsedArgs {
       i++
     } else if (arg === '--mc-url') {
       result.mcUrl = args[++i]
+      i++
+    } else if (arg === '--snapshot-stages') {
+      result.snapshotStages = args[++i]
+      i++
+    } else if (arg === '--snapshot-output') {
+      result.snapshotOutput = args[++i]
       i++
     } else if (!result.command) {
       result.command = arg

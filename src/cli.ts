@@ -10,7 +10,7 @@
  *   redscript version
  */
 
-import { compile, checkDetailed } from './index'
+import { compile, checkDetailed, type CompileStageName, type CompileStageSnapshot } from './index'
 import { DiagnosticError, formatError } from './diagnostics'
 import { parseMcVersion, DEFAULT_MC_VERSION, McVersion, mcVersionToPackFormat } from './types/mc-version'
 import { startRepl } from './repl'
@@ -71,6 +71,8 @@ Options:
   --hot-reload <url>     After each successful compile, POST to <url>/reload
                          (use with redscript-testharness; e.g. http://localhost:25561)
   --source-map           Generate .sourcemap.json files alongside .mcfunction output
+  --snapshot-stages <s>  Comma-separated compile stages to snapshot, or "all"
+  --snapshot-output <p>  Write selected compile stage snapshots to JSON file
   --mc-version <ver>     Target Minecraft version (default: 1.21). Affects codegen features.
                          e.g. --mc-version 1.20.2, --mc-version 1.19
   --lenient              Treat type errors as warnings instead of blocking compilation
@@ -256,6 +258,38 @@ function initCommand(projectName?: string): void {
   console.log('  Entry: src/main.mcrs')
 }
 
+const COMPILE_STAGE_NAMES: CompileStageName[] = [
+  'preprocess',
+  'parse',
+  'runtimeAssets',
+  'typecheck',
+  'lowerToHIR',
+  'runtimeMetadata',
+  'lowerAndOptimize',
+  'finalizeRuntimeLIR',
+  'emitDatapack',
+]
+
+function parseSnapshotStages(value?: string): CompileStageName[] | undefined {
+  if (!value) return undefined
+  if (value === 'all') return [...COMPILE_STAGE_NAMES]
+
+  const stages = value.split(',').map(stage => stage.trim()).filter(Boolean)
+  const invalid = stages.filter(stage => !COMPILE_STAGE_NAMES.includes(stage as CompileStageName))
+  if (invalid.length > 0) {
+    throw new Error(`Unknown compile stage snapshot(s): ${invalid.join(', ')}. Valid stages: ${COMPILE_STAGE_NAMES.join(', ')}`)
+  }
+  return stages as CompileStageName[]
+}
+
+function writeStageSnapshots(
+  outputPath: string,
+  payload: { file: string; namespace: string; stages: CompileStageSnapshot[] },
+): void {
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+  fs.writeFileSync(outputPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8')
+}
+
 function compileCommand(
   file: string,
   output: string,
@@ -265,6 +299,8 @@ function compileCommand(
   lenient = false,
   includeDirs?: string[],
   incremental = false,
+  snapshotStageSpec?: string,
+  snapshotOutput?: string,
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -280,6 +316,24 @@ function compileCommand(
       console.error(`Error: ${(e as Error).message}`)
       process.exit(1)
     }
+  }
+
+  let snapshotStages: CompileStageName[] | undefined
+  try {
+    snapshotStages = parseSnapshotStages(snapshotStageSpec)
+  } catch (e) {
+    console.error(`Error: ${(e as Error).message}`)
+    process.exit(1)
+  }
+
+  if (incremental && (snapshotStages || snapshotOutput)) {
+    console.error('Error: --snapshot-stages/--snapshot-output are only supported for non-incremental compile')
+    process.exit(1)
+  }
+
+  if (snapshotOutput && !snapshotStages) {
+    console.error('Error: --snapshot-output requires --snapshot-stages')
+    process.exit(1)
   }
 
   if (incremental) {
@@ -321,7 +375,21 @@ function compileCommand(
   const source = fs.readFileSync(file, 'utf-8')
 
   try {
-    const result = compile(source, { namespace, filePath: file, generateSourceMap: sourceMap, mcVersion, lenient, includeDirs })
+    const stageSnapshots: CompileStageSnapshot[] = []
+    const result = compile(source, {
+      namespace,
+      filePath: file,
+      generateSourceMap: sourceMap,
+      mcVersion,
+      lenient,
+      includeDirs,
+      snapshotStages,
+      stageSnapshots: snapshotStages ? stageSnapshots : undefined,
+    })
+
+    if (snapshotOutput) {
+      writeStageSnapshots(snapshotOutput, { file, namespace, stages: stageSnapshots })
+    }
 
     for (const w of result.warnings) {
       console.error(`Warning: ${w}`)
@@ -748,6 +816,8 @@ async function main(): Promise<void> {
           parsed.lenient,
           includeDirs,
           parsed.incremental,
+          parsed.snapshotStages,
+          parsed.snapshotOutput,
         )
       }
       break

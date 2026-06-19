@@ -9,6 +9,13 @@ describe('CLI arg helpers', () => {
       includeDirs: ['lib', 'vendor'],
       sourceMap: true,
     })
+
+    expect(parseArgs(['compile', 'src/main.mcrs', '--snapshot-stages', 'runtimeAssets,emitDatapack', '--snapshot-output', 'snapshots.json'])).toMatchObject({
+      command: 'compile',
+      file: 'src/main.mcrs',
+      snapshotStages: 'runtimeAssets,emitDatapack',
+      snapshotOutput: 'snapshots.json',
+    })
   })
 
   test('derives safe namespaces and project names', () => {
