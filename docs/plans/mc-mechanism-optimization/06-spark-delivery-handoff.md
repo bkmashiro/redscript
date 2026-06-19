@@ -42,7 +42,9 @@ npm run build
 
 ## Lane 2 — Display decomposition characterization probe
 
-**Objective:** Add a live Paper probe for display transformation decomposition before any new helper API.
+**Objective:** Add a live Paper probe for display decomposition characterization before any new helper API.
+
+**Status:** Implemented as a dedicated live probe file: `src/__tests__/mc-integration/display-decomposition-probe.test.ts` (adds baseline matrix cases, scaled rotation, PSD toy, rank-deficient matrix, and same-tick/next-tick read checks with tick stepping when available).
 
 **Probe cases:**
 - diagonal matrix baseline;
