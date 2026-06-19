@@ -1,6 +1,6 @@
 # Benchmark Suite
 
-RedScript now ships two benchmark entrypoints under `benchmarks/`.
+RedScript ships benchmark entrypoints under `benchmarks/`.
 
 ## What They Measure
 
@@ -23,6 +23,16 @@ RedScript now ships two benchmark entrypoints under `benchmarks/`.
   - `O1`: current default optimization pipeline
   - `O2`: `O1` plus a second MIR/LIR optimization round after coroutine lowering
 
+`benchmarks/arithmetic-probes.ts`
+
+- Compiles focused arithmetic/helper probe snippets.
+- Optionally includes stdlib modules such as `math` or `math_hp`.
+- Reports emitted `.mcfunction` file count, instruction count, bytes, and command
+  categories (`scoreboard`, `execute`, `data`, `function`, `storage`, selector,
+  macro, summon, teleport).
+- Compares `O0`/`O1`/`O2` when invoked with `--opt all`.
+- Intended as the first compile-time cost lens before live Paper mechanism probes.
+
 ## How To Run
 
 Run the default compiler benchmark:
@@ -43,6 +53,24 @@ Run the stdlib complexity benchmark:
 npx ts-node benchmarks/stdlib-complexity.ts --output benchmarks/stdlib-complexity.report.json
 ```
 
+List arithmetic probe cases:
+
+```bash
+npm run bench:arithmetic -- --list
+```
+
+Run one arithmetic probe at the default optimization level:
+
+```bash
+npm run bench:arithmetic -- --case double_div --output benchmarks/double-div.probe.json
+```
+
+Run all arithmetic probes across all optimization presets:
+
+```bash
+npm run bench:arithmetic -- --case all --opt all --output benchmarks/arithmetic-probes.report.json
+```
+
 ## Baseline
 
-`benchmarks/baseline.json` stores one recorded run of both benchmarks on the local machine. Treat it as a local baseline, not a cross-machine performance target.
+`benchmarks/baseline.json` stores one recorded run of the compiler and stdlib benchmarks on the local machine. Treat it as a local baseline, not a cross-machine performance target.
