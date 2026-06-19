@@ -506,7 +506,7 @@ Planned tasks:
   - `fixed + int`, `int + fixed`, `double + fixed`, `fixed + double`, `double + int`, and `int + double` should require explicit casts.
   - Preserve valid same-family operations: `int + int`, `fixed + fixed`, `double + double`, and `float`/`fixed` compatibility while `float` remains a deprecated alias.
 - [x] Fix `checkExpr(binary)` to reject mixed numeric families before lowering, preventing silent wrong scoreboard math such as `1.5 + 2 -> 15002`.
-- [ ] Add lowering/golden tests that pin language `fixed` arithmetic scale:
+- [x] Add lowering/golden tests that pin language `fixed` arithmetic scale:
   - decimal literal lowering (`1.5 -> 15000`),
   - `fixed * fixed` correction (`/ 10000`),
   - `fixed / fixed` correction (`* 10000` before divide),

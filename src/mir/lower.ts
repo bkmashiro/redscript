@@ -134,12 +134,14 @@ function formatFunctionSignature(fn: HIRFunction): string {
  *   appended after all regular functions so name resolution is stable.
  */
 export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
-  // Build struct definitions: name → field names
+  // Build struct definitions: name → field names and field types
   const structDefs = new Map<string, string[]>()
+  const structFieldTypes = new Map<string, Map<string, TypeNode>>()
   // Track @singleton struct names for special expansion of GameState::set(gs) calls
   const singletonStructs = new Set<string>()
   for (const s of hir.structs) {
     structDefs.set(s.name, s.fields.map(f => f.name))
+    structFieldTypes.set(s.name, new Map(s.fields.map(f => [f.name, f.type])))
     if (s.isSingleton) singletonStructs.add(s.name)
   }
 
@@ -233,7 +235,7 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
       continue
     }
 
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues, singletonStructs, displayImpls, globalVarNames)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, structFieldTypes, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues, singletonStructs, displayImpls, globalVarNames)
     allFunctions.push(fn, ...helpers)
   }
 
@@ -241,7 +243,7 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
   for (const ib of hir.implBlocks) {
     if (ib.traitName === 'Display') continue  // Display impls are inlined, not emitted as functions
     for (const m of ib.methods) {
-      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads, constValues, globalVarNames)
+      const { fn, helpers } = lowerImplMethod(m, ib.typeName, hir.namespace, structDefs, structFieldTypes, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, enumPayloads, constValues, globalVarNames)
       allFunctions.push(fn, ...helpers)
     }
   }
@@ -281,6 +283,8 @@ class FnContext {
   private readonly fnName: string
   /** Struct definitions: struct name → field names */
   readonly structDefs: Map<string, string[]>
+  /** Struct field type metadata: struct name → field name → type. */
+  readonly structFieldTypes: Map<string, Map<string, TypeNode>>
   /** Impl method info: typeName → methodName → { hasSelf, returnStructName? } */
   readonly implMethods: Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>>
   /**
@@ -364,6 +368,7 @@ class FnContext {
     namespace: string,
     fnName: string,
     structDefs: Map<string, string[]> = new Map(),
+    structFieldTypes: Map<string, Map<string, TypeNode>> = new Map(),
     implMethods: Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>> = new Map(),
     macroInfo: Map<string, MacroFunctionInfo> = new Map(),
     fnParamInfo: Map<string, HIRParam[]> = new Map(),
@@ -374,6 +379,7 @@ class FnContext {
     this.namespace = namespace
     this.fnName = fnName
     this.structDefs = structDefs
+    this.structFieldTypes = structFieldTypes
     this.implMethods = implMethods
     this.macroInfo = macroInfo
     this.fnParamInfo = fnParamInfo
@@ -390,6 +396,7 @@ class FnContext {
       this.namespace,
       helperName,
       this.structDefs,
+      this.structFieldTypes,
       this.implMethods,
       this.macroInfo,
       this.fnParamInfo,
@@ -526,10 +533,25 @@ function getLegacyEventExecutorAliases(fn: HIRFunction): Set<string> {
   return aliases
 }
 
+function isFixedPointType(type: TypeNode | undefined): boolean {
+  return type?.kind === 'named' && (type.name === 'fixed' || type.name === 'float')
+}
+
+function markFixedPointStructFields(ctx: FnContext, typeName: string, fields: Map<string, Temp>): void {
+  const fieldTypes = ctx.structFieldTypes.get(typeName)
+  if (!fieldTypes) return
+  for (const [fieldName, temp] of fields) {
+    if (isFixedPointType(fieldTypes.get(fieldName))) {
+      ctx.floatTemps.add(temp)
+    }
+  }
+}
+
 function lowerFunction(
   fn: HIRFunction,
   namespace: string,
   structDefs: Map<string, string[]> = new Map(),
+  structFieldTypes: Map<string, Map<string, TypeNode>> = new Map(),
   implMethods: Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>> = new Map(),
   macroInfo: Map<string, MacroFunctionInfo> = new Map(),
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
@@ -597,7 +619,7 @@ function lowerFunction(
   //                    inner loops by searching from innermost to outermost
   //                    with `ctx.findLoopByLabel()`
   // ---------------------------------------------------------------------------
-  const ctx = new FnContext(namespace, mirFnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
+  const ctx = new FnContext(namespace, mirFnName, structDefs, structFieldTypes, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = fn.sourceFile ?? sourceFile
   ctx.constValues = constValues
   ctx.singletonStructs = singletonStructs
@@ -629,6 +651,7 @@ function lowerFunction(
     if (eventExecutorAliases.has(p.name)) {
       return
     }
+    const isFixedPoint = isFixedPointType(p.type)
     if (p.type.kind === 'array' && arrayArgBindings?.has(p.name)) {
       // Array param already bound via arrayVars; it does not consume a scoreboard
       // parameter, but keep a sentinel temp in scope so scalar contexts such as
@@ -650,6 +673,20 @@ function lowerFunction(
       ctx.stringVars.set(p.name, `__sp${stringParamSlot++}`)
       return
     }
+    if (p.type.kind === 'struct') {
+      const paramFields = ctx.structDefs.get(p.type.name)
+      if (paramFields && paramFields.length > 0) {
+        const paramFieldTemps = new Map<string, Temp>()
+        for (const fieldName of paramFields) {
+          const t = ctx.freshTemp()
+          params.push({ name: t, isMacroParam: false })
+          paramFieldTemps.set(fieldName, t)
+        }
+        markFixedPointStructFields(ctx, p.type.name, paramFieldTemps)
+        ctx.structVars.set(p.name, { typeName: p.type.name, fields: paramFieldTemps })
+        return
+      }
+    }
     const t = ctx.freshTemp()
     scope.set(p.name, t)
     if (fnMacroInfo) {
@@ -657,17 +694,21 @@ function lowerFunction(
       // ordinary scoreboard parameters are not available as `$pN` slots.
       // Load scalar non-string parameters from the same storage object that
       // backs `$(...)` macro substitutions.
-      const isFloat = p.type.kind === 'named' && p.type.name === 'float'
-      const isFixed = p.type.kind === 'named' && p.type.name === 'fixed'
       ctx.emit({
         kind: 'nbt_read',
         dst: t,
         ns: 'rs:macro_args',
         path: p.name,
-        scale: isFloat ? 0.01 : isFixed ? 0.0001 : 1,
+        scale: p.type.kind === 'named' && p.type.name === 'float' ? 0.01 : p.type.kind === 'named' && p.type.name === 'fixed' ? 0.0001 : 1,
       })
+      if (isFixedPoint) {
+        ctx.floatTemps.add(t)
+      }
     } else {
       params.push({ name: t, isMacroParam: false })
+      if (isFixedPoint) {
+        ctx.floatTemps.add(t)
+      }
     }
   })
 
@@ -704,6 +745,7 @@ function lowerImplMethod(
   typeName: string,
   namespace: string,
   structDefs: Map<string, string[]>,
+  structFieldTypes: Map<string, Map<string, TypeNode>>,
   implMethods: Map<string, Map<string, { hasSelf: boolean; returnStructName?: string }>>,
   macroInfo: Map<string, MacroFunctionInfo> = new Map(),
   fnParamInfo: Map<string, HIRParam[]> = new Map(),
@@ -715,7 +757,7 @@ function lowerImplMethod(
   globalVarNames: Set<string> = new Set(),
 ): { fn: MIRFunction; helpers: MIRFunction[] } {
   const fnName = `${typeName}::${method.name}`
-  const ctx = new FnContext(namespace, fnName, structDefs, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
+  const ctx = new FnContext(namespace, fnName, structDefs, structFieldTypes, implMethods, macroInfo, fnParamInfo, enumDefs, timerCounter, enumPayloads)
   ctx.sourceFile = method.sourceFile ?? sourceFile
   ctx.constValues = constValues
   ctx.globalVarNames = globalVarNames
@@ -733,10 +775,13 @@ function lowerImplMethod(
       params.push({ name: t, isMacroParam: false })
       selfFields.set(fieldName, t)
     }
+    markFixedPointStructFields(ctx, typeName, selfFields)
     ctx.structVars.set('self', { typeName, fields: selfFields })
     // Remaining params (after self) — struct params get one slot per field
     for (let i = 1; i < method.params.length; i++) {
       const p = method.params[i]
+      const isFloat = p.type.kind === 'named' && p.type.name === 'float'
+      const isFixed = p.type.kind === 'named' && p.type.name === 'fixed'
       const paramTypeName = p.type.kind === 'named' ? p.type.name
         : p.type.kind === 'struct' ? p.type.name : null
       const paramFields = paramTypeName ? ctx.structDefs.get(paramTypeName) : null
@@ -748,16 +793,22 @@ function lowerImplMethod(
           params.push({ name: t, isMacroParam: false })
           paramFieldTemps.set(fieldName, t)
         }
+        markFixedPointStructFields(ctx, paramTypeName!, paramFieldTemps)
         ctx.structVars.set(p.name, { typeName: paramTypeName!, fields: paramFieldTemps })
       } else {
         const t = ctx.freshTemp()
         params.push({ name: t, isMacroParam: false })
+        if (isFloat || isFixed) {
+          ctx.floatTemps.add(t)
+        }
         scope.set(p.name, t)
       }
     }
   } else {
     // Static method — regular params (struct params get one slot per field)
     for (const p of method.params) {
+      const isFloat = p.type.kind === 'named' && p.type.name === 'float'
+      const isFixed = p.type.kind === 'named' && p.type.name === 'fixed'
       const paramTypeName = p.type.kind === 'named' ? p.type.name
         : p.type.kind === 'struct' ? p.type.name : null
       const paramFields = paramTypeName ? ctx.structDefs.get(paramTypeName) : null
@@ -768,10 +819,14 @@ function lowerImplMethod(
           params.push({ name: t, isMacroParam: false })
           paramFieldTemps.set(fieldName, t)
         }
+        markFixedPointStructFields(ctx, paramTypeName!, paramFieldTemps)
         ctx.structVars.set(p.name, { typeName: paramTypeName!, fields: paramFieldTemps })
       } else {
         const t = ctx.freshTemp()
         params.push({ name: t, isMacroParam: false })
+        if (isFloat || isFixed) {
+          ctx.floatTemps.add(t)
+        }
         scope.set(p.name, t)
       }
     }
@@ -2353,6 +2408,7 @@ function lowerExpr(
             ns,
             callbackName,
             ctx.structDefs,
+            ctx.structFieldTypes,
             ctx.implMethods,
             ctx.macroInfo,
             ctx.fnParamInfo,
@@ -2484,7 +2540,7 @@ function lowerExpr(
             }
 
             // Build helper MIR function with isMacro: true
-            const helperCtx = new FnContext(ns, helperName, ctx.structDefs, ctx.implMethods)
+            const helperCtx = new FnContext(ns, helperName, ctx.structDefs, ctx.structFieldTypes, ctx.implMethods)
             helperCtx.emit({ kind: 'call', dst: null, fn: `__raw:$${template}`, args: [] })
             helperCtx.terminate({ kind: 'return', value: null })
             const helperReachable = computeReachable(helperCtx.blocks, 'entry')
@@ -2668,6 +2724,7 @@ function lowerExpr(
                 targetHirFn,
                 ctx.getNamespace(),
                 ctx.structDefs,
+                ctx.structFieldTypes,
                 ctx.implMethods,
                 ctx.macroInfo,
                 ctx.fnParamInfo,

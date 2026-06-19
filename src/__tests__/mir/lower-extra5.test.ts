@@ -518,6 +518,37 @@ describe('MIR lower — binary float mul/div scale correction', () => {
   })
 })
 
+describe('MIR lower — binary fixed mul/div scale correction', () => {
+  function getInstrKinds(source: string): string[] {
+    const mod = compileMIR(source)
+    expect(verifyMIR(mod)).toEqual([])
+    return mod.functions
+      .flatMap(fn => fn.blocks)
+      .flatMap(block => block.instrs)
+      .map(instr => instr.kind)
+  }
+
+  test('fixed * fixed lowers with extra divide instruction', () => {
+    const kinds = getInstrKinds(`
+      fn f(a: fixed, b: fixed): fixed {
+        return a * b;
+      }
+    `)
+    expect(kinds).toContain('mul')
+    expect(kinds).toContain('div')
+  })
+
+  test('fixed / fixed lowers with extra multiply instruction', () => {
+    const kinds = getInstrKinds(`
+      fn f(a: fixed, b: fixed): fixed {
+        return a / b;
+      }
+    `)
+    expect(kinds).toContain('mul')
+    expect(kinds).toContain('div')
+  })
+})
+
 // ── unary neg / not ──────────────────────────────────────────────────────
 
 describe('MIR lower — unary expressions', () => {

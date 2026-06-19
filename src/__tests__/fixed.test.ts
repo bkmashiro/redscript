@@ -11,6 +11,10 @@ function getAllMcContent(files: { path: string; content: string }[]): string {
   return files.filter(f => f.path.endsWith('.mcfunction')).map(f => f.content).join('\n')
 }
 
+function getFunctionContent(files: { path: string; content: string }[]): string {
+  return files.find(f => f.path.endsWith('/t.mcfunction') || f.path.endsWith('\\t.mcfunction'))?.content ?? ''
+}
+
 describe('fixed literals (×10000 fixed-point)', () => {
   test('1.5 literal compiles to scoreboard value 15000', () => {
     const source = `fn t(): fixed { return 1.5; }`
@@ -137,6 +141,101 @@ describe('fixed division (scale correction ×10000)', () => {
     const result = compile(source, { namespace: 'fixedtest' })
     const all = getAllMcContent(result.files)
     expect(all).toContain('25000')
+  })
+})
+
+describe('fixed runtime arithmetic scale correction', () => {
+  test('fixed * fixed includes a ÷10000 correction in emitted operations', () => {
+    const source = `
+      fn t(a: fixed, b: fixed): fixed {
+        return a * b;
+      }
+    `
+    const result = compile(source, { namespace: 'fixedtest' })
+    const fn = getFunctionContent(result.files)
+
+    expect(fn).toContain('scoreboard players operation')
+    expect(fn).toMatch(/scoreboard players set .*__const_10000 __fixedtest 10000/)
+    expect(fn).toMatch(/scoreboard players operation .*\/= .*__const_10000 __fixedtest/)
+  })
+
+  test('fixed / fixed includes a ×10000 correction before division', () => {
+    const source = `
+      fn t(a: fixed, b: fixed): fixed {
+        return a / b;
+      }
+    `
+    const result = compile(source, { namespace: 'fixedtest' })
+    const fn = getFunctionContent(result.files)
+
+    expect(fn).toContain('scoreboard players operation')
+    expect(fn).toMatch(/scoreboard players set .*__const_10000 __fixedtest 10000/)
+    expect(fn).toMatch(/scoreboard players operation .*\*= .*__const_10000 __fixedtest/)
+    expect(fn).toMatch(/scoreboard players operation .*\/= /)
+  })
+
+  test('struct fixed fields keep scale correction when passed as parameters', () => {
+    const source = `
+      struct Pair { x: fixed, y: fixed }
+      fn t(p: Pair): fixed {
+        return p.x * p.y;
+      }
+    `
+    const result = compile(source, { namespace: 'fixedtest' })
+    const fn = getFunctionContent(result.files)
+
+    expect(fn).toMatch(/scoreboard players set .*__const_10000 __fixedtest 10000/)
+    expect(fn).toMatch(/scoreboard players operation .*\/= .*__const_10000 __fixedtest/)
+  })
+
+  test('impl self fixed fields keep scale correction', () => {
+    const source = `
+      struct Box { x: fixed }
+      impl Box {
+        fn square(self): fixed {
+          return self.x * self.x;
+        }
+      }
+      fn t(b: Box): fixed {
+        return b.square();
+      }
+    `
+    const result = compile(source, { namespace: 'fixedtest' })
+    const fn = result.files.find(f => f.path.endsWith('/box/square.mcfunction'))?.content ?? ''
+
+    expect(fn).toMatch(/scoreboard players set .*__const_10000 __fixedtest 10000/)
+    expect(fn).toMatch(/scoreboard players operation .*\/= .*__const_10000 __fixedtest/)
+  })
+})
+
+describe('explicit fixed conversions', () => {
+  test("'as fixed' keeps scoreboard-level value unchanged", () => {
+    const source = `fn t(a: fixed): fixed { return a as fixed; }`
+    const result = compile(source, { namespace: 'fixedtest' })
+    const fn = getFunctionContent(result.files)
+
+    expect(fn).toContain('scoreboard players operation')
+    expect(fn).not.toMatch(/data get storage rs:d/)
+  })
+
+  test("'as int' keeps scoreboard-level value unchanged", () => {
+    const source = `fn t(a: fixed): int { return a as int; }`
+    const result = compile(source, { namespace: 'fixedtest' })
+    const fn = getFunctionContent(result.files)
+
+    expect(fn).toContain('scoreboard players operation')
+    expect(fn).not.toMatch(/data get storage rs:d/)
+  })
+
+  test("'as double' converts through rs:d with 0.0001 then 10000.0 scaling", () => {
+    const source = `
+      fn t(a: fixed): double { return a as double; }
+    `
+    const result = compile(source, { namespace: 'fixedtest' })
+    const fn = getFunctionContent(result.files)
+
+    expect(fn).toMatch(/double 0\.0001/)
+    expect(fn).toMatch(/10000\.0/)
   })
 })
 
