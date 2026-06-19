@@ -1,6 +1,6 @@
 # Numeric Scale and Precision Policy
 
-Status: policy draft for Phase 11. This document records the current numeric contract and the intended migration discipline. It does **not** change compiler or stdlib semantics by itself.
+Status: completed Phase 11 policy baseline. This document records the current numeric contract and migration discipline. It does **not** change compiler or stdlib semantics by itself; future numeric changes should update this document and add tests in the same slice.
 
 ## Goals
 
@@ -41,6 +41,8 @@ A global rewrite from ×1000 or ×100 to ×10000 can reduce headroom and make fo
 
 ## Language-level `fixed`
 
+Phase 11 decision: compiler `fixed` remains ×10000. This is now treated as the canonical language representation, not an open migration target. Any future proposal to move it to a lower scale is a major semantic migration and must include broad golden/runtime tests, docs, and compatibility planning.
+
 The compiler contract for `fixed` is currently ×10000:
 
 - A decimal literal such as `1.5` lowers to `15000`.
@@ -64,13 +66,13 @@ Current hardening tests pin this behavior in:
 
 Current documented tiers:
 
-| Helper path | Precision model | Notes |
+| Helper path | Precision tier | Contract |
 |---|---|---|
-| `double_add` | Java double/entity position trick | High precision, entity/NBT-backed. |
-| `double_div` | Display entity SVD trick | High precision but requires runtime entity setup. |
-| `double_sub` | Negation and add path with ×10000 round-trip | Can introduce fixed-scale rounding where it crosses scoreboard. |
-| `double_mul` | scoreboard approximation path today | Do not document as full IEEE multiplication unless implementation changes. |
-| `double_mul_fixed` | macro scale trick | Multiplies by a ×10000 fixed integer while keeping the double operand in NBT. |
+| `double_add` | NBT/entity double | Uses the entity position trick and keeps arithmetic in Java double precision. |
+| `double_div` | NBT/display-entity double | Uses display-entity SVD and keeps the division in Java double precision; division by zero follows Java double/MC NBT failure modes and is not safe to read back. |
+| `double_sub` | scale-crossing double | Negates the subtrahend through a ×10000 score read/write before using the add path; expect fixed-scale rounding/truncation at that boundary. |
+| `double_mul` | scoreboard approximation | Converts operands to ×10000 int scores, multiplies/divides on scoreboard, then stores back as double; this is not full IEEE multiplication and has int32 overflow limits. |
+| `double_mul_fixed` | NBT double × ×10000 fixed | Uses a macro scale trick so the double operand stays in NBT and is multiplied by a ×10000 fixed integer scale. |
 
 Docs and API names should say when a helper is true NBT/double precision versus approximate or scale-crossing.
 
@@ -136,7 +138,7 @@ Before changing any numeric scale or helper precision:
 ## Near-term roadmap
 
 1. Use the explicit ×1000 aliases in new examples and docs when touching legacy helpers; keep old names as compatibility wrappers.
-2. Decide how much `double` precision can be promised per helper and document approximate paths honestly.
-3. Only after the above, consider ergonomic conversion helpers or scale-specific syntax.
+2. Use the documented double precision tiers when writing docs/examples: `double_add`/`double_div` are NBT-backed high precision paths, `double_sub` crosses a ×10000 score boundary, `double_mul` is a scoreboard approximation, and `double_mul_fixed` is NBT double × ×10000 fixed.
+3. Future ergonomic conversion helpers or scale-specific syntax can build on this baseline, but should be a new phase with explicit RED tests.
 
-Completed audit note: `math.mcrs`, `math_hp.mcrs`, `signal.mcrs`, and `geometry.mcrs` now carry file-level scale policy comments that preserve existing semantics while making legacy ×1000, ×10000, NBT double, and geometry ×100 boundaries explicit.
+Completed audit note: `math.mcrs`, `math_hp.mcrs`, `signal.mcrs`, and `geometry.mcrs` now carry file-level scale policy comments that preserve existing semantics while making legacy ×1000, ×10000, NBT double, and geometry ×100 boundaries explicit. Phase 11 also locks language `fixed` to ×10000, rejects mixed numeric arithmetic, pins fixed lowering scale behavior, adds explicit ×1000 aliases, and records double helper precision tiers.

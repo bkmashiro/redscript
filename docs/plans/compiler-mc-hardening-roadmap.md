@@ -471,7 +471,7 @@ npm test -- src/__tests__/cli.test.ts src/__tests__/cli/args.test.ts --runInBand
 
 ## Phase 11 — Numeric scale and precision policy hardening
 
-Status: 🔧 In progress. Mixed numeric arithmetic and language `fixed` lowering are now test-backed; broad scale normalization remains blocked on the scale policy and follow-up stdlib audit.
+Status: ✅ Complete. Phase 11 establishes the numeric policy baseline: mixed numeric arithmetic fails loudly, language `fixed` remains ×10000 and is test-pinned through lowering, stdlib scale families are documented without forced migration, legacy ×1000 helpers have explicit aliases, and double helper precision tiers are recorded.
 
 Context from the numeric audit:
 
@@ -524,9 +524,11 @@ Planned tasks:
 - [x] Decide naming/deprecation strategy for legacy ×1000 helpers:
   - keep old names as compatibility wrappers,
   - introduce explicit additive aliases such as `sqrt_fx1000`, `sin_fx1000`, `cos_fx1000`, `lerp_t1000`, `mul_fx1000`, `div_fx1000`, `smoothstep_t1000`, and `smootherstep_t1000` for new code/docs.
-- [ ] Decide whether compiler `fixed` should remain ×10000 or move to a lower scale; if changed, do it as a major semantic migration with broad golden/runtime tests, not as opportunistic cleanup.
-- [ ] Document double helper precision tiers:
-  - `double_add` and `double_div` are high-precision entity/NBT tricks,
+- [x] Keep compiler `fixed` at ×10000 for this policy baseline:
+  - changing it would be a major semantic migration with broad golden/runtime tests,
+  - no opportunistic scale migration is planned for Phase 11.
+- [x] Document double helper precision tiers:
+  - `double_add` and `double_div` are NBT/entity-backed high-precision paths,
   - `double_sub` includes a ×10000 negation round-trip,
   - `double_mul` is currently scoreboard approximation,
   - `double_mul_fixed` uses a macro scale trick and has different precision/overflow characteristics.
@@ -558,10 +560,10 @@ npm run docs:check
 
 ## Short next slice recommendation
 
-The next implementation slice should be:
+Phase 11 is complete. The next numeric work should be a new phase, not a continuation of the policy baseline:
 
-1. Add typechecker RED tests for mixed numeric binary operations, then reject cross-family arithmetic before lowering.
-2. Preserve existing scale-specific stdlib helper semantics while writing the numeric scale policy; do not migrate ×100/×1000/×10000 helpers in the same slice.
-3. Run `npm run build`, numeric/typechecker/double tests, `npm run validate-mc`, docs check, and full suite before changing numeric semantics further.
+1. If improving DX, design explicit conversion helpers or scale-specific syntax (`as fx3 round/trunc`, target typing, or `numeric fx4 { ... }`) with RED parser/typechecker tests first.
+2. If improving precision, treat `double_mul` replacement as its own implementation phase with runtime oracle coverage and overflow/NaN policy.
+3. If changing any stdlib scale, keep compatibility wrappers and add helper-level unit/Paper tests before migrating examples.
 
-This keeps compiler-owned behavior safe while acknowledging that Minecraft precision and int32 overflow tradeoffs require multiple explicit scale families.
+This keeps compiler-owned numeric behavior safe while acknowledging that Minecraft precision and int32 overflow tradeoffs require multiple explicit scale families.
