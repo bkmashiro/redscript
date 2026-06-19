@@ -471,7 +471,7 @@ npm test -- src/__tests__/cli.test.ts src/__tests__/cli/args.test.ts --runInBand
 
 ## Phase 11 — Numeric scale and precision policy hardening
 
-Status: 📝 Planned only. Do not normalize scales or change arithmetic semantics until the scale policy is explicitly designed and test-backed.
+Status: 🔧 In progress. Mixed numeric arithmetic and language `fixed` lowering are now test-backed; broad scale normalization remains blocked on the scale policy and follow-up stdlib audit.
 
 Context from the numeric audit:
 
@@ -511,7 +511,7 @@ Planned tasks:
   - `fixed * fixed` correction (`/ 10000`),
   - `fixed / fixed` correction (`* 10000` before divide),
   - explicit `as int`, `as fixed`, and `as double` conversions.
-- [ ] Write a numeric scale policy document, likely `docs/plans/numeric-scale-policy.md`, that separates:
+- [x] Write a numeric scale policy document, likely `docs/plans/numeric-scale-policy.md`, that separates:
   - language-level `fixed`,
   - NBT-backed `double`,
   - scale-specific stdlib integer helper APIs (`*_fx`, `*_hp`, or explicit suffixes),
