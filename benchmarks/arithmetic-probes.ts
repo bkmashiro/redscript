@@ -31,6 +31,49 @@ export interface CommandCategorySummary {
   rawCommandLike: number
 }
 
+export interface ForkEstimate {
+  executeAs: number
+  executeAsEntity: number
+  executeAsPlayer: number
+  executeAsBroad: number
+  runFunctionInsideExecuteAs: number
+  estimatedForkUnits: number
+}
+
+export interface SelectorEstimate {
+  mentions: number
+  broadMentions: number
+  broadRiskRatio: number
+  broadRiskLevel: 'none' | 'low' | 'medium' | 'high'
+}
+
+export interface NbtEstimate {
+  scalarReads: number
+  wholeListCopies: number
+}
+
+export interface MacroEstimate {
+  commandCount: number
+  withStorageCalls: number
+}
+
+export interface SetupHintEstimate {
+  entitySetupCommands: number
+  displaySetupCommands: number
+  entityTypes: string[]
+  entityTags: string[]
+  hasTransformationReads: boolean
+}
+
+export interface ArithmeticCostEstimate {
+  forks: ForkEstimate
+  selector: SelectorEstimate
+  nbt: NbtEstimate
+  macro: MacroEstimate
+  setupHints: SetupHintEstimate
+  note: 'static-estimate'
+}
+
 export interface ArithmeticProbeResult {
   case: string
   description: string
@@ -39,6 +82,7 @@ export interface ArithmeticProbeResult {
   timingsMs: { parse: number; hir: number; mir: number; emit: number; total: number }
   files: ReturnType<typeof summarizeFiles>
   commands: CommandCategorySummary
+  estimatedCost: ArithmeticCostEstimate
   warnings: string[]
 }
 
@@ -178,6 +222,178 @@ function round(value: number): number {
   return Math.round(value * 1000) / 1000
 }
 
+function extractSelectors(line: string): Array<{ type: string; token: string }> {
+  const matches = Array.from(line.matchAll(/@([a-z])(?:\[[^\]]*\])?/g))
+  return matches
+    .map(match => ({
+      type: match[1],
+      token: match[0],
+    }))
+    .filter(selector => ['a', 'e', 'p', 'r', 's'].includes(selector.type))
+}
+
+function isBroadSelector(selector: { type: string; token: string }): boolean {
+  if (selector.type !== 'e' && selector.type !== 'a') return false
+  return !/\[[^\]]*\]/.test(selector.token) || !/\blimit\s*=\s*1\b/.test(selector.token)
+}
+
+function broadRiskLevelFromRatio(ratio: number): 'none' | 'low' | 'medium' | 'high' {
+  if (ratio <= 0) return 'none'
+  if (ratio < 0.25) return 'low'
+  if (ratio < 0.6) return 'medium'
+  return 'high'
+}
+
+function isNumericToken(token: string): boolean {
+  return /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:[dDfF])?$/.test(token)
+}
+
+function isScalarNbtPath(path: string): boolean {
+  return /(?:\[[0-9]+\]|\.[A-Za-z0-9_]+)$/.test(path)
+}
+
+function extractExecuteSelectors(line: string): { count: number; entities: number; players: number; broad: number } {
+  const matches = Array.from(line.matchAll(/\bas\s+(@[a-z](?:\[[^\]]*\])?)/g))
+
+  return {
+    count: matches.length,
+    entities: matches.filter(match => match[1].startsWith('@e')).length,
+    players: matches.filter(match => match[1].startsWith('@a')).length,
+    broad: matches
+      .map(match => ({ type: match[1][1], token: match[1] as `@${string}` }))
+      .filter(selector => isBroadSelector(selector)).length,
+  }
+}
+
+function summarizeEstimatedNbtReads(lines: string[]): NbtEstimate {
+  let scalarReads = 0
+  let wholeListCopies = 0
+
+  for (const line of lines) {
+    const tokens = line.split(/\s+/)
+    const getIndex = tokens.indexOf('get')
+    const modifyIndex = tokens.indexOf('modify')
+
+    if (getIndex >= 0 && tokens[getIndex - 1] === 'data') {
+      const source = tokens[getIndex + 1]
+      if (source === 'entity' || source === 'storage' || source === 'block') {
+        const path = tokens[getIndex + 3]
+        if (!path || isNumericToken(path) || !isScalarNbtPath(path)) {
+          wholeListCopies++
+        } else {
+          scalarReads++
+        }
+      }
+      continue
+    }
+
+    if (modifyIndex >= 0 && tokens[modifyIndex - 1] === 'data') {
+      const setIndex = tokens.indexOf('set', modifyIndex)
+      const fromIndex = setIndex >= 0 ? tokens.indexOf('from', setIndex) : -1
+      if (fromIndex >= 0) {
+        const source = tokens[fromIndex + 1]
+        if (source === 'storage' || source === 'entity' || source === 'block') {
+          const path = tokens[fromIndex + 3]
+          if (!path || isNumericToken(path) || !isScalarNbtPath(path)) {
+            wholeListCopies++
+          } else {
+            scalarReads++
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    scalarReads,
+    wholeListCopies,
+  }
+}
+
+function summarizeCommandCostEstimateFromLines(lines: string[]): ArithmeticCostEstimate {
+  const selectorStats = lines.flatMap(line => extractSelectors(line))
+  const broadSelectors = selectorStats.filter(selector => isBroadSelector(selector))
+  const selectorRiskRatio = selectorStats.length === 0 ? 0 : broadSelectors.length / selectorStats.length
+
+  const executeLines = lines.filter(line => line.startsWith('execute ') || line.startsWith('$execute '))
+  const executeForkStats = executeLines.map(extractExecuteSelectors)
+  const executeAs = executeForkStats.reduce((sum, stat) => sum + stat.count, 0)
+  const executeAsEntity = executeForkStats.reduce((sum, stat) => sum + stat.entities, 0)
+  const executeAsPlayer = executeForkStats.reduce((sum, stat) => sum + stat.players, 0)
+  const executeAsBroad = executeForkStats.reduce((sum, stat) => sum + stat.broad, 0)
+  const runFunctionInsideExecuteAs = executeLines.filter(
+    line => /\bas\b/.test(line) && /\brun\s+function\b/.test(line),
+  ).length
+
+  const nbt = summarizeEstimatedNbtReads(lines)
+  const macroCount = lines.filter(line => line.startsWith('$') || line.includes('$(')).length
+  const withStorageCalls = lines.filter(line => /\bfunction\b\s+[^\s]+\s+with\s+storage\b/.test(line)).length
+
+  const entityTypeSet = new Set<string>()
+  const tagSet = new Set<string>()
+  const setupEntityHintLines = lines.filter(
+    line => /\b(?:summon|tp|teleport)\b/.test(line) || /\brun\s+(?:summon|tp|teleport)\b/.test(line),
+  )
+  const displaySetupCommandLines = lines.filter(line => line.includes('block_display'))
+  const transformationLines = lines.filter(line => line.includes('transformation'))
+
+  for (const line of lines) {
+    const summonMatch = line.match(/\bsummon\s+((?:minecraft:)?[a-zA-Z0-9_]+)/)
+    if (summonMatch) entityTypeSet.add(summonMatch[1])
+
+    const selectorTagMatch = /tag=([a-zA-Z0-9_]+)/g
+    for (const [, tag] of line.matchAll(selectorTagMatch)) {
+      tagSet.add(tag)
+    }
+
+    for (const tag of line.matchAll(/Tags:\[(.*?)\]/g)) {
+      const payload = tag[1]
+      for (const item of payload.split(',').map(value => value.trim().replace(/^\"|\"$/g, ''))) {
+        if (item.length > 0 && item !== '"') {
+          tagSet.add(item)
+        }
+      }
+    }
+  }
+
+  const broadForkPenalty = executeAsBroad * 64
+  const runFunctionPenalty = runFunctionInsideExecuteAs * 8
+
+  return {
+    forks: {
+      executeAs,
+      executeAsEntity,
+      executeAsPlayer,
+      executeAsBroad,
+      runFunctionInsideExecuteAs,
+      estimatedForkUnits: executeAs + broadForkPenalty + runFunctionPenalty,
+    },
+    selector: {
+      mentions: selectorStats.length,
+      broadMentions: broadSelectors.length,
+      broadRiskRatio: Math.round(selectorRiskRatio * 1000) / 1000,
+      broadRiskLevel: broadRiskLevelFromRatio(selectorRiskRatio),
+    },
+    nbt,
+    macro: {
+      commandCount: macroCount,
+      withStorageCalls,
+    },
+    setupHints: {
+      entitySetupCommands: setupEntityHintLines.length,
+      displaySetupCommands: displaySetupCommandLines.length,
+      entityTypes: [...entityTypeSet].sort(),
+      entityTags: [...tagSet].sort(),
+      hasTransformationReads: transformationLines.length > 0,
+    },
+    note: 'static-estimate',
+  }
+}
+
+export function summarizeCommandCosts(files: Array<{ path: string; content: string }>): ArithmeticCostEstimate {
+  return summarizeCommandCostEstimateFromLines(commandLines(files))
+}
+
 function commandLines(files: Array<{ path: string; content: string }>): string[] {
   return files
     .filter(file => file.path.endsWith('.mcfunction'))
@@ -223,6 +439,7 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
     },
     files: summarizeFiles(result.files),
     commands: summarizeCommandCategories(result.files),
+    estimatedCost: summarizeCommandCosts(result.files),
     warnings: result.warnings,
   }
 }

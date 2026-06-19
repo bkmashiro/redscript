@@ -31,6 +31,12 @@ RedScript ships benchmark entrypoints under `benchmarks/`.
   categories (`scoreboard`, `execute`, `data`, `function`, `storage`, selector,
   macro, summon, teleport).
 - Compares `O0`/`O1`/`O2` when invoked with `--opt all`.
+- Adds a static `estimatedCost` section with:
+  - fork risk (`execute as @e/@a`, broad selectors, and `run function` under `execute as`),
+  - selector mentions and broad-selector risk,
+  - NBT scalar reads vs whole-list/compound copies,
+  - macro command pressure (including `with storage` calls),
+  - and entity/display setup hints.
 - Intended as the first compile-time cost lens before live Paper mechanism probes.
 
 ## How To Run
