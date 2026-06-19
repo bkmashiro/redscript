@@ -469,6 +469,72 @@ npm test -- src/__tests__/cli.test.ts src/__tests__/cli/args.test.ts --runInBand
 
 ---
 
+## Phase 11 — Numeric scale and precision policy hardening
+
+Status: 📝 Planned only. Do not normalize scales or change arithmetic semantics until the scale policy is explicitly designed and test-backed.
+
+Context from the numeric audit:
+
+| Area | Current representation | Notes |
+|---|---:|---|
+| Compiler `fixed` / decimal literals | ×10000 | Lowering stores decimal literals as `Math.round(value * 10000)`; fixed casts use `0.0001` / `10000.0`. |
+| `double` | NBT-backed Java double | Arithmetic is helper-specific: add/div use entity tricks, mul is currently scoreboard approximation, casts round-trip through ×10000 when converted to scoreboards. |
+| `src/stdlib/math.mcrs` legacy fixed helpers | ×1000 | `sqrt_fixed`, `sin_fixed`, `cos_fixed`, `lerp` document/use ×1000-era conventions. |
+| `src/stdlib/math_hp.mcrs` | mostly ×10000 | High-precision trig/div/log helpers document ×10000; some helpers rely on entity rotation/SVD tricks. |
+| `src/stdlib/signal.mcrs` | mostly ×10000 | Probability/statistics/DFT helpers use explicit `_fx`-style integer scale conventions. |
+| `src/stdlib/geometry.mcrs` | mixed ×100 / ×10000 | Coordinates and angles intentionally trade precision against overflow risk; do not blindly migrate. |
+
+Design constraints:
+
+- Minecraft scoreboard values are signed int32; every extra decimal digit materially increases overflow risk.
+- ×100, ×1000, and ×10000 each have valid gameplay/use-case tradeoffs. The goal is **not** to force one global scale everywhere.
+- `fixed` as a language type must have a single, well-documented representation, but stdlib APIs may expose scale-specific integer helper families when that is clearer and safer.
+- `double` should remain a separate NBT-backed type; do not promise full IEEE semantics for every operation unless the helper path actually provides it.
+- Precision-sensitive stdlib helpers should make scale explicit in names/docs when they are not operating on language `fixed` directly.
+
+Planned tasks:
+
+- [ ] Add failing typechecker tests for numeric binary mismatches:
+  - `fixed + int`, `int + fixed`, `double + fixed`, `fixed + double`, `double + int`, and `int + double` should require explicit casts.
+  - Preserve valid same-family operations: `int + int`, `fixed + fixed`, `double + double`, and `float`/`fixed` compatibility while `float` remains a deprecated alias.
+- [ ] Fix `checkExpr(binary)` to reject mixed numeric families before lowering, preventing silent wrong scoreboard math such as `1.5 + 2 -> 15002`.
+- [ ] Add lowering/golden tests that pin language `fixed` arithmetic scale:
+  - decimal literal lowering (`1.5 -> 15000`),
+  - `fixed * fixed` correction (`/ 10000`),
+  - `fixed / fixed` correction (`* 10000` before divide),
+  - explicit `as int`, `as fixed`, and `as double` conversions.
+- [ ] Write a numeric scale policy document, likely `docs/plans/numeric-scale-policy.md`, that separates:
+  - language-level `fixed`,
+  - NBT-backed `double`,
+  - scale-specific stdlib integer helper APIs (`*_fx`, `*_hp`, or explicit suffixes),
+  - overflow envelopes and recommended ranges.
+- [ ] Audit stdlib docs/comments for scale labels without changing semantics first:
+  - `src/stdlib/math.mcrs` ×1000 helpers,
+  - `src/stdlib/math_hp.mcrs` ×10000 helpers,
+  - `src/stdlib/signal.mcrs` ×10000 helpers,
+  - `src/stdlib/geometry.mcrs` ×100 / ×10000 split.
+- [ ] Decide naming/deprecation strategy for legacy ×1000 helpers:
+  - either keep names but document them as legacy scale-specific APIs,
+  - or introduce explicit names such as `sqrt_fixed1000` / `sin_fixed1000` before deprecating old names.
+- [ ] Decide whether compiler `fixed` should remain ×10000 or move to a lower scale; if changed, do it as a major semantic migration with broad golden/runtime tests, not as opportunistic cleanup.
+- [ ] Document double helper precision tiers:
+  - `double_add` and `double_div` are high-precision entity/NBT tricks,
+  - `double_sub` includes a ×10000 negation round-trip,
+  - `double_mul` is currently scoreboard approximation,
+  - `double_mul_fixed` uses a macro scale trick and has different precision/overflow characteristics.
+
+Verification for Phase 11 slices:
+
+```bash
+npm test -- src/__tests__/typechecker.test.ts src/__tests__/typechecker/**/*.test.ts src/__tests__/double.test.ts src/__tests__/mir/lower-extra*.test.ts --runInBand
+npm run build
+npm run validate-mc
+npm test -- --runInBand
+npm run docs:check
+```
+
+---
+
 ## Decision rules for future agents
 
 - Prefer test/oracle hardening before broad refactors.
@@ -478,6 +544,7 @@ npm test -- src/__tests__/cli.test.ts src/__tests__/cli/args.test.ts --runInBand
 - Do not commit VSCode compiled output unless the task is specifically extension packaging/release.
 - If touching `src/emit/compile.ts`, explain which stage boundary is being clarified.
 - If touching syntax sugar, add tests at the lowering/codegen level, not just parser tests.
+- If touching numeric code, do not blindly normalize ×100/×1000/×10000 scales. First state the target representation, overflow envelope, affected stdlib APIs, and explicit cast/typechecker behavior.
 
 ---
 
@@ -485,8 +552,8 @@ npm test -- src/__tests__/cli.test.ts src/__tests__/cli/args.test.ts --runInBand
 
 The next implementation slice should be:
 
-1. Keep extracting `compile()` boundaries where behavior is now stable, with each extraction covered by stage tests and artifact shape checks.
-2. If gameplay runtime behavior continues to grow, prefer stdlib/runtime assets + manifests over compiler-hardcoded cases.
-3. Run `npm run build`, event/runtime tests, `npm run validate-mc`, and full suite before broader event/runtime changes.
+1. Add typechecker RED tests for mixed numeric binary operations, then reject cross-family arithmetic before lowering.
+2. Preserve existing scale-specific stdlib helper semantics while writing the numeric scale policy; do not migrate ×100/×1000/×10000 helpers in the same slice.
+3. Run `npm run build`, numeric/typechecker/double tests, `npm run validate-mc`, docs check, and full suite before changing numeric semantics further.
 
-This keeps compiler-owned behavior limited to safe manifest validation and datapack artifact wiring.
+This keeps compiler-owned behavior safe while acknowledging that Minecraft precision and int32 overflow tradeoffs require multiple explicit scale families.
