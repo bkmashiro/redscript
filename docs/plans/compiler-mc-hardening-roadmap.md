@@ -634,7 +634,7 @@ npm test -- --runInBand
 
 Phase 13's macro-scale `double_mul` runtime oracle is complete, live Paper integration output is quiet by default (`MC_VERBOSE=1` opts success breadcrumbs back in), and the true-IEEE decision is recorded: add a future `double_mul_ieee`-style helper separately before considering any replacement of `double_mul`. Do not change language-level `fixed` scale as part of that work.
 
-The next deeper numeric/performance track is now captured in `docs/plans/arithmetic-optimization-exploration.md`. Treat it as Phase 14: build compile-time arithmetic probe tooling, measure helper command costs, then dispatch small Paper/mechanism probes for display SVD, quaternion normalization, combined `sincos_hp`, direct scoreboard RMW optimization, and sqrt/reciprocal approximation tiers.
+The next deeper numeric/performance track is now captured in `docs/plans/arithmetic-optimization-exploration.md`, with the expanded mechanism report and Spark task board split under `docs/plans/mc-mechanism-optimization/`. Treat it as Phase 14: build compile-time arithmetic probe tooling, measure helper command costs, then dispatch small Paper/mechanism probes for display SVD, attribute/enchantment ALU, quaternion normalization, combined `sincos_hp`, direct scoreboard RMW optimization, and sqrt/reciprocal approximation tiers.
 
 If improving DX instead, design explicit conversion helpers or scale-specific syntax (`as fx3 round/trunc`, target typing, or `numeric fx4 { ... }`) with RED parser/typechecker tests first.
 

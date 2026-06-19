@@ -1,6 +1,6 @@
 # Arithmetic Optimization and Minecraft Mechanism Exploration
 
-Status: Phase 14 proposal / exploration backlog.
+Status: Phase 14 proposal / exploration backlog. The full Minecraft mechanism report is split under [`mc-mechanism-optimization/`](./mc-mechanism-optimization/README.md) with a Spark delivery handoff.
 
 This document tracks the next numeric direction after the fixed-scale policy,
 helper-level tuner, and `double_mul` macro-scale work. The goal is not to change
