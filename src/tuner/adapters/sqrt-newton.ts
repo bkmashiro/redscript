@@ -11,7 +11,7 @@
  *      Overflow-safe: x * 10000 / g  →  (x * 100) / (g / 100)
  *   4. Return g
  *
- * Valid range: x ∈ [1, 1_000_000]  (real range 0.0001 to 100.0)
+ * Valid tuning range: x ∈ [100, 1_000_000]  (real range 0.01 to 100.0)
  *   Larger x needs more iterations; beyond 1M, convergence is not guaranteed
  *   within N=12 iterations from an x/2 initial guess.
  *
@@ -37,7 +37,7 @@ export const defaultParams: Record<string, number> = {
 export const sqrtNewtonAdapter: TunerAdapter = {
   name: 'sqrt-newton',
   description: 'sqrt(x) Newton iteration using fixed-point int32 arithmetic (×10000 scale)',
-  input: { min: 1, max: 1_000_000, scale: SCALE, unit: 'fixed×10000' },
+  input: { min: 100, max: 1_000_000, scale: SCALE, unit: 'fixed×10000' },
   output: { scale: SCALE, unit: 'fixed×10000' },
   overflowPolicy: 'simulate Minecraft scoreboard int32 arithmetic; non-finite/overflow results are penalized as Infinity',
 
@@ -116,7 +116,7 @@ export const sqrtNewtonAdapter: TunerAdapter = {
 
 fn sqrt_fx(x: int): int {
     // Input x: fixed-point ×10000, returns floor(sqrt(x/10000)*10000)
-    // Valid range: x ∈ [0, 1000000]  (real range 0.0 to 100.0)
+    // Tuned range: x ∈ [100, 1000000]  (real range 0.01 to 100.0); x <= 0 returns 0
     // max_error: ${meta.maxError.toFixed(6)} (in ×10000 units)
     //
     // Overflow-safe: x*10000/g computed as (x*100)/(g/100), valid for x ≤ 1_000_000

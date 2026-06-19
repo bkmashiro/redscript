@@ -2,12 +2,67 @@
  * Error metrics for tuner adapters.
  */
 
-import { TunerAdapter } from './types';
+import { TunerAdapter, TunerSimulationReport } from './types';
 
 export interface EvaluationResult {
   maxError: number;
   mae: number;
   rmse: number;
+}
+
+export function buildSimulationReport(
+  adapter: TunerAdapter,
+  params: Record<string, number>
+): TunerSimulationReport {
+  const inputs = adapter.sampleInputs();
+  const uniqueInputs = Array.from(new Set(inputs));
+  const min = inputs.length > 0 ? Math.min(...inputs) : undefined;
+  const max = inputs.length > 0 ? Math.max(...inputs) : undefined;
+
+  let inRangeCount = 0;
+  let outOfRangeCount = 0;
+  if (adapter.input) {
+    for (const input of inputs) {
+      if (input >= adapter.input.min && input <= adapter.input.max) {
+        inRangeCount++;
+      } else {
+        outOfRangeCount++;
+      }
+    }
+  }
+
+  let nonFiniteSimCount = 0;
+  let invalidReferenceCount = 0;
+  for (const input of inputs) {
+    const simResult = adapter.simulate(input, params);
+    if (!isFinite(simResult) || isNaN(simResult)) {
+      nonFiniteSimCount++;
+    }
+
+    const refResult = adapter.reference(input);
+    if (!isFinite(refResult) || isNaN(refResult)) {
+      invalidReferenceCount++;
+    }
+  }
+
+  return {
+    samples: {
+      count: inputs.length,
+      uniqueCount: uniqueInputs.length,
+      min,
+      max,
+      ...(adapter.input ? {
+        containsDeclaredMin: inputs.includes(adapter.input.min),
+        containsDeclaredMax: inputs.includes(adapter.input.max),
+        inRangeCount,
+        outOfRangeCount,
+      } : {}),
+    },
+    overflow: {
+      nonFiniteSimCount,
+      invalidReferenceCount,
+    },
+  };
 }
 
 /**

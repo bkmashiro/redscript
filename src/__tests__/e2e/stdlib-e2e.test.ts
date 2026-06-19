@@ -148,6 +148,9 @@ describe('stdlib e2e: sqrt_fixed', () => {
     fn test_sqrt_1(): int { return sqrt_fixed(1000); }
     fn test_sqrt_2(): int { return sqrt_fixed(2000); }
     fn test_sqrt_4(): int { return sqrt_fixed(4000); }
+    fn test_sqrt_fx1000_4k(): int { return sqrt_fx1000(4000); }
+    fn test_sqrt_fx10000_1(): int { return sqrt_fx10000(10000); }
+    fn test_sqrt_fx10000_4(): int { return sqrt_fx10000(40000); }
   `)
 
   test('sqrt_fixed(1000) = 1000 (sqrt(1)*1000)', () =>
@@ -159,6 +162,15 @@ describe('stdlib e2e: sqrt_fixed', () => {
   })
   test('sqrt_fixed(4000) = 2000 (sqrt(4)*1000)', () =>
     expect(callAndGetRet(rt, 'test_sqrt_4')).toBe(2000))
+
+  test('sqrt_fx1000(4000) = 2000 (scale still ×1000)', () =>
+    expect(callAndGetRet(rt, 'test_sqrt_fx1000_4k')).toBe(2000))
+
+  test('sqrt_fx10000(10000) = 10000 (sqrt(1)*10000)', () =>
+    expect(callAndGetRet(rt, 'test_sqrt_fx10000_1')).toBe(10000))
+
+  test('sqrt_fx10000(40000) = 20000 (sqrt(4)*10000)', () =>
+    expect(callAndGetRet(rt, 'test_sqrt_fx10000_4')).toBe(20000))
 })
 
 describe('stdlib e2e: pow_int', () => {

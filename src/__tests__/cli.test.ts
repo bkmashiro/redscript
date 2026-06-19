@@ -210,10 +210,24 @@ describe('CLI API', () => {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
       expect(manifest.schemaVersion).toBe(1)
       expect(manifest.adapter).toBe('ln-polynomial')
+      expect(manifest.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
       expect(manifest.artifact.codePath).toBe(outPath)
       expect(manifest.input).toEqual({ min: 100, max: 1000000, scale: 10000, unit: 'fixed×10000' })
       expect(manifest.output).toEqual({ scale: 10000, unit: 'fixed×10000' })
       expect(manifest.overflowPolicy).toContain('int32')
+      expect(manifest.samples).toMatchObject({
+        count: expect.any(Number),
+        uniqueCount: expect.any(Number),
+        min: 100,
+        max: 1000000,
+        containsDeclaredMin: true,
+        containsDeclaredMax: true,
+        outOfRangeCount: 0,
+      })
+      expect(manifest.overflowReport).toEqual({
+        nonFiniteSimCount: 0,
+        invalidReferenceCount: 0,
+      })
       expect(manifest.params).toHaveProperty('A1')
       expect(manifest.metrics.maxError).toEqual(expect.any(Number))
     })

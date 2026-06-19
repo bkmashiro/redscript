@@ -97,6 +97,14 @@ describe('lnPolynomialAdapter — sampleInputs', () => {
     const inputs = lnPolynomialAdapter.sampleInputs()
     expect(inputs[0]).toBeGreaterThanOrEqual(100)
   })
+
+  test('all samples stay inside declared input range', () => {
+    const inputs = lnPolynomialAdapter.sampleInputs()
+    expect(lnPolynomialAdapter.input).toBeDefined()
+    expect(Math.min(...inputs)).toBe(lnPolynomialAdapter.input!.min)
+    expect(Math.max(...inputs)).toBe(lnPolynomialAdapter.input!.max)
+    expect(inputs.every(x => x >= lnPolynomialAdapter.input!.min && x <= lnPolynomialAdapter.input!.max)).toBe(true)
+  })
 })
 
 describe('lnPolynomialAdapter — generateCode', () => {
@@ -212,6 +220,14 @@ describe('sqrtNewtonAdapter — sampleInputs', () => {
     const inputs = sqrtNewtonAdapter.sampleInputs()
     expect(inputs.every(x => Number.isInteger(x) && x > 0)).toBe(true)
   })
+
+  test('all samples stay inside declared input range', () => {
+    const inputs = sqrtNewtonAdapter.sampleInputs()
+    expect(sqrtNewtonAdapter.input).toBeDefined()
+    expect(Math.min(...inputs)).toBe(sqrtNewtonAdapter.input!.min)
+    expect(Math.max(...inputs)).toBe(sqrtNewtonAdapter.input!.max)
+    expect(inputs.every(x => x >= sqrtNewtonAdapter.input!.min && x <= sqrtNewtonAdapter.input!.max)).toBe(true)
+  })
 })
 
 describe('sqrtNewtonAdapter — generateCode', () => {
@@ -237,7 +253,7 @@ describe('sqrtNewtonAdapter — metadata', () => {
   })
 
   test('declares input range, scale, and overflow policy for manifest output', () => {
-    expect(sqrtNewtonAdapter.input).toEqual({ min: 1, max: 1000000, scale: 10000, unit: 'fixed×10000' })
+    expect(sqrtNewtonAdapter.input).toEqual({ min: 100, max: 1000000, scale: 10000, unit: 'fixed×10000' })
     expect(sqrtNewtonAdapter.output).toEqual({ scale: 10000, unit: 'fixed×10000' })
     expect(sqrtNewtonAdapter.overflowPolicy).toContain('int32')
   })

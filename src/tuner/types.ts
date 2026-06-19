@@ -27,6 +27,27 @@ export interface ResultMeta {
   budgetUsed: number;
 }
 
+export interface TunerSampleReport {
+  count: number;
+  uniqueCount: number;
+  min?: number;
+  max?: number;
+  containsDeclaredMin?: boolean;
+  containsDeclaredMax?: boolean;
+  inRangeCount?: number;
+  outOfRangeCount?: number;
+}
+
+export interface TunerOverflowReport {
+  nonFiniteSimCount: number;
+  invalidReferenceCount: number;
+}
+
+export interface TunerSimulationReport {
+  samples: TunerSampleReport;
+  overflow: TunerOverflowReport;
+}
+
 export interface TunerAdapter {
   name: string;
   description: string;
@@ -68,9 +89,8 @@ export interface TunerManifest {
     requested: number;
     used: number;
   };
-  samples: {
-    count: number;
-  };
+  samples: TunerSampleReport;
+  overflowReport: TunerOverflowReport;
   artifact: {
     codePath?: string;
     command: string;

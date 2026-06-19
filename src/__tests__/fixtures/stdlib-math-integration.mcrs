@@ -18,6 +18,9 @@
 
 @keep fn test_math_sqrt() {
     scoreboard_set("#sqrt_fx_40000", "rs", sqrt_fx(40000));
+    scoreboard_set("#sqrt_fx10000_10000", "rs", sqrt_fx10000(10000));
+    scoreboard_set("#sqrt_fx10000_40000", "rs", sqrt_fx10000(40000));
+    scoreboard_set("#sqrt_fx1000_4000", "rs", sqrt_fx1000(4000));
     scoreboard_set("#cbrt_27", "rs", cbrt_fx(27));
     scoreboard_set("#cbrt_1000", "rs", cbrt_fx(1000));
 }

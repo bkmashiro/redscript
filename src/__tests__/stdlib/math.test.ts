@@ -81,6 +81,15 @@ describe('stdlib/math.mcrs', () => {
     expect(files.some(f => f.path.includes('sqrt_fx') || f.path.includes('isqrt'))).toBe(true)
   })
 
+  test('sqrt_fx10000 helper is emitted', () => {
+    const files = compileWith(`
+      @keep fn t(): int {
+        return sqrt_fx10000(40000);
+      }
+    `)
+    expect(files.some(f => f.path.includes('sqrt_fx10000'))).toBe(true)
+  })
+
   test('explicit legacy ×1000 helper aliases compile', () => {
     const files = compileWith(`
       @keep fn t(): int {

@@ -1,4 +1,4 @@
-import { evaluate } from '../../tuner/metrics';
+import { evaluate, buildSimulationReport } from '../../tuner/metrics';
 import { TunerAdapter, ParamSpec } from '../../tuner/types';
 
 // ---------------------------------------------------------------------------
@@ -139,5 +139,41 @@ describe('evaluate', () => {
     expect(evaluate(adapter, {}).maxError).toBe(0);
     // With offset = 1000: simFloat = 1.1, refFloat = 1.0, error = 0.1
     expect(evaluate(adapter, { offset: 1000 }).maxError).toBeCloseTo(0.1);
+  });
+});
+
+describe('buildSimulationReport', () => {
+  test('summarizes declared range, unique samples, and non-finite simulation results', () => {
+    const adapter: TunerAdapter = {
+      name: 'report-test',
+      description: 'report test adapter',
+      params: [],
+      input: { min: 10, max: 20, scale: 10000, unit: 'fixed×10000' },
+      sampleInputs: () => [5, 10, 10, 20, 25],
+      simulate: input => {
+        if (input === 10) return Infinity;
+        if (input === 20) return NaN;
+        return 10000;
+      },
+      reference: input => input === 25 ? Infinity : 10000,
+      generateCode: () => '',
+    };
+
+    const report = buildSimulationReport(adapter, {});
+
+    expect(report.samples).toEqual({
+      count: 5,
+      uniqueCount: 4,
+      min: 5,
+      max: 25,
+      containsDeclaredMin: true,
+      containsDeclaredMax: true,
+      inRangeCount: 3,
+      outOfRangeCount: 2,
+    });
+    expect(report.overflow).toEqual({
+      nonFiniteSimCount: 3,
+      invalidReferenceCount: 1,
+    });
   });
 });

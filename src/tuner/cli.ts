@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { search, searchSA } from './engine';
+import { buildSimulationReport } from './metrics';
 import { lnPolynomialAdapter } from './adapters/ln-polynomial';
 import { sqrtNewtonAdapter } from './adapters/sqrt-newton';
 import { TunerAdapter, ResultMeta, TunerManifest } from './types';
@@ -90,6 +91,8 @@ function buildManifest(
     ...(codePath ? ['--out', codePath] : []),
   ].join(' ');
 
+  const simulationReport = buildSimulationReport(adapter, params);
+
   return {
     schemaVersion: 1,
     adapter: adapter.name,
@@ -110,9 +113,8 @@ function buildManifest(
       requested: budget,
       used: meta.budgetUsed,
     },
-    samples: {
-      count: adapter.sampleInputs().length,
-    },
+    samples: simulationReport.samples,
+    overflowReport: simulationReport.overflow,
     artifact: {
       codePath,
       command,
@@ -188,7 +190,7 @@ export async function runTunerCli(rawArgs = process.argv.slice(2)): Promise<void
     mae: result.mae,
     rmse: result.rmse,
     estimatedCmds,
-    tuneDate: new Date().toISOString().split('T')[0],
+    tuneDate: new Date().toISOString(),
     budgetUsed: result.budgetUsed,
   };
 

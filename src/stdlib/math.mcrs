@@ -485,6 +485,13 @@ fn sqrt_fx(x: int) -> int {
     return isqrt(x) * 100;
 }
 
+// sqrt_fx10000(x): fixed-point sqrt alias, scale ×10000
+// Legacy `sqrt_fx` remains available for compatibility.
+// `sqrt_fx10000` makes the ×10000 contract explicit at call sites.
+fn sqrt_fx10000(x: int) -> int {
+    return sqrt_fx(x);
+}
+
 // exp_fx(x): e^(x/10000) × 10000, fixed-point ×10000
 // exp_fx(0)     == 10000  (e^0 = 1.0)
 // exp_fx(10000) ≈ 27183   (e^1 ≈ 2.7183)

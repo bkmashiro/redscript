@@ -1035,6 +1035,27 @@ describe('MC Integration - stdlib math', () => {
     expect(await mc.scoreboard('#sqrt_fx_40000', 'rs')).toBe(20000)
   })
 
+  test('sqrt_fx10000(10000) == 10000', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_sqrt')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#sqrt_fx10000_10000', 'rs')).toBe(10000)
+  })
+
+  test('sqrt_fx10000(40000) == 20000', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_sqrt')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#sqrt_fx10000_40000', 'rs')).toBe(20000)
+  })
+
+  test('sqrt_fx1000(4000) == 2000 (legacy scale)', async () => {
+    if (!serverOnline) return
+    await mc.command('/function stdmath:test_math_sqrt')
+    await mc.ticks(5)
+    expect(await mc.scoreboard('#sqrt_fx1000_4000', 'rs')).toBe(2000)
+  })
+
   test('cbrt_fx(27) == 3', async () => {
     if (!serverOnline) return
     await mc.command('/function stdmath:test_math_sqrt')
