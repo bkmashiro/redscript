@@ -435,6 +435,23 @@ npm test -- src/__tests__/emit/compile.test.ts src/__tests__/events-manifest.tes
 
 ---
 
+## Phase 9 — Runtime asset compile snapshot coverage
+
+Status: ✅ Implemented in code, with a RED→GREEN snapshot test.
+
+- [x] Extend `CompileStageName` with `runtimeAssets` so selected compile snapshots can include event runtime asset planning/merge.
+- [x] Add a deterministic snapshot summary for `mergeRuntimeAssetsStage`: `runtimeEventTypes`, `runtimeAssetPaths`, and warning count.
+- [x] Record the `runtimeAssets` snapshot after runtime asset merge and before config/typecheck/lowering, matching the actual pipeline boundary.
+- [x] Add focused coverage that `@on(PlayerJoin)` snapshots `['PlayerJoin']` and `['src/stdlib/events.mcrs']` without changing compile output shape.
+
+Verification for Phase 9:
+
+```bash
+npm test -- src/__tests__/emit/compile.test.ts --runInBand -t "runtime asset merge stage"
+```
+
+---
+
 ## Decision rules for future agents
 
 - Prefer test/oracle hardening before broad refactors.

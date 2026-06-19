@@ -93,9 +93,15 @@ describe('FileCache', () => {
   })
 
   test('load handles missing cache gracefully', () => {
-    const cache = new FileCache(cacheDir)
-    cache.load() // no file — should not throw
-    expect(cache.size).toBe(0)
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const cache = new FileCache(cacheDir)
+      cache.load() // no file — should not throw
+      expect(cache.size).toBe(0)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('failed to load cache'))
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 

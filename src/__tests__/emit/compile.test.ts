@@ -746,6 +746,33 @@ describe('emit: compile coverage', () => {
     })
   })
 
+  test('compile can snapshot event runtime asset merge stage', () => {
+    const stageSnapshots: CompileStageSnapshot[] = []
+
+    const result = compile(`
+      @on(PlayerJoin)
+      fn joined(): void {
+        raw("say joined")
+      }
+    `, {
+      namespace: 'runtime_asset_snapshot',
+      snapshotStages: ['runtimeAssets'],
+      stageSnapshots,
+    })
+
+    expect(result.success).toBe(true)
+    expect(stageSnapshots).toEqual([
+      {
+        stage: 'runtimeAssets',
+        summary: {
+          runtimeEventTypes: ['PlayerJoin'],
+          runtimeAssetPaths: ['src/stdlib/events.mcrs'],
+          warnings: 0,
+        },
+      },
+    ])
+  })
+
   test('control-flow statements generate emit-time branching artifacts', () => {
     const source = `
       fn flow(): void {

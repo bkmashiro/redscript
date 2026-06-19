@@ -76,6 +76,7 @@ export type CompileStageName =
   | 'preprocess'
   | 'parse'
   | 'typecheck'
+  | 'runtimeAssets'
   | 'lowerToHIR'
   | 'runtimeMetadata'
   | 'lowerAndOptimize'
@@ -711,6 +712,14 @@ function summarizeTypecheckStage(stage: RunTypecheckStageResult): Record<string,
   }
 }
 
+function summarizeRuntimeAssetsStage(stage: MergeRuntimeAssetsStageResult): Record<string, unknown> {
+  return {
+    runtimeEventTypes: stage.runtimeEventTypes,
+    runtimeAssetPaths: stage.runtimeAssetPaths,
+    warnings: stage.warnings.length,
+  }
+}
+
 function summarizeRuntimeMetadataStage(stage: CollectRuntimeMetadataStageResult): Record<string, unknown> {
   return {
     tickFunctions: stage.tickFunctions,
@@ -942,6 +951,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
         stopAfterCheck,
       })
       warnings.push(...plannedRuntimeAssets.warnings)
+      recordStageSnapshot(options, 'runtimeAssets', () => summarizeRuntimeAssetsStage(plannedRuntimeAssets))
     }
 
     {
