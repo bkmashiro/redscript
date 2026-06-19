@@ -118,6 +118,8 @@ Offline skip is not MC proof.
 
 **Objective:** Produce a design before implementation.
 
+**Status:** Completed as [07 — Scoreboard RMW optimizer design](./07-rmw-optimizer-design.md). The recommended next implementation lane is a conservative LIR pass with local adjacent rewrites only; no implementation was done in Lane 6.
+
 **Read:**
 - `src/lir/types.ts`
 - `src/lir/lower.ts`

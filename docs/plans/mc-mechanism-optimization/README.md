@@ -19,6 +19,7 @@
 - [04 — Compiler/runtime optimization patterns](./04-compiler-runtime-optimization-patterns.md)
 - [05 — Priority roadmap](./05-priority-roadmap.md)
 - [06 — Spark delivery handoff](./06-spark-delivery-handoff.md)
+- [07 — Scoreboard RMW optimizer design](./07-rmw-optimizer-design.md)
 
 ## Operating rules
 
@@ -31,8 +32,23 @@
 
 ## Immediate next slices
 
-1. Extend `benchmarks/arithmetic-probes.ts` from static command categories to richer cost estimates: forks/selectors/NBT reads/macro calls/persistent state.
-2. Add a live probe harness skeleton for mechanism experiments under a clearly isolated test namespace.
-3. Run display decomposition characterization before adding any new SVD-backed helper.
-4. Run attribute/enchantment ALU probes before designing dot/affine helper APIs.
-5. Run combined `sincos_hp` as the first low-risk implementation slice.
+Completed setup lanes:
+
+1. Static arithmetic probe cost model: `estimatedCost` now tracks forks/selectors/NBT/macro/setup hints.
+2. Live-probe scaffolds exist for display decomposition, item-modifier attributes, and enchantment level-based values. They are `MC_LIVE_PROBES=true` gated and skipped by default; offline skip is not MC proof.
+3. Lane 6 produced the scoreboard RMW optimizer design: [07 — Scoreboard RMW optimizer design](./07-rmw-optimizer-design.md).
+
+Near-term implementation order:
+
+1. Implement the conservative LIR scoreboard RMW optimizer first.
+2. Add a `scoreCopy`/RMW-specific counter to `benchmarks/arithmetic-probes.ts` if the first pass needs direct trend tracking.
+3. Benchmark `sin_hp` + `cos_hp` separately before deciding whether `sincos_hp` is worth a public helper.
+4. Run the existing live probes on the target Paper/TestHarness server before promoting display/attribute/enchantment backends.
+
+Deferred / not near-term:
+
+- AI/pathfinding/POI/mob-target mechanisms.
+- Shulker bullet homing and general mob behavior oracles.
+- Redstone analog ALU, light/sculk/leaves distance fields, worldgen noise, item merge reductions, XP/player-state oracles.
+
+These remain in the source report as research notes only; they should not receive Spark implementation lanes unless a concrete user scenario justifies their real server cost.

@@ -1,5 +1,13 @@
 # 5. 推荐优先级
 
+## Near-term triage update
+
+After Lane 2/3/4 scaffolds, the near-term roadmap is intentionally narrower:
+
+1. Prefer compiler/backend optimizations first, especially the LIR scoreboard RMW pass in [07](./07-rmw-optimizer-design.md).
+2. Keep display / attribute / enchantment mechanisms as live-gated probes until the target Paper/TestHarness server proves same-tick readback, schema compatibility, and cost advantage.
+3. Do **not** open near-term Spark lanes for AI/pathfinding, mob target selection, villager POI, shulker homing, redstone analog ALU, sculk/light/leaves distance fields, worldgen noise, item-merge reductions, or player-state oracles. They remain research notes only.
+
 ## 最先做的 5 个 live probes
 
 ### 1. Attribute item-modifier `dot4/dot8`
@@ -94,16 +102,17 @@ Vanilla/Paper
 
 ---
 
-### 5. Projectile raycast/collision lane
+### 5. Projectile raycast/collision lane — deferred
 
-**原因**
+**Status:** Not a near-term lane. Keep only as a domain-specific raycast/collision research note.
 
-* raycast 在纯 commands 中通常昂贵。
-* Projectile 已经实现 continuous collision 和 block/entity hit detection。
-* 一 tick latency 可接受时，可能显著胜过逐步 ray marching。
-* 同一套 probe 还能测 collision clamp、Motion recurrence 和批量射线。
+**Why deferred**
 
-**首批测试**
+* Tick latency and Paper projectile configuration can dominate real cost.
+* It is only attractive for actual raycast/collision helpers, not scalar arithmetic.
+* It should not compete with LIR/RMW optimizer work or low-risk helper consolidation.
+
+**Only reconsider when**
 
 ```text
 axis-aligned wall
@@ -116,7 +125,9 @@ chunk boundary
 Paper projectile config
 ```
 
-下一批建议是 sculk nearest/distance、light max-plus、leaves/scaffolding BFS 和 redstone analog batch。
+all have a concrete gameplay/compiler caller and a measured break-even against command ray marching.
+
+Next speculative probes such as sculk nearest/distance, light max-plus, leaves/scaffolding BFS, redstone analog batch, AI/pathfinding, and item merge reduction are deferred until there is a specific real-server use case.
 
 ---
 
