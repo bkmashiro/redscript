@@ -42,7 +42,7 @@ fn foo(volume: float): void {
     const source = `
 fn test(): void {
   let x: fixed = 15000 as fixed;
-  let y: fixed = x + 5000;
+  let y: fixed = x + (5000 as fixed);
 }
 `
     const warnings = compileAndGetWarnings(source)

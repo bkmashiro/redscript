@@ -174,6 +174,55 @@ fn test() {
       expect(errors).toHaveLength(0)
     })
 
+    it.each([
+      ['fixed + int', 'let x = 1.5 + 2;'],
+      ['int + fixed', 'let x = 2 + 1.5;'],
+      ['double + fixed', 'let x = 1.0d + 2.5;'],
+      ['fixed + double', 'let x = 2.5 + 1.0d;'],
+      ['double + int', 'let x = 1.0d + 2;'],
+      ['int + double', 'let x = 2 + 1.0d;'],
+    ])('requires explicit casts for mixed numeric binary arithmetic: %s', (_label, statement) => {
+      const errors = typeCheck(`
+fn test() {
+    ${statement}
+}
+`)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0].message).toContain('Mixed numeric arithmetic requires explicit casts')
+    })
+
+    it.each([
+      ['int + int', 'let x = 1 + 2;'],
+      ['fixed + fixed', 'let x = 1.5 + 2.5;'],
+      ['double + double', 'let x = 1.0d + 2.0d;'],
+      ['float + fixed legacy alias', 'let a: float = 1.0; let b: fixed = 2.0; let x = a + b;'],
+    ])('allows same-family numeric binary arithmetic: %s', (_label, statements) => {
+      const errors = typeCheck(`
+fn test() {
+    ${statements}
+}
+`)
+      expect(errors).toHaveLength(0)
+    })
+
+    it('blocks compilation on mixed numeric binary arithmetic in strict mode', () => {
+      expect(() => compileStrict(`
+fn test() {
+    let x = 1.5 + 2;
+}
+`)).toThrow()
+    })
+
+    it('mixed numeric binary arithmetic is demoted to warning in lenient mode', () => {
+      const result = compileLenient(`
+fn test() {
+    let x = 1.5 + 2;
+}
+`)
+      expect(result.warnings.length).toBeGreaterThan(0)
+      expect(result.warnings[0]).toContain('Mixed numeric arithmetic requires explicit casts')
+    })
+
     it('blocks compilation on int→fixed mismatch', () => {
       expect(() => compileStrict(`
 fn get_fixed() -> fixed {

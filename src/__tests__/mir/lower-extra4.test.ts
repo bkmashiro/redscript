@@ -297,10 +297,10 @@ describe('MIR lower — float arithmetic scale correction', () => {
     `, { namespace: 'fltdiv' })).not.toThrow()
   })
 
-  test('mixed float + int propagates float tag', () => {
+  test('float + explicit fixed cast propagates float tag', () => {
     expect(() => compile(`
       fn f(a: float, b: int): float {
-        return a + b;
+        return a + (b as float);
       }
     `, { namespace: 'fltadd' })).not.toThrow()
   })

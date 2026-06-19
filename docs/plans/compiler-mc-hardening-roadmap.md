@@ -492,12 +492,20 @@ Design constraints:
 - `double` should remain a separate NBT-backed type; do not promise full IEEE semantics for every operation unless the helper path actually provides it.
 - Precision-sensitive stdlib helpers should make scale explicit in names/docs when they are not operating on language `fixed` directly.
 
+Numeric conversion DX policy:
+
+- Do **not** use C-style casts such as `(fx3)a` as the primary surface. They are compact but hide rounding/overflow semantics and make grep/LSP/code actions harder.
+- Prefer explicit postfix conversions with visible target and policy, starting with existing `expr as fixed` / `expr as int` / `expr as double`; future scale-specific forms should make rounding explicit, e.g. `expr as fx3 round`, `expr as fx3 trunc`, or stdlib helpers named around the scale/policy.
+- Allow target/contextual typing only where the target is already syntactically declared (`let x: fx3 = 1.2`, function args, returns, struct fields, array literals). Context can choose literal representation, but must not silently convert arbitrary runtime expressions across numeric families.
+- For dense math blocks, consider a future opt-in block annotation such as `numeric fx4 { ... }` only as syntax sugar over explicit target typing/checking. It should reject ambiguous mixed-scale expressions instead of inserting hidden conversions.
+- First implementation slice remains conservative: reject unsafe mixed numeric binary expressions; add ergonomic conversion helpers later once the failure mode is safe and documented.
+
 Planned tasks:
 
-- [ ] Add failing typechecker tests for numeric binary mismatches:
+- [x] Add failing typechecker tests for numeric binary mismatches:
   - `fixed + int`, `int + fixed`, `double + fixed`, `fixed + double`, `double + int`, and `int + double` should require explicit casts.
   - Preserve valid same-family operations: `int + int`, `fixed + fixed`, `double + double`, and `float`/`fixed` compatibility while `float` remains a deprecated alias.
-- [ ] Fix `checkExpr(binary)` to reject mixed numeric families before lowering, preventing silent wrong scoreboard math such as `1.5 + 2 -> 15002`.
+- [x] Fix `checkExpr(binary)` to reject mixed numeric families before lowering, preventing silent wrong scoreboard math such as `1.5 + 2 -> 15002`.
 - [ ] Add lowering/golden tests that pin language `fixed` arithmetic scale:
   - decimal literal lowering (`1.5 -> 15000`),
   - `fixed * fixed` correction (`/ 10000`),

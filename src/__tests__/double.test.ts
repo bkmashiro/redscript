@@ -238,7 +238,7 @@ describe('double parameter passing', () => {
   test('mixed double and int params: double via NBT, int via scoreboard', () => {
     const source = `
       fn mixed(d: double, n: int): fixed {
-        return (d as fixed) + n;
+        return (d as fixed) + (n as fixed);
       }
       fn t(): fixed {
         let x: double = 1.5d;

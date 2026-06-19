@@ -653,6 +653,12 @@ export class TypeChecker {
               expr
             )
           }
+          if (this.isMixedNumericArithmetic(leftType, rightType)) {
+            this.report(
+              `Mixed numeric arithmetic requires explicit casts: ${this.typeToString(leftType)} ${expr.op} ${this.typeToString(rightType)}`,
+              expr
+            )
+          }
           // Warn when float is used in arithmetic — float is a MC NBT system boundary type
           const leftIsFloat = leftType.kind === 'named' && leftType.name === 'float'
           const rightIsFloat = rightType.kind === 'named' && rightType.name === 'float'
@@ -1470,6 +1476,20 @@ export class TypeChecker {
       // float and fixed are compatible (float is deprecated alias for fixed)
     ]
     return numericPairs.some(([e, a]) => expected.name === e && actual.name === a)
+  }
+
+  private numericArithmeticFamily(type: TypeNode): 'int' | 'fixed' | 'double' | undefined {
+    if (type.kind !== 'named') return undefined
+    if (['byte', 'short', 'int', 'long'].includes(type.name)) return 'int'
+    if (type.name === 'fixed' || type.name === 'float') return 'fixed'
+    if (type.name === 'double') return 'double'
+    return undefined
+  }
+
+  private isMixedNumericArithmetic(left: TypeNode, right: TypeNode): boolean {
+    const leftFamily = this.numericArithmeticFamily(left)
+    const rightFamily = this.numericArithmeticFamily(right)
+    return !!leftFamily && !!rightFamily && leftFamily !== rightFamily
   }
 
   private typesMatch(expected: TypeNode, actual: TypeNode): boolean {
