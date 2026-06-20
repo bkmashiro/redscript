@@ -30,6 +30,11 @@ RedScript ships benchmark entrypoints under `benchmarks/`.
 - Reports emitted `.mcfunction` file count, instruction count, bytes, and command
   categories (`scoreboard`, `scoreCopy`, `execute`, `data`, `function`, `storage`, selector,
   macro, summon, teleport).
+- Adds `scoreCopyPatterns` at both per-case and report level. This groups remaining
+  scoreboard copy commands by adjacent command shape, for example
+  `score_arith -> score_copy -> score_arith`, and includes a few concrete file/line
+  examples so the next LIR optimizer slice can be chosen from measured output rather
+  than guessed.
 - Compares `O0`/`O1`/`O2` when invoked with `--opt all`.
 - Adds a static `estimatedCost` section with:
   - fork risk (`execute as @e/@a`, broad selectors, and `run function` under `execute as`),

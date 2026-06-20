@@ -57,6 +57,34 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(summary.summon).toBe(1)
   })
 
+  it('summarizes adjacent score copy patterns for optimizer triage', () => {
+    const report = runArithmeticProbeReport('int_arithmetic', [1])
+    const [result] = report.cases
+
+    expect(result.scoreCopyPatterns.total).toBe(result.commands.scoreCopy)
+    expect(report.scoreCopyPatterns.total).toBe(result.commands.scoreCopy)
+    expect(result.scoreCopyPatterns.topPatterns.length).toBeGreaterThan(0)
+    expect(result.scoreCopyPatterns.topPatterns[0]).toEqual(
+      expect.objectContaining({
+        pattern: expect.any(String),
+        count: expect.any(Number),
+        examples: expect.any(Array),
+      }),
+    )
+  })
+
+  it('aggregates score copy pattern totals across probe cases', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    const caseTotal = report.cases.reduce((sum, result) => sum + result.scoreCopyPatterns.total, 0)
+    const commandTotal = report.cases.reduce((sum, result) => sum + result.commands.scoreCopy, 0)
+
+    expect(report.scoreCopyPatterns.total).toBe(caseTotal)
+    expect(report.scoreCopyPatterns.total).toBe(commandTotal)
+    for (const pattern of report.scoreCopyPatterns.topPatterns) {
+      expect(pattern.examples.length).toBeLessThanOrEqual(3)
+    }
+  })
+
   it('reports estimated static cost dimensions for execute, selectors, NBT, macros, and setup hints', () => {
     const summary = summarizeCommandCosts([
       {

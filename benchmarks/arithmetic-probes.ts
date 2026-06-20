@@ -75,6 +75,17 @@ export interface ArithmeticCostEstimate {
   note: 'static-estimate'
 }
 
+export interface ScoreCopyPatternEntry {
+  pattern: string
+  count: number
+  examples: string[]
+}
+
+export interface ScoreCopyPatternSummary {
+  total: number
+  topPatterns: ScoreCopyPatternEntry[]
+}
+
 export interface ArithmeticProbeResult {
   case: string
   description: string
@@ -84,6 +95,7 @@ export interface ArithmeticProbeResult {
   files: ReturnType<typeof summarizeFiles>
   commands: CommandCategorySummary
   estimatedCost: ArithmeticCostEstimate
+  scoreCopyPatterns: ScoreCopyPatternSummary
   warnings: string[]
 }
 
@@ -92,6 +104,7 @@ export interface ArithmeticProbeReport {
   generatedAt: string
   host: ReturnType<typeof benchmarkMeta>['host']
   cases: ArithmeticProbeResult[]
+  scoreCopyPatterns: ScoreCopyPatternSummary
 }
 
 type ProbeCliArgs = ReturnType<typeof parseCliArgs> & {
@@ -396,11 +409,95 @@ export function summarizeCommandCosts(files: Array<{ path: string; content: stri
 }
 
 function commandLines(files: Array<{ path: string; content: string }>): string[] {
+  return commandLinesWithLocations(files).map(line => line.content)
+}
+
+function commandLinesWithLocations(files: Array<{ path: string; content: string }>): Array<{ path: string; line: number; content: string }> {
   return files
     .filter(file => file.path.endsWith('.mcfunction'))
-    .flatMap(file => file.content.split('\n'))
-    .map(line => line.trim())
-    .filter(Boolean)
+    .flatMap(file => file.content.split('\n').map((line, index) => ({
+      path: file.path,
+      line: index + 1,
+      content: line.trim(),
+    })))
+    .filter(line => line.content.length > 0)
+}
+
+function isScoreCopy(line: string): boolean {
+  return /^scoreboard players operation \S+ \S+ = \S+ \S+$/.test(line)
+}
+
+function commandShape(line: string | undefined): string {
+  if (!line) return 'boundary'
+  if (isScoreCopy(line)) return 'score_copy'
+  if (/^scoreboard players set \S+ \S+ -?\d+$/.test(line)) return 'score_set_const'
+  if (/^scoreboard players operation \S+ \S+ [+\-*/%]= \S+ \S+$/.test(line)) return 'score_arith'
+  if (/^scoreboard players (add|remove) \S+ \S+ -?\d+$/.test(line)) return 'score_add_imm'
+  if (/^return run scoreboard players get \S+ \S+$/.test(line)) return 'return_score'
+  if (line.startsWith('return ')) return 'return'
+  if (line.startsWith('function ') || line.includes(' run function ')) return 'function_call'
+  if (line.startsWith('execute ') || line.startsWith('$execute ')) return 'execute'
+  if (line.startsWith('data ') || line.includes(' run data ')) return 'data'
+  if (line.startsWith('$') || line.includes('$(')) return 'macro'
+  if (line.startsWith('scoreboard ')) return 'scoreboard_other'
+  return 'other'
+}
+
+export function summarizeScoreCopyPatterns(files: Array<{ path: string; content: string }>): ScoreCopyPatternSummary {
+  const lines = commandLinesWithLocations(files)
+  const patterns = new Map<string, ScoreCopyPatternEntry>()
+  let total = 0
+
+  for (let i = 0; i < lines.length; i++) {
+    const current = lines[i]
+    if (!isScoreCopy(current.content)) continue
+    total++
+
+    const previous = i > 0 && lines[i - 1].path === current.path ? lines[i - 1].content : undefined
+    const next = i + 1 < lines.length && lines[i + 1].path === current.path ? lines[i + 1].content : undefined
+    const pattern = `${commandShape(previous)} -> score_copy -> ${commandShape(next)}`
+    let entry = patterns.get(pattern)
+    if (!entry) {
+      entry = { pattern, count: 0, examples: [] }
+      patterns.set(pattern, entry)
+    }
+    entry.count++
+    if (entry.examples.length < 3) {
+      entry.examples.push(`${current.path}:${current.line}: ${current.content}`)
+    }
+  }
+
+  return scoreCopyPatternSummaryFromMap(total, patterns)
+}
+
+function scoreCopyPatternSummaryFromMap(total: number, patterns: Map<string, ScoreCopyPatternEntry>): ScoreCopyPatternSummary {
+  return {
+    total,
+    topPatterns: [...patterns.values()].sort((a, b) => b.count - a.count || a.pattern.localeCompare(b.pattern)),
+  }
+}
+
+function mergeScoreCopyPatterns(summaries: ScoreCopyPatternSummary[]): ScoreCopyPatternSummary {
+  const patterns = new Map<string, ScoreCopyPatternEntry>()
+  let total = 0
+
+  for (const summary of summaries) {
+    total += summary.total
+    for (const item of summary.topPatterns) {
+      let entry = patterns.get(item.pattern)
+      if (!entry) {
+        entry = { pattern: item.pattern, count: 0, examples: [] }
+        patterns.set(item.pattern, entry)
+      }
+      entry.count += item.count
+      for (const example of item.examples) {
+        if (entry.examples.length >= 3) break
+        entry.examples.push(example)
+      }
+    }
+  }
+
+  return scoreCopyPatternSummaryFromMap(total, patterns)
 }
 
 export function summarizeCommandCategories(files: Array<{ path: string; content: string }>): CommandCategorySummary {
@@ -442,6 +539,7 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
     files: summarizeFiles(result.files),
     commands: summarizeCommandCategories(result.files),
     estimatedCost: summarizeCommandCosts(result.files),
+    scoreCopyPatterns: summarizeScoreCopyPatterns(result.files),
     warnings: result.warnings,
   }
 }
@@ -454,9 +552,11 @@ export function runArithmeticProbeReport(caseName = 'all', optLevels: Optimizati
     throw new Error(`Unknown arithmetic probe case '${caseName}'. Use --list to see available cases.`)
   }
   const meta = benchmarkMeta('arithmetic-probes')
+  const cases = selected.flatMap(probe => optLevels.map(level => runArithmeticProbe(probe, level)))
   return {
     ...meta,
-    cases: selected.flatMap(probe => optLevels.map(level => runArithmeticProbe(probe, level))),
+    cases,
+    scoreCopyPatterns: mergeScoreCopyPatterns(cases.map(result => result.scoreCopyPatterns)),
   }
 }
 
