@@ -1,0 +1,68 @@
+# 8. TS Optimizer Infrastructure Stack
+
+Status: initial wrapper landed. Keep this lane focused on reusable compiler infrastructure, not one-off peepholes.
+
+## Decision
+
+Stay in the TypeScript toolchain for the production compiler. Do **not** migrate the compiler to MLIR/LLVM now.
+
+Use a small project-owned optimizer core, with external packages only where they are cheap and test-friendly:
+
+| Area | Choice | Role |
+| --- | --- | --- |
+| IR representation | TypeScript discriminated unions | Main source of truth for MIR/VIR/LIR nodes. |
+| Shared LIR analysis | `src/optimizer/lir/analysis.ts` | Slot identity, read/write sets, raw/macro/execute mention detection, module reference indexes. |
+| Property/fuzz testing | `fast-check` | Generate small optimizer inputs and pin invariants that example tests miss. |
+| Pattern ergonomics | optional `ts-pattern` later | Only introduce if rewrite code becomes repetitive; not required for the first wrapper. |
+| Equivalence oracle | optional `z3-solver` later | Offline proof/checker for small scoreboard rewrite rules; not production pipeline. |
+| External optimizer spike | optional `binaryen` later | Pure arithmetic-only experiment; not a whole-program RedScript optimizer. |
+| E-graphs | optional Rust `egg` subprocess later | Helper/math rewrite exploration only. |
+
+## What landed first
+
+`src/optimizer/lir/analysis.ts` is the first reusable layer extracted from ad-hoc LIR passes. It centralizes:
+
+- `slotKey` / `sameSlot`;
+- protected ABI/compiler slot classification;
+- explicit read/write slot extraction;
+- conservative raw and macro text slot scanning;
+- execute `call_context` slot mention detection;
+- module-level cross-function reference indexing.
+
+Current users:
+
+- `src/optimizer/lir/dead_slot.ts`;
+- `src/optimizer/lir/rmw.ts`.
+
+Test coverage:
+
+- `src/__tests__/optimizer/lir/analysis.test.ts`;
+- existing RMW and LIR pipeline tests.
+
+## Near-term migration rule
+
+Before adding another LIR peephole, first ask whether it needs one of these shared analyses:
+
+```text
+slot identity
+read/write set
+barrier/effect classification
+module-level reference index
+local liveness
+rewrite safety predicate
+```
+
+If yes, extend `analysis.ts` or add a sibling support module first, then write the optimizer rule on top of that API.
+
+## What not to do yet
+
+Do not add a full VIR/SSA layer until the TS support stack proves it can remove duplication and protect correctness in the current LIR optimizer.
+
+Do not add Binaryen, Z3, or egg to the production dependency graph until each has a narrow spike with measurable value.
+
+## Next slices
+
+1. Add local liveness / next-use helpers for straight-line LIR windows.
+2. Add a tiny rewrite-rule harness so multi-instruction patterns can share window matching and safety checks.
+3. Use `fast-check` to fuzz small LIR programs for analysis invariants and no-op rewrite equivalence.
+4. Only then prototype arithmetic-only VIR behind an experimental path if benchmark data still shows copy/temp pressure that LIR analysis cannot cleanly address.

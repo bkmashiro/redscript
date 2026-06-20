@@ -1,6 +1,6 @@
 # 7. Lane 6 — Scoreboard RMW Optimizer Design
 
-Status: first conservative implementation landed. This document remains the design baseline for future, more aggressive RMW/liveness work.
+Status: first conservative implementation landed. Shared LIR analysis extraction has started in [08](./08-ts-optimizer-infra.md), and future RMW/liveness work should build on that support stack instead of adding standalone safety logic here.
 
 This lane replaces another speculative Minecraft mechanism probe with a lower-risk compiler/backend optimization: reduce redundant scoreboard copy/temporary traffic before emitting `.mcfunction` lines.
 

@@ -1,4 +1,5 @@
 import type { LIRFunction, LIRInstr, LIRModule, Slot } from '../../lir/types'
+import { createModuleSlotReferenceIndex, instructionMentionsSlot, isProtectedSlot, sameSlot } from './analysis'
 
 interface RmwPassOptions {
   isExternallyMentioned?: (slot: Slot) => boolean
@@ -14,88 +15,8 @@ const RMW_OPS = new Set<LIRInstr['kind']>([
   'score_max',
 ])
 
-function slotKey(slot: Slot): string {
-  return `${slot.player}\0${slot.obj}`
-}
-
-function sameSlot(a: Slot, b: Slot): boolean {
-  return a.player === b.player && a.obj === b.obj
-}
-
-function isProtectedSlot(slot: Slot): boolean {
-  const player = slot.player
-  return (
-    player === '$ret' ||
-    player.startsWith('$ret_') ||
-    /^\$p\d+$/.test(player) ||
-    player.startsWith('$__const_') ||
-    player.includes('__rf_') ||
-    player.includes('__opt_')
-  )
-}
-
 function isRmwOp(instr: LIRInstr): instr is Extract<LIRInstr, { kind: 'score_add' | 'score_sub' | 'score_mul' | 'score_div' | 'score_mod' | 'score_min' | 'score_max' }> {
   return RMW_OPS.has(instr.kind)
-}
-
-function textMentionsSlot(text: string, slot: Slot): boolean {
-  const escapedPlayer = slot.player.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const escapedObj = slot.obj.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(^|\\s)${escapedPlayer}\\s+${escapedObj}(\\s|$)`).test(text)
-}
-
-function subcommandMentionsSlot(subcmd: { kind: string } & Record<string, unknown>, slot: Slot): boolean {
-  switch (subcmd.kind) {
-    case 'if_score':
-    case 'unless_score':
-      return textMentionsSlot(String(subcmd.a), slot) || textMentionsSlot(String(subcmd.b), slot)
-    case 'if_matches':
-    case 'unless_matches':
-      return textMentionsSlot(String(subcmd.score), slot)
-    default:
-      return false
-  }
-}
-
-function instructionMentionsSlot(instr: LIRInstr, slot: Slot): boolean {
-  switch (instr.kind) {
-    case 'score_set':
-      return sameSlot(instr.dst, slot)
-    case 'score_copy':
-      return sameSlot(instr.dst, slot) || sameSlot(instr.src, slot)
-    case 'score_add':
-    case 'score_sub':
-    case 'score_mul':
-    case 'score_div':
-    case 'score_mod':
-    case 'score_min':
-    case 'score_max':
-      return sameSlot(instr.dst, slot) || sameSlot(instr.src, slot)
-    case 'score_swap':
-      return sameSlot(instr.a, slot) || sameSlot(instr.b, slot)
-    case 'store_cmd_to_score':
-      return sameSlot(instr.dst, slot) || instructionMentionsSlot(instr.cmd, slot)
-    case 'store_score_to_nbt':
-      return sameSlot(instr.src, slot)
-    case 'store_nbt_to_score':
-      return sameSlot(instr.dst, slot)
-    case 'call_if_matches':
-    case 'call_unless_matches':
-      return sameSlot(instr.slot, slot)
-    case 'call_if_score':
-    case 'call_unless_score':
-      return sameSlot(instr.a, slot) || sameSlot(instr.b, slot)
-    case 'return_value':
-      return sameSlot(instr.slot, slot)
-    case 'raw':
-      return textMentionsSlot(instr.cmd, slot)
-    case 'macro_line':
-      return textMentionsSlot(instr.template, slot)
-    case 'call_context':
-      return instr.subcommands.some(subcmd => subcommandMentionsSlot(subcmd, slot))
-    default:
-      return false
-  }
 }
 
 function tempOnlyAppearsInWindow(instrs: LIRInstr[], temp: Slot, start: number, length = 3): boolean {
@@ -230,18 +151,10 @@ export function scoreboardRmwPass(fn: LIRFunction, options: RmwPassOptions = {})
 }
 
 export function scoreboardRmwPassModule(mod: LIRModule): LIRModule {
-  const optimized = mod.functions.map(fn => {
-    const isExternallyMentioned = (slot: Slot): boolean => {
-      for (const other of mod.functions) {
-        if (other === fn) continue
-        for (const instr of other.instructions) {
-          if (instructionMentionsSlot(instr, slot)) return true
-        }
-      }
-      return false
-    }
-    return scoreboardRmwPass(fn, { isExternallyMentioned })
-  })
+  const referenceIndex = createModuleSlotReferenceIndex(mod)
+  const optimized = mod.functions.map(fn => scoreboardRmwPass(fn, {
+    isExternallyMentioned: (slot: Slot): boolean => referenceIndex.isMentionedOutside(fn, slot),
+  }))
 
   const changed = optimized.some((fn, index) => fn !== mod.functions[index])
   return changed ? { ...mod, functions: optimized } : mod

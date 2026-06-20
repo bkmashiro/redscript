@@ -20,6 +20,7 @@
 - [05 — Priority roadmap](./05-priority-roadmap.md)
 - [06 — Spark delivery handoff](./06-spark-delivery-handoff.md)
 - [07 — Scoreboard RMW optimizer design](./07-rmw-optimizer-design.md)
+- [08 — TS optimizer infrastructure stack](./08-ts-optimizer-infra.md)
 
 ## Operating rules
 
@@ -40,10 +41,11 @@ Completed setup lanes:
 
 Near-term implementation order:
 
-1. Implement the conservative LIR scoreboard RMW optimizer first.
-2. Add a `scoreCopy`/RMW-specific counter to `benchmarks/arithmetic-probes.ts` if the first pass needs direct trend tracking.
-3. Benchmark `sin_hp` + `cos_hp` separately before deciding whether `sincos_hp` is worth a public helper.
-4. Run the existing live probes on the target Paper/TestHarness server before promoting display/attribute/enchantment backends.
+1. TS optimizer infrastructure extraction has started: [08 — TS optimizer infrastructure stack](./08-ts-optimizer-infra.md) records the support stack and `src/optimizer/lir/analysis.ts` now centralizes slot/use safety helpers for RMW and dead-slot passes.
+2. Implement the next shared LIR support slice before adding more one-off peepholes: local liveness / next-use helpers, then a small rewrite-rule harness.
+3. Add a `scoreCopy`/RMW-specific counter to `benchmarks/arithmetic-probes.ts` if the next pass needs direct trend tracking.
+4. Benchmark `sin_hp` + `cos_hp` separately before deciding whether `sincos_hp` is worth a public helper.
+5. Run the existing live probes on the target Paper/TestHarness server before promoting display/attribute/enchantment backends.
 
 Deferred / not near-term:
 

@@ -10,69 +10,8 @@
  *  - slots used in side-effectful instructions (calls, stores, nbt ops, raw)
  */
 
-import type { LIRFunction, LIRInstr, LIRModule, Slot } from '../../lir/types'
-
-/** Canonical key for a slot (player + obj). */
-function slotKey(s: Slot): string {
-  return `${s.player}\0${s.obj}`
-}
-
-/**
- * Extract slot references from a raw MC command string.
- * Matches patterns like `$player_name objective_name` used in scoreboard commands.
- */
-function extractSlotsFromRaw(cmd: string): Slot[] {
-  const slots: Slot[] = []
-  // Match $<player> <obj> patterns (scoreboard slot references)
-  const re = /(\$[\w.:]+)\s+(\S+)/g
-  let m
-  while ((m = re.exec(cmd)) !== null) {
-    slots.push({ player: m[1], obj: m[2] })
-  }
-  return slots
-}
-
-/** Collect all slots that are *read* (used as source) by an instruction. */
-function getReadSlots(instr: LIRInstr): Slot[] {
-  switch (instr.kind) {
-    case 'score_copy': return [instr.src]
-    case 'score_add': case 'score_sub':
-    case 'score_mul': case 'score_div': case 'score_mod':
-    case 'score_min': case 'score_max':
-      return [instr.src]
-    case 'score_swap': return [instr.a, instr.b]
-    case 'store_cmd_to_score': return getReadSlots(instr.cmd)
-    case 'store_score_to_nbt': return [instr.src]
-    case 'store_nbt_to_score': return []
-    case 'return_value': return [instr.slot]
-    case 'call_if_matches': case 'call_unless_matches':
-      return [instr.slot]
-    case 'call_if_score': case 'call_unless_score':
-      return [instr.a, instr.b]
-    case 'raw': return extractSlotsFromRaw(instr.cmd)
-    case 'macro_line': return extractSlotsFromRaw(instr.template)
-    default: return []
-  }
-}
-
-/** Returns the destination slot if the instruction is a pure write (no side effects). */
-function getPureWriteDst(instr: LIRInstr): Slot | null {
-  switch (instr.kind) {
-    case 'score_set': return instr.dst
-    case 'score_copy': return instr.dst
-    default: return null
-  }
-}
-
-/** True if a slot should never be eliminated (externally visible). */
-function isProtectedSlot(s: Slot): boolean {
-  const p = s.player
-  if (p === '$ret' || p.startsWith('$ret_') || /^\$p\d+$/.test(p)) return true
-  // Option slots: __opt_ prefix ensures they're always written to scoreboard
-  // even when the variable appears unused locally
-  if (p.includes('__opt_')) return true
-  return false
-}
+import type { LIRFunction, LIRModule } from '../../lir/types'
+import { getPureWriteDst, getReadSlots, isProtectedSlot, slotKey } from './analysis'
 
 export function deadSlotElim(fn: LIRFunction): LIRFunction {
   // 1. Collect all read slots across the function
