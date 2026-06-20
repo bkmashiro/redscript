@@ -442,21 +442,34 @@ Documentation-only slices:
 
 ```text
 git diff --check
-git status --short --branch
+# or npm run gate:docs when generated docs / docs contracts are touched
 ```
 
 Code slices:
 
 - Run targeted tests for the edited area.
-- Run `bench:arithmetic` only for benchmark/optimizer behavior changes.
-- Run full project gate before finalizing a band or changing compiler behavior:
+- Prefer the package scripts instead of hand-written long commands:
 
 ```bash
-npm run build
-npm run validate-mc
-npm test -- --runInBand
-npm run docs:check
-git diff --check
+npm run test:lir          # LIR optimizer/analysis slices, serial and side-effect-safe
+npm run test:optimizer    # broader optimizer-only check
+npm run test:probe        # arithmetic probe tooling
+npm run test:unit         # pure TypeScript/unit project, parallel at 50% workers
+npm run test:unit:serial  # same unit project, but deterministic serial fallback
+npm run test:integration  # mc-integration project, always serial
+npm run gate:optimizer    # build + LIR/probe checks + diff check
+npm run gate:fast         # build + parallel unit + validate-mc + diff check
+npm run gate:full         # full heavyweight gate
+```
+
+- Run `bench:arithmetic` only for benchmark/optimizer behavior changes.
+- Do **not** run `gate:full` after every small slice. Use it at band decision gates, before changing default compiler behavior, or before final handoff.
+- Keep server/live/integration suites serial; only the pure `unit` project is allowed to run in parallel by default.
+
+Full project gate remains:
+
+```bash
+npm run gate:full
 ```
 
 No push by default.
