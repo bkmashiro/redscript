@@ -82,39 +82,47 @@ Drop `my-datapack/` into your world's `datapacks/` folder and run `/reload`.
 
 ---
 
-## Demo GIF script
+## See it in action
 
-A short GIF works best when it shows that RedScript is not just syntax sugar: it is runtime math, macro parameters, scoreboard lowering, and live Minecraft output.
+RedScript can drive live Minecraft effects from regular typed code. This demo computes a moving sine ribbon at runtime, then lowers the math into vanilla scoreboard and macro commands for particle rendering.
 
-This repo includes a ready-to-record hero demo:
+```rs
+import "../src/stdlib/math.mcrs"
+
+let phase: int = 0;
+let running: bool = false;
+
+fn draw_point(y: fixed) {
+    particle("minecraft:end_rod", ^0, ^y, ^6, 0.02, 0.02, 0.02, 0.0, 6);
+}
+
+@tick fn draw_wave() {
+    if (!running) { return; }
+    phase = (phase + 4) % 360;
+
+    foreach (p in @a) at @s {
+        let y: int = sin_fixed(phase) * 25;
+        draw_point(y as fixed);
+    }
+}
+```
+
+Run the full version locally:
 
 ```bash
 redscript compile examples/hero-demo.mcrs -o /tmp/redscript-hero --namespace rsdemo
 ```
 
-In game:
-
 ```mcfunction
 /reload
 /function rsdemo:start
-/function rsdemo:stop
 ```
 
-What it shows:
+It demonstrates runtime `sin_fixed` / `cos_fixed` math, fixed-point macro parameters, local-coordinate particles, `@load`, `@tick`, functions, globals, selectors, and stdlib imports — all compiled into a vanilla datapack.
 
-- runtime `sin_fixed` / `cos_fixed` math;
-- fixed-point values flowing into macro particle coordinates;
-- local-coordinate particle rendering;
-- `@load`, `@tick`, functions, globals, selectors, and stdlib imports;
-- a visually obvious “typed code → vanilla datapack → live world” loop.
-
-Recording tip: stand about 12 blocks back, face a dark wall or the sky, then run `/function rsdemo:start`.
-
-<!--
-When the GIF is ready, save it as ./docs/assets/redscript-hero-demo.gif and uncomment:
-
+<!-- Optional media slot:
 <p align="center">
-  <img src="./docs/assets/redscript-hero-demo.gif" alt="RedScript compiling typed code into a live Minecraft particle demo" width="720" />
+  <img src="./docs/assets/redscript-hero-demo.gif" alt="RedScript live particle demo in Minecraft" width="720" />
 </p>
 -->
 
@@ -215,7 +223,7 @@ Full list: [Stdlib Documentation](https://redscript-docs.pages.dev/en/stdlib/)
 
 | File | Description |
 | --- | --- |
-| [`hero-demo.mcrs`](./examples/hero-demo.mcrs) | GIF-ready live sine ribbon demo |
+| [`hero-demo.mcrs`](./examples/hero-demo.mcrs) | Live particle ribbon demo |
 | [`readme-demo.mcrs`](./examples/readme-demo.mcrs) | Compact real-time sine wave |
 | [`showcase.mcrs`](./examples/showcase.mcrs) | Larger feature tour |
 | [`loops-demo.mcrs`](./examples/loops-demo.mcrs) | Loop constructs |
