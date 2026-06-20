@@ -1,8 +1,8 @@
 // hero-demo.mcrs — RedScript README hero demo
 //
-// A compact live particle ribbon for trying RedScript in a real world.
-// It uses only language features plus vanilla particles, so the generated
-// datapack stays small and easy to inspect.
+// A live runtime-computed sine ribbon for trying RedScript in a real world.
+// It uses stdlib math, scoreboard arithmetic, macro parameters, local
+// coordinates, titles, and vanilla particles.
 //
 // Compile:
 //   redscript compile examples/hero-demo.mcrs -o /tmp/redscript-hero --namespace rsdemo
@@ -12,7 +12,10 @@
 //   /function rsdemo:start
 //   /function rsdemo:stop
 
+import "../src/stdlib/math.mcrs"
+
 let phase: int = 0;
+let cursor: int = 0;
 let running: bool = false;
 
 // Macro particle coordinates use fixed arguments, stored as double ×0.0001.
@@ -25,57 +28,48 @@ fn _draw_glow(px: fixed, py: fixed) {
     particle("minecraft:electric_spark", ^px, ^py, ^6, 0.04, 0.04, 0.04, 0.0, 3);
 }
 
-fn _triangle_wave(n: int): int {
-    let a: int = n % 120;
-    if (a > 60) {
-        a = 120 - a;
-    }
-    return a - 30;
-}
+fn _point(i: int, phase_offset: int) {
+    let angle: int = (i * 6 + phase + phase_offset) % 360;
+    let s: int = sin_fixed(angle);
+    let c: int = cos_fixed(angle);
 
-fn _point(i: int) {
     // x: 0..59 -> roughly -10..+10 blocks
-    // y: triangle wave -> roughly -2..+2 blocks
+    // y: sin/cos fixed ×1000 -> roughly -2.5..+2.5 blocks
     let x: int = i * 3400 - 100000;
-    let y: int = _triangle_wave(i * 8 + phase) * 700;
-    let halo: int = _triangle_wave(i * 8 + phase + 30) * 300;
+    let y: int = s * 25;
+    let halo: int = c * 18;
 
     _draw_core(x as fixed, y as fixed);
-    _draw_glow(x as fixed, (y + halo / 2) as fixed);
+    _draw_glow(x as fixed, (y + halo / 3) as fixed);
 }
 
 @load fn _init() {
     phase = 0;
+    cursor = 0;
     running = false;
 }
 
 @tick fn _tick() {
     if (!running) { return; }
 
-    phase = (phase + 5) % 120;
+    phase = (phase + 4) % 360;
+    cursor = (cursor + 6) % 60;
 
     foreach (p in @a) at @s {
-        _point(0);
-        _point(4);
-        _point(8);
-        _point(12);
-        _point(16);
-        _point(20);
-        _point(24);
-        _point(28);
-        _point(32);
-        _point(36);
-        _point(40);
-        _point(44);
-        _point(48);
-        _point(52);
-        _point(56);
+        // Six fresh points per tick; the old particles naturally fade.
+        _point(cursor, 0);
+        _point((cursor + 1) % 60, 0);
+        _point((cursor + 2) % 60, 0);
+        _point((cursor + 3) % 60, 0);
+        _point((cursor + 4) % 60, 0);
+        _point((cursor + 5) % 60, 0);
     }
 }
 
 fn start() {
     running = true;
     phase = 0;
+    cursor = 0;
     title(@a, "§cRedScript", "§7typed code → vanilla datapack → live particles");
     say("§a▶ RedScript hero demo started");
 }

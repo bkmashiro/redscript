@@ -84,9 +84,11 @@ Drop `my-datapack/` into your world's `datapacks/` folder and run `/reload`.
 
 ## See it in action
 
-RedScript can drive live Minecraft effects from regular typed code. This demo computes a moving particle ribbon at runtime, then lowers the math into vanilla scoreboard and macro commands for particle rendering.
+RedScript can drive live Minecraft effects from regular typed code. This demo computes a moving sine ribbon at runtime, then lowers the math into vanilla scoreboard and macro commands for particle rendering.
 
 ```rs
+import "../src/stdlib/math.mcrs"
+
 let phase: int = 0;
 let running: bool = false;
 
@@ -94,18 +96,13 @@ fn draw_point(y: fixed) {
     particle("minecraft:end_rod", ^0, ^y, ^6, 0.02, 0.02, 0.02, 0.0, 6);
 }
 
-fn triangle_wave(n: int): int {
-    let a: int = n % 120;
-    if (a > 60) { a = 120 - a; }
-    return a - 30;
-}
-
 @tick fn draw_wave() {
     if (!running) { return; }
-    phase = (phase + 5) % 120;
+    phase = (phase + 4) % 360;
 
     foreach (p in @a) at @s {
-        draw_point((triangle_wave(phase) * 700) as fixed);
+        let y: int = sin_fixed(phase) * 25;
+        draw_point(y as fixed);
     }
 }
 ```
@@ -121,7 +118,7 @@ redscript compile examples/hero-demo.mcrs -o /tmp/redscript-hero --namespace rsd
 /function rsdemo:start
 ```
 
-It demonstrates runtime integer math, fixed-point macro parameters, local-coordinate particles, `@load`, `@tick`, functions, globals, selectors, and typed control flow — all compiled into a small vanilla datapack.
+It demonstrates runtime `sin_fixed` / `cos_fixed` math, fixed-point macro parameters, local-coordinate particles, `@load`, `@tick`, functions, globals, selectors, and stdlib imports — all compiled into a compact vanilla datapack.
 
 <!-- Optional media slot:
 <p align="center">

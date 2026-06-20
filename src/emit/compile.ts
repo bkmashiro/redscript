@@ -26,6 +26,7 @@ import { emit, type DatapackFile, type EmitOptions } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import { analyzeBudget } from '../lir/budget'
 import type { LIRModule, LIRInstr } from '../lir/types'
+import type { MIRModule } from '../mir/types'
 import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 import { TypeChecker } from '../typechecker'
 import { isEventTypeName } from '../events/types'
@@ -335,6 +336,98 @@ export interface CollectRuntimeMetadataStageResult {
   functionTags: Map<string, string[]>
 }
 
+function functionFilePath(namespace: string, fnName: string): string {
+  return `data/${namespace}/function/${fnName}.mcfunction`
+}
+
+function functionNameFromFilePath(filePath: string): string | null {
+  const match = filePath.match(/^data\/[^/]+\/function\/(.+)\.mcfunction$/)
+  return match?.[1] ?? null
+}
+
+function isDerivedFunctionName(fnName: string, rootNames: ReadonlySet<string>): boolean {
+  for (const rootName of rootNames) {
+    if (fnName.startsWith(`${rootName}__`)) return true
+  }
+  return false
+}
+
+function addDerivedLibraryFunctionPaths(
+  lir: LIRModule,
+  namespace: string,
+  libraryFilePaths: Set<string>,
+  userRootNames: ReadonlySet<string>,
+): void {
+  const prunableLibraryRootNames = new Set<string>()
+  for (const libraryPath of libraryFilePaths) {
+    const fnName = functionNameFromFilePath(libraryPath)
+    if (fnName) prunableLibraryRootNames.add(fnName)
+  }
+
+  if (prunableLibraryRootNames.size === 0) return
+
+  for (const fn of lir.functions) {
+    if (userRootNames.has(fn.name)) continue
+    if (isDerivedFunctionName(fn.name, userRootNames)) continue
+    if (isDerivedFunctionName(fn.name, prunableLibraryRootNames)) {
+      libraryFilePaths.add(functionFilePath(namespace, fn.name))
+    }
+  }
+}
+
+function findReachableLibraryFunctions(
+  mod: MIRModule,
+  namespace: string,
+  libraryFilePaths: ReadonlySet<string>,
+): Set<string> {
+  if (libraryFilePaths.size === 0) return new Set()
+
+  const functionNames = new Set(mod.functions.map(fn => fn.name))
+  const libraryNames = new Set<string>()
+  for (const fn of mod.functions) {
+    if (libraryFilePaths.has(`data/${namespace}/function/${fn.name}.mcfunction`)) {
+      libraryNames.add(fn.name)
+    }
+  }
+
+  const edges = new Map<string, Set<string>>()
+  for (const fn of mod.functions) {
+    const callees = new Set<string>()
+    for (const block of fn.blocks) {
+      for (const instr of block.instrs) {
+        if (
+          (instr.kind === 'call' || instr.kind === 'call_macro' || instr.kind === 'call_context') &&
+          functionNames.has(instr.fn)
+        ) {
+          callees.add(instr.fn)
+        }
+      }
+    }
+    edges.set(fn.name, callees)
+  }
+
+  const reachable = new Set<string>()
+  const queue: string[] = []
+  for (const fn of mod.functions) {
+    if (!libraryNames.has(fn.name)) {
+      queue.push(fn.name)
+      reachable.add(fn.name)
+    }
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    for (const callee of edges.get(current) ?? []) {
+      if (!reachable.has(callee)) {
+        reachable.add(callee)
+        queue.push(callee)
+      }
+    }
+  }
+
+  return new Set([...reachable].filter(fnName => libraryNames.has(fnName)))
+}
+
 export interface LowerAndOptimizeStagesOptions {
   namespace: string
   filePath?: string
@@ -368,6 +461,12 @@ export function lowerAndOptimizeStages(
   const warnings: string[] = []
 
   const mir = lowerToMIR(hir, filePath)
+  const userRootNames = new Set(
+    mir.functions
+      .filter(fn => !incomingLibraryFilePaths.has(functionFilePath(namespace, fn.name)))
+      .map(fn => fn.name),
+  )
+  const reachableLibraryFns = findReachableLibraryFunctions(mir, namespace, incomingLibraryFilePaths)
   if (inlineFunctions.size > 0) {
     mir.inlineFunctions = new Set(inlineFunctions)
   }
@@ -380,7 +479,10 @@ export function lowerAndOptimizeStages(
   const libraryFilePaths = new Set(incomingLibraryFilePaths)
   if (mirOpt.keepInOutput && mirOpt.keepInOutput.size > 0) {
     for (const fnName of mirOpt.keepInOutput) {
-      libraryFilePaths.delete(`data/${namespace}/function/${fnName}.mcfunction`)
+      const filePath = `data/${namespace}/function/${fnName}.mcfunction`
+      if (!incomingLibraryFilePaths.has(filePath) || reachableLibraryFns.has(fnName)) {
+        libraryFilePaths.delete(filePath)
+      }
     }
   }
 
@@ -390,6 +492,7 @@ export function lowerAndOptimizeStages(
 
   const lir = lowerToLIR(mirFinal)
   const lirOpt = lirOptimizeModule(lir)
+  addDerivedLibraryFunctionPaths(lirOpt, namespace, libraryFilePaths, userRootNames)
 
   return {
     hir,

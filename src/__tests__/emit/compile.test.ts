@@ -490,6 +490,108 @@ describe('emit: compile coverage', () => {
     expect(prunedPaths).toContain(keptFile)
   })
 
+  test('emitDatapackStage prunes lowered helper blocks derived from unreachable library functions', () => {
+    const finalizedLIR: LIRModule = {
+      namespace: 'emit_stage_prune_blocks',
+      objective: '__emit_stage_prune_blocks',
+      functions: [
+        {
+          name: 'entry',
+          isMacro: false,
+          macroParams: [],
+          instructions: [{ kind: 'call', fn: 'emit_stage_prune_blocks:used_library' }],
+        },
+        {
+          name: 'used_library',
+          isMacro: false,
+          macroParams: [],
+          instructions: [{ kind: 'call', fn: 'emit_stage_prune_blocks:used_library__then_0' }],
+        },
+        {
+          name: 'used_library__then_0',
+          isMacro: false,
+          macroParams: [],
+          instructions: [],
+        },
+        {
+          name: 'unused_library',
+          isMacro: false,
+          macroParams: [],
+          instructions: [{ kind: 'call', fn: 'emit_stage_prune_blocks:unused_library__loop_body_0' }],
+        },
+        {
+          name: 'unused_library__loop_body_0',
+          isMacro: false,
+          macroParams: [],
+          instructions: [],
+        },
+      ],
+    }
+
+    const pruned = emitDatapackStage(finalizedLIR, {
+      namespace: 'emit_stage_prune_blocks',
+      libraryFilePaths: new Set([
+        'data/emit_stage_prune_blocks/function/used_library.mcfunction',
+        'data/emit_stage_prune_blocks/function/used_library__then_0.mcfunction',
+        'data/emit_stage_prune_blocks/function/unused_library.mcfunction',
+        'data/emit_stage_prune_blocks/function/unused_library__loop_body_0.mcfunction',
+      ]),
+    })
+    const paths = pruned.files.map(file => file.path)
+
+    expect(paths).toContain('data/emit_stage_prune_blocks/function/entry.mcfunction')
+    expect(paths).toContain('data/emit_stage_prune_blocks/function/used_library.mcfunction')
+    expect(paths).toContain('data/emit_stage_prune_blocks/function/used_library__then_0.mcfunction')
+    expect(paths).not.toContain('data/emit_stage_prune_blocks/function/unused_library.mcfunction')
+    expect(paths).not.toContain('data/emit_stage_prune_blocks/function/unused_library__loop_body_0.mcfunction')
+  })
+
+  test('compile prunes unrelated lowered stdlib math helpers', () => {
+    const mathPath = path.resolve(process.cwd(), 'src/stdlib/math.mcrs')
+    const result = compile(`
+      import "${mathPath}";
+
+      fn main(): int {
+        return sin_fixed(30);
+      }
+    `, {
+      namespace: 'math_prune_regression',
+      filePath: path.join(os.tmpdir(), 'math-prune-regression.mcrs'),
+    })
+
+    const paths = result.files.map(file => file.path)
+    expect(paths).toContain('data/math_prune_regression/function/sin_fixed.mcfunction')
+    expect(paths).toContain('data/math_prune_regression/function/__dyn_idx_math_tables_sin.mcfunction')
+    expect(paths.some(filePath => filePath.includes('cubic_newton'))).toBe(false)
+    expect(paths.some(filePath => filePath.includes('cbrt_newton'))).toBe(false)
+    expect(paths.some(filePath => filePath.includes('exp_fx'))).toBe(false)
+    expect(paths.some(filePath => filePath.includes('quadratic'))).toBe(false)
+    expect(paths.length).toBeLessThan(80)
+  })
+
+  test('compile does not prune user functions whose names look like library helper blocks', () => {
+    const mathPath = path.resolve(process.cwd(), 'src/stdlib/math.mcrs')
+    const result = compile(`
+      import "${mathPath}";
+
+      fn sin_fixed__user_helper(): int {
+        return 7;
+      }
+
+      fn main(): int {
+        return sin_fixed(30);
+      }
+    `, {
+      namespace: 'math_prune_collision',
+      filePath: path.join(os.tmpdir(), 'math-prune-collision.mcrs'),
+    })
+
+    const paths = result.files.map(file => file.path)
+    expect(paths).toContain('data/math_prune_collision/function/sin_fixed__user_helper.mcfunction')
+    expect(paths.some(filePath => filePath.includes('cubic_newton'))).toBe(false)
+    expect(paths.some(filePath => filePath.includes('exp_fx'))).toBe(false)
+  })
+
   test('finalizeRuntimeLIRStage injects @singleton get/set helpers and objective list', () => {
     const stage = finalizeRuntimeLIRStage(
       {
