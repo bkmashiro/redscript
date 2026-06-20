@@ -259,6 +259,7 @@ Implemented first slice:
 
 3. It is integrated into `src/optimizer/lir/pipeline.ts` after module-level dead-slot cleanup and before peephole/const-immediate folding.
 4. `benchmarks/arithmetic-probes.ts` now reports `commands.scoreCopy` so future runs can track copy-pressure changes. After module-safe copy-forwarding, current O1 arithmetic probes dropped from 1266 to 1139 total `scoreCopy` commands.
+5. A follow-up const-immediate slice folds safe identities (`* 1`, `/ 1`, `* 0`, `% 1`) plus one-use constant copies. The current arithmetic probe corpus does not yet contain those adjacent identity shapes, so this slice is mainly correctness/hardening rather than a measured probe win.
 
 ## Future implementation criteria
 

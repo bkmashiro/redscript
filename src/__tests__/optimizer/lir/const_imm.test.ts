@@ -112,13 +112,74 @@ describe('constant immediate folding', () => {
     expect(result.instructions).toHaveLength(3)
   })
 
-  test('does not fold score_mul (no single MC command)', () => {
+  test('eliminates multiply by 1', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_1'), value: 1 },
+      { kind: 'score_mul', dst: mkSlot('$x'), src: mkSlot('$__const_1') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toHaveLength(0)
+  })
+
+  test('folds multiply by 0 into score_set 0', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_0'), value: 0 },
+      { kind: 'score_mul', dst: mkSlot('$x'), src: mkSlot('$__const_0') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 0 },
+    ])
+  })
+
+  test('eliminates divide by 1', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_1'), value: 1 },
+      { kind: 'score_div', dst: mkSlot('$x'), src: mkSlot('$__const_1') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toHaveLength(0)
+  })
+
+  test('folds modulo by 1 into score_set 0', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_1'), value: 1 },
+      { kind: 'score_mod', dst: mkSlot('$x'), src: mkSlot('$__const_1') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 0 },
+    ])
+  })
+
+  test('does not fold multiply by non-identity constant', () => {
     const fn = mkFn([
       { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
       { kind: 'score_mul', dst: mkSlot('$x'), src: mkSlot('$__const_5') },
     ])
     const result = constImmFold(fn)
     expect(result.instructions).toHaveLength(2)
+  })
+
+  test('folds score_set const copied into destination', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_42'), value: 42 },
+      { kind: 'score_copy', dst: mkSlot('$x'), src: mkSlot('$__const_42') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 42 },
+    ])
+  })
+
+  test('does not fold score_set const copy when const slot has multiple uses', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_42'), value: 42 },
+      { kind: 'score_copy', dst: mkSlot('$x'), src: mkSlot('$__const_42') },
+      { kind: 'score_add', dst: mkSlot('$y'), src: mkSlot('$__const_42') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toHaveLength(3)
   })
 
   test('folds multiple independent pairs', () => {

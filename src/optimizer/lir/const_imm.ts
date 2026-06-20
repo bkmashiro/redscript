@@ -2,9 +2,9 @@
  * Constant Immediate Folding — LIR optimization pass.
  *
  * Peephole: finds score_set($__const_C, C) immediately followed by
- * score_add/score_sub(dst, $__const_C), where $__const_C has no other
- * uses in the function, and replaces the pair with a single
- * `scoreboard players add/remove` raw command.
+ * arithmetic using that const slot exactly once. It folds add/sub into
+ * raw scoreboard immediates and removes safe algebraic identities such
+ * as `* 1`, `/ 1`, `* 0`, and `% 1`.
  *
  * This saves one command per arithmetic-with-constant operation.
  */
@@ -78,17 +78,24 @@ export function constImmFold(fn: LIRFunction): LIRFunction {
     const curr = instrs[i]
     const next = instrs[i + 1]
 
-    // Pattern: score_set(constSlot, C) + score_add/sub(dst, constSlot)
+    // Pattern: score_set(constSlot, C) + score_copy/add/sub/mul/div/mod(dst, constSlot)
     if (
       next &&
       curr.kind === 'score_set' &&
       curr.dst.player.startsWith('$__const_') &&
-      (next.kind === 'score_add' || next.kind === 'score_sub') &&
+      (next.kind === 'score_copy' || next.kind === 'score_add' || next.kind === 'score_sub' || next.kind === 'score_mul' || next.kind === 'score_div' || next.kind === 'score_mod') &&
       slotKey(next.src) === slotKey(curr.dst) &&
       (useCounts.get(slotKey(curr.dst)) || 0) === 1
     ) {
       const C = curr.value
       const dst = next.dst
+
+      if (next.kind === 'score_copy') {
+        result.push({ kind: 'score_set', dst: next.dst, value: C })
+        changed = true
+        i += 2
+        continue
+      }
 
       if (C === 0 && next.kind === 'score_add') {
         // add 0 is a no-op — skip both
@@ -101,6 +108,42 @@ export function constImmFold(fn: LIRFunction): LIRFunction {
         // sub 0 is a no-op — skip both
         changed = true
         i += 2
+        continue
+      }
+
+      if (next.kind === 'score_mul' && C === 1) {
+        // mul 1 is a no-op — skip both
+        changed = true
+        i += 2
+        continue
+      }
+
+      if (next.kind === 'score_div' && C === 1) {
+        // div 1 is a no-op — skip both
+        changed = true
+        i += 2
+        continue
+      }
+
+      if (next.kind === 'score_mul' && C === 0) {
+        // mul 0 always produces 0
+        result.push({ kind: 'score_set', dst: next.dst, value: 0 })
+        changed = true
+        i += 2
+        continue
+      }
+
+      if (next.kind === 'score_mod' && C === 1) {
+        // integer x % 1 is always 0
+        result.push({ kind: 'score_set', dst: next.dst, value: 0 })
+        changed = true
+        i += 2
+        continue
+      }
+
+      if (next.kind !== 'score_add' && next.kind !== 'score_sub') {
+        result.push(curr)
+        i++
         continue
       }
 
