@@ -38,31 +38,24 @@ jobs:
         working-directory: editors/vscode
         run: npm install
 
-      - name: Check if packages need update
+      - name: Check if extension needs update
         id: check
         run: |
-          SRC_CHANGED=$(git diff --name-only HEAD~1 HEAD -- src/ | head -1)
-          ROOT_PKG_CHANGED=$(git diff --name-only HEAD~1 HEAD -- package.json package-lock.json | head -1)
+          SRC_CHANGED=$(git diff --name-only HEAD~1 HEAD -- src/ package.json package-lock.json | head -1)
           EXT_CHANGED=$(git diff --name-only HEAD~1 HEAD -- editors/vscode/ | head -1)
           echo "src_changed=${SRC_CHANGED}" >> $GITHUB_OUTPUT
-          echo "root_pkg_changed=${ROOT_PKG_CHANGED}" >> $GITHUB_OUTPUT
           echo "ext_changed=${EXT_CHANGED}" >> $GITHUB_OUTPUT
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_publish=true" >> $GITHUB_OUTPUT
-          elif [ -n "$SRC_CHANGED" ] || [ -n "$ROOT_PKG_CHANGED" ] || [ -n "$EXT_CHANGED" ]; then
+          elif [ -n "$SRC_CHANGED" ] || [ -n "$EXT_CHANGED" ]; then
             echo "should_publish=true" >> $GITHUB_OUTPUT
           else
             echo "should_publish=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Bump package versions and commit first
+      - name: Bump extension version and commit first
         if: steps.check.outputs.should_publish == 'true'
         run: |
-          if [ -n "${{ steps.check.outputs.src_changed }}" ] && [ -z "${{ steps.check.outputs.root_pkg_changed }}" ]; then
-            npm version patch --no-git-tag-version
-            echo "Auto-bumped redscript-mc to $(node -p "require('./package.json').version")"
-          fi
-
           cd editors/vscode
           npm version patch --no-git-tag-version
           NEW_VER=$(node -p "require('./package.json').version")
@@ -70,39 +63,11 @@ jobs:
           cd ../..
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json editors/vscode/package.json editors/vscode/package-lock.json
-          git commit -m "chore: auto-bump published packages [skip ci]" || echo "Nothing to commit"
+          git add editors/vscode/package.json editors/vscode/package-lock.json
+          git commit -m "chore: auto-bump vscode extension to ${NEW_VER} [skip ci]" || echo "Nothing to commit"
           git pull --rebase origin main || true
           git push
         id: bump
-
-      - name: Publish npm package (redscript-mc)
-        if: steps.check.outputs.should_publish == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          # Check if this version is already published
-          PKG_VER=$(node -p "require('./package.json').version")
-          if npm view "redscript-mc@${PKG_VER}" version &>/dev/null 2>&1; then
-            echo "⏭️  redscript-mc@${PKG_VER} already on npm, skipping"
-            exit 0
-          fi
-
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
-          if ! npm whoami; then
-            echo "::error::NPM_TOKEN is invalid or expired. Create an npm automation token for a maintainer of redscript-mc and save it as the NPM_TOKEN repository secret."
-            exit 1
-          fi
-
-          if ! npm owner ls redscript-mc | grep -E '^bkmsr '; then
-            echo "::warning::Could not confirm expected npm owner bkmsr; continuing to publish attempt."
-          fi
-
-          if ! npm publish --access public; then
-            echo "::error::npm publish failed. If npm returned E404 for an existing package, the NPM_TOKEN account likely lacks publish access to redscript-mc."
-            exit 1
-          fi
-          echo "✅ Published redscript-mc@${PKG_VER}"
 
       - name: Build and publish extension
         if: steps.check.outputs.should_publish == 'true'
