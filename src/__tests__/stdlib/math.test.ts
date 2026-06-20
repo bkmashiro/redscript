@@ -118,7 +118,7 @@ describe('stdlib/math.mcrs', () => {
       }
     `)
     const allContent = getAllContent(files)
-    expect(allContent).toContain('sin_fx1000')
+    expect(allContent).toContain('__dyn_idx_math_tables_sin')
     expect(allContent).toContain('cos_fx1000')
     expect(files.some(f => f.path.endsWith('/load.mcfunction'))).toBe(true)
   })

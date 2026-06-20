@@ -1,5 +1,5 @@
-import { scoreboardRmwPass } from '../../../optimizer/lir/rmw'
-import type { LIRFunction, LIRInstr, Slot } from '../../../lir/types'
+import { scoreboardRmwPass, scoreboardRmwPassModule } from '../../../optimizer/lir/rmw'
+import type { LIRFunction, LIRInstr, LIRModule, Slot } from '../../../lir/types'
 
 const obj = '__test'
 
@@ -7,11 +7,53 @@ function mkSlot(player: string): Slot {
   return { player, obj }
 }
 
-function mkFn(instructions: LIRInstr[]): LIRFunction {
-  return { name: 'main', instructions, isMacro: false, macroParams: [] }
+function mkFn(instructions: LIRInstr[], name = 'main'): LIRFunction {
+  return { name, instructions, isMacro: false, macroParams: [] }
+}
+
+function mkModule(functions: LIRFunction[]): LIRModule {
+  return { functions, namespace: 'test', objective: obj }
 }
 
 describe('LIR scoreboard RMW optimizer', () => {
+  test('collapses adjacent copy chain through dead temporary', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result.instructions).toEqual([
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+    ])
+  })
+
+  test('collapses copy followed by return through dead temporary', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'return_value', slot: mkSlot('$tmp') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result.instructions).toEqual([
+      { kind: 'score_copy', dst: mkSlot('$ret'), src: mkSlot('$src') },
+    ])
+  })
+
+  test('does not collapse copy chain when temporary is read later', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+      { kind: 'score_add', dst: mkSlot('$later'), src: mkSlot('$tmp') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result).toBe(fn)
+  })
+
   test('collapses temp copy/op/output-copy into direct output RMW', () => {
     const fn = mkFn([
       { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
@@ -170,11 +212,45 @@ describe('LIR scoreboard RMW optimizer', () => {
   test('returns same reference when nothing changes', () => {
     const fn = mkFn([
       { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
-      { kind: 'return_value', slot: mkSlot('$out') },
+      { kind: 'score_add', dst: mkSlot('$out'), src: mkSlot('$rhs') },
     ])
 
     const result = scoreboardRmwPass(fn)
 
     expect(result).toBe(fn)
+  })
+})
+
+describe('LIR scoreboard RMW optimizer (module-level safety)', () => {
+  test('does not remove a temporary assignment read by another function call_context', () => {
+    const producer = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$shared_tmp'), src: mkSlot('$src') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$shared_tmp') },
+    ], 'producer')
+    const consumer = mkFn([
+      {
+        kind: 'call_context',
+        fn: 'test:consumer_body',
+        subcommands: [{ kind: 'if_matches', score: '$shared_tmp __test', range: '1..' }],
+      },
+    ], 'consumer')
+
+    const result = scoreboardRmwPassModule(mkModule([producer, consumer]))
+
+    expect(result.functions[0].instructions).toEqual(producer.instructions)
+  })
+
+  test('does not remove a temporary assignment read by another function', () => {
+    const producer = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$shared_tmp'), src: mkSlot('$src') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$shared_tmp') },
+    ], 'producer')
+    const consumer = mkFn([
+      { kind: 'score_add', dst: mkSlot('$use'), src: mkSlot('$shared_tmp') },
+    ], 'consumer')
+
+    const result = scoreboardRmwPassModule(mkModule([producer, consumer]))
+
+    expect(result.functions[0].instructions).toEqual(producer.instructions)
   })
 })

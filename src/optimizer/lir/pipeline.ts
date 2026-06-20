@@ -8,21 +8,21 @@
 
 import type { LIRFunction, LIRModule } from '../../lir/types'
 import { deadSlotElimModule } from './dead_slot'
-import { scoreboardRmwPass } from './rmw'
+import { scoreboardRmwPassModule } from './rmw'
 import { constImmFold } from './const_imm'
 import { execStorePeephole } from './peephole'
 
 export type LIRPass = (fn: LIRFunction) => LIRFunction
 
 const perFunctionPasses: LIRPass[] = [
-  scoreboardRmwPass,
   execStorePeephole,
   constImmFold,
 ]
 
 export function lirOptimizeModule(mod: LIRModule): LIRModule {
-  // Module-level pass: dead slot elimination (cross-function analysis)
-  let result = deadSlotElimModule(mod)
+  // Module-level passes: dead slot elimination, then RMW/copy forwarding
+  // with cross-function temp-use protection.
+  let result = scoreboardRmwPassModule(deadSlotElimModule(mod))
 
   // Per-function passes
   let changed = false
