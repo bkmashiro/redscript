@@ -4,7 +4,7 @@
 
 After Lane 2/3/4 scaffolds, the near-term roadmap is intentionally narrower:
 
-1. Build reusable TS optimizer infrastructure first: shared LIR slot/use/effect analysis, local liveness, rewrite safety helpers, and property-based optimizer tests. See [08](./08-ts-optimizer-infra.md).
+1. Build reusable TS optimizer infrastructure first: shared LIR slot/use/effect analysis, local liveness, rewrite safety helpers, and property-based optimizer tests. See [08](./08-ts-optimizer-infra.md) and the concrete step order in [10](./10-near-term-optimizer-roadmap.md).
 2. Keep the long-term compiler direction aligned with the thin VIR recommendation in [09](./09-vir-architecture-recommendation.md): SSA values + block arguments, Minecraft-aware numeric/effect semantics, but no physical scoreboard slot binding until legalization/slot planning.
 3. Prefer compiler/backend optimizations next, especially follow-on work after the LIR scoreboard RMW pass in [07](./07-rmw-optimizer-design.md).
 4. Keep display / attribute / enchantment mechanisms as live-gated probes until the target Paper/TestHarness server proves same-tick readback, schema compatibility, and cost advantage.

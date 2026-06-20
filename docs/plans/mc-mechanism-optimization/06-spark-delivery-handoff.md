@@ -155,7 +155,7 @@ Offline skip is not MC proof.
 
 **Objective:** Validate whether a value-level SSA layer can turn current copy/RMW peepholes into slot-planning consequences.
 
-**Status:** Design recommendation captured in [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md). Not implemented.
+**Status:** Design recommendation captured in [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md). Concrete step order is tracked in [10 — Near-term optimizer roadmap](./10-near-term-optimizer-roadmap.md). Not implemented.
 
 **Non-goals for the first spike:**
 
