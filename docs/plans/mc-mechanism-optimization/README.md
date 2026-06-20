@@ -23,6 +23,7 @@
 - [08 — TS optimizer infrastructure stack](./08-ts-optimizer-infra.md)
 - [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md)
 - [10 — Near-term optimizer roadmap](./10-near-term-optimizer-roadmap.md)
+- [11 — Pro 20x /goal brief](./11-pro-20x-goal-brief.md)
 
 ## Operating rules
 
@@ -46,10 +47,11 @@ Near-term implementation order:
 1. TS optimizer infrastructure extraction has started: [08 — TS optimizer infrastructure stack](./08-ts-optimizer-infra.md) records the support stack and `src/optimizer/lir/analysis.ts` now centralizes slot/use safety helpers for RMW and dead-slot passes.
 2. The target architecture is now documented in [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md): a thin SSA value layer with Minecraft-aware semantics but target-independent locations, followed by MC legalization and slot planning.
 3. Follow [10 — Near-term optimizer roadmap](./10-near-term-optimizer-roadmap.md) for concrete implementation order: LIR liveness, rewrite harness, property tests, copy-origin diagnostics, then a bounded arithmetic-only VIR spike.
-4. Implement the next shared LIR support slice before adding more one-off peepholes: local liveness / next-use helpers, then a small rewrite-rule harness.
-5. Only after that, consider an arithmetic-only VIR spike; it must keep the default compiler path unchanged and prove semantic equivalence plus command-count non-regression.
-6. Benchmark `sin_hp` + `cos_hp` separately before deciding whether `sincos_hp` is worth a public helper.
-7. Run the existing live probes on the target Paper/TestHarness server before promoting display/attribute/enchantment backends.
+4. For a future Pro 20x `/goal` run, use [11 — Pro 20x /goal brief](./11-pro-20x-goal-brief.md) as the controller document: it groups the work into LIR infra, VIR core, and slot-planner proof bands with explicit decision gates.
+5. Implement the next shared LIR support slice before adding more one-off peepholes: local liveness / next-use helpers, then a small rewrite-rule harness.
+6. Only after that, consider an arithmetic-only VIR spike; it must keep the default compiler path unchanged and prove semantic equivalence plus command-count non-regression.
+7. Benchmark `sin_hp` + `cos_hp` separately before deciding whether `sincos_hp` is worth a public helper.
+8. Run the existing live probes on the target Paper/TestHarness server before promoting display/attribute/enchantment backends.
 
 Deferred / not near-term:
 
