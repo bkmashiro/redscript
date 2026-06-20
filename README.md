@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="./logo.png" alt="RedScript Logo" width="64" />
+<img src="./logo.png" alt="RedScript Logo" width="72" />
 
 # RedScript
 
-**A typed language that compiles to Minecraft datapacks.**
+**A typed language and toolchain for building vanilla Minecraft datapacks.**
 
-Write clean code. Get vanilla datapacks. No mods required.
+Write structured code. Compile to `.mcfunction`. Ship without mods.
 
 [![npm](https://img.shields.io/npm/v/redscript-mc?color=cb3837&label=npm)](https://www.npmjs.com/package/redscript-mc)
 [![CI](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml/badge.svg)](https://github.com/bkmashiro/redscript/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-3886%20passing-brightgreen)](https://github.com/bkmashiro/redscript)
 [![VSCode](https://img.shields.io/badge/VSCode-Extension-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=bkmashiro.redscript-vscode)
+[![Datapack](https://img.shields.io/badge/output-vanilla%20datapack-55aa55)](https://redscript-docs.pages.dev)
 
 [中文版](./README.zh.md) · [Documentation](https://redscript-docs.pages.dev) · [Playground](https://redscript-ide.pages.dev)
 
@@ -21,10 +21,12 @@ Write clean code. Get vanilla datapacks. No mods required.
 
 ## Why RedScript?
 
-Minecraft datapacks are powerful but painful to write:
+Minecraft datapacks are powerful, but real projects quickly become piles of selectors, scoreboards, generated functions, and fragile command glue.
+
+RedScript gives you a typed language, optimizer, CLI, LSP, formatter, stdlib, and Minecraft-aware validation loop while still emitting plain vanilla datapacks.
 
 ```mcfunction
-# Vanilla: Check if player has 100+ score and give reward
+# Vanilla mcfunction: repeat the selector and command plumbing everywhere
 execute as @a[scores={points=100..}] run scoreboard players add @s rewards 1
 execute as @a[scores={points=100..}] run scoreboard players set @s points 0
 execute as @a[scores={points=100..}] run give @s minecraft:diamond 1
@@ -32,7 +34,7 @@ execute as @a[scores={points=100..}] run tellraw @s {"text":"Reward claimed!"}
 ```
 
 ```rs
-// RedScript: Same logic, readable
+// RedScript: keep the game logic readable
 @tick fn check_rewards() {
     foreach (p in @a) {
         if (scoreboard_get(p, #points) >= 100) {
@@ -47,17 +49,17 @@ execute as @a[scores={points=100..}] run tellraw @s {"text":"Reward claimed!"}
 
 ## Quick Start
 
-### Try Online (No Install)
+### Try online
 
-**[→ redscript-ide.pages.dev](https://redscript-ide.pages.dev)** — Write code, download datapack.
+**[redscript-ide.pages.dev](https://redscript-ide.pages.dev)** — write code in the browser and download a datapack.
 
-### Install CLI
+### Install the CLI
 
 ```bash
 npm install -g redscript-mc
 ```
 
-### Hello World
+### Compile a datapack
 
 ```rs
 // hello.mcrs
@@ -76,7 +78,45 @@ npm install -g redscript-mc
 redscript build hello.mcrs -o ./my-datapack
 ```
 
-Drop `my-datapack/` into your world's `datapacks/` folder, run `/reload`. Done.
+Drop `my-datapack/` into your world's `datapacks/` folder and run `/reload`.
+
+---
+
+## Demo GIF script
+
+A short GIF works best when it shows that RedScript is not just syntax sugar: it is runtime math, macro parameters, scoreboard lowering, and live Minecraft output.
+
+This repo includes a ready-to-record hero demo:
+
+```bash
+redscript compile examples/hero-demo.mcrs -o /tmp/redscript-hero --namespace rsdemo
+```
+
+In game:
+
+```mcfunction
+/reload
+/function rsdemo:start
+/function rsdemo:stop
+```
+
+What it shows:
+
+- runtime `sin_fixed` / `cos_fixed` math;
+- fixed-point values flowing into macro particle coordinates;
+- local-coordinate particle rendering;
+- `@load`, `@tick`, functions, globals, selectors, and stdlib imports;
+- a visually obvious “typed code → vanilla datapack → live world” loop.
+
+Recording tip: stand about 12 blocks back, face a dark wall or the sky, then run `/function rsdemo:start`.
+
+<!--
+When the GIF is ready, save it as ./docs/assets/redscript-hero-demo.gif and uncomment:
+
+<p align="center">
+  <img src="./docs/assets/redscript-hero-demo.gif" alt="RedScript compiling typed code into a live Minecraft particle demo" width="720" />
+</p>
+-->
 
 ---
 
@@ -85,51 +125,50 @@ Drop `my-datapack/` into your world's `datapacks/` folder, run `/reload`. Done.
 ### Language
 
 | Feature | Example |
-|---------|---------|
+| --- | --- |
 | Variables | `let x: int = 42;` |
 | Functions | `fn damage(target: selector, amount: int) { ... }` |
 | Control flow | `if`, `else`, `for`, `while`, `foreach`, `match` |
-| Structs | `struct Player { score: int, alive: bool }` |
+| Structs / impls | `struct Player { score: int, alive: bool }` |
 | Enums | `enum State { Lobby, Playing, Ended }` |
-| Option type | `let item: Option<int> = Some(5);` |
-| Result type | `let r: Result<int, string> = Ok(42);` |
+| Option / Result | `Some(5)`, `Ok(42)` |
 | F-strings | `say(f"Score: {points}");` |
 | Modules | `import math; math::sin(45);` |
 
-### Minecraft Integration
+### Minecraft integration
 
 ```rs
-// Decorators for game events
-@tick fn every_tick() { }
-@tick(rate=20) fn every_second() { }
-@load fn on_datapack_load() { }
-@on(PlayerJoin) fn welcome(p: Player) { }
-
-// Entity selectors work naturally
-foreach (zombie in @e[type=zombie, distance=..10]) {
-    kill(zombie);
+@load fn on_reload() {
+    say("Datapack loaded.");
 }
 
-// Execute subcommands
-foreach (p in @a) at @s positioned ~ ~2 ~ {
-    particle("minecraft:flame", ~0, ~0, ~0, 0.1, 0.1, 0.1, 0.01, 10);
+@tick(rate=20) fn every_second() {
+    foreach (p in @a[tag=playing]) {
+        title(p, "§aReady", "§7RedScript tick handler");
+    }
 }
 
-// Coroutines for heavy work (spread across ticks)
-@coroutine(batch=100)
-fn process_all() {
-    for (let i = 0; i < 10000; i = i + 1) {
-        // Won't lag — runs 100 iterations per tick
+fn clear_nearby_zombies() {
+    foreach (zombie in @e[type=zombie, distance=..10]) {
+        kill(zombie);
+    }
+}
+
+@tick fn flame_trail() {
+    foreach (p in @a) at @s positioned ~ ~2 ~ {
+        particle("minecraft:flame", ~0, ~0, ~0, 0.1, 0.1, 0.1, 0.01, 10);
     }
 }
 ```
 
 ### Tooling
 
-- **15 optimizer passes** — Dead code elimination, constant folding, inlining, etc.
-- **LSP** — Hover docs, go-to-definition, auto-complete, diagnostics
-- **VSCode Extension** — Full syntax highlighting and snippets
-- **50 stdlib modules** — Math, vectors, pathfinding, particles, and more
+- **Compiler pipeline** — parser, type checker, HIR/MIR/LIR lowering, optimizers, and datapack emitter.
+- **Minecraft-aware validation** — static command checks plus optional Paper/TestHarness integration tests.
+- **LSP + VSCode extension** — hover docs, go-to-definition, completion, diagnostics, snippets, and syntax highlighting.
+- **Formatter / linter / test runner** — project tooling for maintaining larger datapacks.
+- **Stdlib** — math, vectors, particles, inventory, scheduling, data structures, ECS-style helpers, and more.
+- **Numeric tuner** — helper-level `.mcrs` overlay generation with reviewable manifests.
 
 ---
 
@@ -153,18 +192,17 @@ redscript tune --adapter sqrt-newton --range 10000:400000 --samples 128 --out tu
 
 ## Standard Library
 
-50 modules covering math, data structures, game systems, and MC-specific helpers:
+RedScript ships with stdlib modules for math, data structures, game systems, and MC-specific helpers:
 
 ```rs
-import math;        // sin, cos, sqrt, pow, abs
+import math;        // sin, cos, sqrt, interpolation, fixed-scale helpers
+import math_hp;     // higher-precision numeric helpers
 import vec;         // 2D/3D vectors, dot, cross, normalize
-import random;      // LCG/PCG random generators
-import pathfind;    // A* pathfinding
-import particles;   // Particle helpers
-import inventory;   // Slot manipulation
-import scheduler;   // Delayed execution
-import ecs;         // Entity-component system
-// ... and 42 more
+import random;      // random generators
+import particles;   // particle helpers
+import inventory;   // slot manipulation
+import scheduler;   // delayed execution
+import ecs;         // entity-component style helpers
 ```
 
 Full list: [Stdlib Documentation](https://redscript-docs.pages.dev/en/stdlib/)
@@ -176,20 +214,36 @@ Full list: [Stdlib Documentation](https://redscript-docs.pages.dev/en/stdlib/)
 ## Examples
 
 | File | Description |
-|------|-------------|
-| [`loops-demo.mcrs`](./examples/loops-demo.mcrs) | All loop constructs |
-| [`showcase.mcrs`](./examples/showcase.mcrs) | Full feature tour |
+| --- | --- |
+| [`hero-demo.mcrs`](./examples/hero-demo.mcrs) | GIF-ready live sine ribbon demo |
+| [`readme-demo.mcrs`](./examples/readme-demo.mcrs) | Compact real-time sine wave |
+| [`showcase.mcrs`](./examples/showcase.mcrs) | Larger feature tour |
+| [`loops-demo.mcrs`](./examples/loops-demo.mcrs) | Loop constructs |
 
-More in the [`examples/`](./examples/) directory.
+More examples live in [`examples/`](./examples/).
 
 ---
 
 ## Documentation
 
-- **[Getting Started](https://redscript-docs.pages.dev/en/guide/)** — Installation and first project
-- **[Language Reference](https://redscript-docs.pages.dev/en/reference/)** — Complete syntax guide
-- **[Stdlib Reference](https://redscript-docs.pages.dev/en/stdlib/)** — All 50 modules documented
-- **[CLI Reference](https://redscript-docs.pages.dev/en/cli/)** — Command line options
+- **[Getting Started](https://redscript-docs.pages.dev/en/guide/)** — installation and first project
+- **[Language Reference](https://redscript-docs.pages.dev/en/reference/)** — syntax and semantics
+- **[Stdlib Reference](https://redscript-docs.pages.dev/en/stdlib/)** — generated stdlib docs
+- **[CLI Reference](https://redscript-docs.pages.dev/en/reference/cli)** — command-line options
+
+---
+
+## Development
+
+```bash
+npm install
+npm run build
+npm run test:unit       # pure TS/unit tests, parallel
+npm run test:integration # mc-integration project, serial
+npm run gate:full       # heavyweight release-style gate
+```
+
+See [AGENTS.md](./AGENTS.md) and [compiler hardening roadmap](./docs/plans/compiler-mc-hardening-roadmap.md) for current architecture and verification notes.
 
 ---
 
