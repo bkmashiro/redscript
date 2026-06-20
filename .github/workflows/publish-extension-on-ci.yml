@@ -6,11 +6,12 @@ on:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   publish:
-    # Only run if CI passed
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Auto-run only after successful CI; allow manual dispatch after secret/token fixes.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -46,7 +47,9 @@ jobs:
           echo "src_changed=${SRC_CHANGED}" >> $GITHUB_OUTPUT
           echo "root_pkg_changed=${ROOT_PKG_CHANGED}" >> $GITHUB_OUTPUT
           echo "ext_changed=${EXT_CHANGED}" >> $GITHUB_OUTPUT
-          if [ -n "$SRC_CHANGED" ] || [ -n "$ROOT_PKG_CHANGED" ] || [ -n "$EXT_CHANGED" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          elif [ -n "$SRC_CHANGED" ] || [ -n "$ROOT_PKG_CHANGED" ] || [ -n "$EXT_CHANGED" ]; then
             echo "should_publish=true" >> $GITHUB_OUTPUT
           else
             echo "should_publish=false" >> $GITHUB_OUTPUT
@@ -82,11 +85,24 @@ jobs:
           PKG_VER=$(node -p "require('./package.json').version")
           if npm view "redscript-mc@${PKG_VER}" version &>/dev/null 2>&1; then
             echo "⏭️  redscript-mc@${PKG_VER} already on npm, skipping"
-          else
-            echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
-            npm publish --access public
-            echo "✅ Published redscript-mc@${PKG_VER}"
+            exit 0
           fi
+
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+          if ! npm whoami; then
+            echo "::error::NPM_TOKEN is invalid or expired. Create an npm automation token for a maintainer of redscript-mc and save it as the NPM_TOKEN repository secret."
+            exit 1
+          fi
+
+          if ! npm owner ls redscript-mc | grep -E '^bkmsr '; then
+            echo "::warning::Could not confirm expected npm owner bkmsr; continuing to publish attempt."
+          fi
+
+          if ! npm publish --access public; then
+            echo "::error::npm publish failed. If npm returned E404 for an existing package, the NPM_TOKEN account likely lacks publish access to redscript-mc."
+            exit 1
+          fi
+          echo "✅ Published redscript-mc@${PKG_VER}"
 
       - name: Build and publish extension
         if: steps.check.outputs.should_publish == 'true'
