@@ -56,7 +56,7 @@ If yes, extend `analysis.ts` or add a sibling support module first, then write t
 
 ## What not to do yet
 
-Do not add a full VIR/SSA layer until the TS support stack proves it can remove duplication and protect correctness in the current LIR optimizer.
+Do not add a full VIR/SSA production layer until the TS support stack proves it can remove duplication and protect correctness in the current LIR optimizer. The intended shape, if the spike is justified, is documented in [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md): thin SSA value layer, Minecraft-aware semantics, target-independent locations, then MC legalization and slot planning.
 
 Do not add Binaryen, Z3, or egg to the production dependency graph until each has a narrow spike with measurable value.
 
@@ -65,4 +65,4 @@ Do not add Binaryen, Z3, or egg to the production dependency graph until each ha
 1. Add local liveness / next-use helpers for straight-line LIR windows.
 2. Add a tiny rewrite-rule harness so multi-instruction patterns can share window matching and safety checks.
 3. Use `fast-check` to fuzz small LIR programs for analysis invariants and no-op rewrite equivalence.
-4. Only then prototype arithmetic-only VIR behind an experimental path if benchmark data still shows copy/temp pressure that LIR analysis cannot cleanly address.
+4. Only then prototype arithmetic-only VIR behind an experimental path if benchmark data still shows copy/temp pressure that LIR analysis cannot cleanly address; follow the Phase 0–5 spike criteria in [09](./09-vir-architecture-recommendation.md).

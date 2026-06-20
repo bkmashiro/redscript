@@ -21,6 +21,7 @@
 - [06 — Spark delivery handoff](./06-spark-delivery-handoff.md)
 - [07 — Scoreboard RMW optimizer design](./07-rmw-optimizer-design.md)
 - [08 — TS optimizer infrastructure stack](./08-ts-optimizer-infra.md)
+- [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md)
 
 ## Operating rules
 
@@ -42,10 +43,11 @@ Completed setup lanes:
 Near-term implementation order:
 
 1. TS optimizer infrastructure extraction has started: [08 — TS optimizer infrastructure stack](./08-ts-optimizer-infra.md) records the support stack and `src/optimizer/lir/analysis.ts` now centralizes slot/use safety helpers for RMW and dead-slot passes.
-2. Implement the next shared LIR support slice before adding more one-off peepholes: local liveness / next-use helpers, then a small rewrite-rule harness.
-3. Add a `scoreCopy`/RMW-specific counter to `benchmarks/arithmetic-probes.ts` if the next pass needs direct trend tracking.
-4. Benchmark `sin_hp` + `cos_hp` separately before deciding whether `sincos_hp` is worth a public helper.
-5. Run the existing live probes on the target Paper/TestHarness server before promoting display/attribute/enchantment backends.
+2. The target architecture is now documented in [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md): a thin SSA value layer with Minecraft-aware semantics but target-independent locations, followed by MC legalization and slot planning.
+3. Implement the next shared LIR support slice before adding more one-off peepholes: local liveness / next-use helpers, then a small rewrite-rule harness.
+4. Only after that, consider an arithmetic-only VIR spike; it must keep the default compiler path unchanged and prove semantic equivalence plus command-count non-regression.
+5. Benchmark `sin_hp` + `cos_hp` separately before deciding whether `sincos_hp` is worth a public helper.
+6. Run the existing live probes on the target Paper/TestHarness server before promoting display/attribute/enchantment backends.
 
 Deferred / not near-term:
 

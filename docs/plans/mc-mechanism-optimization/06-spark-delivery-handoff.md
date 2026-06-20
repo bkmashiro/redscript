@@ -131,6 +131,48 @@ Offline skip is not MC proof.
 
 **No edits unless explicitly promoted.**
 
+## Lane 7 — TS optimizer infrastructure support stack
+
+**Objective:** Stop adding standalone LIR peepholes without shared safety APIs.
+
+**Status:** Initial support stack landed in `src/optimizer/lir/analysis.ts` and is documented in [08 — TS optimizer infrastructure stack](./08-ts-optimizer-infra.md).
+
+**Current scope:**
+
+- slot identity and protected slot helpers;
+- read/write slot extraction;
+- raw/macro/call-context mention detection;
+- module-level reference index;
+- property-style tests with `fast-check`.
+
+**Next candidate edits:**
+
+- local liveness / next-use helpers;
+- rewrite window harness;
+- fuzzing small LIR no-op/equivalence invariants.
+
+## Lane 8 — Thin VIR architecture spike
+
+**Objective:** Validate whether a value-level SSA layer can turn current copy/RMW peepholes into slot-planning consequences.
+
+**Status:** Design recommendation captured in [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md). Not implemented.
+
+**Non-goals for the first spike:**
+
+- no coroutine support;
+- no storage/NBT effects;
+- no entity/display/macro layout;
+- no production default path change;
+- no full MLIR/LLVM/Cranelift integration.
+
+**First implementation scope if promoted:**
+
+- table-backed VIR IDs, builder, printer, verifier;
+- single-block leaf arithmetic only;
+- naive VIR-to-LIR lowering first;
+- then DCE/local CSE and slot planner v1;
+- compare against `bench:arithmetic` and symbolic allocation checks.
+
 ## Final controller gate for any edit lane
 
 Run at minimum:
