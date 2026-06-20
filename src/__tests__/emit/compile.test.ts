@@ -68,10 +68,69 @@ describe('emit: compile coverage', () => {
 
     expect(stage.hir.functions.some(fn => fn.name === 'plain_identity_int')).toBe(true)
     expect(stage.hir.functions.some(fn => fn.name === 'plain_identity')).toBe(false)
-    expect(stage.libraryFilePaths).toEqual(new Set(['data/hir_stage_compile/function/lib_plain.mcfunction']))
+    expect(stage.libraryFilePaths).toEqual(new Set([
+      'data/hir_stage_compile/function/decorated_lib.mcfunction',
+      'data/hir_stage_compile/function/lib_plain.mcfunction',
+    ]))
     expect(stage.warnings).toHaveLength(1)
     expect(stage.warnings[0]).toContain('[DeprecatedUsage]')
     expect(stage.warnings[0]).toContain('old')
+  })
+
+  test('lowerToHIRStage prunes unreachable library functions before MIR lowering', () => {
+    const parsed = parseSourceStage(`
+      fn used_leaf(): int { return 1; }
+      fn used_root(): int { return used_leaf(); }
+      fn unused_leaf(): int { return 2; }
+      fn unused_root(): int { return unused_leaf(); }
+      fn main(): int { return used_root(); }
+    `, 'hir_prune_test')
+
+    for (const name of ['used_leaf', 'used_root', 'unused_leaf', 'unused_root']) {
+      parsed.ast.declarations.find(fn => fn.name === name)!.isLibraryFn = true
+    }
+
+    const stage = lowerToHIRStage(parsed.ast, 'hir_prune_test')
+    const names = stage.hir.functions.map(fn => fn.name)
+
+    expect(names).toEqual(expect.arrayContaining(['main', 'used_root', 'used_leaf']))
+    expect(names).not.toContain('unused_root')
+    expect(names).not.toContain('unused_leaf')
+    expect(stage.libraryFilePaths).toEqual(new Set([
+      'data/hir_prune_test/function/used_leaf.mcfunction',
+      'data/hir_prune_test/function/used_root.mcfunction',
+    ]))
+  })
+
+  test('lowerToHIRStage preserves @require_on_load dependencies for reachable library functions', () => {
+    const parsed = parseSourceStage(`
+      fn init_table(): void { raw("say init"); }
+
+      @require_on_load(init_table)
+      fn lookup(): int { return 7; }
+
+      fn unrelated_init(): void { raw("say nope"); }
+
+      @require_on_load(unrelated_init)
+      fn unrelated_lookup(): int { return 9; }
+
+      fn main(): int { return lookup(); }
+    `, 'hir_require_prune_test')
+
+    for (const name of ['init_table', 'lookup', 'unrelated_init', 'unrelated_lookup']) {
+      parsed.ast.declarations.find(fn => fn.name === name)!.isLibraryFn = true
+    }
+
+    const stage = lowerToHIRStage(parsed.ast, 'hir_require_prune_test')
+    const names = stage.hir.functions.map(fn => fn.name)
+
+    expect(names).toEqual(expect.arrayContaining(['main', 'lookup', 'init_table']))
+    expect(names).not.toContain('unrelated_lookup')
+    expect(names).not.toContain('unrelated_init')
+
+    const metadata = collectRuntimeMetadataStage(stage.hir, 'hir_require_prune_test')
+    expect(metadata.loadFunctions).toContain('init_table')
+    expect(metadata.loadFunctions).not.toContain('unrelated_init')
   })
 
   test('parseSourceStage returns AST and parser warnings without emitting files', () => {
@@ -561,7 +620,10 @@ describe('emit: compile coverage', () => {
 
     const paths = result.files.map(file => file.path)
     expect(paths).toContain('data/math_prune_regression/function/sin_fixed.mcfunction')
+    expect(paths).toContain('data/math_prune_regression/function/_math_init.mcfunction')
     expect(paths).toContain('data/math_prune_regression/function/__dyn_idx_math_tables_sin.mcfunction')
+    const loadTag = result.files.find(file => file.path === 'data/minecraft/tags/function/load.json')
+    expect(loadTag?.content).toContain('math_prune_regression:_math_init')
     expect(paths.some(filePath => filePath.includes('cubic_newton'))).toBe(false)
     expect(paths.some(filePath => filePath.includes('cbrt_newton'))).toBe(false)
     expect(paths.some(filePath => filePath.includes('exp_fx'))).toBe(false)

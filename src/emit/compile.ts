@@ -31,7 +31,7 @@ import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 import { TypeChecker } from '../typechecker'
 import { isEventTypeName } from '../events/types'
 import type { Program } from '../ast/types'
-import type { HIRModule, HIRStruct } from '../hir/types'
+import type { HIRModule, HIRStruct, HIRFunction, HIRStmt, HIRExpr } from '../hir/types'
 import { EVENT_RUNTIME_MANIFESTS, getAllEventRuntimeAssets, type EventRuntimeManifest } from '../events/manifest'
 
 export interface CompileOptions {
@@ -197,6 +197,219 @@ function mergeParsedLibrarySource(
   ast.globals.push(...libAst.globals)
 }
 
+function hasLibraryRuntimeRootDecorator(fn: HIRFunction): boolean {
+  return fn.decorators.some(dec =>
+    dec.name === 'load' ||
+    dec.name === 'tick' ||
+    dec.name === 'schedule' ||
+    dec.name === 'on' ||
+    dec.name === 'function_tag' ||
+    dec.name === 'watch' ||
+    dec.name === 'keep' ||
+    dec.name === 'coroutine' ||
+    dec.name === 'profile' ||
+    dec.name === 'benchmark' ||
+    dec.name === 'throttle' ||
+    dec.name === 'retry' ||
+    dec.name === 'memoize'
+  )
+}
+
+function getRequireOnLoadTargets(fn: HIRFunction): string[] {
+  const targets: string[] = []
+  for (const dec of fn.decorators) {
+    if (dec.name !== 'require_on_load') continue
+    for (const arg of dec.rawArgs ?? []) {
+      if (arg.kind === 'string') targets.push(arg.value)
+    }
+  }
+  return targets
+}
+
+function collectHIRFunctionCalls(fn: HIRFunction): Set<string> {
+  const calls = new Set<string>()
+  const visitBlock = (block: HIRStmt[]): void => {
+    for (const stmt of block) visitStmt(stmt)
+  }
+  const visitExpr = (expr: HIRExpr): void => {
+    switch (expr.kind) {
+      case 'call':
+        calls.add(expr.fn)
+        expr.args.forEach(visitExpr)
+        break
+      case 'invoke':
+        visitExpr(expr.callee)
+        expr.args.forEach(visitExpr)
+        break
+      case 'static_call':
+        calls.add(`${expr.type}::${expr.method}`)
+        expr.args.forEach(visitExpr)
+        break
+      case 'binary':
+        visitExpr(expr.left)
+        visitExpr(expr.right)
+        break
+      case 'unary':
+        visitExpr(expr.operand)
+        break
+      case 'is_check':
+      case 'type_cast':
+        visitExpr(expr.expr)
+        break
+      case 'some_lit':
+        visitExpr(expr.value)
+        break
+      case 'assign':
+        visitExpr(expr.value)
+        break
+      case 'member_assign':
+      case 'index_assign':
+        visitExpr(expr.obj)
+        if ('index' in expr) visitExpr(expr.index)
+        visitExpr(expr.value)
+        break
+      case 'member':
+        visitExpr(expr.obj)
+        break
+      case 'index':
+        visitExpr(expr.obj)
+        visitExpr(expr.index)
+        break
+      case 'array_lit':
+      case 'tuple_lit':
+        expr.elements.forEach(visitExpr)
+        break
+      case 'struct_lit':
+        expr.fields.forEach(field => visitExpr(field.value))
+        break
+      case 'str_interp':
+        expr.parts.forEach(part => { if (typeof part !== 'string') visitExpr(part) })
+        break
+      case 'f_string':
+        expr.parts.forEach(part => { if (part.kind === 'expr') visitExpr(part.expr) })
+        break
+      case 'enum_construct':
+        expr.args.forEach(arg => visitExpr(arg.value))
+        break
+      case 'lambda':
+        if (Array.isArray(expr.body)) visitBlock(expr.body)
+        else visitExpr(expr.body)
+        break
+      case 'unwrap_or':
+        visitExpr(expr.opt)
+        visitExpr(expr.default_)
+        break
+      case 'int_lit':
+      case 'float_lit':
+      case 'byte_lit':
+      case 'short_lit':
+      case 'long_lit':
+      case 'double_lit':
+      case 'bool_lit':
+      case 'str_lit':
+      case 'range_lit':
+      case 'rel_coord':
+      case 'local_coord':
+      case 'mc_name':
+      case 'blockpos':
+      case 'selector':
+      case 'ident':
+      case 'path_expr':
+      case 'none_lit':
+        break
+    }
+  }
+  const visitStmt = (stmt: HIRStmt): void => {
+    switch (stmt.kind) {
+      case 'let':
+      case 'let_destruct':
+        visitExpr(stmt.init)
+        break
+      case 'const_decl':
+        visitExpr(stmt.value)
+        break
+      case 'expr':
+        visitExpr(stmt.expr)
+        break
+      case 'return':
+        if (stmt.value) visitExpr(stmt.value)
+        break
+      case 'labeled_loop':
+        visitStmt(stmt.body)
+        break
+      case 'if':
+        visitExpr(stmt.cond)
+        visitBlock(stmt.then)
+        if (stmt.else_) visitBlock(stmt.else_)
+        break
+      case 'while':
+        visitExpr(stmt.cond)
+        visitBlock(stmt.body)
+        if (stmt.step) visitBlock(stmt.step)
+        break
+      case 'foreach':
+        visitExpr(stmt.iterable)
+        visitBlock(stmt.body)
+        break
+      case 'match':
+        visitExpr(stmt.expr)
+        for (const arm of stmt.arms) {
+          if (arm.pattern.kind === 'PatExpr') visitExpr(arm.pattern.expr)
+          visitBlock(arm.body)
+        }
+        break
+      case 'execute':
+        visitBlock(stmt.body)
+        break
+      case 'if_let_some':
+        visitExpr(stmt.init)
+        visitBlock(stmt.then)
+        if (stmt.else_) visitBlock(stmt.else_)
+        break
+      case 'while_let_some':
+        visitExpr(stmt.init)
+        visitBlock(stmt.body)
+        break
+      case 'break':
+      case 'continue':
+      case 'break_label':
+      case 'continue_label':
+      case 'raw':
+        break
+    }
+  }
+
+  visitBlock(fn.body)
+  return calls
+}
+
+function pruneUnreachableLibraryHIR(hir: HIRModule): HIRModule {
+  const functionsByName = new Map(hir.functions.map(fn => [fn.name, fn]))
+  const reachable = new Set<string>()
+  const queue: string[] = []
+  const enqueue = (name: string): void => {
+    if (!functionsByName.has(name) || reachable.has(name)) return
+    reachable.add(name)
+    queue.push(name)
+  }
+
+  for (const fn of hir.functions) {
+    if (!fn.isLibraryFn || hasLibraryRuntimeRootDecorator(fn)) enqueue(fn.name)
+  }
+
+  while (queue.length > 0) {
+    const fn = functionsByName.get(queue.shift()!)
+    if (!fn) continue
+    for (const callee of collectHIRFunctionCalls(fn)) enqueue(callee)
+    for (const target of getRequireOnLoadTargets(fn)) enqueue(target)
+  }
+
+  return {
+    ...hir,
+    functions: hir.functions.filter(fn => !fn.isLibraryFn || reachable.has(fn.name)),
+  }
+}
+
 export interface LowerToHIRStageResult {
   hir: HIRModule
   libraryFilePaths: Set<string>
@@ -205,11 +418,11 @@ export interface LowerToHIRStageResult {
 
 export function lowerToHIRStage(ast: Program, namespace: string): LowerToHIRStageResult {
   const hirRaw = lowerToHIR(ast)
-  const hir = monomorphize(hirRaw)
+  const hir = pruneUnreachableLibraryHIR(monomorphize(hirRaw))
 
   const libraryFilePaths = new Set(
     hir.functions
-      .filter(fn => fn.isLibraryFn && fn.decorators.length === 0)
+      .filter(fn => fn.isLibraryFn && !hasLibraryRuntimeRootDecorator(fn))
       .map(fn => `data/${namespace}/function/${fn.name}.mcfunction`),
   )
 
@@ -530,8 +743,23 @@ export function emitDatapackStage(
   options: EmitDatapackStageOptions,
 ): EmitDatapackStageResult {
   const { libraryFilePaths, ...emitOptions } = options
+  const prunableLibraryPaths = new Set(libraryFilePaths)
+  const protectFunction = (fnName: string): void => {
+    const normalized = fnName.includes(':') ? fnName.split(':').slice(1).join(':') : fnName
+    prunableLibraryPaths.delete(functionFilePath(options.namespace, normalized))
+  }
+  for (const fn of options.loadFunctions ?? []) protectFunction(fn)
+  for (const fn of options.tickFunctions ?? []) protectFunction(fn)
+  for (const schedule of options.scheduleFunctions ?? []) protectFunction(schedule.name)
+  for (const watch of options.watchFunctions ?? []) protectFunction(watch.name)
+  for (const fns of options.eventHandlers?.values() ?? []) {
+    for (const fn of fns) protectFunction(fn)
+  }
+  for (const fns of options.functionTags?.values() ?? []) {
+    for (const fn of fns) protectFunction(fn)
+  }
   const files = emit(finalizedLIR, emitOptions)
-  return { files: pruneLibraryFunctionFiles(files, new Set(libraryFilePaths)) }
+  return { files: pruneLibraryFunctionFiles(files, prunableLibraryPaths) }
 }
 
 export function finalizeRuntimeLIRStage(
@@ -723,6 +951,9 @@ export function collectRuntimeMetadataStage(
       }
       if (dec.name === 'memoize') {
         memoizeFunctions.push(fn.name)
+      }
+      if (dec.name === 'require_on_load') {
+        loadFunctions.push(...getRequireOnLoadTargets(fn))
       }
       if (dec.name === 'on' && dec.args?.eventType) {
         const evType = dec.args.eventType as string
