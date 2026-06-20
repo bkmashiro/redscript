@@ -226,6 +226,16 @@ function getRequireOnLoadTargets(fn: HIRFunction): string[] {
   return targets
 }
 
+function collectRawFunctionReferences(cmd: string): string[] {
+  const refs: string[] = []
+  const functionRefPattern = /\bfunction\s+(?:(?:[A-Za-z0-9_.-]+|__NS__):)?([A-Za-z0-9_./-]+)/g
+  for (const match of cmd.matchAll(functionRefPattern)) {
+    const target = match[1]
+    if (target) refs.push(target.replace(/\//g, '_'))
+  }
+  return refs
+}
+
 function collectHIRFunctionCalls(fn: HIRFunction): Set<string> {
   const calls = new Set<string>()
   const visitBlock = (block: HIRStmt[]): void => {
@@ -374,11 +384,14 @@ function collectHIRFunctionCalls(fn: HIRFunction): Set<string> {
       case 'continue':
       case 'break_label':
       case 'continue_label':
+        break
       case 'raw':
+        collectRawFunctionReferences(stmt.cmd).forEach(ref => calls.add(ref))
         break
     }
   }
 
+  if (!Array.isArray(fn.body)) return calls
   visitBlock(fn.body)
   return calls
 }
@@ -416,14 +429,23 @@ export interface LowerToHIRStageResult {
   warnings: string[]
 }
 
-export function lowerToHIRStage(ast: Program, namespace: string): LowerToHIRStageResult {
+export function lowerToHIRStage(
+  ast: Program,
+  namespace: string,
+  options: { pruneInjectedLibraries?: boolean } = { pruneInjectedLibraries: true },
+): LowerToHIRStageResult {
   const hirRaw = lowerToHIR(ast)
-  const hir = pruneUnreachableLibraryHIR(monomorphize(hirRaw))
+  const hirMonomorphized = monomorphize(hirRaw)
+  const hir = options.pruneInjectedLibraries
+    ? pruneUnreachableLibraryHIR(hirMonomorphized)
+    : hirMonomorphized
 
   const libraryFilePaths = new Set(
-    hir.functions
-      .filter(fn => fn.isLibraryFn && !hasLibraryRuntimeRootDecorator(fn))
-      .map(fn => `data/${namespace}/function/${fn.name}.mcfunction`),
+    options.pruneInjectedLibraries
+      ? hir.functions
+        .filter(fn => fn.isLibraryFn && !hasLibraryRuntimeRootDecorator(fn))
+        .map(fn => `data/${namespace}/function/${fn.name}.mcfunction`)
+      : [],
   )
 
   return {
@@ -1219,7 +1241,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       return null
     }
 
+    let hasInjectedLibraries = false
+
     function mergeWholeModuleImport(modFilePath: string): void {
+      hasInjectedLibraries = true
       if (seenModuleImports.has(modFilePath)) return
       seenModuleImports.add(modFilePath)
       const modSource = fs.readFileSync(modFilePath, 'utf-8')
@@ -1259,6 +1284,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     for (const li of preprocessed.libraryImports ?? []) {
+      hasInjectedLibraries = true
       mergeParsedLibrarySource(ast, li.source, warnings, {
         filePath: li.filePath,
         namespace,
@@ -1268,6 +1294,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     if (options.librarySources) {
+      hasInjectedLibraries = true
       for (const libSrc of options.librarySources) {
         mergeParsedLibrarySource(ast, libSrc, warnings, {
           namespace,
@@ -1317,7 +1344,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       warnings.push(...typechecked.warnings)
     }
 
-    const hirStage = lowerToHIRStage(ast, namespace)
+    const hirStage = lowerToHIRStage(ast, namespace, { pruneInjectedLibraries: hasInjectedLibraries })
     recordStageSnapshot(options, 'lowerToHIR', () => summarizeLowerToHIRStage(hirStage))
     warnings.push(...hirStage.warnings)
 
