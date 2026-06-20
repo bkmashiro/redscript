@@ -170,6 +170,11 @@ export function scoreboardRmwPass(fn: LIRFunction, options: RmwPassOptions = {})
     const second = fn.instructions[i + 1]
     const third = fn.instructions[i + 2]
 
+    if (first.kind === 'score_copy' && sameSlot(first.dst, first.src)) {
+      changed = true
+      continue
+    }
+
     if (second && canCollapseCopyChain(first, second, fn.instructions, i, options)) {
       const copyIn = first as Extract<LIRInstr, { kind: 'score_copy' }>
       const copyOut = second as Extract<LIRInstr, { kind: 'score_copy' }>

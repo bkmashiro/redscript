@@ -260,12 +260,13 @@ Implemented first slice:
 3. It is integrated into `src/optimizer/lir/pipeline.ts` after module-level dead-slot cleanup and before peephole/const-immediate folding.
 4. `benchmarks/arithmetic-probes.ts` now reports `commands.scoreCopy` so future runs can track copy-pressure changes. After module-safe copy-forwarding, current O1 arithmetic probes dropped from 1266 to 1139 total `scoreCopy` commands.
 5. A follow-up const-immediate slice folds safe identities (`* 1`, `/ 1`, `* 0`, `% 1`) plus one-use constant copies. The current arithmetic probe corpus does not yet contain those adjacent identity shapes, so this slice is mainly correctness/hardening rather than a measured probe win.
-6. The arithmetic probe report now includes aggregate and per-case `scoreCopyPatterns`, grouping each remaining `score_copy` by adjacent command shape and preserving concrete file/line examples. The current O1 aggregate top patterns are:
+6. The arithmetic probe report now includes aggregate and per-case `scoreCopyPatterns`, grouping each remaining `score_copy` by adjacent command shape and preserving concrete file/line examples. After emitter-level self-copy suppression, current O1 arithmetic probes dropped to `1127` total `scoreCopy` commands (`3567` total commands). The current aggregate top patterns are:
    - `score_arith -> score_copy -> score_arith` (`238`)
    - `score_copy -> score_copy -> score_copy` (`92`)
    - `execute -> score_copy -> boundary` (`72`)
    - `score_arith -> score_copy -> score_set_const` (`70`)
    - `boundary -> score_copy -> score_copy` (`65`)
+7. A small follow-up removes scoreboard self-copy no-ops (`score_copy x <- x`) in the LIR RMW pass and suppresses any remaining generated self-copy at emit time. This is behavior-preserving because MC `scoreboard players operation A = A` has no effect, and it catches late runtime/finalization shapes that appear after LIR optimization.
 
 ## Future implementation criteria
 

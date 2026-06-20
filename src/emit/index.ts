@@ -423,6 +423,7 @@ function emitFunction(
 
   let lastSourceMarker: string | undefined
   for (const instr of fn.instructions) {
+    if (isEmitterNoOp(instr)) continue
     const marker = instr.sourceLoc ? formatSourceMarker(instr.sourceLoc) : undefined
     if (marker && marker !== lastSourceMarker) {
       pushLine(`# src: ${marker}`)
@@ -866,6 +867,14 @@ function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersio
  */
 function slot(s: Slot): string {
   return `${s.player} ${s.obj}`
+}
+
+function sameSlot(a: Slot, b: Slot): boolean {
+  return a.player === b.player && a.obj === b.obj
+}
+
+function isEmitterNoOp(instr: LIRInstr): boolean {
+  return instr.kind === 'score_copy' && sameSlot(instr.dst, instr.src)
 }
 
 /**

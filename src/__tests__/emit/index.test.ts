@@ -11,6 +11,48 @@ function getFile(files: { path: string; content: string }[], path: string): stri
 }
 
 describe('emit: direct LIR emission', () => {
+  test('omits scoreboard self-copy commands as emitter-level no-ops', () => {
+    const module: LIRModule = {
+      functions: [{
+        name: 'SelfCopy',
+        instructions: [
+          { kind: 'score_copy', dst: { player: '$a', obj: '__emit' }, src: { player: '$a', obj: '__emit' } },
+          { kind: 'score_add', dst: { player: '$a', obj: '__emit' }, src: { player: '$b', obj: '__emit' } },
+        ],
+        isMacro: false,
+        macroParams: [],
+      }],
+      namespace: 'emitns',
+      objective: '__emit',
+    }
+
+    const files = emit(module, { namespace: 'emitns' })
+    const content = getFile(files, 'data/emitns/function/selfcopy.mcfunction')
+
+    expect(content).not.toContain('scoreboard players operation $a __emit = $a __emit')
+    expect(content).toContain('scoreboard players operation $a __emit += $b __emit')
+  })
+
+  test('keeps same-player copies across different objectives', () => {
+    const module: LIRModule = {
+      functions: [{
+        name: 'CrossObjectiveCopy',
+        instructions: [
+          { kind: 'score_copy', dst: { player: '$a', obj: '__left' }, src: { player: '$a', obj: '__right' } },
+        ],
+        isMacro: false,
+        macroParams: [],
+      }],
+      namespace: 'emitns',
+      objective: '__emit',
+    }
+
+    const files = emit(module, { namespace: 'emitns' })
+    const content = getFile(files, 'data/emitns/function/crossobjectivecopy.mcfunction')
+
+    expect(content).toContain('scoreboard players operation $a __left = $a __right')
+  })
+
   test('emits datapack files, source maps, tags, schedule wrappers, and modern instruction variants', () => {
     const sourceLoc = { file: 'src/test.mcrs', line: 3, col: 5 }
     const instructions: LIRInstr[] = [

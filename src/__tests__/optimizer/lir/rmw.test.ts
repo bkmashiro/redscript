@@ -16,6 +16,29 @@ function mkModule(functions: LIRFunction[]): LIRModule {
 }
 
 describe('LIR scoreboard RMW optimizer', () => {
+  test('removes scoreboard self-copy no-ops', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$tmp') },
+      { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$rhs') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result.instructions).toEqual([
+      { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$rhs') },
+    ])
+  })
+
+  test('does not remove same-player copy across different objectives', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: { player: '$tmp', obj: '__left' }, src: { player: '$tmp', obj: '__right' } },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result).toBe(fn)
+  })
+
   test('collapses adjacent copy chain through dead temporary', () => {
     const fn = mkFn([
       { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
