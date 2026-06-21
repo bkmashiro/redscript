@@ -630,12 +630,80 @@ npm test -- --runInBand
 
 ---
 
+## Phase 15 — Registry resource literals and package declaration surface
+
+Status: Planned. This is a language/package-DX track to pick up during parser/typechecker/package refactors, not part of the numeric helper work. The goal is to treat Minecraft and mod/datapack `namespace:path` values as typed registry resources with LSP support, and to make `.d.mcrs` useful as a package boundary similar to TypeScript declaration files.
+
+Design boundary:
+
+- Do not model Minecraft registries as closed language enums. Registries are open across Minecraft versions, datapacks, mods, and server plugins.
+- Prefer typed resource locations / registry values: `resource<particle>`, `resource<effect>`, `resource<entity_type>`, `resource<item>`, `resource<block>`, `resource<sound>`, etc.
+- Built-in catalogs should be versioned metadata for completion, hover, and diagnostics, not a hard-coded semantic ceiling.
+- User/package declarations must be additive: libraries and datapacks can declare their own `create:glue`, `mypack:blue_spark`, or server-provided resources with JSDoc hover text.
+- Keep string compatibility first. Existing calls like `particle("minecraft:flame", ...)`, `effect(p, "minecraft:speed")`, and selectors like `@e[type=minecraft:zombie]` must continue to compile.
+- Unquoted resource literals such as `minecraft:flame` should be contextual/typed literals, not arbitrary global identifiers. If a context is ambiguous, require an explicit target type or registry qualifier rather than guessing.
+
+Potential surface syntax, to be validated by parser/LSP experiments:
+
+```mcrs
+/// Create glue item used by contraption logic.
+resource item create:glue
+
+/// Custom particle from this datapack.
+resource particle mypack:blue_spark
+
+fn spawn_fx(p: Player) {
+  particle(minecraft:flame, p.pos)
+  effect(p, minecraft:speed)
+  give(p, create:glue)
+}
+```
+
+Later alias/import sugar can reduce repetition, but should not be the first requirement:
+
+```mcrs
+use minecraft.particle.{flame, smoke}
+use minecraft.effect.{speed}
+use create.item.{glue}
+```
+
+`.d.mcrs` direction:
+
+- Extend declaration files beyond builtins so packages can describe external functions, structs/interfaces, decorators/runtime assets, and registry resources without shipping implementation source.
+- Support external function declarations for code provided by another datapack/package or server-side convention, e.g. declarations that typecheck calls but lower to a known `function namespace:path` boundary.
+- Add explicit `export` declarations so a package can expose a stable API surface while keeping internal helpers private.
+- Add import/package resolution for declaration-only dependencies, then support generating a `.d.mcrs` bundle from a package's exported public API for collaborators.
+- Preserve JSDoc from source or declaration files in generated `.d.mcrs` so LSP hover/completion remains useful across package boundaries.
+- Keep declaration-only files non-emitting: they should affect typecheck/LSP/package resolution, not directly generate datapack functions unless paired with explicit runtime asset metadata.
+
+Planned implementation order:
+
+- [ ] LSP-only registry catalog first: complete known resource IDs in string positions (`particle("...")`, `effect(..., "...")`, `give(..., "...")`) and selector fields such as `type=` without changing parser syntax.
+- [ ] Add a registry metadata model with MC-version awareness and user/package extension hooks.
+- [ ] Parse and typecheck `resource <registry> <namespace:path>` declarations in normal `.mcrs` and `.d.mcrs` files, preserving doc comments for hover.
+- [ ] Introduce resource-typed stdlib signatures gradually (`ParticleId`, `EffectId`, `EntityTypeId`, `ItemId`, etc.) while accepting compatible string literals for migration.
+- [ ] Add contextual unquoted resource literals (`minecraft:flame`) only after the registry/typechecker path is pinned with RED parser/typechecker/LSP tests.
+- [ ] Extend `.d.mcrs` with `export` and declaration-only external function/package surfaces; add tests that a consumer package can typecheck against declarations without implementation files.
+- [ ] Add `.d.mcrs` generation from package exports, including JSDoc and registry resource declarations.
+
+Verification for Phase 15 slices:
+
+```bash
+npm test -- src/__tests__/parser*.test.ts src/__tests__/typechecker*.test.ts src/__tests__/lsp*.test.ts --runInBand
+npm run build
+npm run validate-mc
+```
+
+---
+
 ## Short next slice recommendation
 
 Phase 13's macro-scale `double_mul` runtime oracle is complete, live Paper integration output is quiet by default (`MC_VERBOSE=1` opts success breadcrumbs back in), and the true-IEEE decision is recorded: add a future `double_mul_ieee`-style helper separately before considering any replacement of `double_mul`. Do not change language-level `fixed` scale as part of that work.
 
 The next deeper numeric/performance track is now captured in `docs/plans/arithmetic-optimization-exploration.md`, with the expanded mechanism report and Spark task board split under `docs/plans/mc-mechanism-optimization/`. Treat it as Phase 14: build compile-time arithmetic probe tooling, measure helper command costs, then dispatch small Paper/mechanism probes for display SVD, attribute/enchantment ALU, quaternion normalization, combined `sincos_hp`, direct scoreboard RMW optimization, and sqrt/reciprocal approximation tiers.
 
-If improving DX instead, design explicit conversion helpers or scale-specific syntax (`as fx3 round/trunc`, target typing, or `numeric fx4 { ... }`) with RED parser/typechecker tests first.
+If improving language/package DX instead, Phase 15 now records the registry-resource and `.d.mcrs` declaration surface: start with LSP registry completions and declaration-only package boundaries before adding contextual unquoted `namespace:path` literals.
+
+If improving numeric DX instead, design explicit conversion helpers or scale-specific syntax (`as fx3 round/trunc`, target typing, or `numeric fx4 { ... }`) with RED parser/typechecker tests first.
 
 This keeps compiler-owned numeric behavior safe while acknowledging that Minecraft precision and int32 overflow tradeoffs require multiple explicit scale families.
