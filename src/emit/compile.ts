@@ -180,6 +180,8 @@ function mergeParsedLibrarySource(
   warnings.push(...libParsed.warnings)
 
   const existingFnNames = new Set(ast.declarations.map(fn => fn.name))
+  if (!ast.declaredFunctions) ast.declaredFunctions = []
+  const existingDeclaredFnNames = new Set(ast.declaredFunctions.map(fn => fn.name))
 
   for (const fn of libAst.declarations) {
     if (options.dedupeDeclarations && existingFnNames.has(fn.name)) {
@@ -188,6 +190,14 @@ function mergeParsedLibrarySource(
     fn.isLibraryFn = true
     ast.declarations.push(fn)
     existingFnNames.add(fn.name)
+  }
+
+  for (const fn of libAst.declaredFunctions ?? []) {
+    if (existingFnNames.has(fn.name) || existingDeclaredFnNames.has(fn.name)) {
+      continue
+    }
+    ast.declaredFunctions.push(fn)
+    existingDeclaredFnNames.add(fn.name)
   }
 
   ast.structs.push(...libAst.structs)

@@ -53,6 +53,42 @@ describe('emit: declared-function boundary behavior', () => {
     }
   })
 
+  test('module-library .d.mcrs path import preserves declaredFunctions and does not emit declaration file', () => {
+    const ns = 'declared_imported_module_library'
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-lib-'))
+    const declFile = path.join(tmpDir, 'declared_ext.d.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(
+      declFile,
+      'module library;\n' +
+      'declare fn ext(x: int): int;\n',
+    )
+    fs.writeFileSync(
+      mainFile,
+      'import "declared_ext.d.mcrs";\nfn main(): int { return ext(1); }\n',
+    )
+
+    try {
+      const result = compile(fs.readFileSync(mainFile, 'utf-8'), {
+        namespace: ns,
+        filePath: mainFile,
+      })
+
+      const paths = getFilePaths(result.files)
+      const main = result.files.find(file => file.path === `data/${ns}/function/main.mcfunction`)
+      const mainContent = main?.content ?? ''
+
+      expect(result.success).toBe(true)
+      expect(fileExists(result.files, `data/${ns}/function/main.mcfunction`)).toBe(true)
+      expect(fileExists(result.files, `data/${ns}/function/ext.mcfunction`)).toBe(false)
+      expect(paths).not.toContain(`data/${ns}/function/ext.mcfunction`)
+      expect(mainContent).toContain(`function ${ns}:ext`)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+  })
+
   test('declared-only function with executable main emits main but not declared stub', () => {
     const ns = 'declared_and_main'
     const result = compile(`
@@ -110,7 +146,7 @@ describe('emit: declared-function boundary behavior', () => {
     const declFile = path.join(tmpDir, 'bad_ext.d.mcrs')
     const mainFile = path.join(tmpDir, 'main.mcrs')
 
-    fs.writeFileSync(declFile, 'declare fn ext(x: int, y: int): int;\n')
+    fs.writeFileSync(declFile, 'module library;\ndeclare fn ext(x: int, y: int): int;\n')
     fs.writeFileSync(mainFile, 'import "bad_ext.d.mcrs";\nfn main(): int { return ext(1); }\n')
 
     let err: CheckFailedError | undefined
