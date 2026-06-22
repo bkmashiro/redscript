@@ -95,4 +95,5 @@ fn main(): int { return ext("ok"); }
     // Existing-consistent policy: executable function should win over declare-only stub.
     expect(errors).toHaveLength(0)
   })
+
 })
