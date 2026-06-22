@@ -141,8 +141,8 @@ describe('emit: declared-function boundary behavior', () => {
     // namespaced calls when no implementation is available.
   })
 
-  test('imported declaration argument mismatch fails with declaration-aware type diagnostics', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-bad-'))
+  test('module-library imported declaration arity mismatch fails with declaration-aware diagnostics', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-lib-bad-'))
     const declFile = path.join(tmpDir, 'bad_ext.d.mcrs')
     const mainFile = path.join(tmpDir, 'main.mcrs')
 
@@ -152,7 +152,7 @@ describe('emit: declared-function boundary behavior', () => {
     let err: CheckFailedError | undefined
     try {
       compile(fs.readFileSync(mainFile, 'utf-8'), {
-        namespace: 'declared_imported_bad',
+        namespace: 'declared_imported_library_bad',
         filePath: mainFile,
         stopAfterCheck: true,
       })
@@ -164,5 +164,58 @@ describe('emit: declared-function boundary behavior', () => {
 
     expect(err).toBeDefined()
     expect(err!.diagnostics[0].message).toContain("Function 'ext' expects 2 arguments, got 1")
+  })
+
+  test('whole-module imported declaration arity mismatch fails with declaration-aware diagnostics', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-bad-'))
+    const declFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(declFile, 'module api;\ndeclare fn ext(x: int, y: int): int;\n')
+    fs.writeFileSync(mainFile, 'import api;\nfn main(): int { return ext(1); }\n')
+
+    let err: CheckFailedError | undefined
+    try {
+      compile(fs.readFileSync(mainFile, 'utf-8'), {
+        namespace: 'declared_imported_whole_bad',
+        filePath: mainFile,
+        includeDirs: [tmpDir],
+        stopAfterCheck: true,
+      })
+    } catch (e) {
+      if (e instanceof CheckFailedError) err = e
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+
+    expect(err).toBeDefined()
+    expect(err!.diagnostics[0].message).toContain("Function 'ext' expects 2 arguments, got 1")
+  })
+
+  test('whole-module imported declaration typechecks and emits only call sites, never the declaration body', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-ok-'))
+    const declFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(declFile, 'module api;\ndeclare fn ext(x: int): int;\n')
+    fs.writeFileSync(mainFile, 'import api;\nfn main(): int { return ext(1); }\n')
+
+    try {
+      const result = compile(fs.readFileSync(mainFile, 'utf-8'), {
+        namespace: 'declared_imported_whole_ok',
+        filePath: mainFile,
+        includeDirs: [tmpDir],
+      })
+
+      const main = result.files.find(file => file.path === `data/declared_imported_whole_ok/function/main.mcfunction`)
+      const mainContent = main?.content ?? ''
+
+      expect(result.success).toBe(true)
+      expect(fileExists(result.files, `data/declared_imported_whole_ok/function/main.mcfunction`)).toBe(true)
+      expect(fileExists(result.files, `data/declared_imported_whole_ok/function/ext.mcfunction`)).toBe(false)
+      expect(mainContent).toContain(`function declared_imported_whole_ok:ext`)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
   })
 })
