@@ -132,6 +132,14 @@ export class TypeChecker {
       this.functions.set(fn.name, fn)
     }
 
+    // Declaration-only stubs are not executable, but they provide callable signatures.
+    // Keep executable functions authoritative when names collide.
+    for (const fn of program.declaredFunctions ?? []) {
+      if (!this.functions.has(fn.name)) {
+        this.functions.set(fn.name, fn)
+      }
+    }
+
     // Register interface declarations
     for (const iface of program.interfaces ?? []) {
       this.interfaces.set(iface.name, iface)
@@ -267,6 +275,8 @@ export class TypeChecker {
   }
 
   private checkFunction(fn: FnDecl): void {
+    if (fn.isDeclareOnly) return
+
     // Generic functions (with type params like <T>) are checked after monomorphization.
     // Skip body checking here to avoid false errors for unresolved type params.
     if (fn.typeParams && fn.typeParams.length > 0) return
