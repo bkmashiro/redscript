@@ -246,6 +246,60 @@ describe('emit: declared-function boundary behavior', () => {
     expect(result.files).toHaveLength(0)
   })
 
+  test('declared function stub imported before executable whole-module implementation wins for later import', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-precedence-ordered-'))
+    const apiDeclPath = path.join(tmpDir, 'api_decl.mcrs')
+    const apiImplPath = path.join(tmpDir, 'api_impl.mcrs')
+    const mainPath = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(apiDeclPath, 'module api_decl;\ndeclare fn ext(x: int): int;\n')
+    fs.writeFileSync(apiImplPath, 'module api_impl;\nfn ext(x: string): int { return 1; }\n')
+    fs.writeFileSync(mainPath, 'import api_decl;\nimport api_impl;\nfn main(): int { return ext("ok"); }\n')
+
+    let result: ReturnType<typeof compile>
+    try {
+      result = compile(fs.readFileSync(mainPath, 'utf-8'), {
+        namespace: 'declared_imported_precedence_ordered_ok',
+        filePath: mainPath,
+        includeDirs: [tmpDir],
+        stopAfterCheck: true,
+      })
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+
+    expect(result.success).toBe(true)
+    expect(result.files).toHaveLength(0)
+  })
+
+  test('declared function stub imported before executable whole-module implementation uses executable signature in diagnostics', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-precedence-ordered-bad-'))
+    const apiDeclPath = path.join(tmpDir, 'api_decl.mcrs')
+    const apiImplPath = path.join(tmpDir, 'api_impl.mcrs')
+    const mainPath = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(apiDeclPath, 'module api_decl;\ndeclare fn ext(x: int): int;\n')
+    fs.writeFileSync(apiImplPath, 'module api_impl;\nfn ext(x: string): int { return 1; }\n')
+    fs.writeFileSync(mainPath, 'import api_decl;\nimport api_impl;\nfn main(): int { return ext(1); }\n')
+
+    let err: CheckFailedError | undefined
+    try {
+      compile(fs.readFileSync(mainPath, 'utf-8'), {
+        namespace: 'declared_imported_precedence_ordered_bad',
+        filePath: mainPath,
+        includeDirs: [tmpDir],
+        stopAfterCheck: true,
+      })
+    } catch (e) {
+      if (e instanceof CheckFailedError) err = e
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+
+    expect(err).toBeDefined()
+    expect(err!.diagnostics[0].message).toContain('Argument 1 of \'ext\' expects string, got int')
+  })
+
   test('whole-module imported declaration typechecks and emits only call sites, never the declaration body', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-ok-'))
     const declFile = path.join(tmpDir, 'api.mcrs')
