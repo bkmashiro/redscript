@@ -30,7 +30,7 @@ import type { MIRModule } from '../mir/types'
 import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 import { TypeChecker } from '../typechecker'
 import { isEventTypeName } from '../events/types'
-import type { Program } from '../ast/types'
+import type { FnDecl, Program } from '../ast/types'
 import type { HIRModule, HIRStruct, HIRFunction, HIRStmt, HIRExpr } from '../hir/types'
 import { EVENT_RUNTIME_MANIFESTS, getAllEventRuntimeAssets, type EventRuntimeManifest } from '../events/manifest'
 
@@ -167,15 +167,29 @@ function collectEventRuntimeTypesFromProgram(program: Program): string[] {
 }
 
 function mergeDeclaredFunctions(target: Program, source: Program, existingFnNames?: Set<string>): void {
+  mergeDeclaredFunctionsByName(target, source.declaredFunctions ?? [], existingFnNames)
+}
+
+function mergeDeclaredFunctionsByName(target: Program, declaredFunctions: FnDecl[], existingFnNames?: Set<string>): void {
   if (!target.declaredFunctions) target.declaredFunctions = []
 
   const mergedDeclaredNames = new Set(target.declaredFunctions.map(fn => fn.name))
   const knownExecutableNames = existingFnNames ?? new Set(target.declarations.map(fn => fn.name))
 
-  for (const fn of source.declaredFunctions ?? []) {
+  for (const fn of declaredFunctions) {
     if (knownExecutableNames.has(fn.name) || mergedDeclaredNames.has(fn.name)) continue
-    target.declaredFunctions.push(fn)
+    target.declaredFunctions.push(cloneDeclaredFunctionForImport(fn))
     mergedDeclaredNames.add(fn.name)
+  }
+}
+
+function cloneDeclaredFunctionForImport(fn: FnDecl): FnDecl {
+  return {
+    ...fn,
+    isDeclareOnly: true,
+    decorators: [...fn.decorators],
+    params: [...fn.params],
+    body: [...fn.body],
   }
 }
 
@@ -1237,7 +1251,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     warnings.push(...parsed.warnings)
 
     // Resolve whole-module file imports: `import player_utils;` (no `::` symbol)
+    // and declaration-only symbol imports: `import player_utils::ext` / `import player_utils::*`.
     const seenModuleImports = new Set<string>()
+    const parsedImportModules = new Map<string, Program>()
+
     function resolveModuleFilePath(modName: string, fromFile?: string): string | null {
       const candidates = [`${modName}.mcrs`, modName]
       const stdlibDir = path.resolve(__dirname, '..', 'src', 'stdlib')
@@ -1256,17 +1273,35 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       return null
     }
 
+    function parseImportedModule(modFilePath: string): Program {
+      const cached = parsedImportModules.get(modFilePath)
+      if (cached) return cached
+
+      const modSource = fs.readFileSync(modFilePath, 'utf-8')
+      const modPreprocessed = preprocessSourceWithMetadata(modSource, { filePath: modFilePath, includeDirs })
+      const modParsed = parseSourceStage(modPreprocessed.source, namespace, { filePath: modFilePath, stopAfterCheck })
+      warnings.push(...modParsed.warnings)
+      parsedImportModules.set(modFilePath, modParsed.ast)
+      return modParsed.ast
+    }
+
+    function mergeImportedDeclaredSignatures(modFilePath: string, symbol: string): void {
+      const modAst = parseImportedModule(modFilePath)
+      const declaredFunctions = symbol === '*'
+        ? modAst.declaredFunctions ?? []
+        : (modAst.declaredFunctions ?? []).filter(fn => fn.name === symbol)
+      if (declaredFunctions.length > 0) {
+        mergeDeclaredFunctionsByName(ast, declaredFunctions)
+      }
+    }
+
     let hasInjectedLibraries = false
 
     function mergeWholeModuleImport(modFilePath: string): void {
       hasInjectedLibraries = true
       if (seenModuleImports.has(modFilePath)) return
       seenModuleImports.add(modFilePath)
-      const modSource = fs.readFileSync(modFilePath, 'utf-8')
-      const modPreprocessed = preprocessSourceWithMetadata(modSource, { filePath: modFilePath, includeDirs })
-      const modParsed = parseSourceStage(modPreprocessed.source, namespace, { filePath: modFilePath, stopAfterCheck })
-      const modAst = modParsed.ast
-      warnings.push(...modParsed.warnings)
+      const modAst = parseImportedModule(modFilePath)
       const existingFnNames = new Set(ast.declarations.map(fn => fn.name))
       for (const fn of modAst.declarations) fn.isLibraryFn = true
       ast.declarations.push(...modAst.declarations)
@@ -1275,13 +1310,22 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       }
       mergeDeclaredFunctions(ast, modAst, existingFnNames)
       for (const imp of modAst.imports) {
-        if (imp.symbol !== undefined) continue
+        if (imp.symbol === undefined) {
+          const nestedPath = resolveModuleFilePath(imp.moduleName, modFilePath)
+          if (!nestedPath) {
+            warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${modFilePath})`)
+            continue
+          }
+          mergeWholeModuleImport(nestedPath)
+          continue
+        }
+
         const nestedPath = resolveModuleFilePath(imp.moduleName, modFilePath)
         if (!nestedPath) {
           warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${modFilePath})`)
           continue
         }
-        mergeWholeModuleImport(nestedPath)
+        mergeImportedDeclaredSignatures(nestedPath, imp.symbol)
       }
       ast.structs.push(...modAst.structs)
       ast.implBlocks.push(...modAst.implBlocks)
@@ -1291,16 +1335,26 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     }
 
     for (const imp of ast.imports) {
-      if (imp.symbol !== undefined) continue
+      if (imp.symbol === undefined) {
+        const resolved = resolveModuleFilePath(imp.moduleName, filePath)
+        if (!resolved) {
+          throw new DiagnosticError(
+            'ParseError',
+            `Module '${imp.moduleName}' not found. Make sure '${imp.moduleName}.mcrs' exists relative to this file or in the stdlib.`,
+            imp.span ?? { line: 1, col: 1 },
+          )
+        }
+        mergeWholeModuleImport(resolved)
+        continue
+      }
+
       const resolved = resolveModuleFilePath(imp.moduleName, filePath)
       if (!resolved) {
-        throw new DiagnosticError(
-          'ParseError',
-          `Module '${imp.moduleName}' not found. Make sure '${imp.moduleName}.mcrs' exists relative to this file or in the stdlib.`,
-          imp.span ?? { line: 1, col: 1 },
-        )
+        const requester = filePath ?? 'source'
+        warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${requester})`)
+        continue
       }
-      mergeWholeModuleImport(resolved)
+      mergeImportedDeclaredSignatures(resolved, imp.symbol)
     }
 
     for (const li of preprocessed.libraryImports ?? []) {

@@ -89,6 +89,138 @@ describe('emit: declared-function boundary behavior', () => {
     }
   })
 
+  test('symbol import from module file injects declaration signatures for arity/type checking', () => {
+    const ns = 'declared_imported_symbol'
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-symbol-ok-'))
+    const declFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(
+      declFile,
+      'module api;\n' +
+      'declare fn ext(x: int, y: int): int;\n',
+    )
+    fs.writeFileSync(
+      mainFile,
+      'import api::ext;\n' +
+      'fn main(): int { return ext(1, 2); }\n',
+    )
+
+    try {
+      const result = compile(fs.readFileSync(mainFile, 'utf-8'), {
+        namespace: ns,
+        filePath: mainFile,
+        includeDirs: [tmpDir],
+      })
+
+      expect(result.success).toBe(true)
+      expect(fileExists(result.files, `data/${ns}/function/main.mcfunction`)).toBe(true)
+      expect(fileExists(result.files, `data/${ns}/function/ext.mcfunction`)).toBe(false)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+  })
+
+  test('symbol import arity mismatch against module declaration is reported as type error', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-symbol-bad-'))
+    const declFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(
+      declFile,
+      'module api;\n' +
+      'declare fn ext(x: int, y: int): int;\n',
+    )
+    fs.writeFileSync(
+      mainFile,
+      'import api::ext;\n' +
+      'fn main(): int { return ext(1); }\n',
+    )
+
+    let err: CheckFailedError | undefined
+    try {
+      compile(fs.readFileSync(mainFile, 'utf-8'), {
+        namespace: 'declared_imported_symbol_bad',
+        filePath: mainFile,
+        includeDirs: [tmpDir],
+        stopAfterCheck: true,
+      })
+    } catch (e) {
+      if (e instanceof CheckFailedError) err = e
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+
+    expect(err).toBeDefined()
+    expect(err!.diagnostics[0].message).toContain("Function 'ext' expects 2 arguments, got 1")
+  })
+
+  test('wildcard module import from module file injects declaration signatures for arity/type checking', () => {
+    const ns = 'declared_imported_wildcard'
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-wildcard-ok-'))
+    const declFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(
+      declFile,
+      'module api;\n' +
+      'declare fn ext(x: int, y: int): int;\n',
+    )
+    fs.writeFileSync(
+      mainFile,
+      'import api::*;\n' +
+      'fn main(): int { return ext(1, 2); }\n',
+    )
+
+    try {
+      const result = compile(fs.readFileSync(mainFile, 'utf-8'), {
+        namespace: ns,
+        filePath: mainFile,
+        includeDirs: [tmpDir],
+      })
+
+      expect(result.success).toBe(true)
+      expect(fileExists(result.files, `data/${ns}/function/main.mcfunction`)).toBe(true)
+      expect(fileExists(result.files, `data/${ns}/function/ext.mcfunction`)).toBe(false)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+  })
+
+  test('wildcard module declaration import arity mismatch is reported as type error', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-wildcard-bad-'))
+    const declFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(
+      declFile,
+      'module api;\n' +
+      'declare fn ext(x: int, y: int): int;\n',
+    )
+    fs.writeFileSync(
+      mainFile,
+      'import api::*;\n' +
+      'fn main(): int { return ext(1); }\n',
+    )
+
+    let err: CheckFailedError | undefined
+    try {
+      compile(fs.readFileSync(mainFile, 'utf-8'), {
+        namespace: 'declared_imported_wildcard_bad',
+        filePath: mainFile,
+        includeDirs: [tmpDir],
+        stopAfterCheck: true,
+      })
+    } catch (e) {
+      if (e instanceof CheckFailedError) err = e
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+
+    expect(err).toBeDefined()
+    expect(err!.diagnostics[0].message).toContain("Function 'ext' expects 2 arguments, got 1")
+  })
+
   test('declared-only function with executable main emits main but not declared stub', () => {
     const ns = 'declared_and_main'
     const result = compile(`
