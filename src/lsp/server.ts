@@ -303,6 +303,8 @@ function findFunction(program: Program, name: string): FnDecl | undefined {
   // Top-level functions
   const fn = program.declarations.find(f => f.name === name)
   if (fn) return fn
+  const declaredFn = program.declaredFunctions?.find(f => f.name === name)
+  if (declaredFn) return declaredFn
   // Impl methods
   for (const impl of program.implBlocks ?? []) {
     const m = impl.methods.find(f => f.name === name)
@@ -312,11 +314,12 @@ function findFunction(program: Program, name: string): FnDecl | undefined {
 }
 
 /** Format a function signature for hover. */
-function formatFnSignature(fn: FnDecl): string {
+function formatFnSignature(fn: FnDecl, opts: { includeDeclare?: boolean } = {}): string {
+  const keyword = opts.includeDeclare ? 'declare fn ' : 'fn '
   const params = fn.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')
   const ret = typeToString(fn.returnType)
   const typeParams = fn.typeParams?.length ? `<${fn.typeParams.join(', ')}>` : ''
-  return `fn ${fn.name}${typeParams}(${params}): ${ret}`
+  return `${keyword}${fn.name}${typeParams}(${params}): ${ret}`
 }
 
 // ---------------------------------------------------------------------------
@@ -677,7 +680,7 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   // Check if it's a known function
   const fn = findFunction(program, word)
   if (fn) {
-    const sig = formatFnSignature(fn)
+    const sig = formatFnSignature(fn, { includeDeclare: fn.isDeclareOnly === true })
     const rawDoc = extractDocComment(source, fn)
     let docSection = ''
     if (rawDoc) {
@@ -1139,6 +1142,15 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
     // User-defined top-level symbols
     for (const fn of program.declarations) {
       items.push({ label: fn.name, kind: CompletionItemKind.Function })
+    }
+    const declaredNames = new Set(program.declarations.map(fn => fn.name))
+    for (const fn of program.declaredFunctions ?? []) {
+      if (declaredNames.has(fn.name)) continue
+      items.push({
+        label: fn.name,
+        kind: CompletionItemKind.Function,
+        detail: formatFnSignature(fn, { includeDeclare: true }),
+      })
     }
     for (const s of program.structs ?? []) {
       items.push({ label: s.name, kind: CompletionItemKind.Struct })

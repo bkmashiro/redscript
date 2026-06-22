@@ -50,6 +50,12 @@ function formatFnSignature(fn: FnDecl): string {
   return `fn ${fn.name}${typeParams}(${params}): ${ret}`
 }
 
+function formatDeclaredFnSignature(fn: FnDecl): string {
+  return `declare fn ${fn.name}${fn.typeParams?.length ? `<${fn.typeParams.join(', ')}>` : ''}(${fn.params.map(
+    p => `${p.name}: ${typeToString(p.type)}`,
+  ).join(', ')}): ${typeToString(fn.returnType)}`
+}
+
 function wordAt(source: string, position: Position): string {
   const lines = source.split('\n')
   const line = lines[position.line] ?? ''
@@ -231,6 +237,7 @@ describe('LSP completion — user-defined functions', () => {
 fn greet(name: string): void {}
 fn add(a: int, b: int): int { return a + b; }
 fn identity<T>(x: T): T { return x; }
+declare fn ext(x: int): int;
 `
 
   it('includes user-defined functions in completions', () => {
@@ -267,6 +274,73 @@ fn identity<T>(x: T): T { return x; }
     expect(addItem!.detail).toContain('a: int')
     expect(addItem!.detail).toContain('b: int')
     expect(addItem!.detail).toContain('int')
+  })
+
+  it('includes same-file declare fn in completion', () => {
+    const { program } = parseSource(source)
+    expect(program).toBeTruthy()
+
+    const userFnItems: CompletionItem[] = [
+      ...program!.declarations.map(fn => ({
+        label: fn.name,
+        kind: CompletionItemKind.Function,
+      })),
+      ...(program!.declaredFunctions ?? []).map(fn => ({
+        label: fn.name,
+        kind: CompletionItemKind.Function,
+        detail: formatDeclaredFnSignature(fn),
+      })),
+    ]
+
+    const labels = userFnItems.map(i => i.label)
+    expect(labels).toContain('ext')
+    expect(labels.filter(label => label.startsWith('e'))).toContain('ext')
+  })
+
+  it('declared fn completion item includes declare signature detail', () => {
+    const { program } = parseSource(source)
+    expect(program).toBeTruthy()
+
+    const declaredItems: CompletionItem[] = (program!.declaredFunctions ?? []).map(fn => ({
+      label: fn.name,
+      kind: CompletionItemKind.Function,
+      detail: formatDeclaredFnSignature(fn),
+    }))
+
+    const extItem = declaredItems.find(i => i.label === 'ext')
+    expect(extItem).toBeDefined()
+    expect(extItem!.detail).toBe('declare fn ext(x: int): int')
+  })
+
+  it('deduplicates fn and declare fn with same name and prefers executable detail', () => {
+    const sourceWithDuplicate = `
+fn ext(x: int): int { return x; }
+declare fn ext(x: int): int;
+`
+    const { program } = parseSource(sourceWithDuplicate)
+    expect(program).toBeTruthy()
+
+    const declaredNames = new Set(program!.declarations.map(fn => fn.name))
+    const items: CompletionItem[] = [
+      ...program!.declarations.map(fn => ({
+        label: fn.name,
+        kind: CompletionItemKind.Function,
+        detail: formatFnSignature(fn),
+      })),
+      ...(program!.declaredFunctions ?? [])
+        .filter(fn => !declaredNames.has(fn.name))
+        .map(fn => ({
+          label: fn.name,
+          kind: CompletionItemKind.Function,
+          detail: formatDeclaredFnSignature(fn),
+        })),
+    ]
+
+    const extItems = items.filter(item => item.label === 'ext')
+    expect(extItems).toHaveLength(1)
+    expect(extItems[0]).toBeDefined()
+    expect(extItems[0]!.detail).toBe('fn ext(x: int): int')
+    expect(extItems[0]!.detail).not.toContain('declare fn')
   })
 })
 

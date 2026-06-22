@@ -40,6 +40,13 @@ function formatFnSignature(fn: FnDecl): string {
   return `fn ${fn.name}${typeParams}(${params}): ${ret}`
 }
 
+function formatDeclaredFnSignature(fn: FnDecl): string {
+  const params = fn.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')
+  const ret = typeToString(fn.returnType)
+  const typeParams = fn.typeParams?.length ? `<${fn.typeParams.join(', ')}>` : ''
+  return `declare fn ${fn.name}${typeParams}(${params}): ${ret}`
+}
+
 function wordAt(source: string, position: Position): string {
   const lines = source.split('\n')
   const line = lines[position.line] ?? ''
@@ -54,6 +61,8 @@ function wordAt(source: string, position: Position): string {
 function findFunction(program: Program, name: string): FnDecl | undefined {
   const fn = program.declarations.find(f => f.name === name)
   if (fn) return fn
+  const declaredFn = program.declaredFunctions?.find(f => f.name === name)
+  if (declaredFn) return declaredFn
   for (const impl of program.implBlocks ?? []) {
     const m = impl.methods.find(f => f.name === name)
     if (m) return m
@@ -145,7 +154,7 @@ function simulateHover(source: string, position: Position): string | null {
   const fn = findFunction(program, word)
   if (!fn) return null
 
-  const sig = formatFnSignature(fn)
+  const sig = fn.isDeclareOnly ? formatDeclaredFnSignature(fn) : formatFnSignature(fn)
   const rawDoc = extractDocComment(source, fn)
   let docSection = ''
   if (rawDoc) {
@@ -204,6 +213,32 @@ describe('LSP hover: /// doc comments', () => {
     const result = simulateHover(source, { line: 4, character: 3 })
     expect(result).not.toBeNull()
     expect(result).toContain('**Returns:** The larger of a and b')
+  })
+
+  test('hover shows declare fn signature', () => {
+    const source = [
+      'declare fn ext(x: int): int;',
+      'fn run(): int {',
+      '  return ext(1);',
+      '}',
+    ].join('\n')
+    const line = source.split('\n')[0]
+    const result = simulateHover(source, { line: 0, character: line.indexOf('ext') + 1 })
+    expect(result).not.toBeNull()
+    expect(result).toContain('declare fn ext(x: int): int')
+  })
+
+  test('hover on call site shows declared signature', () => {
+    const source = [
+      'declare fn ext(x: int): int;',
+      'fn run(): int {',
+      '  return ext(1);',
+      '}',
+    ].join('\n')
+    const line = source.split('\n')[2]
+    const result = simulateHover(source, { line: 2, character: line.indexOf('ext') + 1 })
+    expect(result).not.toBeNull()
+    expect(result).toContain('declare fn ext(x: int): int')
   })
 
   test('hover on function call site also shows docs', () => {
