@@ -449,6 +449,14 @@ describe('LSP completion — resource strings', () => {
     expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.effects.length)
   })
 
+  it('completes sounds in playsound("...")', () => {
+    const line = 'playsound("e'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.sounds)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.sounds.length)
+  })
+
   it('completes items in give(target, "...")', () => {
     const line = 'give(@a, "d'
     const cursor = line.indexOf('"') + 1
@@ -465,6 +473,46 @@ describe('LSP completion — resource strings', () => {
     expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.items.length)
   })
 
+  it('completes blocks in setblock(pos, "...")', () => {
+    const line = 'setblock(pos, "s'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.blocks)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.blocks.length)
+  })
+
+  it('completes blocks in setblock((0, 64, 0), "...")', () => {
+    const line = 'setblock((0, 64, 0), "s'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.blocks)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.blocks.length)
+  })
+
+  it('completes blocks in fill(from, to, "...")', () => {
+    const line = 'fill(from, to, "g'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.blocks)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.blocks.length)
+  })
+
+  it('completes blocks in fill((0, 64, 0), (1, 64, 1), "...")', () => {
+    const line = 'fill((0, 64, 0), (1, 64, 1), "g'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.blocks)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.blocks.length)
+  })
+
+  it('completes entities in summon("...")', () => {
+    const line = 'summon("m'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.entities)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.entities.length)
+  })
+
   it('completes entities for @e[type=...] selectors', () => {
     const line = 'let zombies = @e[type='
     const cursor = line.length
@@ -478,6 +526,19 @@ describe('LSP completion — resource strings', () => {
     const cursor = line.indexOf('="') + 1
     const labels = labelsFor(line, cursor)
     expect(labels).toHaveLength(0)
+  })
+
+  it('returns resource completion metadata for particle IDs', () => {
+    const line = 'particle("f'
+    const cursor = line.indexOf('"') + 1
+    const items = getResourceCompletions(line, cursor)
+    const label = BUILTIN_RESOURCE_REGISTRY.particles[0]
+    const flame = items.find(item => item.label === label)
+
+    expect(flame).toBeDefined()
+    expect(flame!.detail).toBe('Minecraft particle')
+    expect(typeof flame!.documentation).toBe('string')
+    expect((flame!.documentation as string)).toContain('Particle ID')
   })
 
   it('does not offer resource completion for the wrong argument position', () => {
