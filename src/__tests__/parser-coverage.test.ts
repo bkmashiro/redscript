@@ -555,13 +555,37 @@ describe('Parser — export fn', () => {
 describe('Parser — declare stub', () => {
   test('declare fn with return type', () => {
     const prog = parse(`declare fn sin(x: int): int;\nfn f(): int { return 0; }`)
-    // declare stubs are parsed and discarded; no crash
-    expect(prog.declarations.length).toBe(1)
+    expect(prog.declarations).toHaveLength(1)
+    expect(prog.declaredFunctions).toHaveLength(1)
+
+    const declared = prog.declaredFunctions![0]
+    const executable = prog.declarations[0]
+    expect(declared.name).toBe('sin')
+    expect(declared.isDeclareOnly).toBe(true)
+    expect(declared.body).toHaveLength(0)
+    expect(declared.params).toHaveLength(1)
+    expect(declared.params[0]).toMatchObject({ name: 'x', type: { kind: 'named', name: 'int' } })
+    expect(declared.returnType).toMatchObject({ kind: 'named', name: 'int' })
+    expect(executable.name).toBe('f')
+    expect(executable.isDeclareOnly).toBeUndefined()
   })
 
   test('declare fn with -> return type', () => {
     const prog = parse(`declare fn cos(x: int) -> int;\nfn f(): int { return 0; }`)
-    expect(prog.declarations.length).toBe(1)
+    expect(prog.declarations).toHaveLength(1)
+    expect(prog.declaredFunctions!.length).toBe(1)
+    expect(prog.declaredFunctions![0].name).toBe('cos')
+    expect(prog.declaredFunctions![0].isDeclareOnly).toBe(true)
+  })
+
+  test('export declare fn is marked exported and declaration-only', () => {
+    const prog = parse('export declare fn api(x: int): int;')
+    expect(prog.declarations).toHaveLength(0)
+    expect(prog.declaredFunctions).toHaveLength(1)
+    expect(prog.declaredFunctions![0].name).toBe('api')
+    expect(prog.declaredFunctions![0].isExported).toBe(true)
+    expect(prog.declaredFunctions![0].isDeclareOnly).toBe(true)
+    expect(prog.declaredFunctions![0].body).toHaveLength(0)
   })
 })
 

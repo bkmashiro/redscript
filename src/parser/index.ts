@@ -28,6 +28,7 @@ export class Parser extends DeclParser {
     let namespace = defaultNamespace
     const globals: GlobalDecl[] = []
     const declarations: FnDecl[] = []
+    const declaredFunctions: FnDecl[] = []
     const structs: StructDecl[] = []
     const implBlocks: ImplBlock[] = []
     const enums: EnumDecl[] = []
@@ -89,10 +90,14 @@ export class Parser extends DeclParser {
         } else if (this.check('const')) {
           consts.push(this.parseConstDecl())
         } else if (this.check('declare')) {
-          this.advance()
-          this.parseDeclareStub()
+          declaredFunctions.push(this.parseDeclareStub())
         } else if (this.check('export')) {
-          declarations.push(this.parseExportedFnDecl())
+          const exportedFnDecl = this.parseExportedFnDecl()
+          if (exportedFnDecl.isDeclareOnly) {
+            declaredFunctions.push(exportedFnDecl)
+          } else {
+            declarations.push(exportedFnDecl)
+          }
         } else if (this.check('import') || (this.check('ident') && this.peek().value === 'import')) {
           this.advance()
           const importToken = this.peek()
@@ -125,6 +130,19 @@ export class Parser extends DeclParser {
       }
     }
 
-    return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, interfaces, isLibrary }
+    return {
+      namespace,
+      moduleName,
+      globals,
+      declarations,
+      declaredFunctions,
+      structs,
+      implBlocks,
+      enums,
+      consts,
+      imports,
+      interfaces,
+      isLibrary,
+    }
   }
 }

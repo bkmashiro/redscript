@@ -173,7 +173,7 @@ export class DeclParser extends StmtParser {
 
   parseExportedFnDecl(): FnDecl {
     this.expect('export')
-    const fn = this.parseFnDecl()
+    const fn = this.check('declare') ? this.parseDeclareStub() : this.parseFnDecl()
     fn.isExported = true
     return fn
   }
@@ -225,20 +225,59 @@ export class DeclParser extends StmtParser {
     return fn
   }
 
-  parseDeclareStub(): void {
+  parseDeclareStub(): FnDecl {
+    const decorators = this.parseDecorators()
+    const watchObjective = decorators.find(decorator => decorator.name === 'watch')?.args?.objective
+
+    let isExported: boolean | undefined
+    const filteredDecorators = decorators.filter(d => {
+      if (d.name === 'keep') {
+        isExported = true
+        return false
+      }
+      return true
+    })
+
+    const declareToken = this.expect('declare')
     this.expect('fn')
-    this.expect('ident')
+    const name = this.expect('ident').value
+
+    let typeParams: string[] | undefined
+    if (this.check('<')) {
+      this.advance()
+      typeParams = []
+      do {
+        typeParams.push(this.expect('ident').value)
+      } while (this.match(','))
+      this.expect('>')
+    }
+
     this.expect('(')
-    let depth = 1
-    while (!this.check('eof') && depth > 0) {
-      const t = this.advance()
-      if (t.kind === '(') depth++
-      else if (t.kind === ')') depth--
+    const params = this.parseParams()
+    this.expect(')')
+
+    let returnType: TypeNode = { kind: 'named', name: 'void' }
+    if (this.match('->') || this.match(':')) {
+      returnType = this.parseType()
     }
-    if (this.match(':') || this.match('->')) {
-      this.parseType()
-    }
+
     this.match(';')
+
+    return this.withLoc(
+      {
+        name,
+        typeParams,
+        params,
+        returnType,
+        decorators: filteredDecorators,
+        body: [],
+        isLibraryFn: this.inLibraryMode || undefined,
+        isExported,
+        watchObjective,
+        isDeclareOnly: true,
+      },
+      declareToken,
+    )
   }
 
   // -------------------------------------------------------------------------

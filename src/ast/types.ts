@@ -318,6 +318,8 @@ export interface FnDecl {
    *  Library functions are NOT MC entry points — DCE only keeps them if they
    *  are reachable from a non-library (user) entry point. */
   isLibraryFn?: boolean
+  /** Set when this is a declaration-only `declare fn` stub with no executable body. */
+  isDeclareOnly?: boolean
   /** True when declared with `export fn` or `@keep fn` — survives DCE. */
   isExported?: boolean
   /** Scoreboard objective watched by @watch("..."), if present. */
@@ -440,6 +442,7 @@ export interface Program {
   moduleName?: string
   globals: GlobalDecl[]
   declarations: FnDecl[]
+  declaredFunctions?: FnDecl[]
   structs: StructDecl[]
   implBlocks: ImplBlock[]
   enums: EnumDecl[]
