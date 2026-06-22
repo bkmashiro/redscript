@@ -51,6 +51,7 @@ import type { BuiltinDef } from '../builtins/metadata'
 import { lintString } from '../lint'
 import type { LintWarning } from '../lint'
 import { buildRenameWorkspaceEdit } from './rename'
+import { getResourceCompletions } from './resource-completions'
 
 // ---------------------------------------------------------------------------
 // Connection and document manager
@@ -532,7 +533,7 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => {
       hoverProvider: true,
       definitionProvider: true,
       completionProvider: {
-        triggerCharacters: ['.', '@'],
+        triggerCharacters: ['.', '@', '"', '='],
         resolveProvider: false,
       },
       signatureHelpProvider: {
@@ -1045,6 +1046,11 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
 
   const cached = parsedDocs.get(params.textDocument.uri)
   const program = cached?.program ?? null
+
+  const resourceStringItems = getResourceCompletions(lineText, charPos)
+  if (resourceStringItems.length > 0) {
+    return resourceStringItems
+  }
 
   // ── @ trigger: selector (@a/@p/@s/@e/@r/@n) vs decorator (@tick etc) ────────
   // Only fires when the character just typed is '@' (triggerCharacter).

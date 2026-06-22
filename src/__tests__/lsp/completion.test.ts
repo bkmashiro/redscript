@@ -10,6 +10,7 @@ import { Parser } from '../../parser'
 import { TypeChecker } from '../../typechecker'
 import { DiagnosticError } from '../../diagnostics'
 import { BUILTIN_METADATA } from '../../builtins/metadata'
+import { getResourceCompletions, BUILTIN_RESOURCE_REGISTRY } from '../../lsp/resource-completions'
 import type { Program, FnDecl, TypeNode, Block } from '../../ast/types'
 import {
   CompletionItemKind,
@@ -413,6 +414,91 @@ describe('LSP completion — decorators', () => {
       expect(item.insertText).toBeDefined()
       expect(item.insertText).not.toMatch(/^@/)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: Completion — resource strings
+// ---------------------------------------------------------------------------
+
+describe('LSP completion — resource strings', () => {
+  const labelsFor = (line: string, cursor: number): string[] =>
+    getResourceCompletions(line, cursor).map(item => item.label as string)
+
+  it('completes particle IDs in particle("...")', () => {
+    const line = 'particle("f'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.particles)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.particles.length)
+  })
+
+  it('completes effects in effect(target, "...")', () => {
+    const line = 'effect(@s, "s'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.effects)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.effects.length)
+  })
+
+  it('completes effects in effect_clear(target, "...")', () => {
+    const line = 'effect_clear(@a, "s'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.effects)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.effects.length)
+  })
+
+  it('completes items in give(target, "...")', () => {
+    const line = 'give(@a, "d'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.items)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.items.length)
+  })
+
+  it('completes items in clear(target, "...")', () => {
+    const line = 'clear(@a, "i'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.items)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.items.length)
+  })
+
+  it('completes entities for @e[type=...] selectors', () => {
+    const line = 'let zombies = @e[type='
+    const cursor = line.length
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.entities)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.entities.length)
+  })
+
+  it('does not offer selector entity completions inside ordinary strings', () => {
+    const line = 'say("@e[type="'
+    const cursor = line.indexOf('="') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toHaveLength(0)
+  })
+
+  it('does not offer resource completion for the wrong argument position', () => {
+    const line = 'effect("s'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toHaveLength(0)
+  })
+
+  it('does not offer resource completion for non-registered string calls', () => {
+    const line = 'say("h'
+    const cursor = line.indexOf('"') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toHaveLength(0)
+  })
+
+  it('does not offer resource completion when not inside a string', () => {
+    const line = 'effect(@s, speed'
+    const cursor = line.indexOf('speed') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toHaveLength(0)
   })
 })
 
