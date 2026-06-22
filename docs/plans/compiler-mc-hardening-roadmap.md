@@ -147,7 +147,7 @@ Tasks:
   - `GET /scoreboard?player=...&obj=...`
   - keep legacy `/run` + `/score` fallback.
 - [x] Add offline fake-harness tests for endpoint selection and fallback behavior.
-- [ ] Add a case descriptor schema and runner that compiles, installs, reloads, runs, and asserts.
+- [x] Add a case descriptor schema and runner that compiles, installs, reloads, runs, and asserts.
   - Initial `src/__tests__/mc-core.test.ts` interaction-matrix coverage now includes execute/as/at/@s context + helper usage, branch+loop+function-return paths, objective/player isolation, storage+NBT read-after-call flow, and controlled tick lifecycle assertions.
   - Deepening coverage has also added deterministic loop+loop-return, storage/NBT read-write loop, foreach + is-check entity counting, macro-in-loop and storage/NBT read-after-call behavior.
   - Initial oracle coverage also includes arithmetic, execute/if-score branching, function helper, macro-with-storage, and load/tick lifecycle baseline checks via `npm run test:mc-core`.
@@ -162,6 +162,7 @@ Tasks:
   - unit/static always
   - offline integration allowed to skip
   - real Paper oracle explicit/manual or nightly first
+  - Current hook: `npm run test:mc-core` remains offline-safe, and `npm run test:mc-core:live` requires an online harness via `MC_CORE_REQUIRE_ONLINE=true`; a GitHub manual/nightly workflow is still pending.
 
 Suggested files:
 

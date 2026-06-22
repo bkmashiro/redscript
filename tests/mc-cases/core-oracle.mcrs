@@ -1,0 +1,238 @@
+@load fn __load() {
+  scoreboard_set("#load_marker", "core_oracle", 41)
+}
+
+@tick fn __tick() {
+  let tickVal: int = scoreboard_get("#tick_marker", "core_oracle")
+  scoreboard_set("#tick_marker", "core_oracle", tickVal + 1)
+}
+
+fn test_arithmetic() {
+  let base: int = scoreboard_get("#arith_input", "core_oracle")
+  scoreboard_set("#arith_sum", "core_oracle", base + 2 * 3)
+  scoreboard_set("#arith_product", "core_oracle", base * 5)
+}
+
+fn test_branch() {
+  let value: int = scoreboard_get("#branch_input", "core_oracle")
+  if (value > 5) {
+    scoreboard_set("#branch_result", "core_oracle", 1)
+  } else {
+    scoreboard_set("#branch_result", "core_oracle", 0)
+  }
+}
+
+fn _chain_step_a(seed: int) {
+  let next: int = seed + 1
+  scoreboard_set("#call_stage_a", "core_oracle", next)
+}
+
+fn _chain_step_b(seed: int) {
+  _chain_step_c(seed * 2)
+}
+
+fn _chain_step_c(seed: int) {
+  scoreboard_set("#call_chain", "core_oracle", seed)
+}
+
+fn test_call_chain() {
+  let base: int = scoreboard_get("#chain_input", "core_oracle")
+  _chain_step_a(base)
+  let stepped: int = scoreboard_get("#call_stage_a", "core_oracle")
+  _chain_step_b(stepped)
+}
+
+fn _triangular_sum(limit: int): int {
+  let acc: int = 0
+  for i in 0..limit {
+    acc = acc + i
+  }
+  return acc
+}
+
+fn test_loop_with_function_return() {
+  let limit: int = scoreboard_get("#loop_return_input", "core_oracle")
+  let total: int = _triangular_sum(limit)
+  scoreboard_set("#loop_return", "core_oracle", total)
+}
+
+fn _nested_tmp_sum(rows: int, cols: int): int {
+  let grand_total: int = 0
+  for row in 0..rows {
+    let row_total: int = 0
+    for col in 0..cols {
+      let cell: int = row * 10 + col
+      row_total = row_total + cell
+    }
+    grand_total = grand_total + row_total
+  }
+  return grand_total
+}
+
+fn test_nested_loop_temp_isolation() {
+  let rows: int = scoreboard_get("#nested_loop_rows", "core_oracle")
+  let cols: int = scoreboard_get("#nested_loop_cols", "core_oracle")
+  let total: int = _nested_tmp_sum(rows, cols)
+  scoreboard_set("#nested_loop_result", "core_oracle", total)
+}
+
+fn test_if_inside_loop_mutable_scoreboard() {
+  scoreboard_set("#if_loop_result", "core_oracle", 0)
+  for i in 0..5 {
+    let cur: int = scoreboard_get("#if_loop_result", "core_oracle")
+    if (i % 2 == 0) {
+      scoreboard_set("#if_loop_result", "core_oracle", cur + i)
+    } else {
+      scoreboard_set("#if_loop_result", "core_oracle", cur - i)
+    }
+  }
+}
+
+fn _execute_ctx_count_marked() {
+  let observer: int = scoreboard_get("#execute_ctx_total", "core_oracle")
+  let source: int = scoreboard_get("@s", "core_oracle")
+  scoreboard_set("#execute_ctx_total", "core_oracle", observer + source)
+}
+
+fn test_execute_context_and_helper() {
+  raw("kill @e[type=armor_stand,tag=core_oracle_exec_ctx_a]")
+  raw("kill @e[type=armor_stand,tag=core_oracle_exec_ctx_b]")
+
+  raw("summon minecraft:armor_stand 8 65 0 {Tags:['core_oracle_exec_ctx_a'],NoGravity:1b}")
+  raw("summon minecraft:armor_stand 10 65 0 {Tags:['core_oracle_exec_ctx_b'],NoGravity:1b}")
+  raw("scoreboard players set @e[type=armor_stand,tag=core_oracle_exec_ctx_a] core_oracle 3")
+  raw("scoreboard players set @e[type=armor_stand,tag=core_oracle_exec_ctx_b] core_oracle 4")
+  raw("scoreboard players set #execute_ctx_total core_oracle 0")
+
+  as @e[type=armor_stand,tag=core_oracle_exec_ctx_a] at @s {
+    _execute_ctx_count_marked()
+  }
+  as @e[type=armor_stand,tag=core_oracle_exec_ctx_b] at @s {
+    _execute_ctx_count_marked()
+  }
+
+  raw("kill @e[type=armor_stand,tag=core_oracle_exec_ctx_a]")
+  raw("kill @e[type=armor_stand,tag=core_oracle_exec_ctx_b]")
+}
+
+fn _branch_loop_term(i: int): int {
+  if (i % 2 == 0) {
+    return 1
+  }
+  return -1
+}
+
+fn _branch_loop_fold(limit: int): int {
+  let out: int = 0
+  for i in 0..limit {
+    if (i > 0) {
+      let sign: int = _branch_loop_term(i)
+      if (sign > 0) {
+        out = out + i
+      } else {
+        out = out - i
+      }
+    }
+  }
+  return out
+}
+
+fn test_branch_loop_function_return() {
+  let limit: int = scoreboard_get("#branch_loop_input", "core_oracle")
+  let computed: int = _branch_loop_fold(limit)
+  scoreboard_set("#branch_loop_result", "core_oracle", computed)
+}
+
+fn _storage_nbt_after_call(seed: int): int {
+  if (seed == 0) {
+    storage_set_array("rs:core_oracle", "nbt_after_call", "[1, 2, 3]")
+  }
+  if (seed == 1) {
+    storage_set_array("rs:core_oracle", "nbt_after_call", "[4, 5, 6]")
+  }
+  return storage_get_int("rs:core_oracle", "nbt_after_call", 1)
+}
+
+fn test_storage_nbt_read_after_call() {
+  storage_set_array("rs:core_oracle", "nbt_after_call", "[0, 0, 0]")
+  let first: int = _storage_nbt_after_call(0)
+  let second: int = _storage_nbt_after_call(1)
+  scoreboard_set("#storage_nbt_after_fn_result", "core_oracle", first + second)
+}
+
+fn test_scoreboard_objective_player_isolation() {
+  let p1a: int = scoreboard_get("#iso_p1", "iso_obj_a")
+  let p1b: int = scoreboard_get("#iso_p1", "iso_obj_b")
+  let p2a: int = scoreboard_get("#iso_p2", "iso_obj_a")
+  let p2b: int = scoreboard_get("#iso_p2", "iso_obj_b")
+
+  scoreboard_set("#objective_player_isolation_result", "core_oracle", p1a + p1b + p2a + p2b)
+  scoreboard_set("#iso_p1", "iso_obj_a", p1a + 1)
+}
+
+@keep
+fn __macro_apply() {
+  raw("$scoreboard players set #macro_result core_oracle $(value)")
+}
+
+fn test_macro_with_storage() {
+  raw("data modify storage rs:core_oracle value set value 77")
+  raw("function core_oracle_mc:__macro_apply with storage rs:core_oracle")
+}
+
+fn test_macro_with_storage_in_loop() {
+  raw("scoreboard players set #macro_loop_result core_oracle 0")
+  for i in 0..3 {
+    if (i == 0) {
+      raw("data modify storage rs:core_oracle value set value 1")
+    }
+    if (i == 1) {
+      raw("data modify storage rs:core_oracle value set value 3")
+    }
+    if (i == 2) {
+      raw("data modify storage rs:core_oracle value set value 5")
+    }
+
+    raw("function core_oracle_mc:__macro_apply with storage rs:core_oracle")
+    let delta: int = scoreboard_get("#macro_loop_result", "core_oracle")
+    scoreboard_set("#macro_loop_result", "core_oracle", delta + 1)
+  }
+}
+
+fn test_storage_nbt_rw_in_loop() {
+  storage_set_array("rs:core_oracle", "nbt_rw", "[1, 2, 3]")
+  scoreboard_set("#storage_nbt_rw_result", "core_oracle", 0)
+
+  for i in 0..3 {
+    if (i == 0) {
+      storage_set_array("rs:core_oracle", "nbt_rw", "[1, 3, 5]")
+    }
+    if (i == 1) {
+      storage_set_array("rs:core_oracle", "nbt_rw", "[2, 4, 6]")
+    }
+    if (i == 2) {
+      storage_set_array("rs:core_oracle", "nbt_rw", "[3, 6, 9]")
+    }
+
+    let current: int = storage_get_int("rs:core_oracle", "nbt_rw", i)
+    let total: int = scoreboard_get("#storage_nbt_rw_result", "core_oracle")
+    scoreboard_set("#storage_nbt_rw_result", "core_oracle", total + current)
+  }
+}
+
+fn test_foreach_is_check_scores() {
+  raw("kill @e[type=armor_stand,tag=core_oracle_foreach]")
+  raw("summon minecraft:armor_stand 0 65 0 {Tags:['core_oracle_foreach'],NoGravity:1b}")
+  raw("summon minecraft:armor_stand 3 65 0 {Tags:['core_oracle_foreach'],NoGravity:1b}")
+  raw("summon minecraft:armor_stand 6 65 0 {Tags:['core_oracle_foreach'],NoGravity:1b}")
+
+  scoreboard_set("#foreach_is_check", "core_oracle", 0)
+  foreach (ent in @e[type=armor_stand,tag=core_oracle_foreach]) {
+    if (ent is ArmorStand) {
+      let current: int = scoreboard_get("#foreach_is_check", "core_oracle")
+      scoreboard_set("#foreach_is_check", "core_oracle", current + 1)
+    }
+  }
+
+  raw("kill @e[type=armor_stand,tag=core_oracle_foreach]")
+}

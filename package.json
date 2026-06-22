@@ -17,6 +17,7 @@
     "test:unit:serial": "jest --selectProjects unit --runInBand",
     "test:integration": "jest --selectProjects mc-integration --runInBand --testTimeout=120000",
     "test:mc-core": "jest src/__tests__/mc-core.test.ts --runInBand --testTimeout=120000",
+    "test:mc-core:live": "MC_CORE_REQUIRE_ONLINE=true jest src/__tests__/mc-core.test.ts --runInBand --testTimeout=120000",
     "test:optimizer": "jest --selectProjects unit --testPathPattern=src/__tests__/optimizer --runInBand",
     "test:lir": "jest --selectProjects unit --testPathPattern=src/__tests__/optimizer/lir --runInBand",
     "test:vir": "jest --selectProjects unit --testPathPattern=src/__tests__/vir --runInBand --passWithNoTests",
