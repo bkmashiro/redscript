@@ -304,6 +304,27 @@ describe('preprocessSourceWithMetadata — extension handling', () => {
       fs.rmSync(tmpDir, { recursive: true })
     }
   })
+
+  test('explicit .d.mcrs import resolves and inlines declaration-only source', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-path-'))
+    const declFile = path.join(tmpDir, 'declaration.d.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(declFile, `declare fn ext(x: int): int;\n`)
+    fs.writeFileSync(mainFile, `import "declaration.d.mcrs";\nfn main(): int { return ext(1); }\n`)
+
+    try {
+      const result = preprocessSourceWithMetadata(
+        fs.readFileSync(mainFile, 'utf-8'),
+        { filePath: mainFile }
+      )
+      expect(result.libraryImports).toBeUndefined()
+      expect(result.source).toContain('declare fn ext(x: int): int;')
+      expect(result.source).toContain('fn main(): int')
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------
