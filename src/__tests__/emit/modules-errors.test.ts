@@ -116,6 +116,54 @@ describe('compileModules — wildcard imports', () => {
 
     expect(result.files.length).toBeGreaterThan(0)
   })
+
+  test('import module::* validates declaration-only arity for wrong call shape', () => {
+    expect(() =>
+      compileModules([
+        {
+          name: 'api',
+          source: `
+            module api;
+            declare fn ext(x: int, y: int): int;
+          `,
+        },
+        {
+          name: 'main',
+          source: `
+            import api::*;
+            fn entry(): int {
+              return ext(1);
+            }
+          `,
+        },
+      ], { namespace: 'decl_bad_wild' })
+    ).toThrow(/expects 2 arguments, got 1/)
+  })
+})
+
+describe('compileModules — declaration-only symbol imports', () => {
+  test('wrong arity through specific symbol import is typechecked', () => {
+    expect(() =>
+      compileModules([
+        {
+          name: 'api',
+          source: `
+            module api;
+            declare fn ext(x: int, y: int): int;
+          `,
+        },
+        {
+          name: 'main',
+          source: `
+            import api::ext;
+            fn entry(): int {
+              return ext(1);
+            }
+          `,
+        },
+      ], { namespace: 'decl_bad_symbol' })
+    ).toThrow(/expects 2 arguments, got 1/)
+  })
 })
 
 // ── Single module without module declaration ───────────────────────────────

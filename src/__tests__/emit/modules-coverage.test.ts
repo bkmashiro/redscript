@@ -88,6 +88,60 @@ describe('compileModules — wildcard import (*)', () => {
   })
 })
 
+describe('compileModules — declaration-only imports', () => {
+  test('specific import can use declaration-only signature and keeps import as symbolic call', () => {
+    const result = compileModules([
+      {
+        name: 'api',
+        source: `
+          module api;
+          declare fn ext(x: int, y: int): int;
+        `,
+      },
+      {
+        name: 'main',
+        source: `
+          import api::ext;
+          fn entry(): int {
+            return ext(1, 2);
+          }
+        `,
+      },
+    ], { namespace: 'decl_module' })
+
+    const entry = getFile(result.files, 'entry.mcfunction')
+    expect(entry).toBeDefined()
+    expect(entry!.content).toContain('function decl_module:api/ext')
+    expect(result.files.some(file => file.path === 'data/decl_module/function/api/ext.mcfunction')).toBe(false)
+  })
+
+  test('wildcard import can use declaration-only signatures', () => {
+    const result = compileModules([
+      {
+        name: 'api',
+        source: `
+          module api;
+          declare fn ext(x: int, y: int): int;
+        `,
+      },
+      {
+        name: 'main',
+        source: `
+          import api::*;
+          fn entry(): int {
+            return ext(1, 2);
+          }
+        `,
+      },
+    ], { namespace: 'decl_module_wild' })
+
+    const entry = getFile(result.files, 'entry.mcfunction')
+    expect(entry).toBeDefined()
+    expect(entry!.content).toContain('function decl_module_wild:api/ext')
+    expect(result.files.some(file => file.path === 'data/decl_module_wild/function/api/ext.mcfunction')).toBe(false)
+  })
+})
+
 describe('compileModules — load/tick tag merging', () => {
   test('multiple modules with @load merge tags', () => {
     const result = compileModules([

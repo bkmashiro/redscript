@@ -25,6 +25,14 @@ import { emit, type DatapackFile } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import type { HIRModule, HIRFunction, HIRExpr, HIRStmt, HIRBlock } from '../hir/types'
 import type { Program, FnDecl, Expr, Stmt, Block } from '../ast/types'
+import { TypeChecker } from '../typechecker'
+
+type ExportKind = 'function' | 'declaration'
+
+interface ImportedSymbolInfo {
+  kind: ExportKind
+  sourceFn: FnDecl
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -63,6 +71,7 @@ export function compileModules(
   // -------------------------------------------------------------------------
 
   const parsedModules = new Map<string, Program>() // moduleName → AST
+  const parsedModuleSources = new Map<string, string>() // moduleName → original source
 
   for (const mod of modules) {
     const lexer = new Lexer(mod.source, mod.filePath)
@@ -84,20 +93,34 @@ export function compileModules(
     }
 
     parsedModules.set(mod.name, ast)
+    parsedModuleSources.set(mod.name, mod.source)
   }
 
   // -------------------------------------------------------------------------
   // Step 2: Build export tables and validate imports
   // -------------------------------------------------------------------------
 
-  // moduleName → set of exported function names
-  const exportTable = new Map<string, Set<string>>()
+  // moduleName → symbol → export metadata
+  const exportTable = new Map<string, Map<string, ImportedSymbolInfo>>()
+  // moduleName → exported executable function names (for DCE/bookkeeping)
+  const executableExportTable = new Map<string, Set<string>>()
   for (const [modName, ast] of parsedModules) {
-    const exports = new Set<string>()
+    const exports = new Map<string, ImportedSymbolInfo>()
+    const executableExports = new Set<string>()
+
     for (const fn of ast.declarations) {
-      if (fn.isExported) exports.add(fn.name)
+      if (fn.isExported) {
+        exports.set(fn.name, { kind: 'function', sourceFn: fn })
+        executableExports.add(fn.name)
+      }
+    }
+
+    for (const fn of ast.declaredFunctions ?? []) {
+      if (exports.has(fn.name)) continue
+      exports.set(fn.name, { kind: 'declaration', sourceFn: fn })
     }
     exportTable.set(modName, exports)
+    executableExportTable.set(modName, executableExports)
   }
 
   // -------------------------------------------------------------------------
@@ -112,9 +135,21 @@ export function compileModules(
   // -------------------------------------------------------------------------
 
   const importMap = new Map<string, Map<string, string>>()
+  // importer module → qualified symbol name → declaration-only signature clone
+  const importedDeclarations = new Map<string, Map<string, FnDecl>>()
 
   for (const [modName, ast] of parsedModules) {
     const resolved = new Map<string, string>()
+
+    const getDeclaredImportMap = (): Map<string, FnDecl> => {
+      let decls = importedDeclarations.get(modName)
+      if (!decls) {
+        decls = new Map()
+        importedDeclarations.set(modName, decls)
+      }
+      return decls
+    }
+
     for (const imp of ast.imports) {
       const sourceExports = exportTable.get(imp.moduleName)
       if (!sourceExports) {
@@ -132,18 +167,27 @@ export function compileModules(
         continue
       } else if (imp.symbol === '*') {
         // Wildcard: import all exports
-        for (const sym of sourceExports) {
-          resolved.set(sym, `${imp.moduleName}/${sym}`)
+        for (const [sym, info] of sourceExports) {
+          const qualified = `${imp.moduleName}/${sym}`
+          resolved.set(sym, qualified)
+          if (info.kind === 'declaration') {
+            getDeclaredImportMap().set(qualified, cloneDeclaredFunctionForModuleImport(info.sourceFn, qualified))
+          }
         }
       } else {
-        if (!sourceExports.has(imp.symbol)) {
+        const sourceSymbol = sourceExports.get(imp.symbol)
+        if (!sourceSymbol) {
           throw new DiagnosticError(
             'LoweringError',
             `Module '${imp.moduleName}' does not export '${imp.symbol}'`,
             { line: 1, col: 1 },
           )
         }
-        resolved.set(imp.symbol, `${imp.moduleName}/${imp.symbol}`)
+        const qualified = `${imp.moduleName}/${imp.symbol}`
+        resolved.set(imp.symbol, qualified)
+        if (sourceSymbol.kind === 'declaration') {
+          getDeclaredImportMap().set(qualified, cloneDeclaredFunctionForModuleImport(sourceSymbol.sourceFn, qualified))
+        }
       }
     }
     importMap.set(modName, resolved)
@@ -165,7 +209,7 @@ export function compileModules(
       const used = usedExports.get(imp.moduleName)
       if (!used) continue
       if (imp.symbol === '*') {
-        const exports = exportTable.get(imp.moduleName)
+        const exports = executableExportTable.get(imp.moduleName)
         if (exports) for (const s of exports) used.add(s)
       } else {
         used.add(imp.symbol)
@@ -192,6 +236,24 @@ export function compileModules(
       rewriteCallsInProgram(ast, symbolMap)
     }
 
+    // Inject declaration-only signatures for imported symbols.
+    // This keeps call sites typecheckable without emitting executable definitions.
+    const declImports = importedDeclarations.get(mod.name)
+    if (declImports) {
+      if (!ast.declaredFunctions) ast.declaredFunctions = []
+
+      const knownNames = new Set<string>()
+      for (const fn of ast.declarations) knownNames.add(fn.name)
+      for (const fn of ast.declaredFunctions) knownNames.add(fn.name)
+
+      for (const decl of declImports.values()) {
+        if (!knownNames.has(decl.name)) {
+          ast.declaredFunctions.push(decl)
+          knownNames.add(decl.name)
+        }
+      }
+    }
+
     // For named modules: prefix all function definitions with `${moduleName}/`
     // so they emit to `${namespace}:${moduleName}/${fnName}.mcfunction`
     // Track which exported functions are not imported anywhere (for cross-module DCE)
@@ -215,7 +277,15 @@ export function compileModules(
     const objective = isNamed ? `__${namespace}_${mod.name}` : `__${namespace}`
 
     // Run the pipeline
-    const modFiles = compileSingleModule(ast, namespace, objective, isNamed ? mod.name : undefined, mod.filePath)
+    const modSource = parsedModuleSources.get(mod.name) ?? mod.filePath ?? ''
+    const modFiles = compileSingleModule(
+      ast,
+      namespace,
+      objective,
+      isNamed ? mod.name : undefined,
+      mod.filePath,
+      modSource,
+    )
     warnings.push(...modFiles.warnings)
 
     // Record library-eligible file paths (only if there are multiple modules — single module = library author)
@@ -342,11 +412,19 @@ function compileSingleModule(
   namespace: string,
   objective: string,
   moduleName: string | undefined,
-  filePath?: string,
+  filePath: string | undefined,
+  source: string,
 ): SingleModuleResult {
   const warnings: string[] = []
 
   try {
+    const checker = new TypeChecker(source, filePath)
+    const errors = checker.check(ast)
+    warnings.push(...checker.getWarnings())
+    if (errors.length > 0) {
+      throw errors[0]
+    }
+
     const hirRaw = lowerToHIR(ast)
     const hir = monomorphize(hirRaw)
 
@@ -614,5 +692,16 @@ function rewriteExpr(expr: Expr, symbolMap: Map<string, string>): void {
       for (const arg of expr.args) rewriteExpr(arg, symbolMap)
       break
     // Literals, ident, selector, path_expr, f_string, etc: nothing to rewrite
+  }
+}
+
+function cloneDeclaredFunctionForModuleImport(fn: FnDecl, qualifiedName: string): FnDecl {
+  return {
+    ...fn,
+    name: qualifiedName,
+    isDeclareOnly: true,
+    decorators: [...fn.decorators],
+    params: [...fn.params],
+    body: [...fn.body],
   }
 }
