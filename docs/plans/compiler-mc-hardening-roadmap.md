@@ -685,6 +685,7 @@ Planned implementation order:
 - [ ] Add contextual unquoted resource literals (`minecraft:flame`) only after the registry/typechecker path is pinned with RED parser/typechecker/LSP tests.
 - [ ] Extend `.d.mcrs` with `export` and declaration-only external function/package surfaces; add tests that a consumer package can typecheck against declarations without implementation files.
 - [ ] Add `.d.mcrs` generation from package exports, including JSDoc and registry resource declarations.
+- [ ] Track concrete implementation order and first Spark slice in `docs/plans/mc-mechanism-optimization/12-d-mcrs-declaration-surface.md`.
 
 Verification for Phase 15 slices:
 

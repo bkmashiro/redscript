@@ -24,6 +24,7 @@
 - [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md)
 - [10 — Near-term optimizer roadmap](./10-near-term-optimizer-roadmap.md)
 - [11 — Pro 20x /goal brief](./11-pro-20x-goal-brief.md)
+- [12 — `.d.mcrs` declaration surface](./12-d-mcrs-declaration-surface.md)
 
 ## Operating rules
 
