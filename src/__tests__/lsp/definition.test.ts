@@ -31,6 +31,9 @@ function buildDefinitionMap(program: Program): Map<string, Span> {
   for (const fn of program.declarations) {
     if (fn.span) map.set(fn.name, fn.span)
   }
+  for (const declaredFn of program.declaredFunctions ?? []) {
+    if (declaredFn.span && !map.has(declaredFn.name)) map.set(declaredFn.name, declaredFn.span)
+  }
   for (const impl of program.implBlocks ?? []) {
     for (const m of impl.methods) {
       if (m.span) map.set(`${impl.typeName}.${m.name}`, m.span)
@@ -215,6 +218,54 @@ fn main(): void {
     const loc = resolveDefinition(source, program!, { line: 0, character: 0 })
     // 'fn' keyword — not in defMap, not a local
     expect(loc).toBeNull()
+  })
+
+  it('resolves call site to same-file declare fn declaration', () => {
+    const declaredSource = `declare fn ext(x: int): int;
+fn main(): int {
+  return ext(1);
+}
+`
+    const { program } = parseSource(declaredSource)
+    expect(program).toBeTruthy()
+
+    const pos = positionOf(declaredSource, 'ext', 1) // call site
+    const loc = resolveDefinition(declaredSource, program!, pos)
+    expect(loc).not.toBeNull()
+    expect(loc!.range.start.line).toBe(0)
+  })
+
+  it('resolves declare fn declaration token itself to same declaration location', () => {
+    const declaredSource = `declare fn ext(x: int): int;
+fn main(): int {
+  return ext(1);
+}
+`
+    const { program } = parseSource(declaredSource)
+    expect(program).toBeTruthy()
+
+    const pos = positionOf(declaredSource, 'ext') // declaration token
+    const loc = resolveDefinition(declaredSource, program!, pos)
+    expect(loc).not.toBeNull()
+    expect(loc!.range.start.line).toBe(0)
+  })
+
+  it('keeps executable fn definitions authoritative when a declare fn has same name', () => {
+    const sourceWithBoth = `declare fn ext(x: int): int;
+fn ext(x: int): int {
+  return x;
+}
+fn main(): void {
+  ext(1);
+}
+`
+    const { program } = parseSource(sourceWithBoth)
+    expect(program).toBeTruthy()
+
+    const pos = positionOf(sourceWithBoth, 'ext', 2) // call site in main
+    const loc = resolveDefinition(sourceWithBoth, program!, pos)
+    expect(loc).not.toBeNull()
+    expect(loc!.range.start.line).toBe(1)
   })
 })
 

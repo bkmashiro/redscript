@@ -442,6 +442,9 @@ function buildDefinitionMap(program: Program, source: string): Map<string, Span>
   for (const fn of program.declarations) {
     if (fn.span) map.set(fn.name, fn.span)
   }
+  for (const declaredFn of program.declaredFunctions ?? []) {
+    if (declaredFn.span && !map.has(declaredFn.name)) map.set(declaredFn.name, declaredFn.span)
+  }
   for (const impl of program.implBlocks ?? []) {
     for (const m of impl.methods) {
       if (m.span) map.set(`${impl.typeName}.${m.name}`, m.span)
