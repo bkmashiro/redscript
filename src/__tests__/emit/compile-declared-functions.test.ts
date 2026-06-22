@@ -192,6 +192,60 @@ describe('emit: declared-function boundary behavior', () => {
     expect(err!.diagnostics[0].message).toContain("Function 'ext' expects 2 arguments, got 1")
   })
 
+  test('nested whole-module imports propagate declared function signatures for arity validation', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-nested-bad-'))
+    const apiPath = path.join(tmpDir, 'api.mcrs')
+    const utilPath = path.join(tmpDir, 'util.mcrs')
+    const mainPath = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(apiPath, 'module api;\ndeclare fn ext(x: int, y: int): int;\n')
+    fs.writeFileSync(utilPath, 'module util;\nimport api;\n')
+    fs.writeFileSync(mainPath, 'import util;\nfn main(): int { return ext(1); }\n')
+
+    let err: CheckFailedError | undefined
+    try {
+      compile(fs.readFileSync(mainPath, 'utf-8'), {
+        namespace: 'declared_imported_nested_bad',
+        filePath: mainPath,
+        includeDirs: [tmpDir],
+        stopAfterCheck: true,
+      })
+    } catch (e) {
+      if (e instanceof CheckFailedError) err = e
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+
+    expect(err).toBeDefined()
+    expect(err!.diagnostics[0].message).toContain("Function 'ext' expects 2 arguments, got 1")
+  })
+
+  test('executable signature wins over declaration stub in whole-module import graph', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-precedence-'))
+    const apiPath = path.join(tmpDir, 'api.mcrs')
+    const utilPath = path.join(tmpDir, 'util.mcrs')
+    const mainPath = path.join(tmpDir, 'main.mcrs')
+
+    fs.writeFileSync(apiPath, 'module api;\ndeclare fn ext(x: int): int;\n')
+    fs.writeFileSync(utilPath, 'module util;\nimport api;\nfn ext(x: string): int { return 1; }\n')
+    fs.writeFileSync(mainPath, 'import util;\nfn main(): int { return ext("ok"); }\n')
+
+    let result: ReturnType<typeof compile>
+    try {
+      result = compile(fs.readFileSync(mainPath, 'utf-8'), {
+        namespace: 'declared_imported_precedence_ok',
+        filePath: mainPath,
+        includeDirs: [tmpDir],
+        stopAfterCheck: true,
+      })
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+
+    expect(result.success).toBe(true)
+    expect(result.files).toHaveLength(0)
+  })
+
   test('whole-module imported declaration typechecks and emits only call sites, never the declaration body', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-ok-'))
     const declFile = path.join(tmpDir, 'api.mcrs')
