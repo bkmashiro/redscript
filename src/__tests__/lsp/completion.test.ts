@@ -9,8 +9,13 @@ import { Lexer } from '../../lexer'
 import { Parser } from '../../parser'
 import { TypeChecker } from '../../typechecker'
 import { DiagnosticError } from '../../diagnostics'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
+import { pathToFileURL } from 'url'
 import { BUILTIN_METADATA } from '../../builtins/metadata'
 import { getResourceCompletions, BUILTIN_RESOURCE_REGISTRY } from '../../lsp/resource-completions'
+import { getImportedFunctions, getImportedPrograms } from '../../lsp/import-resolver'
 import type { Program, FnDecl, TypeNode, Block } from '../../ast/types'
 import {
   CompletionItemKind,
@@ -54,6 +59,28 @@ function formatDeclaredFnSignature(fn: FnDecl): string {
   return `declare fn ${fn.name}${fn.typeParams?.length ? `<${fn.typeParams.join(', ')}>` : ''}(${fn.params.map(
     p => `${p.name}: ${typeToString(p.type)}`,
   ).join(', ')}): ${typeToString(fn.returnType)}`
+}
+
+function importedFunctionItems(source: string, program: Program, uri: string): CompletionItem[] {
+  const importedPrograms = getImportedPrograms(source, uri, program)
+  const seen = new Set<string>()
+  const items: CompletionItem[] = []
+
+  for (const imported of importedPrograms) {
+    for (const fn of getImportedFunctions(imported)) {
+      if (seen.has(fn.name)) continue
+      seen.add(fn.name)
+      items.push({
+        label: fn.name,
+        kind: CompletionItemKind.Function,
+        detail: fn.isDeclareOnly
+          ? formatDeclaredFnSignature(fn)
+          : `(${fn.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')}) → ${typeToString(fn.returnType)}`,
+      })
+    }
+  }
+
+  return items
 }
 
 function wordAt(source: string, position: Position): string {
@@ -341,6 +368,82 @@ declare fn ext(x: int): int;
     expect(extItems[0]).toBeDefined()
     expect(extItems[0]!.detail).toBe('fn ext(x: int): int')
     expect(extItems[0]!.detail).not.toContain('declare fn')
+  })
+
+  it('includes imported declaration from import api::ext in completion', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-lsp-completion-import-symbol-'))
+    const apiFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+    const mainSource = [
+      'import api::ext;',
+      'fn main(): int {',
+      '  return ext(1, 2);',
+      '}',
+    ].join('\n')
+
+    fs.writeFileSync(apiFile, 'module api;\ndeclare fn ext(x: int, y: int): int;\n')
+    fs.writeFileSync(mainFile, mainSource)
+
+    try {
+      const { program } = parseSource(mainSource)
+      const importedItems = importedFunctionItems(mainSource, program!, pathToFileURL(mainFile).toString())
+      const extItem = importedItems.find(i => i.label === 'ext')
+
+      expect(extItem).toBeDefined()
+      expect(extItem!.detail).toBe('declare fn ext(x: int, y: int): int')
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('includes imported declarations from import api::* in completion', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-lsp-completion-import-wildcard-'))
+    const apiFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+    const mainSource = [
+      'import api::*;',
+      'fn main(): int {',
+      '  return ext(1, 2);',
+      '}',
+    ].join('\n')
+
+    fs.writeFileSync(apiFile, 'module api;\ndeclare fn ext(x: int, y: int): int;\ndeclare fn add(a: int, b: int): int;\n')
+    fs.writeFileSync(mainFile, mainSource)
+
+    try {
+      const { program } = parseSource(mainSource)
+      const importedItems = importedFunctionItems(mainSource, program!, pathToFileURL(mainFile).toString())
+      const labels = importedItems.map(i => i.label)
+
+      expect(labels).toContain('ext')
+      expect(labels).toContain('add')
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not include declarations for unresolved symbol imports', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-lsp-completion-import-miss-'))
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+    const mainSource = [
+      'import missing_api::ext;',
+      'fn main(): int {',
+      '  return 1;',
+      '}',
+    ].join('\n')
+
+    fs.writeFileSync(mainFile, mainSource)
+
+    try {
+      const { program } = parseSource(mainSource)
+      const importedItems = importedFunctionItems(mainSource, program!, pathToFileURL(mainFile).toString())
+      const labels = importedItems.map(i => i.label)
+
+      expect(labels).not.toContain('ext')
+      expect(importedItems).toHaveLength(0)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 })
 

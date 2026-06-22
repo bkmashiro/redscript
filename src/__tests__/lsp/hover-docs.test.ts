@@ -13,6 +13,11 @@ import { Parser } from '../../parser'
 import type { Program, FnDecl, TypeNode } from '../../ast/types'
 import type { Position } from 'vscode-languageserver/node'
 import { MarkupKind } from 'vscode-languageserver/node'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
+import { pathToFileURL } from 'url'
+import { getImportedFunctionByName, getImportedPrograms } from '../../lsp/import-resolver'
 
 // ---------------------------------------------------------------------------
 // Mirrored helpers (subset of server.ts)
@@ -33,11 +38,12 @@ function typeToString(t: TypeNode): string {
   }
 }
 
-function formatFnSignature(fn: FnDecl): string {
+function formatFnSignature(fn: FnDecl, opts: { includeDeclare?: boolean } = {}): string {
+  const keyword = opts.includeDeclare ? 'declare fn ' : 'fn '
   const params = fn.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')
   const ret = typeToString(fn.returnType)
   const typeParams = fn.typeParams?.length ? `<${fn.typeParams.join(', ')}>` : ''
-  return `fn ${fn.name}${typeParams}(${params}): ${ret}`
+  return `${keyword}${fn.name}${typeParams}(${params}): ${ret}`
 }
 
 function formatDeclaredFnSignature(fn: FnDecl): string {
@@ -143,6 +149,11 @@ function formatDocCommentMarkdown(doc: ParsedDocComment): string {
   return parts.join('\n')
 }
 
+function parseProgram(source: string): Program {
+  const tokens = new Lexer(source).tokenize()
+  return new Parser(tokens, source, 'test').parse('test')
+}
+
 /** Simulate hover for a given word/position in source. Returns markdown string or null. */
 function simulateHover(source: string, position: Position): string | null {
   const tokens = new Lexer(source).tokenize()
@@ -163,6 +174,34 @@ function simulateHover(source: string, position: Position): string | null {
     if (md) docSection = `\n\n${md}`
   }
   return `\`\`\`redscript\n${sig}\n\`\`\`${docSection}`
+}
+
+function simulateImportedHover(
+  source: string,
+  position: Position,
+  uri: string,
+  program: Program,
+): string | null {
+  const importedPrograms = getImportedPrograms(source, uri, program)
+  const word = wordAt(source, position)
+  if (!word) return null
+
+  for (const imported of importedPrograms) {
+    const importedFn = getImportedFunctionByName(imported, word)
+    if (!importedFn) continue
+
+    const sig = formatFnSignature(importedFn, { includeDeclare: importedFn.isDeclareOnly === true })
+    const rawDoc = extractDocComment(imported.source, importedFn)
+    let docLine = ''
+    if (rawDoc) {
+      const parsed = parseDocCommentText(rawDoc)
+      const md = formatDocCommentMarkdown(parsed)
+      if (md) docLine = `\n\n${md}`
+    }
+    return `\`\`\`redscript\n${sig}\n\`\`\`${docLine}`
+  }
+
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -253,5 +292,59 @@ describe('LSP hover: /// doc comments', () => {
     expect(result).not.toBeNull()
     expect(result).toContain('Greet a player.')
     expect(result).toContain('`name` — The player name')
+  })
+
+  test('hover on imported declaration from import api::ext shows declaration', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-lsp-hover-import-symbol-'))
+    const apiFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+    const mainSource = [
+      'module main;',
+      'import api::ext;',
+      'fn main(): int {',
+      '  return ext(1, 2);',
+      '}',
+    ].join('\n')
+
+    fs.writeFileSync(apiFile, 'module api;\ndeclare fn ext(x: int, y: int): int;\n')
+    fs.writeFileSync(mainFile, mainSource)
+
+    try {
+      const program = parseProgram(mainSource)
+      const line = mainSource.split('\n')[3]
+      const result = simulateImportedHover(mainSource, { line: 3, character: line.indexOf('ext') + 1 }, pathToFileURL(mainFile).toString(), program)
+
+      expect(result).not.toBeNull()
+      expect(result).toContain('declare fn ext(x: int, y: int): int')
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  test('hover on imported declaration from import api::* shows declaration', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-lsp-hover-import-wildcard-'))
+    const apiFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+    const mainSource = [
+      'module main;',
+      'import api::*;',
+      'fn main(): int {',
+      '  return add(1, 2);',
+      '}',
+    ].join('\n')
+
+    fs.writeFileSync(apiFile, 'module api;\ndeclare fn add(x: int, y: int): int;\ndeclare fn sub(x: int, y: int): int;\n')
+    fs.writeFileSync(mainFile, mainSource)
+
+    try {
+      const program = parseProgram(mainSource)
+      const line = mainSource.split('\n')[3]
+      const result = simulateImportedHover(mainSource, { line: 3, character: line.indexOf('add') + 1 }, pathToFileURL(mainFile).toString(), program)
+
+      expect(result).not.toBeNull()
+      expect(result).toContain('declare fn add(x: int, y: int): int')
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 })

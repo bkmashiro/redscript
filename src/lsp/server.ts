@@ -50,6 +50,13 @@ import { BUILTIN_METADATA } from '../builtins/metadata'
 import type { BuiltinDef } from '../builtins/metadata'
 import { lintString } from '../lint'
 import type { LintWarning } from '../lint'
+import {
+  getImportedFunctionByName,
+  getImportedFunctions,
+  getImportedPrograms,
+  resolveImportPath,
+  shouldImportStructsAndTypes,
+} from './import-resolver'
 import { buildRenameWorkspaceEdit } from './rename'
 import { getResourceCompletions } from './resource-completions'
 
@@ -773,13 +780,14 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
 
   // ── Check imported files (import "stdlib/xxx.mcrs" and import xxx::*) ──────
   try {
-    const importedPrograms = getImportedPrograms(source, params.textDocument.uri)
-    for (const { prog, filePath } of importedPrograms) {
-      const importedFn = findFunction(prog, word)
+    const importedPrograms = getImportedPrograms(source, params.textDocument.uri, program)
+    for (const imported of importedPrograms) {
+      const { prog, source: importedSource, filePath } = imported
+      const importedFn = getImportedFunctionByName(imported, word)
       if (importedFn) {
-        const sig = formatFnSignature(importedFn)
+        const sig = formatFnSignature(importedFn, { includeDeclare: importedFn.isDeclareOnly === true })
         // Extract leading /** ... */ comment from the source file
-        const docComment = extractDocComment(fs.readFileSync(filePath, 'utf-8'), importedFn)
+        const docComment = extractDocComment(importedSource, importedFn)
         const docLine = docComment ? `\n\n${docComment}` : ''
         const content: MarkupContent = {
           kind: MarkupKind.Markdown,
@@ -787,6 +795,7 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
         }
         return { contents: content }
       }
+      if (!shouldImportStructsAndTypes(imported)) continue
       const importedStruct = prog.structs?.find(s => s.name === word)
       if (importedStruct) {
         const fields = importedStruct.fields.map(f => `  ${f.name}: ${typeToString(f.type)}`).join('\n')
@@ -805,78 +814,6 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
 // ---------------------------------------------------------------------------
 // Go-to-definition
 // ---------------------------------------------------------------------------
-
-/**
- * Parse all import declarations in `source` (both path-based and module::*
- * forms) and return parsed Program objects for each resolved file.
- */
-function getImportedPrograms(source: string, fromUri: string): Array<{ prog: import('../ast/types').Program; filePath: string }> {
-  const result: Array<{ prog: import('../ast/types').Program; filePath: string }> = []
-  // 1. Path-based: import "stdlib/math.mcrs"
-  const FILE_IMPORT_RE = /^import\s+"([^"]+)"/gm
-  let m: RegExpExecArray | null
-  while ((m = FILE_IMPORT_RE.exec(source)) !== null) {
-    const resolved = resolveImportPath(m[1], fromUri)
-    if (!resolved || !fs.existsSync(resolved)) continue
-    try {
-      const src = fs.readFileSync(resolved, 'utf-8')
-      const tokens = new Lexer(src).tokenize()
-      const prog = new Parser(tokens).parse(path.basename(resolved, '.mcrs'))
-      result.push({ prog, filePath: resolved })
-    } catch { /* skip */ }
-  }
-  // 2. Module-star: import random::* or import random::fn_name
-  const MOD_IMPORT_RE = /^import\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*::/gm
-  while ((m = MOD_IMPORT_RE.exec(source)) !== null) {
-    const modName = m[1]
-    // Try to resolve as stdlib/modName.mcrs
-    const resolved = resolveImportPath(`stdlib/${modName}.mcrs`, fromUri)
-    if (!resolved || !fs.existsSync(resolved)) continue
-    // Avoid duplicates if already resolved above
-    if (result.some(r => r.filePath === resolved)) continue
-    try {
-      const src = fs.readFileSync(resolved, 'utf-8')
-      const tokens = new Lexer(src).tokenize()
-      const prog = new Parser(tokens).parse(modName)
-      result.push({ prog, filePath: resolved })
-    } catch { /* skip */ }
-  }
-  return result
-}
-
-/** Resolve a relative or stdlib import path to an absolute file path. */
-function resolveImportPath(importStr: string, fromUri: string): string | null {
-  try {
-    const fromFile = fileURLToPath(fromUri)
-    const fromDir  = path.dirname(fromFile)
-
-    if (importStr.startsWith('.')) {
-      // Relative path: import "../stdlib/math.mcrs"
-      const resolved = path.resolve(fromDir, importStr)
-      if (fs.existsSync(resolved)) return resolved
-      // Try adding .mcrs extension
-      if (!resolved.endsWith('.mcrs') && fs.existsSync(resolved + '.mcrs')) return resolved + '.mcrs'
-    } else {
-      // stdlib path: import "stdlib/math" or "stdlib/math.mcrs"
-      // Walk up to find package root (contains package.json)
-      let dir = fromDir
-      for (let i = 0; i < 10; i++) {
-        if (fs.existsSync(path.join(dir, 'package.json'))) {
-          const candidate = path.join(dir, 'src', importStr)
-          if (fs.existsSync(candidate)) return candidate
-          if (fs.existsSync(candidate + '.mcrs')) return candidate + '.mcrs'
-          // also try without 'src/'
-          const candidate2 = path.join(dir, importStr)
-          if (fs.existsSync(candidate2)) return candidate2
-          if (fs.existsSync(candidate2 + '.mcrs')) return candidate2 + '.mcrs'
-          break
-        }
-        dir = path.dirname(dir)
-      }
-    }
-  } catch { /* ignore */ }
-  return null
-}
 
 connection.onDefinition((params: TextDocumentPositionParams): Location | null => {
   const doc = documents.get(params.textDocument.uri)
@@ -946,9 +883,17 @@ connection.onDefinition((params: TextDocumentPositionParams): Location | null =>
   // ── Imported symbol F12 — jump to definition inside the imported file ────────
   // Only reached if word is not a local. Avoids false matches for short names like 'p', 'k'.
   try {
-    const importedPrograms = getImportedPrograms(source, params.textDocument.uri)
-    for (const { prog, filePath } of importedPrograms) {
-      const importedDefMap = buildDefinitionMap(prog, fs.readFileSync(filePath, 'utf-8'))
+    const importedPrograms = getImportedPrograms(source, params.textDocument.uri, program)
+    for (const imported of importedPrograms) {
+      const { prog, source: importedSource, filePath, symbol } = imported
+      const importedDefMap = symbol == null
+        ? buildDefinitionMap(prog, importedSource)
+        : new Map(
+          (imported.prog.declaredFunctions ?? [])
+            .filter(fn => symbol === '*' || fn.name === symbol)
+            .filter(fn => fn.span != null)
+            .map(fn => [fn.name, fn.span!]),
+        )
       const importedSpan = importedDefMap.get(word)
       if (importedSpan) {
         const line = Math.max(0, importedSpan.line - 1)
@@ -1184,17 +1129,34 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
 
   // ── Functions from imported files (both "path" and module::* forms) ────────
   try {
-    const importedPrograms = getImportedPrograms(source, params.textDocument.uri)
-    for (const { prog, filePath } of importedPrograms) {
-      for (const fn of prog.declarations) {
-        const paramList = fn.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')
+    const importedPrograms = getImportedPrograms(source, params.textDocument.uri, program)
+    const existingFunctionNames = new Set<string>()
+    if (program) {
+      for (const fn of program.declarations) existingFunctionNames.add(fn.name)
+      const declaredFunctionNames = new Set(program.declarations.map(fn => fn.name))
+      for (const fn of program.declaredFunctions ?? []) {
+        if (!declaredFunctionNames.has(fn.name)) existingFunctionNames.add(fn.name)
+      }
+    }
+
+    for (const imported of importedPrograms) {
+      const { prog, filePath } = imported
+      for (const fn of getImportedFunctions(imported)) {
+        if (existingFunctionNames.has(fn.name)) continue
+        existingFunctionNames.add(fn.name)
+        const detail = fn.isDeclareOnly
+          ? formatFnSignature(fn, { includeDeclare: true })
+          : `(${fn.params.map(p => `${p.name}: ${typeToString(p.type)}`).join(', ')}) → ${typeToString(fn.returnType)}`
         items.push({
           label: fn.name,
           kind: CompletionItemKind.Function,
-          detail: `(${paramList}) → ${typeToString(fn.returnType ?? { kind: 'named', name: 'void' })}`,
+          detail,
           documentation: `from ${path.basename(filePath)}`,
         })
       }
+
+      if (!shouldImportStructsAndTypes(imported)) continue
+
       for (const s of prog.structs ?? []) {
         items.push({ label: s.name, kind: CompletionItemKind.Struct, documentation: `from ${path.basename(filePath)}` })
       }

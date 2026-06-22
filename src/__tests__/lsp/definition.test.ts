@@ -8,8 +8,13 @@
 import { Lexer } from '../../lexer'
 import { Parser } from '../../parser'
 import { DiagnosticError } from '../../diagnostics'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
+import { pathToFileURL } from 'url'
 import type { Program, FnDecl, Span, TypeNode, Block } from '../../ast/types'
 import type { Location, Position } from 'vscode-languageserver/node'
+import { getImportedPrograms } from '../../lsp/import-resolver'
 
 // ---------------------------------------------------------------------------
 // Mirrored helpers from lsp/server.ts
@@ -149,6 +154,42 @@ function parseSource(source: string): { program: Program | null; errors: Diagnos
   return { program, errors }
 }
 
+/** Simulate imported-definition fallback from lsp/server.ts. */
+function resolveDefinitionFromImports(
+  source: string,
+  program: Program,
+  position: Position,
+  uri: string,
+): Location | null {
+  const word = wordAt(source, position)
+  if (!word) return null
+
+  const importedPrograms = getImportedPrograms(source, uri, program)
+  for (const imported of importedPrograms) {
+    const importedDefMap = imported.kind === 'path' || imported.symbol === undefined
+      ? buildDefinitionMap(imported.prog as Program)
+      : new Map(
+        (imported.prog.declaredFunctions ?? [])
+          .filter(fn => imported.symbol === '*' || fn.name === word)
+          .filter(fn => fn.span != null)
+          .map(fn => [fn.name, fn.span!]),
+      )
+
+    const importedSpan = importedDefMap.get(word)
+    if (importedSpan && importedSpan.line >= 1 && importedSpan.col >= 1) {
+      return {
+        uri: pathToFileURL(imported.filePath).toString(),
+        range: {
+          start: { line: importedSpan.line - 1, character: importedSpan.col - 1 },
+          end: { line: importedSpan.line - 1, character: importedSpan.col - 1 + word.length },
+        },
+      }
+    }
+  }
+
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Helper: find position of first occurrence of `name` in source (0-based)
 // ---------------------------------------------------------------------------
@@ -266,6 +307,95 @@ fn main(): void {
     const loc = resolveDefinition(sourceWithBoth, program!, pos)
     expect(loc).not.toBeNull()
     expect(loc!.range.start.line).toBe(1)
+  })
+
+  it('resolves imported declaration from import api::ext to declaration file', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-lsp-def-import-symbol-'))
+    const apiFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+    const mainSource = [
+      'module main;',
+      'import api::ext;',
+      'fn main(): int {',
+      '  return ext(1, 2);',
+      '}',
+    ].join('\n')
+
+    fs.writeFileSync(apiFile, 'module api;\ndeclare fn ext(x: int, y: int): int;\n')
+    fs.writeFileSync(mainFile, mainSource)
+
+    try {
+      const { program } = parseSource(mainSource)
+      expect(program).toBeTruthy()
+      const loc = resolveDefinitionFromImports(mainSource, program!, {
+        line: 3,
+        character: mainSource.split('\n')[3].indexOf('ext') + 1,
+      }, pathToFileURL(mainFile).toString())
+
+      expect(loc).not.toBeNull()
+      expect(loc!.uri).toBe(pathToFileURL(apiFile).toString())
+      expect(loc!.range.start.line).toBe(1)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('resolves imported declarations from import api::* to declaration file', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-lsp-def-import-wildcard-'))
+    const apiFile = path.join(tmpDir, 'api.mcrs')
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+    const mainSource = [
+      'module main;',
+      'import api::*;',
+      'fn main(): int {',
+      '  return sub(3, 4);',
+      '}',
+    ].join('\n')
+
+    fs.writeFileSync(apiFile, 'module api;\ndeclare fn add(x: int, y: int): int;\ndeclare fn sub(x: int, y: int): int;\n')
+    fs.writeFileSync(mainFile, mainSource)
+
+    try {
+      const { program } = parseSource(mainSource)
+      expect(program).toBeTruthy()
+      const loc = resolveDefinitionFromImports(mainSource, program!, {
+        line: 3,
+        character: mainSource.split('\n')[3].indexOf('sub') + 1,
+      }, pathToFileURL(mainFile).toString())
+
+      expect(loc).not.toBeNull()
+      expect(loc!.uri).toBe(pathToFileURL(apiFile).toString())
+      expect(loc!.range.start.line).toBe(2)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not resolve imports when module file cannot be resolved', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-lsp-def-import-miss-'))
+    const mainFile = path.join(tmpDir, 'main.mcrs')
+    const mainSource = [
+      'module main;',
+      'import missing_api::ext;',
+      'fn main(): int {',
+      '  return ext(1, 2);',
+      '}',
+    ].join('\n')
+
+    fs.writeFileSync(mainFile, mainSource)
+
+    try {
+      const { program } = parseSource(mainSource)
+      expect(program).toBeTruthy()
+      const loc = resolveDefinitionFromImports(mainSource, program!, {
+        line: 3,
+        character: mainSource.split('\n')[3].indexOf('ext') + 1,
+      }, pathToFileURL(mainFile).toString())
+
+      expect(loc).toBeNull()
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 })
 
