@@ -166,6 +166,19 @@ function collectEventRuntimeTypesFromProgram(program: Program): string[] {
   return [...eventTypes]
 }
 
+function mergeDeclaredFunctions(target: Program, source: Program, existingFnNames?: Set<string>): void {
+  if (!target.declaredFunctions) target.declaredFunctions = []
+
+  const mergedDeclaredNames = new Set(target.declaredFunctions.map(fn => fn.name))
+  const knownExecutableNames = existingFnNames ?? new Set(target.declarations.map(fn => fn.name))
+
+  for (const fn of source.declaredFunctions ?? []) {
+    if (knownExecutableNames.has(fn.name) || mergedDeclaredNames.has(fn.name)) continue
+    target.declaredFunctions.push(fn)
+    mergedDeclaredNames.add(fn.name)
+  }
+}
+
 function mergeParsedLibrarySource(
   ast: Program,
   source: string,
@@ -180,8 +193,6 @@ function mergeParsedLibrarySource(
   warnings.push(...libParsed.warnings)
 
   const existingFnNames = new Set(ast.declarations.map(fn => fn.name))
-  if (!ast.declaredFunctions) ast.declaredFunctions = []
-  const existingDeclaredFnNames = new Set(ast.declaredFunctions.map(fn => fn.name))
 
   for (const fn of libAst.declarations) {
     if (options.dedupeDeclarations && existingFnNames.has(fn.name)) {
@@ -192,13 +203,7 @@ function mergeParsedLibrarySource(
     existingFnNames.add(fn.name)
   }
 
-  for (const fn of libAst.declaredFunctions ?? []) {
-    if (existingFnNames.has(fn.name) || existingDeclaredFnNames.has(fn.name)) {
-      continue
-    }
-    ast.declaredFunctions.push(fn)
-    existingDeclaredFnNames.add(fn.name)
-  }
+  mergeDeclaredFunctions(ast, libAst, existingFnNames)
 
   ast.structs.push(...libAst.structs)
   ast.implBlocks.push(...libAst.implBlocks)
@@ -1262,21 +1267,13 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       const modParsed = parseSourceStage(modPreprocessed.source, namespace, { filePath: modFilePath, stopAfterCheck })
       const modAst = modParsed.ast
       warnings.push(...modParsed.warnings)
-      if (!ast.declaredFunctions) ast.declaredFunctions = []
       const existingFnNames = new Set(ast.declarations.map(fn => fn.name))
-      const existingDeclaredFnNames = new Set(ast.declaredFunctions.map(fn => fn.name))
       for (const fn of modAst.declarations) fn.isLibraryFn = true
       ast.declarations.push(...modAst.declarations)
       for (const fn of modAst.declarations) {
         existingFnNames.add(fn.name)
       }
-      for (const fn of modAst.declaredFunctions ?? []) {
-        if (existingFnNames.has(fn.name) || existingDeclaredFnNames.has(fn.name)) {
-          continue
-        }
-        ast.declaredFunctions.push(fn)
-        existingDeclaredFnNames.add(fn.name)
-      }
+      mergeDeclaredFunctions(ast, modAst, existingFnNames)
       for (const imp of modAst.imports) {
         if (imp.symbol !== undefined) continue
         const nestedPath = resolveModuleFilePath(imp.moduleName, modFilePath)
