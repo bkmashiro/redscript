@@ -83,4 +83,9 @@ Do not add Binaryen, Z3, or egg to the production dependency graph until each ha
 3. ✅ Use `fast-check` to fuzz small LIR programs for analysis invariants and no-op rewrite equivalence. [Done]
 4. ✅ Prototype arithmetic-only VIR behind an experimental path: core skeleton, arithmetic lowering, first passes, and slot-planner v1 now live under `src/optimizer/vir`. [Experimental only]
 
-Production VIR/LIR handoff is still pending and out of this phase’s scope. The slot planner can be exercised by tests/probes, but it is not wired into the compiler pipeline and still needs the benchmark decision gate before promotion.
+Production VIR/LIR handoff is still pending and out of this phase’s scope. The slot planner can be exercised by tests/probes, but it is not wired into the compiler pipeline.
+
+Step-10 status in this roadmap is an experimental decision gate prototype:
+- `chooseVirLoweringPlan(...)` compares direct vs planned per function in `auto`/`compare` mode.
+- planned selection currently requires simple non-worse cost criteria (`commands`, then `score_copy`) and allocation-check pass.
+- the gate itself is prototype-only; production handoff is still pending until the outcome supports a broader rollout.

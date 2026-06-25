@@ -193,4 +193,33 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(summary.setupHints.entityTags).toContain('rs_div')
     expect(summary.setupHints.hasTransformationReads).toBe(false)
   })
+
+  it('includes VIR direct/planned decision fields with rejection categories', () => {
+    const report = runArithmeticProbeReport('int_arithmetic', [1])
+    const [result] = report.cases
+
+    expect(result.virDecision).toBeDefined()
+    expect(result.virDecision?.directCommandCount).toBeGreaterThan(0)
+    expect(result.virDecision?.plannedCommandCount).toBeGreaterThanOrEqual(0)
+    expect(result.virDecision?.selectedMode).toBeDefined()
+    expect(result.virDecision?.status === 'ok' || result.virDecision?.status === 'unsupported').toBe(true)
+    expect(result.virDecision?.rejectionCategoryCounts).toEqual(expect.objectContaining({
+      planned_unsupported: expect.any(Number),
+      allocation_check_failed: expect.any(Number),
+      higher_cost: expect.any(Number),
+      direct_unsupported: expect.any(Number),
+      unsupported_both: expect.any(Number),
+    }))
+  })
+
+  it('merges VIR decision payload while keeping probe output stable', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    expect(report.cases.length).toBeGreaterThan(0)
+    for (const result of report.cases) {
+      expect(result.virDecision).toBeDefined()
+      if (result.virDecision?.status === 'unsupported') {
+        expect(result.virDecision.unsupportedReason).toBeDefined()
+      }
+    }
+  })
 })

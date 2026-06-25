@@ -279,6 +279,8 @@ src/__tests__/optimizer/vir/slot-planner.test.ts
 
 ## Step 10 — Benchmark decision gate
 
+**Status:** Experimental prototype only. It remains in experimental mode for benchmarks/tests and is not connected to production compiler behavior.
+
 **Objective:** Decide whether VIR continues beyond arithmetic-only.
 
 **Inputs:**

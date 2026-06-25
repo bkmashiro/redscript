@@ -10,6 +10,8 @@ import {
   writeJsonReport,
 } from './_shared'
 import type { Slot } from '../src/lir/types'
+import { chooseVirLoweringPlan, type VirToLirDecisionReport } from '../src/optimizer/vir/lower/vir-to-lir'
+import { lowerMirToVir } from '../src/optimizer/vir/lower/mir-to-vir'
 import { isProtectedSlot, sameSlot } from '../src/optimizer/lir/analysis'
 
 export interface ArithmeticProbeCase {
@@ -129,6 +131,19 @@ export interface ArithmeticProbeResult {
   copyOrigins: CopyOriginSummary
   scoreCopyPatterns: ScoreCopyPatternSummary
   rewriteOpportunities: CopyRewriteOpportunitySummary
+  virDecision?: {
+    status: VirToLirDecisionReport['kind']
+    selectedMode: VirToLirDecisionReport['selectedMode']
+    directCommandCount: number
+    plannedCommandCount: number
+    directScoreCopyCount: number
+    plannedScoreCopyCount: number
+    acceptedFunctionCount: number
+    rejectedFunctionCount: number
+    unsupportedFunctionCount: number
+    rejectionCategoryCounts: VirToLirDecisionReport['rejectionCategoryCounts']
+    unsupportedReason?: string
+  }
   warnings: string[]
 }
 
@@ -860,7 +875,45 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
     namespace: `arith_${probe.name}`,
     optimizationLevel: optLevel,
   })
+  const mirLowering = lowerMirToVir(result.mir)
   const lines = commandLinesWithLocations(result.files)
+  const virDecision = mirLowering.kind === 'ok'
+    ? (() => {
+      const decision = chooseVirLoweringPlan(mirLowering.module, { runAllocationCheck: true })
+      return {
+        status: decision.kind,
+        selectedMode: decision.selectedMode,
+        directCommandCount: decision.directCommandCount,
+        plannedCommandCount: decision.plannedCommandCount,
+        directScoreCopyCount: decision.directScoreCopyCount,
+        plannedScoreCopyCount: decision.plannedScoreCopyCount,
+        acceptedFunctionCount: decision.acceptedFunctionCount,
+        rejectedFunctionCount: decision.rejectedFunctionCount,
+        unsupportedFunctionCount: decision.unsupportedFunctionCount,
+        rejectionCategoryCounts: decision.rejectionCategoryCounts,
+        unsupportedReason: decision.unsupportedReason,
+      }
+    })()
+    : {
+      status: 'unsupported' as const,
+      selectedMode: 'direct' as const,
+      directCommandCount: 0,
+      plannedCommandCount: 0,
+      directScoreCopyCount: 0,
+      plannedScoreCopyCount: 0,
+      acceptedFunctionCount: 0,
+      rejectedFunctionCount: 0,
+      unsupportedFunctionCount: 0,
+      rejectionCategoryCounts: {
+        planned_unsupported: 0,
+        allocation_check_failed: 0,
+        higher_cost: 0,
+        direct_unsupported: 0,
+        unsupported_both: 0,
+      },
+      unsupportedReason: mirLowering.kind === 'unsupported' ? mirLowering.reason : undefined,
+    }
+
   return {
     case: probe.name,
     description: probe.description,
@@ -879,6 +932,7 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
     copyOrigins: summarizeCopyOrigins(lines),
     scoreCopyPatterns: summarizeScoreCopyPatterns(result.files),
     rewriteOpportunities: summarizeRewriteOpportunities(lines),
+    virDecision,
     warnings: result.warnings,
   }
 }
