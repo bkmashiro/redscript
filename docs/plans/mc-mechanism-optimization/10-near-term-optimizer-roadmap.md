@@ -6,6 +6,12 @@ Status: near-term execution roadmap for the TS optimizer infrastructure and thin
 
 Move from ad-hoc physical LIR peepholes toward reusable optimizer infrastructure, then validate a thin arithmetic-only VIR spike without committing to a broad compiler rewrite.
 
+This roadmap keeps the VIR work explicitly in an **isolated experimental lane**:
+- no production compile-path integration,
+- no broad language-semantics changes,
+- unsupported/fallback boundaries required,
+- slot-planner (including full register-like allocation) still pending.
+
 ## Non-goals for this roadmap
 
 - No MLIR/LLVM/Cranelift production migration.
@@ -13,6 +19,12 @@ Move from ad-hoc physical LIR peepholes toward reusable optimizer infrastructure
 - No storage/NBT/entity/macro/coroutine support in the first VIR spike.
 - No new Minecraft mechanism promotion; live probes remain gated.
 - No broad rewrite of MIR or current LIR.
+
+Boundary reminder for this stage:
+
+- Step 7/8 are architecture-probing only and must not alter production compiler semantics.
+- Any unsupported case in lowering must fail clearly and preserve fallback behavior.
+- Slot planner and allocator phases are explicitly deferred beyond this batch.
 
 ## Step 1 — LIR liveness / next-use helpers
 

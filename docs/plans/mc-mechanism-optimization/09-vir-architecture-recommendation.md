@@ -2,6 +2,13 @@
 
 Status: design recommendation imported from external GPT Pro review. This is **not** an implementation commitment yet; it defines the architecture target and the criteria for a small spike.
 
+Current implementation posture for this branch:
+
+- Phase-0 arithmetic VIR remains **isolated** under `src/optimizer/vir`.
+- This is a prototype and is not connected to the default compiler pipeline.
+- Slot-planner and allocator work is explicitly pending; only direct one-value-per-slot lowering is expected in this first cut.
+- Unsupported MIR shapes and unsupported lowerings must return explicit `unsupported` reasons and stay as fallback boundaries.
+
 ## Executive recommendation
 
 Add a value-level layer, but keep it thin.
