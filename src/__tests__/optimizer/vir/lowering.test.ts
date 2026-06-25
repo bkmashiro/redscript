@@ -83,6 +83,38 @@ describe('VIR arithmetic-only lowering experiment', () => {
     ])
   })
 
+  test('planned mode reuses destructive lhs slots and precolors return to $ret', () => {
+    const mir = makeMirOneBlockFunction([
+      { kind: 'add', dst: 'x', a: { kind: 'temp', name: 'a' }, b: { kind: 'temp', name: 'b' } },
+      { kind: 'sub', dst: 'y', a: { kind: 'temp', name: 'x' }, b: { kind: 'temp', name: 'b' } },
+    ], 'y')
+
+    const lowered = lowerMirToVir(mir)
+    expect(lowered.kind).toBe('ok')
+    if (lowered.kind !== 'ok') return
+
+    const direct = lowerVirToLir(lowered.module)
+    expect(direct.kind).toBe('ok')
+    if (direct.kind !== 'ok') return
+
+    const planned = lowerVirToLir(lowered.module, { mode: 'planned' })
+    expect(planned.kind).toBe('ok')
+    if (planned.kind !== 'ok') return
+
+    const directCopyCount = direct.module.functions[0].instructions.filter(instruction => instruction.kind === 'score_copy').length
+    const plannedCopyCount = planned.module.functions[0].instructions.filter(instruction => instruction.kind === 'score_copy').length
+    const plannedInstructions = planned.module.functions[0].instructions
+
+    expect(plannedCopyCount).toBeLessThan(directCopyCount)
+    expect(plannedInstructions).toEqual(expect.arrayContaining([
+      { kind: 'score_sub', dst: { player: '$ret', obj: '__arith' }, src: { player: '$v1', obj: '__arith' } },
+      { kind: 'return_value', slot: { player: '$ret', obj: '__arith' } },
+    ]))
+    expect(plannedInstructions).not.toEqual(expect.arrayContaining([
+      { kind: 'score_copy', dst: { player: '$v2', obj: '__arith' }, src: { player: '$v1', obj: '__arith' } },
+    ]))
+  })
+
   test('rejects mixed unsupported instructions without partial fallback', () => {
     const mir: MIRModule = {
       namespace: 'arith',

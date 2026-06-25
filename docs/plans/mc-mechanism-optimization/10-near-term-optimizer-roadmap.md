@@ -22,9 +22,10 @@ This roadmap keeps the VIR work explicitly in an **isolated experimental lane**:
 
 Boundary reminder for this stage:
 
-- Step 7/8 are architecture-probing only and must not alter production compiler semantics.
+- Step 6/7/8 are now implemented as an isolated experimental skeleton under `src/optimizer/vir`.
+- Step 9 is also experimental-only: it may be called by tests/probes, but production compile paths remain disconnected.
 - Any unsupported case in lowering must fail clearly and preserve fallback behavior.
-- Slot planner and allocator phases are explicitly deferred beyond this batch.
+- Slot planner/allocator work is still a prototype until the benchmark decision gate proves net value.
 
 ## Step 1 — LIR liveness / next-use helpers
 
@@ -174,20 +175,20 @@ copyRewriteOpportunities.unknown
 
 ## Step 6 — VIR core skeleton, no compiler integration
 
+**Status:** Complete as experimental-only Batch 21/22 skeleton under `src/optimizer/vir`.
+
 **Objective:** Build the minimum IR machinery in isolation.
 
 **Files:**
 
 ```text
-src/vir/ids.ts
-src/vir/types.ts
-src/vir/ir.ts
-src/vir/builder.ts
-src/vir/location.ts
-src/vir/effects.ts
-src/vir/verifier.ts
-src/vir/printer.ts
-src/__tests__/vir/*.test.ts
+src/optimizer/vir/ids.ts
+src/optimizer/vir/types.ts
+src/optimizer/vir/builder.ts
+src/optimizer/vir/location.ts
+src/optimizer/vir/verifier.ts
+src/optimizer/vir/printer.ts
+src/__tests__/optimizer/vir/*.test.ts
 ```
 
 **Technology:** TypeScript dense tables, branded numeric IDs, deterministic printer, mandatory locs, verifier.
@@ -198,15 +199,16 @@ src/__tests__/vir/*.test.ts
 
 ## Step 7 — Arithmetic-only VIR lowering experiment
 
+**Status:** Complete for the isolated arithmetic-only subset. Unsupported operations fail explicitly and no production pipeline calls this path.
+
 **Objective:** Lower a tiny MIR subset to VIR and back to current LIR behind an experimental/internal path.
 
 **Files:**
 
 ```text
-src/vir/lower/mir-to-vir.ts
-src/vir/lower/vir-to-lir.ts
-src/vir/interpreter.ts
-src/__tests__/vir/lowering.test.ts
+src/optimizer/vir/lower/mir-to-vir.ts
+src/optimizer/vir/lower/vir-to-lir.ts
+src/__tests__/optimizer/vir/lowering.test.ts
 ```
 
 **Subset:**
@@ -225,17 +227,18 @@ single-block leaf function
 
 ## Step 8 — First VIR optimizer passes
 
+**Status:** Complete for the isolated arithmetic-only prototype.
+
 **Objective:** Prove the VIR layer can remove logical work before physical slot binding.
 
 **Files:**
 
 ```text
-src/vir/pass-manager.ts
-src/vir/passes/canonicalize.ts
-src/vir/passes/constant-fold.ts
-src/vir/passes/dce.ts
-src/vir/passes/local-cse.ts
-src/__tests__/vir/passes/*.test.ts
+src/optimizer/vir/passes/canonicalize.ts
+src/optimizer/vir/passes/constant-fold.ts
+src/optimizer/vir/passes/dce.ts
+src/optimizer/vir/passes/local-cse.ts
+src/__tests__/optimizer/vir/passes.test.ts
 ```
 
 **Passes:**
@@ -249,16 +252,18 @@ src/__tests__/vir/passes/*.test.ts
 
 ## Step 9 — Slot planner v1 for arithmetic-only VIR
 
+**Status:** Experimental prototype implemented. It is available only through isolated VIR tests/probes and does not connect to the production compiler pipeline.
+
 **Objective:** Convert VIR's value-level wins into fewer physical `score_copy` commands.
 
 **Files:**
 
 ```text
-src/vir/lower/machine.ts
-src/vir/lower/slot-planner.ts
-src/vir/lower/parallel-copies.ts
-src/vir/lower/allocation-checker.ts
-src/__tests__/vir/slot-planner.test.ts
+src/optimizer/vir/lower/liveness.ts
+src/optimizer/vir/lower/slot-planner.ts
+src/optimizer/vir/lower/parallel-copies.ts
+src/optimizer/vir/lower/allocation-checker.ts
+src/__tests__/optimizer/vir/slot-planner.test.ts
 ```
 
 **Techniques:**

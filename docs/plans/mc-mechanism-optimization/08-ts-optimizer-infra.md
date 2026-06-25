@@ -81,6 +81,6 @@ Do not add Binaryen, Z3, or egg to the production dependency graph until each ha
 1. ✅ Add local liveness / next-use helpers for straight-line LIR windows. [Done]
 2. ✅ Add a tiny rewrite-rule harness so multi-instruction patterns can share window matching and safety checks. [Done]
 3. ✅ Use `fast-check` to fuzz small LIR programs for analysis invariants and no-op rewrite equivalence. [Done]
-4. Only then prototype arithmetic-only VIR behind an experimental path if benchmark data still shows copy/temp pressure that LIR analysis cannot cleanly address; follow the Phase 0–5 spike criteria in [09](./09-vir-architecture-recommendation.md).
+4. ✅ Prototype arithmetic-only VIR behind an experimental path: core skeleton, arithmetic lowering, first passes, and slot-planner v1 now live under `src/optimizer/vir`. [Experimental only]
 
-Slot planning, physical slot allocation, and production VIR/LIR handoff are still pending and out of this phase’s scope.
+Production VIR/LIR handoff is still pending and out of this phase’s scope. The slot planner can be exercised by tests/probes, but it is not wired into the compiler pipeline and still needs the benchmark decision gate before promotion.
