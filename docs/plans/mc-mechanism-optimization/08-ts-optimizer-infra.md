@@ -85,7 +85,8 @@ Do not add Binaryen, Z3, or egg to the production dependency graph until each ha
 
 Production VIR/LIR handoff is still pending and out of this phase’s scope. The slot planner can be exercised by tests/probes, but it is not wired into the compiler pipeline.
 
-Step-10 status in this roadmap is an experimental decision gate prototype:
+Step-10/Step-11 status in this roadmap is an experimental decision gate prototype:
 - `chooseVirLoweringPlan(...)` compares direct vs planned per function in `auto`/`compare` mode.
 - planned selection currently requires simple non-worse cost criteria (`commands`, then `score_copy`) and allocation-check pass.
 - the gate itself is prototype-only; production handoff is still pending until the outcome supports a broader rollout.
+- Step-11 adds a stable aggregate dashboard and explicit go/no-go recommendation layer for this spike.

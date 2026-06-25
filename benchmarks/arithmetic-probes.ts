@@ -108,6 +108,49 @@ export interface ArithmeticCostEstimate {
   note: 'static-estimate'
 }
 
+export type VirDecisionRejectionCategory = keyof VirToLirDecisionReport['rejectionCategoryCounts']
+
+export type VirArithmeticDecisionStatus = 'continue' | 'pause' | 'stay-experimental'
+
+export interface VirDecisionModeTotals {
+  acceptedPlanned: number
+  acceptedDirect: number
+  rejectedDirect: number
+}
+
+export interface VirArithmeticDecisionAggregate {
+  totalCaseCount: number
+  totalFunctionCount: number
+  plannedAcceptedFunctionCount: number
+  directAcceptedFunctionCount: number
+  directRejectedFunctionCount: number
+  directSelectedFunctionCount: number
+  plannedSelectedFunctionCount: number
+  unsupportedFunctionCount: number
+  unsupportedCaseCount: number
+  rejectionCategoryTotals: VirToLirDecisionReport['rejectionCategoryCounts']
+  directCommandCount: number
+  plannedCommandCount: number
+  directScoreCopyCount: number
+  plannedScoreCopyCount: number
+  directVsPlannedCommandDelta: number
+  directVsPlannedScoreCopyDelta: number
+  directToPlannedScoreCopyReductionPercent: number
+  goNoGoStatus: VirArithmeticDecisionStatus
+}
+
+export interface VirArithmeticDecisionThresholds {
+  maxPlannedCommandDelta: number
+  minScoreCopyReductionPercent: number
+  maxAllocationFailureCount: number
+}
+
+export const VIR_ARITHMETIC_DECISION_THRESHOLDS: VirArithmeticDecisionThresholds = {
+  maxPlannedCommandDelta: 0,
+  minScoreCopyReductionPercent: 20,
+  maxAllocationFailureCount: 0,
+}
+
 export interface ScoreCopyPatternEntry {
   pattern: string
   count: number
@@ -143,6 +186,7 @@ export interface ArithmeticProbeResult {
     unsupportedFunctionCount: number
     rejectionCategoryCounts: VirToLirDecisionReport['rejectionCategoryCounts']
     unsupportedReason?: string
+    modeTotals?: VirDecisionModeTotals
   }
   warnings: string[]
 }
@@ -155,6 +199,7 @@ export interface ArithmeticProbeReport {
   scoreCopyPatterns: ScoreCopyPatternSummary
   copyOrigins?: CopyOriginSummary
   rewriteOpportunities: CopyRewriteOpportunitySummary
+  virDecisionDashboard: VirArithmeticDecisionAggregate
 }
 
 type ProbeCliArgs = ReturnType<typeof parseCliArgs> & {
@@ -851,6 +896,125 @@ function mergeCopyOrigins(summaries: CopyOriginSummary[]): CopyOriginSummary {
   return totals
 }
 
+function makeZeroRejectionCategoryTotals(): VirToLirDecisionReport['rejectionCategoryCounts'] {
+  return {
+    planned_unsupported: 0,
+    allocation_check_failed: 0,
+    higher_cost: 0,
+    direct_unsupported: 0,
+    unsupported_both: 0,
+  }
+}
+
+function makeZeroModeTotals(): VirDecisionModeTotals {
+  return {
+    acceptedPlanned: 0,
+    acceptedDirect: 0,
+    rejectedDirect: 0,
+  }
+}
+
+function summarizeVirDecisionModeTotals(
+  decision: VirToLirDecisionReport,
+): VirDecisionModeTotals {
+  const totals = makeZeroModeTotals()
+  for (const item of decision.decisions) {
+    if (item.status === 'accepted') {
+      if (item.selectedMode === 'planned') totals.acceptedPlanned += 1
+      else totals.acceptedDirect += 1
+      continue
+    }
+
+    if (item.status === 'rejected' && item.selectedMode === 'direct') {
+      totals.rejectedDirect += 1
+      continue
+    }
+  }
+
+  return totals
+}
+
+function mergeRejectionCategoryTotals(
+  out: VirToLirDecisionReport['rejectionCategoryCounts'],
+  source: VirToLirDecisionReport['rejectionCategoryCounts'],
+): void {
+  for (const key of Object.keys(source) as VirDecisionRejectionCategory[]) {
+    out[key] += source[key]
+  }
+}
+
+export function evaluateVirDecisionGoNoGoStatus(
+  totals: Omit<VirArithmeticDecisionAggregate, 'goNoGoStatus'>,
+  thresholds: VirArithmeticDecisionThresholds = VIR_ARITHMETIC_DECISION_THRESHOLDS,
+): VirArithmeticDecisionStatus {
+  if (totals.unsupportedCaseCount > 0) return 'stay-experimental'
+  if (totals.unsupportedFunctionCount > 0) return 'stay-experimental'
+  if (totals.rejectionCategoryTotals.allocation_check_failed > thresholds.maxAllocationFailureCount) return 'stay-experimental'
+  if (totals.totalFunctionCount <= 0) return 'stay-experimental'
+
+  const commandDeltaGood = totals.directVsPlannedCommandDelta <= thresholds.maxPlannedCommandDelta
+  const scoreCopyReductionGood =
+    totals.directToPlannedScoreCopyReductionPercent >= thresholds.minScoreCopyReductionPercent
+  return commandDeltaGood && scoreCopyReductionGood ? 'continue' : 'pause'
+}
+
+function buildVirArithmeticDecisionDashboard(cases: ArithmeticProbeResult[]): VirArithmeticDecisionAggregate {
+  const dashboard: VirArithmeticDecisionAggregate = {
+    totalCaseCount: 0,
+    totalFunctionCount: 0,
+    plannedAcceptedFunctionCount: 0,
+    directAcceptedFunctionCount: 0,
+    directRejectedFunctionCount: 0,
+    directSelectedFunctionCount: 0,
+    plannedSelectedFunctionCount: 0,
+    unsupportedFunctionCount: 0,
+    unsupportedCaseCount: 0,
+    rejectionCategoryTotals: makeZeroRejectionCategoryTotals(),
+    directCommandCount: 0,
+    plannedCommandCount: 0,
+    directScoreCopyCount: 0,
+    plannedScoreCopyCount: 0,
+    directVsPlannedCommandDelta: 0,
+    directVsPlannedScoreCopyDelta: 0,
+    directToPlannedScoreCopyReductionPercent: 0,
+    goNoGoStatus: 'pause',
+  }
+
+  for (const result of cases) {
+    const decision = result.virDecision
+    if (!decision) continue
+
+    dashboard.totalCaseCount += 1
+    dashboard.totalFunctionCount +=
+      decision.acceptedFunctionCount + decision.rejectedFunctionCount + decision.unsupportedFunctionCount
+    dashboard.unsupportedFunctionCount += decision.unsupportedFunctionCount
+    if (decision.status === 'unsupported') dashboard.unsupportedCaseCount += 1
+
+    const modeTotals = decision.modeTotals
+      ?? makeZeroModeTotals()
+    dashboard.plannedAcceptedFunctionCount += modeTotals.acceptedPlanned
+    dashboard.directAcceptedFunctionCount += modeTotals.acceptedDirect
+    dashboard.directRejectedFunctionCount += modeTotals.rejectedDirect
+    dashboard.directSelectedFunctionCount += modeTotals.acceptedDirect + modeTotals.rejectedDirect
+    dashboard.plannedSelectedFunctionCount += modeTotals.acceptedPlanned
+
+    dashboard.directCommandCount += decision.directCommandCount
+    dashboard.plannedCommandCount += decision.plannedCommandCount
+    dashboard.directScoreCopyCount += decision.directScoreCopyCount
+    dashboard.plannedScoreCopyCount += decision.plannedScoreCopyCount
+    mergeRejectionCategoryTotals(dashboard.rejectionCategoryTotals, decision.rejectionCategoryCounts)
+  }
+
+  dashboard.directVsPlannedCommandDelta = dashboard.plannedCommandCount - dashboard.directCommandCount
+  dashboard.directVsPlannedScoreCopyDelta = dashboard.plannedScoreCopyCount - dashboard.directScoreCopyCount
+  dashboard.directToPlannedScoreCopyReductionPercent = dashboard.directScoreCopyCount === 0
+    ? 0
+    : ((dashboard.directScoreCopyCount - dashboard.plannedScoreCopyCount) / dashboard.directScoreCopyCount) * 100
+
+  dashboard.goNoGoStatus = evaluateVirDecisionGoNoGoStatus(dashboard)
+  return dashboard
+}
+
 export function summarizeCommandCategories(files: Array<{ path: string; content: string }>): CommandCategorySummary {
   const lines = commandLines(files)
   const count = (predicate: (line: string) => boolean): number => lines.filter(predicate).length
@@ -880,6 +1044,7 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
   const virDecision = mirLowering.kind === 'ok'
     ? (() => {
       const decision = chooseVirLoweringPlan(mirLowering.module, { runAllocationCheck: true })
+      const modeTotals = summarizeVirDecisionModeTotals(decision)
       return {
         status: decision.kind,
         selectedMode: decision.selectedMode,
@@ -891,6 +1056,7 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
         rejectedFunctionCount: decision.rejectedFunctionCount,
         unsupportedFunctionCount: decision.unsupportedFunctionCount,
         rejectionCategoryCounts: decision.rejectionCategoryCounts,
+        modeTotals,
         unsupportedReason: decision.unsupportedReason,
       }
     })()
@@ -910,6 +1076,11 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
         higher_cost: 0,
         direct_unsupported: 0,
         unsupported_both: 0,
+      },
+      modeTotals: {
+        acceptedPlanned: 0,
+        acceptedDirect: 0,
+        rejectedDirect: 0,
       },
       unsupportedReason: mirLowering.kind === 'unsupported' ? mirLowering.reason : undefined,
     }
@@ -952,6 +1123,7 @@ export function runArithmeticProbeReport(caseName = 'all', optLevels: Optimizati
     scoreCopyPatterns: mergeScoreCopyPatterns(cases.map(result => result.scoreCopyPatterns)),
     copyOrigins: mergeCopyOrigins(cases.map(result => result.copyOrigins)),
     rewriteOpportunities: mergeRewriteOpportunities(cases.map(result => result.rewriteOpportunities)),
+    virDecisionDashboard: buildVirArithmeticDecisionDashboard(cases),
   }
 }
 

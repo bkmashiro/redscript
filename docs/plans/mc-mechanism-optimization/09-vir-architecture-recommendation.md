@@ -9,7 +9,7 @@ Current implementation posture for this branch:
 - Slot-planner v1 now exists experimentally for arithmetic-only VIR: live intervals, destructive-lhs affinity, commutative operand choice, `$ret` precoloring, parallel-copy resolution, and allocation checks.
 - Unsupported MIR shapes and unsupported lowerings must return explicit `unsupported` reasons and stay as fallback boundaries.
 - Production handoff remains pending until the benchmark decision gate proves net value.
-- Step-10 status remains an isolated prototype decision-gate experiment; it currently influences only experimental tests/probes, not compiler defaults.
+- Step-10 status remains an isolated prototype decision-gate experiment; it currently influences only experimental tests/probes, not compiler defaults. Step-11 adds a close-report dashboard to decide whether the spike stays experimental or continues.
 
 ## Executive recommendation
 

@@ -304,6 +304,76 @@ implementation did not force broad MIR/LIR churn
 
 If these do not hold, stop after keeping the useful LIR infra.
 
+## Step 11 — VIR arithmetic spike close decision dashboard
+
+**Status:** Completed (Batch 23) for experimental reporting only.
+
+### Objective
+
+Produce a stable aggregate dashboard from arithmetic probe output so this step can decide whether the arithmetic-only VIR spike should continue, pause, or stay experimental-only.
+
+### Outputs
+
+`bench:arithmetic --case all --opt 1` now emits aggregate fields:
+
+```ts
+interface VirArithmeticDecisionAggregate {
+  totalCaseCount: number
+  totalFunctionCount: number
+  plannedAcceptedFunctionCount: number
+  directAcceptedFunctionCount: number
+  directRejectedFunctionCount: number
+  directSelectedFunctionCount: number
+  plannedSelectedFunctionCount: number
+  unsupportedFunctionCount: number
+  unsupportedCaseCount: number
+  rejectionCategoryTotals: Record<VirDecisionRejectionCategory, number>
+  directCommandCount: number
+  plannedCommandCount: number
+  directScoreCopyCount: number
+  plannedScoreCopyCount: number
+  directVsPlannedCommandDelta: number
+  directVsPlannedScoreCopyDelta: number
+  directToPlannedScoreCopyReductionPercent: number
+  goNoGoStatus: VirArithmeticDecisionStatus
+}
+```
+
+`VirArithmeticDecision` remains compatible at a per-case level and adds `modeTotals` as a non-breaking optional extension.
+
+### Current dashboard snapshot (run 2026-06-25T19:39:46.631Z)
+
+- `totalCaseCount: 9`
+- `totalFunctionCount: 2`
+- `plannedAcceptedFunctionCount: 2`
+- `directAcceptedFunctionCount: 0`
+- `unsupportedCaseCount: 7`
+- `directCommandCount: 22`
+- `plannedCommandCount: 16`
+- `directScoreCopyCount: 8`
+- `plannedScoreCopyCount: 2`
+- `directVsPlannedCommandDelta: -6`
+- `directVsPlannedScoreCopyDelta: -6`
+- `directToPlannedScoreCopyReductionPercent: 75`
+- `goNoGoStatus: 'stay-experimental'`
+
+### Decision
+
+Keep **VIR in experimental-only** mode for now.
+
+### Prerequisites before production integration
+
+1. The benchmark gate reaches `goNoGoStatus === 'continue'` for a representative arithmetic corpus, not only probe shape.
+2. Direct vs planned behavior is validated with deterministic Paper/TestHarnessPlugin checks (not offline/skipped runs).
+3. Unsupported case ratio is materially reduced and/or explicitly bounded by policy.
+4. No semantic/proto changes are made to production default pipeline outside the isolated experiment.
+
+### Next (if continue)
+
+1. Expand the Paper-backed oracle coverage for arithmetic-heavy helpers and helpers with call boundaries.
+2. Raise VIR compatibility for currently rejected arithmetic-adjacent patterns under clear safety constraints.
+3. Add a production-safe integration gate behind an explicit feature flag and staged rollout plan.
+
 ## Recommended execution order
 
 ```text
@@ -317,6 +387,9 @@ If these do not hold, stop after keeping the useful LIR infra.
 8. VIR optimizer passes
 9. Slot planner v1
 10. Benchmark decision gate
+11. Step-11 decision dashboard + explicit close-review and recommendation
 ```
 
 The first four steps are useful even if VIR is never built. Steps 5–10 should be treated as a bounded spike, not a permanent rewrite commitment.
+
+Step-11 close decision details are captured in [13-vir-spike-close-report.md](13-vir-spike-close-report.md).

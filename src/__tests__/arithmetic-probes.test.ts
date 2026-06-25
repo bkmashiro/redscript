@@ -1,5 +1,7 @@
 import {
   ARITHMETIC_PROBES,
+  VIR_ARITHMETIC_DECISION_THRESHOLDS,
+  evaluateVirDecisionGoNoGoStatus,
   runArithmeticProbeReport,
   summarizeCommandCategories,
   summarizeCommandCosts,
@@ -151,6 +153,80 @@ describe('arithmetic probe benchmark tooling', () => {
     }
   })
 
+  it('builds a VIR decision aggregate dashboard for all selected cases', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    const dashboard = report.virDecisionDashboard
+
+    expect(dashboard.totalCaseCount).toBe(report.cases.length)
+
+    const functionCount = report.cases.reduce((total, result) => {
+      const decision = result.virDecision
+      if (!decision) return total
+      return total + decision.acceptedFunctionCount + decision.rejectedFunctionCount + decision.unsupportedFunctionCount
+    }, 0)
+    expect(dashboard.totalFunctionCount).toBe(functionCount)
+
+    expect(dashboard.rejectionCategoryTotals).toEqual(expect.objectContaining({
+      planned_unsupported: expect.any(Number),
+      allocation_check_failed: expect.any(Number),
+      higher_cost: expect.any(Number),
+      direct_unsupported: expect.any(Number),
+      unsupported_both: expect.any(Number),
+    }))
+    expect(dashboard.goNoGoStatus).toMatch(/^(continue|pause|stay-experimental)$/)
+  })
+
+  it('merges rejection-category totals deterministically across all cases', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    const merged = {
+      planned_unsupported: 0,
+      allocation_check_failed: 0,
+      higher_cost: 0,
+      direct_unsupported: 0,
+      unsupported_both: 0,
+    }
+
+    for (const result of report.cases) {
+      if (!result.virDecision) continue
+      merged.planned_unsupported += result.virDecision.rejectionCategoryCounts.planned_unsupported
+      merged.allocation_check_failed += result.virDecision.rejectionCategoryCounts.allocation_check_failed
+      merged.higher_cost += result.virDecision.rejectionCategoryCounts.higher_cost
+      merged.direct_unsupported += result.virDecision.rejectionCategoryCounts.direct_unsupported
+      merged.unsupported_both += result.virDecision.rejectionCategoryCounts.unsupported_both
+    }
+
+    expect(report.virDecisionDashboard.rejectionCategoryTotals).toEqual(merged)
+  })
+
+  it('computes direct/planned command and score_copy deltas at aggregate level', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    const dashboard = report.virDecisionDashboard
+
+    const totalDirectCommands = report.cases.reduce(
+      (sum, result) => sum + (result.virDecision?.directCommandCount ?? 0),
+      0,
+    )
+    const totalPlannedCommands = report.cases.reduce(
+      (sum, result) => sum + (result.virDecision?.plannedCommandCount ?? 0),
+      0,
+    )
+    const totalDirectScoreCopies = report.cases.reduce(
+      (sum, result) => sum + (result.virDecision?.directScoreCopyCount ?? 0),
+      0,
+    )
+    const totalPlannedScoreCopies = report.cases.reduce(
+      (sum, result) => sum + (result.virDecision?.plannedScoreCopyCount ?? 0),
+      0,
+    )
+
+    expect(dashboard.directCommandCount).toBe(totalDirectCommands)
+    expect(dashboard.plannedCommandCount).toBe(totalPlannedCommands)
+    expect(dashboard.directScoreCopyCount).toBe(totalDirectScoreCopies)
+    expect(dashboard.plannedScoreCopyCount).toBe(totalPlannedScoreCopies)
+    expect(dashboard.directVsPlannedCommandDelta).toBe(totalPlannedCommands - totalDirectCommands)
+    expect(dashboard.directVsPlannedScoreCopyDelta).toBe(totalPlannedScoreCopies - totalDirectScoreCopies)
+  })
+
   it('reports estimated static cost dimensions for execute, selectors, NBT, macros, and setup hints', () => {
     const summary = summarizeCommandCosts([
       {
@@ -210,6 +286,7 @@ describe('arithmetic probe benchmark tooling', () => {
       direct_unsupported: expect.any(Number),
       unsupported_both: expect.any(Number),
     }))
+    expect(result.virDecision?.modeTotals).toBeDefined()
   })
 
   it('merges VIR decision payload while keeping probe output stable', () => {
@@ -220,6 +297,70 @@ describe('arithmetic probe benchmark tooling', () => {
       if (result.virDecision?.status === 'unsupported') {
         expect(result.virDecision.unsupportedReason).toBeDefined()
       }
+    }
+  })
+
+  it('evaluates VIR go/no-go states deterministically for synthetic inputs', () => {
+    const base = {
+      totalCaseCount: 3,
+      totalFunctionCount: 3,
+      plannedAcceptedFunctionCount: 3,
+      directAcceptedFunctionCount: 0,
+      directRejectedFunctionCount: 0,
+      directSelectedFunctionCount: 0,
+      plannedSelectedFunctionCount: 3,
+      unsupportedFunctionCount: 0,
+      unsupportedCaseCount: 0,
+      rejectionCategoryTotals: {
+        planned_unsupported: 0,
+        allocation_check_failed: 0,
+        higher_cost: 0,
+        direct_unsupported: 0,
+        unsupported_both: 0,
+      },
+      directCommandCount: 150,
+      plannedCommandCount: 120,
+      directScoreCopyCount: 90,
+      plannedScoreCopyCount: 70,
+      directVsPlannedCommandDelta: -30,
+      directVsPlannedScoreCopyDelta: -20,
+      directToPlannedScoreCopyReductionPercent: 22.2,
+    }
+
+    expect(evaluateVirDecisionGoNoGoStatus(base)).toBe('continue')
+    expect(evaluateVirDecisionGoNoGoStatus(base)).toBe('continue')
+
+    expect(evaluateVirDecisionGoNoGoStatus({
+      ...base,
+      unsupportedCaseCount: 1,
+    })).toBe('stay-experimental')
+
+    expect(evaluateVirDecisionGoNoGoStatus({
+      ...base,
+      rejectionCategoryTotals: {
+        ...base.rejectionCategoryTotals,
+        allocation_check_failed: 1,
+      },
+    })).toBe('stay-experimental')
+
+    expect(evaluateVirDecisionGoNoGoStatus({
+      ...base,
+      directToPlannedScoreCopyReductionPercent: 5,
+      directVsPlannedScoreCopyDelta: -10,
+      plannedScoreCopyCount: 86,
+      directScoreCopyCount: 90,
+    }, {
+      ...VIR_ARITHMETIC_DECISION_THRESHOLDS,
+      minScoreCopyReductionPercent: 20,
+    })).toBe('pause')
+  })
+
+  it('does not treat unsupported probe cases as pass-like go/no-go state', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    const dashboard = report.virDecisionDashboard
+
+    if (dashboard.unsupportedCaseCount > 0) {
+      expect(dashboard.goNoGoStatus).toBe('stay-experimental')
     }
   })
 })
