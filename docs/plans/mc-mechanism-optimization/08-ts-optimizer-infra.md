@@ -61,6 +61,13 @@ rewrite safety predicate
 
 If yes, extend `analysis.ts` or add a sibling support module first, then write the optimizer rule on top of that API.
 
+Batch 20 update: continue conservative by default.
+
+- keep optimizer rewrites in the existing `src/optimizer/lir/*` path while they are proven;
+- keep `raw`/`macro`/call/storage barriers hard in rewrite matching;
+- keep protected slots out of unsafe copy forwarding;
+- leave full VIR implementation out of production until a spike proves measurable benefit and safety.
+
 ## What not to do yet
 
 Do not add a full VIR/SSA production layer until the TS support stack proves it can remove duplication and protect correctness in the current LIR optimizer. The intended shape, if the spike is justified, is documented in [09 — VIR architecture recommendation](./09-vir-architecture-recommendation.md): thin SSA value layer, Minecraft-aware semantics, target-independent locations, then MC legalization and slot planning.

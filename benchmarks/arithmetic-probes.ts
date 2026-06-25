@@ -10,7 +10,7 @@ import {
   writeJsonReport,
 } from './_shared'
 import type { Slot } from '../src/lir/types'
-import { sameSlot } from '../src/optimizer/lir/analysis'
+import { isProtectedSlot, sameSlot } from '../src/optimizer/lir/analysis'
 
 export interface ArithmeticProbeCase {
   name: string
@@ -42,6 +42,24 @@ export interface CopyOriginSummary {
   edgeOrWrapper: number
   opaqueBarrier: number
   unknown: number
+}
+
+export type CopyRewriteStatus = 'currentlyOptimized' | 'safeCandidate' | 'blockedByBarrier' | 'unknown'
+
+export interface CopyRewriteOpportunityEntry {
+  status: CopyRewriteStatus
+  pattern: string
+  count: number
+  examples: string[]
+}
+
+export interface CopyRewriteOpportunitySummary {
+  total: number
+  currentlyOptimized: number
+  safeCandidate: number
+  blockedByBarrier: number
+  unknown: number
+  topOpportunities: CopyRewriteOpportunityEntry[]
 }
 
 export interface ForkEstimate {
@@ -110,6 +128,7 @@ export interface ArithmeticProbeResult {
   estimatedCost: ArithmeticCostEstimate
   copyOrigins: CopyOriginSummary
   scoreCopyPatterns: ScoreCopyPatternSummary
+  rewriteOpportunities: CopyRewriteOpportunitySummary
   warnings: string[]
 }
 
@@ -120,6 +139,7 @@ export interface ArithmeticProbeReport {
   cases: ArithmeticProbeResult[]
   scoreCopyPatterns: ScoreCopyPatternSummary
   copyOrigins?: CopyOriginSummary
+  rewriteOpportunities: CopyRewriteOpportunitySummary
 }
 
 type ProbeCliArgs = ReturnType<typeof parseCliArgs> & {
@@ -442,8 +462,18 @@ function isScoreCopy(line: string): boolean {
   return /^scoreboard players operation \S+ \S+ = \S+ \S+$/.test(line)
 }
 
-function isScoreArithmetic(line: string): boolean {
-  return /^scoreboard players operation \S+ \S+ (?:[+\-*/%]=|[<>]=) \S+ \S+$/.test(line)
+interface ScoreArithmetic {
+  dst: Slot
+  src: Slot
+}
+
+function parseScoreArithmetic(line: string): ScoreArithmetic | null {
+  const match = /^scoreboard players operation (\S+) (\S+) (?:[+\-*/%]=|[<>]=) (\S+) (\S+)$/.exec(line)
+  if (!match) return null
+  return {
+    dst: { player: match[1], obj: match[2] },
+    src: { player: match[3], obj: match[4] },
+  }
 }
 
 function parseScoreCopy(line: string): { dst: Slot; src: Slot } | null {
@@ -456,7 +486,17 @@ function parseScoreCopy(line: string): { dst: Slot; src: Slot } | null {
 }
 
 function isBarrierLine(line: string): boolean {
-  return line.startsWith('$') || line.includes(' run function ') || line.startsWith('function ')
+  return line.startsWith('$')
+    || line.includes(' run function ')
+    || line.startsWith('function ')
+    || line.includes(' function ')
+}
+
+function parseReturnValueSlot(line: string): Slot | null {
+  const returnScoreMatch = /^return run scoreboard players get (\S+) (\S+)$/.exec(line)
+  if (returnScoreMatch) return { player: returnScoreMatch[1], obj: returnScoreMatch[2] }
+  const returnValueMatch = /^return (?:scoreboard players get )?(\S+) (\S+)$/.exec(line)
+  return returnValueMatch ? { player: returnValueMatch[1], obj: returnValueMatch[2] } : null
 }
 
 function classifyCopyOrigin(
@@ -481,11 +521,13 @@ function classifyCopyOrigin(
 
   const previous = previousLine ? parseScoreCopy(previousLine) : null
   const next = nextLine ? parseScoreCopy(nextLine) : null
+  const previousArithmetic = previousLine ? parseScoreArithmetic(previousLine) : null
+  const nextArithmetic = nextLine ? parseScoreArithmetic(nextLine) : null
   if (
     (previous && (sameSlot(previous.dst, parsed.dst) || sameSlot(previous.src, parsed.dst))) ||
     (next && (sameSlot(next.dst, parsed.dst) || sameSlot(next.src, parsed.dst))) ||
-    isScoreArithmetic(previousLine ?? '') ||
-    isScoreArithmetic(nextLine ?? '')
+    (previousArithmetic && (sameSlot(previousArithmetic.dst, parsed.src) || sameSlot(previousArithmetic.dst, parsed.dst) || sameSlot(previousArithmetic.src, parsed.dst))) ||
+    (nextArithmetic && (sameSlot(nextArithmetic.dst, parsed.src) || sameSlot(nextArithmetic.dst, parsed.dst) || sameSlot(nextArithmetic.src, parsed.dst)))
   ) {
     return 'twoAddressMaterialization'
   }
@@ -500,6 +542,177 @@ function classifyCopyOrigin(
   }
 
   return 'unknown'
+}
+
+function describeCopyRewritePattern(previous: string | undefined, current: string, next: string | undefined): string {
+  return `${commandShape(previous)} -> score_copy -> ${commandShape(next)}`
+}
+
+function classifyCopyRewriteOpportunity(
+  currentLine: string,
+  previousLine: string | undefined,
+  nextLine: string | undefined,
+  nextNextLine: string | undefined,
+): { status: CopyRewriteStatus; pattern: string } | null {
+  const parsed = parseScoreCopy(currentLine)
+  if (!parsed) return null
+
+  const pattern = describeCopyRewritePattern(previousLine, currentLine, nextLine)
+  if (sameSlot(parsed.src, parsed.dst)) {
+    return { status: 'currentlyOptimized', pattern }
+  }
+
+  if (isProtectedSlot(parsed.src) || isProtectedSlot(parsed.dst)) {
+    return { status: 'unknown', pattern }
+  }
+
+  const nextCopy = nextLine ? parseScoreCopy(nextLine) : null
+  const nextArithmetic = nextLine ? parseScoreArithmetic(nextLine) : null
+  const nextReturn = nextLine ? parseReturnValueSlot(nextLine) : null
+  const nextNextCopy = nextNextLine ? parseScoreCopy(nextNextLine) : null
+  const nextNextArithmetic = nextNextLine ? parseScoreArithmetic(nextNextLine) : null
+  const nextNextReturn = nextNextLine ? parseReturnValueSlot(nextNextLine) : null
+
+  const blockedByBarrier =
+    isBarrierLine(nextLine ?? '')
+    && (
+      (nextNextCopy && sameSlot(nextNextCopy.src, parsed.dst)) ||
+      (nextNextArithmetic && sameSlot(nextNextArithmetic.dst, parsed.dst)) ||
+      (nextNextReturn && sameSlot(nextNextReturn, parsed.dst))
+    )
+
+  if (nextCopy && sameSlot(nextCopy.src, parsed.dst)) {
+    if (blockedByBarrier) return { status: 'blockedByBarrier', pattern: `${commandShape(currentLine)} -> ${commandShape(nextLine)} -> ${commandShape(nextNextLine)}` }
+    return { status: 'currentlyOptimized', pattern: 'copy -> copy'}
+  }
+
+  if (nextArithmetic && sameSlot(nextArithmetic.dst, parsed.dst)) {
+    if (isBarrierLine(nextLine ?? '')) return { status: 'blockedByBarrier', pattern }
+    return { status: 'safeCandidate', pattern: `${commandShape(currentLine)} -> score_arith` }
+  }
+
+  if (nextReturn && sameSlot(nextReturn, parsed.dst)) {
+    if (isBarrierLine(nextLine ?? '')) return { status: 'blockedByBarrier', pattern }
+    if (nextNextCopy && sameSlot(nextNextCopy.src, parsed.dst)) return { status: 'safeCandidate', pattern }
+    return { status: 'currentlyOptimized', pattern: 'copy -> return' }
+  }
+
+  if (nextNextCopy && sameSlot(nextNextCopy.src, parsed.dst) && isBarrierLine(nextLine ?? '')) {
+    return { status: 'blockedByBarrier', pattern: `${commandShape(currentLine)} -> barrier -> ${commandShape(nextNextLine)}` }
+  }
+
+  if (
+    (nextNextArithmetic && sameSlot(nextNextArithmetic.dst, parsed.dst) && isBarrierLine(nextLine ?? ''))
+    || (nextNextReturn && sameSlot(nextNextReturn, parsed.dst) && isBarrierLine(nextLine ?? ''))
+  ) {
+    return { status: 'blockedByBarrier', pattern: `${commandShape(currentLine)} -> barrier -> ${commandShape(nextNextLine)}` }
+  }
+
+  if (
+    (nextNextCopy && sameSlot(nextNextCopy.src, parsed.dst))
+    || (nextNextArithmetic && sameSlot(nextNextArithmetic.dst, parsed.dst))
+    || (nextNextReturn && sameSlot(nextNextReturn, parsed.dst))
+  ) {
+    return { status: 'safeCandidate', pattern }
+  }
+
+  return { status: 'unknown', pattern }
+}
+
+function summarizeRewriteOpportunities(lines: Array<{ path: string; line: number; content: string }>): CopyRewriteOpportunitySummary {
+  const totals: CopyRewriteOpportunitySummary = {
+    total: 0,
+    currentlyOptimized: 0,
+    safeCandidate: 0,
+    blockedByBarrier: 0,
+    unknown: 0,
+    topOpportunities: [],
+  }
+
+  const buckets = new Map<string, CopyRewriteOpportunityEntry>()
+
+  for (let i = 0; i < lines.length; i++) {
+    const current = lines[i]
+    if (!isScoreCopy(current.content)) continue
+
+    const entry = classifyCopyRewriteOpportunity(
+      current.content,
+      i > 0 && lines[i - 1].path === current.path ? lines[i - 1].content : undefined,
+      i + 1 < lines.length && lines[i + 1].path === current.path ? lines[i + 1].content : undefined,
+      i + 2 < lines.length && lines[i + 2].path === current.path ? lines[i + 2].content : undefined,
+    )
+    if (!entry) continue
+
+    totals.total += 1
+    if (entry.status === 'currentlyOptimized') totals.currentlyOptimized += 1
+    if (entry.status === 'safeCandidate') totals.safeCandidate += 1
+    if (entry.status === 'blockedByBarrier') totals.blockedByBarrier += 1
+    if (entry.status === 'unknown') totals.unknown += 1
+
+    const key = `${entry.status}|${entry.pattern}`
+    let bucket = buckets.get(key)
+    if (!bucket) {
+      bucket = {
+        status: entry.status,
+        pattern: entry.pattern,
+        count: 0,
+        examples: [],
+      }
+      buckets.set(key, bucket)
+    }
+    bucket.count += 1
+    if (bucket.examples.length < 3) bucket.examples.push(`${current.path}:${current.line}: ${current.content}`)
+  }
+
+  const sorted = [...buckets.values()].sort((a, b) =>
+    b.count - a.count || a.pattern.localeCompare(b.pattern) || a.status.localeCompare(b.status))
+
+  totals.topOpportunities = sorted
+
+  return totals
+}
+
+function mergeRewriteOpportunities(summaries: CopyRewriteOpportunitySummary[]): CopyRewriteOpportunitySummary {
+  const totals: CopyRewriteOpportunitySummary = {
+    total: 0,
+    currentlyOptimized: 0,
+    safeCandidate: 0,
+    blockedByBarrier: 0,
+    unknown: 0,
+    topOpportunities: [],
+  }
+
+  const merged = new Map<string, CopyRewriteOpportunityEntry>()
+
+  for (const summary of summaries) {
+    totals.total += summary.total
+    totals.currentlyOptimized += summary.currentlyOptimized
+    totals.safeCandidate += summary.safeCandidate
+    totals.blockedByBarrier += summary.blockedByBarrier
+    totals.unknown += summary.unknown
+    for (const item of summary.topOpportunities) {
+      const key = `${item.status}|${item.pattern}`
+      let entry = merged.get(key)
+      if (!entry) {
+        entry = {
+          status: item.status,
+          pattern: item.pattern,
+          count: 0,
+          examples: [],
+        }
+        merged.set(key, entry)
+      }
+      entry.count += item.count
+      for (const example of item.examples) {
+        if (entry.examples.length >= 3) break
+        entry.examples.push(example)
+      }
+    }
+  }
+
+  totals.topOpportunities = [...merged.values()].sort((a, b) =>
+    b.count - a.count || a.pattern.localeCompare(b.pattern) || a.status.localeCompare(b.status))
+  return totals
 }
 
 function summarizeCopyOrigins(lines: Array<{ path: string; line: number; content: string }>): CopyOriginSummary {
@@ -665,6 +878,7 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
     estimatedCost: summarizeCommandCosts(result.files),
     copyOrigins: summarizeCopyOrigins(lines),
     scoreCopyPatterns: summarizeScoreCopyPatterns(result.files),
+    rewriteOpportunities: summarizeRewriteOpportunities(lines),
     warnings: result.warnings,
   }
 }
@@ -683,6 +897,7 @@ export function runArithmeticProbeReport(caseName = 'all', optLevels: Optimizati
     cases,
     scoreCopyPatterns: mergeScoreCopyPatterns(cases.map(result => result.scoreCopyPatterns)),
     copyOrigins: mergeCopyOrigins(cases.map(result => result.copyOrigins)),
+    rewriteOpportunities: mergeRewriteOpportunities(cases.map(result => result.rewriteOpportunities)),
   }
 }
 

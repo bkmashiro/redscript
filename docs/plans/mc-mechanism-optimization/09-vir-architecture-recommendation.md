@@ -319,6 +319,42 @@ Slot planning v1:
 
 Do not start with graph coloring. Scoreboard slots are not scarce CPU registers; the objective is minimizing copy commands and clobber risk.
 
+## Copy-pressure handling policy for this batch (Batch 20)
+
+The following is the current operating split for copy-pressure reduction:
+
+- LIR harness should solve:
+  - adjacent and short copy chains through plain scoreboard instructions
+  - local dead-temp overwrite/copy-forwarding patterns
+  - local return materialization with explicit dead-temp safety
+  - pure source-loc-preserving collapse where barriers and protected slots are absent
+- LIR should stay conservative on:
+  - any pattern crossing `raw`, `macro_line`, `call*`, `store_*_to_*`, or storage-visible command barriers
+  - opaque selectors/`return` side-conditions that are not expressible as local slot liveness
+  - ABI slot classes treated as protected (`$ret`, `$ret_*`, `$pN`, `__rf_*`, `__const_*`, `__opt_*`)
+
+VIR (Phase-0 only) may be useful for cases that require global SSA/liveness reasoning beyond current local windows, such as:
+
+- cross-function copy materialization decisions driven by argument/result flow
+- repeated expression-value reuse before destructive-binding to fixed slots
+- block-level copy coalescing when temporary identity is carried through many instructions
+
+For this roadmap, those cases remain diagnostics-first:
+
+- `call`/`macro`/`raw`/storage barriers split the value flow graph into conservative blocks
+- unknown origin lines where textual slot provenance is ambiguous
+- copy chains that need cross-function or inter-block proof of liveness
+
+Phase-0 VIR spike acceptance criteria:
+
+- no behavior change in current compiler output semantics
+- deterministic verifier-backed parsing/printing for a tiny arithmetic-only subset
+- a narrow compare between old/new path on arithmetic probes
+- unchanged pass output when the pattern is already covered by existing LIR rules
+- and **no production integration** until the spike is formally closed as useful
+
+Explicitly: full VIR is **not** implemented today; it remains a bounded experiment path only.
+
 Constants:
 
 - `score_set` for direct literal set;

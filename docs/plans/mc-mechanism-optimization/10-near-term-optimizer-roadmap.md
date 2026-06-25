@@ -90,9 +90,9 @@ function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseInfo
 
 ## Step 4 — Copy-origin diagnostics in arithmetic probes
 
-**Status:** Completed (Batch 19) with conservative `copyOrigins` buckets in probe output and aggregations.
+**Status:** Expanded in Batch 20.
 
-**Objective:** Make copy pressure actionable before building VIR.
+**Objective:** Make copy pressure actionable before deciding on VIR scope.
 
 **Files:**
 
@@ -110,13 +110,19 @@ copyOrigins.returnMaterialization
 copyOrigins.edgeOrWrapper
 copyOrigins.opaqueBarrier
 copyOrigins.unknown
+copyRewriteOpportunities.currentlyOptimized
+copyRewriteOpportunities.safeCandidate
+copyRewriteOpportunities.blockedByBarrier
+copyRewriteOpportunities.unknown
 ```
 
-**Why:** The current adjacent pattern counts show where `score_copy` occurs but not why it exists. VIR/slot-planning work should be judged by reducing the high-value origins, not by shaving arbitrary copies.
+**Why:** The adjacent pattern counts now show both source and status: which copy shapes are already covered by optimizer behavior, which are safe candidates, and which are currently blocked by conservative barriers.
+
+**Update:** Per-case/aggregated top rewrite opportunities are included in benchmark output to support triage without changing compiler behavior.
 
 ## Step 5 — VIR ADR / open-question closure
 
-**Status:** Not started.
+**Status:** Batch 20 closure.
 
 **Objective:** Convert [09](./09-vir-architecture-recommendation.md)'s open questions into short answers before code starts.
 
@@ -127,12 +133,30 @@ copyOrigins.unknown
 
 **Must answer first:**
 
-1. Is current MIR SSA-like enough to lower cleanly?
-2. What is the complete `$pN/$ret` clobber set?
-3. Are helpers allowed to read caller temporaries?
-4. What is the recursion/reentrancy/coroutine safety policy?
-5. How should `execute as @e[...] run function` interact with shared fake-player temps?
-6. Which raw/macro cases can require effect annotations later?
+1. Which copy-pressure cases does the current LIR harness already cover?
+2. Which cases remain diagnostics-only or unsafe due barriers?
+3. What are the minimum requirements for a contained VIR phase-0 experiment?
+4. What is the complete `$pN/$ret` clobber set?
+5. Are helpers allowed to read caller temporaries?
+6. What is the recursion/reentrancy/coroutine safety policy?
+7. How should `execute as @e[...] run function` interact with shared fake-player temps?
+8. Which raw/macro cases can require effect annotations later?
+
+### Batch-20 resolution
+
+- **LIR-owned (production-safe):**
+  - local copy chains with matching objectives
+  - direct dead-temp overwrite elimination
+  - source-loc-preserving local copy collapse and return-materialization
+- **Diagnostics-only (for now):**
+  - cases that cross `raw` / `macro_line` / `call*` / storage-visible barriers
+  - copy chains that require non-local liveness or cross-function reasoning
+  - ambiguous origin at present from conservative probe-level text analysis
+- **VIR phase-0 acceptance criteria (experimental only):**
+  - tiny arithmetic-only path behind a feature gate
+  - no production compiler integration
+  - no behavioral change in existing paths
+  - benchmark command-shape deltas + allocation checks are stable or improved
 
 **Success criterion:** A small ADR says exactly what the first VIR spike supports and what falls back.
 

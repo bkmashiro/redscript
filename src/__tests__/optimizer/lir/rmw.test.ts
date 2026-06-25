@@ -1,6 +1,8 @@
 import fc from 'fast-check'
 import { scoreboardRmwPass, scoreboardRmwPassModule } from '../../../optimizer/lir/rmw'
 import type { LIRFunction, LIRInstr, LIRModule, Slot } from '../../../lir/types'
+import { isProtectedSlot } from '../../../optimizer/lir/analysis'
+import type { SourceLoc } from '../../../mir/types'
 
 const obj = '__test'
 
@@ -32,6 +34,33 @@ describe('LIR scoreboard RMW optimizer', () => {
         const once = scoreboardRmwPass(fn)
         const twice = scoreboardRmwPass(once)
         expect(twice).toEqual(once)
+      },
+    ))
+  })
+
+  test('collapses randomized longer copy chains through dead temporaries', () => {
+    fc.assert(fc.property(
+      fc.integer({ min: 1, max: 2 }),
+      (chainLength) => {
+        const src = mkSlot('$src')
+        const out = mkSlot('$out')
+        const copies = Array.from({ length: chainLength + 1 }).map((_, index) => mkSlot(`$tmp${index}`))
+        const sourceLoc: SourceLoc = { file: 'test', line: 1, col: 1 }
+        const instrs: LIRInstr[] = [
+          { kind: 'score_copy', dst: copies[0], src, sourceLoc },
+          ...copies.slice(0, -1).map((dst, index) => ({
+            kind: 'score_copy',
+            dst: copies[index + 1],
+            src: copies[index],
+          } as const)),
+          { kind: 'score_copy', dst: out, src: copies[copies.length - 1] } as const,
+        ]
+
+        const result = scoreboardRmwPass(mkFn(instrs))
+
+        expect(result.instructions).toEqual([
+          { kind: 'score_copy', dst: out, src, sourceLoc },
+        ])
       },
     ))
   })
@@ -70,6 +99,79 @@ describe('LIR scoreboard RMW optimizer', () => {
     expect(result.instructions).toEqual([
       { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
     ])
+  })
+
+  test('collapses longer copy chains while preserving source location on retained copies', () => {
+    const copied = {
+      kind: 'score_copy' as const,
+      dst: mkSlot('$tmp0'),
+      src: mkSlot('$src'),
+      sourceLoc: { file: 'test', line: 1, col: 1 } as const,
+    }
+    const fn = mkFn([
+      copied,
+      { kind: 'score_copy', dst: mkSlot('$tmp1'), src: mkSlot('$tmp0') },
+      { kind: 'score_copy', dst: mkSlot('$tmp2'), src: mkSlot('$tmp1') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp2') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result.instructions).toEqual([
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src'), sourceLoc: copied.sourceLoc },
+    ])
+  })
+
+  test('removes temporary writes that are immediately overwritten without intervening reads', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_set', dst: mkSlot('$tmp'), value: 1 },
+      { kind: 'score_add', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$tmp'), value: 1 },
+      { kind: 'score_add', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ])
+  })
+
+  test('does not remove overwrite candidate when immediate overwrite reads the slot again', () => {
+    fc.assert(fc.property(
+      fc.stringMatching(/^\$[a-z]{1,8}$/),
+      fc.integer({ min: 1, max: 16 }),
+      fc.integer({ min: -12, max: 12 }),
+      (tempName, rhsValue, rhsScore) => {
+        fc.pre(!isProtectedSlot(mkSlot(tempName)))
+        const temp = mkSlot(tempName)
+        const result = scoreboardRmwPass(mkFn([
+          { kind: 'score_copy', dst: temp, src: mkSlot('$src') },
+          { kind: 'store_score_to_nbt', ns: 'rs', path: 'x', type: 'int', scale: 1, src: temp },
+          { kind: 'score_set', dst: temp, value: rhsValue },
+          { kind: 'score_set', dst: mkSlot(`$out${rhsScore}`), value: rhsScore },
+        ]))
+
+        expect(result.instructions).toEqual([
+          { kind: 'score_copy', dst: temp, src: mkSlot('$src') },
+          { kind: 'store_score_to_nbt', ns: 'rs', path: 'x', type: 'int', scale: 1, src: temp },
+          { kind: 'score_set', dst: temp, value: rhsValue },
+          { kind: 'score_set', dst: mkSlot(`$out${rhsScore}`), value: rhsScore },
+        ])
+      },
+    ))
+  })
+
+  test('does not remove overwrite candidate when temporary is read by immediate consumer', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$rhs') },
+      { kind: 'score_add', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result).toBe(fn)
   })
 
   test('collapses copy followed by return through dead temporary', () => {
@@ -124,7 +226,7 @@ describe('LIR scoreboard RMW optimizer', () => {
   ] as const)('collapses %s temp/output RMW shape', kind => {
     const fn = mkFn([
       { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
-      { kind, dst: mkSlot('$tmp'), src: mkSlot('$rhs') },
+      { kind, dst: mkSlot('$tmp'), src: mkSlot('$rhs') } as const,
       { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
     ])
 
@@ -132,7 +234,7 @@ describe('LIR scoreboard RMW optimizer', () => {
 
     expect(result.instructions).toEqual([
       { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
-      { kind, dst: mkSlot('$out'), src: mkSlot('$rhs') },
+      { kind, dst: mkSlot('$out'), src: mkSlot('$rhs') } as const,
     ])
   })
 

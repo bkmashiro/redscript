@@ -106,6 +106,51 @@ describe('arithmetic probe benchmark tooling', () => {
     }
   })
 
+  it('reports per-case rewrite-opportunity statuses that cover all score-copy commands', () => {
+    const result = runArithmeticProbeReport('int_arithmetic', [1])
+    const [probeResult] = result.cases
+
+    expect(probeResult.rewriteOpportunities.total).toBe(probeResult.commands.scoreCopy)
+    expect(probeResult.rewriteOpportunities.currentlyOptimized).toBeGreaterThanOrEqual(0)
+    expect(probeResult.rewriteOpportunities.safeCandidate).toBeGreaterThanOrEqual(0)
+    expect(probeResult.rewriteOpportunities.blockedByBarrier).toBeGreaterThanOrEqual(0)
+    expect(probeResult.rewriteOpportunities.unknown).toBeGreaterThanOrEqual(0)
+
+    const opportunitiesTotal = probeResult.rewriteOpportunities.currentlyOptimized
+      + probeResult.rewriteOpportunities.safeCandidate
+      + probeResult.rewriteOpportunities.blockedByBarrier
+      + probeResult.rewriteOpportunities.unknown
+    expect(opportunitiesTotal).toBe(probeResult.rewriteOpportunities.total)
+    expect(probeResult.rewriteOpportunities.topOpportunities.length).toBeGreaterThan(0)
+  })
+
+  it('aggregates rewrite-opportunity statuses across all cases', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    const caseTotal = report.cases.reduce((sum, result) => sum + result.rewriteOpportunities.total, 0)
+    const opportunitiesTotal = report.rewriteOpportunities
+      ? report.rewriteOpportunities.currentlyOptimized
+      + report.rewriteOpportunities.safeCandidate
+      + report.rewriteOpportunities.blockedByBarrier
+      + report.rewriteOpportunities.unknown
+      : 0
+
+    expect(caseTotal).toBe(opportunitiesTotal)
+    expect(report.rewriteOpportunities.topOpportunities.length).toBeGreaterThan(0)
+  })
+
+  it('keeps rewrite-opportunity examples and status fields stable', () => {
+    const result = runArithmeticProbeReport('double_div', [1]).cases[0]
+
+    for (const opportunity of result.rewriteOpportunities.topOpportunities) {
+      expect(opportunity.pattern).toEqual(expect.any(String))
+      expect(opportunity.count).toBeGreaterThan(0)
+      expect(opportunity.status).toMatch(
+        /^(currentlyOptimized|safeCandidate|blockedByBarrier|unknown)$/,
+      )
+      expect(opportunity.examples.length).toBeLessThanOrEqual(3)
+    }
+  })
+
   it('reports estimated static cost dimensions for execute, selectors, NBT, macros, and setup hints', () => {
     const summary = summarizeCommandCosts([
       {
