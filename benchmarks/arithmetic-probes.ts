@@ -9,6 +9,8 @@ import {
   summarizeFiles,
   writeJsonReport,
 } from './_shared'
+import type { Slot } from '../src/lir/types'
+import { sameSlot } from '../src/optimizer/lir/analysis'
 
 export interface ArithmeticProbeCase {
   name: string
@@ -30,6 +32,16 @@ export interface CommandCategorySummary {
   teleport: number
   macro: number
   rawCommandLike: number
+}
+
+export interface CopyOriginSummary {
+  twoAddressMaterialization: number
+  callArg: number
+  callResultPreservation: number
+  returnMaterialization: number
+  edgeOrWrapper: number
+  opaqueBarrier: number
+  unknown: number
 }
 
 export interface ForkEstimate {
@@ -72,6 +84,7 @@ export interface ArithmeticCostEstimate {
   nbt: NbtEstimate
   macro: MacroEstimate
   setupHints: SetupHintEstimate
+  copyOrigins?: CopyOriginSummary
   note: 'static-estimate'
 }
 
@@ -95,6 +108,7 @@ export interface ArithmeticProbeResult {
   files: ReturnType<typeof summarizeFiles>
   commands: CommandCategorySummary
   estimatedCost: ArithmeticCostEstimate
+  copyOrigins: CopyOriginSummary
   scoreCopyPatterns: ScoreCopyPatternSummary
   warnings: string[]
 }
@@ -105,6 +119,7 @@ export interface ArithmeticProbeReport {
   host: ReturnType<typeof benchmarkMeta>['host']
   cases: ArithmeticProbeResult[]
   scoreCopyPatterns: ScoreCopyPatternSummary
+  copyOrigins?: CopyOriginSummary
 }
 
 type ProbeCliArgs = ReturnType<typeof parseCliArgs> & {
@@ -427,6 +442,91 @@ function isScoreCopy(line: string): boolean {
   return /^scoreboard players operation \S+ \S+ = \S+ \S+$/.test(line)
 }
 
+function isScoreArithmetic(line: string): boolean {
+  return /^scoreboard players operation \S+ \S+ (?:[+\-*/%]=|[<>]=) \S+ \S+$/.test(line)
+}
+
+function parseScoreCopy(line: string): { dst: Slot; src: Slot } | null {
+  const match = /^scoreboard players operation (\S+) (\S+) = (\S+) (\S+)$/.exec(line)
+  if (!match) return null
+  return {
+    dst: { player: match[1], obj: match[2] },
+    src: { player: match[3], obj: match[4] },
+  }
+}
+
+function isBarrierLine(line: string): boolean {
+  return line.startsWith('$') || line.includes(' run function ') || line.startsWith('function ')
+}
+
+function classifyCopyOrigin(
+  line: string,
+  previousLine: string | undefined,
+  nextLine: string | undefined,
+): keyof CopyOriginSummary {
+  const parsed = parseScoreCopy(line)
+  if (!parsed) return 'unknown'
+
+  if (parsed.dst.player === '$ret' || parsed.src.player === '$ret' || parsed.dst.player.startsWith('$ret_')) {
+    return 'returnMaterialization'
+  }
+
+  if (/^\$p\d+$/.test(parsed.dst.player) || /^\$p\d+$/.test(parsed.src.player)) {
+    return 'callArg'
+  }
+
+  if (parsed.dst.player.includes('__rf_') || parsed.src.player.includes('__rf_')) {
+    return 'callResultPreservation'
+  }
+
+  const previous = previousLine ? parseScoreCopy(previousLine) : null
+  const next = nextLine ? parseScoreCopy(nextLine) : null
+  if (
+    (previous && (sameSlot(previous.dst, parsed.dst) || sameSlot(previous.src, parsed.dst))) ||
+    (next && (sameSlot(next.dst, parsed.dst) || sameSlot(next.src, parsed.dst))) ||
+    isScoreArithmetic(previousLine ?? '') ||
+    isScoreArithmetic(nextLine ?? '')
+  ) {
+    return 'twoAddressMaterialization'
+  }
+
+  if (parsed.dst.player.includes('edge') || parsed.src.player.includes('edge') ||
+    parsed.dst.player.includes('wrapper') || parsed.src.player.includes('wrapper')) {
+    return 'edgeOrWrapper'
+  }
+
+  if ((previousLine && isBarrierLine(previousLine)) || (nextLine && isBarrierLine(nextLine))) {
+    return 'opaqueBarrier'
+  }
+
+  return 'unknown'
+}
+
+function summarizeCopyOrigins(lines: Array<{ path: string; line: number; content: string }>): CopyOriginSummary {
+  const totals: CopyOriginSummary = {
+    twoAddressMaterialization: 0,
+    callArg: 0,
+    callResultPreservation: 0,
+    returnMaterialization: 0,
+    edgeOrWrapper: 0,
+    opaqueBarrier: 0,
+    unknown: 0,
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const current = lines[i]
+    if (!isScoreCopy(current.content)) continue
+    const origin = classifyCopyOrigin(
+      current.content,
+      i > 0 && lines[i - 1].path === current.path ? lines[i - 1].content : undefined,
+      i + 1 < lines.length && lines[i + 1].path === current.path ? lines[i + 1].content : undefined,
+    )
+    totals[origin]++
+  }
+
+  return totals
+}
+
 function commandShape(line: string | undefined): string {
   if (!line) return 'boundary'
   if (isScoreCopy(line)) return 'score_copy'
@@ -500,6 +600,29 @@ function mergeScoreCopyPatterns(summaries: ScoreCopyPatternSummary[]): ScoreCopy
   return scoreCopyPatternSummaryFromMap(total, patterns)
 }
 
+function mergeCopyOrigins(summaries: CopyOriginSummary[]): CopyOriginSummary {
+  const totals: CopyOriginSummary = {
+    twoAddressMaterialization: 0,
+    callArg: 0,
+    callResultPreservation: 0,
+    returnMaterialization: 0,
+    edgeOrWrapper: 0,
+    opaqueBarrier: 0,
+    unknown: 0,
+  }
+
+  for (const summary of summaries) {
+    totals.twoAddressMaterialization += summary.twoAddressMaterialization
+    totals.callArg += summary.callArg
+    totals.callResultPreservation += summary.callResultPreservation
+    totals.returnMaterialization += summary.returnMaterialization
+    totals.edgeOrWrapper += summary.edgeOrWrapper
+    totals.opaqueBarrier += summary.opaqueBarrier
+    totals.unknown += summary.unknown
+  }
+  return totals
+}
+
 export function summarizeCommandCategories(files: Array<{ path: string; content: string }>): CommandCategorySummary {
   const lines = commandLines(files)
   const count = (predicate: (line: string) => boolean): number => lines.filter(predicate).length
@@ -524,6 +647,7 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
     namespace: `arith_${probe.name}`,
     optimizationLevel: optLevel,
   })
+  const lines = commandLinesWithLocations(result.files)
   return {
     case: probe.name,
     description: probe.description,
@@ -539,6 +663,7 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
     files: summarizeFiles(result.files),
     commands: summarizeCommandCategories(result.files),
     estimatedCost: summarizeCommandCosts(result.files),
+    copyOrigins: summarizeCopyOrigins(lines),
     scoreCopyPatterns: summarizeScoreCopyPatterns(result.files),
     warnings: result.warnings,
   }
@@ -557,6 +682,7 @@ export function runArithmeticProbeReport(caseName = 'all', optLevels: Optimizati
     ...meta,
     cases,
     scoreCopyPatterns: mergeScoreCopyPatterns(cases.map(result => result.scoreCopyPatterns)),
+    copyOrigins: mergeCopyOrigins(cases.map(result => result.copyOrigins)),
   }
 }
 

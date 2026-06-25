@@ -37,7 +37,14 @@ Current users:
 Test coverage:
 
 - `src/__tests__/optimizer/lir/analysis.test.ts`;
-- existing RMW and LIR pipeline tests.
+- `src/__tests__/optimizer/lir/rmw.test.ts`;
+- `src/__tests__/optimizer/lir/rewrite.test.ts`;
+- existing LIR pipeline tests.
+
+Batch 19 added:
+- straight-line next-read/write/dead-after analysis in `analyzeStraightLineSlotLiveness`;
+- `src/optimizer/lir/rewrite.ts` window harness with deterministic local pattern matching.
+- conservative barrier helpers for raw/macro/call/storage boundaries.
 
 ## Near-term migration rule
 
@@ -62,7 +69,7 @@ Do not add Binaryen, Z3, or egg to the production dependency graph until each ha
 
 ## Next slices
 
-1. Add local liveness / next-use helpers for straight-line LIR windows.
-2. Add a tiny rewrite-rule harness so multi-instruction patterns can share window matching and safety checks.
-3. Use `fast-check` to fuzz small LIR programs for analysis invariants and no-op rewrite equivalence.
+1. ✅ Add local liveness / next-use helpers for straight-line LIR windows. [Done]
+2. ✅ Add a tiny rewrite-rule harness so multi-instruction patterns can share window matching and safety checks. [Done]
+3. ✅ Use `fast-check` to fuzz small LIR programs for analysis invariants and no-op rewrite equivalence. [Done]
 4. Only then prototype arithmetic-only VIR behind an experimental path if benchmark data still shows copy/temp pressure that LIR analysis cannot cleanly address; follow the Phase 0–5 spike criteria in [09](./09-vir-architecture-recommendation.md).

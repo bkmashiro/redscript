@@ -16,6 +16,8 @@ Move from ad-hoc physical LIR peepholes toward reusable optimizer infrastructure
 
 ## Step 1 — LIR liveness / next-use helpers
 
+**Status:** Completed (Batch 19).
+
 **Objective:** Extend the current LIR support stack from slot mention extraction to straight-line lifetime information.
 
 **Why first:** The next useful optimizations need to know whether a slot is read later, whether a write kills an older value, and whether a destructive update can reuse a location.
@@ -45,6 +47,8 @@ function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseInfo
 
 ## Step 2 — Shared rewrite window harness
 
+**Status:** Completed (Batch 19).
+
 **Objective:** Stop each LIR pass from hand-rolling multi-instruction window scanning and safety checks.
 
 **Files:**
@@ -65,6 +69,8 @@ function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseInfo
 
 ## Step 3 — Property/fuzz tests for LIR analysis and local rewrites
 
+**Status:** Completed (Batch 19). Added no-op idempotence property checks for self-copy plus rewrite harness determinism coverage.
+
 **Objective:** Use `fast-check` beyond slot identity tests to catch unsafe optimizer assumptions.
 
 **Files:**
@@ -83,6 +89,8 @@ function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseInfo
 **Non-goal:** Full semantic interpreter for all LIR. That belongs later if needed.
 
 ## Step 4 — Copy-origin diagnostics in arithmetic probes
+
+**Status:** Completed (Batch 19) with conservative `copyOrigins` buckets in probe output and aggregations.
 
 **Objective:** Make copy pressure actionable before building VIR.
 
@@ -107,6 +115,8 @@ copyOrigins.unknown
 **Why:** The current adjacent pattern counts show where `score_copy` occurs but not why it exists. VIR/slot-planning work should be judged by reducing the high-value origins, not by shaving arbitrary copies.
 
 ## Step 5 — VIR ADR / open-question closure
+
+**Status:** Not started.
 
 **Objective:** Convert [09](./09-vir-architecture-recommendation.md)'s open questions into short answers before code starts.
 

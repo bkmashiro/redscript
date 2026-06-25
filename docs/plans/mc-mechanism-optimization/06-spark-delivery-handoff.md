@@ -118,7 +118,8 @@ Offline skip is not MC proof.
 
 **Objective:** Produce a design before implementation.
 
-**Status:** First conservative implementation landed as `src/optimizer/lir/rmw.ts` and is tracked in [07 — Scoreboard RMW optimizer design](./07-rmw-optimizer-design.md). Lane 6 implemented only local adjacent output-copy collapse, not destructive source updates.
+**Status:** Implemented as `src/optimizer/lir/rmw.ts` in Batch 19. Behavior is unchanged from prior conservative shape for tested cases; the pass now runs through a shared local rewrite harness and barrier-aware straight-line liveness for safer window scans.
+Lane 6 still excludes destructive source updates and does not cross raw/macro/call barriers.
 
 **Read:**
 - `src/lir/types.ts`
@@ -135,7 +136,7 @@ Offline skip is not MC proof.
 
 **Objective:** Stop adding standalone LIR peepholes without shared safety APIs.
 
-**Status:** Initial support stack landed in `src/optimizer/lir/analysis.ts` and is documented in [08 — TS optimizer infrastructure stack](./08-ts-optimizer-infra.md).
+**Status:** Initial support stack and additional infrastructure are now landed (`src/optimizer/lir/analysis.ts`, `src/optimizer/lir/rewrite.ts`) in Batch 19. Current scope includes straight-line next-use analysis and shared local rewrite windows with conservative barriers.
 
 **Current scope:**
 

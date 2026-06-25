@@ -63,6 +63,29 @@ function getSubcommandReadSlots(subcmd: { kind: string } & Record<string, unknow
   }
 }
 
+function isBarrierInstruction(instr: LIRInstr): boolean {
+  switch (instr.kind) {
+    case 'raw':
+    case 'macro_line':
+    case 'call':
+    case 'call_macro':
+    case 'call_context':
+    case 'call_if_matches':
+    case 'call_unless_matches':
+    case 'call_if_score':
+    case 'call_unless_score':
+    case 'store_score_to_nbt':
+    case 'store_nbt_to_score':
+      return true
+    default:
+      return false
+  }
+}
+
+export function isConservativeBarrierInstruction(instr: LIRInstr): boolean {
+  return isBarrierInstruction(instr)
+}
+
 function subcommandMentionsSlot(subcmd: { kind: string } & Record<string, unknown>, slot: Slot): boolean {
   return getSubcommandReadSlots(subcmd).some(candidate => sameSlot(candidate, slot))
 }
@@ -212,6 +235,71 @@ export function createModuleSlotReferenceIndex(mod: LIRModule): ModuleSlotRefere
         if (mentioned.has(key)) return true
       }
       return false
+    },
+  }
+}
+
+export interface LIRNextUseInfo {
+  hasLaterRead(index: number, slot: Slot): boolean
+  nextReadAfter(index: number, slot: Slot): number | null
+  nextWriteAfter(index: number, slot: Slot): number | null
+  isDeadAfter(index: number, slot: Slot): boolean
+}
+
+export function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseInfo {
+  const n = instrs.length
+  const nextReadBySlot = new Map<string, number>()
+  const nextWriteBySlot = new Map<string, number>()
+  const nextReadAfter: Array<Map<string, number>> = new Array(n)
+  const nextWriteAfter: Array<Map<string, number>> = new Array(n)
+  const barrierAfter: boolean[] = new Array(n).fill(false)
+
+  let hasBarrierAfter = false
+
+  for (let index = n - 1; index >= 0; index--) {
+    barrierAfter[index] = hasBarrierAfter
+    nextReadAfter[index] = new Map(nextReadBySlot)
+    nextWriteAfter[index] = new Map(nextWriteBySlot)
+
+    if (isConservativeBarrierInstruction(instrs[index])) {
+      hasBarrierAfter = true
+      nextReadBySlot.clear()
+      nextWriteBySlot.clear()
+      continue
+    }
+
+    for (const slot of getReadSlots(instrs[index])) {
+      nextReadBySlot.set(slotKey(slot), index)
+    }
+    for (const slot of getWriteSlots(instrs[index])) {
+      nextWriteBySlot.set(slotKey(slot), index)
+    }
+  }
+
+  function key(slot: Slot): string {
+    return slotKey(slot)
+  }
+
+  return {
+    hasLaterRead(index: number, slot: Slot): boolean {
+      if (index < 0 || index >= n) return false
+      if (barrierAfter[index]) return true
+      return nextReadAfter[index].has(key(slot))
+    },
+    nextReadAfter(index: number, slot: Slot): number | null {
+      if (index < 0 || index >= n) return null
+      return nextReadAfter[index].get(key(slot)) ?? null
+    },
+    nextWriteAfter(index: number, slot: Slot): number | null {
+      if (index < 0 || index >= n) return null
+      return nextWriteAfter[index].get(key(slot)) ?? null
+    },
+    isDeadAfter(index: number, slot: Slot): boolean {
+      if (index < 0 || index >= n) return false
+      const hasBarrier = barrierAfter[index]
+      const hasRead = nextReadAfter[index].has(key(slot))
+      const hasWrite = nextWriteAfter[index].has(key(slot))
+      return !hasBarrier && !hasRead && !hasWrite
     },
   }
 }

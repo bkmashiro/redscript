@@ -73,6 +73,27 @@ describe('arithmetic probe benchmark tooling', () => {
     )
   })
 
+  it('reports copy origins buckets that account for every score-copy command', () => {
+    const result = runArithmeticProbeReport('int_arithmetic', [1])
+    const [probeResult] = result.cases
+
+    const originTotal = Object.values(probeResult.copyOrigins).reduce((sum, value) => sum + value, 0)
+    expect(originTotal).toBe(probeResult.commands.scoreCopy)
+    for (const value of Object.values(probeResult.copyOrigins)) {
+      expect(value).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('aggregates copy-origin summaries across probe cases', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    const caseTotal = report.cases.reduce((sum, result) => sum + result.commands.scoreCopy, 0)
+    const originTotal = report.copyOrigins
+      ? Object.values(report.copyOrigins).reduce((sum, value) => sum + value, 0)
+      : 0
+
+    expect(originTotal).toBe(caseTotal)
+  })
+
   it('aggregates score copy pattern totals across probe cases', () => {
     const report = runArithmeticProbeReport('all', [1])
     const caseTotal = report.cases.reduce((sum, result) => sum + result.scoreCopyPatterns.total, 0)

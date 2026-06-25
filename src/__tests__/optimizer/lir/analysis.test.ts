@@ -1,8 +1,10 @@
 import fc from 'fast-check'
 import {
+  analyzeStraightLineSlotLiveness,
   createModuleSlotReferenceIndex,
   getReadSlots,
   instructionMentionsSlot,
+  isConservativeBarrierInstruction,
   sameSlot,
   slotKey,
 } from '../../../optimizer/lir/analysis'
@@ -86,5 +88,48 @@ describe('LIR optimizer analysis helpers', () => {
     expect(index.isMentionedOutside(producer, mkSlot('$tmp'))).toBe(true)
     expect(index.isMentionedOutside(consumer, mkSlot('$src'))).toBe(true)
     expect(index.isMentionedOutside(producer, mkSlot('$missing'))).toBe(false)
+    })
   })
-})
+
+  test('captures straight-line next-read/write and dead-after information', () => {
+    const src = mkSlot('$src')
+    const tmp = mkSlot('$tmp')
+    const out = mkSlot('$out')
+
+    const fn: LIRFunction = mkFn([
+      { kind: 'score_copy', dst: tmp, src },
+      { kind: 'score_add', dst: out, src: tmp },
+      { kind: 'score_copy', dst: out, src: tmp },
+    ])
+
+    const liveness = analyzeStraightLineSlotLiveness(fn.instructions)
+
+    expect(liveness.nextReadAfter(0, tmp)).toBe(1)
+    expect(liveness.nextWriteAfter(1, tmp)).toBeNull()
+    expect(liveness.hasLaterRead(0, tmp)).toBe(true)
+    expect(liveness.hasLaterRead(0, out)).toBe(false)
+    expect(liveness.isDeadAfter(0, out)).toBe(false)
+    expect(liveness.isDeadAfter(1, out)).toBe(false)
+    expect(liveness.isDeadAfter(2, out)).toBe(true)
+  })
+
+  test('treats conservative barriers as blocking cross-window liveness checks', () => {
+    const src = mkSlot('$src')
+    const tmp = mkSlot('$tmp')
+    const later = mkSlot('$later')
+
+    const fn: LIRFunction = mkFn([
+      { kind: 'score_copy', dst: tmp, src },
+      { kind: 'score_add', dst: later, src: tmp },
+      { kind: 'raw', cmd: 'say barrier' },
+      { kind: 'score_copy', dst: later, src: tmp },
+    ])
+
+    const liveness = analyzeStraightLineSlotLiveness(fn.instructions)
+
+    expect(isConservativeBarrierInstruction(fn.instructions[2])).toBe(true)
+    expect(liveness.nextReadAfter(0, tmp)).toBe(1)
+    expect(liveness.hasLaterRead(1, tmp)).toBe(true)
+    expect(liveness.hasLaterRead(0, tmp)).toBe(true)
+    expect(liveness.isDeadAfter(1, tmp)).toBe(false)
+  })

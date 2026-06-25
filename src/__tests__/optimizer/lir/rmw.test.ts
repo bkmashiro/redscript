@@ -1,10 +1,11 @@
+import fc from 'fast-check'
 import { scoreboardRmwPass, scoreboardRmwPassModule } from '../../../optimizer/lir/rmw'
 import type { LIRFunction, LIRInstr, LIRModule, Slot } from '../../../lir/types'
 
 const obj = '__test'
 
-function mkSlot(player: string): Slot {
-  return { player, obj }
+function mkSlot(player: string, objective = obj): Slot {
+  return { player, obj: objective }
 }
 
 function mkFn(instructions: LIRInstr[], name = 'main'): LIRFunction {
@@ -16,6 +17,25 @@ function mkModule(functions: LIRFunction[]): LIRModule {
 }
 
 describe('LIR scoreboard RMW optimizer', () => {
+  test('self-copy no-op removal is idempotent', () => {
+    fc.assert(fc.property(
+      fc.stringMatching(/^\$[a-z]{1,8}$/),
+      fc.stringMatching(/^__[A-Za-z0-9_.:-]{1,8}$/),
+      (player, obj) => {
+        const x = mkSlot(player, obj)
+        const rhs = mkSlot('$rhs', obj)
+        const fn = mkFn([
+          { kind: 'score_copy', dst: x, src: x },
+          { kind: 'score_add', dst: x, src: rhs },
+        ])
+
+        const once = scoreboardRmwPass(fn)
+        const twice = scoreboardRmwPass(once)
+        expect(twice).toEqual(once)
+      },
+    ))
+  })
+
   test('removes scoreboard self-copy no-ops', () => {
     const fn = mkFn([
       { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$tmp') },
