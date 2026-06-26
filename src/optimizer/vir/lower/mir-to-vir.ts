@@ -9,10 +9,18 @@ import type {
 import { VIRModuleBuilder } from '../builder'
 import type { SourceLoc, VIRModule } from '../types'
 import type { BlockId, FuncId, LocId, TypeId, ValueId } from '../ids'
+import { VirUnsupportedReasonTag } from './unsupported-tags'
 
 type MIRToVirResultUnsupported = {
   kind: 'unsupported'
   reason: string
+  reasonTags?: VirUnsupportedReasonTag[]
+  unsupportedMirOpKinds?: string[]
+  unsupportedMirCallTargets?: Array<{
+    fn: string
+    argCount: number
+    hasResult: boolean
+  }>
 }
 
 export type MirToVirResult = MIRToVirResultUnsupported | {
@@ -78,14 +86,45 @@ function mapArithmeticKind(kind: ArithmeticBinaryKind): ArithOpKind {
   return 'arith.max'
 }
 
-function validateFunction(fn: MIRFunction): string | null {
-  if (fn.isMacro) return `unsupported macro function '${fn.name}'`
+interface MirFunctionValidationFailure {
+  reason: string
+  reasonTags: VirUnsupportedReasonTag[]
+}
+
+function validateFunction(fn: MIRFunction): MirFunctionValidationFailure | null {
+  if (fn.isMacro) {
+    return {
+      reason: `unsupported macro function '${fn.name}'`,
+      reasonTags: ['unsupported-call-boundary'],
+    }
+  }
 
   const entry = fn.blocks.find(block => block.id === fn.entry)
-  if (!entry) return `function '${fn.name}' missing entry block '${fn.entry}'`
-  if (entry.id !== fn.entry) return `unsupported first block '${entry.id}' in '${fn.name}'`
-  if (entry.term.kind !== 'return') return `unsupported non-return terminator in '${fn.name}'`
-  if (fn.blocks.length !== 1) return `unsupported multi-block function '${fn.name}'`
+  if (!entry) {
+    return {
+      reason: `function '${fn.name}' missing entry block '${fn.entry}'`,
+      reasonTags: ['unsupported-control-flow-shape'],
+    }
+  }
+  if (entry.id !== fn.entry) {
+    return {
+      reason: `unsupported first block '${entry.id}' in '${fn.name}'`,
+      reasonTags: ['unsupported-control-flow-shape'],
+    }
+  }
+  if (entry.term.kind !== 'return') {
+    return {
+      reason: `unsupported non-return terminator in '${fn.name}'`,
+      reasonTags: ['unsupported-control-flow-shape'],
+    }
+  }
+  if (fn.blocks.length !== 1) {
+    return {
+      reason: `unsupported multi-block function '${fn.name}'`,
+      reasonTags: ['unsupported-control-flow-shape'],
+    }
+  }
+
   return null
 }
 
@@ -105,7 +144,11 @@ function resolveOperand(
 
   const existing = valueEnv.get(operand.name)
   if (existing === undefined) {
-    return { kind: 'unsupported', reason: `unsupported use of undeclared MIR temp '${operand.name}'` }
+    return {
+      kind: 'unsupported',
+      reason: `unsupported use of undeclared MIR temp '${operand.name}'`,
+      reasonTags: ['unsupported-operand-shape'],
+    }
   }
 
   return { kind: 'ok', value: existing }
@@ -145,17 +188,31 @@ export function lowerMirToVir(mir: MIRModule): MirToVirResult {
 
   for (const fn of mir.functions) {
     const unsupported = validateFunction(fn)
-    if (unsupported) return { kind: 'unsupported', reason: unsupported }
+    if (unsupported) {
+      return {
+        kind: 'unsupported',
+        reason: unsupported.reason,
+        reasonTags: unsupported.reasonTags,
+      }
+    }
 
     const sourceLoc = mirSourceToVir(fn.sourceLoc)
     const functionLoc = sourceLoc ? builder.addSourceLocation(sourceLoc) : builder.addUnknownLoc()
     const entry = fn.blocks.find(block => block.id === fn.entry)
     if (!entry) {
-      return { kind: 'unsupported', reason: `function '${fn.name}' has missing entry block` }
+      return {
+        kind: 'unsupported',
+        reason: `function '${fn.name}' has missing entry block`,
+        reasonTags: ['unsupported-control-flow-shape'],
+      }
     }
 
     if (entry.term.kind !== 'return') {
-      return { kind: 'unsupported', reason: `function '${fn.name}' has non-return terminator` }
+      return {
+        kind: 'unsupported',
+        reason: `function '${fn.name}' has non-return terminator`,
+        reasonTags: ['unsupported-control-flow-shape'],
+      }
     }
 
     const term = entry.term
@@ -183,7 +240,30 @@ export function lowerMirToVir(mir: MIRModule): MirToVirResult {
 
     for (const rawInstr of entry.instrs) {
       if (!isSupportedArithmetic(rawInstr)) {
-        return { kind: 'unsupported', reason: `unsupported instruction '${rawInstr.kind}' in '${fn.name}'` }
+        const baseUnsupported: Pick<MIRToVirResultUnsupported, 'reason' | 'reasonTags' | 'unsupportedMirOpKinds'> = {
+          reason: rawInstr.kind === 'call'
+            ? `unsupported instruction 'call' in '${fn.name}': fn='${rawInstr.fn}' args=${rawInstr.args.length} hasResult=${rawInstr.dst !== null}`
+            : `unsupported instruction '${rawInstr.kind}' in '${fn.name}'`,
+          reasonTags: ['unsupported-mir-op-kind'],
+          unsupportedMirOpKinds: [rawInstr.kind],
+        }
+
+        if (rawInstr.kind === 'call') {
+          return {
+            kind: 'unsupported',
+            ...baseUnsupported,
+            unsupportedMirCallTargets: [{
+              fn: rawInstr.fn,
+              argCount: rawInstr.args.length,
+              hasResult: rawInstr.dst !== null,
+            }],
+          }
+        }
+
+        return {
+          kind: 'unsupported',
+          ...baseUnsupported,
+        }
       }
 
       const lowered = lowerInstruction(
