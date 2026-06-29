@@ -482,7 +482,7 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 ### Track AC — Manual opt-in documentation hardening
 
-**Status:** [ ] Optional after AB/AA stabilizes
+**Status:** [x] Completed — docs closeout
 
 **Product promise:** Make manual experimental usage understandable without implying default readiness.
 
@@ -499,15 +499,17 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 **Implementation outline:**
 
-- [ ] Document the flag as experimental/manual/off-by-default.
-- [ ] Document incremental incompatibility.
-- [ ] Include the exact evidence gate command for maintainers.
-- [ ] State that gate pass is not semantic proof/default readiness.
+- [x] Document the flag as experimental/manual/off-by-default.
+- [x] Document incremental incompatibility.
+- [x] Include the exact evidence gate command for maintainers.
+- [x] State that gate pass is not semantic proof/default readiness.
 
 **Definition of Done:**
 
-- [ ] Docs are accurate and do not oversell safety.
-- [ ] `git diff --check` passes.
+- [x] Docs are accurate and do not oversell safety.
+- [x] `git diff --check` passes.
+
+**Evidence:** Documented in `docs/dev/README-benchmarks.md`; verified with `git diff --check`.
 
 ---
 
@@ -627,3 +629,10 @@ Append a short note here after each completed tranche.
 - Controller gate `/tmp/redscript-lir-track-aa-controller.json` reports `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -497`, `scoreCopyDelta = -497`, offline fixtures `31/31` pass.
 - Residuals are reduced but not gone: Track AB `157`, Track AF `needs-slot-use-def-map: 114`, Track AG `dst-reused-after-arith: 48`, `slot-use-window-too-small: 37`, `src-reused-after-copy: 24`, `slot-alias-unsafe-or-opaque: 5`.
 - Default enablement remains not ready; next work is post-AA residual design/diagnostics or Track AC manual opt-in docs.
+
+### 2026-06-29 — Track AC completed
+
+- Added maintainer-facing docs for the manual experimental LIR local-copy evidence path.
+- The docs state that `--experimental-lir-local-copy-rewrite` is off by default, incompatible with `--incremental`, and measured via `npm run gate:lir-local-copy -- --output /tmp/redscript-lir-local-copy.json`.
+- The docs explicitly say gate pass is evidence, not semantic proof or default-readiness.
+- Default enablement remains deferred to Track AD and is not part of closeout.

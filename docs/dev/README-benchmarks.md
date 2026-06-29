@@ -82,6 +82,23 @@ Run all arithmetic probes across all optimization presets:
 npm run bench:arithmetic -- --case all --opt all --output benchmarks/arithmetic-probes.report.json
 ```
 
+## Experimental LIR Local-Copy Evidence Gate
+
+The LIR local-copy rewrite is an explicit evidence path, not a production default.
+Use `--experimental-lir-local-copy-rewrite` only when intentionally measuring the
+manual optimizer lane. It is off by default and is not supported with
+`--incremental`; the CLI exits with an explicit error if both flags are combined.
+
+Maintainers can run the CI-friendly evidence gate with:
+
+```bash
+npm run gate:lir-local-copy -- --output /tmp/redscript-lir-local-copy.json
+```
+
+A passing gate means the current benchmark/equivalence evidence accepted the
+manual experimental path. It is not semantic proof and does not imply the rewrite
+is ready to enable by default.
+
 ## Baseline
 
 `benchmarks/baseline.json` stores one recorded run of the compiler and stdlib benchmarks on the local machine. Treat it as a local baseline, not a cross-machine performance target.

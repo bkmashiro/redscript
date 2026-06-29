@@ -4,6 +4,7 @@
 
 **Active decision:** [21 — Post-VIR Decision ADR](./21-post-vir-decision-adr.md)
 **Active roadmap/tracker:** [27 — LIR Local-Copy Proof-to-Release Roadmap](./27-lir-local-copy-proof-to-release-roadmap.md)
+**Next optimizer roadmap index:** [28 — Optimizer Roadmap Index After LIR Local-Copy](./28-optimizer-roadmap-index.md)
 **Historical tranche log:** [16 — Post-VIR Optimizer Spark Roadmap](./16-post-vir-optimizer-spark-roadmap.md)
 
 ## Archived plan set
