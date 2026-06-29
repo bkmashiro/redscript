@@ -116,9 +116,13 @@ R4 continuation implemented: typed self-copy no-op canonicalization (`score_copy
 
 ### R5 — Call/return materialization cleanup
 
+**Status:** 2026-06-29 diagnostic-only tranche for ABI/copy-pressure inventory. Behavior unchanged. No default enablement.
+
 **Product promise:** Reduce copy pressure around `$pN`, `$ret`, helper arguments, and return preservation where ABI rules prove the copy is redundant.
 
 **Why:** Arithmetic probes show copy pressure around helper calls; this can have real impact on stdlib math.
+
+**Diagnostic note:** [29-r5-call-return-copy-diagnostic.md](29-r5-call-return-copy-diagnostic.md)
 
 **Primary files:**
 
