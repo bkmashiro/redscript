@@ -1526,6 +1526,51 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(residualTrackZ?.recommendation).toBe('prioritize-AA')
   })
 
+  it('classifies selected Track AB labels from synthetic command-window evidence', () => {
+    const lines = [
+      { path: 'data/test/function/probe.mcfunction', line: 1, content: 'scoreboard players operation $acc0 o += $other0 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 2, content: 'scoreboard players operation $acc0 o = $seed0 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 3, content: 'scoreboard players operation $tmp0 o = $seed0 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 4, content: 'scoreboard players operation $tmp2 o += $other2 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 5, content: 'scoreboard players operation $tmp2 o = $tmp3 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 6, content: 'scoreboard players operation $tmp4 o = $seed4 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 7, content: 'scoreboard players operation $barrier0 o = $seed5 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 8, content: 'function redscript:test/barrier_probe' },
+      { path: 'data/test/function/probe.mcfunction', line: 9, content: 'say start-probe' },
+      { path: 'data/test/function/probe.mcfunction', line: 10, content: 'scoreboard players operation $nomaterial o = $seed6 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 11, content: 'say end-probe' },
+      { path: 'data/test/function/probe.mcfunction', line: 12, content: 'scoreboard players operation $u2 o = $seed7 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 13, content: 'scoreboard players operation $u2 o += $seed8 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 14, content: 'scoreboard players operation $other3 o = $u2 o' },
+    ]
+
+    const synthesis = summarizeRewriteOpportunitiesWithProvenance(lines)
+    const caseSummary = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-track-ab-classifier',
+      optLevel: 'O1',
+      opportunities: synthesis.opportunities,
+      rewriteOpportunityProvenanceSummary: synthesis.provenanceSummary,
+      rewriteOpportunityTrackZResidualSummary: synthesis.trackZResidualSummary,
+      rewriteOpportunityTrackABResidualSummary: synthesis.trackABResidualSummary,
+    })
+    const residualTrackAB = caseSummary.trackABResidualDiagnostics
+
+    expect(caseSummary.residualCount).toBe(8)
+    expect(caseSummary.residualByStatus.find(entry => entry.status === 'safeCandidate')?.count).toBe(1)
+    expect(residualTrackAB?.targetPattern).toBe('score_copy -> score_arith')
+    expect(residualTrackAB?.totalCount).toBe(1)
+    expect(residualTrackAB?.byLabel).toEqual([
+      {
+        label: 'non-adjacent-window-needs-pass-design',
+        count: 1,
+        caseNames: ['case-track-ab-classifier'],
+        examples: [
+          'data/test/function/probe.mcfunction:12: scoreboard players operation $u2 o = $seed7 o',
+        ],
+      },
+    ])
+  })
+
   it('provides deterministic aggregate Track Z sorting, capping, and fallback recommendations on synthetic case inputs', () => {
     const caseAlpha = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
       caseName: 'case-alpha',
@@ -1620,6 +1665,117 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(trackZ?.recommendation).toBe('collect-more-data')
   })
 
+  it('provides deterministic aggregate Track AB sorting, capping, and fallback recommendations on synthetic case inputs', () => {
+    const caseAlpha = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-alpha',
+      optLevel: 'O1',
+      opportunities: {
+        total: 8,
+        currentlyOptimized: 0,
+        safeCandidate: 6,
+        blockedByBarrier: 2,
+        unknown: 0,
+        topOpportunities: [
+          { status: 'safeCandidate', pattern: 'score_copy -> score_arith', count: 6, examples: ['case-alpha:1', 'case-alpha:2', 'case-alpha:3', 'case-alpha:4', 'case-alpha:5', 'case-alpha:6'] },
+          { status: 'blockedByBarrier', pattern: 'other', count: 2, examples: ['case-alpha:7', 'case-alpha:8'] },
+        ],
+      },
+      rewriteOpportunityTrackZResidualSummary: {
+        totalCount: 2,
+        byLabel: [
+          { label: 'needs-window-proof', count: 1, caseNames: [], examples: ['case-alpha:n1'] },
+          { label: 'unknown-needs-lir-proof', count: 1, caseNames: [], examples: ['case-alpha:u1'] },
+        ],
+      },
+      rewriteOpportunityTrackABResidualSummary: {
+        totalCount: 8,
+        byLabel: [
+          { label: 'local-window-dead-source-candidate', count: 2, caseNames: [], examples: ['case-alpha:l1', 'case-alpha:l2', 'case-alpha:l3', 'case-alpha:l4'] },
+          { label: 'source-reused-needs-copy', count: 1, caseNames: [], examples: ['case-alpha:s1'] },
+          { label: 'non-adjacent-window-needs-pass-design', count: 1, caseNames: [], examples: ['case-alpha:n1'] },
+          { label: 'barrier-or-boundary-window', count: 1, caseNames: [], examples: ['case-alpha:b1'] },
+          { label: 'unparsed-or-insufficient-window', count: 1, caseNames: [], examples: ['case-alpha:u1', 'case-alpha:u2', 'case-alpha:u3', 'case-alpha:u4', 'case-alpha:u5'] },
+          { label: 'source-reused-needs-copy', count: 1, caseNames: [], examples: ['case-alpha:s2'] },
+        ],
+      },
+    })
+    const caseBeta = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-beta',
+      optLevel: 'O1',
+      opportunities: {
+        total: 4,
+        currentlyOptimized: 1,
+        safeCandidate: 3,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [
+          { status: 'safeCandidate', pattern: 'score_copy -> score_arith', count: 3, examples: ['case-beta:1', 'case-beta:2', 'case-beta:3'] },
+        ],
+      },
+      rewriteOpportunityTrackABResidualSummary: {
+        totalCount: 4,
+        byLabel: [
+          { label: 'source-reused-needs-copy', count: 2, caseNames: [], examples: ['case-beta:s1', 'case-beta:s2', 'case-beta:s3', 'case-beta:s4'] },
+          { label: 'protected-or-abi-slot', count: 1, caseNames: [], examples: ['case-beta:p1', 'case-beta:p2', 'case-beta:p3'] },
+          { label: 'external-or-cross-function-mention', count: 1, caseNames: [], examples: ['case-beta:e1', 'case-beta:e2'] },
+        ],
+      },
+    })
+
+    const aggregate = summarizeExperimentalLocalCopyRewriteResidualSummary([caseAlpha, caseBeta])
+
+    expect(aggregate.trackABResidualDiagnostics).toBeDefined()
+    const trackAB = aggregate.trackABResidualDiagnostics
+    expect(trackAB?.targetPattern).toBe('score_copy -> score_arith')
+    expect(trackAB?.totalCount).toBe(12)
+    expect(trackAB?.topCaseNames).toEqual(['case-alpha', 'case-beta'])
+    expect(trackAB?.byLabel).toEqual([
+      {
+        label: 'source-reused-needs-copy',
+        count: 4,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:s1', 'case-alpha:s2', 'case-beta:s1'],
+      },
+      {
+        label: 'local-window-dead-source-candidate',
+        count: 2,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:l1', 'case-alpha:l2', 'case-alpha:l3'],
+      },
+      {
+        label: 'barrier-or-boundary-window',
+        count: 1,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:b1'],
+      },
+      {
+        label: 'external-or-cross-function-mention',
+        count: 1,
+        caseNames: ['case-beta'],
+        examples: ['case-beta:e1', 'case-beta:e2'],
+      },
+      {
+        label: 'non-adjacent-window-needs-pass-design',
+        count: 1,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:n1'],
+      },
+      {
+        label: 'protected-or-abi-slot',
+        count: 1,
+        caseNames: ['case-beta'],
+        examples: ['case-beta:p1', 'case-beta:p2', 'case-beta:p3'],
+      },
+      {
+        label: 'unparsed-or-insufficient-window',
+        count: 1,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:u1', 'case-alpha:u2', 'case-alpha:u3'],
+      },
+    ])
+    expect(trackAB?.recommendation).toBe('investigate-blockers')
+  })
+
   it('uses conservative Track Z fallback when no candidate summary is available', () => {
     const caseSummary = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
       caseName: 'case-none',
@@ -1676,8 +1832,11 @@ describe('arithmetic probe benchmark tooling', () => {
 
     expect(residualSummary).toBeDefined()
     expect(residualSummary?.trackZResidualDiagnostics).toBeDefined()
+    expect(residualSummary?.trackABResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackZResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
     expect(residualSummary?.trackZResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
+    expect(residualSummary?.trackABResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
+    expect(residualSummary?.trackABResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
     expect(residualSummary?.mode).toBe('experimental-local-copy-rewrite')
     expect(residualSummary?.status).toBe('diagnostic')
     expect(residualSummary?.onCaseCount).toBe(onReport.cases.length)
@@ -1763,6 +1922,7 @@ describe('arithmetic probe benchmark tooling', () => {
       'suitable only for manual experimental opt-in review',
     ]))
     expect(readiness?.improvedCaseNames.length).toBeGreaterThan(0)
+    expect(report.experimentalLocalCopyRewriteResidualSummary?.trackABResidualDiagnostics).toBeDefined()
   })
 
   it('preserves requested optimization levels in experimental comparison mode', () => {

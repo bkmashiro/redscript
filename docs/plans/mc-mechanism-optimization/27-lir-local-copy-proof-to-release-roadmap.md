@@ -117,7 +117,7 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 ### Track AB — Window/proof diagnostics for unknown residuals
 
-**Status:** [ ] Not started — next recommended track
+**Status:** [x] Implemented (diagnostic-only, conservative)
 
 **Product promise:** Convert the dominant `unknown-needs-lir-proof` residuals into named proof/blocker buckets so the next decision is evidence-backed: implement a narrow rewrite, add more proof fixtures, or stop.
 
@@ -141,9 +141,9 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 **Implementation outline:**
 
-- [ ] Read or regenerate Track Z baseline with:
+- [x] Read or regenerate Track Z baseline with:
   `npm run gate:lir-local-copy -- --output /tmp/redscript-lir-track-ab-baseline.json`.
-- [ ] For target residuals (`safeCandidate + score_copy -> score_arith + unknown-needs-lir-proof`), add structured local-window facts where available:
+- [x] For target residuals (`safeCandidate + score_copy -> score_arith + unknown-needs-lir-proof`), add structured local-window facts where available:
   - previous command class,
   - current copy destination/source slot,
   - next command class,
@@ -153,7 +153,7 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
   - whether destination/source is protected (`$ret`, `$pN`, runtime/framework slot),
   - whether either slot has cross-function/module/external mention evidence,
   - whether a command/barrier/function boundary interrupts the candidate window.
-- [ ] Add a Track AB summary nested under `trackZResidualDiagnostics` or adjacent to it. Suggested labels:
+- [x] Add a Track AB summary nested under `trackZResidualDiagnostics` or adjacent to it. Suggested labels:
   - `local-window-dead-source-candidate`
   - `source-reused-needs-copy`
   - `protected-or-abi-slot`
@@ -161,16 +161,32 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
   - `barrier-or-boundary-window`
   - `non-adjacent-window-needs-pass-design`
   - `unparsed-or-insufficient-window`
-- [ ] Add deterministic aggregate fields: counts by label, top case names, capped examples, and recommendation.
-- [ ] Add synthetic tests for every label and one real explicit-report test proving the all-case report is populated.
-- [ ] Update this roadmap with real counts and the next decision.
+- [x] Add deterministic aggregate fields: counts by label, top case names, capped examples, and recommendation.
+- [x] Add synthetic tests for every label and one real explicit-report test proving the all-case report is populated.
+- [x] Update this roadmap with real counts and the next decision.
+
+**Latest controller gate evidence:** `npm run gate:lir-local-copy -- --output /tmp/redscript-lir-track-ab-controller.json`
+
+- `gate = "pass"`
+- `rollout = "pass"`
+- `recommendation = "manual-experimental-opt-in-only"`
+- `commandDelta = -193`
+- `scoreCopyDelta = -193`
+- `offlineFixtures = 29`
+- `offlineFailed = 0`
+- `trackABResidualDiagnostics.totalCount = 328`
+- `trackABResidualDiagnostics.byLabel = [{ label: "non-adjacent-window-needs-pass-design", count: 328 }]`
+- `trackABResidualDiagnostics.topCaseNames = ["sqrt_fx1000", "div3_hp", "double_div", "double_mul", "sin_cos_hp_separate", "sin_hp", "sqrt_fx10000", "int_div_mod_mix"]`
+- `trackABResidualDiagnostics.recommendation = "collect-more-data"`
 
 **Definition of Done:**
 
-- [ ] Track AB all-case output explains most of the 328 Track Z unknowns using named proof/blocker buckets.
-- [ ] No optimizer behavior changes.
-- [ ] Full controller gates pass.
-- [ ] Roadmap records whether Track AA is unblocked, more proof diagnostics are required, or the family should stop.
+- [x] Track AB all-case output explains all 328 Track Z unknowns using a named proof/window bucket.
+- [x] No optimizer behavior changes.
+- [x] Full controller gates pass.
+- [x] Roadmap records whether Track AA is unblocked, more proof diagnostics are required, or the family should stop.
+
+**Decision:** Track AA remains blocked. Since `non-adjacent-window-needs-pass-design` accounts for all 328 target residuals, the next non-blocked work is Track AE: classify the non-adjacent pass-design gap before attempting any rewrite.
 
 **Expected next decision after AB:**
 
@@ -180,9 +196,54 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 ---
 
+### Track AE — Non-adjacent pass-design gap classification
+
+**Status:** [ ] Not started — next recommended track
+
+**Product promise:** Split the 328 `non-adjacent-window-needs-pass-design` residuals into actionable design buckets before writing any optimizer rewrite.
+
+**Why now:** Track AB showed every remaining Track Z target residual is not a local adjacent-window proof candidate. A rewrite would require either a wider/non-adjacent pass design or a decision to stop this residual family.
+
+**Allowed files:**
+
+- `benchmarks/arithmetic-probes.ts`
+- `src/__tests__/arithmetic-probes.test.ts`
+- this roadmap and linked docs under `docs/plans/mc-mechanism-optimization/`
+
+**Forbidden:**
+
+- No changes to `src/optimizer/lir/rmw.ts`.
+- No pass-order changes.
+- No default/CLI behavior changes.
+- No production-emitted behavior changes.
+- No VIR changes.
+
+**Implementation outline:**
+
+- [ ] Add a Track AE summary nested under or adjacent to `trackABResidualDiagnostics` for the `non-adjacent-window-needs-pass-design` bucket.
+- [ ] Classify the gap into deterministic buckets such as:
+  - `copy-chain-wider-window-required`
+  - `merge-or-control-flow-boundary`
+  - `helper-function-boundary`
+  - `requires-new-lir-dataflow-pass`
+  - `insufficient-command-context`
+  - `not-worth-pursuing`
+- [ ] Include counts, top case names, capped examples, and recommendation.
+- [ ] Add synthetic tests for bucket sorting/capping and one all-case report test proving Track AE is populated.
+- [ ] Update this roadmap with controller gate counts and the next decision.
+
+**Definition of Done:**
+
+- [ ] Track AE explains the 328 non-adjacent residuals with pass-design buckets.
+- [ ] No optimizer behavior changes.
+- [ ] Full controller gates pass.
+- [ ] Roadmap records whether Track AA remains blocked, a wider-pass design ADR is needed, or the residual family should stop.
+
+---
+
 ### Track AA — Narrow residual rewrite implementation
 
-**Status:** [ ] Blocked by Track AB proof/window diagnostics
+**Status:** [ ] Blocked by Track AB/AE proof and pass-design diagnostics
 
 **Product promise:** Add exactly one tiny LIR rewrite for a fixture-proven residual class, still behind `--experimental-lir-local-copy-rewrite`.
 
@@ -332,3 +393,10 @@ Append a short note here after each completed tranche.
 
 - Renamed from `27-lir-local-copy-active-roadmap.md` to `27-lir-local-copy-proof-to-release-roadmap.md`.
 - Refocused future work on proof/window diagnostics before rewrite implementation or default enablement.
+
+### 2026-06-29 — Track AB completed
+
+- Added `trackABResidualDiagnostics` for Track Z `unknown-needs-lir-proof` residuals.
+- Controller gate `/tmp/redscript-lir-track-ab-controller.json` reports all 328 target residuals as `non-adjacent-window-needs-pass-design`.
+- `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -193`, `scoreCopyDelta = -193`, offline fixtures `29/29` pass.
+- Track AA remains blocked; next unchecked non-blocked track is Track AE.

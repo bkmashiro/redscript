@@ -510,6 +510,20 @@ export type RewriteTrackZDiagnosticRecommendation =
   | 'investigate-blockers'
   | 'collect-more-data'
 
+export type RewriteTrackABDiagnosticLabel =
+  | 'local-window-dead-source-candidate'
+  | 'source-reused-needs-copy'
+  | 'protected-or-abi-slot'
+  | 'external-or-cross-function-mention'
+  | 'barrier-or-boundary-window'
+  | 'non-adjacent-window-needs-pass-design'
+  | 'unparsed-or-insufficient-window'
+
+export type RewriteTrackABDiagnosticRecommendation =
+  | 'prioritize-local-window-rewrite'
+  | 'investigate-blockers'
+  | 'collect-more-data'
+
 export interface RewriteTrackZDiagnosticBucket {
   label: RewriteTrackZDiagnosticLabel
   count: number
@@ -530,6 +544,33 @@ export interface RewriteTrackZDiagnosticAggregateSummary {
   totalCount: number
   topCaseNames: string[]
   recommendation: RewriteTrackZDiagnosticRecommendation
+}
+
+export interface RewriteTrackABDiagnosticBucket {
+  label: RewriteTrackABDiagnosticLabel
+  count: number
+  caseNames: string[]
+  examples: string[]
+}
+
+export interface RewriteTrackABDiagnosticCaseSummary {
+  byLabel: RewriteTrackABDiagnosticBucket[]
+  targetPattern: 'score_copy -> score_arith'
+  totalCount: number
+  recommendation: RewriteTrackABDiagnosticRecommendation
+}
+
+export interface RewriteTrackABDiagnosticAggregateSummary {
+  byLabel: RewriteTrackABDiagnosticBucket[]
+  targetPattern: 'score_copy -> score_arith'
+  totalCount: number
+  topCaseNames: string[]
+  recommendation: RewriteTrackABDiagnosticRecommendation
+}
+
+interface RewriteTrackABDiagnosticCandidateSummary {
+  totalCount: number
+  byLabel: RewriteTrackABDiagnosticBucket[]
 }
 
 export interface RewriteTrackZDiagnosticCandidateSummary {
@@ -1001,6 +1042,7 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary 
   residualByFamily: ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry[]
   residualByProvenanceReason: RewriteProvenanceBucket[]
   trackZResidualDiagnostics?: RewriteTrackZDiagnosticCaseSummary
+  trackABResidualDiagnostics?: RewriteTrackABDiagnosticAggregateSummary
   recommendation: 'candidate-family-ready' | 'diagnose-residuals-first' | 'no-residuals'
 }
 
@@ -1014,6 +1056,7 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteResidualSummary {
   residualByFamily: ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry[]
   residualByProvenanceReason: RewriteProvenanceBucket[]
   trackZResidualDiagnostics?: RewriteTrackZDiagnosticAggregateSummary
+  trackABResidualDiagnostics?: RewriteTrackABDiagnosticAggregateSummary
   topResidualCaseNames: string[]
   recommendation: 'candidate-family-ready' | 'diagnose-residuals-first' | 'no-residuals'
   perCase: ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary[]
@@ -3451,6 +3494,111 @@ function classifyTrackZDiagnosticLabel(
   return 'unknown-needs-lir-proof'
 }
 
+function classifyTrackABDiagnosticLabel(
+  status: CopyRewriteStatus,
+  pattern: string,
+  reason: RewriteProvenanceReason,
+  currentLine: string,
+  previousLine: string | undefined,
+  nextLine: string | undefined,
+  lines: Array<{ path: string; line: number; content: string }>,
+  index: number,
+): RewriteTrackABDiagnosticLabel | null {
+  if (status !== 'safeCandidate' || pattern !== TRACK_Z_TARGET_PATTERN) return null
+
+  const parsedCopy = parseScoreCopy(currentLine)
+  if (!parsedCopy) return 'unparsed-or-insufficient-window'
+
+  const proofMissReason = classifyProofMissReason(reason, pattern, currentLine)
+  if (isProtectedSlotEvidence(parsedCopy.src) || isProtectedSlotEvidence(parsedCopy.dst)) {
+    return 'protected-or-abi-slot'
+  }
+  const sourceKind = classifyProofMissSourceKind(proofMissReason, parsedCopy)
+  if (sourceKind === 'external-mention') {
+    return 'external-or-cross-function-mention'
+  }
+
+  if (proofMissReason === 'barrier-or-non-adjacent') {
+    return 'barrier-or-boundary-window'
+  }
+  if (proofMissReason === 'insufficient-command-context') {
+    return 'unparsed-or-insufficient-window'
+  }
+  if (proofMissReason === 'command-level-only-artifact') {
+    return 'non-adjacent-window-needs-pass-design'
+  }
+  if (proofMissReason !== 'no-exact-lir-local-proof') {
+    return 'non-adjacent-window-needs-pass-design'
+  }
+
+  const family = classifyShapeFamilyForBlockedPatternNotExact(pattern, currentLine)
+  const localProofEvidenceKind = classifyLocalProofEvidenceKind(
+    family,
+    sourceKind,
+    parsedCopy,
+    previousLine,
+    nextLine,
+  )
+  if (
+    localProofEvidenceKind === 'adjacent-arith-source-reused'
+    || localProofEvidenceKind === 'copy-chain-local-temp'
+  ) {
+    return 'source-reused-needs-copy'
+  }
+
+  const livenessWindowKind = classifyLivenessWindowKind(family, lines, index, parsedCopy)
+  const adjacentWindowBreakdown = classifyProofMissAdjacentWindowBreakdownKind(
+    proofMissReason,
+    sourceKind,
+    livenessWindowKind,
+  )
+  if (
+    adjacentWindowBreakdown === 'unknown-unparsed-command'
+    || adjacentWindowBreakdown === 'adjacent-window-missing-or-incomplete'
+  ) {
+    return 'unparsed-or-insufficient-window'
+  }
+  if (adjacentWindowBreakdown === 'candidate-shape-not-satisfying-lir-local-proof') {
+    return 'non-adjacent-window-needs-pass-design'
+  }
+
+  if (
+    livenessWindowKind === 'single-adjacent-arith-no-reuse'
+    || livenessWindowKind === 'copy-chain-no-reuse'
+  ) {
+    return 'local-window-dead-source-candidate'
+  }
+  if (
+    livenessWindowKind === 'blocked-dst-reused-after-window'
+    || livenessWindowKind === 'blocked-src-overwritten-before-use'
+  ) {
+    return 'source-reused-needs-copy'
+  }
+  if (livenessWindowKind === 'unknown-window-too-small') {
+    return 'unparsed-or-insufficient-window'
+  }
+
+  if (sourceKind === 'insufficient-context' || localProofEvidenceKind === 'insufficient-context') {
+    return 'unparsed-or-insufficient-window'
+  }
+  return 'non-adjacent-window-needs-pass-design'
+}
+
+function toTrackABCandidateSummary(
+  byLabel: Map<RewriteTrackABDiagnosticLabel, { count: number; examples: string[] }>,
+  totalCount: number,
+): RewriteTrackABDiagnosticCandidateSummary {
+  return {
+    totalCount,
+    byLabel: [...byLabel.entries()].map(([label, value]) => ({
+      label,
+      count: value.count,
+      caseNames: [],
+      examples: value.examples,
+    })),
+  }
+}
+
 function toTrackZCandidateSummary(
   byLabel: Map<RewriteTrackZDiagnosticLabel, { count: number; examples: string[] }>,
   totalCount: number,
@@ -3484,6 +3632,7 @@ export function summarizeRewriteOpportunitiesWithProvenance(
   opportunities: CopyRewriteOpportunitySummary
   provenanceSummary: RewriteProvenanceSummary
   trackZResidualSummary: RewriteTrackZDiagnosticCandidateSummary
+  trackABResidualSummary: RewriteTrackABDiagnosticCandidateSummary
 } {
   const opportunities = summarizeRewriteOpportunities(lines)
   const provenanceSummary = makeZeroRewriteProvenanceSummary()
@@ -3513,6 +3662,8 @@ export function summarizeRewriteOpportunitiesWithProvenance(
   }>()
   const trackZByLabel = new Map<RewriteTrackZDiagnosticLabel, { count: number; examples: string[] }>()
   let trackZResidualTotalCount = 0
+  const trackABByLabel = new Map<RewriteTrackABDiagnosticLabel, { count: number; examples: string[] }>()
+  let trackABResidualTotalCount = 0
   let patternNotExactTotal = 0
 
   for (let i = 0; i < lines.length; i += 1) {
@@ -3553,6 +3704,33 @@ export function summarizeRewriteOpportunitiesWithProvenance(
       trackZResidualTotalCount += 1
       if (trackZBucket.examples.length < MAX_RESIDUAL_EXAMPLES_PER_BUCKET) {
         trackZBucket.examples.push(`${current.path}:${current.line}: ${current.content}`)
+      }
+    }
+    if (trackZLabel === 'unknown-needs-lir-proof') {
+      const trackABLabel = classifyTrackABDiagnosticLabel(
+        entry.status,
+        entry.pattern,
+        entry.reason,
+        current.content,
+        previousLine,
+        nextLine,
+        lines,
+        i,
+      )
+      if (trackABLabel) {
+        let trackABBucket = trackABByLabel.get(trackABLabel)
+        if (!trackABBucket) {
+          trackABBucket = {
+            count: 0,
+            examples: [],
+          }
+          trackABByLabel.set(trackABLabel, trackABBucket)
+        }
+        trackABBucket.count += 1
+        trackABResidualTotalCount += 1
+        if (trackABBucket.examples.length < MAX_RESIDUAL_EXAMPLES_PER_BUCKET) {
+          trackABBucket.examples.push(`${current.path}:${current.line}: ${current.content}`)
+        }
       }
     }
 
@@ -3827,6 +4005,7 @@ export function summarizeRewriteOpportunitiesWithProvenance(
     opportunities,
     provenanceSummary: opportunities.provenanceSummary,
     trackZResidualSummary: toTrackZCandidateSummary(trackZByLabel, trackZResidualTotalCount),
+    trackABResidualSummary: toTrackABCandidateSummary(trackABByLabel, trackABResidualTotalCount),
   }
 }
 
@@ -5055,6 +5234,20 @@ function toSortedTrackZCandidateBuckets(
     ))
 }
 
+function toSortedTrackABCandidateBuckets(
+  buckets: RewriteTrackABDiagnosticBucket[],
+): RewriteTrackABDiagnosticBucket[] {
+  return buckets
+    .map(entry => ({
+      ...entry,
+      caseNames: [...entry.caseNames].sort(),
+      examples: entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+    }))
+    .sort((left, right) => (
+      right.count - left.count || left.label.localeCompare(right.label)
+    ))
+}
+
 function toTrackZCaseTopNames(
   caseTotals: Map<string, number>,
 ): string[] {
@@ -5086,6 +5279,30 @@ function summarizeTrackZRecommendation(
   return 'collect-more-data'
 }
 
+function summarizeTrackABRecommendation(
+  byLabel: RewriteTrackABDiagnosticBucket[],
+  totalCount: number,
+): RewriteTrackABDiagnosticRecommendation {
+  if (totalCount === 0) return 'collect-more-data'
+  const top = byLabel[0]
+  if (!top) return 'collect-more-data'
+
+  if (top.label === 'local-window-dead-source-candidate') return 'prioritize-local-window-rewrite'
+  if (
+    top.label === 'source-reused-needs-copy'
+    || top.label === 'protected-or-abi-slot'
+    || top.label === 'external-or-cross-function-mention'
+    || top.label === 'barrier-or-boundary-window'
+  ) {
+    return 'investigate-blockers'
+  }
+  if (top.label === 'unparsed-or-insufficient-window' || top.label === 'non-adjacent-window-needs-pass-design') {
+    return 'collect-more-data'
+  }
+
+  return 'collect-more-data'
+}
+
 function summarizeTrackZCaseSummary(
   caseName: string,
   candidateSummary: RewriteTrackZDiagnosticCandidateSummary,
@@ -5105,6 +5322,25 @@ function summarizeTrackZCaseSummary(
   }
 }
 
+function summarizeTrackABCaseSummary(
+  caseName: string,
+  candidateSummary: RewriteTrackABDiagnosticCandidateSummary,
+): RewriteTrackABDiagnosticAggregateSummary {
+  const byLabel = toSortedTrackABCandidateBuckets(candidateSummary.byLabel)
+    .map(entry => ({
+      ...entry,
+      caseNames: entry.count > 0 ? [caseName] : [],
+    }))
+  const recommendation = summarizeTrackABRecommendation(byLabel, candidateSummary.totalCount)
+  return {
+    byLabel,
+    targetPattern: TRACK_Z_TARGET_PATTERN,
+    totalCount: candidateSummary.totalCount,
+    topCaseNames: [caseName],
+    recommendation,
+  }
+}
+
 export function summarizeExperimentalLocalCopyRewriteResidualCaseSummary(
   caseSummary: {
     caseName: string
@@ -5112,6 +5348,7 @@ export function summarizeExperimentalLocalCopyRewriteResidualCaseSummary(
     opportunities: CopyRewriteOpportunitySummary
     rewriteOpportunityProvenanceSummary?: RewriteProvenanceSummary
     rewriteOpportunityTrackZResidualSummary?: RewriteTrackZDiagnosticCandidateSummary
+    rewriteOpportunityTrackABResidualSummary?: RewriteTrackABDiagnosticCandidateSummary
   },
 ): ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary {
   const caseName = caseSummary.caseName
@@ -5127,6 +5364,9 @@ export function summarizeExperimentalLocalCopyRewriteResidualCaseSummary(
   const byProvenance = summarizeLocalCopyRewriteResidualReasonsFromProvenance(provenanceSummary, caseName)
   const trackZResidualDiagnostics = caseSummary.rewriteOpportunityTrackZResidualSummary
     ? summarizeTrackZCaseSummary(caseName, caseSummary.rewriteOpportunityTrackZResidualSummary)
+    : undefined
+  const trackABResidualDiagnostics = caseSummary.rewriteOpportunityTrackABResidualSummary
+    ? summarizeTrackABCaseSummary(caseName, caseSummary.rewriteOpportunityTrackABResidualSummary)
     : undefined
   const residualByStatus = toSortedResidualByStatus(byStatus)
   const residualByPattern = toSortedResidualByPattern(byPattern).slice(0, MAX_RESIDUAL_PATTERNS_PER_SUMMARY)
@@ -5147,6 +5387,7 @@ export function summarizeExperimentalLocalCopyRewriteResidualCaseSummary(
       }))
       .sort((left, right) => right.count - left.count || left.reason.localeCompare(right.reason)),
     ...(trackZResidualDiagnostics ? { trackZResidualDiagnostics } : {}),
+    ...(trackABResidualDiagnostics ? { trackABResidualDiagnostics } : {}),
     recommendation,
   }
 }
@@ -5173,6 +5414,19 @@ export function summarizeExperimentalLocalCopyRewriteResidualSummary(
           recommendation: item.trackZResidualDiagnostics.recommendation,
         },
       } : {}),
+      ...(item.trackABResidualDiagnostics ? {
+        trackABResidualDiagnostics: {
+          byLabel: item.trackABResidualDiagnostics.byLabel.map(bucket => ({
+            ...bucket,
+            caseNames: [...bucket.caseNames],
+            examples: [...bucket.examples],
+          })),
+          targetPattern: item.trackABResidualDiagnostics.targetPattern,
+          totalCount: item.trackABResidualDiagnostics.totalCount,
+          topCaseNames: [...item.trackABResidualDiagnostics.topCaseNames],
+          recommendation: item.trackABResidualDiagnostics.recommendation,
+        },
+      } : {}),
     }))
     .sort((left, right) => left.caseName.localeCompare(right.caseName) || left.optLevel.localeCompare(right.optLevel))
 
@@ -5184,6 +5438,9 @@ export function summarizeExperimentalLocalCopyRewriteResidualSummary(
   const byTrackZLabel = new Map<string, RewriteTrackZDiagnosticBucket>()
   const trackZCaseTotals = new Map<string, number>()
   let totalTrackZCount = 0
+  const byTrackABLabel = new Map<string, RewriteTrackABDiagnosticBucket>()
+  const trackABCaseTotals = new Map<string, number>()
+  let totalTrackABCount = 0
 
   for (const item of perCase) {
     if (item.residualCount <= 0) continue
@@ -5297,6 +5554,32 @@ export function summarizeExperimentalLocalCopyRewriteResidualSummary(
         }
       }
     }
+    const trackAB = item.trackABResidualDiagnostics
+    if (trackAB && trackAB.totalCount > 0) {
+      totalTrackABCount += trackAB.totalCount
+      trackABCaseTotals.set(item.caseName, trackAB.totalCount)
+      for (const bucket of trackAB.byLabel) {
+        if (bucket.count <= 0) continue
+        let aggregate = byTrackABLabel.get(bucket.label)
+        if (!aggregate) {
+          aggregate = {
+            label: bucket.label,
+            count: 0,
+            caseNames: [],
+            examples: [],
+          }
+          byTrackABLabel.set(bucket.label, aggregate)
+        }
+        aggregate.count += bucket.count
+        if (!aggregate.caseNames.includes(item.caseName)) {
+          aggregate.caseNames.push(item.caseName)
+        }
+        for (const example of bucket.examples) {
+          if (aggregate.examples.length >= MAX_RESIDUAL_EXAMPLES_PER_BUCKET) break
+          aggregate.examples.push(example)
+        }
+      }
+    }
   }
 
   const residualTrackZDiagnosticsByLabel = [...byTrackZLabel.values()].map(entry => ({
@@ -5318,6 +5601,27 @@ export function summarizeExperimentalLocalCopyRewriteResidualSummary(
       totalCount: totalTrackZCount,
       topCaseNames: residualTrackZTopCaseNames,
       recommendation: residualTrackZRecommendation,
+    }
+    : undefined
+  const residualTrackABDiagnosticsByLabel = [...byTrackABLabel.values()].map(entry => ({
+    ...entry,
+    caseNames: [...entry.caseNames].sort(),
+    examples: entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+  })).sort((left, right) => (
+    right.count - left.count || left.label.localeCompare(right.label)
+  ))
+  const residualTrackABRecommendation = summarizeTrackABRecommendation(
+    residualTrackABDiagnosticsByLabel,
+    totalTrackABCount,
+  )
+  const residualTrackABTopCaseNames = toTrackZCaseTopNames(trackABCaseTotals)
+  const residualTrackABResidualDiagnostics = totalTrackABCount > 0 || residualTrackABTopCaseNames.length > 0
+    ? {
+      byLabel: residualTrackABDiagnosticsByLabel,
+      targetPattern: TRACK_Z_TARGET_PATTERN,
+      totalCount: totalTrackABCount,
+      topCaseNames: residualTrackABTopCaseNames,
+      recommendation: residualTrackABRecommendation,
     }
     : undefined
 
@@ -5349,6 +5653,7 @@ export function summarizeExperimentalLocalCopyRewriteResidualSummary(
     residualByFamily: byFamilyArray,
     residualByProvenanceReason,
     ...(residualTrackZResidualDiagnostics ? { trackZResidualDiagnostics: residualTrackZResidualDiagnostics } : {}),
+    ...(residualTrackABResidualDiagnostics ? { trackABResidualDiagnostics: residualTrackABResidualDiagnostics } : {}),
     topResidualCaseNames,
     recommendation,
     perCase,
@@ -7775,6 +8080,7 @@ export function runArithmeticProbe(
         opportunities: rewriteOpportunityAnalysis.opportunities,
         rewriteOpportunityProvenanceSummary: rewriteOpportunityAnalysis.provenanceSummary,
         rewriteOpportunityTrackZResidualSummary: rewriteOpportunityAnalysis.trackZResidualSummary,
+        rewriteOpportunityTrackABResidualSummary: rewriteOpportunityAnalysis.trackABResidualSummary,
       })
       : undefined,
     virDecision,
