@@ -6,7 +6,10 @@ import {
   buildVirArithmeticDecisionDashboard,
   summarizeDeltaSeries,
   mergeRejectionCategoryTotals,
+  evaluateExperimentalLocalCopyRewriteNoRegressionGate,
+  parseProbeCliArgs,
   type ArithmeticProbeResult,
+  type ArithmeticProbeExperimentalLocalCopyRewriteComparison,
   type RewriteProvenanceSummary,
   type RewriteProofMissLirAdjacentWindowBreakdownKind,
   type RewriteProofMissLirAdjacentWindowSummary,
@@ -448,6 +451,161 @@ describe('arithmetic probe benchmark tooling', () => {
   it('keeps benchmark mode flag-off by default', () => {
     const report = runArithmeticProbeReport('int_arithmetic', [1])
     expect(report.experimentalLocalCopyRewriteComparison).toBeUndefined()
+  })
+
+  it('requires explicit experimental local-copy rewrite flag to use the no-regression gate', () => {
+    expect(() => parseProbeCliArgs([
+      '--require-experimental-lir-local-copy-no-regressions',
+      '--case',
+      'int_arithmetic',
+    ])).toThrow(/requires --experimental-lir-local-copy-rewrite/)
+  })
+
+  it('fails when the no-regression gate is missing the experimental comparison', () => {
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(undefined)
+    expect(gate.status).toBe('fail')
+    expect(gate.failReasons).toEqual([
+      'Missing experimentalLocalCopyRewriteComparison',
+    ])
+  })
+
+  it('passes explicit no-regression gate for a synthetic non-regressing comparison', () => {
+    const comparison: ArithmeticProbeExperimentalLocalCopyRewriteComparison = {
+      mode: 'experimental-local-copy-rewrite',
+      status: 'experimental',
+      enabled: true,
+      off: { caseCount: 2, commandTotal: 20, scoreCopyTotal: 8 },
+      on: { caseCount: 2, commandTotal: 16, scoreCopyTotal: 4 },
+      commandDelta: -4,
+      scoreCopyDelta: -4,
+      commandDeltaSummary: {
+        min: 0,
+        max: 0,
+        total: -4,
+        average: -2,
+        improvedCount: 2,
+        regressedCount: 0,
+        unchangedCount: 0,
+      },
+      scoreCopyDeltaSummary: {
+        min: 0,
+        max: 0,
+        total: -4,
+        average: -2,
+        improvedCount: 2,
+        regressedCount: 0,
+        unchangedCount: 0,
+      },
+      perCaseDeltas: [
+        {
+          caseName: 'case-a',
+          optLevel: 'O1',
+          offCommandsTotal: 10,
+          onCommandsTotal: 8,
+          commandDelta: -2,
+          offScoreCopyTotal: 4,
+          onScoreCopyTotal: 2,
+          scoreCopyDelta: -2,
+        },
+        {
+          caseName: 'case-b',
+          optLevel: 'O1',
+          offCommandsTotal: 10,
+          onCommandsTotal: 8,
+          commandDelta: -2,
+          offScoreCopyTotal: 4,
+          onScoreCopyTotal: 2,
+          scoreCopyDelta: -2,
+        },
+      ],
+    }
+
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(comparison)
+    expect(gate.status).toBe('pass')
+    expect(gate.failReasons).toHaveLength(0)
+    expect(gate.mode).toBe('experimental-no-regression-evidence-only')
+    expect(gate.rationale).toBe('benchmark-evidence-only-no-production')
+  })
+
+  it('detects command and scoreCopy regressions in the no-regression gate', () => {
+    const commandRegressionComparison: ArithmeticProbeExperimentalLocalCopyRewriteComparison = {
+      mode: 'experimental-local-copy-rewrite',
+      status: 'experimental',
+      enabled: true,
+      off: { caseCount: 1, commandTotal: 5, scoreCopyTotal: 3 },
+      on: { caseCount: 1, commandTotal: 7, scoreCopyTotal: 4 },
+      commandDelta: 2,
+      scoreCopyDelta: 1,
+      commandDeltaSummary: {
+        min: 2,
+        max: 2,
+        total: 2,
+        average: 2,
+        improvedCount: 0,
+        regressedCount: 1,
+        unchangedCount: 0,
+      },
+      scoreCopyDeltaSummary: {
+        min: 1,
+        max: 1,
+        total: 1,
+        average: 1,
+        improvedCount: 0,
+        regressedCount: 1,
+        unchangedCount: 0,
+      },
+      perCaseDeltas: [
+        {
+          caseName: 'case-a',
+          optLevel: 'O1',
+          offCommandsTotal: 5,
+          onCommandsTotal: 7,
+          commandDelta: 2,
+          offScoreCopyTotal: 3,
+          onScoreCopyTotal: 4,
+          scoreCopyDelta: 1,
+        },
+      ],
+    }
+
+    const commandGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(commandRegressionComparison)
+    expect(commandGate.status).toBe('fail')
+    expect(commandGate.failReasons).toEqual([
+      'command regressions detected in summary: 1',
+      'scoreCopy regressions detected in summary: 1',
+      'command regressions detected in per-case deltas: 1',
+      'scoreCopy regressions detected in per-case deltas: 1',
+      'aggregate command delta regression: 2',
+      'aggregate scoreCopy delta regression: 1',
+    ])
+
+    const perCaseOnlyRegressionComparison: ArithmeticProbeExperimentalLocalCopyRewriteComparison = {
+      ...commandRegressionComparison,
+      commandDelta: 0,
+      scoreCopyDelta: 0,
+      commandDeltaSummary: {
+        ...commandRegressionComparison.commandDeltaSummary,
+        regressedCount: 0,
+      },
+      scoreCopyDeltaSummary: {
+        ...commandRegressionComparison.scoreCopyDeltaSummary,
+        regressedCount: 0,
+      },
+    }
+    const perCaseGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(perCaseOnlyRegressionComparison)
+    expect(perCaseGate.status).toBe('fail')
+    expect(perCaseGate.failReasons).toEqual([
+      'command regressions detected in per-case deltas: 1',
+      'scoreCopy regressions detected in per-case deltas: 1',
+    ])
+
+    const caseMismatchComparison: ArithmeticProbeExperimentalLocalCopyRewriteComparison = {
+      ...commandRegressionComparison,
+      on: { ...commandRegressionComparison.on, caseCount: 2 },
+    }
+    const mismatchGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(caseMismatchComparison)
+    expect(mismatchGate.status).toBe('fail')
+    expect(mismatchGate.failReasons).toContain('off/on case count mismatch: off=1, on=2')
   })
 
   it('runs experimental local-copy rewrite probes deterministically with explicit comparison totals', () => {

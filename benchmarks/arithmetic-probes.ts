@@ -878,6 +878,7 @@ export interface ArithmeticProbeReport {
   unknownCauseSplitSummary?: RewriteProofMissUnknownCauseSplitSummary
   offlineRewriteTestHarnessSummary?: OfflineRewriteTestHarnessSummary
   experimentalLocalCopyRewriteComparison?: ArithmeticProbeExperimentalLocalCopyRewriteComparison
+  experimentalLocalCopyRewriteNoRegressionGate?: ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate
 }
 
 export interface ArithmeticProbeExperimentTotals {
@@ -910,11 +911,19 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteComparison {
   perCaseDeltas: ArithmeticProbeExperimentalLocalCopyRewriteComparisonEntry[]
 }
 
+export interface ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate {
+  mode: 'experimental-no-regression-evidence-only'
+  status: 'pass' | 'fail'
+  failReasons: string[]
+  rationale: 'benchmark-evidence-only-no-production'
+}
+
 type ProbeCliArgs = ReturnType<typeof parseCliArgs> & {
   caseName: string
   optLevels: OptimizationLevel[]
   list: boolean
   experimentalLirLocalCopyRewrite: boolean
+  requireNoRegressionInExperimentalLocalCopyRewrite: boolean
 }
 
 const STDLIB_DIR = path.resolve(__dirname, '..', 'src', 'stdlib')
@@ -6674,6 +6683,53 @@ function buildExperimentalLocalCopyRewriteComparison(
   }
 }
 
+export function evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+  comparison: ArithmeticProbeExperimentalLocalCopyRewriteComparison | undefined,
+): ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate {
+  const failReasons: string[] = []
+
+  if (!comparison) {
+    failReasons.push('Missing experimentalLocalCopyRewriteComparison')
+  } else {
+    if (comparison.off.caseCount !== comparison.on.caseCount) {
+      failReasons.push(
+        `off/on case count mismatch: off=${comparison.off.caseCount}, on=${comparison.on.caseCount}`,
+      )
+    }
+    if (comparison.commandDeltaSummary.regressedCount > 0) {
+      failReasons.push(`command regressions detected in summary: ${comparison.commandDeltaSummary.regressedCount}`)
+    }
+    if (comparison.scoreCopyDeltaSummary.regressedCount > 0) {
+      failReasons.push(`scoreCopy regressions detected in summary: ${comparison.scoreCopyDeltaSummary.regressedCount}`)
+    }
+    const commandRegressionCases = comparison.perCaseDeltas.filter(delta => delta.commandDelta > 0)
+    if (commandRegressionCases.length > 0) {
+      failReasons.push(
+        `command regressions detected in per-case deltas: ${commandRegressionCases.length}`,
+      )
+    }
+    const scoreCopyRegressionCases = comparison.perCaseDeltas.filter(delta => delta.scoreCopyDelta > 0)
+    if (scoreCopyRegressionCases.length > 0) {
+      failReasons.push(
+        `scoreCopy regressions detected in per-case deltas: ${scoreCopyRegressionCases.length}`,
+      )
+    }
+    if (comparison.commandDelta > 0) {
+      failReasons.push(`aggregate command delta regression: ${comparison.commandDelta}`)
+    }
+    if (comparison.scoreCopyDelta > 0) {
+      failReasons.push(`aggregate scoreCopy delta regression: ${comparison.scoreCopyDelta}`)
+    }
+  }
+
+  return {
+    mode: 'experimental-no-regression-evidence-only',
+    status: failReasons.length === 0 ? 'pass' : 'fail',
+    failReasons,
+    rationale: 'benchmark-evidence-only-no-production',
+  }
+}
+
 export function runArithmeticProbe(
   probe: ArithmeticProbeCase,
   optLevel: OptimizationLevel,
@@ -6828,12 +6884,13 @@ export function runArithmeticProbeReport(
   }
 }
 
-function parseProbeCliArgs(argv: string[]): ProbeCliArgs {
+export function parseProbeCliArgs(argv: string[]): ProbeCliArgs {
   const base = parseCliArgs(argv)
   let caseName = 'all'
   let optLevels: OptimizationLevel[] = [1]
   let list = false
   let experimentalLirLocalCopyRewrite = false
+  let requireNoRegressionInExperimentalLocalCopyRewrite = false
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -6858,6 +6915,15 @@ function parseProbeCliArgs(argv: string[]): ProbeCliArgs {
     if (arg === '--experimental-lir-local-copy-rewrite') {
       experimentalLirLocalCopyRewrite = true
     }
+    if (arg === '--require-experimental-lir-local-copy-no-regressions') {
+      requireNoRegressionInExperimentalLocalCopyRewrite = true
+    }
+  }
+
+  if (requireNoRegressionInExperimentalLocalCopyRewrite && !experimentalLirLocalCopyRewrite) {
+    throw new Error(
+      '--require-experimental-lir-local-copy-no-regressions requires --experimental-lir-local-copy-rewrite',
+    )
   }
 
   return {
@@ -6866,6 +6932,7 @@ function parseProbeCliArgs(argv: string[]): ProbeCliArgs {
     optLevels,
     list,
     experimentalLirLocalCopyRewrite,
+    requireNoRegressionInExperimentalLocalCopyRewrite,
   }
 }
 
@@ -6877,8 +6944,24 @@ function main(): void {
     }
     return
   }
+  const report = runArithmeticProbeReport(
+    args.caseName,
+    args.optLevels,
+    args.experimentalLirLocalCopyRewrite,
+  )
+
+  if (args.requireNoRegressionInExperimentalLocalCopyRewrite) {
+    const noRegressionGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      report.experimentalLocalCopyRewriteComparison,
+    )
+    report.experimentalLocalCopyRewriteNoRegressionGate = noRegressionGate
+    if (noRegressionGate.status !== 'pass') {
+      throw new Error(`Experimental local-copy rewrite no-regression gate failed: ${noRegressionGate.failReasons.join('; ')}`)
+    }
+  }
+
   writeJsonReport(
-    runArithmeticProbeReport(args.caseName, args.optLevels, args.experimentalLirLocalCopyRewrite),
+    report,
     args.output,
   )
 }

@@ -175,7 +175,25 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
   - local-copy/return RMW shape.
 - This phase is evidence-only: default compilation behavior remains with local-copy rewrite disabled unless the flag is explicitly enabled.
 
+### Tranche P outcome update
+- Added explicit CLI/benchmark evidence gate for experimental local-copy comparison:
+  - `--require-experimental-lir-local-copy-no-regressions`,
+  - hard dependency on `--experimental-lir-local-copy-rewrite`,
+  - exported `evaluateExperimentalLocalCopyRewriteNoRegressionGate` for deterministic regression checks.
+- Added additive report field `experimentalLocalCopyRewriteNoRegressionGate` with additive status metadata when gate is enabled:
+  - `mode: experimental-no-regression-evidence-only`,
+  - `status: pass | fail`,
+  - `failReasons`,
+  - `rationale: benchmark-evidence-only-no-production`.
+- Added conservative gate failure checks only for explicit evidence conditions:
+  - missing comparison,
+  - off/on case-count mismatch,
+  - regressed cases in command/scoreCopy delta summaries,
+  - per-case command/scoreCopy delta regressions,
+  - positive aggregate command/scoreCopy deltas.
+- This phase remains a no-regression evidence gate only and does not enable production rewrites.
+
 ## Next safe goals
-1. add a bounded correctness/report gate that consumes `experimentalLocalCopyRewriteComparison` and fails on command/score-copy regressions before any default enablement.
-2. expand equivalence fixtures for predecessor-arithmetic and local-temp read/write-window families before broadening/defaulting the rewrite pass.
-3. keep `experimentalLirLocalCopyRewrite` default-off until benchmark, equivalence, and corpus readiness gates are green.
+1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite`,
+2. expand bounded equivalence fixtures for predecessor-arithmetic and local-temp read/write-window families before considering any production enablement,
+3. only after gate stability and coverage evidence improve, move to a narrowly scoped rewrite-safe tranche.

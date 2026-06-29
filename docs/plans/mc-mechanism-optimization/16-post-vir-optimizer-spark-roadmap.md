@@ -95,6 +95,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | M | Offline bounded equivalence harness | Test-only LIR interpreter/checker proves smallest exported rewrite fixtures over bounded samples | Medium | Small TDD slice | Completed |
 | N | Explicit gated local-copy rewrite path | Existing local-copy/RMW rewrite pass is available only through an experimental opt-in pipeline flag, with default compiler behavior flag-off | Medium | Small TDD slice | Completed |
 | O | Experimental local-copy benchmark comparison + proof-evidence prep | Add deterministic flag-off/flag-on benchmark comparison and bounded fixture expansion before any default-on decision | Medium | Small TDD slice | Completed |
+| P | Explicit no-regression benchmark gate | Add explicit evidence-only gate that fails on command/score-copy regressions when experimental local-copy comparison is explicitly enabled | Medium | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -571,11 +572,33 @@ git status --short --branch
     - the experimental comparison is additive and does not affect default enablement.
   - Constraint preserved: this tranche only produces evidence and comparisons; it does not make local-copy/RMW rewrites the compiler default.
 
+## Tranche P — explicit experimental local-copy no-regression gate
+
+- Status: Completed as evidence-only.
+- Outcome:
+  - Added a new CLI gate flag `--require-experimental-lir-local-copy-no-regressions`.
+  - Added strict dependency check requiring `--experimental-lir-local-copy-rewrite` when gate flag is used.
+  - Added exported pure gate evaluator `evaluateExperimentalLocalCopyRewriteNoRegressionGate` with failure conditions:
+    - comparison missing,
+    - off/on case counts differ,
+    - command summary regressedCount > 0,
+    - scoreCopy summary regressedCount > 0,
+    - per-case command/scoreCopy delta > 0,
+    - aggregate command delta > 0,
+    - aggregate scoreCopy delta > 0.
+  - Added additive report status at `experimentalLocalCopyRewriteNoRegressionGate` with:
+    - `mode: experimental-no-regression-evidence-only`,
+    - `status: pass | fail`,
+    - `failReasons`,
+    - `rationale: benchmark-evidence-only-no-production`.
+  - Added tests for missing dependency, passing synthetic comparison, and synthetic command/scoreCopy regression detection.
+  - Existing behavior remains proof-less and evidence-only; this gate does not assert correctness and does not enable any rewrite by default.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through O and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through P and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -600,12 +623,12 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche O with J/K/L/O diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche P with J/K/L/O/P diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.
 
 Next safe work remains:
-1. stronger local proof parser support
-2. explicit bounded equivalence tests for candidate families
-3. then a separately gated rewrite implementation tranche
+1. run the new no-regression gate in explicit CI/benchmark paths using `--require-experimental-lir-local-copy-no-regressions`,
+2. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments,
+3. proceed to a separately gated rewrite implementation tranche only after gate stability and coverage evidence are stable.
