@@ -69,10 +69,69 @@ describe('LIR optimizer analysis helpers', () => {
       fn: 'test:body',
       subcommands: [{ kind: 'if_matches', score: '$shared_tmp __test', range: '1..' }],
     }
+    const call: LIRInstr = { kind: 'call', fn: 'test:leaf' }
+    const callMacro: LIRInstr = { kind: 'call_macro', fn: 'test:macro', storage: 'rs:macro_args' }
 
     expect(instructionMentionsSlot(raw, shared)).toBe(true)
     expect(instructionMentionsSlot(macro, shared)).toBe(true)
     expect(instructionMentionsSlot(ctx, shared)).toBe(true)
+    expect(instructionMentionsSlot(call, shared)).toBe(false)
+    expect(instructionMentionsSlot(callMacro, shared)).toBe(false)
+    expect(isConservativeBarrierInstruction(call)).toBe(true)
+    expect(isConservativeBarrierInstruction(callMacro)).toBe(true)
+  })
+
+  test('keeps conservative liveness across explicit call and call_macro barriers', () => {
+    const shared = mkSlot('$shared_tmp')
+    const output = mkSlot('$output')
+    const call = mkFn([
+      { kind: 'score_copy', dst: output, src: { player: '$shared_tmp', obj: obj } },
+      { kind: 'call', fn: 'test:leaf' },
+      { kind: 'score_copy', dst: output, src: output },
+    ])
+    const callMacro = mkFn([
+      { kind: 'score_copy', dst: output, src: { player: '$shared_tmp', obj: obj } },
+      { kind: 'call_macro', fn: 'test:macro', storage: 'rs:macro_args' },
+      { kind: 'score_copy', dst: output, src: output },
+    ], 'macroCarrier')
+
+    const callLiveness = analyzeStraightLineSlotLiveness(call.instructions)
+    const callMacroLiveness = analyzeStraightLineSlotLiveness(callMacro.instructions)
+
+    expect(isConservativeBarrierInstruction(call.instructions[1])).toBe(true)
+    expect(isConservativeBarrierInstruction(callMacro.instructions[1])).toBe(true)
+    expect(callLiveness.nextReadAfter(0, output)).toBeNull()
+    expect(callLiveness.hasLaterRead(0, output)).toBe(true)
+    expect(callLiveness.isDeadAfter(0, output)).toBe(true)
+    expect(callMacroLiveness.nextReadAfter(0, output)).toBeNull()
+    expect(callMacroLiveness.hasLaterRead(0, output)).toBe(true)
+    expect(callMacroLiveness.isDeadAfter(0, output)).toBe(true)
+  })
+
+  test('keeps conservative liveness across raw and execute-context barriers', () => {
+    const shared = mkSlot('$shared_tmp')
+    const output = mkSlot('$output')
+    const ctx: LIRInstr = {
+      kind: 'call_context',
+      fn: 'test:body',
+      subcommands: [{ kind: 'if_matches', score: '$shared_tmp __test', range: '1..' }],
+    }
+
+    const fn: LIRFunction = mkFn([
+      { kind: 'score_copy', dst: output, src: shared },
+      { kind: 'raw', cmd: 'say context: $shared_tmp __test' },
+      ctx,
+      { kind: 'score_copy', dst: output, src: output },
+    ], 'rawCarrier')
+
+    const liveness = analyzeStraightLineSlotLiveness(fn.instructions)
+
+    expect(isConservativeBarrierInstruction(fn.instructions[1])).toBe(true)
+    expect(isConservativeBarrierInstruction(fn.instructions[2])).toBe(true)
+    expect(instructionMentionsSlot(ctx, shared)).toBe(true)
+    expect(liveness.nextReadAfter(0, output)).toBeNull()
+    expect(liveness.hasLaterRead(0, output)).toBe(true)
+    expect(liveness.isDeadAfter(0, output)).toBe(true)
   })
 
   test('builds module-level slot mention index for cross-function safety checks', () => {

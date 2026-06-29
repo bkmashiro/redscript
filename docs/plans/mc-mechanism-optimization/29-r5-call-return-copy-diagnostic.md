@@ -113,3 +113,15 @@ Diagnostic-only inventory for ABI/copy-pressure behavior and safe-versus-unsafe 
 5. `call_context` boundaries,
 6. tuple/struct-return capture (`$ret_*`) and mixed return-slot reads.
 
+## Fixture tranche added
+
+- `src/__tests__/lir/lower.test.ts`
+  - `nested helper calls keep per-frame $pN and $ret materialization explicit`
+  - `call destination capture stays before later $ret clobber`
+  - `call_macro capture stays explicit before a raw $ret clobber`
+  - `call_context wrapper remains context-only and does not introduce ABI temp copy plumbing`
+  - `return with __rf_0 aliases to $ret_0`
+  - `return with __rf_1 aliases to $ret_1`
+- `src/__tests__/optimizer/lir/analysis.test.ts`
+  - `keeps conservative liveness across explicit call and call_macro barriers`
+  - `keeps conservative liveness across raw and execute-context barriers`

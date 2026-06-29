@@ -387,6 +387,97 @@ describe('MIR→LIR lowering — calls', () => {
     })
   })
 
+  test('nested helper calls keep per-frame $pN and $ret materialization explicit', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [
+          { kind: 'const', dst: 'base', value: 10 },
+          { kind: 'const', dst: 'delta', value: 4 },
+          { kind: 'call', dst: 'value', fn: 'sum_scale', args: [t('base'), t('delta')] },
+        ], { kind: 'return', value: null }),
+      ]),
+      mkFn('sum_scale', [
+        mkBlock('entry', [
+          { kind: 'const', dst: 'scale', value: 2 },
+          { kind: 'call', dst: 'inner', fn: 'sum_pair', args: [t('base'), t('delta')] },
+          { kind: 'mul', dst: 'value', a: t('inner'), b: t('scale') },
+        ], { kind: 'return', value: t('value') }),
+      ], [{ name: 'base', isMacroParam: false }, { name: 'delta', isMacroParam: false }]),
+      mkFn('sum_pair', [
+        mkBlock('entry', [
+          { kind: 'add', dst: 'sum', a: t('a'), b: t('b') },
+        ], { kind: 'return', value: t('sum') }),
+      ], [{ name: 'a', isMacroParam: false }, { name: 'b', isMacroParam: false }]),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+    const sumScale = lir.functions.find(f => f.name === 'sum_scale')!
+    const sumPair = lir.functions.find(f => f.name === 'sum_pair')!
+
+    expect(main.instructions[2]).toEqual({
+      kind: 'score_copy',
+      dst: { player: '$p0', obj: OBJ },
+      src: slot('base'),
+    })
+    expect(main.instructions[3]).toEqual({
+      kind: 'score_copy',
+      dst: { player: '$p1', obj: OBJ },
+      src: slot('delta'),
+    })
+    expect(main.instructions[4]).toEqual({ kind: 'call', fn: 'test:sum_scale' })
+    expect(main.instructions[5]).toEqual({
+      kind: 'score_copy',
+      dst: slot('value'),
+      src: { player: '$ret', obj: OBJ },
+    })
+
+    // Callee param staging should be isolated per-function and still explicit.
+    expect(sumScale.instructions[0]).toEqual({
+      kind: 'score_copy',
+      dst: slot('base', 'sum_scale'),
+      src: { player: '$p0', obj: OBJ },
+    })
+    expect(sumScale.instructions[1]).toEqual({
+      kind: 'score_copy',
+      dst: slot('delta', 'sum_scale'),
+      src: { player: '$p1', obj: OBJ },
+    })
+    expect(sumScale.instructions[3]).toEqual({
+      kind: 'score_copy',
+      dst: { player: '$p0', obj: OBJ },
+      src: slot('base', 'sum_scale'),
+    })
+    expect(sumScale.instructions[4]).toEqual({
+      kind: 'score_copy',
+      dst: { player: '$p1', obj: OBJ },
+      src: slot('delta', 'sum_scale'),
+    })
+    expect(sumScale.instructions[6]).toEqual({
+      kind: 'score_copy',
+      dst: slot('inner', 'sum_scale'),
+      src: { player: '$ret', obj: OBJ },
+    })
+    expect(sumScale.instructions.find(i => i.kind === 'return_value')).toEqual({
+      kind: 'return_value',
+      slot: slot('value', 'sum_scale'),
+    })
+
+    expect(sumPair.instructions[0]).toEqual({
+      kind: 'score_copy',
+      dst: slot('a', 'sum_pair'),
+      src: { player: '$p0', obj: OBJ },
+    })
+    expect(sumPair.instructions[1]).toEqual({
+      kind: 'score_copy',
+      dst: slot('b', 'sum_pair'),
+      src: { player: '$p1', obj: OBJ },
+    })
+    expect(sumPair.instructions.find(i => i.kind === 'return_value')).toEqual({
+      kind: 'return_value',
+      slot: slot('sum', 'sum_pair'),
+    })
+  })
+
   test('call with no dst does not copy $ret', () => {
     const mod = mkModule([
       mkFn('main', [
@@ -403,6 +494,42 @@ describe('MIR→LIR lowering — calls', () => {
     expect(main.instructions).toEqual([
       { kind: 'call', fn: 'test:side_effect' },
     ])
+  })
+
+  test('call destination capture stays before later $ret clobber', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [
+          { kind: 'const', dst: 'in', value: 9 },
+          { kind: 'call', dst: 'out', fn: 'inc', args: [t('in')] },
+          { kind: 'call', dst: null, fn: '__raw:scoreboard players set $ret __test 7', args: [] },
+        ], { kind: 'return', value: null }),
+      ]),
+      mkFn('inc', [
+        mkBlock('entry', [
+          { kind: 'add', dst: 'r', a: t('in'), b: c(1) },
+        ], { kind: 'return', value: t('r') }),
+      ], [{ name: 'in', isMacroParam: false }]),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+    const callIdx = main.instructions.findIndex(i => i.kind === 'call')
+    const captureIdx = main.instructions.findIndex(
+      i => i.kind === 'score_copy' && (i as any).src.player === '$ret'
+    )
+    const clobberIdx = main.instructions.findIndex(i => i.kind === 'raw')
+
+    expect(main.instructions[2]).toEqual({ kind: 'call', fn: 'test:inc' })
+    expect(callIdx).toBe(2)
+    expect(captureIdx).toBe(3)
+    expect(main.instructions[3]).toEqual({
+      kind: 'score_copy',
+      dst: slot('out'),
+      src: { player: '$ret', obj: OBJ },
+    })
+    expect(clobberIdx).toBe(4)
+    expect(clobberIdx).toBe(captureIdx + 1)
+    expect(main.instructions[clobberIdx]).toEqual({ kind: 'raw', cmd: 'scoreboard players set $ret __test 7' })
   })
 
   test('raw command via __raw: prefix', () => {
@@ -457,6 +584,53 @@ describe('MIR→LIR lowering — macro calls', () => {
     expect(callMacro.fn).toBe('test:draw_pt')
     expect(callMacro.storage).toBe('rs:macro_args')
   })
+
+  test('call_macro capture stays explicit before a raw $ret clobber', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [
+          { kind: 'const', dst: 'x', value: 12 },
+          { kind: 'const', dst: 'y', value: 3 },
+          {
+            kind: 'call_macro',
+            dst: 'r',
+            fn: 'draw_pt',
+            args: [
+              { name: 'x', value: t('x'), type: 'int' as const, scale: 1 },
+              { name: 'y', value: t('y'), type: 'int' as const, scale: 1 },
+            ],
+          },
+          { kind: 'call', dst: null, fn: '__raw:scoreboard players set $ret __test 0', args: [] },
+        ], { kind: 'return', value: null }),
+      ]),
+      mkFn('draw_pt', [
+        mkBlock('entry', [], { kind: 'return', value: null }),
+      ], [{ name: 'x', isMacroParam: true }, { name: 'y', isMacroParam: true }], true),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+
+    const xStore = main.instructions[2] as any
+    const yStore = main.instructions[3] as any
+    const callMacro = main.instructions[4] as any
+    const capture = main.instructions[5] as any
+    const clobber = main.instructions[6] as any
+
+    expect(xStore.kind).toBe('store_score_to_nbt')
+    expect(xStore.path).toBe('x')
+    expect(xStore.src).toEqual(slot('x'))
+    expect(yStore.kind).toBe('store_score_to_nbt')
+    expect(yStore.path).toBe('y')
+    expect(yStore.src).toEqual(slot('y'))
+    expect(callMacro.kind).toBe('call_macro')
+    expect(callMacro.fn).toBe('test:draw_pt')
+    expect(capture).toEqual({
+      kind: 'score_copy',
+      dst: slot('r'),
+      src: { player: '$ret', obj: OBJ },
+    })
+    expect(clobber).toEqual({ kind: 'raw', cmd: 'scoreboard players set $ret __test 0' })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -487,6 +661,55 @@ describe('MIR→LIR lowering — context calls', () => {
       subcommands: [{ kind: 'as', selector: '@e[tag=foo]' }, { kind: 'at_self' }],
     })
   })
+
+  test('call_context wrapper remains context-only and does not introduce ABI temp copy plumbing', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [
+          { kind: 'const', dst: 'seed', value: 7 },
+          { kind: 'call', dst: 'echoed', fn: 'echo_seed', args: [t('seed')] },
+          { kind: 'call_context', fn: 'ctx_wrapper', subcommands: [{ kind: 'as', selector: '@e[tag=foo]' }, { kind: 'at_self' }] },
+        ], { kind: 'return', value: null }),
+      ]),
+      mkFn('echo_seed', [
+        mkBlock('entry', [
+        ], { kind: 'return', value: t('value') }),
+      ], [{ name: 'value', isMacroParam: false }]),
+      mkFn('ctx_wrapper', [
+        mkBlock('entry', [
+          { kind: 'const', dst: 'ctx', value: 1 },
+          { kind: 'return', value: t('ctx') },
+        ], { kind: 'return', value: t('ctx') }),
+      ]),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+    const echoSeed = lir.functions.find(f => f.name === 'echo_seed')!
+
+    expect(main.instructions[1]).toEqual({ kind: 'score_copy', dst: { player: '$p0', obj: OBJ }, src: slot('seed') })
+    expect(main.instructions[2]).toEqual({ kind: 'call', fn: 'test:echo_seed' })
+    expect(main.instructions[3]).toEqual({
+      kind: 'score_copy',
+      dst: slot('echoed'),
+      src: { player: '$ret', obj: OBJ },
+    })
+    expect(main.instructions[4]).toEqual({
+      kind: 'call_context',
+      fn: 'test:ctx_wrapper',
+      subcommands: [{ kind: 'as', selector: '@e[tag=foo]' }, { kind: 'at_self' }],
+    })
+
+    // echo_seed copies its single arg into its local namespace before return.
+    expect(echoSeed.instructions[0]).toEqual({
+      kind: 'score_copy',
+      dst: slot('value', 'echo_seed'),
+      src: { player: '$p0', obj: OBJ },
+    })
+    expect(echoSeed.instructions[1]).toEqual({
+      kind: 'return_value',
+      slot: slot('value', 'echo_seed'),
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -507,6 +730,36 @@ describe('MIR→LIR lowering — return', () => {
     const ret = main.instructions.find(i => i.kind === 'return_value') as any
     expect(ret).toBeDefined()
     expect(ret.slot).toEqual(slot('t0'))
+  })
+
+  test('return with __rf_0 aliases to $ret_0', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [
+          { kind: 'copy', dst: '__rf_0', src: c(4) },
+        ], { kind: 'return', value: t('__rf_0') }),
+      ]),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+    const ret = main.instructions.find(i => i.kind === 'return_value') as any
+    expect(ret).toBeDefined()
+    expect(ret.slot).toEqual({ player: '$ret_0', obj: OBJ })
+  })
+
+  test('return with __rf_1 aliases to $ret_1', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        mkBlock('entry', [
+          { kind: 'copy', dst: '__rf_1', src: c(9) },
+        ], { kind: 'return', value: t('__rf_1') }),
+      ]),
+    ])
+    const lir = lowerToLIR(mod)
+    const main = lir.functions.find(f => f.name === 'main')!
+    const ret = main.instructions.find(i => i.kind === 'return_value') as any
+    expect(ret).toBeDefined()
+    expect(ret.slot).toEqual({ player: '$ret_1', obj: OBJ })
   })
 
   test('return void → no return_value instruction', () => {
