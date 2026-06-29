@@ -448,7 +448,8 @@ git status --short --branch
 - Status: Completed; final decision is documented in [21-post-vir-decision-adr.md](./21-post-vir-decision-adr.md).
 - Recommendation outcome: keep VIR experimental/read-only and do not integrate it into the production compiler pipeline now.
 - Safety: production compiler pipeline and VIR production hooks remain unchanged; Tranche E shipped no emitted LIR behavior changes.
-- LIR lane result: diagnostic evidence supports a narrower future LIR-only rewrite track, but no rewrite has been shipped yet.
+- LIR lane result: Tranche F now captures adjacent-window context from **real** arithmetic probe per-line provenance (not synthetic merges), making `lirAdjacentWindowSummary.proofMissAdjacentWindowBreakdown` observable for real bench output.
+- Safety reminder: this tranche is diagnostic-only and does not alter rewrite behavior or proof eligibility in production.
 
 ---
 

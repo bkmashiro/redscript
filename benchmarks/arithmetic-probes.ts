@@ -1880,6 +1880,16 @@ function summarizeProofMissByFamilyFromBuckets(
         recommendation: '',
       }]),
     }
+    const lirAdjacentWindowSummary = summarizeLirAdjacentWindowBreakdown(new Map(
+      [...summary.byAdjacentWindowBreakdown.entries()].map(([kind, value]) => [
+        kind,
+        {
+          count: value.count,
+          caseNames: new Set(value.caseNames),
+          examples: value.examples,
+        },
+      ]),
+    ))
     const candidateCount = evidenceKinds
       .filter(item => item.evidenceKind === 'adjacent-arith-source-reused' || item.evidenceKind === 'copy-chain-local-temp')
       .reduce((sum, item) => sum + item.count, 0)
@@ -1896,6 +1906,7 @@ function summarizeProofMissByFamilyFromBuckets(
       evidenceKinds,
       livenessWindowSummary,
       proofReadiness: summarizeLocalProofReadiness(candidateCount, insufficientContextCount),
+      lirAdjacentWindowSummary,
       recommendation: summarizeLocalProofEvidenceRecommendation([
         {
           family,
@@ -2388,6 +2399,11 @@ function mergeRewriteOpportunitiesProvenance(
       caseNames: Set<string>
       examples: string[]
     }>
+    byAdjacentWindowBreakdown: Map<RewriteProofMissLirAdjacentWindowBreakdownKind, {
+      count: number
+      caseNames: Set<string>
+      examples: string[]
+    }>
   }>()
   let patternNotExactTotal = 0
   const proofMissAdjacentWindowBreakdown = new Map<
@@ -2459,6 +2475,7 @@ function mergeRewriteOpportunitiesProvenance(
               bySourceKind: new Map(),
               byLocalProofEvidenceKind: new Map(),
               byLivenessWindowKind: new Map(),
+              byAdjacentWindowBreakdown: new Map(),
             }
             byProofMissFamily.set(proofMissFamily.family, aggregate)
           }
@@ -2567,16 +2584,28 @@ function mergeRewriteOpportunitiesProvenance(
               const detailedLirAdjacentWindowSummary = detailedLocalProofEvidence.lirAdjacentWindowSummary
               if (detailedLirAdjacentWindowSummary) {
                 for (const window of detailedLirAdjacentWindowSummary.proofMissAdjacentWindowBreakdown) {
-                  let adjacentSummary = proofMissAdjacentWindowBreakdown.get(window.kind)
+                  let adjacentSummary = aggregate.byAdjacentWindowBreakdown.get(window.kind)
                   if (!adjacentSummary) {
                     adjacentSummary = { count: 0, caseNames: new Set(), examples: [] }
-                    proofMissAdjacentWindowBreakdown.set(window.kind, adjacentSummary)
+                    aggregate.byAdjacentWindowBreakdown.set(window.kind, adjacentSummary)
                   }
                   adjacentSummary.count += window.count
                   adjacentSummary.caseNames.add(caseName)
                   for (const example of window.examples) {
                     if (adjacentSummary.examples.length >= 3) break
                     adjacentSummary.examples.push(example)
+                  }
+
+                  let globalAdjacentSummary = proofMissAdjacentWindowBreakdown.get(window.kind)
+                  if (!globalAdjacentSummary) {
+                    globalAdjacentSummary = { count: 0, caseNames: new Set(), examples: [] }
+                    proofMissAdjacentWindowBreakdown.set(window.kind, globalAdjacentSummary)
+                  }
+                  globalAdjacentSummary.count += window.count
+                  globalAdjacentSummary.caseNames.add(caseName)
+                  for (const example of window.examples) {
+                    if (globalAdjacentSummary.examples.length >= 3) break
+                    globalAdjacentSummary.examples.push(example)
                   }
                 }
               }
@@ -2853,6 +2882,16 @@ function mergeRewriteOpportunitiesProvenance(
         totalLocalTempOnly,
         livenessWindowSummary,
         evidenceKinds: localProofEvidenceKinds,
+        lirAdjacentWindowSummary: summarizeLirAdjacentWindowBreakdown(new Map(
+          [...(summary.byAdjacentWindowBreakdown).entries()].map(([kind, adjacentWindowSummary]) => ([
+            kind,
+            {
+              count: adjacentWindowSummary.count,
+              caseNames: new Set(adjacentWindowSummary.caseNames),
+              examples: adjacentWindowSummary.examples,
+            },
+          ])),
+        )),
         proofReadiness,
         recommendation: summarizeLocalProofEvidenceRecommendation([
           {

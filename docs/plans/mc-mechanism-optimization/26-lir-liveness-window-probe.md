@@ -61,6 +61,16 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
 - No windows are classified as `locally-safe` or `blocked` yet; all 79 candidate-like windows remain `unknown` under this local parse-window probe.
 - `proofReadiness` stays diagnostics-only (`unknown`) as required.
 
+### Tranche F outcome update
+- Adjacent-window proof-miss context for candidate-like local-temp cases is now fed from real `summarizeProofMissByFamilyFromBuckets` data (line-level provenance buckets), so real bench output can produce non-empty `lirAdjacentWindowSummary.proofMissAdjacentWindowBreakdown`.
+- The real pipeline still applies no production rewrite behavior; `lirAdjacentWindowSummary` remains a diagnostic-only evidence artifact for tuning next safe slices.
+- Window buckets should include the canonical kinds:
+  - `unknown-unparsed-command`
+  - `adjacent-window-missing-or-incomplete`
+  - `protected-boundary-blocked`
+  - `local-temp-exact-proof-gap`
+  - `candidate-shape-not-satisfying-lir-local-proof`
+
 ## Next safe goals
 1. Expand candidate-window parser support to classify short local proof spans into `single-adjacent-arith-no-reuse` / `copy-chain-no-reuse` where provable.
 2. Add deterministic evidence examples for unknown causes (`insufficient-window`, `unparsed-command`) to improve triage quality.

@@ -1321,6 +1321,47 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(localProofEvidenceSummary.recommendation).toEqual(expect.any(String))
   })
 
+  it('builds structured adjacent-window buckets from real per-line provenance', () => {
+    const lines = [
+      { path: 'data/test/function/probe.mcfunction', line: 1, content: 'scoreboard players operation $prev0 o = $seed o' },
+      { path: 'data/test/function/probe.mcfunction', line: 2, content: 'scoreboard players operation $tmp_t1 o = $tmp_t0 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 3, content: 'scoreboard players operation $sink o = $other o' },
+      { path: 'data/test/function/probe.mcfunction', line: 4, content: 'scoreboard players operation $prev1 o = $seed2 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 5, content: 'scoreboard players operation $__const_keep o = $tmp_t3 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 6, content: 'scoreboard players operation $sink2 o = $other2 o' },
+    ]
+
+    const summary = summarizeRewriteOpportunitiesWithProvenance(lines).provenanceSummary
+    const proofMissSummary = summary.shapeFamilySummary?.proofMissSummary
+    const slotSummary = proofMissSummary?.slotProvenanceSummary
+    const localProofEvidenceSummary = slotSummary?.localProofEvidenceSummary
+
+    expect(proofMissSummary).toBeDefined()
+    expect(slotSummary).toBeDefined()
+    expect(localProofEvidenceSummary).toBeDefined()
+    if (!localProofEvidenceSummary) return
+
+    const adjacentWindowSummary = localProofEvidenceSummary.lirAdjacentWindowSummary
+    expect(adjacentWindowSummary).toBeDefined()
+    if (!adjacentWindowSummary) return
+
+    const breakdownKinds = adjacentWindowSummary.proofMissAdjacentWindowBreakdown.map(item => item.kind)
+    expect(breakdownKinds).toEqual(expect.arrayContaining([
+      'local-temp-exact-proof-gap',
+      'protected-boundary-blocked',
+    ]))
+    expect(adjacentWindowSummary.totalCandidateLike).toBeGreaterThan(0)
+    expect(adjacentWindowSummary.localTempExactProofGapCases).toBeGreaterThanOrEqual(1)
+    expect(adjacentWindowSummary.protectedBoundaryBlockedCases).toBeGreaterThanOrEqual(1)
+    expect(adjacentWindowSummary.proofMissAdjacentWindowBreakdown).toEqual([...adjacentWindowSummary.proofMissAdjacentWindowBreakdown].sort(
+      (left, right) => right.count - left.count || left.kind.localeCompare(right.kind),
+    ))
+    for (const item of adjacentWindowSummary.proofMissAdjacentWindowBreakdown) {
+      expect(item.caseNames).toEqual([...item.caseNames].sort())
+      expect(item.examples.length).toBeLessThanOrEqual(3)
+    }
+  })
+
   it('emits structured adjacent-window buckets for proof misses instead of generic unknown', () => {
     const summary = buildLirOpportunitySummary([
       makeAdjacentWindowDiagnosticCase({
