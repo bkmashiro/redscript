@@ -261,7 +261,7 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 ### Track AF — Structured context capture for insufficient-command residuals
 
-**Status:** [ ] Not started — next recommended track
+**Status:** [x] Completed — controller verified (2026-06-29)
 
 **Product promise:** Explain the 318 `insufficient-command-context` Track AE residuals with richer same-function context before considering any pass design.
 
@@ -283,29 +283,93 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 **Implementation outline:**
 
-- [ ] Add structured context details for Track AE `insufficient-command-context` residuals, such as bounded previous/next parsed command windows, same-function boundary metadata, and whether the copy source/destination appears again later in the function.
-- [ ] Split the bucket into deterministic causes, for example:
+- [x] Add structured context details for Track AE `insufficient-command-context` residuals, such as bounded previous/next parsed command windows, same-function boundary metadata, and whether the copy source/destination appears again later in the function.
+- [x] Split the bucket into deterministic causes, for example:
   - `needs-wider-same-function-window`
   - `needs-function-boundary-map`
   - `needs-slot-use-def-map`
   - `opaque-command-context`
   - `context-capture-not-worth-pursuing`
-- [ ] Include counts, top case names, capped examples, and a conservative recommendation.
-- [ ] Add synthetic tests and one all-case report test proving the 318 bucket is split or explicitly remains opaque.
+- [x] Include counts, top case names, capped examples, and a conservative recommendation.
+- [x] Add synthetic tests and one all-case report test proving the 318 bucket is split or explicitly remains opaque.
+- [x] Update this roadmap with controller gate counts and the next decision.
+
+### Track AF evidence (2026-06-29 controller run)
+
+- `npm run gate:lir-local-copy -- --output /tmp/redscript-lir-track-af-controller.json`
+- `gate = "pass"`
+- `rollout = "pass"`
+- `recommendation = "manual-experimental-opt-in-only"`
+- `commandDelta = -193`
+- `scoreCopyDelta = -193`
+- `offlineFixtures = 29`
+- `offlineFailed = 0`
+- `trackAEResidualDiagnostics.totalCount = 328`
+- `trackAEResidualDiagnostics.byLabel.insufficient-command-context = 318`
+- `trackAFResidualDiagnostics.totalCount = 318`
+- `trackAFResidualDiagnostics.recommendation = "collect-more-data"`
+- `trackAFResidualDiagnostics.byLabel`:
+  - `needs-slot-use-def-map: 272`
+  - `needs-wider-same-function-window: 46`
+- **Decision:** Track AA remains blocked. The dominant next diagnostic need is slot use/def evidence, with a smaller wider-window bucket; do not write rewrite/pass-design code yet.
+
+**Definition of Done:**
+
+- [x] Track AF explains the 318 insufficient-context residuals with named context-capture buckets.
+- [x] No optimizer behavior changes.
+- [x] Full controller gates pass.
+- [x] Roadmap records whether a pass-design ADR is worth writing or the residual family should stop.
+
+---
+
+### Track AG — Slot use/def diagnostics for context-captured residuals
+
+**Status:** [ ] Not started — next recommended track
+
+**Product promise:** Explain the 272 `needs-slot-use-def-map` Track AF residuals with bounded slot use/def evidence before any pass design or rewrite.
+
+**Why now:** Track AF converted the dominant missing-context bucket into `needs-slot-use-def-map: 272` and `needs-wider-same-function-window: 46`. The next useful work is to classify whether the copied source/destination slots are truly dead, reused, overwritten, or alias-unsafe in the same emitted function context.
+
+**Allowed files:**
+
+- `benchmarks/arithmetic-probes.ts`
+- `src/__tests__/arithmetic-probes.test.ts`
+- this roadmap and linked docs under `docs/plans/mc-mechanism-optimization/`
+
+**Forbidden:**
+
+- No changes to `src/optimizer/lir/rmw.ts`.
+- No pass-order changes.
+- No default/CLI behavior changes.
+- No production-emitted behavior changes.
+- No VIR changes.
+
+**Implementation outline:**
+
+- [ ] Add a diagnostics-only slot use/def summary for Track AF `needs-slot-use-def-map` residuals.
+- [ ] For each candidate, inspect a bounded same-function window and classify source/destination status with labels such as:
+  - `dst-reused-after-arith`
+  - `src-reused-after-copy`
+  - `dst-dead-after-window`
+  - `src-dead-after-window`
+  - `slot-use-window-too-small`
+  - `slot-alias-unsafe-or-opaque`
+- [ ] Include counts, top case names, capped examples, and recommendation.
+- [ ] Add synthetic tests and one all-case report test proving the 272 bucket is classified.
 - [ ] Update this roadmap with controller gate counts and the next decision.
 
 **Definition of Done:**
 
-- [ ] Track AF explains the 318 insufficient-context residuals with named context-capture buckets.
+- [ ] Track AG explains the 272 slot-use/def residuals with named buckets.
 - [ ] No optimizer behavior changes.
 - [ ] Full controller gates pass.
-- [ ] Roadmap records whether a pass-design ADR is worth writing or the residual family should stop.
+- [ ] Roadmap records whether a fixture-backed rewrite class is plausible, a wider context tranche is needed, or the residual family should stop.
 
 ---
 
 ### Track AA — Narrow residual rewrite implementation
 
-**Status:** [ ] Blocked by Track AB/AE proof and pass-design diagnostics
+**Status:** [ ] Blocked by Track AB/AE/AF/AG proof and pass-design diagnostics
 
 **Product promise:** Add exactly one tiny LIR rewrite for a fixture-proven residual class, still behind `--experimental-lir-local-copy-rewrite`.
 
@@ -469,3 +533,10 @@ Append a short note here after each completed tranche.
 - Controller gate `/tmp/redscript-lir-track-ae-controller.json` reports `insufficient-command-context: 318` and `merge-or-control-flow-boundary: 10`.
 - `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -193`, `scoreCopyDelta = -193`, offline fixtures `29/29` pass.
 - Track AA remains blocked; next unchecked non-blocked track is Track AF.
+
+### 2026-06-29 — Track AF completed
+
+- Added `trackAFResidualDiagnostics` with bounded context snapshots for Track AE `insufficient-command-context` residuals.
+- Controller gate `/tmp/redscript-lir-track-af-controller.json` reports `needs-slot-use-def-map: 272` and `needs-wider-same-function-window: 46`.
+- `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -193`, `scoreCopyDelta = -193`, offline fixtures `29/29` pass.
+- Track AA remains blocked; next unchecked non-blocked track is Track AG.

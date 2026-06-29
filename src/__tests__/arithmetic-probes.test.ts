@@ -22,6 +22,7 @@ import {
   type RewriteProofMissLirLocalTempProofGapReadinessSummary,
   type RewriteProofMissLirLocalTempProofWindowSummary,
   type RewriteProofMissSourceKind,
+  type RewriteTrackAFContextSnapshot,
   type VirUnsupportedMirCallTarget,
   type VirUnsupportedMirCallTargetFamilyBreakdownEntry,
   type VirAllocationCheckCloseout,
@@ -504,6 +505,30 @@ function makeOfflineRewriteEquivalencePackSummary(
     ],
     evidenceStatus: 'bounded-offline-evidence-only',
     offlineRewriteFamilyReadinessSummary: makeOfflineRewriteFamilyReadinessSummary(),
+    ...overrides,
+  }
+}
+
+function makeSyntheticTrackAFContext(
+  example: string,
+  overrides: Partial<RewriteTrackAFContextSnapshot> = {},
+): RewriteTrackAFContextSnapshot {
+  return {
+    example,
+    currentPath: 'pkg:functions/math.mcfunction',
+    currentFunctionName: 'pkg:math',
+    currentCommandClass: 'score_copy',
+    previousCommandClass: 'scoreboard_other',
+    nextCommandClass: 'score_arith',
+    nextNextCommandClass: 'return',
+    previousContextMissing: false,
+    nextContextMissing: false,
+    functionBoundarySignal: false,
+    loopOrMergeBoundarySignal: false,
+    helperBoundarySignal: false,
+    functionNameBoundarySignal: false,
+    srcAppearsLaterInSameFunctionWindow: false,
+    dstAppearsLaterInSameFunctionWindow: false,
     ...overrides,
   }
 }
@@ -1834,12 +1859,15 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(residualSummary?.trackZResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackABResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackAEResidualDiagnostics).toBeDefined()
+    expect(residualSummary?.trackAFResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackZResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
     expect(residualSummary?.trackZResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
     expect(residualSummary?.trackABResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
     expect(residualSummary?.trackABResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
     expect(residualSummary?.trackAEResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
     expect(residualSummary?.trackAEResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
+    expect(residualSummary?.trackAFResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
     expect(residualSummary?.mode).toBe('experimental-local-copy-rewrite')
     expect(residualSummary?.status).toBe('diagnostic')
     expect(residualSummary?.onCaseCount).toBe(onReport.cases.length)
@@ -1998,19 +2026,218 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(trackAE?.recommendation).toBe('collect-more-data')
   })
 
+  it('proves Track AF synthetic sorting/capping with all label coverage and context capture snapshots', () => {
+    const caseAlpha = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-alpha',
+      optLevel: 'O1',
+      opportunities: {
+        total: 8,
+        currentlyOptimized: 0,
+        safeCandidate: 8,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [
+          {
+            status: 'safeCandidate',
+            pattern: 'safe',
+            count: 8,
+            examples: ['case-alpha:1', 'case-alpha:2', 'case-alpha:3', 'case-alpha:4', 'case-alpha:5', 'case-alpha:6', 'case-alpha:7', 'case-alpha:8'],
+          },
+        ],
+      },
+      rewriteOpportunityTrackAFResidualSummary: {
+        totalCount: 10,
+        byLabel: [
+          {
+            label: 'needs-slot-use-def-map',
+            count: 4,
+            caseNames: [],
+            examples: ['case-alpha:s1', 'case-alpha:s2', 'case-alpha:s3', 'case-alpha:s4', 'case-alpha:s5', 'case-alpha:s6'],
+            contexts: [
+              makeSyntheticTrackAFContext('case-alpha:s1'),
+              makeSyntheticTrackAFContext('case-alpha:s2'),
+              makeSyntheticTrackAFContext('case-alpha:s3'),
+              makeSyntheticTrackAFContext('case-alpha:s4'),
+              makeSyntheticTrackAFContext('case-alpha:s5'),
+              makeSyntheticTrackAFContext('case-alpha:s6'),
+            ],
+          },
+          {
+            label: 'needs-function-boundary-map',
+            count: 2,
+            caseNames: [],
+            examples: ['case-alpha:f1', 'case-alpha:f2'],
+            contexts: [
+              makeSyntheticTrackAFContext('case-alpha:f1', { currentFunctionName: 'helper.loop' }),
+              makeSyntheticTrackAFContext('case-alpha:f2', { functionBoundarySignal: true }),
+            ],
+          },
+          {
+            label: 'needs-wider-same-function-window',
+            count: 2,
+            caseNames: [],
+            examples: ['case-alpha:w1', 'case-alpha:w2'],
+            contexts: [
+              makeSyntheticTrackAFContext('case-alpha:w1', { nextContextMissing: true }),
+              makeSyntheticTrackAFContext('case-alpha:w2', { previousContextMissing: true }),
+            ],
+          },
+          {
+            label: 'opaque-command-context',
+            count: 1,
+            caseNames: [],
+            examples: ['case-alpha:o1'],
+            contexts: [makeSyntheticTrackAFContext('case-alpha:o1')],
+          },
+          {
+            label: 'context-capture-not-worth-pursuing',
+            count: 1,
+            caseNames: [],
+            examples: ['case-alpha:n1'],
+            contexts: [makeSyntheticTrackAFContext('case-alpha:n1')],
+          },
+        ],
+      },
+    })
+
+    const caseBeta = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-beta',
+      optLevel: 'O1',
+      opportunities: {
+        total: 4,
+        currentlyOptimized: 1,
+        safeCandidate: 3,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [
+          {
+            status: 'safeCandidate',
+            pattern: 'safe',
+            count: 3,
+            examples: ['case-beta:1', 'case-beta:2', 'case-beta:3'],
+          },
+        ],
+      },
+      rewriteOpportunityTrackAFResidualSummary: {
+        totalCount: 12,
+        byLabel: [
+          {
+            label: 'needs-function-boundary-map',
+            count: 4,
+            caseNames: [],
+            examples: ['case-beta:f1', 'case-beta:f2', 'case-beta:f3', 'case-beta:f4'],
+            contexts: [
+              makeSyntheticTrackAFContext('case-beta:f1'),
+              makeSyntheticTrackAFContext('case-beta:f2'),
+              makeSyntheticTrackAFContext('case-beta:f3'),
+              makeSyntheticTrackAFContext('case-beta:f4'),
+            ],
+          },
+          {
+            label: 'needs-slot-use-def-map',
+            count: 1,
+            caseNames: [],
+            examples: ['case-beta:s1'],
+            contexts: [makeSyntheticTrackAFContext('case-beta:s1')],
+          },
+          {
+            label: 'needs-wider-same-function-window',
+            count: 2,
+            caseNames: [],
+            examples: ['case-beta:w1', 'case-beta:w2'],
+            contexts: [makeSyntheticTrackAFContext('case-beta:w1'), makeSyntheticTrackAFContext('case-beta:w2')],
+          },
+          {
+            label: 'opaque-command-context',
+            count: 3,
+            caseNames: [],
+            examples: ['case-beta:o1', 'case-beta:o2', 'case-beta:o3'],
+            contexts: [makeSyntheticTrackAFContext('case-beta:o1'), makeSyntheticTrackAFContext('case-beta:o2'), makeSyntheticTrackAFContext('case-beta:o3')],
+          },
+          {
+            label: 'context-capture-not-worth-pursuing',
+            count: 2,
+            caseNames: [],
+            examples: ['case-beta:n1', 'case-beta:n2'],
+            contexts: [makeSyntheticTrackAFContext('case-beta:n1'), makeSyntheticTrackAFContext('case-beta:n2')],
+          },
+        ],
+      },
+    })
+
+    const aggregate = summarizeExperimentalLocalCopyRewriteResidualSummary([caseAlpha, caseBeta])
+    const trackAF = aggregate.trackAFResidualDiagnostics
+
+    expect(caseAlpha.trackAFResidualDiagnostics).toBeDefined()
+    expect(caseBeta.trackAFResidualDiagnostics).toBeDefined()
+    expect(trackAF).toBeDefined()
+    expect(trackAF?.totalCount).toBe(22)
+    expect(trackAF?.topCaseNames).toEqual(['case-beta', 'case-alpha'])
+    expect(trackAF?.byLabel).toEqual([
+      {
+        label: 'needs-function-boundary-map',
+        count: 6,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:f1', 'case-alpha:f2', 'case-beta:f1'],
+        contexts: [expect.any(Object), expect.any(Object), expect.any(Object)],
+      },
+      {
+        label: 'needs-slot-use-def-map',
+        count: 5,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:s1', 'case-alpha:s2', 'case-alpha:s3'],
+        contexts: [expect.any(Object), expect.any(Object), expect.any(Object)],
+      },
+      {
+        label: 'needs-wider-same-function-window',
+        count: 4,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:w1', 'case-alpha:w2', 'case-beta:w1'],
+        contexts: [expect.any(Object), expect.any(Object), expect.any(Object)],
+      },
+      {
+        label: 'opaque-command-context',
+        count: 4,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:o1', 'case-beta:o1', 'case-beta:o2'],
+        contexts: [expect.any(Object), expect.any(Object), expect.any(Object)],
+      },
+      {
+        label: 'context-capture-not-worth-pursuing',
+        count: 3,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:n1', 'case-beta:n1', 'case-beta:n2'],
+        contexts: [expect.any(Object), expect.any(Object), expect.any(Object)],
+      },
+    ])
+    expect(trackAF?.recommendation).toBe('collect-more-data')
+
+    expect(caseAlpha.trackAFResidualDiagnostics?.byLabel[0].examples).toEqual(['case-alpha:s1', 'case-alpha:s2', 'case-alpha:s3'])
+    expect(caseAlpha.trackAFResidualDiagnostics?.byLabel[0].contexts).toHaveLength(3)
+    expect(caseAlpha.trackAFResidualDiagnostics?.byLabel.every(entry => entry.contexts.length > 0)).toBe(true)
+  })
+
   it('proves Track AE Track AB non-adjacent residuals are populated in all-case experimental summaries', () => {
     const report = runArithmeticProbeReport('all', [1], true)
     const residualSummary = report.experimentalLocalCopyRewriteResidualSummary
 
     expect(residualSummary?.trackABResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackAEResidualDiagnostics).toBeDefined()
+    expect(residualSummary?.trackAFResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackABResidualDiagnostics?.totalCount).toBe(328)
     expect(residualSummary?.trackAEResidualDiagnostics?.totalCount).toBe(328)
+    expect(residualSummary?.trackAFResidualDiagnostics?.totalCount).toBe(
+      residualSummary?.trackAEResidualDiagnostics?.byLabel.find(item => item.label === 'insufficient-command-context')?.count ?? 0,
+    )
     expect(residualSummary?.trackAEResidualDiagnostics?.topCaseNames.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAEResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
     expect(
       residualSummary?.trackAEResidualDiagnostics?.byLabel.reduce((sum, entry) => sum + entry.count, 0),
     ).toBe(residualSummary?.trackAEResidualDiagnostics?.totalCount)
+    expect(
+      residualSummary?.trackAFResidualDiagnostics?.byLabel.reduce((sum, entry) => sum + entry.count, 0),
+    ).toBe(residualSummary?.trackAFResidualDiagnostics?.totalCount)
   })
 
   it('caps residual examples conservatively at deterministic depth', () => {
