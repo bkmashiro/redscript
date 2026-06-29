@@ -924,6 +924,7 @@ export interface ArithmeticProbeReport {
   offlineRewriteTestHarnessSummary?: OfflineRewriteTestHarnessSummary
   experimentalLocalCopyRewriteComparison?: ArithmeticProbeExperimentalLocalCopyRewriteComparison
   experimentalLocalCopyRewriteNoRegressionGate?: ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate
+  experimentalLocalCopyRewriteRolloutReadinessSummary?: ArithmeticProbeExperimentalLocalCopyRewriteRolloutReadinessSummary
 }
 
 export interface ArithmeticProbeExperimentTotals {
@@ -964,7 +965,24 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate {
   offlineRewriteFamilyReadinessSummary?: OfflineRewriteFamilyReadinessSummary
 }
 
+export interface ArithmeticProbeExperimentalLocalCopyRewriteRolloutReadinessSummary {
+  status: 'pass' | 'fail'
+  recommendation: 'manual-experimental-opt-in-only' | 'stay-experimental'
+  evidenceStatus: 'benchmark-and-bounded-offline-evidence-only'
+  reasons: string[]
+  requiredGateStatus: 'pass' | 'fail'
+  offlinePackStatus: 'pass' | 'fail'
+  familyReadinessStatus: 'pass' | 'fail'
+  commandDelta: number
+  scoreCopyDelta: number
+  commandRegressedCount: number
+  scoreCopyRegressedCount: number
+  improvedCaseNames: string[]
+  notes: string
+}
+
 const OFFLINE_REWRITE_EQUIVALENCE_PACK_MAX_FAILED_FIXTURE_NAMES = 5
+const ROLLOUT_READINESS_MAX_IMPROVED_CASE_NAMES = 5
 const OFFLINE_REWRITE_FAMILY_READINESS_REQUIRED_FAMILIES = [
   'local-copy-forwarding',
   'predecessor-arithmetic',
@@ -6896,6 +6914,111 @@ export function evaluateExperimentalLocalCopyRewriteNoRegressionGate(
   }
 }
 
+function summarizeRolloutImprovedCaseNames(
+  perCaseDeltas: ArithmeticProbeExperimentalLocalCopyRewriteComparison['perCaseDeltas'] = [],
+): string[] {
+  const improved = perCaseDeltas
+    .filter(delta => delta.commandDelta < 0 || delta.scoreCopyDelta < 0)
+    .sort((left, right) =>
+      left.caseName.localeCompare(right.caseName) || left.optLevel.localeCompare(right.optLevel),
+    )
+
+  const seenCaseNames = new Set<string>()
+  const improvedCaseNames: string[] = []
+  for (const delta of improved) {
+    if (seenCaseNames.has(delta.caseName)) continue
+    seenCaseNames.add(delta.caseName)
+    improvedCaseNames.push(delta.caseName)
+    if (improvedCaseNames.length >= ROLLOUT_READINESS_MAX_IMPROVED_CASE_NAMES) {
+      break
+    }
+  }
+
+  return improvedCaseNames
+}
+
+export function evaluateExperimentalLocalCopyRewriteRolloutReadinessSummary(
+  args: {
+    comparison?: ArithmeticProbeExperimentalLocalCopyRewriteComparison
+    noRegressionGate?: ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate
+    offlineRewriteEquivalencePackSummary?: OfflineRewriteEquivalencePackSummary
+  },
+): ArithmeticProbeExperimentalLocalCopyRewriteRolloutReadinessSummary {
+  const comparison = args.comparison
+  const noRegressionGate = args.noRegressionGate
+  const offlineRewriteEquivalencePackSummary = args.offlineRewriteEquivalencePackSummary
+
+  const failReasons: string[] = []
+  const commandDelta = comparison?.commandDelta ?? 0
+  const scoreCopyDelta = comparison?.scoreCopyDelta ?? 0
+  const commandRegressedCount = comparison?.commandDeltaSummary?.regressedCount ?? 0
+  const scoreCopyRegressedCount = comparison?.scoreCopyDeltaSummary?.regressedCount ?? 0
+  const commandRegressedCaseCount = comparison?.perCaseDeltas.filter(delta => delta.commandDelta > 0).length ?? 0
+  const scoreCopyRegressedCaseCount = comparison?.perCaseDeltas.filter(delta => delta.scoreCopyDelta > 0).length ?? 0
+  const requiredGateStatus = noRegressionGate?.status ?? 'fail'
+  const offlinePackStatus = offlineRewriteEquivalencePackSummary?.status ?? 'fail'
+  const familyReadinessStatus = offlineRewriteEquivalencePackSummary?.offlineRewriteFamilyReadinessSummary?.status ?? 'fail'
+
+  if (!comparison) {
+    failReasons.push('Missing experimentalLocalCopyRewriteComparison')
+  }
+  if (requiredGateStatus === 'fail') {
+    failReasons.push(`required no-regression gate did not pass: status=${requiredGateStatus}`)
+  }
+  if (offlinePackStatus === 'fail') {
+    failReasons.push(`offline rewrite equivalence pack status did not pass: status=${offlinePackStatus}`)
+  }
+  if (familyReadinessStatus === 'fail') {
+    failReasons.push(`offline rewrite family readiness status did not pass: status=${familyReadinessStatus}`)
+  }
+  if (commandRegressedCount > 0) {
+    failReasons.push(`command regressions detected in summary: ${commandRegressedCount}`)
+  }
+  if (scoreCopyRegressedCount > 0) {
+    failReasons.push(`scoreCopy regressions detected in summary: ${scoreCopyRegressedCount}`)
+  }
+  if (commandRegressedCaseCount > 0) {
+    failReasons.push(`command regressions detected in per-case deltas: ${commandRegressedCaseCount}`)
+  }
+  if (scoreCopyRegressedCaseCount > 0) {
+    failReasons.push(`scoreCopy regressions detected in per-case deltas: ${scoreCopyRegressedCaseCount}`)
+  }
+  if (commandDelta > 0) {
+    failReasons.push(`aggregate command delta regression: ${commandDelta}`)
+  }
+  if (scoreCopyDelta > 0) {
+    failReasons.push(`aggregate scoreCopy delta regression: ${scoreCopyDelta}`)
+  }
+  if (commandDelta >= 0 && scoreCopyDelta >= 0) {
+    failReasons.push(`no aggregate command/scoreCopy improvement: commandDelta=${commandDelta}, scoreCopyDelta=${scoreCopyDelta}`)
+  }
+
+  const reasons = failReasons.length > 0
+    ? failReasons
+    : [
+      'explicit no-regression gate passed',
+      'offline rewrite equivalence pack and family readiness passed',
+      'bounded benchmark deltas show command/scoreCopy improvement with no regressions',
+      'suitable only for manual experimental opt-in review',
+    ]
+
+  return {
+    status: failReasons.length === 0 ? 'pass' : 'fail',
+    recommendation: failReasons.length === 0 ? 'manual-experimental-opt-in-only' : 'stay-experimental',
+    evidenceStatus: 'benchmark-and-bounded-offline-evidence-only',
+    reasons,
+    requiredGateStatus,
+    offlinePackStatus,
+    familyReadinessStatus,
+    commandDelta,
+    scoreCopyDelta,
+    commandRegressedCount,
+    scoreCopyRegressedCount,
+    improvedCaseNames: summarizeRolloutImprovedCaseNames(comparison?.perCaseDeltas),
+    notes: 'Benchmark-and-bounded-offline evidence only; this summary is for manual experimental opt-in review and does not authorize production default enablement.',
+  }
+}
+
 export function runArithmeticProbe(
   probe: ArithmeticProbeCase,
   optLevel: OptimizationLevel,
@@ -7047,6 +7170,19 @@ export function runArithmeticProbeReport(
   const experimentalLocalCopyRewriteComparison = experimentalLirLocalCopyRewrite
     ? buildExperimentalLocalCopyRewriteComparison(offCases, cases)
     : undefined
+  const experimentalLocalCopyRewriteNoRegressionGate = experimentalLirLocalCopyRewrite
+    ? evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      experimentalLocalCopyRewriteComparison,
+      offlineRewriteEquivalencePackSummary,
+    )
+    : undefined
+  const experimentalLocalCopyRewriteRolloutReadinessSummary = experimentalLirLocalCopyRewrite
+    ? evaluateExperimentalLocalCopyRewriteRolloutReadinessSummary({
+      comparison: experimentalLocalCopyRewriteComparison,
+      noRegressionGate: experimentalLocalCopyRewriteNoRegressionGate,
+      offlineRewriteEquivalencePackSummary,
+    })
+    : undefined
   return {
     ...meta,
     cases,
@@ -7055,6 +7191,8 @@ export function runArithmeticProbeReport(
     rewriteOpportunities: mergeRewriteOpportunities(cases.map(result => result.rewriteOpportunities)),
     offlineRewriteEquivalencePackSummary,
     experimentalLocalCopyRewriteComparison,
+    experimentalLocalCopyRewriteNoRegressionGate,
+    experimentalLocalCopyRewriteRolloutReadinessSummary,
     lirOpportunitySummary,
     futureRewriteFixtureExportSummary: lirOpportunitySummary?.futureRewriteFixtureExportSummary,
     unknownCauseSplitSummary: lirOpportunitySummary?.unknownCauseSplitSummary,

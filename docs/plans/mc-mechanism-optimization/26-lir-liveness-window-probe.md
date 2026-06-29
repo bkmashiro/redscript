@@ -252,6 +252,23 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
 - Updated tests to assert deterministic required-family ordering, deterministic fail reasons, and presence of readiness metadata in explicit report/gate outputs.
 - This tranche is diagnostics-only and does not change production optimizer behavior.
 
+### Tranche W outcome update
+- Added `ArithmeticProbeReport.experimentalLocalCopyRewriteRolloutReadinessSummary` and companion evaluator `evaluateExperimentalLocalCopyRewriteRolloutReadinessSummary` for deterministic readiness messaging on explicit experimental local-copy runs.
+- The new rollout summary includes:
+  - `status` (`pass`/`fail`),
+  - `recommendation` (`manual-experimental-opt-in-only` or `stay-experimental`),
+  - `evidenceStatus: 'benchmark-and-bounded-offline-evidence-only'`,
+  - deterministic `reasons`,
+  - copied aggregate/regression fields (`commandDelta`, `scoreCopyDelta`, regression counts),
+  - explicit `requiredGateStatus` / `offlinePackStatus` / `familyReadinessStatus`,
+  - capped deterministic `improvedCaseNames`.
+- The script wrapper prints a concise rollout/readiness line derived from this summary while writing the full JSON artifact; it exits non-zero if either the no-regression gate or rollout readiness summary fails.
+- Summary pass criteria is conservative:
+  - no regression gate/family evidence is allowed to fail,
+  - no aggregate or per-case regressions are allowed,
+  - at least one aggregate benchmark signal must improve.
+- Tranche W remains bounded offline-evidence only and does **not** change production/default optimizer behavior; it is explicitly for manual experimental opt-in review and does not authorize default enablement.
+
 ## Next safe goals
 1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite` via the new wrapper.
 2. use the new Phase U/U+V fixture and readiness results to guide the next gated rewrite candidate tranche,

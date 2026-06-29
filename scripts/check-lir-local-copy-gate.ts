@@ -2,7 +2,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 import {
-  evaluateExperimentalLocalCopyRewriteNoRegressionGate,
   runArithmeticProbeReport,
 } from '../benchmarks/arithmetic-probes'
 
@@ -49,13 +48,19 @@ function main(): void {
   const outputPath = args.output ?? DEFAULT_OUTPUT_PATH
 
   const report = runArithmeticProbeReport('all', [1], true)
-  const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
-    report.experimentalLocalCopyRewriteComparison,
-    report.offlineRewriteEquivalencePackSummary,
-  )
-  report.experimentalLocalCopyRewriteNoRegressionGate = gate
+  const gate = report.experimentalLocalCopyRewriteNoRegressionGate
+  const rolloutReadiness = report.experimentalLocalCopyRewriteRolloutReadinessSummary
   const comparison = report.experimentalLocalCopyRewriteComparison
   const offlinePack = report.offlineRewriteEquivalencePackSummary
+
+  if (!gate) {
+    console.error('Missing experimentalLocalCopyRewriteNoRegressionGate in explicit local-copy report output')
+    process.exit(1)
+  }
+  if (!rolloutReadiness) {
+    console.error('Missing experimentalLocalCopyRewriteRolloutReadinessSummary in explicit local-copy report output')
+    process.exit(1)
+  }
 
   const outputDir = path.dirname(outputPath)
   if (outputDir !== '.') {
@@ -69,6 +74,14 @@ function main(): void {
 
   console.log(`gate status: ${gate.status}`)
   console.log(`failReasons: ${gate.failReasons.length > 0 ? gate.failReasons.join('; ') : 'none'}`)
+  console.log(
+    `rollout readiness: status=${rolloutReadiness?.status ?? 'unknown'}`
+    + ` recommendation=${rolloutReadiness?.recommendation ?? 'unknown'}`
+    + ` evidence=${rolloutReadiness?.evidenceStatus ?? 'unknown'}`
+    + ` commandDelta=${rolloutReadiness?.commandDelta ?? 0}`
+    + ` scoreCopyDelta=${rolloutReadiness?.scoreCopyDelta ?? 0}`
+    + ` improvedCases=${rolloutReadiness?.improvedCaseNames?.length ?? 0}`,
+  )
   if (offlinePack) {
     console.log(
       `offline pack: status=${offlinePack.status}`
@@ -89,7 +102,7 @@ function main(): void {
   )
   console.log(`output: ${outputPath}`)
 
-  if (gate.status !== 'pass') {
+  if (gate.status !== 'pass' || rolloutReadiness.status !== 'pass') {
     process.exit(1)
   }
 }

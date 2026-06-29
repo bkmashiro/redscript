@@ -101,6 +101,8 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | S | Offline equivalence pack + benchmark gate integration | Add deterministic offline-pack evidence into explicit local-copy benchmark paths and no-regression gate checks | Medium | Small diagnostics-only slice | Completed |
 | T | CI-friendly explicit local-copy no-regression gate path | Add concise, CI-safe wrapper and workflow step to run evidence-only gate with full JSON artifact | Medium | Small diagnostics-only slice | Completed |
 | U | Offline rewrite fixture family/window expansion | Expand bounded equivalence fixture coverage for score-swap, score-set-overwrite, and unsupported typed boundary cases | Low | Small diagnostics-only slice | Completed |
+| V | Offline rewrite family readiness contract | Add explicit required-family readiness metadata and fail the evidence gate when required fixture families are missing or failed | Medium | Small diagnostics-only slice | Completed |
+| W | Explicit local-copy rollout readiness summary for manual opt-in | Add deterministic aggregate+regression evidence summary for manual experimental rollout readiness | Medium | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -685,11 +687,36 @@ git status --short --branch
   - Added tests for deterministic required-family ordering, fail-paths for missing/failed required families, and explicit inclusion of readiness metadata in report+gate outputs.
   - No production optimizer behavior changed; this remains evidence-only readiness contract work.
 
+## Tranche W — explicit rollout readiness summary for experimental local-copy opt-in
+
+- Status: Completed as evidence-only.
+- Outcome:
+  - Added `ArithmeticProbeReport.experimentalLocalCopyRewriteRolloutReadinessSummary` and `ArithmeticProbeExperimentalLocalCopyRewriteRolloutReadinessSummary` with:
+    - `status: 'pass' | 'fail'`
+    - `recommendation: 'manual-experimental-opt-in-only' | 'stay-experimental'`
+    - `evidenceStatus: 'benchmark-and-bounded-offline-evidence-only'`
+    - deterministic `reasons`,
+    - copied `commandDelta`/`scoreCopyDelta` and regression counts from the experimental comparison,
+    - `requiredGateStatus`, `offlinePackStatus`, `familyReadinessStatus`,
+    - capped deterministic `improvedCaseNames`.
+  - Added rollout evaluator that passes only when:
+    - the no-regression gate passes,
+    - offline equivalence pack status is `pass`,
+    - family readiness status is `pass`,
+    - there are no command/scoreCopy regressions in summary and per-case,
+    - there is aggregate command/scoreCopy improvement (`commandDelta < 0` or `scoreCopyDelta < 0`).
+  - Added a concise rollout/readiness line to `scripts/check-lir-local-copy-gate.ts`, bound the wrapper to explicit-report readiness output, and made the wrapper exit non-zero if either the no-regression gate or rollout readiness summary fails.
+  - Added unit tests for:
+    - synthetic gate-fail and no-improvement fail conditions,
+    - deterministic/capped improved-case ordering,
+    - real explicit `runArithmeticProbeReport('all', [1], true)` pass path with `-193/-193`.
+  - This tranche does not change production/default optimizer behavior; it is bounded evidence for manual experimental opt-in only.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through V and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through W and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -714,7 +741,7 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche V with J/K/L/O/P/Q/R/S/T/U/V diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche W with J/K/L/O/P/Q/R/S/T/U/V/W diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.

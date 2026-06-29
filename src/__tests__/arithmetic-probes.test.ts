@@ -7,6 +7,7 @@ import {
   summarizeDeltaSeries,
   mergeRejectionCategoryTotals,
   evaluateExperimentalLocalCopyRewriteNoRegressionGate,
+  evaluateExperimentalLocalCopyRewriteRolloutReadinessSummary,
   summarizeOfflineRewriteEquivalencePack,
   parseProbeCliArgs,
   type ArithmeticProbeResult,
@@ -555,6 +556,52 @@ const SYNTHETIC_NO_REGRESSION_COMPARISON: ArithmeticProbeExperimentalLocalCopyRe
   ],
 }
 
+const SYNTHETIC_NO_IMPROVEMENT_COMPARISON: ArithmeticProbeExperimentalLocalCopyRewriteComparison = {
+  ...SYNTHETIC_NO_REGRESSION_COMPARISON,
+  commandDelta: 0,
+  scoreCopyDelta: 0,
+  commandDeltaSummary: {
+    min: 0,
+    max: 0,
+    total: 0,
+    average: 0,
+    improvedCount: 0,
+    regressedCount: 0,
+    unchangedCount: 2,
+  },
+  scoreCopyDeltaSummary: {
+    min: 0,
+    max: 0,
+    total: 0,
+    average: 0,
+    improvedCount: 0,
+    regressedCount: 0,
+    unchangedCount: 2,
+  },
+  perCaseDeltas: [
+    {
+      caseName: 'case-b',
+      optLevel: 'O1',
+      offCommandsTotal: 10,
+      onCommandsTotal: 10,
+      commandDelta: 0,
+      offScoreCopyTotal: 4,
+      onScoreCopyTotal: 4,
+      scoreCopyDelta: 0,
+    },
+    {
+      caseName: 'case-a',
+      optLevel: 'O1',
+      offCommandsTotal: 10,
+      onCommandsTotal: 10,
+      commandDelta: 0,
+      offScoreCopyTotal: 4,
+      onScoreCopyTotal: 4,
+      scoreCopyDelta: 0,
+    },
+  ],
+}
+
 describe('arithmetic probe benchmark tooling', () => {
   it('lists stable named arithmetic probes', () => {
     const names = ARITHMETIC_PROBES.map(probe => probe.name)
@@ -588,6 +635,152 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(gate.failReasons).toEqual([
       'Missing experimentalLocalCopyRewriteComparison',
     ])
+  })
+
+  it('fails rollout readiness when the explicit no-regression gate does not pass', () => {
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(undefined)
+    const readiness = evaluateExperimentalLocalCopyRewriteRolloutReadinessSummary({
+      comparison: SYNTHETIC_NO_REGRESSION_COMPARISON,
+      noRegressionGate: gate,
+      offlineRewriteEquivalencePackSummary: makeOfflineRewriteEquivalencePackSummary(),
+    })
+
+    expect(readiness.status).toBe('fail')
+    expect(readiness.recommendation).toBe('stay-experimental')
+    expect(readiness.requiredGateStatus).toBe('fail')
+    expect(readiness.offlinePackStatus).toBe('pass')
+    expect(readiness.familyReadinessStatus).toBe('pass')
+    expect(readiness.commandDelta).toBe(-4)
+    expect(readiness.scoreCopyDelta).toBe(-4)
+    expect(readiness.commandRegressedCount).toBe(0)
+    expect(readiness.scoreCopyRegressedCount).toBe(0)
+    expect(readiness.reasons).toContain('required no-regression gate did not pass: status=fail')
+  })
+
+  it('fails rollout readiness when no aggregate improvement exists despite no regressions', () => {
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      SYNTHETIC_NO_IMPROVEMENT_COMPARISON,
+      makeOfflineRewriteEquivalencePackSummary(),
+    )
+    const readiness = evaluateExperimentalLocalCopyRewriteRolloutReadinessSummary({
+      comparison: SYNTHETIC_NO_IMPROVEMENT_COMPARISON,
+      noRegressionGate: gate,
+      offlineRewriteEquivalencePackSummary: makeOfflineRewriteEquivalencePackSummary(),
+    })
+
+    expect(gate.status).toBe('pass')
+    expect(readiness.status).toBe('fail')
+    expect(readiness.recommendation).toBe('stay-experimental')
+    expect(readiness.requiredGateStatus).toBe('pass')
+    expect(readiness.reasons).toContain(
+      'no aggregate command/scoreCopy improvement: commandDelta=0, scoreCopyDelta=0',
+    )
+  })
+
+  it('sorts and caps deterministic improved case names for rollout readiness', () => {
+    const improvedComparison: ArithmeticProbeExperimentalLocalCopyRewriteComparison = {
+      ...SYNTHETIC_NO_REGRESSION_COMPARISON,
+      commandDelta: -6,
+      scoreCopyDelta: -12,
+      commandDeltaSummary: {
+        min: -1,
+        max: -1,
+        total: -6,
+        average: -1,
+        improvedCount: 6,
+        regressedCount: 0,
+        unchangedCount: 0,
+      },
+      scoreCopyDeltaSummary: {
+        min: -2,
+        max: -2,
+        total: -12,
+        average: -2,
+        improvedCount: 6,
+        regressedCount: 0,
+        unchangedCount: 0,
+      },
+      perCaseDeltas: [
+        {
+          caseName: 'zeta',
+          optLevel: 'O1',
+          offCommandsTotal: 10,
+          onCommandsTotal: 8,
+          commandDelta: -1,
+          offScoreCopyTotal: 4,
+          onScoreCopyTotal: 2,
+          scoreCopyDelta: -2,
+        },
+        {
+          caseName: 'alpha',
+          optLevel: 'O1',
+          offCommandsTotal: 10,
+          onCommandsTotal: 9,
+          commandDelta: -1,
+          offScoreCopyTotal: 4,
+          onScoreCopyTotal: 2,
+          scoreCopyDelta: -2,
+        },
+        {
+          caseName: 'theta',
+          optLevel: 'O1',
+          offCommandsTotal: 10,
+          onCommandsTotal: 9,
+          commandDelta: -1,
+          offScoreCopyTotal: 4,
+          onScoreCopyTotal: 2,
+          scoreCopyDelta: -2,
+        },
+        {
+          caseName: 'beta',
+          optLevel: 'O1',
+          offCommandsTotal: 10,
+          onCommandsTotal: 9,
+          commandDelta: -1,
+          offScoreCopyTotal: 4,
+          onScoreCopyTotal: 2,
+          scoreCopyDelta: -2,
+        },
+        {
+          caseName: 'epsilon',
+          optLevel: 'O1',
+          offCommandsTotal: 10,
+          onCommandsTotal: 9,
+          commandDelta: -1,
+          offScoreCopyTotal: 4,
+          onScoreCopyTotal: 2,
+          scoreCopyDelta: -2,
+        },
+        {
+          caseName: 'delta',
+          optLevel: 'O1',
+          offCommandsTotal: 10,
+          onCommandsTotal: 9,
+          commandDelta: -1,
+          offScoreCopyTotal: 4,
+          onScoreCopyTotal: 2,
+          scoreCopyDelta: -2,
+        },
+      ],
+    }
+    const readiness = evaluateExperimentalLocalCopyRewriteRolloutReadinessSummary({
+      comparison: improvedComparison,
+      noRegressionGate: {
+        ...evaluateExperimentalLocalCopyRewriteNoRegressionGate(improvedComparison, makeOfflineRewriteEquivalencePackSummary()),
+      },
+      offlineRewriteEquivalencePackSummary: makeOfflineRewriteEquivalencePackSummary(),
+    })
+
+    expect(readiness.commandDelta).toBe(-6)
+    expect(readiness.status).toBe('pass')
+    expect(readiness.improvedCaseNames).toEqual([
+      'alpha',
+      'beta',
+      'delta',
+      'epsilon',
+      'theta',
+    ])
+    expect(readiness.improvedCaseNames).toHaveLength(5)
   })
 
   it('summarizes offline rewrite equivalence pack fixtures with deterministic family order', () => {
@@ -916,6 +1109,23 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(gate.status).toBe('pass')
     expect(gate.failReasons).toHaveLength(0)
     expect(gate.offlineRewriteFamilyReadinessSummary).toEqual(summary!.offlineRewriteFamilyReadinessSummary)
+
+    const rolloutReadiness = report.experimentalLocalCopyRewriteRolloutReadinessSummary
+    expect(rolloutReadiness).toBeDefined()
+    expect(rolloutReadiness?.status).toBe('pass')
+    expect(rolloutReadiness?.recommendation).toBe('manual-experimental-opt-in-only')
+    expect(rolloutReadiness?.evidenceStatus).toBe('benchmark-and-bounded-offline-evidence-only')
+    expect(rolloutReadiness?.requiredGateStatus).toBe('pass')
+    expect(rolloutReadiness?.offlinePackStatus).toBe('pass')
+    expect(rolloutReadiness?.familyReadinessStatus).toBe('pass')
+    expect(rolloutReadiness?.commandRegressedCount).toBe(0)
+    expect(rolloutReadiness?.scoreCopyRegressedCount).toBe(0)
+    expect(rolloutReadiness?.notes).toMatch(/Benchmark-and-bounded-offline|not authorize production default|evidence/)
+    expect(rolloutReadiness?.improvedCaseNames.length).toBeGreaterThan(0)
+    expect(rolloutReadiness?.reasons).toEqual(expect.arrayContaining([
+      'offline rewrite equivalence pack and family readiness passed',
+      'suitable only for manual experimental opt-in review',
+    ]))
   })
 
   it('runs experimental local-copy rewrite probes deterministically with explicit comparison totals', () => {
@@ -947,6 +1157,30 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(comparison?.on.caseCount).toBe(1)
     expect(comparison?.off.commandTotal).toBe(offCase.commands.total)
     expect(comparison?.on.commandTotal).toBe(onCase.commands.total)
+  })
+
+  it('adds rollout readiness summary with aggregate improvement on explicit all-case experimental report path', () => {
+    const report = runArithmeticProbeReport('all', [1], true)
+    const readiness = report.experimentalLocalCopyRewriteRolloutReadinessSummary
+
+    expect(readiness?.status).toBe('pass')
+    expect(readiness?.recommendation).toBe('manual-experimental-opt-in-only')
+    expect(readiness?.evidenceStatus).toBe('benchmark-and-bounded-offline-evidence-only')
+    expect(readiness?.requiredGateStatus).toBe('pass')
+    expect(readiness?.offlinePackStatus).toBe('pass')
+    expect(readiness?.familyReadinessStatus).toBe('pass')
+    expect(readiness?.commandDelta).toBe(-193)
+    expect(readiness?.scoreCopyDelta).toBe(-193)
+    expect(readiness?.commandRegressedCount).toBe(0)
+    expect(readiness?.scoreCopyRegressedCount).toBe(0)
+    expect(readiness?.notes).toMatch(/does not authorize production default enablement/)
+    expect(readiness?.reasons).toEqual(expect.arrayContaining([
+      'explicit no-regression gate passed',
+      'offline rewrite equivalence pack and family readiness passed',
+      'bounded benchmark deltas show command/scoreCopy improvement with no regressions',
+      'suitable only for manual experimental opt-in review',
+    ]))
+    expect(readiness?.improvedCaseNames.length).toBeGreaterThan(0)
   })
 
   it('preserves requested optimization levels in experimental comparison mode', () => {
