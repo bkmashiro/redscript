@@ -15,6 +15,14 @@ function slotKey(s: Slot): string {
   return `${s.player}\0${s.obj}`
 }
 
+function sameSlot(a: Slot, b: Slot): boolean {
+  return a.player === b.player && a.obj === b.obj
+}
+
+function isMinMaxSelfNoOp(instr: LIRInstr): boolean {
+  return (instr.kind === 'score_min' || instr.kind === 'score_max') && sameSlot(instr.dst, instr.src)
+}
+
 /** Count how many times a slot is used as a source operand. */
 function countSlotUses(instrs: LIRInstr[], target: string): number {
   let count = 0
@@ -77,6 +85,13 @@ export function constImmFold(fn: LIRFunction): LIRFunction {
   while (i < instrs.length) {
     const curr = instrs[i]
     const next = instrs[i + 1]
+
+    // Pattern: score_min(dst, dst) or score_max(dst, dst) is a no-op.
+    if (isMinMaxSelfNoOp(curr)) {
+      changed = true
+      i++
+      continue
+    }
 
     // Pattern: score_set(constSlot, C) + score_copy/add/sub/mul/div/mod(dst, constSlot)
     if (

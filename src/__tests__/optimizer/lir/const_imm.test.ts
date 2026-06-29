@@ -141,6 +141,52 @@ describe('constant immediate folding', () => {
     expect(result.instructions).toHaveLength(0)
   })
 
+  test('eliminates score_min on same slot', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$x') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+    ])
+  })
+
+  test('eliminates score_max on same slot', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_max', dst: mkSlot('$x'), src: mkSlot('$x') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+    ])
+  })
+
+  test('does not eliminate score_min with different source', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$y') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$y') },
+    ])
+  })
+
+  test('eliminates standalone and consecutive min/max self no-ops', () => {
+    const fn = mkFn([
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$x') },
+      { kind: 'score_max', dst: mkSlot('$x'), src: mkSlot('$x') },
+      { kind: 'return_value', slot: mkSlot('$x') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'return_value', slot: mkSlot('$x') },
+    ])
+  })
+
   test('folds modulo by 1 into score_set 0', () => {
     const fn = mkFn([
       { kind: 'score_set', dst: mkSlot('$__const_1'), value: 1 },

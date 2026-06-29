@@ -69,6 +69,8 @@ Practical estimate:
 
 **Proof/gate:** deterministic fixtures for each identity; negative tests for non-commutative/division/modulo cases; arithmetic probes.
 
+**Status:** tranche R2 currently includes conservative `score_min`/`score_max` self-no-op folding in `src/optimizer/lir/const_imm.ts` with unit tests and negative coverage. Next: extend to const-driven no-op identities only where safety is machine-verified.
+
 **Risk:** Minecraft scoreboard integer semantics, overflow/truncation, division/modulo edge cases.
 
 ---
