@@ -12,7 +12,7 @@
 
 ## Current status snapshot
 
-Latest committed implementation tranche: `8d18c64 feat: classify residual LIR rewrite candidates`.
+Latest verified implementation tranche: Track AG — slot use/def diagnostics (controller verified 2026-06-29; commit recorded in git history).
 
 Completed posture:
 
@@ -324,7 +324,7 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 ### Track AG — Slot use/def diagnostics for context-captured residuals
 
-**Status:** [ ] Not started — next recommended track
+**Status:** [x] Completed — controller verified (2026-06-29)
 
 **Product promise:** Explain the 272 `needs-slot-use-def-map` Track AF residuals with bounded slot use/def evidence before any pass design or rewrite.
 
@@ -346,30 +346,88 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 **Implementation outline:**
 
-- [ ] Add a diagnostics-only slot use/def summary for Track AF `needs-slot-use-def-map` residuals.
-- [ ] For each candidate, inspect a bounded same-function window and classify source/destination status with labels such as:
+- [x] Add a diagnostics-only slot use/def summary for Track AF `needs-slot-use-def-map` residuals.
+- [x] For each candidate, inspect a bounded same-function window and classify source/destination status with labels such as:
   - `dst-reused-after-arith`
   - `src-reused-after-copy`
   - `dst-dead-after-window`
   - `src-dead-after-window`
   - `slot-use-window-too-small`
   - `slot-alias-unsafe-or-opaque`
-- [ ] Include counts, top case names, capped examples, and recommendation.
-- [ ] Add synthetic tests and one all-case report test proving the 272 bucket is classified.
-- [ ] Update this roadmap with controller gate counts and the next decision.
+- [x] Include counts, top case names, capped examples, and recommendation.
+- [x] Add synthetic tests and one all-case report test proving the 272 bucket is classified.
+- [x] Update this roadmap with controller gate counts and the next decision.
+
+### Track AG evidence (2026-06-29 controller run)
+
+- `npm run gate:lir-local-copy -- --output /tmp/redscript-lir-track-ag-controller.json`
+- `gate = "pass"`
+- `rollout = "pass"`
+- `recommendation = "manual-experimental-opt-in-only"`
+- `commandDelta = -193`
+- `scoreCopyDelta = -193`
+- `offlineFixtures = 29`
+- `offlineFailed = 0`
+- `trackAFResidualDiagnostics.totalCount = 318`
+- `trackAFResidualDiagnostics.byLabel.needs-slot-use-def-map = 272`
+- `trackAFResidualDiagnostics.byLabel.needs-wider-same-function-window = 46`
+- `trackAGResidualDiagnostics.totalCount = 272`
+- `trackAGResidualDiagnostics.recommendation = "prioritize-pass-design"`
+- `trackAGResidualDiagnostics.byLabel =`
+  - `dst-reused-after-arith: 141`
+  - `slot-use-window-too-small: 83`
+  - `src-reused-after-copy: 29`
+  - `slot-alias-unsafe-or-opaque: 19`
+- **Decision:** Track AA remains blocked. Track AG now shows a pass-design question rather than a fixture-proven local rewrite class: the dominant bucket is destination reuse after arithmetic, but the window-too-small and alias/opaque buckets still require a conservative design note before any implementation.
 
 **Definition of Done:**
 
-- [ ] Track AG explains the 272 slot-use/def residuals with named buckets.
-- [ ] No optimizer behavior changes.
-- [ ] Full controller gates pass.
-- [ ] Roadmap records whether a fixture-backed rewrite class is plausible, a wider context tranche is needed, or the residual family should stop.
+- [x] Track AG explains the 272 slot-use/def residuals with named buckets.
+- [x] No optimizer behavior changes.
+- [x] Full controller gates pass.
+- [x] Roadmap records whether a fixture-backed rewrite class is plausible, a wider context tranche is needed, or the residual family should stop.
+
+---
+
+### Track AH — Pass-design note for slot use/def residuals
+
+**Status:** [ ] Not started — next recommended track
+
+**Product promise:** Turn the Track AG evidence into a conservative pass-design decision note before any rewrite/pass implementation.
+
+**Why now:** Track AG classified the 272 slot-use/def residuals as `dst-reused-after-arith: 141`, `slot-use-window-too-small: 83`, `src-reused-after-copy: 29`, and `slot-alias-unsafe-or-opaque: 19`. This is design evidence, not a fixture-proven local rewrite class.
+
+**Allowed files:**
+
+- this roadmap and linked docs under `docs/plans/mc-mechanism-optimization/`
+- `benchmarks/arithmetic-probes.ts` and `src/__tests__/arithmetic-probes.test.ts` only if the note needs one more evidence-only summary field
+
+**Forbidden:**
+
+- No changes to `src/optimizer/lir/rmw.ts`.
+- No pass-order changes.
+- No default/CLI behavior changes.
+- No production-emitted behavior changes.
+- No VIR changes.
+
+**Implementation outline:**
+
+- [ ] Write a short design note or roadmap section that maps Track AG buckets to safe/unsafe pass requirements.
+- [ ] Define what proof would be required before Track AA can be unblocked, especially for destination reuse after arithmetic and window-too-small cases.
+- [ ] Decide whether the next code tranche is another diagnostics pass, a bounded offline fixture pack, or stopping this residual family.
+- [ ] Keep the recommendation at `manual-experimental-opt-in-only` or `stay-experimental`.
+
+**Definition of Done:**
+
+- [ ] Track AA remains blocked unless the note identifies a fixture-backed exact rewrite class.
+- [ ] The note names required negative tests/equivalence fixtures for any future implementation.
+- [ ] `git diff --check` passes for docs-only work, or full controller gates pass if code/test files change.
 
 ---
 
 ### Track AA — Narrow residual rewrite implementation
 
-**Status:** [ ] Blocked by Track AB/AE/AF/AG proof and pass-design diagnostics
+**Status:** [ ] Blocked by Track AB/AE/AF/AG/AH proof and pass-design diagnostics
 
 **Product promise:** Add exactly one tiny LIR rewrite for a fixture-proven residual class, still behind `--experimental-lir-local-copy-rewrite`.
 
@@ -472,7 +530,7 @@ Rules:
 - Do not enable --experimental-lir-local-copy-rewrite by default.
 - Treat benchmark gates as evidence, not semantic proof.
 
-Start with the first unchecked non-blocked track in the roadmap. At the time this goal was written, that is Track AB: window/proof diagnostics for unknown residuals.
+Start with the first unchecked non-blocked track in the roadmap. At the time this goal was last updated, that is Track AH: pass-design note for slot use/def residuals.
 
 Expected workflow:
 1. Check git status and recent log.
@@ -540,3 +598,10 @@ Append a short note here after each completed tranche.
 - Controller gate `/tmp/redscript-lir-track-af-controller.json` reports `needs-slot-use-def-map: 272` and `needs-wider-same-function-window: 46`.
 - `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -193`, `scoreCopyDelta = -193`, offline fixtures `29/29` pass.
 - Track AA remains blocked; next unchecked non-blocked track is Track AG.
+
+### 2026-06-29 — Track AG completed
+
+- Added `trackAGResidualDiagnostics` for Track AF `needs-slot-use-def-map` residuals.
+- Controller gate `/tmp/redscript-lir-track-ag-controller.json` reports `dst-reused-after-arith: 141`, `slot-use-window-too-small: 83`, `src-reused-after-copy: 29`, and `slot-alias-unsafe-or-opaque: 19`.
+- `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -193`, `scoreCopyDelta = -193`, offline fixtures `29/29` pass.
+- Track AA remains blocked; next unchecked non-blocked track is Track AH.

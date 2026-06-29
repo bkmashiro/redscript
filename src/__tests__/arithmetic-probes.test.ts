@@ -2217,6 +2217,158 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(caseAlpha.trackAFResidualDiagnostics?.byLabel.every(entry => entry.contexts.length > 0)).toBe(true)
   })
 
+  it('proves Track AG synthetic sorting/capping with all label coverage', () => {
+    const caseAlpha = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-alpha',
+      optLevel: 'O1',
+      opportunities: {
+        total: 8,
+        currentlyOptimized: 0,
+        safeCandidate: 8,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [
+          {
+            status: 'safeCandidate',
+            pattern: 'safe',
+            count: 8,
+            examples: ['case-alpha:1', 'case-alpha:2', 'case-alpha:3', 'case-alpha:4', 'case-alpha:5', 'case-alpha:6', 'case-alpha:7', 'case-alpha:8'],
+          },
+        ],
+      },
+      rewriteOpportunityTrackAGResidualSummary: {
+        totalCount: 18,
+        byLabel: [
+          {
+            label: 'dst-reused-after-arith',
+            count: 5,
+            caseNames: [],
+            examples: ['case-alpha:d1', 'case-alpha:d2', 'case-alpha:d3', 'case-alpha:d4', 'case-alpha:d5'],
+          },
+          {
+            label: 'src-reused-after-copy',
+            count: 4,
+            caseNames: [],
+            examples: ['case-alpha:s1', 'case-alpha:s2', 'case-alpha:s3', 'case-alpha:s4'],
+          },
+          {
+            label: 'slot-alias-unsafe-or-opaque',
+            count: 3,
+            caseNames: [],
+            examples: ['case-alpha:o1', 'case-alpha:o2', 'case-alpha:o3'],
+          },
+          {
+            label: 'slot-use-window-too-small',
+            count: 2,
+            caseNames: [],
+            examples: ['case-alpha:w1', 'case-alpha:w2', 'case-alpha:w3'],
+          },
+          {
+            label: 'dst-dead-after-window',
+            count: 2,
+            caseNames: [],
+            examples: ['case-alpha:dd1', 'case-alpha:dd2', 'case-alpha:dd3'],
+          },
+          {
+            label: 'src-dead-after-window',
+            count: 2,
+            caseNames: [],
+            examples: ['case-alpha:ds1', 'case-alpha:ds2', 'case-alpha:ds3'],
+          },
+        ],
+      },
+    })
+    const caseBeta = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-beta',
+      optLevel: 'O1',
+      opportunities: {
+        total: 4,
+        currentlyOptimized: 1,
+        safeCandidate: 3,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [
+          {
+            status: 'safeCandidate',
+            pattern: 'safe',
+            count: 3,
+            examples: ['case-beta:1', 'case-beta:2', 'case-beta:3'],
+          },
+        ],
+      },
+      rewriteOpportunityTrackAGResidualSummary: {
+        totalCount: 8,
+        byLabel: [
+          {
+            label: 'slot-alias-unsafe-or-opaque',
+            count: 2,
+            caseNames: [],
+            examples: ['case-beta:o4', 'case-beta:o5'],
+          },
+          {
+            label: 'src-reused-after-copy',
+            count: 3,
+            caseNames: [],
+            examples: ['case-beta:s5', 'case-beta:s6', 'case-beta:s7', 'case-beta:s8'],
+          },
+          {
+            label: 'slot-use-window-too-small',
+            count: 1,
+            caseNames: [],
+            examples: ['case-beta:w3'],
+          },
+        ],
+      },
+    })
+
+    const aggregate = summarizeExperimentalLocalCopyRewriteResidualSummary([caseAlpha, caseBeta])
+
+    expect(aggregate.trackAGResidualDiagnostics).toBeDefined()
+    const trackAG = aggregate.trackAGResidualDiagnostics
+    expect(trackAG?.targetPattern).toBe('score_copy -> score_arith')
+    expect(trackAG?.totalCount).toBe(26)
+    expect(trackAG?.topCaseNames).toEqual(['case-alpha', 'case-beta'])
+    expect(trackAG?.byLabel).toEqual([
+      {
+        label: 'src-reused-after-copy',
+        count: 7,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:s1', 'case-alpha:s2', 'case-alpha:s3'],
+      },
+      {
+        label: 'dst-reused-after-arith',
+        count: 5,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:d1', 'case-alpha:d2', 'case-alpha:d3'],
+      },
+      {
+        label: 'slot-alias-unsafe-or-opaque',
+        count: 5,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:o1', 'case-alpha:o2', 'case-alpha:o3'],
+      },
+      {
+        label: 'slot-use-window-too-small',
+        count: 3,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:w1', 'case-alpha:w2', 'case-alpha:w3'],
+      },
+      {
+        label: 'dst-dead-after-window',
+        count: 2,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:dd1', 'case-alpha:dd2', 'case-alpha:dd3'],
+      },
+      {
+        label: 'src-dead-after-window',
+        count: 2,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:ds1', 'case-alpha:ds2', 'case-alpha:ds3'],
+      },
+    ])
+    expect(trackAG?.recommendation).toBe('prioritize-pass-design')
+  })
+
   it('proves Track AE Track AB non-adjacent residuals are populated in all-case experimental summaries', () => {
     const report = runArithmeticProbeReport('all', [1], true)
     const residualSummary = report.experimentalLocalCopyRewriteResidualSummary
@@ -2229,9 +2381,19 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(residualSummary?.trackAFResidualDiagnostics?.totalCount).toBe(
       residualSummary?.trackAEResidualDiagnostics?.byLabel.find(item => item.label === 'insufficient-command-context')?.count ?? 0,
     )
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(272)
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-wider-same-function-window')?.count).toBe(46)
     expect(residualSummary?.trackAEResidualDiagnostics?.topCaseNames.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAEResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
+    expect(residualSummary?.trackAGResidualDiagnostics).toBeDefined()
+    expect(residualSummary?.trackAGResidualDiagnostics?.totalCount).toBe(272)
+    expect(
+      residualSummary?.trackAGResidualDiagnostics?.byLabel.reduce((sum, item) => sum + item.count, 0),
+    ).toBe(272)
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(
+      residualSummary?.trackAGResidualDiagnostics?.byLabel.reduce((sum, item) => sum + item.count, 0) ?? 0,
+    )
     expect(
       residualSummary?.trackAEResidualDiagnostics?.byLabel.reduce((sum, entry) => sum + entry.count, 0),
     ).toBe(residualSummary?.trackAEResidualDiagnostics?.totalCount)
