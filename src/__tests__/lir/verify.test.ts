@@ -36,6 +36,91 @@ describe('LIR verifier — objective checks', () => {
     expect(verifyLIR(mod)).toEqual([])
   })
 
+describe('LIR verifier — ScoreInt immediates', () => {
+  test('accepts emit-safe boundary score_delta values', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_delta', dst: slot('b'), value: -1 },
+        { kind: 'score_delta', dst: slot('c'), value: 0 },
+        { kind: 'score_delta', dst: slot('d'), value: 1 },
+        { kind: 'score_delta', dst: slot('e'), value: 2147483647 },
+      ]),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
+  })
+
+  test('rejects SCORE_INT_MIN because it cannot be emitted as one remove immediate', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_delta', dst: slot('a'), value: -2147483648 },
+      ]),
+    ])
+    const errors = verifyLIR(mod)
+    expect(errors).toHaveLength(1)
+    expect(errors[0].message).toContain('not emit-safe')
+  })
+
+  test('rejects invalid score_delta values inside store_cmd_to_score', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'store_cmd_to_score', dst: slot('out'), cmd: { kind: 'score_delta', dst: slot('a'), value: -2147483648 } },
+      ]),
+    ])
+    const errors = verifyLIR(mod)
+    expect(errors).toHaveLength(1)
+    expect(errors[0].message).toContain('not emit-safe')
+  })
+
+  test('rejects invalid score_delta values inside deeply nested store commands', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        {
+          kind: 'store_cmd_to_score',
+          dst: slot('outer'),
+          cmd: {
+            kind: 'store_cmd_to_score',
+            dst: slot('inner'),
+            cmd: { kind: 'score_delta', dst: slot('a'), value: -2147483648 },
+          },
+        },
+      ]),
+    ])
+    const errors = verifyLIR(mod)
+    expect(errors).toHaveLength(1)
+    expect(errors[0].message).toContain('not emit-safe')
+  })
+
+  test('rejects out-of-range score_delta values', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_delta', dst: slot('a'), value: 2147483648 as number },
+        { kind: 'score_delta', dst: slot('b'), value: -2147483649 as number },
+      ]),
+    ])
+    const errors = verifyLIR(mod)
+    expect(errors).toHaveLength(2)
+    expect(errors[0].message).toContain('score_delta')
+    expect(errors[1].message).toContain('score_delta')
+  })
+
+  test('rejects non-finite and non-integer score_delta values', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_delta', dst: slot('a'), value: Number.NaN as number },
+        { kind: 'score_delta', dst: slot('b'), value: Number.POSITIVE_INFINITY as number },
+        { kind: 'score_delta', dst: slot('c'), value: Number.NEGATIVE_INFINITY as number },
+        { kind: 'score_delta', dst: slot('d'), value: 1.5 as number },
+      ]),
+    ])
+    const errors = verifyLIR(mod)
+    expect(errors).toHaveLength(4)
+    expect(errors[0].message).toContain('non-finite')
+    expect(errors[1].message).toContain('non-finite')
+    expect(errors[2].message).toContain('non-finite')
+    expect(errors[3].message).toContain('non-integer')
+  })
+})
+
   test('rejects slot with wrong objective', () => {
     const mod = mkModule([
       mkFn('main', [

@@ -65,6 +65,9 @@ describe('emit: direct LIR emission', () => {
       { kind: 'score_mod', dst: { player: '$a', obj: '__emit' }, src: { player: '$b', obj: '__emit' }, sourceLoc },
       { kind: 'score_min', dst: { player: '$a', obj: '__emit' }, src: { player: '$b', obj: '__emit' }, sourceLoc },
       { kind: 'score_max', dst: { player: '$a', obj: '__emit' }, src: { player: '$b', obj: '__emit' }, sourceLoc },
+      { kind: 'score_delta', dst: { player: '$x', obj: '__emit' }, value: 3, sourceLoc },
+      { kind: 'score_delta', dst: { player: '$y', obj: '__emit' }, value: -4, sourceLoc },
+      { kind: 'score_delta', dst: { player: '$z', obj: '__emit' }, value: 0, sourceLoc },
       { kind: 'score_swap', a: { player: '$a', obj: '__emit' }, b: { player: '$b', obj: '__emit' }, sourceLoc },
       {
         kind: 'store_cmd_to_score',
@@ -168,6 +171,8 @@ describe('emit: direct LIR emission', () => {
     expect(main).toContain('scoreboard players operation $a __emit < $b __emit')
     expect(main).toContain('scoreboard players operation $a __emit > $b __emit')
     expect(main).toContain('scoreboard players operation $a __emit >< $b __emit')
+    expect(main).toContain('scoreboard players add $x __emit 3')
+    expect(main).toContain('scoreboard players remove $y __emit 4')
     expect(main).toContain('execute store result score $stored __emit run say nested-store')
     expect(main).toContain('execute store result storage rs:data value.path int 2 run scoreboard players get $a __emit')
     expect(main).toContain('execute store result score $from_nbt __emit run data get storage rs:data value.path 2.5')

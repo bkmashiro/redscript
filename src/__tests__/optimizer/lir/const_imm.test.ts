@@ -20,8 +20,9 @@ describe('constant immediate folding', () => {
     const result = constImmFold(fn)
     expect(result.instructions).toHaveLength(1)
     expect(result.instructions[0]).toEqual({
-      kind: 'raw',
-      cmd: 'scoreboard players add $x __test 5',
+      kind: 'score_delta',
+      dst: mkSlot('$x'),
+      value: 5,
     })
   })
 
@@ -33,8 +34,9 @@ describe('constant immediate folding', () => {
     const result = constImmFold(fn)
     expect(result.instructions).toHaveLength(1)
     expect(result.instructions[0]).toEqual({
-      kind: 'raw',
-      cmd: 'scoreboard players remove $y __test 3',
+      kind: 'score_delta',
+      dst: mkSlot('$y'),
+      value: -3,
     })
   })
 
@@ -46,8 +48,9 @@ describe('constant immediate folding', () => {
     const result = constImmFold(fn)
     expect(result.instructions).toHaveLength(1)
     expect(result.instructions[0]).toEqual({
-      kind: 'raw',
-      cmd: 'scoreboard players remove $z __test 7',
+      kind: 'score_delta',
+      dst: mkSlot('$z'),
+      value: -7,
     })
   })
 
@@ -59,8 +62,9 @@ describe('constant immediate folding', () => {
     const result = constImmFold(fn)
     expect(result.instructions).toHaveLength(1)
     expect(result.instructions[0]).toEqual({
-      kind: 'raw',
-      cmd: 'scoreboard players add $w __test 2',
+      kind: 'score_delta',
+      dst: mkSlot('$w'),
+      value: 2,
     })
   })
 
@@ -90,7 +94,7 @@ describe('constant immediate folding', () => {
     ])
     const result = constImmFold(fn)
     expect(result.instructions).toEqual([
-      { kind: 'raw', cmd: 'scoreboard players add $x __test 7' },
+      { kind: 'score_delta', dst: mkSlot('$x'), value: 7 },
       { kind: 'score_add', dst: mkSlot('$__const_7'), src: mkSlot('$y') },
     ])
   })
@@ -348,13 +352,33 @@ describe('constant immediate folding', () => {
     const result = constImmFold(fn)
     expect(result.instructions).toHaveLength(2)
     expect(result.instructions[0]).toEqual({
-      kind: 'raw',
-      cmd: 'scoreboard players add $a __test 3',
+      kind: 'score_delta',
+      dst: mkSlot('$a'),
+      value: 3,
     })
     expect(result.instructions[1]).toEqual({
-      kind: 'raw',
-      cmd: 'scoreboard players remove $b __test 7',
+      kind: 'score_delta',
+      dst: mkSlot('$b'),
+      value: -7,
     })
+  })
+
+  test('does not fold score_set + score_add when delta is Int32 min', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_min'), value: -2147483648 },
+      { kind: 'score_add', dst: mkSlot('$x'), src: mkSlot('$__const_min') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual(fn.instructions)
+  })
+
+  test('does not fold out-of-range score_delta constants', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_large'), value: 2147483648 },
+      { kind: 'score_sub', dst: mkSlot('$x'), src: mkSlot('$__const_large') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual(fn.instructions)
   })
 
   test('returns same reference when nothing changed', () => {

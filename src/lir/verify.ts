@@ -7,7 +7,7 @@
  * 3. macro_line only appears in isMacro functions
  */
 
-import type { LIRModule, LIRFunction, LIRInstr, Slot } from './types'
+import { SCORE_INT_MAX, SCORE_INT_MIN, isScoreInt, type LIRModule, type LIRFunction, type LIRInstr, type Slot } from './types'
 
 export interface LIRVerifyError {
   fn: string
@@ -68,14 +68,35 @@ function verifyFunction(
         message: `macro_line instruction in non-macro function`,
       })
     }
+
+    for (const candidate of getInstrsFromInstr(instr)) {
+      if (candidate.kind !== 'score_delta' || (isScoreInt(candidate.value) && candidate.value !== SCORE_INT_MIN)) continue
+      const reason = !Number.isFinite(candidate.value)
+        ? 'non-finite value'
+        : !Number.isInteger(candidate.value)
+          ? 'non-integer value'
+          : candidate.value === SCORE_INT_MIN
+            ? 'not emit-safe as a single remove immediate'
+            : `out of range [${SCORE_INT_MIN}, ${SCORE_INT_MAX}]`
+      errors.push({
+        fn: fn.name,
+        message: `score_delta immediate '${candidate.value}' is invalid: ${reason}`,
+      })
+    }
   }
 
   return errors
 }
 
+function getInstrsFromInstr(instr: LIRInstr): LIRInstr[] {
+  if (instr.kind === 'store_cmd_to_score') return [instr, ...getInstrsFromInstr(instr.cmd)]
+  return [instr]
+}
+
 function getSlotsFromInstr(instr: LIRInstr): Slot[] {
   switch (instr.kind) {
     case 'score_set':
+    case 'score_delta':
       return [instr.dst]
     case 'score_copy':
     case 'score_add':

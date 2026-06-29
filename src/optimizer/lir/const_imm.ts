@@ -3,13 +3,14 @@
  *
  * Peephole: finds score_set($__const_C, C) immediately followed by
  * arithmetic using that const slot exactly once. It folds add/sub into
- * raw scoreboard immediates and removes safe algebraic identities such
+ * typed `score_delta` immediates and removes safe algebraic identities such
  * as `* 1`, `/ 1`, `* 0`, and `% 1`.
  *
  * This saves one command per arithmetic-with-constant operation.
  */
 
 import type { LIRFunction, LIRInstr, Slot } from '../../lir/types'
+import { SCORE_INT_MIN, isScoreInt } from '../../lir/types'
 import { getSourceOperandSlots } from './effects'
 
 function slotKey(s: Slot): string {
@@ -161,31 +162,21 @@ export function constImmFold(fn: LIRFunction): LIRFunction {
         continue
       }
 
-      // Determine add vs remove
-      let op: string
-      let val: number
-      if (next.kind === 'score_add') {
-        if (C > 0) {
-          op = 'add'
-          val = C
-        } else {
-          op = 'remove'
-          val = -C
-        }
-      } else {
-        // score_sub
-        if (C > 0) {
-          op = 'remove'
-          val = C
-        } else {
-          op = 'add'
-          val = -C
-        }
+      // score_add with constant K folds to dst += K.
+      // score_sub with constant K folds to dst -= K.
+      const delta = next.kind === 'score_add' ? C : -C
+
+      if (!isScoreInt(delta) || delta === SCORE_INT_MIN) {
+        result.push(curr)
+        result.push(next)
+        i += 2
+        continue
       }
 
       result.push({
-        kind: 'raw',
-        cmd: `scoreboard players ${op} ${dst.player} ${dst.obj} ${val}`,
+        kind: 'score_delta',
+        dst,
+        value: delta,
       })
       changed = true
       i += 2

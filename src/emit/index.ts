@@ -5,7 +5,7 @@
  * Each LIRFunction becomes a .mcfunction file under data/<ns>/function/.
  */
 
-import type { LIRModule, LIRFunction, LIRInstr, Slot, CmpOp, ExecuteSubcmd } from '../lir/types'
+import { SCORE_INT_MIN, type LIRModule, type LIRFunction, type LIRInstr, type Slot, type CmpOp, type ExecuteSubcmd } from '../lir/types'
 import {
   NamespaceSourceMapBuilder,
   SourceMapBuilder,
@@ -767,6 +767,18 @@ function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersio
     case 'score_set':
       return `scoreboard players set ${slot(instr.dst)} ${instr.value}`
 
+    case 'score_delta':
+      if (instr.value === 0) {
+        return ''
+      }
+      if (instr.value < 0) {
+        if (instr.value === SCORE_INT_MIN) {
+          throw new Error('score_delta value -2147483648 is not emit-safe as a single remove immediate')
+        }
+        return `scoreboard players remove ${slot(instr.dst)} ${-instr.value}`
+      }
+      return `scoreboard players add ${slot(instr.dst)} ${instr.value}`
+
     case 'score_copy':
       return `scoreboard players operation ${slot(instr.dst)} = ${slot(instr.src)}`
 
@@ -874,7 +886,10 @@ function sameSlot(a: Slot, b: Slot): boolean {
 }
 
 function isEmitterNoOp(instr: LIRInstr): boolean {
-  return instr.kind === 'score_copy' && sameSlot(instr.dst, instr.src)
+  return (
+    (instr.kind === 'score_copy' && sameSlot(instr.dst, instr.src)) ||
+    (instr.kind === 'score_delta' && instr.value === 0)
+  )
 }
 
 /**

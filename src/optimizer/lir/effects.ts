@@ -91,6 +91,15 @@ export function getSlotEffect(instr: LIRInstr): SlotEffect {
         opaqueWrites: false,
         barrier: false,
       }
+    case 'score_delta':
+      return {
+        sourceOperands: [],
+        semanticReads: [instr.dst],
+        writes: [instr.dst],
+        opaqueReads: false,
+        opaqueWrites: false,
+        barrier: false,
+      }
     case 'score_copy':
       return {
         sourceOperands: [instr.src],

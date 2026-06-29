@@ -15,8 +15,29 @@ export interface Slot {
   obj: string
 }
 
+export const SCORE_INT_MIN = -2147483648
+export const SCORE_INT_MAX = 2147483647
+
+export function isScoreInt(value: number): value is ScoreInt {
+  return Number.isInteger(value) && value >= SCORE_INT_MIN && value <= SCORE_INT_MAX
+}
+
+export function assertScoreInt(value: number, label: string): asserts value is ScoreInt {
+  if (!Number.isFinite(value)) {
+    throw new Error(`${label} must be a finite integer`)
+  }
+  if (!Number.isInteger(value)) {
+    throw new Error(`${label} must be an integer`)
+  }
+  if (value < SCORE_INT_MIN || value > SCORE_INT_MAX) {
+    throw new Error(`${label} ${value} is outside MC int32 range [${SCORE_INT_MIN}, ${SCORE_INT_MAX}]`)
+  }
+}
+
 // Re-export types used in LIR from MIR
 export type { CmpOp, NBTType, ExecuteSubcmd, SourceLoc }
+
+export type ScoreInt = number
 
 // ---------------------------------------------------------------------------
 // LIR Instructions
@@ -29,6 +50,8 @@ export type LIRInstr = LIRInstrBase & (
   // ── Scoreboard ───────────────────────────────────────────────────────────
   | { kind: 'score_set'; dst: Slot; value: number }
   // scoreboard players set <dst.player> <dst.obj> value
+  | { kind: 'score_delta'; dst: Slot; value: ScoreInt }
+  // scoreboard players add/remove <dst.player> <dst.obj> <value>
 
   | { kind: 'score_copy'; dst: Slot; src: Slot }
   // scoreboard players operation <dst> = <src>

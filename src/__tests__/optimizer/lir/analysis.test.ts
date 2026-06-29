@@ -69,6 +69,12 @@ describe('LIR optimizer analysis helpers', () => {
     expect(getSemanticReadSlots(instr)).toEqual([mkSlot('$dst'), mkSlot('$src')])
   })
 
+  test('distinguishes source operands from semantic reads for score_delta', () => {
+    const instr: LIRInstr = { kind: 'score_delta', dst: mkSlot('$dst'), value: 7 }
+    expect(getSourceOperandSlots(instr)).toEqual([])
+    expect(getSemanticReadSlots(instr)).toEqual([mkSlot('$dst')])
+  })
+
   test('detects raw, macro, and execute-context slot references conservatively', () => {
     const shared = mkSlot('$shared_tmp')
     const raw: LIRInstr = { kind: 'raw', cmd: 'execute if score $shared_tmp __test matches 1.. run say hit' }

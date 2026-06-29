@@ -433,8 +433,8 @@ Return:
 - [x] Archive previous post-local-copy roadmaps.
 - [x] Create this integrated contract-hardening roadmap.
 - [x] P1 shared LIR effect model.
-- [ ] P2 compile-stage LIR verification.
-- [ ] P3 typed immediate LIR and ScoreInt guard.
+- [x] P2 compile-stage LIR verification.
+- [x] P3 typed immediate LIR and ScoreInt guard.
 - [ ] P4 raw/macro opaque policy.
 - [ ] P5 slot-classification split.
 - [ ] P6 LIR pass manager/idempotence.

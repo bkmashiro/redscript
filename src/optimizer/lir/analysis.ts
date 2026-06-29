@@ -125,6 +125,7 @@ export function instructionMentionsSlot(instr: LIRInstr, slot: Slot): boolean {
     case 'score_min':
     case 'score_max':
     case 'score_swap':
+    case 'score_delta':
     case 'store_score_to_nbt':
     case 'return_value':
     case 'call_if_matches':

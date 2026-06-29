@@ -40,6 +40,15 @@ describe('LIR types — instructions', () => {
     expect(max.kind).toBe('score_max')
   })
 
+  test('score_delta instruction', () => {
+    const instr: LIRInstr = {
+      kind: 'score_delta',
+      dst: { player: '$x', obj: '__ns' },
+      value: 7,
+    }
+    expect(instr.kind).toBe('score_delta')
+  })
+
   test('score_swap instruction', () => {
     const a: Slot = { player: '$x', obj: '__ns' }
     const b: Slot = { player: '$y', obj: '__ns' }

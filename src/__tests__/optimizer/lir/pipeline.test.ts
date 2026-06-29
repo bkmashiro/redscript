@@ -38,7 +38,7 @@ describe('LIR optimization pipeline', () => {
 
     // const+add should be folded by const_imm
     expect(instrs.some(i =>
-      i.kind === 'raw' && i.cmd.includes('scoreboard players add $x')
+      i.kind === 'score_delta' && i.dst.player === '$x' && i.value === 5
     )).toBe(true)
   })
 
@@ -59,7 +59,7 @@ describe('LIR optimization pipeline', () => {
 
     // The dead copy should be gone and const_imm should fold
     expect(instrs.some(i =>
-      i.kind === 'raw' && i.cmd.includes('scoreboard players add $x')
+      i.kind === 'score_delta' && i.dst.player === '$x' && i.value === 5
     )).toBe(true)
     expect(instrs.some(i =>
       i.kind === 'score_copy' && i.dst.player === '$dead'
@@ -155,13 +155,13 @@ describe('LIR optimization pipeline', () => {
       i.kind === 'score_set' && i.dst.player === '$dead_in_fn1'
     )).toBe(false)
     expect(fn1.instructions.some(i =>
-      i.kind === 'raw' && i.cmd.includes('add $a')
+      i.kind === 'score_delta' && i.dst.player === '$a' && i.value === 10
     )).toBe(true)
 
     // fn2: const folded
     const fn2 = result.functions[1]
     expect(fn2.instructions.some(i =>
-      i.kind === 'raw' && i.cmd.includes('remove $b')
+      i.kind === 'score_delta' && i.dst.player === '$b' && i.value === -3
     )).toBe(true)
   })
 })
