@@ -14,7 +14,8 @@ import type { LIRFunction, LIRModule, Slot } from '../../lir/types'
 import {
   analyzeStraightLineSlotLiveness,
   getPureWriteDst,
-  getReadSlots,
+  extractSlotsFromText,
+  getSemanticReadSlots,
   isConservativeBarrierInstruction,
   isProtectedSlot,
   slotKey,
@@ -24,8 +25,17 @@ function collectReadSlots(instructions: LIRFunction['instructions']): Set<string
   const readSet = new Set<string>()
 
   for (const instr of instructions) {
-    for (const s of getReadSlots(instr)) {
+    for (const s of getSemanticReadSlots(instr)) {
       readSet.add(slotKey(s))
+    }
+    if (instr.kind === 'raw') {
+      for (const slot of extractSlotsFromText(instr.cmd)) {
+        readSet.add(slotKey(slot))
+      }
+    } else if (instr.kind === 'macro_line') {
+      for (const slot of extractSlotsFromText(instr.template)) {
+        readSet.add(slotKey(slot))
+      }
     }
   }
 
@@ -95,17 +105,15 @@ export function deadSlotElimModule(mod: LIRModule): LIRModule {
   const readFunctionMap = new Map<string, Set<number>>()
 
   for (const [fnIndex, fn] of mod.functions.entries()) {
-    for (const instr of fn.instructions) {
-      for (const s of getReadSlots(instr)) {
-        const key = slotKey(s)
-        globalReadSet.add(key)
-        let functions = readFunctionMap.get(key)
-        if (functions === undefined) {
-          functions = new Set<number>()
-          readFunctionMap.set(key, functions)
-        }
-        functions.add(fnIndex)
+    const fnReadSet = collectReadSlots(fn.instructions)
+    for (const key of fnReadSet) {
+      globalReadSet.add(key)
+      let functions = readFunctionMap.get(key)
+      if (functions === undefined) {
+        functions = new Set<number>()
+        readFunctionMap.set(key, functions)
       }
+      functions.add(fnIndex)
     }
   }
 

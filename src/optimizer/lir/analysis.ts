@@ -1,4 +1,10 @@
 import type { LIRFunction, LIRInstr, LIRModule, Slot } from '../../lir/types'
+import {
+  getSemanticReadSlots as getSlotSemanticReads,
+  getSourceOperandSlots as getSlotSourceOperands,
+  getWriteSlots as getSlotWrites,
+  isOpaqueBarrierInstruction as isOpaqueBarrier,
+} from './effects'
 
 /** Canonical key for a scoreboard slot (fake player + objective). */
 export function slotKey(slot: Slot): string {
@@ -63,93 +69,32 @@ function getSubcommandReadSlots(subcmd: { kind: string } & Record<string, unknow
   }
 }
 
-function isBarrierInstruction(instr: LIRInstr): boolean {
-  switch (instr.kind) {
-    case 'raw':
-    case 'macro_line':
-    case 'call':
-    case 'call_macro':
-    case 'call_context':
-    case 'call_if_matches':
-    case 'call_unless_matches':
-    case 'call_if_score':
-    case 'call_unless_score':
-    case 'store_score_to_nbt':
-    case 'store_nbt_to_score':
-      return true
-    default:
-      return false
-  }
+export function isConservativeBarrierInstruction(instr: LIRInstr): boolean {
+  return isOpaqueBarrier(instr)
 }
 
-export function isConservativeBarrierInstruction(instr: LIRInstr): boolean {
-  return isBarrierInstruction(instr)
+export function getSourceOperandSlots(instr: LIRInstr): Slot[] {
+  return getSlotSourceOperands(instr)
+}
+
+/**
+ * Compatibility: this returns semantic reads, not source-operand reads.
+ */
+export function getReadSlots(instr: LIRInstr): Slot[] {
+  return getSlotSemanticReads(instr)
+}
+
+export function getSemanticReadSlots(instr: LIRInstr): Slot[] {
+  return getSlotSemanticReads(instr)
 }
 
 function subcommandMentionsSlot(subcmd: { kind: string } & Record<string, unknown>, slot: Slot): boolean {
   return getSubcommandReadSlots(subcmd).some(candidate => sameSlot(candidate, slot))
 }
 
-/** Collect slots read by an instruction. Destructive scoreboard ops read only src here. */
-export function getReadSlots(instr: LIRInstr): Slot[] {
-  switch (instr.kind) {
-    case 'score_copy':
-      return [instr.src]
-    case 'score_add':
-    case 'score_sub':
-    case 'score_mul':
-    case 'score_div':
-    case 'score_mod':
-    case 'score_min':
-    case 'score_max':
-      return [instr.src]
-    case 'score_swap':
-      return [instr.a, instr.b]
-    case 'store_cmd_to_score':
-      return getReadSlots(instr.cmd)
-    case 'store_score_to_nbt':
-      return [instr.src]
-    case 'store_nbt_to_score':
-      return []
-    case 'return_value':
-      return [instr.slot]
-    case 'call_if_matches':
-    case 'call_unless_matches':
-      return [instr.slot]
-    case 'call_if_score':
-    case 'call_unless_score':
-      return [instr.a, instr.b]
-    case 'raw':
-      return extractSlotsFromText(instr.cmd)
-    case 'macro_line':
-      return extractSlotsFromText(instr.template)
-    case 'call_context':
-      return instr.subcommands.flatMap(subcmd => getSubcommandReadSlots(subcmd as { kind: string } & Record<string, unknown>))
-    default:
-      return []
-  }
-}
-
 /** Collect slots written by an instruction. */
 export function getWriteSlots(instr: LIRInstr): Slot[] {
-  switch (instr.kind) {
-    case 'score_set':
-    case 'score_copy':
-    case 'score_add':
-    case 'score_sub':
-    case 'score_mul':
-    case 'score_div':
-    case 'score_mod':
-    case 'score_min':
-    case 'score_max':
-    case 'store_cmd_to_score':
-    case 'store_nbt_to_score':
-      return [instr.dst]
-    case 'score_swap':
-      return [instr.a, instr.b]
-    default:
-      return []
-  }
+  return getSlotWrites(instr)
 }
 
 /** Destination slot for pure write instructions that can be deleted if dead. */
@@ -256,6 +201,12 @@ export function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseI
 
   let hasBarrierAfter = false
 
+  function getConservativeBarrierReadSlots(instr: LIRInstr): Slot[] {
+    if (instr.kind === 'raw') return extractSlotsFromText(instr.cmd)
+    if (instr.kind === 'macro_line') return extractSlotsFromText(instr.template)
+    return getReadSlots(instr)
+  }
+
   for (let index = n - 1; index >= 0; index--) {
     barrierAfter[index] = hasBarrierAfter
     nextReadAfter[index] = new Map(nextReadBySlot)
@@ -265,7 +216,7 @@ export function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseI
       hasBarrierAfter = true
       nextReadBySlot.clear()
       nextWriteBySlot.clear()
-      for (const slot of getReadSlots(instrs[index])) {
+      for (const slot of getConservativeBarrierReadSlots(instrs[index])) {
         nextReadBySlot.set(slotKey(slot), index)
       }
       for (const slot of getWriteSlots(instrs[index])) {

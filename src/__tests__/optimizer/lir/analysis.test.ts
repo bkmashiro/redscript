@@ -3,11 +3,14 @@ import {
   analyzeStraightLineSlotLiveness,
   createModuleSlotReferenceIndex,
   getReadSlots,
+  getSemanticReadSlots,
+  getSourceOperandSlots,
   instructionMentionsSlot,
   isConservativeBarrierInstruction,
   sameSlot,
   slotKey,
 } from '../../../optimizer/lir/analysis'
+import { getSlotEffect } from '../../../optimizer/lir/effects'
 import type { LIRFunction, LIRInstr, LIRModule, Slot } from '../../../lir/types'
 
 const obj = '__test'
@@ -56,8 +59,14 @@ describe('LIR optimizer analysis helpers', () => {
     }
     const store: LIRInstr = { kind: 'store_score_to_nbt', ns: 'rs', path: 'tmp.x', type: 'int', scale: 1, src: mkSlot('$src') }
 
-    expect(getReadSlots(nested)).toEqual([mkSlot('$rhs')])
+    expect(getReadSlots(nested)).toEqual([mkSlot('$acc'), mkSlot('$rhs')])
     expect(getReadSlots(store)).toEqual([mkSlot('$src')])
+  })
+
+  test('distinguishes source operands from semantic reads for score arithmetic', () => {
+    const instr: LIRInstr = { kind: 'score_add', dst: mkSlot('$dst'), src: mkSlot('$src') }
+    expect(getSourceOperandSlots(instr)).toEqual([mkSlot('$src')])
+    expect(getSemanticReadSlots(instr)).toEqual([mkSlot('$dst'), mkSlot('$src')])
   })
 
   test('detects raw, macro, and execute-context slot references conservatively', () => {
@@ -79,6 +88,21 @@ describe('LIR optimizer analysis helpers', () => {
     expect(instructionMentionsSlot(callMacro, shared)).toBe(false)
     expect(isConservativeBarrierInstruction(call)).toBe(true)
     expect(isConservativeBarrierInstruction(callMacro)).toBe(true)
+  })
+
+  test('exposes opaque barrier metadata for raw and macro_line', () => {
+    const raw: LIRInstr = { kind: 'raw', cmd: 'say something about $shared_tmp __test' }
+    const macro: LIRInstr = { kind: 'macro_line', template: '$execute if score $shared_tmp __test matches $(range) run say hit' }
+
+    const rawEffect = getSlotEffect(raw)
+    const macroEffect = getSlotEffect(macro)
+
+    expect(rawEffect.opaqueReads).toBe(true)
+    expect(rawEffect.opaqueWrites).toBe(true)
+    expect(rawEffect.barrier).toBe(true)
+    expect(macroEffect.opaqueReads).toBe(true)
+    expect(macroEffect.opaqueWrites).toBe(true)
+    expect(macroEffect.barrier).toBe(true)
   })
 
   test('keeps conservative liveness across explicit call and call_macro barriers', () => {
@@ -166,13 +190,13 @@ describe('LIR optimizer analysis helpers', () => {
     expect(liveness.nextReadAfter(0, tmp)).toBe(1)
     expect(liveness.nextWriteAfter(1, tmp)).toBeNull()
     expect(liveness.hasLaterRead(0, tmp)).toBe(true)
-    expect(liveness.hasLaterRead(0, out)).toBe(false)
+    expect(liveness.hasLaterRead(0, out)).toBe(true)
     expect(liveness.isDeadAfter(0, out)).toBe(false)
     expect(liveness.isDeadAfter(1, out)).toBe(false)
     expect(liveness.isDeadAfter(2, out)).toBe(true)
   })
 
-  test('treats conservative barriers as blocking cross-window liveness checks but keeps explicit barrier reads', () => {
+  test('treats conservative barriers as blocking cross-window liveness checks', () => {
     const src = mkSlot('$src')
     const tmp = mkSlot('$tmp')
     const later = mkSlot('$later')

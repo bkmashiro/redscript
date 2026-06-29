@@ -10,6 +10,7 @@
  */
 
 import type { LIRFunction, LIRInstr, Slot } from '../../lir/types'
+import { getSourceOperandSlots } from './effects'
 
 function slotKey(s: Slot): string {
   return `${s.player}\0${s.obj}`
@@ -31,42 +32,11 @@ function constFoldScoreMinMax(a: number, b: number, op: 'score_min' | 'score_max
 function countSlotUses(instrs: LIRInstr[], target: string): number {
   let count = 0
   for (const instr of instrs) {
-    for (const s of getReadSlots(instr)) {
+    for (const s of getSourceOperandSlots(instr)) {
       if (slotKey(s) === target) count++
     }
   }
   return count
-}
-
-function extractSlotsFromRaw(cmd: string): Slot[] {
-  const slots: Slot[] = []
-  const re = /(\$[\w.:]+)\s+(\S+)/g
-  let m
-  while ((m = re.exec(cmd)) !== null) {
-    slots.push({ player: m[1], obj: m[2] })
-  }
-  return slots
-}
-
-function getReadSlots(instr: LIRInstr): Slot[] {
-  switch (instr.kind) {
-    case 'score_copy': return [instr.src]
-    case 'score_add': case 'score_sub':
-    case 'score_mul': case 'score_div': case 'score_mod':
-    case 'score_min': case 'score_max':
-      return [instr.src]
-    case 'score_swap': return [instr.a, instr.b]
-    case 'store_cmd_to_score': return getReadSlots(instr.cmd)
-    case 'store_score_to_nbt': return [instr.src]
-    case 'return_value': return [instr.slot]
-    case 'call_if_matches': case 'call_unless_matches':
-      return [instr.slot]
-    case 'call_if_score': case 'call_unless_score':
-      return [instr.a, instr.b]
-    case 'raw': return extractSlotsFromRaw(instr.cmd)
-    case 'macro_line': return extractSlotsFromRaw(instr.template)
-    default: return []
-  }
 }
 
 export function constImmFold(fn: LIRFunction): LIRFunction {
@@ -76,7 +46,7 @@ export function constImmFold(fn: LIRFunction): LIRFunction {
   // Pre-compute use counts for all const slots
   const useCounts = new Map<string, number>()
   for (const instr of instrs) {
-    for (const s of getReadSlots(instr)) {
+    for (const s of getSourceOperandSlots(instr)) {
       const key = slotKey(s)
       useCounts.set(key, (useCounts.get(key) || 0) + 1)
     }

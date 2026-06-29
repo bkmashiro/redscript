@@ -82,6 +82,19 @@ describe('constant immediate folding', () => {
     expect(result.instructions).toHaveLength(0)
   })
 
+  test('keeps const-foldable source use count stable when const is used as RMW destination later', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_7'), value: 7 },
+      { kind: 'score_add', dst: mkSlot('$x'), src: mkSlot('$__const_7') },
+      { kind: 'score_add', dst: mkSlot('$__const_7'), src: mkSlot('$y') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'raw', cmd: 'scoreboard players add $x __test 7' },
+      { kind: 'score_add', dst: mkSlot('$__const_7'), src: mkSlot('$y') },
+    ])
+  })
+
   test('does not fold when const slot has multiple uses', () => {
     const fn = mkFn([
       { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },

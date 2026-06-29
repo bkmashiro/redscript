@@ -120,6 +120,34 @@ describe('dead slot elimination', () => {
     expect(result.instructions).toHaveLength(3)
   })
 
+  test('keeps a temp slot write that is destructively read by the next RMW op', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$t'), value: 1 },
+      { kind: 'score_add', dst: mkSlot('$t'), src: mkSlot('$x') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(2)
+  })
+
+  test('keeps a temp slot write read by call_context score conditions', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$cond'), value: 1 },
+      { kind: 'call_context', fn: 'test:target', subcommands: [{ kind: 'if_score', a: '$cond __test', op: 'eq', b: '$rhs __test' }] },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(2)
+  })
+
+  test('keeps a temp slot write consumed by nested raw store command text', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$x'), value: 1 },
+      { kind: 'store_cmd_to_score', dst: mkSlot('$out'), cmd: { kind: 'raw', cmd: 'scoreboard players get $x __test' } },
+      { kind: 'return_value', slot: mkSlot('$out') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(3)
+  })
+
   test('keeps earlier temp write when temp is read before overwrite', () => {
     const fn = mkFn('test', [
       { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
