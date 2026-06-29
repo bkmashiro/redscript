@@ -1,10 +1,16 @@
 import {
   ARITHMETIC_PROBES,
+  buildLirOpportunitySummary,
+  summarizeRewriteOpportunitiesWithProvenance,
   VIR_ARITHMETIC_DECISION_THRESHOLDS,
   buildVirArithmeticDecisionDashboard,
   summarizeDeltaSeries,
   mergeRejectionCategoryTotals,
   type ArithmeticProbeResult,
+  type RewriteProvenanceSummary,
+  type RewriteProofMissLirAdjacentWindowBreakdownKind,
+  type RewriteProofMissLirAdjacentWindowSummary,
+  type RewriteProofMissSourceKind,
   type VirUnsupportedMirCallTarget,
   type VirUnsupportedMirCallTargetFamilyBreakdownEntry,
   type VirAllocationCheckCloseout,
@@ -25,9 +31,234 @@ const ZERO_REJECTION_CATEGORY_TOTALS = {
   unsupported_both: 0,
 }
 
+function makeAdjacentWindowDiagnosticCase(options: {
+  caseName: string
+  totalCopies: number
+  sourceKind?: RewriteProofMissSourceKind
+  needsLivenessWindowCount?: number
+  insufficientContextCount?: number
+  localTempExactProofGapCases?: number
+  protectedBoundaryBlockedCases?: number
+  adjacentWindowMissingOrIncompleteCases?: number
+  candidateShapeNotSatisfyingLirLocalProofCases?: number
+  unknownUnparsedCommandCases?: number
+  family?: string
+  byFamilySourceKind?: RewriteProofMissSourceKind
+}): ArithmeticProbeResult {
+  const family = options.family ?? 'arithmetic-copy-feeds-const-or-add-imm'
+  const caseName = options.caseName
+  const totalCopies = options.totalCopies
+  const sourceKind = options.sourceKind ?? 'local-temp-only'
+  const byFamilySourceKind = options.byFamilySourceKind ?? sourceKind
+  const needsLivenessWindowCount = options.needsLivenessWindowCount ?? 0
+  const insufficientContextCount = options.insufficientContextCount ?? 0
+  const localTempExactProofGapCases = options.localTempExactProofGapCases ?? 0
+  const protectedBoundaryBlockedCases = options.protectedBoundaryBlockedCases ?? 0
+  const adjacentWindowMissingOrIncompleteCases = options.adjacentWindowMissingOrIncompleteCases ?? 0
+  const candidateShapeNotSatisfyingLirLocalProofCases = options.candidateShapeNotSatisfyingLirLocalProofCases ?? 0
+  const unknownUnparsedCommandCases = options.unknownUnparsedCommandCases ?? 0
+  const totalCandidateLike = totalCopies
+  const proofMissAdjacentWindowBreakdown = [] as RewriteProofMissLirAdjacentWindowSummary['proofMissAdjacentWindowBreakdown']
+  if (localTempExactProofGapCases > 0) {
+    proofMissAdjacentWindowBreakdown.push({
+      kind: 'local-temp-exact-proof-gap',
+      count: localTempExactProofGapCases,
+      caseNames: [caseName],
+      examples: [`${caseName}:1`],
+    })
+  }
+  if (protectedBoundaryBlockedCases > 0) {
+    proofMissAdjacentWindowBreakdown.push({
+      kind: 'protected-boundary-blocked',
+      count: protectedBoundaryBlockedCases,
+      caseNames: [caseName],
+      examples: [`${caseName}:2`],
+    })
+  }
+  if (adjacentWindowMissingOrIncompleteCases > 0) {
+    proofMissAdjacentWindowBreakdown.push({
+      kind: 'adjacent-window-missing-or-incomplete',
+      count: adjacentWindowMissingOrIncompleteCases,
+      caseNames: [caseName],
+      examples: [`${caseName}:3`],
+    })
+  }
+  if (candidateShapeNotSatisfyingLirLocalProofCases > 0) {
+    proofMissAdjacentWindowBreakdown.push({
+      kind: 'candidate-shape-not-satisfying-lir-local-proof',
+      count: candidateShapeNotSatisfyingLirLocalProofCases,
+      caseNames: [caseName],
+      examples: [`${caseName}:4`],
+    })
+  }
+  if (unknownUnparsedCommandCases > 0) {
+    proofMissAdjacentWindowBreakdown.push({
+      kind: 'unknown-unparsed-command',
+      count: unknownUnparsedCommandCases,
+      caseNames: [caseName],
+      examples: [`${caseName}:5`],
+    })
+  }
+
+  if (proofMissAdjacentWindowBreakdown.length === 0) {
+    proofMissAdjacentWindowBreakdown.push({
+      kind: 'unknown-unparsed-command',
+      count: 1,
+      caseNames: [caseName],
+      examples: [`${caseName}:1`],
+    })
+  }
+
+  return makeSyntheticProbeResult('ok', {
+    directCommandCount: totalCopies,
+    plannedCommandCount: Math.max(totalCopies - 1, 0),
+    directScoreCopyCount: totalCopies,
+    plannedScoreCopyCount: Math.max(totalCopies - 1, 0),
+    caseName,
+    rewriteOpportunities: {
+      total: totalCopies,
+      currentlyOptimized: 0,
+      safeCandidate: 0,
+      blockedByBarrier: 0,
+      unknown: totalCopies,
+      topOpportunities: [
+        {
+          status: 'unknown',
+          pattern: `${family} -> arithmetic-chain`,
+          count: totalCopies,
+          examples: [`${caseName}:1`],
+        },
+      ],
+    },
+    rewriteProvenanceSummary: {
+      total: totalCopies,
+      byReason: [
+        {
+          reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+          count: totalCopies,
+          caseNames: [caseName],
+          examples: [`${caseName}:1`],
+        },
+      ],
+      safeAdjacentScoreCopyArithCount: 0,
+      blockedCount: totalCopies,
+      insufficientInfoCount: 0,
+      unknownCount: 0,
+      requiresLirLevelAnalysis: true,
+      shapeFamilySummary: {
+        totalPatternNotExactCount: totalCopies,
+        families: [
+          {
+            family,
+            count: totalCopies,
+            caseNames: [caseName],
+            examples: [`${caseName}:1`],
+            likelyNextAction: 'local-canonicalization',
+            requiresLirLevelAnalysis: false,
+          },
+        ],
+        topRecoverableFamilies: [family],
+        recommendation: 'synthetic-adjacent-window-case',
+        proofMissSummary: {
+          total: totalCopies,
+          byFamily: [
+            {
+              family,
+              total: totalCopies,
+              caseNames: [caseName],
+              byReason: [
+                {
+                  reason: 'no-exact-lir-local-proof',
+                  count: Math.min(totalCopies, localTempExactProofGapCases + candidateShapeNotSatisfyingLirLocalProofCases + 1),
+                  caseNames: [caseName],
+                  examples: [`${caseName}:1`],
+                },
+              ],
+              suggestedNextAction: 'lir-safety-analysis',
+            },
+          ],
+          topActionableFamilies: [family],
+          recommendation: 'synthetic adjacent-window focus',
+          slotProvenanceSummary: {
+            total: totalCopies,
+            byFamily: [
+              {
+                family,
+                total: totalCopies,
+                slotRoles: [
+                  {
+                    role: 'local-temp',
+                    count: totalCopies,
+                    examples: [`${caseName}:1`],
+                    caseNames: [],
+                  },
+                ],
+                sourceKinds: [
+                  {
+                    sourceKind: byFamilySourceKind,
+                    count: totalCopies,
+                    examples: [`${caseName}:1`],
+                    caseNames: [],
+                  },
+                ],
+                recommendation: 'collect structured-window context',
+              },
+            ],
+            dominantBlockers: [
+              {
+                blocker: byFamilySourceKind,
+                count: totalCopies,
+              },
+            ],
+            recommendation: 'collect structured-window context',
+            localProofEvidenceSummary: {
+              totalLocalTempOnly: Math.min(totalCopies, localTempExactProofGapCases + adjacentWindowMissingOrIncompleteCases),
+              byFamily: [
+                {
+                  family,
+                  totalLocalTempOnly: Math.min(totalCopies, localTempExactProofGapCases + adjacentWindowMissingOrIncompleteCases),
+                  evidenceKinds: [
+                    {
+                      evidenceKind: 'adjacent-arith-source-reused',
+                      count: Math.min(totalCopies, localTempExactProofGapCases + adjacentWindowMissingOrIncompleteCases),
+                      caseNames: [caseName],
+                      examples: [`${caseName}:1`],
+                    },
+                  ],
+                  proofReadiness: 'candidate-after-liveness-window',
+                  recommendation: 'collect structured-window context',
+                  candidateCount: Math.min(totalCopies, localTempExactProofGapCases + adjacentWindowMissingOrIncompleteCases),
+                  needsLivenessWindowCount,
+                  insufficientContextCount,
+                  lirAdjacentWindowSummary: {
+                    proofMissAdjacentWindowBreakdown,
+                    unknownUnparsedCommandCases: unknownUnparsedCommandCases,
+                    localTempExactProofGapCases: localTempExactProofGapCases,
+                    protectedBoundaryBlockedCases: protectedBoundaryBlockedCases,
+                    adjacentWindowMissingOrIncompleteCases: adjacentWindowMissingOrIncompleteCases,
+                    candidateShapeNotSatisfyingLirLocalProofCases: candidateShapeNotSatisfyingLirLocalProofCases,
+                    totalCandidateLike,
+                    proofReadiness: 'unknown',
+                    nextSafeDiagnosticGoals: [],
+                    recommendation: 'synthetic adjacent-window probe',
+                  },
+                },
+              ],
+              candidateCount: totalCopies,
+              needsLivenessWindowCount,
+              insufficientContextCount,
+              recommendation: 'collect structured-window context',
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
   function makeSyntheticProbeResult(
   status: 'ok' | 'unsupported',
-  values: {
+ values: {
     directCommandCount: number
     plannedCommandCount: number
     directScoreCopyCount: number
@@ -37,16 +268,19 @@ const ZERO_REJECTION_CATEGORY_TOTALS = {
     unsupportedFunctionCount?: number
     rejectionCategoryCounts?: Partial<typeof ZERO_REJECTION_CATEGORY_TOTALS>
     semanticProofStatus?: 'proven' | 'unproven' | 'unsupported'
-    rejectionCategory?: VirDecisionRejectionCategory
-    modeTotals?: VirDecisionModeTotals
+  rejectionCategory?: VirDecisionRejectionCategory
+  modeTotals?: VirDecisionModeTotals
   unsupportedMirOpKinds?: string[]
   unsupportedMirCallTargets?: VirUnsupportedMirCallTarget[]
   unsupportedReasonTags?: VirUnsupportedReasonTag[]
   unsupportedReason?: string
-    caseName?: string
-    coverageCategory?: 'controlled' | 'broad'
+  rewriteOpportunities?: Partial<ArithmeticProbeResult['rewriteOpportunities']>
+  rewriteProvenanceSummary?: RewriteProvenanceSummary
+  caseName?: string
+  coverageCategory?: 'controlled' | 'broad'
   },
 ): ArithmeticProbeResult {
+  const rewrite = values.rewriteOpportunities ?? {}
   const modeTotals = values.modeTotals ?? {
     acceptedPlanned: status === 'ok' ? 1 : 0,
     acceptedDirect: status === 'ok' ? 0 : 0,
@@ -133,12 +367,13 @@ const ZERO_REJECTION_CATEGORY_TOTALS = {
       topPatterns: [],
     },
     rewriteOpportunities: {
-      total: 0,
-      currentlyOptimized: 0,
-      safeCandidate: 0,
-      blockedByBarrier: 0,
-      unknown: 0,
-      topOpportunities: [],
+      total: rewrite.total ?? 0,
+      currentlyOptimized: rewrite.currentlyOptimized ?? 0,
+      safeCandidate: rewrite.safeCandidate ?? 0,
+      blockedByBarrier: rewrite.blockedByBarrier ?? 0,
+      unknown: rewrite.unknown ?? 0,
+      topOpportunities: rewrite.topOpportunities ?? [],
+      provenanceSummary: values.rewriteProvenanceSummary,
     },
     virDecision: {
       status,
@@ -320,6 +555,1828 @@ describe('arithmetic probe benchmark tooling', () => {
 
     expect(caseTotal).toBe(opportunitiesTotal)
     expect(report.rewriteOpportunities.topOpportunities.length).toBeGreaterThan(0)
+  })
+
+  it('builds a deterministic aggregate LIR opportunity summary across cases', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    const summary = report.lirOpportunitySummary
+    const byCaseRewriteTotal = report.cases.reduce((sum, result) => sum + result.rewriteOpportunities.total, 0)
+    const byCaseScoreCopyTotal = report.cases.reduce((sum, result) => sum + result.commands.scoreCopy, 0)
+    const summaryStatusTotal = summary!.byStatus.currentlyOptimized
+      + summary!.byStatus.safeCandidate
+      + summary!.byStatus.blockedByBarrier
+      + summary!.byStatus.unknown
+
+    expect(summary).toBeDefined()
+    expect(summary!.totalScoreCopyCount).toBe(byCaseRewriteTotal)
+    expect(summary!.totalScoreCopyCount).toBe(byCaseScoreCopyTotal)
+    expect(summary!.byStatus.currentlyOptimized).toBe(report.rewriteOpportunities.currentlyOptimized)
+    expect(summary!.byStatus.safeCandidate).toBe(report.rewriteOpportunities.safeCandidate)
+    expect(summary!.byStatus.blockedByBarrier).toBe(report.rewriteOpportunities.blockedByBarrier)
+    expect(summary!.byStatus.unknown).toBe(report.rewriteOpportunities.unknown)
+    expect(summaryStatusTotal).toBe(summary!.totalScoreCopyCount)
+    for (const pattern of summary!.topPatterns) {
+      expect(pattern.caseNames).toEqual([...pattern.caseNames].sort())
+      expect(pattern.examples.length).toBeLessThanOrEqual(3)
+    }
+    expect(summary!.recommendation).toMatch(/^(diagnose-first|safe-local-rewrite-candidate|no-action)$/)
+    expect(summary!.notes).toEqual(expect.any(String))
+  })
+
+  it('adds stable provenance buckets to aggregate LIR summaries', () => {
+    const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
+    expect(summary).toBeDefined()
+    expect(summary!.provenanceSummary.total).toBe(summary!.totalScoreCopyCount)
+    expect(summary!.provenanceSummary.byReason.length).toBeGreaterThan(0)
+    expect(summary!.provenanceSummary.byReason).toEqual([
+      ...summary!.provenanceSummary.byReason,
+    ].sort(
+      (left, right) => right.count - left.count || left.reason.localeCompare(right.reason),
+    ))
+    for (const entry of summary!.provenanceSummary.byReason) {
+      expect(entry.caseNames).toEqual([...entry.caseNames].sort())
+      expect(entry.examples.length).toBeLessThanOrEqual(3)
+      expect(entry.count).toBeGreaterThan(0)
+    }
+
+    const provenanceTotal = summary!.provenanceSummary.safeAdjacentScoreCopyArithCount
+      + summary!.provenanceSummary.blockedCount
+      + summary!.provenanceSummary.unknownCount
+    expect(provenanceTotal).toBe(summary!.provenanceSummary.total)
+    expect(summary!.provenanceSummary.insufficientInfoCount).toBeLessThanOrEqual(
+      summary!.provenanceSummary.unknownCount,
+    )
+  })
+
+  it('adds targeted proof-miss family summaries for command-level diagnosis', () => {
+    const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
+    expect(summary).toBeDefined()
+    expect(summary!.provenanceSummary.shapeFamilySummary?.proofMissSummary).toBeDefined()
+
+    const proofMissSummary = summary!.provenanceSummary.shapeFamilySummary!.proofMissSummary
+    if (!proofMissSummary) return
+
+    const familiesOfInterest = ['arithmetic-copy-feeds-const-or-add-imm', 'copy-feeds-copy-chain']
+    const proofMissFamiliesOfInterest = proofMissSummary.byFamily.filter(entry => familiesOfInterest.includes(entry.family))
+    const totalOfInterest = proofMissFamiliesOfInterest.reduce((sum, family) => sum + family.total, 0)
+
+    expect(proofMissSummary.total).toBe(totalOfInterest)
+    expect(familiesOfInterest).toEqual(expect.arrayContaining(proofMissSummary.byFamily.map(item => item.family)))
+    expect(proofMissSummary.byFamily).toEqual([...proofMissSummary.byFamily].sort(
+      (left, right) => right.total - left.total || left.family.localeCompare(right.family),
+    ))
+    expect(proofMissSummary.topActionableFamilies.length).toBeLessThanOrEqual(3)
+
+    const familyNames = proofMissSummary.byFamily.map(entry => entry.family)
+    for (const family of familiesOfInterest) {
+      expect(familyNames.includes(family)).toBe(true)
+    }
+  })
+
+  it('tracks blocked-provenance buckets independently from safe-adjacent rewrite candidates', () => {
+    const summary = buildLirOpportunitySummary([
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 5,
+        plannedCommandCount: 3,
+        directScoreCopyCount: 5,
+        plannedScoreCopyCount: 3,
+        caseName: 'safe_blocked_mix',
+        rewriteOpportunities: {
+          total: 5,
+          currentlyOptimized: 1,
+          safeCandidate: 2,
+          blockedByBarrier: 1,
+          unknown: 1,
+          topOpportunities: [
+            { status: 'currentlyOptimized', pattern: 'copy -> copy', count: 1, examples: ['safe_blocked_mix:1:copy'] },
+            { status: 'safeCandidate', pattern: 'copy -> arithmetic', count: 2, examples: ['safe_blocked_mix:2:arith'] },
+            { status: 'blockedByBarrier', pattern: 'barrier', count: 1, examples: ['safe_blocked_mix:3:barrier'] },
+            { status: 'unknown', pattern: 'other', count: 1, examples: ['safe_blocked_mix:4:other'] },
+          ],
+        },
+        rewriteProvenanceSummary: {
+          total: 5,
+          byReason: [
+            {
+              reason: 'safe-adjacent-score-copy-arith',
+              count: 2,
+              caseNames: ['safe_blocked_mix'],
+              examples: ['safe_blocked_mix:2:arith'],
+            },
+            {
+              reason: 'blocked-by-protected-slot',
+              count: 1,
+              caseNames: ['safe_blocked_mix'],
+              examples: ['safe_blocked_mix:5:$__const_ protected'],
+            },
+            {
+              reason: 'blocked-by-barrier-or-non-adjacent-shape',
+              count: 1,
+              caseNames: ['safe_blocked_mix'],
+              examples: ['safe_blocked_mix:3:barrier'],
+            },
+            {
+              reason: 'insufficient-command-level-information',
+              count: 1,
+              caseNames: ['safe_blocked_mix'],
+              examples: ['safe_blocked_mix:4:other'],
+            },
+          ],
+          safeAdjacentScoreCopyArithCount: 2,
+          blockedCount: 2,
+          insufficientInfoCount: 1,
+          unknownCount: 1,
+          requiresLirLevelAnalysis: true,
+        },
+      }),
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 4,
+        plannedCommandCount: 2,
+        directScoreCopyCount: 4,
+        plannedScoreCopyCount: 2,
+        caseName: 'alias_and_dead',
+        rewriteOpportunities: {
+          total: 4,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 4,
+          topOpportunities: [
+            { status: 'unknown', pattern: 'alias', count: 2, examples: ['alias_and_dead:1'] },
+            { status: 'unknown', pattern: 'not-dead', count: 1, examples: ['alias_and_dead:2'] },
+            { status: 'unknown', pattern: 'cross-fn', count: 1, examples: ['alias_and_dead:3'] },
+          ],
+        },
+        rewriteProvenanceSummary: {
+          total: 4,
+          byReason: [
+            {
+              reason: 'blocked-by-alias-safety',
+              count: 2,
+              caseNames: ['alias_and_dead'],
+              examples: ['alias_and_dead:1'],
+            },
+            {
+              reason: 'blocked-by-temp-not-dead-after-consuming-op',
+              count: 1,
+              caseNames: ['alias_and_dead'],
+              examples: ['alias_and_dead:2'],
+            },
+            {
+              reason: 'blocked-by-cross-function-module-external-mention',
+              count: 1,
+              caseNames: ['alias_and_dead'],
+              examples: ['alias_and_dead:3'],
+            },
+          ],
+          safeAdjacentScoreCopyArithCount: 0,
+          blockedCount: 3,
+          insufficientInfoCount: 0,
+          unknownCount: 0,
+          requiresLirLevelAnalysis: true,
+        },
+      }),
+    ])
+
+    expect(summary.provenanceSummary.total).toBe(9)
+    expect(summary.provenanceSummary.safeAdjacentScoreCopyArithCount).toBe(2)
+    expect(summary.provenanceSummary.blockedCount).toBe(5)
+    expect(summary.provenanceSummary.unknownCount).toBe(1)
+
+    const aliasReason = summary.provenanceSummary.byReason.find(item => item.reason === 'blocked-by-alias-safety')
+    const deadReason = summary.provenanceSummary.byReason.find(item => item.reason === 'blocked-by-temp-not-dead-after-consuming-op')
+    const protectedReason = summary.provenanceSummary.byReason.find(item => item.reason === 'blocked-by-protected-slot')
+    expect(aliasReason?.count).toBe(2)
+    expect(deadReason?.count).toBe(1)
+    expect(protectedReason?.count).toBe(1)
+    expect(aliasReason?.caseNames).toEqual(['alias_and_dead'])
+    expect(summary.provenanceSummary.unknownCount).toBe(1)
+    expect(summary.provenanceSummary.byReason.find(item => item.reason === 'insufficient-command-level-information')?.count).toBe(1)
+    expect(summary.provenanceSummary.blockedCount).toBe(5)
+  })
+
+  it('merges proof-miss summaries deterministically across synthetic cases', () => {
+    const summary = buildLirOpportunitySummary([
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 6,
+        plannedCommandCount: 4,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 2,
+        caseName: 'proof_case_alpha',
+        rewriteOpportunities: {
+          total: 3,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 3,
+          topOpportunities: [],
+        },
+        rewriteProvenanceSummary: {
+          total: 3,
+          byReason: [
+            {
+              reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+              count: 2,
+              caseNames: ['proof_case_alpha'],
+              examples: ['proof_case_alpha:1'],
+            },
+            {
+              reason: 'blocked-by-protected-slot',
+              count: 1,
+              caseNames: ['proof_case_alpha'],
+              examples: ['proof_case_alpha:2'],
+            },
+          ],
+          safeAdjacentScoreCopyArithCount: 0,
+          blockedCount: 3,
+          insufficientInfoCount: 0,
+          unknownCount: 0,
+          requiresLirLevelAnalysis: true,
+          shapeFamilySummary: {
+            totalPatternNotExactCount: 3,
+            families: [
+              {
+                family: 'arithmetic-copy-feeds-const-or-add-imm',
+                count: 2,
+                caseNames: ['proof_case_alpha'],
+                examples: ['proof_case_alpha:1'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+            ],
+            topRecoverableFamilies: ['arithmetic-copy-feeds-const-or-add-imm'],
+            recommendation: 'test-only',
+            proofMissSummary: {
+              total: 2,
+              byFamily: [
+                {
+                  family: 'arithmetic-copy-feeds-const-or-add-imm',
+                  total: 2,
+                  caseNames: ['proof_case_alpha'],
+                  byReason: [
+                    {
+                      reason: 'no-exact-lir-local-proof',
+                      count: 2,
+                      caseNames: ['proof_case_alpha'],
+                      examples: ['proof_case_alpha:1'],
+                    },
+                  ],
+                  suggestedNextAction: 'rewrite-test-candidate',
+                },
+              ],
+              topActionableFamilies: ['arithmetic-copy-feeds-const-or-add-imm'],
+              recommendation: 'proof case',
+            },
+          },
+        },
+      }),
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 4,
+        plannedCommandCount: 2,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 2,
+        caseName: 'proof_case_beta',
+        rewriteOpportunities: {
+          total: 3,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 3,
+          topOpportunities: [],
+        },
+        rewriteProvenanceSummary: {
+          total: 3,
+          byReason: [
+            {
+              reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+              count: 1,
+              caseNames: ['proof_case_beta'],
+              examples: ['proof_case_beta:1'],
+            },
+            {
+              reason: 'blocked-by-barrier-or-non-adjacent-shape',
+              count: 2,
+              caseNames: ['proof_case_beta'],
+              examples: ['proof_case_beta:2', 'proof_case_beta:3'],
+            },
+          ],
+          safeAdjacentScoreCopyArithCount: 0,
+          blockedCount: 3,
+          insufficientInfoCount: 0,
+          unknownCount: 0,
+          requiresLirLevelAnalysis: true,
+          shapeFamilySummary: {
+            totalPatternNotExactCount: 3,
+            families: [
+              {
+                family: 'copy-feeds-copy-chain',
+                count: 1,
+                caseNames: ['proof_case_beta'],
+                examples: ['proof_case_beta:1'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+              {
+                family: 'arithmetic-copy-feeds-const-or-add-imm',
+                count: 2,
+                caseNames: ['proof_case_beta'],
+                examples: ['proof_case_beta:2'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+            ],
+            topRecoverableFamilies: ['copy-feeds-copy-chain', 'arithmetic-copy-feeds-const-or-add-imm'],
+            recommendation: 'test-only',
+            proofMissSummary: {
+              total: 3,
+              byFamily: [
+                {
+                  family: 'copy-feeds-copy-chain',
+                  total: 1,
+                  caseNames: ['proof_case_beta'],
+                  byReason: [
+                    {
+                      reason: 'barrier-or-non-adjacent',
+                      count: 1,
+                      caseNames: ['proof_case_beta'],
+                      examples: ['proof_case_beta:1'],
+                    },
+                  ],
+                  suggestedNextAction: 'focused-probe',
+                },
+                {
+                  family: 'arithmetic-copy-feeds-const-or-add-imm',
+                  total: 2,
+                  caseNames: ['proof_case_beta'],
+                  byReason: [
+                    {
+                      reason: 'no-exact-lir-local-proof',
+                      count: 1,
+                      caseNames: ['proof_case_beta'],
+                      examples: ['proof_case_beta:2'],
+                    },
+                    {
+                      reason: 'external-or-protected-slot',
+                      count: 1,
+                      caseNames: ['proof_case_beta'],
+                      examples: ['proof_case_beta:3'],
+                    },
+                  ],
+                  suggestedNextAction: 'rewrite-test-candidate',
+                },
+              ],
+              topActionableFamilies: ['copy-feeds-copy-chain', 'arithmetic-copy-feeds-const-or-add-imm'],
+              recommendation: 'proof case',
+            },
+          },
+        },
+      }),
+    ])
+
+    const proofMissSummary = summary.provenanceSummary.shapeFamilySummary?.proofMissSummary
+    expect(proofMissSummary).toBeDefined()
+    if (!proofMissSummary) return
+
+    expect(proofMissSummary.total).toBe(5)
+    expect(proofMissSummary.byFamily).toEqual([
+        {
+          family: 'arithmetic-copy-feeds-const-or-add-imm',
+          total: 4,
+          caseNames: ['proof_case_alpha', 'proof_case_beta'],
+          byReason: [
+            {
+              reason: 'no-exact-lir-local-proof',
+              count: 3,
+              caseNames: ['proof_case_alpha', 'proof_case_beta'],
+              examples: ['proof_case_alpha:1', 'proof_case_beta:2'],
+            },
+            {
+              reason: 'external-or-protected-slot',
+              count: 1,
+              caseNames: ['proof_case_beta'],
+              examples: ['proof_case_beta:3'],
+            },
+          ],
+          suggestedNextAction: 'lir-safety-analysis',
+        },
+      {
+        family: 'copy-feeds-copy-chain',
+        total: 1,
+        caseNames: ['proof_case_beta'],
+        byReason: [
+          {
+            reason: 'barrier-or-non-adjacent',
+            count: 1,
+            caseNames: ['proof_case_beta'],
+            examples: ['proof_case_beta:1'],
+          },
+        ],
+        suggestedNextAction: 'focused-probe',
+      },
+    ])
+    expect(proofMissSummary.topActionableFamilies).toEqual([
+      'copy-feeds-copy-chain',
+    ])
+    expect(proofMissSummary.byFamily[0].byReason).toEqual([...proofMissSummary.byFamily[0].byReason].sort(
+      (left, right) => right.count - left.count || left.reason.localeCompare(right.reason),
+    ))
+  })
+
+  it('adds deterministic slot-provenance summaries when merging synthetic proof-miss cases', () => {
+    const summary = buildLirOpportunitySummary([
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 5,
+        plannedCommandCount: 2,
+        directScoreCopyCount: 4,
+        plannedScoreCopyCount: 2,
+        caseName: 'slot_case_alpha',
+        rewriteOpportunities: {
+          total: 4,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 4,
+          topOpportunities: [],
+        },
+        rewriteProvenanceSummary: {
+          total: 4,
+          byReason: [
+            {
+              reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+              count: 3,
+              caseNames: ['slot_case_alpha'],
+              examples: ['slot_case_alpha:1'],
+            },
+            {
+              reason: 'insufficient-command-level-information',
+              count: 1,
+              caseNames: ['slot_case_alpha'],
+              examples: ['slot_case_alpha:2'],
+            },
+          ],
+          safeAdjacentScoreCopyArithCount: 0,
+          blockedCount: 4,
+          insufficientInfoCount: 1,
+          unknownCount: 0,
+          requiresLirLevelAnalysis: true,
+          shapeFamilySummary: {
+            totalPatternNotExactCount: 4,
+            families: [
+              {
+                family: 'arithmetic-copy-feeds-const-or-add-imm',
+                count: 4,
+                caseNames: ['slot_case_alpha'],
+                examples: ['slot_case_alpha:1'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+            ],
+            topRecoverableFamilies: ['arithmetic-copy-feeds-const-or-add-imm'],
+            recommendation: 'slot-role synthetic case',
+            proofMissSummary: {
+              total: 4,
+              byFamily: [
+                {
+                  family: 'arithmetic-copy-feeds-const-or-add-imm',
+                  total: 4,
+                  caseNames: ['slot_case_alpha'],
+                  byReason: [
+                    {
+                      reason: 'no-exact-lir-local-proof',
+                      count: 2,
+                      caseNames: ['slot_case_alpha'],
+                      examples: ['slot_case_alpha:1'],
+                    },
+                    {
+                      reason: 'insufficient-command-context',
+                      count: 2,
+                      caseNames: ['slot_case_alpha'],
+                      examples: ['slot_case_alpha:2'],
+                    },
+                  ],
+                  suggestedNextAction: 'lir-safety-analysis',
+                },
+              ],
+              topActionableFamilies: [],
+              recommendation: 'slot-role synthetic case',
+              slotProvenanceSummary: {
+                total: 4,
+                byFamily: [
+                  {
+                    family: 'arithmetic-copy-feeds-const-or-add-imm',
+                    total: 4,
+                    slotRoles: [
+                      { role: 'return', count: 1, caseNames: ['slot_case_alpha'], examples: ['slot_case_alpha:1: $ret'] },
+                      { role: 'const', count: 1, caseNames: ['slot_case_alpha'], examples: ['slot_case_alpha:1: $__const_keep'] },
+                      { role: 'runtime-framework', count: 1, caseNames: ['slot_case_alpha'], examples: ['slot_case_alpha:1: __rf_tmp'] },
+                      { role: 'local-temp', count: 1, caseNames: ['slot_case_alpha'], examples: ['slot_case_alpha:1: $tmp_t0'] },
+                    ],
+                    sourceKinds: [
+                      { sourceKind: 'command-pattern', count: 1, caseNames: ['slot_case_alpha'], examples: ['slot_case_alpha:1'] },
+                      { sourceKind: 'insufficient-context', count: 2, caseNames: ['slot_case_alpha'], examples: ['slot_case_alpha:2'] },
+                      { sourceKind: 'local-temp-only', count: 1, caseNames: ['slot_case_alpha'], examples: ['slot_case_alpha:3'] },
+                    ],
+                    recommendation: 'collect local-temp and command-pattern evidence',
+                  },
+                ],
+                dominantBlockers: [
+                  { blocker: 'insufficient-context', count: 2 },
+                  { blocker: 'local-temp-only', count: 1 },
+                  { blocker: 'command-pattern', count: 1 },
+                ],
+                recommendation: 'slot-role dominant blocker tracking synthetic alpha',
+              },
+            },
+          },
+        },
+      }),
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 6,
+        plannedCommandCount: 4,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 2,
+        caseName: 'slot_case_beta',
+        rewriteOpportunities: {
+          total: 3,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 3,
+          topOpportunities: [],
+        },
+        rewriteProvenanceSummary: {
+          total: 2,
+          byReason: [
+            {
+              reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+              count: 1,
+              caseNames: ['slot_case_beta'],
+              examples: ['slot_case_beta:1'],
+            },
+            {
+              reason: 'blocked-by-protected-slot',
+              count: 1,
+              caseNames: ['slot_case_beta'],
+              examples: ['slot_case_beta:2'],
+            },
+          ],
+          safeAdjacentScoreCopyArithCount: 0,
+          blockedCount: 2,
+          insufficientInfoCount: 0,
+          unknownCount: 0,
+          requiresLirLevelAnalysis: true,
+          shapeFamilySummary: {
+            totalPatternNotExactCount: 2,
+            families: [
+              {
+                family: 'copy-feeds-copy-chain',
+                count: 2,
+                caseNames: ['slot_case_beta'],
+                examples: ['slot_case_beta:1'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+            ],
+            topRecoverableFamilies: ['copy-feeds-copy-chain'],
+            recommendation: 'slot-role synthetic beta',
+            proofMissSummary: {
+              total: 2,
+              byFamily: [
+                {
+                  family: 'copy-feeds-copy-chain',
+                  total: 2,
+                  caseNames: ['slot_case_beta'],
+                  byReason: [
+                    {
+                      reason: 'no-exact-lir-local-proof',
+                      count: 1,
+                      caseNames: ['slot_case_beta'],
+                      examples: ['slot_case_beta:1'],
+                    },
+                    {
+                      reason: 'external-or-protected-slot',
+                      count: 1,
+                      caseNames: ['slot_case_beta'],
+                      examples: ['slot_case_beta:2'],
+                    },
+                  ],
+                  suggestedNextAction: 'lir-safety-analysis',
+                },
+              ],
+              topActionableFamilies: ['copy-feeds-copy-chain'],
+              recommendation: 'slot-role synthetic beta',
+              slotProvenanceSummary: {
+                total: 2,
+                byFamily: [
+                  {
+                    family: 'copy-feeds-copy-chain',
+                    total: 2,
+                    slotRoles: [
+                      { role: 'parameter', count: 1, caseNames: ['slot_case_beta'], examples: ['slot_case_beta:1: $p0'] },
+                      { role: 'runtime-framework', count: 1, caseNames: ['slot_case_beta'], examples: ['slot_case_beta:2: __rf_tmp'] },
+                    ],
+                    sourceKinds: [
+                      { sourceKind: 'external-mention', count: 1, caseNames: ['slot_case_beta'], examples: ['slot_case_beta:1'] },
+                      { sourceKind: 'protected-slot', count: 1, caseNames: ['slot_case_beta'], examples: ['slot_case_beta:2'] },
+                    ],
+                    recommendation: 'delay rewrite while external/protected are dominant',
+                  },
+                ],
+                dominantBlockers: [
+                  { blocker: 'external-mention', count: 1 },
+                  { blocker: 'protected-slot', count: 1 },
+                ],
+                recommendation: 'slot-role dominant blockers synthetic beta',
+              },
+            },
+          },
+        },
+      }),
+    ])
+
+    const proofMissSummary = summary.provenanceSummary.shapeFamilySummary?.proofMissSummary
+    const slotProvenanceSummary = proofMissSummary?.slotProvenanceSummary
+    expect(proofMissSummary).toBeDefined()
+    expect(slotProvenanceSummary).toBeDefined()
+    if (!proofMissSummary || !slotProvenanceSummary) return
+
+    expect(slotProvenanceSummary.total).toBe(proofMissSummary.total)
+    expect(slotProvenanceSummary.total).toBe(6)
+
+    const arithmetic = slotProvenanceSummary.byFamily.find(family => family.family === 'arithmetic-copy-feeds-const-or-add-imm')
+    expect(arithmetic).toBeDefined()
+    if (!arithmetic) return
+    expect(arithmetic.total).toBe(4)
+    expect(arithmetic.slotRoles.map(item => item.role).sort()).toEqual(['const', 'local-temp', 'return', 'runtime-framework'].sort())
+    expect(arithmetic.slotRoles.find(item => item.role === 'const')?.count).toBe(1)
+    expect(arithmetic.slotRoles.find(item => item.role === 'local-temp')?.count).toBe(1)
+    expect(arithmetic.slotRoles.find(item => item.role === 'return')?.count).toBe(1)
+    expect(arithmetic.slotRoles.find(item => item.role === 'runtime-framework')?.count).toBe(1)
+
+    expect(arithmetic.sourceKinds.map(item => item.sourceKind)).toContain('insufficient-context')
+    expect(arithmetic.sourceKinds.find(item => item.sourceKind === 'insufficient-context')?.count).toBe(2)
+    expect(arithmetic.sourceKinds.find(item => item.sourceKind === 'local-temp-only')?.count).toBe(1)
+    expect(arithmetic.sourceKinds.find(item => item.sourceKind === 'command-pattern')?.count).toBe(1)
+
+    expect(arithmetic.slotRoles).toEqual([...arithmetic.slotRoles].sort((left, right) => (
+      right.count - left.count || left.role.localeCompare(right.role)
+    )))
+    expect(arithmetic.sourceKinds).toEqual([...arithmetic.sourceKinds].sort((left, right) => (
+      right.count - left.count || left.sourceKind.localeCompare(right.sourceKind)
+    )))
+
+
+    const copyChain = slotProvenanceSummary.byFamily.find(family => family.family === 'copy-feeds-copy-chain')
+    expect(copyChain).toBeDefined()
+    if (!copyChain) return
+    expect(copyChain.total).toBe(2)
+    expect(copyChain.slotRoles.map(item => item.role).sort()).toEqual(['parameter', 'runtime-framework'].sort())
+    expect(copyChain.sourceKinds.map(item => item.sourceKind).sort()).toEqual(['external-mention', 'protected-slot'].sort())
+    expect(copyChain.recommendation).toContain('dominant')
+    expect(copyChain.sourceKinds.find(item => item.sourceKind === 'external-mention')?.count).toBe(1)
+    expect(copyChain.sourceKinds.find(item => item.sourceKind === 'protected-slot')?.count).toBe(1)
+
+    expect(slotProvenanceSummary.dominantBlockers.length).toBeGreaterThan(0)
+    expect(slotProvenanceSummary.byFamily).toEqual([...slotProvenanceSummary.byFamily].sort(
+      (left, right) => right.total - left.total || left.family.localeCompare(right.family),
+    ))
+    expect(slotProvenanceSummary.dominantBlockers).toEqual([...slotProvenanceSummary.dominantBlockers].sort(
+      (left, right) => right.count - left.count || left.blocker.localeCompare(right.blocker),
+    ))
+  })
+
+  it('captures local proof-evidence summaries for slot provenance', () => {
+    const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
+    const proofMissSummary = summary?.provenanceSummary.shapeFamilySummary?.proofMissSummary
+    const slotSummary = proofMissSummary?.slotProvenanceSummary
+    expect(proofMissSummary).toBeDefined()
+    expect(slotSummary).toBeDefined()
+    if (!proofMissSummary || !slotSummary) return
+
+    const localProofEvidenceSummary = slotSummary.localProofEvidenceSummary
+    expect(localProofEvidenceSummary).toBeDefined()
+    if (!localProofEvidenceSummary) return
+
+    const expectedLocalProofTotal = slotSummary.byFamily.reduce((sum, family) => {
+      const localTempOnly = family.sourceKinds.find(item => item.sourceKind === 'local-temp-only')?.count ?? 0
+      const insufficientContext = family.sourceKinds.find(item => item.sourceKind === 'insufficient-context')?.count ?? 0
+      return sum + localTempOnly + insufficientContext
+    }, 0)
+    expect(localProofEvidenceSummary.totalLocalTempOnly).toBe(expectedLocalProofTotal)
+    expect(localProofEvidenceSummary.byFamily.length).toBeGreaterThan(0)
+
+    expect(localProofEvidenceSummary.byFamily).toEqual([...localProofEvidenceSummary.byFamily].sort(
+      (left, right) => right.totalLocalTempOnly - left.totalLocalTempOnly || left.family.localeCompare(right.family),
+    ))
+    expect(localProofEvidenceSummary.livenessWindowSummary).toBeDefined()
+    const localLivenessWindowSummary = localProofEvidenceSummary.livenessWindowSummary
+    expect(localLivenessWindowSummary).toBeDefined()
+    if (!localLivenessWindowSummary) return
+    expect(localLivenessWindowSummary.byFamily).toEqual([...localLivenessWindowSummary.byFamily].sort(
+      (left, right) => (
+        right.totalCandidateLike - left.totalCandidateLike || left.family.localeCompare(right.family)
+      ),
+    ))
+    expect(localLivenessWindowSummary.totalCandidateLike).toBe(
+      localProofEvidenceSummary.byFamily.reduce((sum, family) => sum + family.candidateCount, 0),
+    )
+    for (const family of localLivenessWindowSummary.byFamily) {
+      expect(family.windowKinds).toEqual([...family.windowKinds].sort(
+        (left, right) => right.count - left.count || left.windowKind.localeCompare(right.windowKind),
+      ))
+      const windowCandidateCount = family.windowKinds.reduce((sum, item) => sum + item.count, 0)
+      expect(family.totalCandidateLike).toBe(windowCandidateCount)
+      expect(family.locallySafeCandidateCount + family.blockedCandidateCount + family.unknownCandidateCount)
+        .toBe(family.totalCandidateLike)
+      expect(family.proofReadiness).toMatch(/^(locally-safe-but-diagnostics-only|blocked|unknown)$/)
+    }
+    expect(localLivenessWindowSummary.proofReadiness).toMatch(/^(locally-safe-but-diagnostics-only|blocked|unknown)$/)
+    expect(localLivenessWindowSummary.recommendation).toEqual(expect.any(String))
+
+    const candidateEvidenceCount = localProofEvidenceSummary.byFamily.reduce((sum, family) => (
+      sum + family.evidenceKinds
+        .filter(item => item.evidenceKind === 'adjacent-arith-source-reused' || item.evidenceKind === 'copy-chain-local-temp')
+        .reduce((familySum, evidence) => familySum + evidence.count, 0)
+    ), 0)
+    expect(localLivenessWindowSummary.totalCandidateLike).toBe(candidateEvidenceCount)
+    for (const family of localProofEvidenceSummary.byFamily) {
+      expect(family.evidenceKinds).toEqual([...family.evidenceKinds].sort(
+        (left, right) => right.count - left.count || left.evidenceKind.localeCompare(right.evidenceKind),
+      ))
+      const evidenceTotal = family.evidenceKinds.reduce((sum, evidence) => sum + evidence.count, 0)
+      expect(family.totalLocalTempOnly).toBe(evidenceTotal)
+      expect(family.proofReadiness).toMatch(/^(candidate-after-liveness-window|needs-more-context|blocked)$/)
+      if (family.insufficientContextCount > 0) {
+        const insufficientBucket = family.evidenceKinds.find(item => item.evidenceKind === 'insufficient-context')
+        expect(insufficientBucket?.count).toBe(family.insufficientContextCount)
+      }
+    }
+
+    expect(localProofEvidenceSummary.candidateCount)
+      .toBe(localProofEvidenceSummary.byFamily.reduce((sum, family) => sum + family.candidateCount, 0))
+    expect(localProofEvidenceSummary.needsLivenessWindowCount)
+      .toBe(localProofEvidenceSummary.byFamily.reduce((sum, family) => sum + family.needsLivenessWindowCount, 0))
+    expect(localProofEvidenceSummary.insufficientContextCount)
+      .toBe(localProofEvidenceSummary.byFamily.reduce((sum, family) => sum + family.insufficientContextCount, 0))
+    expect(localProofEvidenceSummary.recommendation).toEqual(expect.any(String))
+  })
+
+  it('emits structured adjacent-window buckets for proof misses instead of generic unknown', () => {
+    const summary = buildLirOpportunitySummary([
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'proof_gap_case',
+        totalCopies: 3,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 2,
+        candidateShapeNotSatisfyingLirLocalProofCases: 1,
+        needsLivenessWindowCount: 0,
+        insufficientContextCount: 0,
+        unknownUnparsedCommandCases: 0,
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'protected_case',
+        totalCopies: 2,
+        sourceKind: 'protected-slot',
+        byFamilySourceKind: 'protected-slot',
+        protectedBoundaryBlockedCases: 2,
+        unknownUnparsedCommandCases: 0,
+        needsLivenessWindowCount: 0,
+        insufficientContextCount: 0,
+      }),
+    ])
+
+    const localProofEvidenceSummary = summary.provenanceSummary.shapeFamilySummary?.proofMissSummary?.slotProvenanceSummary
+      ?.localProofEvidenceSummary
+    expect(localProofEvidenceSummary).toBeDefined()
+    if (!localProofEvidenceSummary) return
+
+    const adjacentWindowSummary = localProofEvidenceSummary.lirAdjacentWindowSummary
+    expect(adjacentWindowSummary).toBeDefined()
+    if (!adjacentWindowSummary) return
+
+    expect(adjacentWindowSummary.proofMissAdjacentWindowBreakdown.length).toBeGreaterThan(1)
+    expect(adjacentWindowSummary.proofMissAdjacentWindowBreakdown.map(entry => entry.kind)).toEqual(expect.arrayContaining([
+      'local-temp-exact-proof-gap',
+      'protected-boundary-blocked',
+      'candidate-shape-not-satisfying-lir-local-proof',
+    ]))
+    expect(adjacentWindowSummary.localTempExactProofGapCases).toBeGreaterThan(0)
+    expect(adjacentWindowSummary.protectedBoundaryBlockedCases).toBeGreaterThan(0)
+    expect(adjacentWindowSummary.proofMissAdjacentWindowBreakdown[0]!.count)
+      .toBeGreaterThanOrEqual(adjacentWindowSummary.proofMissAdjacentWindowBreakdown[1]!.count)
+  })
+
+  it('keeps unknown-unparsed-command misses separated when adjacent-window context is incomplete', () => {
+    const summary = buildLirOpportunitySummary([
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'parse_gap_case',
+        totalCopies: 4,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        unknownUnparsedCommandCases: 4,
+        needsLivenessWindowCount: 0,
+        insufficientContextCount: 0,
+      }),
+    ])
+
+    const adjacentWindowSummary = summary.provenanceSummary.shapeFamilySummary?.proofMissSummary?.slotProvenanceSummary
+      ?.localProofEvidenceSummary?.lirAdjacentWindowSummary
+
+    expect(adjacentWindowSummary).toBeDefined()
+    if (!adjacentWindowSummary) return
+
+    expect(adjacentWindowSummary.unknownUnparsedCommandCases).toBe(4)
+    expect(adjacentWindowSummary.localTempExactProofGapCases).toBe(0)
+    expect(adjacentWindowSummary.proofMissAdjacentWindowBreakdown).toEqual([
+      {
+        kind: 'unknown-unparsed-command',
+        count: 4,
+        caseNames: ['parse_gap_case'],
+        examples: ['parse_gap_case:5'],
+      },
+    ])
+  })
+
+  it('keeps protected/parameter boundary blocker buckets separate from local-temp exact proof gaps', () => {
+    const summary = buildLirOpportunitySummary([
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'boundary_case',
+        totalCopies: 5,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'external-mention',
+        protectedBoundaryBlockedCases: 3,
+        unknownUnparsedCommandCases: 2,
+        needsLivenessWindowCount: 0,
+        insufficientContextCount: 0,
+      }),
+    ])
+
+    const adjacentWindowSummary = summary.provenanceSummary.shapeFamilySummary?.proofMissSummary?.slotProvenanceSummary
+      ?.localProofEvidenceSummary?.lirAdjacentWindowSummary
+    expect(adjacentWindowSummary).toBeDefined()
+    if (!adjacentWindowSummary) return
+
+    expect(adjacentWindowSummary.protectedBoundaryBlockedCases).toBe(3)
+    expect(adjacentWindowSummary.localTempExactProofGapCases).toBe(0)
+    expect(adjacentWindowSummary.proofMissAdjacentWindowBreakdown.some(item => item.kind === 'protected-boundary-blocked')).toBe(true)
+    expect(adjacentWindowSummary.proofMissAdjacentWindowBreakdown.some(item => item.kind === 'unknown-unparsed-command')).toBe(true)
+    expect(adjacentWindowSummary.candidateShapeNotSatisfyingLirLocalProofCases).toBe(0)
+  })
+
+  it('sorts adjacent-window proof buckets deterministically by count and kind', () => {
+    const summary = buildLirOpportunitySummary([
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'sort_case_alpha',
+        totalCopies: 2,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 2,
+        unknownUnparsedCommandCases: 1,
+        needsLivenessWindowCount: 0,
+        insufficientContextCount: 0,
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'sort_case_beta',
+        totalCopies: 2,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        protectedBoundaryBlockedCases: 2,
+        candidateShapeNotSatisfyingLirLocalProofCases: 1,
+        unknownUnparsedCommandCases: 1,
+        needsLivenessWindowCount: 0,
+        insufficientContextCount: 0,
+      }),
+    ])
+
+    const adjacentWindowSummary = summary.provenanceSummary.shapeFamilySummary?.proofMissSummary?.slotProvenanceSummary
+      ?.localProofEvidenceSummary?.lirAdjacentWindowSummary
+    expect(adjacentWindowSummary).toBeDefined()
+    if (!adjacentWindowSummary) return
+
+    const expected = [...adjacentWindowSummary.proofMissAdjacentWindowBreakdown]
+      .sort((left, right) => right.count - left.count || left.kind.localeCompare(right.kind))
+    expect(adjacentWindowSummary.proofMissAdjacentWindowBreakdown).toEqual(expected)
+
+    for (const item of adjacentWindowSummary.proofMissAdjacentWindowBreakdown) {
+      expect(item.caseNames).toEqual([...item.caseNames].sort())
+      expect(item.examples.length).toBeLessThanOrEqual(3)
+    }
+  })
+
+  it('captures slot-provenance summaries for the full arithmetic proof-miss aggregate', () => {
+    const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
+    const proofMissSummary = summary?.provenanceSummary.shapeFamilySummary?.proofMissSummary
+    const slotSummary = proofMissSummary?.slotProvenanceSummary
+    expect(proofMissSummary).toBeDefined()
+    expect(slotSummary).toBeDefined()
+    if (!proofMissSummary || !slotSummary) return
+
+    expect(slotSummary.total).toBe(proofMissSummary.total)
+    expect(slotSummary.total).toBeGreaterThan(0)
+    expect(slotSummary.total).toBeLessThan(summary!.provenanceSummary.total)
+
+    expect(slotSummary.byFamily).toEqual([...slotSummary.byFamily].sort(
+      (left, right) => right.total - left.total || left.family.localeCompare(right.family),
+    ))
+    expect(slotSummary.byFamily.length).toBeGreaterThan(0)
+
+    const familiesOfInterest = ['arithmetic-copy-feeds-const-or-add-imm', 'copy-feeds-copy-chain']
+    expect(familiesOfInterest).toEqual(expect.arrayContaining(slotSummary.byFamily.map(item => item.family)))
+
+    for (const family of slotSummary.byFamily) {
+      expect(family.slotRoles).toEqual([...family.slotRoles].sort(
+        (left, right) => right.count - left.count || left.role.localeCompare(right.role),
+      ))
+      expect(family.sourceKinds).toEqual([...family.sourceKinds].sort(
+        (left, right) => right.count - left.count || left.sourceKind.localeCompare(right.sourceKind),
+      ))
+      expect(family.recommendation).toEqual(expect.any(String))
+      expect(family.total).toBeGreaterThan(0)
+      for (const slotRole of family.slotRoles) {
+        expect(slotRole.count).toBeGreaterThan(0)
+        expect(slotRole.examples.length).toBeLessThanOrEqual(3)
+      }
+      for (const sourceKind of family.sourceKinds) {
+        expect(sourceKind.count).toBeGreaterThan(0)
+        expect(sourceKind.examples.length).toBeLessThanOrEqual(3)
+      }
+    }
+
+    expect(slotSummary.dominantBlockers).toEqual([...slotSummary.dominantBlockers].sort(
+      (left, right) => right.count - left.count || left.blocker.localeCompare(right.blocker),
+    ))
+    expect(slotSummary.recommendation).toEqual(expect.any(String))
+  })
+
+  it('does not promote rewrite-test candidates when slot-source blockers are dominant', () => {
+    const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
+    const proofMissSummary = summary?.provenanceSummary.shapeFamilySummary?.proofMissSummary
+    const slotProvenanceSummary = proofMissSummary?.slotProvenanceSummary
+    expect(proofMissSummary).toBeDefined()
+    expect(slotProvenanceSummary).toBeDefined()
+    if (!proofMissSummary || !slotProvenanceSummary) return
+
+    expect(slotProvenanceSummary.total).toBeLessThan(summary!.provenanceSummary.total)
+
+    for (const family of slotProvenanceSummary.byFamily) {
+      const topSourceKind = family.sourceKinds[0]?.sourceKind
+      if (topSourceKind === 'external-mention' || topSourceKind === 'protected-slot' || topSourceKind === 'insufficient-context') {
+        expect(proofMissSummary.byFamily.find(item => item.family === family.family)?.suggestedNextAction).not.toBe(
+          'rewrite-test-candidate',
+        )
+        expect(family.recommendation).toContain('Do not promote')
+      }
+    }
+  })
+
+  it('merges local proof-evidence summaries deterministically across synthetic cases', () => {
+    const summary = buildLirOpportunitySummary([
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 4,
+        plannedCommandCount: 2,
+        directScoreCopyCount: 4,
+        plannedScoreCopyCount: 2,
+        caseName: 'local_merge_alpha',
+        rewriteOpportunities: {
+          total: 4,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 4,
+          topOpportunities: [],
+        },
+        rewriteProvenanceSummary: {
+          total: 4,
+          byReason: [
+            {
+              reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+              count: 2,
+              caseNames: ['local_merge_alpha'],
+              examples: ['local_merge_alpha:1'],
+            },
+            {
+              reason: 'insufficient-command-level-information',
+              count: 1,
+              caseNames: ['local_merge_alpha'],
+              examples: ['local_merge_alpha:2'],
+            },
+            {
+              reason: 'blocked-by-protected-slot',
+              count: 1,
+              caseNames: ['local_merge_alpha'],
+              examples: ['local_merge_alpha:3'],
+            },
+          ],
+          safeAdjacentScoreCopyArithCount: 0,
+          blockedCount: 3,
+          insufficientInfoCount: 1,
+          unknownCount: 1,
+          requiresLirLevelAnalysis: true,
+          shapeFamilySummary: {
+            totalPatternNotExactCount: 3,
+            families: [
+              {
+                family: 'arithmetic-copy-feeds-const-or-add-imm',
+                count: 3,
+                caseNames: ['local_merge_alpha'],
+                examples: ['local_merge_alpha:1'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+            ],
+            topRecoverableFamilies: ['arithmetic-copy-feeds-const-or-add-imm'],
+            recommendation: 'local merge alpha',
+            proofMissSummary: {
+              total: 3,
+              byFamily: [
+                {
+                  family: 'arithmetic-copy-feeds-const-or-add-imm',
+                  total: 3,
+                  caseNames: ['local_merge_alpha'],
+                  byReason: [
+                    {
+                      reason: 'no-exact-lir-local-proof',
+                      count: 3,
+                      caseNames: ['local_merge_alpha'],
+                      examples: ['local_merge_alpha:1'],
+                    },
+                  ],
+                  suggestedNextAction: 'rewrite-test-candidate',
+                },
+              ],
+              topActionableFamilies: ['arithmetic-copy-feeds-const-or-add-imm'],
+              recommendation: 'local merge alpha',
+              slotProvenanceSummary: {
+                total: 3,
+                byFamily: [
+                  {
+                    family: 'arithmetic-copy-feeds-const-or-add-imm',
+                    total: 3,
+                    slotRoles: [
+                      { role: 'local-temp', count: 2, caseNames: ['local_merge_alpha'], examples: ['local_merge_alpha:1'] },
+                      { role: 'const', count: 1, caseNames: ['local_merge_alpha'], examples: ['local_merge_alpha:2'] },
+                    ],
+                    sourceKinds: [
+                      { sourceKind: 'local-temp-only', count: 2, caseNames: ['local_merge_alpha'], examples: ['local_merge_alpha:1'] },
+                      { sourceKind: 'insufficient-context', count: 1, caseNames: ['local_merge_alpha'], examples: ['local_merge_alpha:2'] },
+                    ],
+                    recommendation: 'local merge alpha',
+                  },
+                ],
+                dominantBlockers: [
+                  { blocker: 'local-temp-only', count: 2 },
+                  { blocker: 'insufficient-context', count: 1 },
+                ],
+                recommendation: 'local merge alpha',
+                localProofEvidenceSummary: {
+                  totalLocalTempOnly: 2,
+                  byFamily: [
+                    {
+                      family: 'arithmetic-copy-feeds-const-or-add-imm',
+                      totalLocalTempOnly: 2,
+                      evidenceKinds: [
+                        {
+                          evidenceKind: 'adjacent-arith-source-reused',
+                          count: 2,
+                          caseNames: ['local_merge_alpha'],
+                          examples: ['local_merge_alpha:1', 'local_merge_alpha:2', 'local_merge_alpha:3'],
+                        },
+                        {
+                          evidenceKind: 'insufficient-context',
+                          count: 1,
+                          caseNames: ['local_merge_alpha'],
+                          examples: ['local_merge_alpha:2'],
+                        },
+                      ],
+                      proofReadiness: 'candidate-after-liveness-window',
+                      recommendation: 'local merge alpha',
+                      candidateCount: 2,
+                      needsLivenessWindowCount: 0,
+                      insufficientContextCount: 1,
+                      livenessWindowSummary: {
+                        family: 'arithmetic-copy-feeds-const-or-add-imm',
+                        totalCandidateLike: 2,
+                        locallySafeCandidateCount: 1,
+                        blockedCandidateCount: 1,
+                        unknownCandidateCount: 0,
+                        windowKinds: [
+                          {
+                            windowKind: 'single-adjacent-arith-no-reuse',
+                            count: 1,
+                            caseNames: ['local_merge_alpha'],
+                            examples: ['local_merge_alpha:1'],
+                          },
+                          {
+                            windowKind: 'blocked-src-overwritten-before-use',
+                            count: 1,
+                            caseNames: ['local_merge_alpha'],
+                            examples: ['local_merge_alpha:3'],
+                          },
+                        ],
+                        proofReadiness: 'blocked',
+                        recommendation: 'local merge alpha split by local window evidence.',
+                      },
+                    },
+                  ],
+                  candidateCount: 2,
+                  needsLivenessWindowCount: 0,
+                  insufficientContextCount: 1,
+                  livenessWindowSummary: {
+                    byFamily: [
+                      {
+                        family: 'arithmetic-copy-feeds-const-or-add-imm',
+                        totalCandidateLike: 2,
+                        locallySafeCandidateCount: 1,
+                        blockedCandidateCount: 1,
+                        unknownCandidateCount: 0,
+                        windowKinds: [
+                          {
+                            windowKind: 'single-adjacent-arith-no-reuse',
+                            count: 1,
+                            caseNames: ['local_merge_alpha'],
+                            examples: ['local_merge_alpha:1'],
+                          },
+                          {
+                            windowKind: 'blocked-src-overwritten-before-use',
+                            count: 1,
+                            caseNames: ['local_merge_alpha'],
+                            examples: ['local_merge_alpha:3'],
+                          },
+                        ],
+                        proofReadiness: 'blocked',
+                        recommendation: 'local merge alpha split by local window evidence.',
+                      },
+                    ],
+                    totalCandidateLike: 2,
+                    locallySafeCandidateCount: 1,
+                    blockedCandidateCount: 1,
+                    unknownCandidateCount: 0,
+                    proofReadiness: 'blocked',
+                    recommendation: 'local merge alpha split by local window evidence.',
+                  },
+                  recommendation: 'local merge alpha',
+                },
+              },
+            },
+          },
+        },
+      }),
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 6,
+        plannedCommandCount: 4,
+        directScoreCopyCount: 4,
+        plannedScoreCopyCount: 3,
+        caseName: 'local_merge_beta',
+        rewriteOpportunities: {
+          total: 3,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 3,
+          topOpportunities: [],
+        },
+        rewriteProvenanceSummary: {
+          total: 3,
+          byReason: [
+            {
+              reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+              count: 1,
+              caseNames: ['local_merge_beta'],
+              examples: ['local_merge_beta:1'],
+            },
+            {
+              reason: 'blocked-by-cross-function-module-external-mention',
+              count: 1,
+              caseNames: ['local_merge_beta'],
+              examples: ['local_merge_beta:2'],
+            },
+            {
+              reason: 'blocked-by-alias-safety',
+              count: 1,
+              caseNames: ['local_merge_beta'],
+              examples: ['local_merge_beta:3'],
+            },
+          ],
+          safeAdjacentScoreCopyArithCount: 0,
+          blockedCount: 3,
+          insufficientInfoCount: 0,
+          unknownCount: 0,
+          requiresLirLevelAnalysis: true,
+          shapeFamilySummary: {
+            totalPatternNotExactCount: 2,
+            families: [
+              {
+                family: 'arithmetic-copy-feeds-const-or-add-imm',
+                count: 2,
+                caseNames: ['local_merge_beta'],
+                examples: ['local_merge_beta:1'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+              {
+                family: 'copy-feeds-copy-chain',
+                count: 1,
+                caseNames: ['local_merge_beta'],
+                examples: ['local_merge_beta:1'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+            ],
+            topRecoverableFamilies: ['copy-feeds-copy-chain', 'arithmetic-copy-feeds-const-or-add-imm'],
+            recommendation: 'local merge beta',
+            proofMissSummary: {
+              total: 2,
+              byFamily: [
+                {
+                  family: 'arithmetic-copy-feeds-const-or-add-imm',
+                  total: 1,
+                  caseNames: ['local_merge_beta'],
+                  byReason: [
+                    {
+                      reason: 'no-exact-lir-local-proof',
+                      count: 1,
+                      caseNames: ['local_merge_beta'],
+                      examples: ['local_merge_beta:1'],
+                    },
+                  ],
+                  suggestedNextAction: 'rewrite-test-candidate',
+                },
+                {
+                  family: 'copy-feeds-copy-chain',
+                  total: 1,
+                  caseNames: ['local_merge_beta'],
+                  byReason: [
+                    {
+                      reason: 'command-level-only-artifact',
+                      count: 1,
+                      caseNames: ['local_merge_beta'],
+                      examples: ['local_merge_beta:2'],
+                    },
+                  ],
+                  suggestedNextAction: 'leave-blocked',
+                },
+              ],
+              topActionableFamilies: [],
+              recommendation: 'local merge beta',
+              slotProvenanceSummary: {
+                total: 2,
+                byFamily: [
+                  {
+                    family: 'arithmetic-copy-feeds-const-or-add-imm',
+                    total: 1,
+                    slotRoles: [
+                      { role: 'local-temp', count: 1, caseNames: ['local_merge_beta'], examples: ['local_merge_beta:1'] },
+                    ],
+                    sourceKinds: [
+                      { sourceKind: 'local-temp-only', count: 1, caseNames: ['local_merge_beta'], examples: ['local_merge_beta:1'] },
+                    ],
+                    recommendation: 'local merge beta arithmetic',
+                  },
+                  {
+                    family: 'copy-feeds-copy-chain',
+                    total: 1,
+                    slotRoles: [
+                      { role: 'parameter', count: 1, caseNames: ['local_merge_beta'], examples: ['local_merge_beta:2'] },
+                    ],
+                    sourceKinds: [
+                      { sourceKind: 'external-mention', count: 1, caseNames: ['local_merge_beta'], examples: ['local_merge_beta:2'] },
+                    ],
+                    recommendation: 'local merge beta copy-chain',
+                  },
+                ],
+                dominantBlockers: [
+                  { blocker: 'local-temp-only', count: 1 },
+                  { blocker: 'external-mention', count: 1 },
+                ],
+                recommendation: 'local merge beta',
+                localProofEvidenceSummary: {
+                  totalLocalTempOnly: 1,
+                  byFamily: [
+                    {
+                      family: 'arithmetic-copy-feeds-const-or-add-imm',
+                      totalLocalTempOnly: 1,
+                      evidenceKinds: [
+                        {
+                          evidenceKind: 'copy-chain-local-temp',
+                          count: 1,
+                          caseNames: ['local_merge_beta'],
+                          examples: ['local_merge_beta:1', 'local_merge_beta:2', 'local_merge_beta:3', 'local_merge_beta:4'],
+                        },
+                      ],
+                      proofReadiness: 'candidate-after-liveness-window',
+                      recommendation: 'local merge beta',
+                      candidateCount: 1,
+                      needsLivenessWindowCount: 0,
+                      insufficientContextCount: 0,
+                      livenessWindowSummary: {
+                        family: 'arithmetic-copy-feeds-const-or-add-imm',
+                        totalCandidateLike: 1,
+                        locallySafeCandidateCount: 0,
+                        blockedCandidateCount: 0,
+                        unknownCandidateCount: 1,
+                        windowKinds: [
+                          {
+                            windowKind: 'unknown-unparsed-command',
+                            count: 1,
+                            caseNames: ['local_merge_beta'],
+                            examples: ['local_merge_beta:1'],
+                          },
+                        ],
+                        proofReadiness: 'unknown',
+                        recommendation: 'local merge beta split by local window evidence.',
+                      },
+                    },
+                  ],
+                  candidateCount: 1,
+                  needsLivenessWindowCount: 0,
+                  insufficientContextCount: 0,
+                  livenessWindowSummary: {
+                    byFamily: [
+                      {
+                        family: 'arithmetic-copy-feeds-const-or-add-imm',
+                        totalCandidateLike: 1,
+                        locallySafeCandidateCount: 0,
+                        blockedCandidateCount: 0,
+                        unknownCandidateCount: 1,
+                        windowKinds: [
+                          {
+                            windowKind: 'unknown-unparsed-command',
+                            count: 1,
+                            caseNames: ['local_merge_beta'],
+                            examples: ['local_merge_beta:1'],
+                          },
+                        ],
+                        proofReadiness: 'unknown',
+                        recommendation: 'local merge beta split by local window evidence.',
+                      },
+                    ],
+                    totalCandidateLike: 1,
+                    locallySafeCandidateCount: 0,
+                    blockedCandidateCount: 0,
+                    unknownCandidateCount: 1,
+                    proofReadiness: 'unknown',
+                    recommendation: 'local merge beta split by local window evidence.',
+                  },
+                  recommendation: 'local merge beta',
+                },
+              },
+            },
+          },
+        },
+      }),
+    ])
+
+    const localProofEvidenceSummary = summary.provenanceSummary.shapeFamilySummary?.proofMissSummary?.slotProvenanceSummary?.localProofEvidenceSummary
+    expect(localProofEvidenceSummary).toBeDefined()
+    if (!localProofEvidenceSummary) return
+
+    expect(localProofEvidenceSummary.byFamily).toEqual([...localProofEvidenceSummary.byFamily].sort(
+      (left, right) => right.totalLocalTempOnly - left.totalLocalTempOnly || left.family.localeCompare(right.family),
+    ))
+
+    const arithmeticFamily = localProofEvidenceSummary.byFamily.find(
+      family => family.family === 'arithmetic-copy-feeds-const-or-add-imm',
+    )
+    const copyChainFamily = localProofEvidenceSummary.byFamily.find(
+      family => family.family === 'copy-feeds-copy-chain',
+    )
+    expect(arithmeticFamily).toBeDefined()
+    expect(copyChainFamily).toBeUndefined()
+    if (!arithmeticFamily) return
+
+    expect(arithmeticFamily.totalLocalTempOnly).toBe(4)
+    expect(arithmeticFamily.candidateCount).toBe(3)
+    expect(arithmeticFamily.insufficientContextCount).toBe(1)
+    expect(arithmeticFamily.needsLivenessWindowCount).toBe(0)
+    expect(arithmeticFamily.proofReadiness).toBe('candidate-after-liveness-window')
+    expect(arithmeticFamily.evidenceKinds[0]?.evidenceKind).toBe('adjacent-arith-source-reused')
+    expect(arithmeticFamily.evidenceKinds[0]?.examples.length).toBeLessThanOrEqual(3)
+
+    expect(localProofEvidenceSummary.totalLocalTempOnly).toBe(4)
+    expect(localProofEvidenceSummary.candidateCount).toBe(3)
+    expect(localProofEvidenceSummary.needsLivenessWindowCount).toBe(0)
+    expect(localProofEvidenceSummary.insufficientContextCount).toBe(1)
+
+    expect(localProofEvidenceSummary.livenessWindowSummary).toBeDefined()
+    if (!localProofEvidenceSummary.livenessWindowSummary) return
+    expect(localProofEvidenceSummary.livenessWindowSummary.totalCandidateLike).toBe(3)
+    expect(localProofEvidenceSummary.livenessWindowSummary.byFamily).toEqual([...localProofEvidenceSummary.livenessWindowSummary.byFamily].sort(
+      (left, right) => right.totalCandidateLike - left.totalCandidateLike || left.family.localeCompare(right.family),
+    ))
+    expect(localProofEvidenceSummary.livenessWindowSummary.locallySafeCandidateCount).toBe(1)
+    expect(localProofEvidenceSummary.livenessWindowSummary.blockedCandidateCount).toBe(1)
+    expect(localProofEvidenceSummary.livenessWindowSummary.unknownCandidateCount).toBe(1)
+    expect(localProofEvidenceSummary.livenessWindowSummary.locallySafeCandidateCount
+      + localProofEvidenceSummary.livenessWindowSummary.blockedCandidateCount
+      + localProofEvidenceSummary.livenessWindowSummary.unknownCandidateCount)
+      .toBe(localProofEvidenceSummary.livenessWindowSummary.totalCandidateLike)
+
+    const mergedArithmeticWindowFamily = localProofEvidenceSummary.livenessWindowSummary.byFamily.find(
+      family => family.family === 'arithmetic-copy-feeds-const-or-add-imm',
+    )
+    expect(mergedArithmeticWindowFamily).toBeDefined()
+    expect(mergedArithmeticWindowFamily?.proofReadiness).toMatch(/^(locally-safe-but-diagnostics-only|blocked|unknown)$/)
+  })
+
+  it('does not classify external/protected proof misses as rewrite-test candidates', () => {
+    const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
+    const proofMissSummary = summary?.provenanceSummary.shapeFamilySummary?.proofMissSummary
+    expect(proofMissSummary).toBeDefined()
+    if (!proofMissSummary) return
+
+    for (const family of proofMissSummary.byFamily) {
+      if (family.byReason.some(item => item.reason === 'external-or-protected-slot')) {
+        expect(family.suggestedNextAction).not.toBe('rewrite-test-candidate')
+      }
+    }
+  })
+
+  it('keeps command-level-only-miss buckets conservative and sorted', () => {
+    const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
+    const proofMissSummary = summary?.provenanceSummary.shapeFamilySummary?.proofMissSummary
+    expect(proofMissSummary).toBeDefined()
+    if (!proofMissSummary) return
+
+    for (const family of proofMissSummary.byFamily) {
+      expect(family.caseNames).toEqual([...family.caseNames].sort())
+      for (const reason of family.byReason) {
+        expect(reason.caseNames).toEqual([...reason.caseNames].sort())
+        expect(reason.examples.length).toBeLessThanOrEqual(3)
+      }
+    }
+  })
+
+  it('derives deterministic provenance reasons from emitted command sequences', () => {
+    const lines = [
+      { path: 'data/test/function/probe.mcfunction', line: 1, content: 'scoreboard players operation $tmp1 o = $a o' },
+      { path: 'data/test/function/probe.mcfunction', line: 2, content: 'scoreboard players operation $b o += $tmp1 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 3, content: 'scoreboard players operation $tmp2 o = $c o' },
+      { path: 'data/test/function/probe.mcfunction', line: 4, content: 'scoreboard players operation $d o -= $tmp2 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 5, content: 'scoreboard players operation $tmp3 o = $e o' },
+      { path: 'data/test/function/probe.mcfunction', line: 6, content: 'scoreboard players operation $f o += $tmp3 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 7, content: 'scoreboard players operation $tmp3 o += $g o' },
+      { path: 'data/test/function/probe.mcfunction', line: 8, content: 'scoreboard players operation $__const_keep o = $h o' },
+      { path: 'data/test/function/probe.mcfunction', line: 9, content: 'scoreboard players operation $i o += $__const_keep o' },
+      { path: 'data/test/function/probe.mcfunction', line: 10, content: 'scoreboard players operation $p0 o = $j o' },
+      { path: 'data/test/function/probe.mcfunction', line: 11, content: 'scoreboard players operation $k o += $p0 o' },
+    ]
+
+    const summary = summarizeRewriteOpportunitiesWithProvenance(lines).provenanceSummary
+
+    expect(summary.total).toBe(5)
+    expect(summary.safeAdjacentScoreCopyArithCount).toBe(2)
+    expect(summary.blockedCount).toBe(3)
+    expect(summary.unknownCount).toBe(0)
+    expect(summary.byReason.find(item => item.reason === 'safe-adjacent-score-copy-arith')?.count).toBe(2)
+    expect(summary.byReason.find(item => item.reason === 'blocked-by-alias-safety')).toBeUndefined()
+    expect(summary.byReason.find(item => item.reason === 'blocked-by-temp-not-dead-after-consuming-op')?.count).toBe(1)
+    expect(summary.byReason.find(item => item.reason === 'blocked-by-protected-slot')?.count).toBe(1)
+    expect(summary.byReason.find(item => item.reason === 'blocked-by-cross-function-module-external-mention')?.count).toBe(1)
+    expect(summary.insufficientInfoCount).toBe(0)
+  })
+
+  it('derives deterministic LIR recommendations for synthetic empty/safe/unknown inputs', () => {
+    const safeSummary = buildLirOpportunitySummary([
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 4,
+        plannedCommandCount: 3,
+        directScoreCopyCount: 2,
+        plannedScoreCopyCount: 2,
+        caseName: 'safe_case',
+        rewriteOpportunities: {
+          total: 2,
+          currentlyOptimized: 0,
+          safeCandidate: 2,
+          blockedByBarrier: 0,
+          unknown: 0,
+          topOpportunities: [
+            {
+              status: 'safeCandidate',
+              pattern: 'copy -> arithmetic',
+              count: 2,
+              examples: ['safe_case:1:scoreboard players operation $tmp o = $x o', 'safe_case:2:scoreboard players operation $y o += $tmp o'],
+            },
+          ],
+        },
+      }),
+    ])
+    expect(safeSummary.recommendation).toBe('safe-local-rewrite-candidate')
+    expect(safeSummary.topPatterns).toEqual([
+      expect.objectContaining({
+        pattern: 'copy -> arithmetic',
+        caseNames: ['safe_case'],
+      }),
+    ])
+
+    const unknownSummary = buildLirOpportunitySummary([
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 4,
+        plannedCommandCount: 3,
+        directScoreCopyCount: 2,
+        plannedScoreCopyCount: 2,
+        caseName: 'unknown_case',
+        rewriteOpportunities: {
+          total: 1,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 1,
+          topOpportunities: [
+            {
+              status: 'unknown',
+              pattern: 'copy -> unknown',
+              count: 1,
+              examples: ['unknown_case:1:scoreboard players operation $tmp o = $x o'],
+            },
+          ],
+        },
+      }),
+    ])
+    expect(unknownSummary.recommendation).toBe('diagnose-first')
+
+    const emptySummary = buildLirOpportunitySummary([])
+    expect(emptySummary.recommendation).toBe('no-action')
+    expect(emptySummary.totalScoreCopyCount).toBe(0)
+    expect(emptySummary.topPatterns).toEqual([])
+  })
+
+  it('adds deterministic shape-family summaries for blocked non-exact pattern cases', () => {
+    const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
+    expect(summary).toBeDefined()
+    const provenanceSummary = summary!.provenanceSummary
+    const shapeFamilySummary = provenanceSummary.shapeFamilySummary
+    expect(shapeFamilySummary).toBeDefined()
+    const blockedPatternReason = provenanceSummary.byReason.find(
+      item => item.reason === 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+    )
+
+    expect(blockedPatternReason).toBeDefined()
+    expect(shapeFamilySummary!.totalPatternNotExactCount).toBe(blockedPatternReason!.count)
+    expect(shapeFamilySummary!.families.reduce((sum, family) => sum + family.count, 0)).toBe(shapeFamilySummary!.totalPatternNotExactCount)
+
+    expect(shapeFamilySummary!.families).toEqual([...shapeFamilySummary!.families].sort(
+      (left, right) => right.count - left.count || left.family.localeCompare(right.family),
+    ))
+
+    for (const family of shapeFamilySummary!.families) {
+      expect(family.count).toBeGreaterThan(0)
+      expect(family.caseNames).toEqual([...family.caseNames].sort())
+      expect(family.examples.length).toBeLessThanOrEqual(3)
+      expect(family.likelyNextAction).toMatch(/^(local-canonicalization|slot-scope-analysis|protected-slot-policy|liveness-analysis|leave-blocked)$/)
+      expect(family.requiresLirLevelAnalysis).toBe(family.likelyNextAction !== 'local-canonicalization')
+    }
+
+    const localFamilies = shapeFamilySummary!.families.filter(
+      family => family.likelyNextAction === 'local-canonicalization' && !family.requiresLirLevelAnalysis,
+    )
+    const expectedLocalFamilies = [
+      'copy-chain-feeds-arithmetic',
+      'arithmetic-copy-feeds-arithmetic',
+      'copy-feeds-copy-chain',
+      'arithmetic-copy-feeds-const-or-add-imm',
+    ]
+    expect(localFamilies.length).toBeGreaterThan(0)
+    expect(shapeFamilySummary!.topRecoverableFamilies).toEqual(
+      shapeFamilySummary!.families
+        .filter(item => !item.requiresLirLevelAnalysis && item.likelyNextAction === 'local-canonicalization')
+        .slice(0, 3)
+        .map(item => item.family),
+    )
+
+    expect(shapeFamilySummary!.topRecoverableFamilies).toEqual(
+      localFamilies
+        .slice(0, 3)
+        .map(item => item.family),
+    )
+    expect(localFamilies[0]).toBeDefined()
+    expect(expectedLocalFamilies).toContain(localFamilies[0]!.family)
+    for (const family of localFamilies) {
+      expect(expectedLocalFamilies).toContain(family.family)
+      expect(family.requiresLirLevelAnalysis).toBe(false)
+    }
+
+    expect(shapeFamilySummary!.recommendation).toEqual(expect.any(String))
+
+    expect(provenanceSummary.byReason.find(item => item.reason === 'insufficient-command-level-information')?.count ?? 0).toBeGreaterThanOrEqual(0)
+    expect(shapeFamilySummary!.topRecoverableFamilies.every(familyName => familyName !== 'other-pattern-not-exact')).toBe(true)
+  })
+
+  it('merges shape-family summaries across cases with deterministic families and caps', () => {
+    const summary = buildLirOpportunitySummary([
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 6,
+        plannedCommandCount: 4,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 2,
+        caseName: 'shape_case_alpha',
+        rewriteOpportunities: {
+          total: 3,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 0,
+          topOpportunities: [],
+        },
+        rewriteProvenanceSummary: {
+          total: 3,
+          byReason: [
+            {
+              reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+              count: 2,
+            caseNames: ['shape_case_alpha'],
+            examples: ['shape_case_alpha:1:copy'],
+            },
+            {
+              reason: 'insufficient-command-level-information',
+              count: 1,
+              caseNames: ['shape_case_alpha'],
+              examples: ['shape_case_alpha:2:copy'],
+            },
+            ],
+            safeAdjacentScoreCopyArithCount: 0,
+            blockedCount: 2,
+            insufficientInfoCount: 1,
+            unknownCount: 0,
+            requiresLirLevelAnalysis: false,
+            shapeFamilySummary: {
+              totalPatternNotExactCount: 2,
+              families: [
+                {
+                family: 'copy-chain-feeds-arithmetic',
+                count: 2,
+                caseNames: ['shape_case_alpha'],
+                examples: ['shape_case_alpha:1:copy', 'shape_case_alpha:2:copy'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+              {
+                family: 'other-pattern-not-exact',
+                count: 1,
+                caseNames: ['shape_case_alpha'],
+                examples: ['shape_case_alpha:3:copy'],
+                likelyNextAction: 'leave-blocked',
+                requiresLirLevelAnalysis: true,
+              },
+            ],
+            topRecoverableFamilies: ['copy-chain-feeds-arithmetic'],
+            recommendation: 'local family first',
+          },
+        },
+      }),
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 6,
+        plannedCommandCount: 4,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 2,
+        caseName: 'shape_case_beta',
+        rewriteOpportunities: {
+          total: 3,
+          currentlyOptimized: 0,
+          safeCandidate: 0,
+          blockedByBarrier: 0,
+          unknown: 0,
+          topOpportunities: [],
+        },
+        rewriteProvenanceSummary: {
+          total: 3,
+          byReason: [
+              {
+                reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+                count: 3,
+                caseNames: ['shape_case_beta'],
+                examples: ['shape_case_beta:1:copy'],
+            },
+            {
+              reason: 'blocked-by-protected-slot',
+              count: 1,
+              caseNames: ['shape_case_beta'],
+              examples: ['shape_case_beta:2:copy'],
+            },
+            ],
+            safeAdjacentScoreCopyArithCount: 0,
+            blockedCount: 4,
+            insufficientInfoCount: 0,
+            unknownCount: 0,
+            requiresLirLevelAnalysis: true,
+            shapeFamilySummary: {
+            totalPatternNotExactCount: 3,
+            families: [
+              {
+                family: 'copy-chain-feeds-arithmetic',
+                count: 1,
+                caseNames: ['shape_case_beta'],
+                examples: ['shape_case_beta:1:copy', 'shape_case_beta:4:copy'],
+                likelyNextAction: 'local-canonicalization',
+                requiresLirLevelAnalysis: false,
+              },
+              {
+                family: 'return-materialization',
+                count: 2,
+                caseNames: ['shape_case_beta'],
+                examples: ['shape_case_beta:2:copy', 'shape_case_beta:3:copy'],
+                likelyNextAction: 'protected-slot-policy',
+                requiresLirLevelAnalysis: true,
+              },
+            ],
+            topRecoverableFamilies: ['copy-chain-feeds-arithmetic'],
+            recommendation: 'protected-slot policy first',
+          },
+        },
+      }),
+    ])
+
+    const shapeFamilySummary = summary.provenanceSummary.shapeFamilySummary
+    expect(shapeFamilySummary).toBeDefined()
+    expect(shapeFamilySummary!.totalPatternNotExactCount).toBe(5)
+
+    const blockedPatternCount = summary.provenanceSummary.byReason.find(
+      item => item.reason === 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+    )?.count
+    expect(shapeFamilySummary!.totalPatternNotExactCount).toBe(blockedPatternCount)
+
+    const copyChainFamily = shapeFamilySummary!.families.find(item => item.family === 'copy-chain-feeds-arithmetic')
+    expect(copyChainFamily?.count).toBe(3)
+    expect(copyChainFamily?.caseNames).toEqual(['shape_case_alpha', 'shape_case_beta'])
+    expect(copyChainFamily?.examples.length).toBeLessThanOrEqual(3)
+    expect(copyChainFamily?.likelyNextAction).toBe('local-canonicalization')
+    expect(copyChainFamily?.requiresLirLevelAnalysis).toBe(false)
+
+    const otherFamily = shapeFamilySummary!.families.find(item => item.family === 'other-pattern-not-exact')
+    expect(otherFamily).toBeDefined()
+    expect(shapeFamilySummary!.topRecoverableFamilies).toEqual(['copy-chain-feeds-arithmetic'])
+    expect(shapeFamilySummary!.families).toEqual([...shapeFamilySummary!.families].sort(
+      (left, right) => right.count - left.count || left.family.localeCompare(right.family),
+    ))
+    expect(shapeFamilySummary!.recommendation).toBe('Prioritize local canonicalization for copy-chain-feeds-arithmetic first, then rerun LIR provenance.')
+  })
+
+  it('merges LIR opportunity pattern case names deterministically and caps examples', () => {
+    const summary = buildLirOpportunitySummary([
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 6,
+        plannedCommandCount: 5,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 3,
+        caseName: 'beta_case',
+        rewriteOpportunities: {
+          total: 3,
+          currentlyOptimized: 0,
+          safeCandidate: 2,
+          blockedByBarrier: 1,
+          unknown: 0,
+          topOpportunities: [
+            {
+              status: 'safeCandidate',
+              pattern: 'copy -> arithmetic',
+              count: 2,
+              examples: ['beta_case:1:x', 'beta_case:2:y', 'beta_case:3:z', 'beta_case:4:w'],
+            },
+            {
+              status: 'blockedByBarrier',
+              pattern: 'copy -> barrier -> arith',
+              count: 1,
+              examples: ['beta_case:5:w'],
+            },
+          ],
+        },
+      }),
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 6,
+        plannedCommandCount: 5,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 3,
+        caseName: 'alpha_case',
+        rewriteOpportunities: {
+          total: 3,
+          currentlyOptimized: 0,
+          safeCandidate: 1,
+          blockedByBarrier: 2,
+          unknown: 0,
+          topOpportunities: [
+            {
+              status: 'safeCandidate',
+              pattern: 'copy -> arithmetic',
+              count: 1,
+              examples: ['alpha_case:1:x', 'alpha_case:2:y'],
+            },
+            {
+              status: 'blockedByBarrier',
+              pattern: 'copy -> barrier -> arith',
+              count: 2,
+              examples: ['alpha_case:3:x'],
+            },
+          ],
+        },
+      }),
+    ])
+
+    const safePattern = summary.topPatterns.find(item => item.pattern === 'copy -> arithmetic')
+    const blockedPattern = summary.topPatterns.find(item => item.pattern === 'copy -> barrier -> arith')
+
+    expect(safePattern?.caseNames).toEqual(['alpha_case', 'beta_case'])
+    expect(blockedPattern?.caseNames).toEqual(['alpha_case', 'beta_case'])
+    expect(safePattern?.examples.length).toBeLessThanOrEqual(3)
   })
 
   it('keeps rewrite-opportunity examples and status fields stable', () => {
@@ -711,6 +2768,22 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(dashboard.nextSafeGoals).toEqual(expect.arrayContaining([
       'isolate unsupported MIR call target family: raw:summon-marker-setup',
     ]))
+    expect(dashboard.fixtureBoundarySummary).toBeDefined()
+    expect(dashboard.fixtureBoundarySummary).toEqual(expect.objectContaining({
+      setupOnlyCaseNames: ['raw_marker_controlled', 'raw_marker_first'],
+      setupOnlyUnsupportedCount: 2,
+      trueArithmeticUnsupportedCaseNames: ['function_call', 'marker_case_broad', 'raw_execute_other'],
+      trueArithmeticUnsupportedCount: 3,
+      mixedOrUnknownCaseNames: [],
+      mixedOrUnknownCount: 0,
+    }))
+    expect(dashboard.fixtureBoundarySummary!.dominantFixtureFamilies).toEqual([
+      {
+        family: 'raw:summon-marker-setup',
+        count: 2,
+        caseNames: ['raw_marker_controlled', 'raw_marker_first'],
+      },
+    ])
     expect(dashboard.rawSummonMarkerSetupIsolation).toEqual(expect.objectContaining({
       status: 'mixed',
       caseCount: 2,
@@ -760,6 +2833,22 @@ describe('arithmetic probe benchmark tooling', () => {
       semanticProofStatus: 'unsupported',
     }))
     expect(rawOnly.semanticProofCloseout.unsupportedCaseNames).toEqual(['raw_broad', 'raw_none'])
+    expect(rawOnly.fixtureBoundarySummary).toBeDefined()
+    expect(rawOnly.fixtureBoundarySummary).toEqual(expect.objectContaining({
+      setupOnlyCaseNames: ['raw_broad', 'raw_none'],
+      setupOnlyUnsupportedCount: 2,
+      trueArithmeticUnsupportedCaseNames: [],
+      trueArithmeticUnsupportedCount: 0,
+      mixedOrUnknownCaseNames: [],
+      mixedOrUnknownCount: 0,
+    }))
+    expect(rawOnly.fixtureBoundarySummary!.dominantFixtureFamilies).toEqual([
+      {
+        family: 'raw:summon-marker-setup',
+        count: 2,
+        caseNames: ['raw_broad', 'raw_none'],
+      },
+    ])
 
     const rawMixed = buildVirArithmeticDecisionDashboard([
       makeSyntheticProbeResult('unsupported', {
@@ -794,6 +2883,22 @@ describe('arithmetic probe benchmark tooling', () => {
       controlledCaseNames: ['raw_controlled'],
       broadCaseNames: ['raw_broad_other'],
     }))
+    expect(rawMixed.fixtureBoundarySummary).toBeDefined()
+    expect(rawMixed.fixtureBoundarySummary).toEqual(expect.objectContaining({
+      setupOnlyCaseNames: ['raw_broad_other', 'raw_controlled'],
+      setupOnlyUnsupportedCount: 2,
+      trueArithmeticUnsupportedCaseNames: [],
+      trueArithmeticUnsupportedCount: 0,
+      mixedOrUnknownCaseNames: [],
+      mixedOrUnknownCount: 0,
+    }))
+    expect(rawMixed.fixtureBoundarySummary!.dominantFixtureFamilies).toEqual([
+      {
+        family: 'raw:summon-marker-setup',
+        count: 2,
+        caseNames: ['raw_broad_other', 'raw_controlled'],
+      },
+    ])
 
     const noRawSummon = buildVirArithmeticDecisionDashboard([
       makeSyntheticProbeResult('unsupported', {
@@ -809,6 +2914,176 @@ describe('arithmetic probe benchmark tooling', () => {
     ])
     expect(noRawSummon.rawSummonMarkerSetupIsolation.status).toBe('none')
     expect(noRawSummon.rawSummonMarkerSetupIsolation.caseNames).toEqual([])
+    expect(noRawSummon.fixtureBoundarySummary).toBeDefined()
+    expect(noRawSummon.fixtureBoundarySummary).toEqual(expect.objectContaining({
+      setupOnlyCaseNames: [],
+      setupOnlyUnsupportedCount: 0,
+      trueArithmeticUnsupportedCaseNames: [],
+      trueArithmeticUnsupportedCount: 0,
+      mixedOrUnknownCaseNames: ['non_raw_case'],
+      mixedOrUnknownCount: 1,
+      dominantFixtureFamilies: [],
+    }))
+  })
+
+  it('supports explicit fixture-boundary split when true arithmetic and setup-only blockers coexist', () => {
+    const rawMarkerSetup = "__raw:execute unless entity @e[tag=rs_trig,limit=1] run summon minecraft:marker ~ 0 ~ {Tags:[\"rs_trig\"]}"
+    const dashboard = buildVirArithmeticDecisionDashboard([
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 20,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'setup_only_case',
+        coverageCategory: 'broad',
+        unsupportedReasonTags: ['unsupported-mir-op-kind'],
+        unsupportedMirCallTargets: [{ fn: rawMarkerSetup, argCount: 0, hasResult: false }],
+      }),
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 16,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'true_arithmetic_case',
+        coverageCategory: 'controlled',
+        unsupportedReasonTags: ['unsupported-mir-op-kind'],
+        unsupportedMirOpKinds: ['call'],
+        unsupportedReason: "unsupported instruction 'call' in 'probe_math'; fn='double_div' args=1 hasResult=true",
+      }),
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 14,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'mixed_case',
+        coverageCategory: 'broad',
+        unsupportedReasonTags: ['unsupported-mir-op-kind'],
+        unsupportedMirOpKinds: ['call'],
+        unsupportedMirCallTargets: [
+          { fn: rawMarkerSetup, argCount: 0, hasResult: false },
+          { fn: 'double_div', argCount: 1, hasResult: true },
+        ],
+      }),
+    ])
+
+    expect(dashboard.fixtureBoundarySummary).toBeDefined()
+    expect(dashboard.fixtureBoundarySummary).toEqual(expect.objectContaining({
+      setupOnlyCaseNames: ['setup_only_case'],
+      setupOnlyUnsupportedCount: 1,
+      trueArithmeticUnsupportedCaseNames: ['true_arithmetic_case'],
+      trueArithmeticUnsupportedCount: 1,
+      mixedOrUnknownCaseNames: ['mixed_case'],
+      mixedOrUnknownCount: 1,
+    }))
+    expect(dashboard.fixtureBoundarySummary!.dominantFixtureFamilies).toEqual([
+      {
+        family: 'raw:summon-marker-setup',
+        count: 2,
+        caseNames: ['mixed_case', 'setup_only_case'],
+      },
+    ])
+    expect(dashboard.status).toBe('stay-experimental')
+  })
+
+  it('setup-only unsupported cases do not satisfy semantic proof or go/no-go conditions', () => {
+    const rawMarkerSetup = "__raw:execute unless entity @e[tag=rs_trig,limit=1] run summon minecraft:marker ~ 0 ~ {Tags:[\"rs_trig\"]}"
+    const dashboard = buildVirArithmeticDecisionDashboard([
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 20,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 3,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'setup_only_case',
+        coverageCategory: 'broad',
+        unsupportedReasonTags: ['unsupported-mir-op-kind'],
+        unsupportedMirCallTargets: [{ fn: rawMarkerSetup, argCount: 0, hasResult: false }],
+      }),
+    ])
+
+    expect(dashboard.semanticProofSummary.unsupportedCount).toBe(1)
+    expect(dashboard.semanticProofCloseout.unsupportedCaseNames).toEqual(['setup_only_case'])
+    expect(dashboard.blockers).toEqual(expect.arrayContaining(['semantic-proof-gap']))
+    expect(dashboard.goNoGoStatus).toBe('stay-experimental')
+    expect(dashboard.rawSummonMarkerSetupIsolation.status).toBe('isolated-structural-setup')
+  })
+
+  it('proves one controlled arithmetic probe via a deterministic offline witness and keeps others unproven', () => {
+    const proven = runArithmeticProbeReport('int_arithmetic', [1]).cases[0]
+    const unprovenControl = runArithmeticProbeReport('int_const_var_mix', [1]).cases[0]
+    const unsupported = runArithmeticProbeReport('branched_arithmetic', [1]).cases[0]
+
+    expect(proven.virDecision?.status).toBe('ok')
+    expect(proven.virDecision?.semanticProofStatus).toBe('proven')
+    expect(proven.virDecision?.semanticProofDetails).toEqual(expect.objectContaining({
+      status: 'proven',
+      method: 'fixture-expected-output',
+      reason: expect.stringContaining('witness'),
+    }))
+
+    expect(unprovenControl.virDecision?.status).toBe('ok')
+    expect(unprovenControl.virDecision?.semanticProofStatus).toBe('unproven')
+    expect(unprovenControl.virDecision?.semanticProofDetails?.status).toBe('unproven')
+    expect(unprovenControl.virDecision?.semanticProofDetails?.method).toBe('none')
+
+    expect(unsupported.virDecision?.status).toBe('unsupported')
+    expect(unsupported.virDecision?.semanticProofStatus).toBe('unsupported')
+    expect(unsupported.virDecision?.semanticProofDetails?.status).toBe('unsupported')
+  })
+
+  it('keeps deterministic semantic proof aggregates conservative with mixed supported/unproven/unsupported cases', () => {
+    const dashboard = buildVirArithmeticDecisionDashboard([
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 30,
+        plannedCommandCount: 24,
+        directScoreCopyCount: 10,
+        plannedScoreCopyCount: 8,
+        acceptedFunctionCount: 1,
+        caseName: 'probe_proven',
+        coverageCategory: 'controlled',
+        semanticProofStatus: 'proven',
+      }),
+      makeSyntheticProbeResult('ok', {
+        directCommandCount: 25,
+        plannedCommandCount: 24,
+        directScoreCopyCount: 9,
+        plannedScoreCopyCount: 8,
+        acceptedFunctionCount: 1,
+        caseName: 'probe_unproven',
+        coverageCategory: 'controlled',
+      }),
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 30,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 10,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'probe_unsupported',
+        coverageCategory: 'broad',
+      }),
+    ])
+
+    expect(dashboard.semanticProofSummary).toEqual(expect.objectContaining({
+      provenEquivalentCount: 1,
+      unsupportedCount: 1,
+      missingProofCount: 1,
+      unprovenCount: 1,
+    }))
+
+    expect(dashboard.semanticProofCloseout).toEqual(expect.objectContaining({
+      status: 'fail',
+      provenSupportedCount: 1,
+      supportedButUnprovenCount: 1,
+      unsupportedCount: 1,
+      provenSupportedCaseNames: ['probe_proven'],
+      supportedButUnprovenCaseNames: ['probe_unproven'],
+      unsupportedCaseNames: ['probe_unsupported'],
+    }))
+
+    expect(dashboard.goNoGoStatus).toBe('stay-experimental')
   })
 
   it('preserves per-case MIR op kind drilldown and avoids synthetic details for non-MIR blockers', () => {
@@ -1672,6 +3947,7 @@ describe('arithmetic probe benchmark tooling', () => {
           direct_unsupported: 0,
           unsupported_both: 0,
         },
+        unsupportedReason: "planned allocation check failed for 'probe': binary write to $v1 __arith in op 1 clobbers live root 4",
       }),
       makeSyntheticProbeResult('unsupported', {
         directCommandCount: 7,
@@ -1699,11 +3975,146 @@ describe('arithmetic probe benchmark tooling', () => {
       affectedFunctionCount: 1,
       affectedCaseNames: ['alloc_case_one'],
       functionNamesAvailable: false,
+      allocationFailureBreakdown: expect.arrayContaining([
+        {
+          category: 'dead-lhs-affinity-conflict',
+          count: 1,
+          caseNames: ['alloc_case_one'],
+          examples: expect.arrayContaining([
+            expect.stringContaining("planned allocation check failed for 'probe': binary write to $v1"),
+          ]),
+        },
+      ]),
     }))
     expect(dashboard.readinessChecklist.find(item => item.id === 'allocation-check-closeout')?.status).toBe('fail')
     expect(dashboard.nextSafeGoals).toEqual(expect.arrayContaining([
       expect.stringContaining('allocation-check'),
     ]))
+  })
+
+  it('classifies synthetic allocation failure reasons into deterministic buckets', () => {
+    const dashboard = buildVirArithmeticDecisionDashboard([
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 1,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 0,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'case_cycle',
+        coverageCategory: 'controlled',
+        unsupportedReasonTags: ['allocation-check-failure'],
+        unsupportedReason: 'planned allocation check failed for \'probe\': parallel copy cycle requires scratch slot',
+        rejectionCategoryCounts: {
+          allocation_check_failed: 1,
+          planned_unsupported: 0,
+          higher_cost: 0,
+          direct_unsupported: 0,
+          unsupported_both: 0,
+        },
+      }),
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 1,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 0,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'case_ret',
+        coverageCategory: 'controlled',
+        unsupportedReasonTags: ['allocation-check-failure'],
+        unsupportedReason: 'planned allocation check failed for \'probe\': return slot missing for probe',
+        rejectionCategoryCounts: {
+          allocation_check_failed: 1,
+          planned_unsupported: 0,
+          higher_cost: 0,
+          direct_unsupported: 0,
+          unsupported_both: 0,
+        },
+      }),
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 1,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 0,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'case_dead',
+        coverageCategory: 'controlled',
+        unsupportedReasonTags: ['allocation-check-failure'],
+        unsupportedReason: 'planned allocation check failed for \'probe\': binary write to $v1 in op 1 clobbers live root 4',
+        rejectionCategoryCounts: {
+          allocation_check_failed: 1,
+          planned_unsupported: 0,
+          higher_cost: 0,
+          direct_unsupported: 0,
+          unsupported_both: 0,
+        },
+      }),
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 1,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 0,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'case_dead',
+        coverageCategory: 'controlled',
+        unsupportedReasonTags: ['allocation-check-failure'],
+        unsupportedReason: 'planned allocation check failed for \'probe_2\': binary write to $v2 in op 2 clobbers live root 5',
+        rejectionCategoryCounts: {
+          allocation_check_failed: 1,
+          planned_unsupported: 0,
+          higher_cost: 0,
+          direct_unsupported: 0,
+          unsupported_both: 0,
+        },
+      }),
+      makeSyntheticProbeResult('unsupported', {
+        directCommandCount: 1,
+        plannedCommandCount: 0,
+        directScoreCopyCount: 0,
+        plannedScoreCopyCount: 0,
+        unsupportedFunctionCount: 1,
+        caseName: 'case_unknown',
+        coverageCategory: 'broad',
+        unsupportedReasonTags: ['allocation-check-failure'],
+        unsupportedReason: 'planned allocation check failed for \'probe\': allocation checker rejected',
+        rejectionCategoryCounts: {
+          allocation_check_failed: 1,
+          planned_unsupported: 0,
+          higher_cost: 0,
+          direct_unsupported: 0,
+          unsupported_both: 0,
+        },
+      }),
+    ])
+
+    expect(dashboard.allocationCheckCloseout.allocationFailureBreakdown).toEqual([
+      {
+        category: 'parallel-copy-cycle',
+        count: 1,
+        caseNames: ['case_cycle'],
+        examples: ['planned allocation check failed for \'probe\': parallel copy cycle requires scratch slot'],
+      },
+      {
+        category: 'ret-precolor-conflict',
+        count: 1,
+        caseNames: ['case_ret'],
+        examples: ['planned allocation check failed for \'probe\': return slot missing for probe'],
+      },
+      {
+        category: 'dead-lhs-affinity-conflict',
+        count: 2,
+        caseNames: ['case_dead'],
+        examples: [
+          'planned allocation check failed for \'probe\': binary write to $v1 in op 1 clobbers live root 4',
+          'planned allocation check failed for \'probe_2\': binary write to $v2 in op 2 clobbers live root 5',
+        ],
+      },
+      {
+        category: 'unknown',
+        count: 1,
+        caseNames: ['case_unknown'],
+        examples: ['planned allocation check failed for \'probe\': allocation checker rejected'],
+      },
+    ])
   })
 
   it('does not treat unsupported probe cases as pass-like go/no-go state', () => {

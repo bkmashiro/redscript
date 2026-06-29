@@ -23,6 +23,11 @@ const RMW_OPS = new Set<LIRInstr['kind']>([
   'score_min',
   'score_max',
 ])
+const NON_COMMUTATIVE_RMW_OPS = new Set<LIRInstr['kind']>([
+  'score_sub',
+  'score_div',
+  'score_mod',
+])
 
 function isRmwOp(instr: LIRInstr): instr is Extract<LIRInstr, { kind: 'score_add' | 'score_sub' | 'score_mul' | 'score_div' | 'score_mod' | 'score_min' | 'score_max' }> {
   return RMW_OPS.has(instr.kind)
@@ -146,6 +151,21 @@ const copyOverwriteRule = (isExternallyMentioned: (slot: Slot) => boolean): Rewr
   }
 }
 
+const arithCopySetRule = (isExternallyMentioned: (slot: Slot) => boolean): RewriteRule => (context): { replacement: LIRInstr[]; consume: number } | null => {
+  const [arith, copy, set] = context.window
+  if (!arith || !copy || !set) return null
+  if (!isRmwOp(arith) || copy.kind !== 'score_copy' || set.kind !== 'score_set') return null
+  if (!sameSlot(copy.src, arith.dst)) return null
+  if (!sameSlot(copy.dst, set.dst)) return null
+
+  if (!isSlotTemporarySafeForOverwrite(copy.dst, context, isExternallyMentioned)) return null
+
+  return {
+    replacement: [arith, set],
+    consume: 3,
+  }
+}
+
 const copyReturnRule = (isExternallyMentioned: (slot: Slot) => boolean): RewriteRule => (context): { replacement: LIRInstr[]; consume: number } | null => {
   const [copyIn, ret] = context.window
   if (!copyIn || !ret) return null
@@ -157,6 +177,22 @@ const copyReturnRule = (isExternallyMentioned: (slot: Slot) => boolean): Rewrite
 
   return {
     replacement: [makeScoreCopy({ player: '$ret', obj: ret.slot.obj }, copyIn.src, copyIn.sourceLoc)],
+    consume: 2,
+  }
+}
+
+const copyToRmwRule = (isExternallyMentioned: (slot: Slot) => boolean): RewriteRule => (context): { replacement: LIRInstr[]; consume: number } | null => {
+  const [copyIn, op] = context.window
+  if (!copyIn || !op) return null
+  if (copyIn.kind !== 'score_copy') return null
+  if (!isRmwOp(op)) return null
+  if (!sameSlot(op.src, copyIn.dst)) return null
+  if (NON_COMMUTATIVE_RMW_OPS.has(op.kind) && sameSlot(op.dst, copyIn.src)) return null
+
+  if (!isTemporarySafe(copyIn.dst, context.start + 1, context, isExternallyMentioned)) return null
+
+  return {
+    replacement: [{ ...op, src: copyIn.src }],
     consume: 2,
   }
 }
@@ -213,7 +249,9 @@ function rewriteRules(isExternallyMentioned: (slot: Slot) => boolean): RewriteRu
     selfCopyRule,
     copyChainRule(isExternallyMentioned),
     copyOverwriteRule(isExternallyMentioned),
+    arithCopySetRule(isExternallyMentioned),
     copyReturnRule(isExternallyMentioned),
+    copyToRmwRule(isExternallyMentioned),
     copyRmwRule(isExternallyMentioned),
     copyRmwReturnRule(isExternallyMentioned),
   ]
