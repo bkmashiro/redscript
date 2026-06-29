@@ -163,6 +163,103 @@ describe('constant immediate folding', () => {
     ])
   })
 
+  test('folds adjacent score_set + const materialization + score_min into score_set', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$__const_5') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 5 },
+    ])
+  })
+
+  test('folds adjacent score_set + const materialization + score_max into score_set', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_9'), value: 9 },
+      { kind: 'score_max', dst: mkSlot('$x'), src: mkSlot('$__const_9') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 9 },
+    ])
+  })
+
+  test('keeps sequence when const slot is used more than once', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$__const_5') },
+      { kind: 'score_add', dst: mkSlot('$y'), src: mkSlot('$__const_5') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$__const_5') },
+      { kind: 'score_add', dst: mkSlot('$y'), src: mkSlot('$__const_5') },
+    ])
+  })
+
+  test('keeps sequence when min/max source is not const slot', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$y') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$y') },
+    ])
+  })
+
+  test('keeps sequence when dst differs from min/max destination', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'score_min', dst: mkSlot('$z'), src: mkSlot('$__const_5') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'score_min', dst: mkSlot('$z'), src: mkSlot('$__const_5') },
+    ])
+  })
+
+  test('keeps sequence when initial dst is the const slot', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'score_min', dst: mkSlot('$__const_5'), src: mkSlot('$__const_5') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+    ])
+  })
+
+  test('keeps sequence when non-adjacent across call', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'call', fn: 'test:foo' },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$__const_5') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'call', fn: 'test:foo' },
+      { kind: 'score_min', dst: mkSlot('$x'), src: mkSlot('$__const_5') },
+    ])
+  })
+
   test('does not eliminate score_min with different source', () => {
     const fn = mkFn([
       { kind: 'score_set', dst: mkSlot('$x'), value: 7 },

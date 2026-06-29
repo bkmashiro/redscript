@@ -23,6 +23,10 @@ function isMinMaxSelfNoOp(instr: LIRInstr): boolean {
   return (instr.kind === 'score_min' || instr.kind === 'score_max') && sameSlot(instr.dst, instr.src)
 }
 
+function constFoldScoreMinMax(a: number, b: number, op: 'score_min' | 'score_max'): number {
+  return op === 'score_min' ? Math.min(a, b) : Math.max(a, b)
+}
+
 /** Count how many times a slot is used as a source operand. */
 function countSlotUses(instrs: LIRInstr[], target: string): number {
   let count = 0
@@ -85,6 +89,31 @@ export function constImmFold(fn: LIRFunction): LIRFunction {
   while (i < instrs.length) {
     const curr = instrs[i]
     const next = instrs[i + 1]
+    const nextNext = instrs[i + 2]
+
+    // Pattern: score_set(dst, A), score_set(constSlot, B), score_min/max(dst, constSlot)
+    if (
+      curr &&
+      next &&
+      nextNext &&
+      curr.kind === 'score_set' &&
+      next.kind === 'score_set' &&
+      next.dst.player.startsWith('$__const_') &&
+      !sameSlot(curr.dst, next.dst) &&
+      (nextNext.kind === 'score_min' || nextNext.kind === 'score_max') &&
+      sameSlot(curr.dst, nextNext.dst) &&
+      sameSlot(next.dst, nextNext.src) &&
+      (useCounts.get(slotKey(next.dst)) || 0) === 1
+    ) {
+      result.push({
+        kind: 'score_set',
+        dst: curr.dst,
+        value: constFoldScoreMinMax(curr.value, next.value, nextNext.kind),
+      })
+      changed = true
+      i += 3
+      continue
+    }
 
     // Pattern: score_min(dst, dst) or score_max(dst, dst) is a no-op.
     if (isMinMaxSelfNoOp(curr)) {
