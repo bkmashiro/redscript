@@ -87,6 +87,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | E | Production-safe LIR opportunity lane | One LIR optimization or diagnostic promoted without VIR | Medium | Goal-sized | Completed (diagnostic only) |
 | F | Decision ADR and next roadmap refresh | Go/pause criteria after B–E | Low | Docs-only | Completed; see [21](./21-post-vir-decision-adr.md) |
 | G | Read-only local-temp proof-gap readiness triage | Deterministic readiness buckets for local-temp exact-proof-gap cases | Low | Small diagnostics-only slice | Completed |
+| H | Short-window local-temp proof-gap diagnostics | Deterministic short-window trace-kind and fixture-selection buckets | Low | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -459,6 +460,22 @@ git status --short --branch
 - Conservative buckets now cover candidates versus blocked/unknown, with deterministic `candidateCaseNames` and `blockedOrUnknownCaseNames` arrays and reproducible goal guidance.
 - Scope: this is rewrite-test triage evidence only; it does not assert proof of rewrite-correctness or production rewrite enablement.
 
+## Tranche H — short-window proof diagnostics for local-temp proof gaps
+
+- Status: Completed as a diagnostics-only tranche; no production rewrite gates or optimizer behavior were enabled.
+- Outcome: added deterministic short-window trace-kind evidence for local-temp proof-gap misses under `lirAdjacentWindowSummary.localTempProofGapReadinessSummary.shortWindowProofSummary` and `slotProvenanceSummary.localProofEvidenceSummary.lirAdjacentWindowSummary.shortWindowProofSummary`.
+- The following deterministic buckets were introduced:
+  - `single-predecessor-copy-into-local-temp`
+  - `predecessor-arith-feeds-local-temp`
+  - `successor-arith-consumes-local-temp`
+  - `copy-chain-needs-wider-window`
+  - `cross-function-or-boundary-window`
+  - `opaque-or-unparsed-window`
+- Fixture-selection signals were added conservatively:
+  - `futureRewriteTestCandidateCaseNames` only includes clearly local and non-boundary cases.
+  - `needsWiderWindowCaseNames` marks cases that still need additional local window context.
+- Safety reminder: this tranche is strictly for future rewrite-test fixture planning and selection, not a proof of rewrite correctness and not an optimization enablement mechanism.
+
 ---
 
 ## Suggested next `/goal` for Hermes
@@ -487,7 +504,7 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is done after Tranche G and is closed at this point.
+This roadmap is done after Tranche H and is closed at this point.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, write Tranche F and stop.
 

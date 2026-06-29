@@ -11,6 +11,7 @@ import {
   type RewriteProofMissLirAdjacentWindowBreakdownKind,
   type RewriteProofMissLirAdjacentWindowSummary,
   type RewriteProofMissLirLocalTempProofGapReadinessSummary,
+  type RewriteProofMissLirLocalTempProofWindowSummary,
   type RewriteProofMissSourceKind,
   type VirUnsupportedMirCallTarget,
   type VirUnsupportedMirCallTargetFamilyBreakdownEntry,
@@ -44,6 +45,7 @@ function makeAdjacentWindowDiagnosticCase(options: {
   adjacentWindowMissingOrIncompleteCases?: number
   candidateShapeNotSatisfyingLirLocalProofCases?: number
   unknownUnparsedCommandCases?: number
+  shortWindowProofSummary?: RewriteProofMissLirLocalTempProofWindowSummary
   family?: string
   byFamilySourceKind?: RewriteProofMissSourceKind
 }): ArithmeticProbeResult {
@@ -81,6 +83,7 @@ function makeAdjacentWindowDiagnosticCase(options: {
       blockedOrUnknownCount: localTempExactProofGapCases,
       nextSafeDiagnosticGoals: ['Keep collecting structured adjacent-window evidence before enabling rewrite-test expansion.'],
     }
+  const shortWindowProofSummary = options.shortWindowProofSummary
   const proofMissAdjacentWindowBreakdown = [] as RewriteProofMissLirAdjacentWindowSummary['proofMissAdjacentWindowBreakdown']
   if (localTempExactProofGapCases > 0) {
     proofMissAdjacentWindowBreakdown.push({
@@ -265,6 +268,7 @@ function makeAdjacentWindowDiagnosticCase(options: {
                         proofReadiness: 'unknown',
                         nextSafeDiagnosticGoals: [],
                         recommendation: 'synthetic adjacent-window probe',
+                        shortWindowProofSummary,
                       },
                     },
               ],
@@ -1422,6 +1426,156 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(readinessSummary.candidateCaseNames.sort()).toEqual(Array.from(new Set(readinessSummary.candidateCaseNames)).sort())
     expect(readinessSummary.blockedOrUnknownCaseNames.sort())
       .toEqual(Array.from(new Set(readinessSummary.blockedOrUnknownCaseNames)).sort())
+  })
+
+  it('classifies short-window proof kinds from real adjacent-window context', () => {
+    const lines = [
+      { path: 'data/test/function/probe.mcfunction', line: 1, content: 'scoreboard players operation $tmp_t1 o = $seed o' },
+      { path: 'data/test/function/probe.mcfunction', line: 2, content: 'scoreboard players operation $tmp_t2 o = $tmp_t1 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 3, content: 'scoreboard players operation $tmp_t3 o = $tmp_t4 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 5, content: 'scoreboard players operation $tmp_t4 o = $tmp_t5 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 6, content: 'scoreboard players operation $tmp_t5 o = $tmp_t4 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 7, content: 'scoreboard players operation $tmp_t6 o = $tmp_t5 o' },
+    ]
+
+    const summary = summarizeRewriteOpportunitiesWithProvenance(lines).provenanceSummary
+    const proofMissSummary = summary.shapeFamilySummary?.proofMissSummary
+    const slotSummary = proofMissSummary?.slotProvenanceSummary
+    const localProofEvidenceSummary = slotSummary?.localProofEvidenceSummary
+    const adjacentWindowSummary = localProofEvidenceSummary?.lirAdjacentWindowSummary
+    const shortWindowProofSummary = adjacentWindowSummary?.shortWindowProofSummary
+    expect(shortWindowProofSummary).toBeDefined()
+    if (!shortWindowProofSummary) return
+
+    const sorted = [...shortWindowProofSummary.byProofWindowKind].sort(
+      (left, right) => right.count - left.count || left.proofWindowKind.localeCompare(right.proofWindowKind),
+    )
+    expect(shortWindowProofSummary.byProofWindowKind).toEqual(sorted)
+
+    const shortKinds = shortWindowProofSummary.byProofWindowKind.map(entry => entry.proofWindowKind)
+    expect(shortKinds).toContain('single-predecessor-copy-into-local-temp')
+    expect(shortKinds).toContain('opaque-or-unparsed-window')
+
+    for (const bucket of shortWindowProofSummary.byProofWindowKind) {
+      expect(bucket.count).toBeGreaterThan(0)
+      expect(bucket.caseNames).toEqual([...bucket.caseNames].sort())
+      expect([...new Set(bucket.caseNames)]).toEqual(bucket.caseNames)
+      expect(bucket.examples.length).toBeLessThanOrEqual(3)
+    }
+    expect(shortWindowProofSummary.futureRewriteTestCandidateCaseNames).toEqual(['data/test/function/probe.mcfunction'])
+    expect(shortWindowProofSummary.needsWiderWindowCaseNames).toEqual(['data/test/function/probe.mcfunction'])
+    expect(shortWindowProofSummary.totalCandidateLike)
+      .toBe(adjacentWindowSummary.localTempExactProofGapCases)
+    expect(shortWindowProofSummary.byProofWindowKind.reduce((sum, bucket) => sum + bucket.count, 0))
+      .toBe(shortWindowProofSummary.totalCandidateLike)
+  })
+
+  it('merges short-window proof-kind summaries deterministically with dedupe', () => {
+    const summary = buildLirOpportunitySummary([
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'short_window_merge_case',
+        totalCopies: 4,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 2,
+        shortWindowProofSummary: {
+          totalCandidateLike: 2,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'single-predecessor-copy-into-local-temp',
+              count: 1,
+              caseNames: ['short_window_merge_case'],
+              examples: ['short_window_merge_case:1'],
+            },
+            {
+              proofWindowKind: 'predecessor-arith-feeds-local-temp',
+              count: 1,
+              caseNames: ['short_window_merge_case'],
+              examples: ['short_window_merge_case:2'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: ['short_window_merge_case', 'short_window_merge_case'],
+          needsWiderWindowCaseNames: ['short_window_merge_case'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'short_window_merge_case',
+        totalCopies: 3,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 2,
+        shortWindowProofSummary: {
+          totalCandidateLike: 2,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'copy-chain-needs-wider-window',
+              count: 2,
+              caseNames: ['short_window_merge_case'],
+              examples: ['short_window_merge_case:3'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: [],
+          needsWiderWindowCaseNames: ['short_window_merge_case'],
+        },
+      }),
+    ])
+
+    const shortWindowProofSummary = summary.provenanceSummary.shapeFamilySummary
+      ?.proofMissSummary?.slotProvenanceSummary?.localProofEvidenceSummary?.lirAdjacentWindowSummary?.shortWindowProofSummary
+    expect(shortWindowProofSummary).toBeDefined()
+    if (!shortWindowProofSummary) return
+
+    const expectedBuckets = [...shortWindowProofSummary.byProofWindowKind]
+      .sort((left, right) => right.count - left.count || left.proofWindowKind.localeCompare(right.proofWindowKind))
+    expect(shortWindowProofSummary.byProofWindowKind).toEqual(expectedBuckets)
+    expect(shortWindowProofSummary.totalCandidateLike).toBe(4)
+    expect(shortWindowProofSummary.byProofWindowKind.map(entry => entry.count).reduce((sum, count) => sum + count, 0))
+      .toBe(shortWindowProofSummary.totalCandidateLike)
+    expect(shortWindowProofSummary.byProofWindowKind.map(item => item.proofWindowKind)).toEqual([
+      'copy-chain-needs-wider-window',
+      'predecessor-arith-feeds-local-temp',
+      'single-predecessor-copy-into-local-temp',
+    ])
+    for (const item of shortWindowProofSummary.byProofWindowKind) {
+      expect(item.caseNames).toEqual([...new Set(item.caseNames)].sort())
+      expect(item.examples.length).toBeLessThanOrEqual(3)
+    }
+    expect(shortWindowProofSummary.futureRewriteTestCandidateCaseNames).toEqual(['short_window_merge_case'])
+    expect(shortWindowProofSummary.needsWiderWindowCaseNames).toEqual(['short_window_merge_case'])
+    expect(shortWindowProofSummary.futureRewriteTestCandidateCaseNames)
+      .toEqual([...new Set(shortWindowProofSummary.futureRewriteTestCandidateCaseNames)].sort())
+    expect(shortWindowProofSummary.needsWiderWindowCaseNames)
+      .toEqual([...new Set(shortWindowProofSummary.needsWiderWindowCaseNames)].sort())
+  })
+
+  it('reports non-empty short-window proof buckets for full real arithmetic bench output', () => {
+    const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
+    const localProofEvidenceSummary = summary?.provenanceSummary?.shapeFamilySummary?.proofMissSummary
+      ?.slotProvenanceSummary?.localProofEvidenceSummary
+    expect(localProofEvidenceSummary).toBeDefined()
+    if (!localProofEvidenceSummary) return
+    const adjacentWindowSummary = localProofEvidenceSummary.lirAdjacentWindowSummary
+    expect(adjacentWindowSummary).toBeDefined()
+    if (!adjacentWindowSummary) return
+    const shortWindowProofSummary = adjacentWindowSummary.shortWindowProofSummary
+    expect(shortWindowProofSummary).toBeDefined()
+    if (!shortWindowProofSummary) return
+
+    expect(adjacentWindowSummary.localTempExactProofGapCases).toBeGreaterThan(0)
+    expect(shortWindowProofSummary.byProofWindowKind.length).toBeGreaterThan(0)
+    expect(shortWindowProofSummary.totalCandidateLike).toBeGreaterThan(0)
+    expect(shortWindowProofSummary.totalCandidateLike)
+      .toBe(adjacentWindowSummary.localTempExactProofGapCases)
+    expect(shortWindowProofSummary.byProofWindowKind).toEqual(
+      [...shortWindowProofSummary.byProofWindowKind].sort(
+        (left, right) => right.count - left.count || left.proofWindowKind.localeCompare(right.proofWindowKind),
+      ),
+    )
+    for (const bucket of shortWindowProofSummary.byProofWindowKind) {
+      expect(bucket.caseNames).toEqual([...bucket.caseNames].sort())
+      expect([...new Set(bucket.caseNames)]).toEqual(bucket.caseNames)
+      expect(bucket.examples.length).toBeLessThanOrEqual(3)
+    }
   })
 
   it('emits structured adjacent-window buckets for proof misses instead of generic unknown', () => {

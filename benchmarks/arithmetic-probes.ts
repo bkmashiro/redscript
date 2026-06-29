@@ -185,6 +185,14 @@ export type RewriteProofMissLirLocalTempProofGapReadiness =
   | 'needs-cross-function-boundary-proof'
   | 'unknown-local-temp-proof-gap'
 
+export type RewriteProofMissLirLocalTempProofWindowKind =
+  | 'single-predecessor-copy-into-local-temp'
+  | 'predecessor-arith-feeds-local-temp'
+  | 'successor-arith-consumes-local-temp'
+  | 'copy-chain-needs-wider-window'
+  | 'cross-function-or-boundary-window'
+  | 'opaque-or-unparsed-window'
+
 export interface RewriteProofMissLirLocalTempProofGapReadinessBucket {
   readiness: RewriteProofMissLirLocalTempProofGapReadiness
   count: number
@@ -200,6 +208,21 @@ export interface RewriteProofMissLirLocalTempProofGapReadinessSummary {
   candidateCount: number
   blockedOrUnknownCount: number
   nextSafeDiagnosticGoals: string[]
+  shortWindowProofSummary?: RewriteProofMissLirLocalTempProofWindowSummary
+}
+
+export interface RewriteProofMissLirLocalTempProofWindowSummaryBucket {
+  proofWindowKind: RewriteProofMissLirLocalTempProofWindowKind
+  count: number
+  caseNames: string[]
+  examples: string[]
+}
+
+export interface RewriteProofMissLirLocalTempProofWindowSummary {
+  totalCandidateLike: number
+  byProofWindowKind: RewriteProofMissLirLocalTempProofWindowSummaryBucket[]
+  futureRewriteTestCandidateCaseNames: string[]
+  needsWiderWindowCaseNames: string[]
 }
 
 export interface RewriteProofMissLirAdjacentWindowSummary {
@@ -214,6 +237,7 @@ export interface RewriteProofMissLirAdjacentWindowSummary {
   proofReadiness: RewriteProofMissLivenessWindowReadiness
   nextSafeDiagnosticGoals: string[]
   recommendation: string
+  shortWindowProofSummary?: RewriteProofMissLirLocalTempProofWindowSummary
 }
 
 export type RewriteProofMissLocalProofReadiness =
@@ -1327,6 +1351,133 @@ const LOCAL_TEMP_PROOF_GAP_READINESS_GOALS: Record<
   'unknown-local-temp-proof-gap': 'Keep collecting structured adjacent-window evidence before enabling rewrite-test expansion.',
 }
 
+const SHORT_WINDOW_PROOF_KIND_GOALS: Record<
+  RewriteProofMissLirLocalTempProofWindowKind,
+  string
+> = {
+  'single-predecessor-copy-into-local-temp': 'Gather exact predecessor-copy traces for a short-window rewrite-test candidate.',
+  'predecessor-arith-feeds-local-temp': 'Gather one-adjacent arithmetic predecessor evidence for a short-window rewrite-test candidate.',
+  'successor-arith-consumes-local-temp': 'Gather one-adjacent successor arithmetic consumption evidence for a short-window rewrite-test candidate.',
+  'copy-chain-needs-wider-window': 'Collect wider-window evidence for copy-chain structures before rewrite-test expansion.',
+  'cross-function-or-boundary-window': 'Keep collecting safe boundary-aware evidence before candidate rewrite tests.',
+  'opaque-or-unparsed-window': 'Collect parse-complete neighboring command evidence before rewrite-test expansion.',
+}
+
+function classifyLocalTempProofGapShortWindowKind(
+  family: string,
+  sourceKind: RewriteProofMissSourceKind,
+  parsedCopy: { dst: Slot; src: Slot },
+  previousLine: string | undefined,
+  nextLine: string | undefined,
+  nextNextLine: string | undefined,
+): RewriteProofMissLirLocalTempProofWindowKind {
+  if (sourceKind === 'external-mention' || sourceKind === 'protected-slot' || sourceKind === 'insufficient-context') {
+    return 'cross-function-or-boundary-window'
+  }
+
+  if (!isLocalTempSlot(parsedCopy.src) || !isLocalTempSlot(parsedCopy.dst)) {
+    return 'cross-function-or-boundary-window'
+  }
+
+  const previousCopy = previousLine ? parseScoreCopy(previousLine) : null
+  const previousArithmetic = previousLine ? parseScoreArithmetic(previousLine) : null
+  const nextCopy = nextLine ? parseScoreCopy(nextLine) : null
+  const nextArithmetic = nextLine ? parseScoreArithmetic(nextLine) : null
+  const nextNextCopy = nextNextLine ? parseScoreCopy(nextNextLine) : null
+  const nextNextArithmetic = nextNextLine ? parseScoreArithmetic(nextNextLine) : null
+
+  const barrierHint = [previousLine, nextLine, nextNextLine].some(line => line ? isBarrierLine(line) : false)
+  if (barrierHint) {
+    return 'cross-function-or-boundary-window'
+  }
+
+  if (family === 'copy-feeds-copy-chain') {
+    if (previousCopy && sameSlot(previousCopy.dst, parsedCopy.src)) {
+      return 'single-predecessor-copy-into-local-temp'
+    }
+    if (nextCopy && sameSlot(nextCopy.src, parsedCopy.dst)) {
+      return 'copy-chain-needs-wider-window'
+    }
+    if (nextNextCopy && sameSlot(nextNextCopy.src, parsedCopy.dst)) {
+      return 'copy-chain-needs-wider-window'
+    }
+  } else {
+    if (previousArithmetic && sameSlot(previousArithmetic.dst, parsedCopy.src)) {
+      return 'predecessor-arith-feeds-local-temp'
+    }
+    if (
+      (nextArithmetic && sameSlot(nextArithmetic.src, parsedCopy.dst))
+      || (nextNextArithmetic && sameSlot(nextNextArithmetic.src, parsedCopy.dst))
+    ) {
+      return 'successor-arith-consumes-local-temp'
+    }
+  }
+
+  const seesLocalSlotsButUnparsed = [previousLine, nextLine, nextNextLine].some(line => {
+    if (!line) return false
+    if (parseScoreCopy(line) || parseScoreArithmetic(line)) return false
+    return lineMentionsSlot(line, parsedCopy.src) || lineMentionsSlot(line, parsedCopy.dst)
+  })
+  if (seesLocalSlotsButUnparsed) {
+    return 'opaque-or-unparsed-window'
+  }
+
+  return 'opaque-or-unparsed-window'
+}
+
+function summarizeLocalTempProofGapShortWindowSummary(
+  byProofWindowKind: Map<RewriteProofMissLirLocalTempProofWindowKind, { count: number; caseNames: Set<string>; examples: string[] }>,
+  totalCandidateLike: number,
+): RewriteProofMissLirLocalTempProofWindowSummary {
+  const byProofWindowKindEntries = [...byProofWindowKind.entries()]
+    .map(([proofWindowKind, value]) => ({
+      proofWindowKind,
+      count: value.count,
+      caseNames: [...value.caseNames].sort(),
+      examples: value.examples.slice(0, 3),
+    }))
+    .filter(entry => entry.count > 0)
+    .sort((left, right) => right.count - left.count || left.proofWindowKind.localeCompare(right.proofWindowKind))
+
+  const accounted = byProofWindowKindEntries.reduce((sum, entry) => sum + entry.count, 0)
+  const normalized = accounted >= totalCandidateLike
+    ? byProofWindowKindEntries
+    : [
+      ...byProofWindowKindEntries,
+      {
+        proofWindowKind: 'opaque-or-unparsed-window' as RewriteProofMissLirLocalTempProofWindowKind,
+        count: totalCandidateLike - accounted,
+        caseNames: [],
+        examples: [],
+      },
+    ].sort((left, right) => right.count - left.count || left.proofWindowKind.localeCompare(right.proofWindowKind))
+
+  const futureRewriteTestCandidateCaseNames = new Set<string>()
+  const needsWiderWindowCaseNames = new Set<string>()
+  for (const bucket of normalized) {
+    if (bucket.count === 0) continue
+    if (bucket.proofWindowKind === 'single-predecessor-copy-into-local-temp'
+      || bucket.proofWindowKind === 'predecessor-arith-feeds-local-temp'
+      || bucket.proofWindowKind === 'successor-arith-consumes-local-temp'
+    ) {
+      for (const caseName of bucket.caseNames) {
+        futureRewriteTestCandidateCaseNames.add(caseName)
+      }
+      continue
+    }
+    for (const caseName of bucket.caseNames) {
+      needsWiderWindowCaseNames.add(caseName)
+    }
+  }
+
+  return {
+    totalCandidateLike,
+    byProofWindowKind: normalized,
+    futureRewriteTestCandidateCaseNames: [...futureRewriteTestCandidateCaseNames].sort(),
+    needsWiderWindowCaseNames: [...needsWiderWindowCaseNames].sort(),
+  }
+}
+
 type RewriteProofGapWindowDirection = 'previous' | 'next' | 'both' | 'none'
 
 function classifyLocalTempProofGapWindowDirection(
@@ -1470,6 +1621,10 @@ function summarizeLirAdjacentWindowBreakdown(
     RewriteProofMissLirLocalTempProofGapReadiness,
     { count: number; caseNames: Set<string>; examples: string[] }
   >,
+  byLocalTempProofGapWindowKind?: Map<
+    RewriteProofMissLirLocalTempProofWindowKind,
+    { count: number; caseNames: Set<string>; examples: string[] }
+  >,
 ): RewriteProofMissLirAdjacentWindowSummary {
   const proofMissAdjacentWindowBreakdown = [...byKind.entries()]
     .map(([kind, value]) => ({
@@ -1493,6 +1648,10 @@ function summarizeLirAdjacentWindowBreakdown(
     byLocalTempProofGapReadiness ?? new Map(),
     localTempExactProofGapCasesForReadiness,
   )
+  const shortWindowProofSummary = summarizeLocalTempProofGapShortWindowSummary(
+    byLocalTempProofGapWindowKind ?? new Map(),
+    localTempExactProofGapCasesForReadiness,
+  )
   const nextSafeDiagnosticGoals = proofMissAdjacentWindowBreakdown
     .map(item => LIR_ADJACENT_WINDOW_NEXT_GOALS[item.kind])
     .filter((goal, index, goals) => goals.indexOf(goal) === index)
@@ -1504,12 +1663,13 @@ function summarizeLirAdjacentWindowBreakdown(
     protectedBoundaryBlockedCases,
     adjacentWindowMissingOrIncompleteCases,
     candidateShapeNotSatisfyingLirLocalProofCases,
-    localTempProofGapReadinessSummary,
-    totalCandidateLike,
-    proofReadiness: livenessWindowKindReadiness(0, 0, totalCandidateLike),
-    nextSafeDiagnosticGoals,
-    recommendation: totalCandidateLike > 0
-      ? `Focus diagnostics on ${proofMissAdjacentWindowBreakdown[0]?.kind} for deterministic adjacent-window proof misses.`
+      localTempProofGapReadinessSummary,
+      shortWindowProofSummary,
+      totalCandidateLike,
+      proofReadiness: livenessWindowKindReadiness(0, 0, totalCandidateLike),
+      nextSafeDiagnosticGoals,
+      recommendation: totalCandidateLike > 0
+        ? `Focus diagnostics on ${proofMissAdjacentWindowBreakdown[0]?.kind} for deterministic adjacent-window proof misses.`
       : 'Collect adjacent-window evidence before enabling diagnostics-only rewrite candidates.',
   }
 }
@@ -1918,6 +2078,10 @@ function summarizeProofMissByFamilyFromBuckets(
       byLivenessWindowKind: Map<RewriteProofMissLivenessWindowKind, { count: number; caseNames: string[]; examples: string[] }>
       byAdjacentWindowBreakdown: Map<RewriteProofMissLirAdjacentWindowBreakdownKind, { count: number; caseNames: string[]; examples: string[] }>
       byLocalTempProofGapReadiness: Map<RewriteProofMissLirLocalTempProofGapReadiness, { count: number; caseNames: Set<string>; examples: string[] }>
+      byLocalTempProofGapWindowKind: Map<
+        RewriteProofMissLirLocalTempProofWindowKind,
+        { count: number; caseNames: Set<string>; examples: string[] }
+      >
     }
   >,
 ): RewriteShapeFamilyProofMissSummary | undefined {
@@ -1993,6 +2157,10 @@ function summarizeProofMissByFamilyFromBuckets(
     RewriteProofMissLirLocalTempProofGapReadiness,
     { count: number; caseNames: Set<string>; examples: string[] }
   >()
+  const proofMissLocalTempProofGapWindowKindMap = new Map<
+    RewriteProofMissLirLocalTempProofWindowKind,
+    { count: number; caseNames: Set<string>; examples: string[] }
+  >()
 
   const localProofEvidenceByFamily: RewriteProofMissLocalProofFamilyEvidence[] = [...byFamily.entries()].map(([family, summary]) => {
     const evidenceKinds = [...summary.byLocalProofEvidenceKind.entries()]
@@ -2032,6 +2200,21 @@ function summarizeProofMissByFamilyFromBuckets(
       if (!aggregate) {
         aggregate = { count: 0, caseNames: new Set(), examples: [] }
         proofMissLocalTempProofGapReadinessMap.set(readiness, aggregate)
+      }
+      aggregate.count += bucket.count
+      for (const caseName of bucket.caseNames) {
+        aggregate.caseNames.add(caseName)
+      }
+      for (const example of bucket.examples) {
+        if (aggregate.examples.length >= 3) break
+        aggregate.examples.push(example)
+      }
+    }
+    for (const [windowKind, bucket] of summary.byLocalTempProofGapWindowKind.entries()) {
+      let aggregate = proofMissLocalTempProofGapWindowKindMap.get(windowKind)
+      if (!aggregate) {
+        aggregate = { count: 0, caseNames: new Set(), examples: [] }
+        proofMissLocalTempProofGapWindowKindMap.set(windowKind, aggregate)
       }
       aggregate.count += bucket.count
       for (const caseName of bucket.caseNames) {
@@ -2095,6 +2278,15 @@ function summarizeProofMissByFamilyFromBuckets(
           count: readinessSummary.count,
           caseNames: readinessSummary.caseNames,
           examples: readinessSummary.examples,
+        },
+      ])),
+    ), new Map(
+      [...summary.byLocalTempProofGapWindowKind.entries()].map(([windowKind, windowKindSummary]) => ([
+        windowKind,
+        {
+          count: windowKindSummary.count,
+          caseNames: windowKindSummary.caseNames,
+          examples: windowKindSummary.examples,
         },
       ])),
     ))
@@ -2180,7 +2372,7 @@ function summarizeProofMissByFamilyFromBuckets(
           examples: summary.examples,
         },
       ]),
-    ), proofMissLocalTempProofGapReadinessMap),
+    ), proofMissLocalTempProofGapReadinessMap, proofMissLocalTempProofGapWindowKindMap),
     livenessWindowSummary: {
       byFamily: localProofEvidenceByFamily.map((family) => {
         const familyWindowSummary = getLivenessWindowSummary(family.family, family.livenessWindowSummary)
@@ -2330,6 +2522,10 @@ export function summarizeRewriteOpportunitiesWithProvenance(
       RewriteProofMissLirLocalTempProofGapReadiness,
       { count: number; caseNames: Set<string>; examples: string[] }
     >
+    byLocalTempProofGapWindowKind: Map<
+      RewriteProofMissLirLocalTempProofWindowKind,
+      { count: number; caseNames: Set<string>; examples: string[] }
+    >
   }>()
   let patternNotExactTotal = 0
 
@@ -2421,6 +2617,7 @@ export function summarizeRewriteOpportunitiesWithProvenance(
             byLivenessWindowKind: new Map(),
             byAdjacentWindowBreakdown: new Map(),
             byLocalTempProofGapReadiness: new Map(),
+            byLocalTempProofGapWindowKind: new Map(),
           }
         byProofMissFamily.set(proofMissFamily, familySummary)
       }
@@ -2443,12 +2640,12 @@ export function summarizeRewriteOpportunitiesWithProvenance(
         reasonSummary.examples.push(`${current.path}:${current.line}: ${current.content}`)
       }
 
-      const parsedCopy = parseScoreCopy(current.content)
-      if (parsedCopy) {
-        const sourceKind = classifyProofMissSourceKind(proofMissReason, parsedCopy)
-        const adjacentWindowBreakdown = classifyProofMissAdjacentWindowBreakdownKind(proofMissReason, sourceKind)
-        let localTempProofGapReadiness = proofMissReason === 'no-exact-lir-local-proof'
-          ? classifyLocalTempProofGapReadiness(
+        const parsedCopy = parseScoreCopy(current.content)
+        if (parsedCopy) {
+          const sourceKind = classifyProofMissSourceKind(proofMissReason, parsedCopy)
+          const adjacentWindowBreakdown = classifyProofMissAdjacentWindowBreakdownKind(proofMissReason, sourceKind)
+          let localTempProofGapReadiness = proofMissReason === 'no-exact-lir-local-proof'
+            ? classifyLocalTempProofGapReadiness(
             proofMissFamily,
             proofMissReason,
             sourceKind,
@@ -2457,9 +2654,19 @@ export function summarizeRewriteOpportunitiesWithProvenance(
             previousLine,
             nextLine,
           )
-          : undefined
+            : undefined
+          const localTempProofGapWindowKind = proofMissReason === 'no-exact-lir-local-proof' && sourceKind === 'local-temp-only'
+            ? classifyLocalTempProofGapShortWindowKind(
+              proofMissFamily,
+              sourceKind,
+              parsedCopy,
+              previousLine,
+              nextLine,
+              nextNextLine,
+            )
+            : undefined
 
-        if (adjacentWindowBreakdown) {
+          if (adjacentWindowBreakdown) {
           let adjacentWindowSummary = familySummary.byAdjacentWindowBreakdown.get(adjacentWindowBreakdown)
           if (!adjacentWindowSummary) {
             adjacentWindowSummary = { count: 0, caseNames: [], examples: [] }
@@ -2556,18 +2763,30 @@ export function summarizeRewriteOpportunitiesWithProvenance(
           }
         }
 
-        if (proofMissReason === 'no-exact-lir-local-proof' && localTempProofGapReadiness) {
-          let localTempProofGapReadinessSummary = familySummary.byLocalTempProofGapReadiness.get(localTempProofGapReadiness)
-          if (!localTempProofGapReadinessSummary) {
-            localTempProofGapReadinessSummary = { count: 0, caseNames: new Set(), examples: [] }
-            familySummary.byLocalTempProofGapReadiness.set(localTempProofGapReadiness, localTempProofGapReadinessSummary)
+          if (proofMissReason === 'no-exact-lir-local-proof' && localTempProofGapReadiness) {
+            let localTempProofGapReadinessSummary = familySummary.byLocalTempProofGapReadiness.get(localTempProofGapReadiness)
+            if (!localTempProofGapReadinessSummary) {
+              localTempProofGapReadinessSummary = { count: 0, caseNames: new Set(), examples: [] }
+              familySummary.byLocalTempProofGapReadiness.set(localTempProofGapReadiness, localTempProofGapReadinessSummary)
+            }
+            localTempProofGapReadinessSummary.count += 1
+            localTempProofGapReadinessSummary.caseNames.add(current.path)
+            if (localTempProofGapReadinessSummary.examples.length < 3) {
+              localTempProofGapReadinessSummary.examples.push(`${current.path}:${current.line}: ${current.content}`)
+            }
           }
-          localTempProofGapReadinessSummary.count += 1
-          localTempProofGapReadinessSummary.caseNames.add(current.path)
-          if (localTempProofGapReadinessSummary.examples.length < 3) {
-            localTempProofGapReadinessSummary.examples.push(`${current.path}:${current.line}: ${current.content}`)
+          if (proofMissReason === 'no-exact-lir-local-proof' && localTempProofGapWindowKind) {
+            let localTempProofGapWindowSummary = familySummary.byLocalTempProofGapWindowKind.get(localTempProofGapWindowKind)
+            if (!localTempProofGapWindowSummary) {
+              localTempProofGapWindowSummary = { count: 0, caseNames: new Set(), examples: [] }
+              familySummary.byLocalTempProofGapWindowKind.set(localTempProofGapWindowKind, localTempProofGapWindowSummary)
+            }
+            localTempProofGapWindowSummary.count += 1
+            localTempProofGapWindowSummary.caseNames.add(current.path)
+            if (localTempProofGapWindowSummary.examples.length < 3) {
+              localTempProofGapWindowSummary.examples.push(`${current.path}:${current.line}: ${current.content}`)
+            }
           }
-        }
 
         for (const slotRole of classifySlotRolesForProofMiss(parsedCopy)) {
           let slotRoleSummary = familySummary.bySlotRole.get(slotRole)
@@ -2655,6 +2874,10 @@ function mergeRewriteOpportunitiesProvenance(
       RewriteProofMissLirLocalTempProofGapReadiness,
       { count: number; caseNames: Set<string>; examples: string[] }
     >
+    byLocalTempProofGapWindowKind: Map<
+      RewriteProofMissLirLocalTempProofWindowKind,
+      { count: number; caseNames: Set<string>; examples: string[] }
+    >
   }>()
   let patternNotExactTotal = 0
   const proofMissAdjacentWindowBreakdown = new Map<
@@ -2663,6 +2886,10 @@ function mergeRewriteOpportunitiesProvenance(
   >()
   const proofMissLocalTempProofGapReadiness = new Map<
     RewriteProofMissLirLocalTempProofGapReadiness,
+    { count: number; caseNames: Set<string>; examples: string[] }
+  >()
+  const proofMissLocalTempProofGapWindowKind = new Map<
+    RewriteProofMissLirLocalTempProofWindowKind,
     { count: number; caseNames: Set<string>; examples: string[] }
   >()
   const slotProvenanceByFamily = new Map<string, {
@@ -2732,6 +2959,7 @@ function mergeRewriteOpportunitiesProvenance(
               byLivenessWindowKind: new Map(),
               byAdjacentWindowBreakdown: new Map(),
               byLocalTempProofGapReadiness: new Map(),
+              byLocalTempProofGapWindowKind: new Map(),
             }
             byProofMissFamily.set(proofMissFamily.family, aggregate)
           }
@@ -2887,6 +3115,35 @@ function mergeRewriteOpportunitiesProvenance(
                   for (const example of readiness.examples) {
                     if (globalReadinessSummary.examples.length >= 3) break
                     globalReadinessSummary.examples.push(example)
+                  }
+                }
+                for (const proofWindowKind of detailedLirAdjacentWindowSummary.shortWindowProofSummary?.byProofWindowKind ?? []) {
+                  let localTempProofGapWindowKindSummary = aggregate.byLocalTempProofGapWindowKind.get(proofWindowKind.proofWindowKind)
+                  if (!localTempProofGapWindowKindSummary) {
+                    localTempProofGapWindowKindSummary = { count: 0, caseNames: new Set(), examples: [] }
+                    aggregate.byLocalTempProofGapWindowKind.set(proofWindowKind.proofWindowKind, localTempProofGapWindowKindSummary)
+                  }
+                  localTempProofGapWindowKindSummary.count += proofWindowKind.count
+                  for (const caseName of proofWindowKind.caseNames) {
+                    localTempProofGapWindowKindSummary.caseNames.add(caseName)
+                  }
+                  for (const example of proofWindowKind.examples) {
+                    if (localTempProofGapWindowKindSummary.examples.length >= 3) break
+                    localTempProofGapWindowKindSummary.examples.push(example)
+                  }
+
+                  let globalWindowKindSummary = proofMissLocalTempProofGapWindowKind.get(proofWindowKind.proofWindowKind)
+                  if (!globalWindowKindSummary) {
+                    globalWindowKindSummary = { count: 0, caseNames: new Set(), examples: [] }
+                    proofMissLocalTempProofGapWindowKind.set(proofWindowKind.proofWindowKind, globalWindowKindSummary)
+                  }
+                  globalWindowKindSummary.count += proofWindowKind.count
+                  for (const caseName of proofWindowKind.caseNames) {
+                    globalWindowKindSummary.caseNames.add(caseName)
+                  }
+                  for (const example of proofWindowKind.examples) {
+                    if (globalWindowKindSummary.examples.length >= 3) break
+                    globalWindowKindSummary.examples.push(example)
                   }
                 }
               }
@@ -3184,6 +3441,16 @@ function mergeRewriteOpportunitiesProvenance(
               },
             ])),
           ),
+          new Map(
+            [...(summary.byLocalTempProofGapWindowKind).entries()].map(([windowKind, windowKindSummary]) => ([
+              windowKind,
+              {
+                count: windowKindSummary.count,
+                caseNames: windowKindSummary.caseNames,
+                examples: windowKindSummary.examples,
+              },
+            ])),
+          ),
         ),
         proofReadiness,
         recommendation: summarizeLocalProofEvidenceRecommendation([
@@ -3253,6 +3520,16 @@ function mergeRewriteOpportunitiesProvenance(
       new Map(
         [...proofMissLocalTempProofGapReadiness.entries()].map(([readiness, summary]) => ([
           readiness,
+          {
+            count: summary.count,
+            caseNames: summary.caseNames,
+            examples: summary.examples,
+          },
+        ])),
+      ),
+      new Map(
+        [...proofMissLocalTempProofGapWindowKind.entries()].map(([windowKind, summary]) => ([
+          windowKind,
           {
             count: summary.count,
             caseNames: summary.caseNames,
