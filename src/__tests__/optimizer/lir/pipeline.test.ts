@@ -1,4 +1,4 @@
-import { lirOptimizeModule } from '../../../optimizer/lir/pipeline'
+import { runLIRPassManager, lirOptimizeModule } from '../../../optimizer/lir/pipeline'
 import type { LIRFunction, LIRInstr, LIRModule, Slot } from '../../../lir/types'
 
 const obj = '__test'
@@ -16,6 +16,11 @@ function mkModule(functions: LIRFunction[]): LIRModule {
 }
 
 describe('LIR optimization pipeline', () => {
+  function runAndCollect(mod: ReturnType<typeof mkModule>) {
+    const result = runLIRPassManager(mod)
+    return result
+  }
+
   test('dead slot + const_imm combined: removes dead write and folds constant', () => {
     const mod = mkModule([
       mkFn('main', [
@@ -130,6 +135,92 @@ describe('LIR optimization pipeline', () => {
 
     const result = lirOptimizeModule(mod)
     expect(result.functions[0].instructions).toHaveLength(2)
+  })
+
+  test('pass manager exposes named pass results with tiny stats', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_set', dst: mkSlot('$dead'), value: 0 },
+        { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+        { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$__const_5') },
+        { kind: 'score_set', dst: mkSlot('$x'), value: 10 },
+        { kind: 'score_set', dst: mkSlot('$x'), value: 11 },
+        { kind: 'return_value', slot: mkSlot('$x') },
+      ]),
+    ])
+
+    const { passes } = runAndCollect(mod)
+
+    expect(passes.map(pass => pass.name)).toEqual([
+      'deadSlotElimModule',
+      'execStorePeephole',
+      'constImmFold',
+      'deadSlotElimModule',
+    ])
+
+    for (const pass of passes) {
+      expect(pass).toMatchObject({
+        name: expect.any(String),
+        changed: expect.any(Boolean),
+        stats: {
+          instructionsIn: expect.any(Number),
+          instructionsOut: expect.any(Number),
+          functionsVisited: 1,
+          functionsChanged: expect.any(Number),
+        },
+      })
+      expect(pass.stats.instructionsIn).toBeGreaterThanOrEqual(pass.stats.instructionsOut)
+      expect(pass.stats.functionsVisited).toBe(1)
+    }
+  })
+
+  test('pass output is stable after one additional run (idempotent)', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_set', dst: mkSlot('$__const_7'), value: 7 },
+        { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$__const_7') },
+        { kind: 'score_add', dst: mkSlot('$x'), src: mkSlot('$tmp') },
+        { kind: 'score_set', dst: mkSlot('$x'), value: 3 },
+        { kind: 'score_set', dst: mkSlot('$x'), value: 4 },
+        { kind: 'return_value', slot: mkSlot('$x') },
+      ]),
+    ])
+
+    const first = runLIRPassManager(mod).module
+    const second = runLIRPassManager(first).module
+
+    expect(second).toEqual(first)
+  })
+
+  test('second dead-slot cleanup removes materialization exposed by per-function passes', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        // First dead-slot pass cannot drop this const because it is read by a
+        // nearby self-copy instruction.
+        { kind: 'score_set', dst: mkSlot('$__const_2'), value: 2 },
+        { kind: 'score_copy', dst: mkSlot('$__const_2'), src: mkSlot('$__const_2') },
+        { kind: 'score_set', dst: mkSlot('$x'), value: 10 },
+        { kind: 'score_set', dst: mkSlot('$x'), value: 11 },
+        { kind: 'return_value', slot: mkSlot('$x') },
+      ]),
+    ])
+
+    const result = runLIRPassManager(mod)
+
+    expect(result.passes[0].changed).toBe(false)
+    expect(result.passes[result.passes.length - 1].changed).toBe(true)
+
+    const instrs = result.module.functions[0].instructions
+    expect(instrs.some(i =>
+      i.kind === 'score_set' && i.dst.player === '$__const_2'
+    )).toBe(false)
+    expect(instrs.some(i =>
+      i.kind === 'score_copy' && i.dst.player === '$__const_2'
+    )).toBe(false)
+    expect(instrs).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 11 },
+      { kind: 'return_value', slot: mkSlot('$x') },
+    ])
   })
 
   test('works across multiple functions', () => {

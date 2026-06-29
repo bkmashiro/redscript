@@ -281,6 +281,8 @@ Compiler-owned slots:
 
 ## P6 — LIR pass manager cleanup and idempotence
 
+**Status:** ✅ Done
+
 **Product promise:** LIR optimization becomes observable, bounded, and easier to reason about when passes expose changed/stats and cleanup has a safe order.
 
 **Primary files:**
@@ -440,8 +442,8 @@ Return:
 - [x] P2 compile-stage LIR verification.
 - [x] P3 typed immediate LIR and ScoreInt guard.
 - [x] P4 raw/macro opaque policy.
-- [ ] P5 slot-classification split.
-- [ ] P6 LIR pass manager/idempotence.
+- [x] P5 slot-classification split.
+- [x] P6 LIR pass manager/idempotence.
 - [ ] P7 macro/version hard errors.
 - [ ] P8 function path/reference validation.
 - [ ] P9 emit/compile decomposition.
