@@ -1843,6 +1843,480 @@ describe('arithmetic probe benchmark tooling', () => {
     }
   })
 
+  it('builds a deterministic future rewrite fixture export summary from local-temp proof diagnostics', () => {
+    const summary = buildLirOpportunitySummary([
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'future_fixture_candidate_case',
+        totalCopies: 3,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'single-predecessor-copy-into-local-temp',
+              count: 1,
+              caseNames: ['future_fixture_candidate_case'],
+              examples: ['future_fixture_candidate_case:1'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: ['future_fixture_candidate_case'],
+          needsWiderWindowCaseNames: [],
+        },
+        localTempProofGapReadinessSummary: {
+          byReadiness: [
+            {
+              readiness: 'rewrite-test-candidate-local-window',
+              count: 1,
+              caseNames: ['future_fixture_candidate_case'],
+              examples: ['future_fixture_candidate_case:1'],
+            },
+          ],
+          totalCandidateLike: 1,
+          candidateCount: 1,
+          blockedOrUnknownCount: 0,
+          candidateCaseNames: ['future_fixture_candidate_case'],
+          blockedOrUnknownCaseNames: [],
+          nextSafeDiagnosticGoals: ['Reduce immediate predecessor uncertainty for future fixture candidates.'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'future_fixture_insufficient_case',
+        totalCopies: 2,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'copy-chain-needs-wider-window',
+              count: 1,
+              caseNames: ['future_fixture_insufficient_case'],
+              examples: ['future_fixture_insufficient_case:1'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: [],
+          needsWiderWindowCaseNames: ['future_fixture_insufficient_case'],
+        },
+        localTempProofGapReadinessSummary: {
+          byReadiness: [
+            {
+              readiness: 'needs-predecessor-window-proof',
+              count: 1,
+              caseNames: ['future_fixture_insufficient_case'],
+              examples: ['future_fixture_insufficient_case:2'],
+            },
+          ],
+          totalCandidateLike: 1,
+          candidateCount: 0,
+          blockedOrUnknownCount: 1,
+          candidateCaseNames: [],
+          blockedOrUnknownCaseNames: ['future_fixture_insufficient_case'],
+          nextSafeDiagnosticGoals: ['Capture a wider producer/consumer proof window.'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'future_fixture_boundary_case',
+        totalCopies: 2,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'external-mention',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'cross-function-or-boundary-window',
+              count: 1,
+              caseNames: ['future_fixture_boundary_case'],
+              examples: ['future_fixture_boundary_case:1'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: [],
+          needsWiderWindowCaseNames: ['future_fixture_boundary_case'],
+        },
+        localTempProofGapReadinessSummary: {
+          byReadiness: [
+            {
+              readiness: 'needs-cross-function-boundary-proof',
+              count: 1,
+              caseNames: ['future_fixture_boundary_case'],
+              examples: ['future_fixture_boundary_case:2'],
+            },
+          ],
+          totalCandidateLike: 1,
+          candidateCount: 0,
+          blockedOrUnknownCount: 1,
+          candidateCaseNames: [],
+          blockedOrUnknownCaseNames: ['future_fixture_boundary_case'],
+          nextSafeDiagnosticGoals: ['Add explicit cross-function proof evidence before boundary fixtures.'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'future_fixture_opaque_case',
+        totalCopies: 1,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        unknownUnparsedCommandCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'opaque-or-unparsed-window',
+              count: 1,
+              caseNames: ['future_fixture_opaque_case'],
+              examples: ['future_fixture_opaque_case:1'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: [],
+          needsWiderWindowCaseNames: ['future_fixture_opaque_case'],
+        },
+        localTempProofGapReadinessSummary: {
+          byReadiness: [
+            {
+              readiness: 'needs-successor-window-proof',
+              count: 1,
+              caseNames: ['future_fixture_opaque_case'],
+              examples: ['future_fixture_opaque_case:3'],
+            },
+          ],
+          totalCandidateLike: 1,
+          candidateCount: 0,
+          blockedOrUnknownCount: 1,
+          candidateCaseNames: [],
+          blockedOrUnknownCaseNames: ['future_fixture_opaque_case'],
+          nextSafeDiagnosticGoals: ['Resolve opaque-window parse fragments before fixture capture.'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'future_fixture_boundary_blocked_case',
+        totalCopies: 2,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'protected-slot',
+        protectedBoundaryBlockedCases: 1,
+        localTempProofGapReadinessSummary: {
+          byReadiness: [
+            {
+              readiness: 'needs-cross-function-boundary-proof',
+              count: 1,
+              caseNames: ['future_fixture_boundary_blocked_case'],
+              examples: ['future_fixture_boundary_blocked_case:1'],
+            },
+            {
+              readiness: 'needs-predecessor-window-proof',
+              count: 1,
+              caseNames: ['future_fixture_boundary_blocked_case'],
+              examples: ['future_fixture_boundary_blocked_case:2'],
+            },
+          ],
+          totalCandidateLike: 2,
+          candidateCount: 0,
+          blockedOrUnknownCount: 2,
+          candidateCaseNames: [],
+          blockedOrUnknownCaseNames: ['future_fixture_boundary_blocked_case'],
+          nextSafeDiagnosticGoals: ['Consolidate protected-boundary evidence before fixture reuse.'],
+        },
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'copy-chain-needs-wider-window',
+              count: 1,
+              caseNames: ['future_fixture_boundary_blocked_case'],
+              examples: ['future_fixture_boundary_blocked_case:1'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: [],
+          needsWiderWindowCaseNames: ['future_fixture_boundary_blocked_case'],
+        },
+      }),
+    ])
+
+    const futureRewriteFixtureExportSummary = summary.futureRewriteFixtureExportSummary
+    expect(futureRewriteFixtureExportSummary).toBeDefined()
+    if (!futureRewriteFixtureExportSummary) return
+
+    expect(futureRewriteFixtureExportSummary.rewriteEnablementStatus).toBe('disabled-diagnostics-only')
+    expect(futureRewriteFixtureExportSummary.exportedFixtureCount).toBe(futureRewriteFixtureExportSummary.candidateFixtureNames.length)
+    expect(futureRewriteFixtureExportSummary.blockedFixtureCount).toBe(futureRewriteFixtureExportSummary.blockedFixtureNames.length)
+    expect(futureRewriteFixtureExportSummary.candidateFixtureNames).toEqual(
+      [...futureRewriteFixtureExportSummary.candidateFixtureNames].sort(),
+    )
+    expect(futureRewriteFixtureExportSummary.blockedFixtureNames).toEqual(
+      [...futureRewriteFixtureExportSummary.blockedFixtureNames].sort(),
+    )
+    expect(futureRewriteFixtureExportSummary.byFixtureFamily).toEqual(
+      [...futureRewriteFixtureExportSummary.byFixtureFamily].sort((left, right) => left.family.localeCompare(right.family)),
+    )
+    expect(futureRewriteFixtureExportSummary.byFixtureFamily.map(family => family)).toEqual(
+      [...futureRewriteFixtureExportSummary.byFixtureFamily].map(family => ({
+        ...family,
+        caseNames: [...family.caseNames],
+      })),
+    )
+    expect(futureRewriteFixtureExportSummary.byFixtureFamily.length).toBeGreaterThan(0)
+    expect(
+      futureRewriteFixtureExportSummary.byFixtureFamily.some(item => item.candidateCount > 0),
+    ).toBe(true)
+    expect(
+      futureRewriteFixtureExportSummary.byFixtureFamily.some(item => item.blockedCount > 0),
+    ).toBe(true)
+    expect(futureRewriteFixtureExportSummary.byBlockerKind.length).toBeGreaterThan(0)
+    expect(futureRewriteFixtureExportSummary.byBlockerKind.map(item => item.blockerKind))
+      .toEqual(
+        [...futureRewriteFixtureExportSummary.byBlockerKind]
+          .sort((left, right) => {
+            const order: string[] = [
+              'insufficient-window',
+              'opaque-or-unparsed-window',
+              'missing-predecessor-evidence',
+              'missing-successor-evidence',
+              'boundary-or-cross-function',
+              'protected-boundary-blocked',
+              'unknown-other',
+            ]
+            const leftIndex = order.indexOf(left.blockerKind)
+            const rightIndex = order.indexOf(right.blockerKind)
+            if (leftIndex !== rightIndex) return (leftIndex === -1 ? 999 : leftIndex) - (rightIndex === -1 ? 999 : rightIndex)
+            return right.count - left.count || left.blockerKind.localeCompare(right.blockerKind)
+          })
+          .map(item => item.blockerKind),
+      )
+    for (const family of futureRewriteFixtureExportSummary.byFixtureFamily) {
+      expect(family.caseNames).toEqual([...family.caseNames].sort())
+      expect(family.candidateCount + family.blockedCount).toBeGreaterThan(0)
+    }
+    for (const blocker of futureRewriteFixtureExportSummary.byBlockerKind) {
+      expect(blocker.caseNames).toEqual([...blocker.caseNames].sort())
+      expect(blocker.count).toBe(blocker.caseNames.length)
+    }
+    expect(futureRewriteFixtureExportSummary.nextRequiredEvidence).toEqual(
+      [...futureRewriteFixtureExportSummary.nextRequiredEvidence].sort(),
+    )
+    expect(futureRewriteFixtureExportSummary.byBlockerKind.some(item => item.blockerKind === 'insufficient-window')).toBe(true)
+    expect(futureRewriteFixtureExportSummary.byBlockerKind.some(item => item.blockerKind === 'boundary-or-cross-function')).toBe(true)
+    expect(futureRewriteFixtureExportSummary.byBlockerKind.some(item => item.blockerKind === 'opaque-or-unparsed-window')).toBe(true)
+    expect(futureRewriteFixtureExportSummary.byBlockerKind.some(item => item.blockerKind === 'protected-boundary-blocked')).toBe(true)
+  })
+
+  it('splits unknown-like rewrite misses into deterministic cause buckets', () => {
+    const summary = buildLirOpportunitySummary([
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'unknown_unparsed_case',
+        totalCopies: 2,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        unknownUnparsedCommandCases: 2,
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [],
+          futureRewriteTestCandidateCaseNames: [],
+          needsWiderWindowCaseNames: [],
+        },
+        localTempProofGapReadinessSummary: {
+          byReadiness: [
+            {
+              readiness: 'unknown-local-temp-proof-gap',
+              count: 1,
+              caseNames: ['unknown_unparsed_case'],
+              examples: ['unknown_unparsed_case:1'],
+            },
+          ],
+          totalCandidateLike: 1,
+          candidateCount: 0,
+          blockedOrUnknownCount: 1,
+          candidateCaseNames: [],
+          blockedOrUnknownCaseNames: ['unknown_unparsed_case'],
+          nextSafeDiagnosticGoals: ['Unparsed command windows need parser evidence.'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'unknown_insufficient_case',
+        totalCopies: 1,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'copy-chain-needs-wider-window',
+              count: 1,
+              caseNames: ['unknown_insufficient_case'],
+              examples: ['unknown_insufficient_case:1'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: [],
+          needsWiderWindowCaseNames: ['unknown_insufficient_case'],
+        },
+        localTempProofGapReadinessSummary: {
+          byReadiness: [
+            {
+              readiness: 'needs-predecessor-window-proof',
+              count: 1,
+              caseNames: ['unknown_insufficient_case'],
+              examples: ['unknown_insufficient_case:2'],
+            },
+          ],
+          totalCandidateLike: 1,
+          candidateCount: 0,
+          blockedOrUnknownCount: 1,
+          candidateCaseNames: [],
+          blockedOrUnknownCaseNames: ['unknown_insufficient_case'],
+          nextSafeDiagnosticGoals: ['Capture wider local window for predecessor chain cases.'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'unknown_boundary_case',
+        totalCopies: 1,
+        sourceKind: 'external-mention',
+        byFamilySourceKind: 'external-mention',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'cross-function-or-boundary-window',
+              count: 1,
+              caseNames: ['unknown_boundary_case'],
+              examples: ['unknown_boundary_case:1'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: [],
+          needsWiderWindowCaseNames: ['unknown_boundary_case'],
+        },
+        localTempProofGapReadinessSummary: {
+          byReadiness: [
+            {
+              readiness: 'needs-cross-function-boundary-proof',
+              count: 1,
+              caseNames: ['unknown_boundary_case'],
+              examples: ['unknown_boundary_case:2'],
+            },
+          ],
+          totalCandidateLike: 1,
+          candidateCount: 0,
+          blockedOrUnknownCount: 1,
+          candidateCaseNames: [],
+          blockedOrUnknownCaseNames: ['unknown_boundary_case'],
+          nextSafeDiagnosticGoals: ['Resolve cross-function proof context before fixture planning.'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'unknown_successor_case',
+        totalCopies: 1,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'successor-arith-consumes-local-temp',
+              count: 1,
+              caseNames: ['unknown_successor_case'],
+              examples: ['unknown_successor_case:1'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: ['unknown_successor_case'],
+          needsWiderWindowCaseNames: [],
+        },
+        localTempProofGapReadinessSummary: {
+          byReadiness: [
+            {
+              readiness: 'needs-successor-window-proof',
+              count: 1,
+              caseNames: ['unknown_successor_case'],
+              examples: ['unknown_successor_case:2'],
+            },
+          ],
+          totalCandidateLike: 1,
+          candidateCount: 0,
+          blockedOrUnknownCount: 1,
+          candidateCaseNames: [],
+          blockedOrUnknownCaseNames: ['unknown_successor_case'],
+          nextSafeDiagnosticGoals: ['Resolve successor arithmetic chain before candidate selection.'],
+        },
+      }),
+    ])
+
+    const unknownCauseSplitSummary = summary.unknownCauseSplitSummary
+    expect(unknownCauseSplitSummary).toBeDefined()
+    if (!unknownCauseSplitSummary) return
+
+    expect(unknownCauseSplitSummary.totalUnknownLike).toBeGreaterThan(0)
+    expect(unknownCauseSplitSummary.byUnknownCause).toEqual(
+      [...unknownCauseSplitSummary.byUnknownCause].sort((left, right) => left.cause.localeCompare(right.cause)),
+    )
+    const groupedSum = unknownCauseSplitSummary.byUnknownCause.reduce((sum, item) => sum + item.count, 0)
+    expect(unknownCauseSplitSummary.totalUnknownLike).toBe(groupedSum)
+    expect(unknownCauseSplitSummary.byUnknownCause.every(item => item.caseNames.length > 0)).toBe(true)
+    for (const item of unknownCauseSplitSummary.byUnknownCause) {
+      expect(item.caseNames).toEqual([...item.caseNames].sort())
+    }
+
+    const causes = unknownCauseSplitSummary.byUnknownCause.map(item => item.cause)
+    expect(causes).toEqual([...causes].sort())
+    expect(causes).toEqual(expect.arrayContaining([
+      'unparsed-command',
+      'insufficient-window',
+      'boundary-or-cross-function',
+      'missing-successor-evidence',
+    ]))
+    const byCauseLookup = new Map(unknownCauseSplitSummary.byUnknownCause.map(item => [item.cause, item.caseNames]))
+    expect(byCauseLookup.get('unparsed-command')).toEqual(expect.arrayContaining(['unknown_unparsed_case']))
+    expect(byCauseLookup.get('insufficient-window')).toEqual(expect.arrayContaining(['unknown_insufficient_case']))
+    expect(byCauseLookup.get('boundary-or-cross-function')).toEqual(expect.arrayContaining(['unknown_boundary_case']))
+    expect(byCauseLookup.get('missing-successor-evidence')).toEqual(expect.arrayContaining(['unknown_successor_case']))
+
+    expect(unknownCauseSplitSummary.examples).toHaveLength(Math.min(3, unknownCauseSplitSummary.totalUnknownLike))
+    expect(unknownCauseSplitSummary.examples).toEqual(
+      [...unknownCauseSplitSummary.examples].filter((_, index, all) => all.findIndex(item => item.caseName === unknownCauseSplitSummary.examples[index]!.caseName) === index),
+    )
+  })
+
+  it('exports offline rewrite-test harness metadata without enabling production rewrites', () => {
+    const report = runArithmeticProbeReport('all', [1])
+    const futureRewriteFixtureExportSummary = report.futureRewriteFixtureExportSummary
+    const unknownCauseSplitSummary = report.unknownCauseSplitSummary
+    const offlineHarnessSummary = report.offlineRewriteTestHarnessSummary
+
+    expect(futureRewriteFixtureExportSummary).toBeDefined()
+    expect(unknownCauseSplitSummary).toBeDefined()
+    expect(offlineHarnessSummary).toBeDefined()
+    if (!futureRewriteFixtureExportSummary || !unknownCauseSplitSummary || !offlineHarnessSummary) return
+
+    expect(futureRewriteFixtureExportSummary.rewriteEnablementStatus).toBe('disabled-diagnostics-only')
+    expect(unknownCauseSplitSummary.totalUnknownLike).toBe(
+      unknownCauseSplitSummary.byUnknownCause.reduce((sum, entry) => sum + entry.count, 0),
+    )
+    expect(offlineHarnessSummary.rewriteEnablementStatus).toBe('disabled-diagnostics-only')
+    expect(offlineHarnessSummary.harnessStatus).toMatch(/^(fixture-selection-only|no-candidates|blocked-by-unknown-evidence)$/)
+    expect(offlineHarnessSummary.candidateFixtureCount).toBe(futureRewriteFixtureExportSummary.exportedFixtureCount)
+    expect(offlineHarnessSummary.blockedFixtureCount).toBe(futureRewriteFixtureExportSummary.blockedFixtureCount)
+    expect(offlineHarnessSummary.requiredBeforeRewriteEnablement.length).toBeGreaterThan(0)
+    expect(offlineHarnessSummary.supportedTestKinds).toEqual([...offlineHarnessSummary.supportedTestKinds].sort())
+
+    expect(report.lirOpportunitySummary?.futureRewriteFixtureExportSummary).toEqual(futureRewriteFixtureExportSummary)
+    expect(report.lirOpportunitySummary?.unknownCauseSplitSummary).toEqual(unknownCauseSplitSummary)
+    expect(report.lirOpportunitySummary?.offlineRewriteTestHarnessSummary).toEqual(offlineHarnessSummary)
+    const adjacentWindowSummary = report.lirOpportunitySummary?.provenanceSummary
+      ?.shapeFamilySummary?.proofMissSummary?.slotProvenanceSummary?.localProofEvidenceSummary?.lirAdjacentWindowSummary
+    expect(adjacentWindowSummary).toBeDefined()
+    if (!adjacentWindowSummary) return
+    expect(adjacentWindowSummary).toHaveProperty('unknownUnparsedCommandCases')
+    expect(adjacentWindowSummary).toHaveProperty('localTempProofGapReadinessSummary')
+    expect(adjacentWindowSummary.proofMissAdjacentWindowBreakdown).toEqual(
+      [...adjacentWindowSummary.proofMissAdjacentWindowBreakdown].sort(
+        (left, right) => right.count - left.count || left.kind.localeCompare(right.kind),
+      ),
+    )
+    expect(adjacentWindowSummary.localTempProofGapReadinessSummary).toBeDefined()
+  })
+
   it('emits structured adjacent-window buckets for proof misses instead of generic unknown', () => {
     const summary = buildLirOpportunitySummary([
       makeAdjacentWindowDiagnosticCase({

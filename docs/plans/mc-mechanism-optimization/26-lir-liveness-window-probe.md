@@ -100,7 +100,53 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
 - Added matching tests validating deterministic ordering, per-bucket caps, and real-bench emission.
 - Next safe work remains explicit rewrite-test fixture design; this tranche does **not** enable production rewrites.
 
+### Tranche J outcome update
+- Added deterministic future fixture export summaries from existing evidence to prepare offline rewrite-test fixture planning.
+- Added `futureRewriteFixtureExportSummary` at both `ArithmeticProbeReport` and `lirOpportunitySummary` with:
+  - `exportedFixtureCount`
+  - `blockedFixtureCount`
+  - `candidateFixtureNames`
+  - `blockedFixtureNames`
+  - `byFixtureFamily`
+  - `byBlockerKind`
+  - `nextRequiredEvidence`
+  - fixed `rewriteEnablementStatus: "disabled-diagnostics-only"`
+- Added blocker-kind tagging for:
+  - `insufficient-window`
+  - `boundary-or-cross-function`
+  - `opaque-or-unparsed-window`
+  - `protected-boundary-blocked`
+  - `missing-predecessor-evidence`
+  - `missing-successor-evidence`
+  - `unknown-other`
+- Summary output is deterministically sorted and capped for stable review, and is explicitly marked as future-test preparation, not rewrite correctness proof.
+
+### Tranche K outcome update
+- Added conservative unknown-cause triage split so vague unknown buckets are classified into deterministic causes:
+  - `unparsed-command`
+  - `insufficient-window`
+  - `opaque-window`
+  - `boundary-or-cross-function`
+  - `missing-predecessor-evidence`
+  - `missing-successor-evidence`
+  - `unknown-other`
+- Added `unknownCauseSplitSummary` with totals, case buckets, and representative examples.
+- Preserved previous unknown buckets in existing summaries (including `unknown-unparsed-command` context) while adding split metadata for better triage only.
+- This tranche is diagnostics/test/docs-only and is not a correctness proof.
+
+### Tranche L outcome update
+- Added `offlineRewriteTestHarnessSummary` as an additive, offline, diagnostics-only harness metadata layer that consumes the exported fixture candidates.
+- Added deterministic harness outputs:
+  - `harnessStatus`: one of `fixture-selection-only`, `no-candidates`, `blocked-by-unknown-evidence`
+  - `candidateFixtureCount`
+  - `blockedFixtureCount`
+  - `supportedTestKinds`
+  - `requiredBeforeRewriteEnablement`
+  - fixed `rewriteEnablementStatus: "disabled-diagnostics-only"`
+- Added tests that fixture-export signals can be consumed by harness summaries and that future rewrite enablement remains disabled.
+- This remains a future harness-only stage and explicitly does not enable production rewrites.
+
 ## Next safe goals
-1. Expand candidate-window parser support to classify short local proof spans into `single-adjacent-arith-no-reuse` / `copy-chain-no-reuse` where provable.
-2. Add deterministic evidence examples for unknown causes (`insufficient-window`, `unparsed-command`) to improve triage quality.
-3. Keep rewrite-test expansion disabled until at least one family reaches non-`unknown` liveness readiness.
+1. stronger local proof parser support for additional provable proof-window patterns before enabling rewrite candidates.
+2. explicit bounded equivalence tests for candidate families under offline-only harness control.
+3. only then, evaluate a separately gated rewrite implementation tranche.

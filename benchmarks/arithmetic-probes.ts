@@ -249,6 +249,73 @@ export interface RewriteProofMissLirFixtureSelectionSummary {
   nextSafeDiagnosticGoals: string[]
 }
 
+export type RewriteProofMissUnknownCause =
+  | 'unparsed-command'
+  | 'insufficient-window'
+  | 'opaque-window'
+  | 'boundary-or-cross-function'
+  | 'missing-predecessor-evidence'
+  | 'missing-successor-evidence'
+  | 'unknown-other'
+
+export interface RewriteProofMissUnknownCauseSplitEntry {
+  cause: RewriteProofMissUnknownCause
+  count: number
+  caseNames: string[]
+  examples: string[]
+}
+
+export interface RewriteProofMissUnknownCauseSplitSummary {
+  totalUnknownLike: number
+  byUnknownCause: RewriteProofMissUnknownCauseSplitEntry[]
+  examples: RewriteProofMissUnknownCauseSplitExample[]
+}
+
+export interface RewriteProofMissUnknownCauseSplitExample {
+  caseName: string
+  cause: RewriteProofMissUnknownCause
+  evidence: string
+  family?: string
+}
+
+export interface RewriteFutureFixtureFamilySummary {
+  family: string
+  candidateCount: number
+  blockedCount: number
+  caseNames: string[]
+}
+
+export interface RewriteFutureFixtureBlockerKindSummary {
+  blockerKind: string
+  count: number
+  caseNames: string[]
+}
+
+export interface FutureRewriteFixtureExportSummary {
+  rewriteEnablementStatus: RewriteProofMissLirFixtureEnablementStatus
+  exportedFixtureCount: number
+  blockedFixtureCount: number
+  candidateFixtureNames: string[]
+  blockedFixtureNames: string[]
+  byFixtureFamily: RewriteFutureFixtureFamilySummary[]
+  byBlockerKind: RewriteFutureFixtureBlockerKindSummary[]
+  nextRequiredEvidence: string[]
+}
+
+export type RewriteTestHarnessStatus =
+  | 'fixture-selection-only'
+  | 'no-candidates'
+  | 'blocked-by-unknown-evidence'
+
+export interface OfflineRewriteTestHarnessSummary {
+  rewriteEnablementStatus: RewriteProofMissLirFixtureEnablementStatus
+  harnessStatus: RewriteTestHarnessStatus
+  candidateFixtureCount: number
+  blockedFixtureCount: number
+  supportedTestKinds: string[]
+  requiredBeforeRewriteEnablement: string[]
+}
+
 export interface RewriteProofMissLirLocalTempProofWindowSummary {
   totalCandidateLike: number
   byProofWindowKind: RewriteProofMissLirLocalTempProofWindowSummaryBucket[]
@@ -422,6 +489,9 @@ export interface LirOpportunitySummary {
   provenanceSummary: RewriteProvenanceSummary
   recommendation: 'diagnose-first' | 'safe-local-rewrite-candidate' | 'no-action'
   notes: string
+  futureRewriteFixtureExportSummary?: FutureRewriteFixtureExportSummary
+  unknownCauseSplitSummary?: RewriteProofMissUnknownCauseSplitSummary
+  offlineRewriteTestHarnessSummary?: OfflineRewriteTestHarnessSummary
 }
 
 export interface ForkEstimate {
@@ -804,6 +874,9 @@ export interface ArithmeticProbeReport {
   rewriteOpportunities: CopyRewriteOpportunitySummary
   lirOpportunitySummary?: LirOpportunitySummary
   virDecisionDashboard: VirArithmeticDecisionAggregate
+  futureRewriteFixtureExportSummary?: FutureRewriteFixtureExportSummary
+  unknownCauseSplitSummary?: RewriteProofMissUnknownCauseSplitSummary
+  offlineRewriteTestHarnessSummary?: OfflineRewriteTestHarnessSummary
 }
 
 type ProbeCliArgs = ReturnType<typeof parseCliArgs> & {
@@ -1395,9 +1468,33 @@ const SHORT_WINDOW_PROOF_KIND_GOALS: Record<
   'opaque-or-unparsed-window': 'Collect parse-complete neighboring command evidence before rewrite-test expansion.',
 }
 
+const UNKNOWN_CAUSE_ORDER: RewriteProofMissUnknownCause[] = [
+  'unparsed-command',
+  'opaque-window',
+  'insufficient-window',
+  'missing-predecessor-evidence',
+  'missing-successor-evidence',
+  'boundary-or-cross-function',
+  'unknown-other',
+]
+
+const FUTURE_FIXTURE_BLOCKER_KIND_ORDER = [
+  'insufficient-window',
+  'opaque-or-unparsed-window',
+  'missing-predecessor-evidence',
+  'missing-successor-evidence',
+  'boundary-or-cross-function',
+  'protected-boundary-blocked',
+  'unknown-other',
+]
+
 const MAX_FIXTURE_EXAMPLES_PER_BUCKET = 3
 const MAX_BLOCKED_FAMILY_CASES_PER_BUCKET = 3
 const MAX_BLOCKED_FAMILY_EXAMPLES_PER_BUCKET = 3
+const MAX_UNKNOWN_CAUSE_EXAMPLES_PER_BUCKET = 3
+const MAX_UNKNOWN_CAUSE_CASES_PER_BUCKET = 4
+const MAX_FUTURE_FIXTURE_CASES_PER_FAMILY = 4
+const MAX_FUTURE_FIXTURE_BLOCKER_CASES = 4
 
 const SHORT_WINDOW_FIXTURE_REWRITE_BUCKETS: Set<RewriteProofMissLirLocalTempProofWindowKind> = new Set([
   'single-predecessor-copy-into-local-temp',
@@ -1479,6 +1576,524 @@ function summarizeShortWindowFixtureSelection(
     blockedFixtureFamilies,
     rewriteEnablementStatus: 'disabled-diagnostics-only',
     nextSafeDiagnosticGoals,
+  }
+}
+
+function summarizeFutureRewriteFixtureExportSummary(
+  localProofEvidenceSummary?: RewriteProofMissLocalProofEvidenceSummary,
+): FutureRewriteFixtureExportSummary {
+  const empty: FutureRewriteFixtureExportSummary = {
+    rewriteEnablementStatus: 'disabled-diagnostics-only',
+    exportedFixtureCount: 0,
+    blockedFixtureCount: 0,
+    candidateFixtureNames: [],
+    blockedFixtureNames: [],
+    byFixtureFamily: [],
+    byBlockerKind: [],
+    nextRequiredEvidence: [],
+  }
+  if (!localProofEvidenceSummary?.lirAdjacentWindowSummary) return empty
+
+  const adjacentWindowSummary = localProofEvidenceSummary.lirAdjacentWindowSummary
+  const shortWindowProofSummary = adjacentWindowSummary.shortWindowProofSummary
+  if (!shortWindowProofSummary) return empty
+  const fixtureSelectionSummary = shortWindowProofSummary.fixtureSelectionSummary
+
+  const caseStatus = new Map<string, 'candidate' | 'blocked'>()
+  const caseBlockers = new Map<string, Set<string>>()
+  const blockerKindCases = new Map<string, Set<string>>()
+  const setCaseAsBlocked = (caseName: string, blockerKind: string): void => {
+    caseStatus.set(caseName, 'blocked')
+    const blockers = caseBlockers.get(caseName) ?? new Set<string>()
+    blockers.add(blockerKind)
+    caseBlockers.set(caseName, blockers)
+  }
+  const setCaseAsCandidate = (caseName: string): void => {
+    if (!caseStatus.has(caseName)) {
+      caseStatus.set(caseName, 'candidate')
+    }
+  }
+  const addBlockerCase = (blockerKind: string, caseName: string): void => {
+    const blockedCases = blockerKindCases.get(blockerKind) ?? new Set<string>()
+    blockedCases.add(caseName)
+    blockerKindCases.set(blockerKind, blockedCases)
+  }
+  const classifyShortWindowBlockerKind = (
+    proofWindowKind: RewriteProofMissLirLocalTempProofWindowKind,
+  ): string | undefined => {
+    if (proofWindowKind === 'copy-chain-needs-wider-window') return 'insufficient-window'
+    if (proofWindowKind === 'cross-function-or-boundary-window') return 'boundary-or-cross-function'
+    if (proofWindowKind === 'opaque-or-unparsed-window') return 'opaque-or-unparsed-window'
+    return undefined
+  }
+  const classifyReadinessBlockerKind = (
+    readiness: RewriteProofMissLirLocalTempProofGapReadiness,
+  ): string | undefined => {
+    if (readiness === 'needs-predecessor-window-proof') return 'missing-predecessor-evidence'
+    if (readiness === 'needs-successor-window-proof') return 'missing-successor-evidence'
+    if (readiness === 'needs-cross-function-boundary-proof') return 'boundary-or-cross-function'
+    return undefined
+  }
+  const classifyAdjacentWindowBlockerKind = (
+    kind: RewriteProofMissLirAdjacentWindowBreakdownKind,
+  ): string | undefined => {
+    if (kind === 'adjacent-window-missing-or-incomplete') return 'insufficient-window'
+    if (kind === 'unknown-unparsed-command') return 'opaque-or-unparsed-window'
+    if (kind === 'protected-boundary-blocked') return 'protected-boundary-blocked'
+    return undefined
+  }
+
+  for (const fixtureCase of fixtureSelectionSummary?.candidateFixtures ?? []) {
+    setCaseAsCandidate(fixtureCase.caseName)
+  }
+  for (const blockedFamily of fixtureSelectionSummary?.blockedFixtureFamilies ?? []) {
+    const blockerKind = classifyShortWindowBlockerKind(blockedFamily.bucket) ?? 'unknown-other'
+    for (const caseName of blockedFamily.caseNames) {
+      setCaseAsBlocked(caseName, blockerKind)
+      addBlockerCase(blockerKind, caseName)
+    }
+  }
+
+  for (const bucket of shortWindowProofSummary.byProofWindowKind) {
+    const blockerKind = classifyShortWindowBlockerKind(bucket.proofWindowKind)
+    for (const caseName of bucket.caseNames) {
+      if (!blockerKind) {
+        setCaseAsCandidate(caseName)
+        continue
+      }
+      setCaseAsBlocked(caseName, blockerKind)
+      addBlockerCase(blockerKind, caseName)
+    }
+  }
+
+  for (const entry of localProofEvidenceSummary.lirAdjacentWindowSummary.localTempProofGapReadinessSummary.byReadiness) {
+    const blockerKind = classifyReadinessBlockerKind(entry.readiness)
+    for (const caseName of entry.caseNames) {
+      if (entry.readiness === 'rewrite-test-candidate-local-window') {
+        setCaseAsCandidate(caseName)
+        continue
+      }
+      setCaseAsBlocked(caseName, blockerKind ?? 'unknown-other')
+      addBlockerCase(blockerKind ?? 'unknown-other', caseName)
+    }
+  }
+
+  for (const entry of adjacentWindowSummary.proofMissAdjacentWindowBreakdown) {
+    const blockerKind = classifyAdjacentWindowBlockerKind(entry.kind)
+    if (!blockerKind) {
+      if (entry.kind === 'candidate-shape-not-satisfying-lir-local-proof') {
+        for (const caseName of entry.caseNames) {
+          setCaseAsBlocked(caseName, 'opaque-or-unparsed-window')
+          addBlockerCase('opaque-or-unparsed-window', caseName)
+        }
+      } else if (entry.kind === 'local-temp-exact-proof-gap') {
+        for (const caseName of entry.caseNames) {
+          setCaseAsCandidate(caseName)
+        }
+      }
+      continue
+    }
+    for (const caseName of entry.caseNames) {
+      setCaseAsBlocked(caseName, blockerKind)
+      addBlockerCase(blockerKind, caseName)
+    }
+  }
+
+  for (const familySummary of localProofEvidenceSummary.byFamily) {
+    const familyCaseNames = [
+      ...((familySummary as { caseNames?: string[] }).caseNames ?? []),
+      ...familySummary.evidenceKinds.flatMap(entry => entry.caseNames),
+    ]
+    for (const caseName of [...new Set(familyCaseNames)].sort()) {
+      if (!caseStatus.has(caseName)) {
+        caseStatus.set(caseName, 'candidate')
+      }
+    }
+  }
+
+  const candidateFixtureNames = [...new Set(
+    [...caseStatus.entries()].filter(([, kind]) => kind === 'candidate').map(([caseName]) => caseName),
+  )].sort()
+  const blockedFixtureNames = [...new Set(
+    [...caseStatus.entries()].filter(([, kind]) => kind === 'blocked').map(([caseName]) => caseName),
+  )].sort()
+
+  const byFixtureFamily = localProofEvidenceSummary.byFamily
+    .map((familySummary) => {
+      const familyCaseNames = [...new Set([
+        ...((familySummary as { caseNames?: string[] }).caseNames ?? []),
+        ...familySummary.evidenceKinds.flatMap(entry => entry.caseNames),
+      ])]
+      const candidateCaseNames = familyCaseNames.filter((caseName) => caseStatus.get(caseName) === 'candidate')
+      const blockedCaseNames = familyCaseNames.filter((caseName) => caseStatus.get(caseName) === 'blocked')
+      if (candidateCaseNames.length === 0 && blockedCaseNames.length === 0) return undefined
+      return {
+        family: familySummary.family,
+        candidateCount: candidateCaseNames.length,
+        blockedCount: blockedCaseNames.length,
+        caseNames: [...new Set([...candidateCaseNames, ...blockedCaseNames])].sort().slice(0, MAX_FUTURE_FIXTURE_CASES_PER_FAMILY),
+      }
+    })
+    .filter((entry): entry is RewriteFutureFixtureFamilySummary => entry !== undefined)
+    .sort((left, right) => left.family.localeCompare(right.family))
+
+  const byBlockerKind = [...blockerKindCases.entries()]
+    .map(([blockerKind, caseNames]) => ({
+      blockerKind,
+      count: caseNames.size,
+      caseNames: [...caseNames].sort().slice(0, MAX_FUTURE_FIXTURE_BLOCKER_CASES),
+    }))
+    .sort((left, right) => {
+      const leftIndex = FUTURE_FIXTURE_BLOCKER_KIND_ORDER.indexOf(left.blockerKind)
+      const rightIndex = FUTURE_FIXTURE_BLOCKER_KIND_ORDER.indexOf(right.blockerKind)
+      if (leftIndex !== rightIndex) return (leftIndex === -1 ? 999 : leftIndex) - (rightIndex === -1 ? 999 : rightIndex)
+      return right.count - left.count || left.blockerKind.localeCompare(right.blockerKind)
+    })
+
+  const nextRequiredEvidence = [
+    ...adjacentWindowSummary.nextSafeDiagnosticGoals,
+    ...((shortWindowProofSummary?.byProofWindowKind ?? [])
+      .filter(item => item.count > 0)
+      .map(item => SHORT_WINDOW_PROOF_KIND_GOALS[item.proofWindowKind])),
+    ...adjacentWindowSummary.localTempProofGapReadinessSummary.nextSafeDiagnosticGoals,
+    ...fixtureSelectionSummary?.nextSafeDiagnosticGoals ?? [],
+  ].filter((value, index, values) => values.indexOf(value) === index).sort()
+
+  return {
+    rewriteEnablementStatus: 'disabled-diagnostics-only',
+    exportedFixtureCount: candidateFixtureNames.length,
+    blockedFixtureCount: blockedFixtureNames.length,
+    candidateFixtureNames,
+    blockedFixtureNames,
+    byFixtureFamily,
+    byBlockerKind,
+    nextRequiredEvidence: nextRequiredEvidence.length > 0
+      ? nextRequiredEvidence
+      : ['Collect deterministic adjacent-window evidence before enabling fixture-selection output.'],
+  }
+}
+
+function summarizeUnknownCauseSplitSummary(
+  localProofEvidenceSummary?: RewriteProofMissLocalProofEvidenceSummary,
+): RewriteProofMissUnknownCauseSplitSummary {
+  const empty: RewriteProofMissUnknownCauseSplitSummary = {
+    totalUnknownLike: 0,
+    byUnknownCause: [],
+    examples: [],
+  }
+  if (!localProofEvidenceSummary?.lirAdjacentWindowSummary) return empty
+
+  const adjacentWindowSummary = localProofEvidenceSummary.lirAdjacentWindowSummary
+  const shortWindowProofSummary = adjacentWindowSummary.shortWindowProofSummary
+  const localTempProofGapReadinessSummary = adjacentWindowSummary.localTempProofGapReadinessSummary
+
+  const byCaseFamily = new Map<string, string[]>()
+  for (const familySummary of localProofEvidenceSummary.byFamily) {
+    const familyCaseNames = [
+      ...((familySummary as { caseNames?: string[] }).caseNames ?? []),
+      ...familySummary.evidenceKinds.flatMap(entry => entry.caseNames),
+    ]
+    for (const caseName of familyCaseNames) {
+      byCaseFamily.set(caseName, (byCaseFamily.get(caseName) ?? []).concat(familySummary.family))
+    }
+  }
+
+  const caseCauseEvidence = new Map<string, {
+    evidence: string
+    causes: Set<RewriteProofMissUnknownCause>
+  }>()
+  const shortCaseEvidence = new Map<string, string[]>()
+  for (const bucket of shortWindowProofSummary?.byProofWindowKind ?? []) {
+    for (const example of bucket.examples) {
+      const caseName = toStableCaseName(example)
+      const existing = shortCaseEvidence.get(caseName) ?? []
+      if (!existing.includes(example)) {
+        existing.push(example)
+        shortCaseEvidence.set(caseName, existing)
+      }
+    }
+  }
+  const adjacentCaseEvidence = new Map<string, string[]>()
+  for (const bucket of adjacentWindowSummary.proofMissAdjacentWindowBreakdown) {
+    for (const example of bucket.examples) {
+      const caseName = toStableCaseName(example)
+      const existing = adjacentCaseEvidence.get(caseName) ?? []
+      if (!existing.includes(example)) {
+        existing.push(example)
+        adjacentCaseEvidence.set(caseName, existing)
+      }
+    }
+  }
+  const readyCaseEvidence = new Map<string, string[]>()
+  for (const bucket of localTempProofGapReadinessSummary.byReadiness) {
+    for (const example of bucket.examples) {
+      const caseName = toStableCaseName(example)
+      const existing = readyCaseEvidence.get(caseName) ?? []
+      if (!existing.includes(example)) {
+        existing.push(example)
+        readyCaseEvidence.set(caseName, existing)
+      }
+    }
+  }
+
+  const getCaseEvidence = (
+    caseName: string,
+    examplesByCase: Map<string, string[]>,
+    fallbackBucket?: string[],
+  ): string => {
+    const examples = examplesByCase.get(caseName)
+    if (examples?.length) return examples[0] ?? `${caseName}:1`
+    if (fallbackBucket?.length) return `${caseName}:${fallbackBucket[0]}`
+    return `${caseName}:1`
+  }
+  const addCaseSignal = (
+    cause: RewriteProofMissUnknownCause,
+    caseNames: string[],
+    examplesByCase: Map<string, string[]>,
+    fallbackCaseNames: string[] = caseNames,
+  ): void => {
+    for (const caseName of [...caseNames].sort()) {
+      const entry = caseCauseEvidence.get(caseName) ?? {
+        evidence: getCaseEvidence(caseName, examplesByCase, fallbackCaseNames),
+        causes: new Set(),
+      }
+      entry.causes.add(cause)
+      caseCauseEvidence.set(caseName, entry)
+    }
+  }
+  const setUnknownOtherIfNeeded = (caseName: string): void => {
+    if (!caseCauseEvidence.has(caseName)) {
+      caseCauseEvidence.set(caseName, {
+        evidence: getCaseEvidence(caseName, adjacentCaseEvidence),
+        causes: new Set(['unknown-other']),
+      })
+    }
+  }
+  const unknownCauseEvidence = (caseName: string): string => {
+    return caseCauseEvidence.get(caseName)?.evidence ?? getCaseEvidence(caseName, adjacentCaseEvidence)
+  }
+
+  const classifyAdjacentCause = (
+    kind: RewriteProofMissLirAdjacentWindowBreakdownKind,
+  ): RewriteProofMissUnknownCause | undefined => {
+    if (kind === 'unknown-unparsed-command') return 'unparsed-command'
+    if (kind === 'adjacent-window-missing-or-incomplete') return 'insufficient-window'
+    if (kind === 'protected-boundary-blocked') return 'boundary-or-cross-function'
+    if (kind === 'candidate-shape-not-satisfying-lir-local-proof') return 'opaque-window'
+    return undefined
+  }
+  const classifyShortWindowCause = (
+    kind: RewriteProofMissLirLocalTempProofWindowKind,
+  ): RewriteProofMissUnknownCause | undefined => {
+    if (kind === 'copy-chain-needs-wider-window') return 'insufficient-window'
+    if (kind === 'cross-function-or-boundary-window') return 'boundary-or-cross-function'
+    if (kind === 'opaque-or-unparsed-window') return 'opaque-window'
+    return undefined
+  }
+  const classifyReadinessCause = (
+    readiness: RewriteProofMissLirLocalTempProofGapReadiness,
+  ): RewriteProofMissUnknownCause | undefined => {
+    if (readiness === 'needs-predecessor-window-proof') return 'missing-predecessor-evidence'
+    if (readiness === 'needs-successor-window-proof') return 'missing-successor-evidence'
+    if (readiness === 'needs-cross-function-boundary-proof') return 'boundary-or-cross-function'
+    if (readiness === 'unknown-local-temp-proof-gap') return 'unknown-other'
+    return undefined
+  }
+
+  for (const entry of adjacentWindowSummary.proofMissAdjacentWindowBreakdown) {
+    if (entry.count <= 0) continue
+    const cause = classifyAdjacentCause(entry.kind)
+    if (!cause) {
+      if (entry.kind === 'local-temp-exact-proof-gap') {
+        continue
+      }
+      if (entry.kind === 'candidate-shape-not-satisfying-lir-local-proof') {
+        addCaseSignal('opaque-window', entry.caseNames, adjacentCaseEvidence, entry.examples)
+      }
+      continue
+    }
+    addCaseSignal(cause, entry.caseNames, adjacentCaseEvidence, entry.examples)
+  }
+  for (const entry of localTempProofGapReadinessSummary.byReadiness) {
+    if (entry.count <= 0) continue
+    const cause = classifyReadinessCause(entry.readiness)
+    if (!cause) continue
+    addCaseSignal(cause, entry.caseNames, readyCaseEvidence, entry.examples)
+  }
+  if (shortWindowProofSummary) {
+    for (const entry of shortWindowProofSummary.byProofWindowKind) {
+      if (entry.count <= 0) continue
+      if (entry.proofWindowKind === 'single-predecessor-copy-into-local-temp'
+        || entry.proofWindowKind === 'predecessor-arith-feeds-local-temp'
+        || entry.proofWindowKind === 'successor-arith-consumes-local-temp') {
+        continue
+      }
+      const cause = classifyShortWindowCause(entry.proofWindowKind)
+      if (cause) {
+        addCaseSignal(cause, entry.caseNames, shortCaseEvidence, entry.examples)
+      }
+    }
+  }
+
+  for (const familySummary of localProofEvidenceSummary.byFamily) {
+    const familySummaryWithNames = familySummary as RewriteProofMissLocalProofFamilyEvidence & { caseNames?: string[] }
+    const familyCaseNames = Array.isArray(familySummaryWithNames.caseNames)
+      ? familySummaryWithNames.caseNames
+      : familySummaryWithNames.evidenceKinds
+        .flatMap((entry) => entry.caseNames)
+        .filter((caseName, index, list) => list.indexOf(caseName) === index)
+        .sort()
+    for (const caseName of familyCaseNames) {
+      if (caseCauseEvidence.has(caseName)) continue
+      if (
+        shortWindowProofSummary?.byProofWindowKind.some(
+          item => item.proofWindowKind === 'copy-chain-needs-wider-window' && item.caseNames.includes(caseName),
+        )
+      ) {
+        addCaseSignal('insufficient-window', [caseName], shortCaseEvidence, shortCaseEvidence.get(caseName))
+        continue
+      }
+      if (
+        shortWindowProofSummary?.byProofWindowKind.some(
+          item => item.proofWindowKind === 'cross-function-or-boundary-window' && item.caseNames.includes(caseName),
+        )
+      ) {
+        addCaseSignal('boundary-or-cross-function', [caseName], shortCaseEvidence, shortCaseEvidence.get(caseName))
+        continue
+      }
+      if (
+        shortWindowProofSummary?.byProofWindowKind.some(
+          item => item.proofWindowKind === 'opaque-or-unparsed-window' && item.caseNames.includes(caseName),
+        )
+      ) {
+        addCaseSignal('opaque-window', [caseName], shortCaseEvidence, shortCaseEvidence.get(caseName))
+        continue
+      }
+      if (
+        localTempProofGapReadinessSummary.byReadiness.some(
+          item => item.readiness === 'unknown-local-temp-proof-gap' && item.caseNames.includes(caseName),
+        )
+      ) {
+        setUnknownOtherIfNeeded(caseName)
+        continue
+      }
+    }
+  }
+
+  const chooseUnknownCause = (causes: Set<RewriteProofMissUnknownCause>): RewriteProofMissUnknownCause => {
+    for (const cause of UNKNOWN_CAUSE_ORDER) {
+      if (causes.has(cause)) return cause
+    }
+    return 'unknown-other'
+  }
+
+  const byUnknownCause = new Map<RewriteProofMissUnknownCause, {
+    count: number
+    caseNames: Set<string>
+    examples: string[]
+  }>()
+  for (const [caseName, evidence] of caseCauseEvidence.entries()) {
+    const cause = chooseUnknownCause(evidence.causes)
+    const entry = byUnknownCause.get(cause) ?? {
+      count: 0,
+      caseNames: new Set(),
+      examples: [],
+    }
+    entry.caseNames.add(caseName)
+    entry.count += 1
+    if (entry.examples.length < MAX_UNKNOWN_CAUSE_EXAMPLES_PER_BUCKET) {
+      entry.examples.push(evidence.evidence)
+    }
+    byUnknownCause.set(cause, entry)
+  }
+
+  const byUnknownCauseArray = UNKNOWN_CAUSE_ORDER
+    .map((cause) => {
+      const summary = byUnknownCause.get(cause)
+      if (!summary) return undefined
+      return {
+        cause,
+        count: summary.count,
+        caseNames: [...summary.caseNames].sort().slice(0, MAX_UNKNOWN_CAUSE_CASES_PER_BUCKET),
+        examples: summary.examples.slice(0, MAX_UNKNOWN_CAUSE_EXAMPLES_PER_BUCKET),
+      }
+    })
+    .filter((entry): entry is RewriteProofMissUnknownCauseSplitEntry => entry !== undefined)
+    .sort((left, right) => left.cause.localeCompare(right.cause))
+
+  const byUnknownCauseByCount = [...byUnknownCauseArray]
+    .sort((left, right) => right.count - left.count || left.cause.localeCompare(right.cause))
+
+  const examples: RewriteProofMissUnknownCauseSplitExample[] = []
+  const exampleCases = new Set<string>()
+  for (const entry of byUnknownCauseByCount) {
+    for (const caseName of entry.caseNames.slice(0, MAX_UNKNOWN_CAUSE_CASES_PER_BUCKET)) {
+      if (exampleCases.has(caseName)) continue
+      exampleCases.add(caseName)
+      examples.push({
+        caseName,
+        cause: entry.cause,
+        evidence: unknownCauseEvidence(caseName),
+        family: byCaseFamily.get(caseName)?.[0],
+      })
+    }
+  }
+
+  return {
+    totalUnknownLike: byUnknownCauseArray.reduce((sum, entry) => sum + entry.count, 0),
+    byUnknownCause: byUnknownCauseArray,
+    examples: examples.slice(0, MAX_UNKNOWN_CAUSE_EXAMPLES_PER_BUCKET),
+  }
+}
+
+function summarizeOfflineRewriteTestHarnessSummary(
+  futureFixtureExportSummary: FutureRewriteFixtureExportSummary,
+  shortWindowProofSummary?: RewriteProofMissLirLocalTempProofWindowSummary,
+  unknownSplitSummary?: RewriteProofMissUnknownCauseSplitSummary,
+): OfflineRewriteTestHarnessSummary {
+  const supportedTestKinds = new Set<string>()
+
+  for (const bucket of shortWindowProofSummary?.byProofWindowKind ?? []) {
+    supportedTestKinds.add(SHORT_WINDOW_FIXTURE_RECOMMENDED_TEST_KIND[bucket.proofWindowKind])
+  }
+  for (const blocked of futureFixtureExportSummary.byBlockerKind) {
+    if (blocked.blockerKind === 'insufficient-window' || blocked.blockerKind === 'missing-predecessor-evidence' || blocked.blockerKind === 'missing-successor-evidence') {
+      supportedTestKinds.add('wider-window-local-copy-fixture')
+    } else if (blocked.blockerKind === 'boundary-or-cross-function' || blocked.blockerKind === 'protected-boundary-blocked') {
+      supportedTestKinds.add('cross-function-boundary-fixture')
+    } else if (blocked.blockerKind === 'opaque-or-unparsed-window') {
+      supportedTestKinds.add('opaque-context-fixture')
+    }
+  }
+  const supportedTestKindsSorted = [...supportedTestKinds].sort()
+  const requiredBeforeRewriteEnablement = [
+    ...futureFixtureExportSummary.nextRequiredEvidence,
+    ...futureFixtureExportSummary.byBlockerKind.map(item => `Resolve ${item.blockerKind} before enabling rewrite-test fixtures.`),
+    ...(unknownSplitSummary?.examples ?? []).map(item => `Conservatively review ${item.caseName} for ${item.cause} before enabling rewrites.`),
+  ]
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .filter((item, index, all) => all.indexOf(item) === index)
+    .sort()
+
+  let harnessStatus: RewriteTestHarnessStatus = 'no-candidates'
+  if (futureFixtureExportSummary.exportedFixtureCount > 0 && futureFixtureExportSummary.blockedFixtureCount > 0) {
+    harnessStatus = 'blocked-by-unknown-evidence'
+  } else if (futureFixtureExportSummary.exportedFixtureCount > 0) {
+    harnessStatus = 'fixture-selection-only'
+  }
+
+  return {
+    rewriteEnablementStatus: 'disabled-diagnostics-only',
+    harnessStatus,
+    candidateFixtureCount: futureFixtureExportSummary.exportedFixtureCount,
+    blockedFixtureCount: futureFixtureExportSummary.blockedFixtureCount,
+    supportedTestKinds: supportedTestKindsSorted,
+    requiredBeforeRewriteEnablement: requiredBeforeRewriteEnablement.length > 0
+      ? requiredBeforeRewriteEnablement
+      : [
+        'Collect deterministic adjacent-window signals and classify blocker causes before enabling fixture harness output.',
+        'Verify no rewrite proof has been claimed from these diagnostics-only fixtures.',
+      ],
   }
 }
 
@@ -4161,6 +4776,18 @@ export function buildLirOpportunitySummary(cases: ArithmeticProbeResult[]): LirO
     caseName: result.case,
     summary: result.rewriteOpportunities.provenanceSummary,
   })))
+  const localProofEvidenceSummary = totals.provenanceSummary.shapeFamilySummary
+    ?.proofMissSummary?.slotProvenanceSummary?.localProofEvidenceSummary
+  const futureRewriteFixtureExportSummary = summarizeFutureRewriteFixtureExportSummary(localProofEvidenceSummary)
+  const unknownCauseSplitSummary = summarizeUnknownCauseSplitSummary(localProofEvidenceSummary)
+  const shortWindowProofSummary = localProofEvidenceSummary?.lirAdjacentWindowSummary?.shortWindowProofSummary
+  totals.futureRewriteFixtureExportSummary = futureRewriteFixtureExportSummary
+  totals.unknownCauseSplitSummary = unknownCauseSplitSummary
+  totals.offlineRewriteTestHarnessSummary = summarizeOfflineRewriteTestHarnessSummary(
+    futureRewriteFixtureExportSummary,
+    shortWindowProofSummary,
+    unknownCauseSplitSummary,
+  )
   return totals
 }
 
@@ -6080,13 +6707,17 @@ export function runArithmeticProbeReport(caseName = 'all', optLevels: Optimizati
   }
   const meta = benchmarkMeta('arithmetic-probes')
   const cases = selected.flatMap(probe => optLevels.map(level => runArithmeticProbe(probe, level)))
+  const lirOpportunitySummary = buildLirOpportunitySummary(cases)
   return {
     ...meta,
     cases,
     scoreCopyPatterns: mergeScoreCopyPatterns(cases.map(result => result.scoreCopyPatterns)),
     copyOrigins: mergeCopyOrigins(cases.map(result => result.copyOrigins)),
     rewriteOpportunities: mergeRewriteOpportunities(cases.map(result => result.rewriteOpportunities)),
-    lirOpportunitySummary: buildLirOpportunitySummary(cases),
+    lirOpportunitySummary,
+    futureRewriteFixtureExportSummary: lirOpportunitySummary?.futureRewriteFixtureExportSummary,
+    unknownCauseSplitSummary: lirOpportunitySummary?.unknownCauseSplitSummary,
+    offlineRewriteTestHarnessSummary: lirOpportunitySummary?.offlineRewriteTestHarnessSummary,
     virDecisionDashboard: buildVirArithmeticDecisionDashboard(cases),
   }
 }

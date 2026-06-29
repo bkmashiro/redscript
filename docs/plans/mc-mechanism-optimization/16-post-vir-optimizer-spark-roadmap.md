@@ -89,6 +89,9 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | G | Read-only local-temp proof-gap readiness triage | Deterministic readiness buckets for local-temp exact-proof-gap cases | Low | Small diagnostics-only slice | Completed |
 | H | Short-window local-temp proof-gap diagnostics | Deterministic short-window trace-kind and fixture-selection buckets | Low | Small diagnostics-only slice | Completed |
 | I | Short-window fixture-selection evidence pack | Deterministic candidate/blocked fixture slices for rewrite-test design | Low | Small diagnostics-only slice | Completed |
+| J | Future rewrite fixture export diagnostics | Deterministic future fixture export summary for offline rewrite-test planning | Low | Small diagnostics-only slice | Completed |
+| K | Unknown-cause split | Deterministic triage buckets for unknown-like proof-miss causes | Low | Small diagnostics-only slice | Completed |
+| L | Offline rewrite-test harness v0 | Deterministic fixture-consumption harness metadata without production rewrites | Low | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -484,16 +487,58 @@ git status --short --branch
   - `benchmark.lirOpportunitySummary...shortWindowProofSummary.fixtureSelectionSummary` (via aggregated short-window summary paths)
 - `fixtureSelectionSummary` includes:
   - `candidateFixtures` with deterministic top-per-bucket entries (`caseName`, `example`, `reason`, `recommendedTestKind`)
-  - `blockedFixtureFamilies` for wider-window / cross-function / opaque-unparsed families
-  - `rewriteEnablementStatus` fixed to `'disabled-diagnostics-only'`
-  - `nextSafeDiagnosticGoals`
+- `blockedFixtureFamilies` for wider-window / cross-function / opaque-unparsed families
+- `rewriteEnablementStatus` fixed to `'disabled-diagnostics-only'`
+- `nextSafeDiagnosticGoals`
 - Next-safe direction: design explicit rewrite-test fixtures from these buckets next; keep production behavior unchanged.
+
+## Tranche J — future rewrite fixture export diagnostics
+
+- Status: Completed as diagnostics-only/offline planning infrastructure.
+- Outcome: added `futureRewriteFixtureExportSummary` (also surfaced under `lirOpportunitySummary`) with deterministic candidate/blocked fixture partitioning and evidence groupings:
+  - `candidateFixtureNames`
+  - `blockedFixtureNames`
+  - `byFixtureFamily`
+  - `byBlockerKind`
+  - `nextRequiredEvidence`
+- The summary is deterministic by case/family/cause ordering, deduplicated, and capped for stable review.
+- This is explicitly future rewrite-test preparation and does **not** imply rewrite correctness.
+
+## Tranche K — unknown-cause split
+
+- Status: Completed as a conservative triage split.
+- Outcome: added `unknownCauseSplitSummary` with deterministic grouped causes including:
+  - `unparsed-command`
+  - `insufficient-window`
+  - `opaque-window`
+  - `boundary-or-cross-function`
+  - `missing-predecessor-evidence`
+  - `missing-successor-evidence`
+  - `unknown-other`
+- This tranche preserves prior unknown buckets (including `unknown-unparsed-command` in adjacent-window evidence) and does not claim stronger proof semantics.
+- Result remains diagnostics-only and used for triage only.
+
+## Tranche L — offline rewrite-test harness v0
+
+- Status: Completed as diagnostics-only.
+- Outcome: added `offlineRewriteTestHarnessSummary` with stable status values:
+  - `fixture-selection-only`
+  - `no-candidates`
+  - `blocked-by-unknown-evidence`
+- Added harness metadata includes:
+  - `candidateFixtureCount`
+  - `blockedFixtureCount`
+  - `supportedTestKinds`
+  - `requiredBeforeRewriteEnablement`
+  - `rewriteEnablementStatus` fixed to `'disabled-diagnostics-only'`
+- Harness remains offline and future-facing; production rewrites are still disabled.
 
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is closed. Use this only if starting a new, explicitly scoped LIR-only tranche:
+This roadmap is still reference-complete through J/K/L and may be reopened only for a new, explicitly scoped tranche.
+Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
 In /Users/yuzhe/projects/redscript, start a new production-safe LIR-only optimizer tranche using docs/plans/mc-mechanism-optimization/21-post-vir-decision-adr.md and docs/plans/mc-mechanism-optimization/20-lir-opportunity-closeout.md as evidence.
@@ -517,8 +562,12 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is done after Tranche I and is closed at this point.
+This roadmap is currently complete through Tranche L with J/K/L diagnostics-only offline planning and evidence outputs.
+It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, write Tranche F and stop.
 
-Reopen only if the user starts a new, explicitly scoped LIR-only tranche.
+Next safe work remains:
+1. stronger local proof parser support
+2. explicit bounded equivalence tests for candidate families
+3. then a separately gated rewrite implementation tranche
