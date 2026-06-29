@@ -99,6 +99,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | Q | Predecessor arithmetic + read/write-window bounded equivalence | Expand offline local-temp rewrite evidence for non-add families and temp read/write-window boundaries | Medium | Small TDD slice | Completed |
 | R | Offline rewrite-equivalence fixture pack and runner | Deterministic fixture metadata + reusable offline runner for bounded equivalence checks | Medium | Small TDD slice | Completed |
 | S | Offline equivalence pack + benchmark gate integration | Add deterministic offline-pack evidence into explicit local-copy benchmark paths and no-regression gate checks | Medium | Small diagnostics-only slice | Completed |
+| T | CI-friendly explicit local-copy no-regression gate path | Add concise, CI-safe wrapper and workflow step to run evidence-only gate with full JSON artifact | Medium | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -636,11 +637,25 @@ git status --short --branch
   - Updated no-regression evaluator to require (in explicit gate path) both `experimentalLocalCopyRewriteComparison` and the offline equivalence pack summary to pass.
   - Added deterministic tests for summary conversion, stable family order, failed offline summary integration into the no-regression gate, and report attachment.
 
+## Tranche T — CI-friendly explicit local-copy evidence gate wrapper
+
+- Status: Completed as evidence-only.
+- Outcome:
+  - Added `scripts/check-lir-local-copy-gate.ts` to run:
+    - `runArithmeticProbeReport('all', [1], true)`
+    - `evaluateExperimentalLocalCopyRewriteNoRegressionGate(report.experimentalLocalCopyRewriteComparison, report.offlineRewriteEquivalencePackSummary)`
+  - Wrapper behavior:
+    - writes full JSON report artifact (default `/tmp/redscript-lir-local-copy-gate.json`, configurable via `--output <path>`),
+    - prints concise evidence-only stdout (`gate status`, `failReasons`, offline pack status/total/failed, deltas, regressedCount, output path),
+    - exits with non-zero status when `experimentalLocalCopyRewriteNoRegressionGate.status !== 'pass'`.
+  - Added `gate:lir-local-copy` npm script and CI step named `Evidence-only experimental LIR local-copy no-regression gate`.
+  - The path is explicitly `bounded-offline-evidence-only` and does not enable production rewrite behavior.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through R and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through T and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -665,12 +680,11 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche S with J/K/L/O/P/Q/R/S diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche T with J/K/L/O/P/Q/R/S/T diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.
 
 Next safe work remains:
-1. run the new no-regression gate in explicit CI/benchmark paths using `--require-experimental-lir-local-copy-no-regressions`,
-2. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments not covered by Phases Q+R+S,
-3. proceed to a separately gated rewrite implementation tranche only after gate stability and coverage evidence are stable.
+1. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments not covered by Phases Q+R+S+T,
+2. proceed to a separately gated rewrite implementation tranche only after gate stability and coverage evidence are stable.

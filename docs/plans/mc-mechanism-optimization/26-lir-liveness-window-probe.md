@@ -221,7 +221,13 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
   - Updated the no-regression gate evaluator to fail when the offline pack summary reports `status: fail`.
 - No production optimizer behavior changed; this remains strict offline evidence required only for explicit gate runs.
 
+### Tranche T outcome update
+- Added an explicit CI-friendly gate wrapper path for Phase S evidence:
+  - `scripts/check-lir-local-copy-gate.ts` runs the explicit experimental report comparison in one process (`runArithmeticProbeReport('all', [1], true)`), evaluates `evaluateExperimentalLocalCopyRewriteNoRegressionGate`, writes JSON to `/tmp/redscript-lir-local-copy-gate.json` by default (`--output` override supported), prints a concise evidence-only summary, and exits non-zero when gate status is not `pass`.
+  - Added `gate:lir-local-copy` script and corresponding CI workflow step so this no-regression gate runs in explicit CI paths without dumping full benchmark JSON to logs.
+  - This remains bounded to `bounded-offline-evidence-only` and does not authorize production behavior.
+
 ## Next safe goals
-1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite`,
-2. expand bounded equivalence fixtures for remaining candidate families and window-edge environments not yet covered by Tranches Q + R + S,
+1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite` via the new wrapper.
+2. expand bounded equivalence fixtures for remaining candidate families and window-edge environments not yet covered by Tranches Q + R + S + T,
 3. only after gate stability and coverage evidence improve, move to a narrowly scoped rewrite-safe tranche.

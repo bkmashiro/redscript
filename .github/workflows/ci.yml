@@ -28,3 +28,5 @@ jobs:
           MC_OFFLINE: "true"
       - name: Static MC command syntax gate
         run: npm run validate-mc
+      - name: Evidence-only experimental LIR local-copy no-regression gate
+        run: npm run gate:lir-local-copy
