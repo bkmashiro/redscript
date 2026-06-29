@@ -877,12 +877,44 @@ export interface ArithmeticProbeReport {
   futureRewriteFixtureExportSummary?: FutureRewriteFixtureExportSummary
   unknownCauseSplitSummary?: RewriteProofMissUnknownCauseSplitSummary
   offlineRewriteTestHarnessSummary?: OfflineRewriteTestHarnessSummary
+  experimentalLocalCopyRewriteComparison?: ArithmeticProbeExperimentalLocalCopyRewriteComparison
+}
+
+export interface ArithmeticProbeExperimentTotals {
+  caseCount: number
+  commandTotal: number
+  scoreCopyTotal: number
+}
+
+export interface ArithmeticProbeExperimentalLocalCopyRewriteComparisonEntry {
+  caseName: string
+  optLevel: `O${OptimizationLevel}`
+  offCommandsTotal: number
+  onCommandsTotal: number
+  commandDelta: number
+  offScoreCopyTotal: number
+  onScoreCopyTotal: number
+  scoreCopyDelta: number
+}
+
+export interface ArithmeticProbeExperimentalLocalCopyRewriteComparison {
+  mode: 'experimental-local-copy-rewrite'
+  status: 'experimental'
+  enabled: true
+  off: ArithmeticProbeExperimentTotals
+  on: ArithmeticProbeExperimentTotals
+  commandDelta: number
+  scoreCopyDelta: number
+  commandDeltaSummary: VirDecisionDeltaSummary
+  scoreCopyDeltaSummary: VirDecisionDeltaSummary
+  perCaseDeltas: ArithmeticProbeExperimentalLocalCopyRewriteComparisonEntry[]
 }
 
 type ProbeCliArgs = ReturnType<typeof parseCliArgs> & {
   caseName: string
   optLevels: OptimizationLevel[]
   list: boolean
+  experimentalLirLocalCopyRewrite: boolean
 }
 
 const STDLIB_DIR = path.resolve(__dirname, '..', 'src', 'stdlib')
@@ -6586,10 +6618,73 @@ export function summarizeCommandCategories(files: Array<{ path: string; content:
   }
 }
 
-export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: OptimizationLevel): ArithmeticProbeResult {
-  const result = runPipeline(buildSource(probe), {
-    namespace: `arith_${probe.name}`,
+function toComparisonCaseKey(result: ArithmeticProbeResult): string {
+  return `${result.case}::${result.optLevel}`
+}
+
+function buildExperimentalLocalCopyRewriteComparison(
+  offCases: ArithmeticProbeResult[],
+  onCases: ArithmeticProbeResult[],
+): ArithmeticProbeExperimentalLocalCopyRewriteComparison {
+  const offCaseByKey = new Map(offCases.map(result => [toComparisonCaseKey(result), result] as const))
+  const perCaseDeltas = onCases.map(on => {
+    const off = offCaseByKey.get(toComparisonCaseKey(on))
+    const offCommands = off?.commands.total ?? 0
+    const offScoreCopy = off?.commands.scoreCopy ?? 0
+    const onCommands = on.commands.total
+    const onScoreCopy = on.commands.scoreCopy
+    return {
+      caseName: on.case,
+      optLevel: on.optLevel,
+      offCommandsTotal: offCommands,
+      onCommandsTotal: onCommands,
+      commandDelta: onCommands - offCommands,
+      offScoreCopyTotal: offScoreCopy,
+      onScoreCopyTotal: onScoreCopy,
+      scoreCopyDelta: onScoreCopy - offScoreCopy,
+    }
+  }).sort((left, right) =>
+    left.caseName.localeCompare(right.caseName) || left.optLevel.localeCompare(right.optLevel),
+  )
+
+  const commandDeltas = perCaseDeltas.map(delta => delta.commandDelta)
+  const scoreCopyDeltas = perCaseDeltas.map(delta => delta.scoreCopyDelta)
+
+  return {
+    mode: 'experimental-local-copy-rewrite',
+    status: 'experimental',
+    enabled: true,
+    off: {
+      caseCount: offCases.length,
+      commandTotal: offCases.reduce((sum, result) => sum + result.commands.total, 0),
+      scoreCopyTotal: offCases.reduce((sum, result) => sum + result.commands.scoreCopy, 0),
+    },
+    on: {
+      caseCount: onCases.length,
+      commandTotal: onCases.reduce((sum, result) => sum + result.commands.total, 0),
+      scoreCopyTotal: onCases.reduce((sum, result) => sum + result.commands.scoreCopy, 0),
+    },
+    commandDelta: onCases.reduce((sum, result) => sum + result.commands.total, 0)
+      - offCases.reduce((sum, result) => sum + result.commands.total, 0),
+    scoreCopyDelta: onCases.reduce((sum, result) => sum + result.commands.scoreCopy, 0)
+      - offCases.reduce((sum, result) => sum + result.commands.scoreCopy, 0),
+    commandDeltaSummary: summarizeDeltaSeries(commandDeltas),
+    scoreCopyDeltaSummary: summarizeDeltaSeries(scoreCopyDeltas),
+    perCaseDeltas,
+  }
+}
+
+export function runArithmeticProbe(
+  probe: ArithmeticProbeCase,
+  optLevel: OptimizationLevel,
+  experimentalLirLocalCopyRewrite = false,
+): ArithmeticProbeResult {
+  const source = buildSource(probe)
+  const namespace = `arith_${probe.name}`
+  const result = runPipeline(source, {
+    namespace,
     optimizationLevel: optLevel,
+    experimentalLirLocalCopyRewrite,
   })
   const mirLowering = lowerMirToVir(result.mir)
   const coverageCategory = probe.coverageCategory ?? 'broad'
@@ -6698,7 +6793,11 @@ export function runArithmeticProbe(probe: ArithmeticProbeCase, optLevel: Optimiz
   }
 }
 
-export function runArithmeticProbeReport(caseName = 'all', optLevels: OptimizationLevel[] = [1]): ArithmeticProbeReport {
+export function runArithmeticProbeReport(
+  caseName = 'all',
+  optLevels: OptimizationLevel[] = [1],
+  experimentalLirLocalCopyRewrite = false,
+): ArithmeticProbeReport {
   const selected = caseName === 'all'
     ? ARITHMETIC_PROBES
     : ARITHMETIC_PROBES.filter(probe => probe.name === caseName)
@@ -6706,14 +6805,21 @@ export function runArithmeticProbeReport(caseName = 'all', optLevels: Optimizati
     throw new Error(`Unknown arithmetic probe case '${caseName}'. Use --list to see available cases.`)
   }
   const meta = benchmarkMeta('arithmetic-probes')
-  const cases = selected.flatMap(probe => optLevels.map(level => runArithmeticProbe(probe, level)))
+  const offCases = selected.flatMap(probe => optLevels.map(level => runArithmeticProbe(probe, level)))
+  const cases = experimentalLirLocalCopyRewrite
+    ? selected.flatMap(probe => optLevels.map(level => runArithmeticProbe(probe, level, true))
+    ) : offCases
   const lirOpportunitySummary = buildLirOpportunitySummary(cases)
+  const experimentalLocalCopyRewriteComparison = experimentalLirLocalCopyRewrite
+    ? buildExperimentalLocalCopyRewriteComparison(offCases, cases)
+    : undefined
   return {
     ...meta,
     cases,
     scoreCopyPatterns: mergeScoreCopyPatterns(cases.map(result => result.scoreCopyPatterns)),
     copyOrigins: mergeCopyOrigins(cases.map(result => result.copyOrigins)),
     rewriteOpportunities: mergeRewriteOpportunities(cases.map(result => result.rewriteOpportunities)),
+    experimentalLocalCopyRewriteComparison,
     lirOpportunitySummary,
     futureRewriteFixtureExportSummary: lirOpportunitySummary?.futureRewriteFixtureExportSummary,
     unknownCauseSplitSummary: lirOpportunitySummary?.unknownCauseSplitSummary,
@@ -6727,6 +6833,7 @@ function parseProbeCliArgs(argv: string[]): ProbeCliArgs {
   let caseName = 'all'
   let optLevels: OptimizationLevel[] = [1]
   let list = false
+  let experimentalLirLocalCopyRewrite = false
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -6748,9 +6855,18 @@ function parseProbeCliArgs(argv: string[]): ProbeCliArgs {
       continue
     }
     if (arg === '--list') list = true
+    if (arg === '--experimental-lir-local-copy-rewrite') {
+      experimentalLirLocalCopyRewrite = true
+    }
   }
 
-  return { ...base, caseName, optLevels, list }
+  return {
+    ...base,
+    caseName,
+    optLevels,
+    list,
+    experimentalLirLocalCopyRewrite,
+  }
 }
 
 function main(): void {
@@ -6761,7 +6877,10 @@ function main(): void {
     }
     return
   }
-  writeJsonReport(runArithmeticProbeReport(args.caseName, args.optLevels), args.output)
+  writeJsonReport(
+    runArithmeticProbeReport(args.caseName, args.optLevels, args.experimentalLirLocalCopyRewrite),
+    args.output,
+  )
 }
 
 if (require.main === module) {

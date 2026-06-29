@@ -17,7 +17,7 @@ import { optimizeModule } from '../src/optimizer/pipeline'
 import { coroutineTransform, type CoroutineInfo } from '../src/optimizer/coroutine'
 import { lowerToLIR } from '../src/lir/lower'
 import type { LIRModule } from '../src/lir/types'
-import { lirOptimizeModule } from '../src/optimizer/lir/pipeline'
+import { lirOptimizeModule, type LIROptimizeOptions } from '../src/optimizer/lir/pipeline'
 import { analyzeBudget } from '../src/lir/budget'
 import { emit, type DatapackFile } from '../src/emit'
 import { TypeChecker } from '../src/typechecker'
@@ -31,6 +31,8 @@ export interface PipelineOptions {
   filePath?: string
   includeDirs?: string[]
   optimizationLevel?: OptimizationLevel
+  lirOptimizeOptions?: LIROptimizeOptions
+  experimentalLirLocalCopyRewrite?: boolean
   lenient?: boolean
 }
 
@@ -257,8 +259,11 @@ export function runPipeline(source: string, options: PipelineOptions = {}): Pipe
       mir = currentMir
 
       let currentLir = lowerToLIR(mir)
-      if (optimizationLevel >= 1) currentLir = lirOptimizeModule(currentLir)
-      if (optimizationLevel >= 2) currentLir = lirOptimizeModule(currentLir)
+      const lirOptimizeOptions = options.lirOptimizeOptions ?? {
+        experimentalLocalCopyRewrite: options.experimentalLirLocalCopyRewrite === true,
+      }
+      if (optimizationLevel >= 1) currentLir = lirOptimizeModule(currentLir, lirOptimizeOptions)
+      if (optimizationLevel >= 2) currentLir = lirOptimizeModule(currentLir, lirOptimizeOptions)
       lir = currentLir
 
       const coroutineNames = new Set(metadata.coroutineInfos.map(info => info.fnName))

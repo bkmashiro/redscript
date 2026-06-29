@@ -445,6 +445,52 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(names).toContain('sin_cos_hp_separate')
   })
 
+  it('keeps benchmark mode flag-off by default', () => {
+    const report = runArithmeticProbeReport('int_arithmetic', [1])
+    expect(report.experimentalLocalCopyRewriteComparison).toBeUndefined()
+  })
+
+  it('runs experimental local-copy rewrite probes deterministically with explicit comparison totals', () => {
+    const off = runArithmeticProbeReport('int_arithmetic', [1], false)
+    const on = runArithmeticProbeReport('int_arithmetic', [1], true)
+    const comparison = on.experimentalLocalCopyRewriteComparison
+    expect(comparison).toBeDefined()
+    expect(comparison?.mode).toBe('experimental-local-copy-rewrite')
+    expect(comparison?.status).toBe('experimental')
+    expect(comparison?.enabled).toBe(true)
+    expect(comparison?.off.caseCount).toBe(1)
+    expect(comparison?.on.caseCount).toBe(1)
+    expect(comparison?.perCaseDeltas).toHaveLength(1)
+
+    const delta = comparison?.perCaseDeltas[0]
+    const [offCase] = off.cases
+    const [onCase] = on.cases
+    expect(delta?.caseName).toBe(onCase.case)
+    expect(delta?.optLevel).toBe(onCase.optLevel)
+    expect(delta?.offCommandsTotal).toBe(offCase.commands.total)
+    expect(delta?.onCommandsTotal).toBe(onCase.commands.total)
+    expect(delta?.offScoreCopyTotal).toBe(offCase.commands.scoreCopy)
+    expect(delta?.onScoreCopyTotal).toBe(onCase.commands.scoreCopy)
+    expect(delta?.commandDelta).toBe(onCase.commands.total - offCase.commands.total)
+    expect(delta?.scoreCopyDelta).toBe(onCase.commands.scoreCopy - offCase.commands.scoreCopy)
+    expect(comparison?.commandDelta).toBe(delta?.commandDelta ?? 0)
+    expect(comparison?.scoreCopyDelta).toBe(delta?.scoreCopyDelta ?? 0)
+    expect(comparison?.off.caseCount).toBe(1)
+    expect(comparison?.on.caseCount).toBe(1)
+    expect(comparison?.off.commandTotal).toBe(offCase.commands.total)
+    expect(comparison?.on.commandTotal).toBe(onCase.commands.total)
+  })
+
+  it('preserves requested optimization levels in experimental comparison mode', () => {
+    const probe = ARITHMETIC_PROBES.find(item => item.name === 'int_add_sub_mul')
+    if (!probe) throw new Error('Missing int_add_sub_mul probe fixture')
+    const report = runArithmeticProbeReport(probe.name, [0, 1, 2], true)
+    expect(report.cases.map(item => item.optLevel)).toEqual(['O0', 'O1', 'O2'])
+    expect(report.experimentalLocalCopyRewriteComparison?.perCaseDeltas.map(item => item.optLevel)).toEqual(['O0', 'O1', 'O2'])
+    expect(report.experimentalLocalCopyRewriteComparison?.off.caseCount).toBe(3)
+    expect(report.experimentalLocalCopyRewriteComparison?.on.caseCount).toBe(3)
+  })
+
   it('tracks controlled corpus coverage in dashboard metadata', () => {
     const report = runArithmeticProbeReport('all', [1])
     const summary = report.virDecisionDashboard.corpusCoverageSummary

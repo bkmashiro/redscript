@@ -94,6 +94,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | L | Offline rewrite-test harness v0 | Deterministic fixture-consumption harness metadata without production rewrites | Low | Small diagnostics-only slice | Completed |
 | M | Offline bounded equivalence harness | Test-only LIR interpreter/checker proves smallest exported rewrite fixtures over bounded samples | Medium | Small TDD slice | Completed |
 | N | Explicit gated local-copy rewrite path | Existing local-copy/RMW rewrite pass is available only through an experimental opt-in pipeline flag, with default compiler behavior flag-off | Medium | Small TDD slice | Completed |
+| O | Experimental local-copy benchmark comparison + proof-evidence prep | Add deterministic flag-off/flag-on benchmark comparison and bounded fixture expansion before any default-on decision | Medium | Small TDD slice | Completed |
 
 ---
 
@@ -553,11 +554,28 @@ git status --short --branch
   - existing LIR pass tests remain valid through the standalone `scoreboardRmwPass` entrypoint.
 - This is a gated integration slice, not default production enablement. Next safe work is a flag-off/flag-on benchmark comparison and a broader equivalence fixture pack before any default enablement decision.
 
+## Tranche O — experimental local-copy benchmark comparison + bounded proof families
+
+- Status: Completed as evidence-only.
+- Outcome:
+  - Added deterministic CLI and report support for opt-in experimental rewrite execution:
+    - `--experimental-lir-local-copy-rewrite` in `bench:arithmetic`.
+    - `ArithmeticProbeReport.experimentalLocalCopyRewriteComparison` with off/on command and `scoreCopy` totals plus deltas.
+  - Added bounded rewrite-equivalence fixtures that explicitly match current experimental copy-chain and local-copy/RMW shapes:
+    - `copy-chain/no-reuse` output shape,
+    - local-copy/output RMW shape,
+    - local-copy/return RMW shape.
+  - Added tests proving:
+    - default benchmark mode is flag-off,
+    - explicit flag-on path is forwarded and deterministic,
+    - the experimental comparison is additive and does not affect default enablement.
+  - Constraint preserved: this tranche only produces evidence and comparisons; it does not make local-copy/RMW rewrites the compiler default.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through J/K/L and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through O and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -582,10 +600,10 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche L with J/K/L diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche O with J/K/L/O diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
-Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, write Tranche F and stop.
+Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.
 
 Next safe work remains:
 1. stronger local proof parser support

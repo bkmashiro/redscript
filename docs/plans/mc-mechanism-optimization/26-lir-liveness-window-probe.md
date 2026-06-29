@@ -157,12 +157,25 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
 - This is still offline harness evidence only. It does not connect to `lirOptimizeModule`, does not add a production rewrite pass, and does not enable any rewrite by default.
 
 ### Tranche N outcome update
+
 - Added an explicit opt-in gate for the existing local-copy/RMW rewrite pass via `LIROptimizeOptions.experimentalLocalCopyRewrite`.
 - Wired the same gate through `compile` and `compileModules` as `experimentalLirLocalCopyRewrite`, defaulting to `false`.
 - Updated pipeline coverage so `lirOptimizeModule(mod)` leaves local-copy/RMW rewrites off by default, while `lirOptimizeModule(mod, { experimentalLocalCopyRewrite: true })` enables the local copy/output and local copy/return collapses.
 - This is a pipeline integration gate only; it is not default production enablement and does not claim corpus-wide correctness. Next proof work should compare flag-off vs flag-on benchmark impact and expand bounded equivalence fixtures before any default-on decision.
 
+### Tranche O outcome update
+- Added deterministic benchmark support for explicit experimental runs via `--experimental-lir-local-copy-rewrite`.
+- Added additive aggregate evidence in `ArithmeticProbeReport.experimentalLocalCopyRewriteComparison` including:
+  - `commandDelta` and `scoreCopyDelta` totals,
+  - per-case command/score-copy deltas,
+  - and deterministic delta summaries.
+- Expanded bounded `checkBoundedLirEquivalence` fixtures for:
+  - `copy-chain/no-reuse` output shape,
+  - local-copy/output RMW shape,
+  - local-copy/return RMW shape.
+- This phase is evidence-only: default compilation behavior remains with local-copy rewrite disabled unless the flag is explicitly enabled.
+
 ## Next safe goals
-1. add bench impact comparison for flag-off vs flag-on output before any default enablement.
-2. expand equivalence fixtures for copy-chain/no-reuse and predecessor-arithmetic families before broadening/defaulting the rewrite pass.
-3. add a narrow default-enable decision gate only after benchmark impact and bounded equivalence fixtures agree.
+1. add a bounded correctness/report gate that consumes `experimentalLocalCopyRewriteComparison` and fails on command/score-copy regressions before any default enablement.
+2. expand equivalence fixtures for predecessor-arithmetic and local-temp read/write-window families before broadening/defaulting the rewrite pass.
+3. keep `experimentalLirLocalCopyRewrite` default-off until benchmark, equivalence, and corpus readiness gates are green.

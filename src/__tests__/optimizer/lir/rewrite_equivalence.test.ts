@@ -110,6 +110,94 @@ describe('offline bounded LIR rewrite equivalence harness', () => {
     })
   })
 
+  test('proves copy-chain/no-reuse elimination to output', () => {
+    const src = mkSlot('$src')
+    const tmp = mkSlot('$tmp')
+    const out = mkSlot('$out')
+    const before = mkFn([
+      { kind: 'score_copy', dst: tmp, src },
+      { kind: 'score_copy', dst: out, src: tmp },
+    ])
+    const after = mkFn([
+      { kind: 'score_copy', dst: out, src },
+    ])
+
+    const result = checkBoundedLirEquivalence({
+      name: 'copy-chain-no-reuse',
+      before,
+      after,
+      observedSlots: [out],
+      samples: [
+        sample([[src, 2], [tmp, 99], [out, 0]]),
+        sample([[src, -3], [tmp, 7], [out, 8]]),
+      ],
+    })
+
+    expect(result.status).toBe('equivalent')
+    expect(result.samplesChecked).toBe(2)
+    expect(result.counterexample).toBeUndefined()
+  })
+
+  test('proves local-copy/output RMW rewrite shape over bounded samples', () => {
+    const src = mkSlot('$src')
+    const tmp = mkSlot('$tmp')
+    const rhs = mkSlot('$rhs')
+    const out = mkSlot('$out')
+    const before = mkFn([
+      { kind: 'score_copy', dst: tmp, src },
+      { kind: 'score_add', dst: tmp, src: rhs },
+      { kind: 'score_copy', dst: out, src: tmp },
+    ])
+    const after = mkFn([
+      { kind: 'score_copy', dst: out, src },
+      { kind: 'score_add', dst: out, src: rhs },
+    ])
+
+    const result = checkBoundedLirEquivalence({
+      name: 'local-copy-output-rmw',
+      before,
+      after,
+      observedSlots: [out],
+      samples: [
+        sample([[src, 10], [rhs, 3], [tmp, 0], [out, 0]]),
+        sample([[src, -6], [rhs, 4], [tmp, 7], [out, -1]]),
+      ],
+    })
+
+    expect(result.status).toBe('equivalent')
+    expect(result.samplesChecked).toBe(2)
+  })
+
+  test('proves local-copy/return RMW shape over bounded samples', () => {
+    const src = mkSlot('$src')
+    const tmp = mkSlot('$tmp')
+    const rhs = mkSlot('$rhs')
+    const before = mkFn([
+      { kind: 'score_copy', dst: tmp, src },
+      { kind: 'score_add', dst: tmp, src: rhs },
+      { kind: 'return_value', slot: tmp },
+    ])
+    const after = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$ret'), src },
+      { kind: 'score_add', dst: mkSlot('$ret'), src: rhs },
+      { kind: 'return_value', slot: mkSlot('$ret') },
+    ])
+
+    const result = checkBoundedLirEquivalence({
+      name: 'local-copy-return-rmw',
+      before,
+      after,
+      observedSlots: [mkSlot('$ret')],
+      samples: [
+        sample([[src, 12], [rhs, 5], [tmp, 0], [mkSlot('$ret'), 0]]),
+        sample([[src, -2], [rhs, 7], [tmp, 9], [mkSlot('$ret'), -3]]),
+      ],
+    })
+
+    expect(result.status).toBe('equivalent')
+    expect(result.samplesChecked).toBe(2)
+  })
+
   test('refuses division by zero samples instead of guessing scoreboard runtime behavior', () => {
     const src = mkSlot('$src')
     const zero = mkSlot('$zero')
