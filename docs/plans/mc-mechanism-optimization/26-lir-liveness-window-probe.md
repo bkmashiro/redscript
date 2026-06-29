@@ -203,7 +203,18 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
   - Added non-add return-path predecessor arithmetic coverage (`$ret` via `score_mul`).
 - This tranche is explicitly offline evidence, not correctness proof and not production behavior.
 
+### Tranche R outcome update
+- Added `src/optimizer/lir/rewrite_equivalence_fixtures.ts` to productize existing M/Q bounded rewrite fixtures into a reusable, deterministic offline pack:
+  - fixture type with family classification and expected status;
+  - exported deterministic fixture list `offlineRewriteEquivalenceFixtures`;
+  - deterministic fixture runner `runOfflineRewriteEquivalenceFixtures()` with per-fixture expected/actual status and family/group totals.
+- Added `src/__tests__/optimizer/lir/rewrite_equivalence.test.ts` coverage over the pack that validates:
+  - required family coverage,
+  - deterministic family-ordered summary totals (`total`, `equivalent`, `counterexample`, `unsupported`, `failed`),
+  - explicit checks that unsafe/unsupported fixtures are not reported as `equivalent`.
+- This tranche remains offline, bounded-evidence-only prep for future local-copy rewrite activation decisions and does not imply rewrite correctness or production enablement.
+
 ## Next safe goals
 1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite`,
-2. expand bounded equivalence fixtures for remaining candidate families and window-edge environments not yet covered by Tranche Q,
+2. expand bounded equivalence fixtures for remaining candidate families and window-edge environments not yet covered by Tranches Q + R,
 3. only after gate stability and coverage evidence improve, move to a narrowly scoped rewrite-safe tranche.

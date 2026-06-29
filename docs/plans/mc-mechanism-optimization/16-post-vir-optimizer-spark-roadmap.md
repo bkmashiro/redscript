@@ -97,6 +97,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | O | Experimental local-copy benchmark comparison + proof-evidence prep | Add deterministic flag-off/flag-on benchmark comparison and bounded fixture expansion before any default-on decision | Medium | Small TDD slice | Completed |
 | P | Explicit no-regression benchmark gate | Add explicit evidence-only gate that fails on command/score-copy regressions when experimental local-copy comparison is explicitly enabled | Medium | Small diagnostics-only slice | Completed |
 | Q | Predecessor arithmetic + read/write-window bounded equivalence | Expand offline local-temp rewrite evidence for non-add families and temp read/write-window boundaries | Medium | Small TDD slice | Completed |
+| R | Offline rewrite-equivalence fixture pack and runner | Deterministic fixture metadata + reusable offline runner for bounded equivalence checks | Medium | Small TDD slice | Completed |
 
 ---
 
@@ -609,11 +610,22 @@ git status --short --branch
   - No optimizer pipeline, benchmark, or rewrite behavior files were changed; this tranche is evidence-only.
   - Existing checker support already covered these operations, so `src/optimizer/lir/equivalence.ts` did not require semantic changes.
 
+## Tranche R — offline rewrite-equivalence fixture pack and runner v1
+
+- Status: Completed as evidence-only.
+- Outcome:
+  - Added `src/optimizer/lir/rewrite_equivalence_fixtures.ts` with:
+    - a fixture contract including `name`, `family`, `expectedStatus`, `before`, `after`, `observedSlots`, and `samples`;
+    - deterministic fixture pack `offlineRewriteEquivalenceFixtures` with required family buckets for offline coverage;
+    - `runOfflineRewriteEquivalenceFixtures()` that emits per-fixture expected-vs-actual status plus deterministic family summaries and totals.
+  - Refactored `src/__tests__/optimizer/lir/rewrite_equivalence.test.ts` to consume the reusable pack and to validate deterministic evidence summaries and non-equivalence for unsafe/unsupported cases.
+  - This tranche is offline bounded evidence prep for future local-copy/RMW rewrite experiments and does not alter production optimizer behavior or enable rewrites.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through Q and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through R and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -638,12 +650,12 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche P with J/K/L/O/P/Q diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche R with J/K/L/O/P/Q/R diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.
 
 Next safe work remains:
 1. run the new no-regression gate in explicit CI/benchmark paths using `--require-experimental-lir-local-copy-no-regressions`,
-2. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments not covered by Phases Q+O,
+2. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments not covered by Phases Q+R,
 3. proceed to a separately gated rewrite implementation tranche only after gate stability and coverage evidence are stable.
