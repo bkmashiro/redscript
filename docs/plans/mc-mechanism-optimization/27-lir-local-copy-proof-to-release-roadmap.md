@@ -12,7 +12,7 @@
 
 ## Current status snapshot
 
-Latest verified implementation tranche: Track AH/AA — conservative pass-design + narrow experimental rewrite implementation (controller verified 2026-06-29; pending commit in current tranche).
+Latest verified implementation tranche: Track AH/AA — conservative pass-design + narrow experimental rewrite implementation (controller verified 2026-06-29; commit recorded in git history).
 
 Completed posture:
 
