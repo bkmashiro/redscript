@@ -92,6 +92,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | J | Future rewrite fixture export diagnostics | Deterministic future fixture export summary for offline rewrite-test planning | Low | Small diagnostics-only slice | Completed |
 | K | Unknown-cause split | Deterministic triage buckets for unknown-like proof-miss causes | Low | Small diagnostics-only slice | Completed |
 | L | Offline rewrite-test harness v0 | Deterministic fixture-consumption harness metadata without production rewrites | Low | Small diagnostics-only slice | Completed |
+| M | Offline bounded equivalence harness | Test-only LIR interpreter/checker proves smallest exported rewrite fixtures over bounded samples | Medium | Small TDD slice | Completed |
 
 ---
 

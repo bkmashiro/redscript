@@ -146,7 +146,17 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
 - Added tests that fixture-export signals can be consumed by harness summaries and that future rewrite enablement remains disabled.
 - This remains a future harness-only stage and explicitly does not enable production rewrites.
 
+### Tranche M outcome update
+- Added `src/optimizer/lir/equivalence.ts`, a test-only/offline bounded LIR equivalence checker for the smallest rewrite fixture shapes.
+- The checker interprets straight-line scoreboard instructions over explicit bounded samples and compares declared observed slots; it returns `equivalent`, `counterexample`, or `unsupported` instead of treating opaque commands as proof.
+- Added `src/__tests__/optimizer/lir/rewrite_equivalence.test.ts` coverage for:
+  - local copy forwarding equivalence,
+  - counterexample reporting when a temp remains observable,
+  - predecessor arithmetic feeding a local temp,
+  - conservative refusal of `raw`/opaque instructions.
+- This is still offline harness evidence only. It does not connect to `lirOptimizeModule`, does not add a production rewrite pass, and does not enable any rewrite by default.
+
 ## Next safe goals
-1. stronger local proof parser support for additional provable proof-window patterns before enabling rewrite candidates.
-2. explicit bounded equivalence tests for candidate families under offline-only harness control.
-3. only then, evaluate a separately gated rewrite implementation tranche.
+1. implement the first local-copy rewrite pass behind an explicit experimental flag, using the bounded equivalence harness cases as safety fixtures.
+2. add bench impact comparison for flag-off vs flag-on output before any default enablement.
+3. expand equivalence fixtures for copy-chain/no-reuse and predecessor-arithmetic families before broadening the rewrite pass.
