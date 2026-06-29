@@ -96,6 +96,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | N | Explicit gated local-copy rewrite path | Existing local-copy/RMW rewrite pass is available only through an experimental opt-in pipeline flag, with default compiler behavior flag-off | Medium | Small TDD slice | Completed |
 | O | Experimental local-copy benchmark comparison + proof-evidence prep | Add deterministic flag-off/flag-on benchmark comparison and bounded fixture expansion before any default-on decision | Medium | Small TDD slice | Completed |
 | P | Explicit no-regression benchmark gate | Add explicit evidence-only gate that fails on command/score-copy regressions when experimental local-copy comparison is explicitly enabled | Medium | Small diagnostics-only slice | Completed |
+| Q | Predecessor arithmetic + read/write-window bounded equivalence | Expand offline local-temp rewrite evidence for non-add families and temp read/write-window boundaries | Medium | Small TDD slice | Completed |
 
 ---
 
@@ -594,11 +595,25 @@ git status --short --branch
   - Added tests for missing dependency, passing synthetic comparison, and synthetic command/scoreCopy regression detection.
   - Existing behavior remains proof-less and evidence-only; this gate does not assert correctness and does not enable any rewrite by default.
 
+## Tranche Q — offline bounded local-temp arithmetic/window evidence
+
+- Status: Completed as evidence-only.
+- Outcome:
+  - Expanded `src/__tests__/optimizer/lir/rewrite_equivalence.test.ts` with additional offline bounded families for local-temp/local-copy rewrites that remain experimental-only:
+    - predecessor arithmetic rewrites for `score_sub`, `score_mul`, `score_min`, `score_max`;
+    - safe local-temp read/write-window cases where temp is consumed into output/`return_value` and never observed afterward;
+    - unsafe observed post-window cases that now produce `counterexample` when temp is in `observedSlots`;
+    - non-add edge coverage for local temp/output rewrites with nonzero `score_div`/`score_mod`;
+    - explicit division/modulo-by-zero unsupported behavior checks remain in place;
+    - return-path predecessor coverage for a non-add opcode (`score_mul`) feeding `$ret`.
+  - No optimizer pipeline, benchmark, or rewrite behavior files were changed; this tranche is evidence-only.
+  - Existing checker support already covered these operations, so `src/optimizer/lir/equivalence.ts` did not require semantic changes.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through P and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through Q and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -623,12 +638,12 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche P with J/K/L/O/P diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche P with J/K/L/O/P/Q diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.
 
 Next safe work remains:
 1. run the new no-regression gate in explicit CI/benchmark paths using `--require-experimental-lir-local-copy-no-regressions`,
-2. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments,
+2. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments not covered by Phases Q+O,
 3. proceed to a separately gated rewrite implementation tranche only after gate stability and coverage evidence are stable.

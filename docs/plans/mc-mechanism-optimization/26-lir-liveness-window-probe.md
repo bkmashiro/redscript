@@ -193,7 +193,17 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
   - positive aggregate command/scoreCopy deltas.
 - This phase remains a no-regression evidence gate only and does not enable production rewrites.
 
+### Tranche Q outcome update
+- Expanded bounded rewrite-equivalence fixture evidence for local-temp safety/coverage goals without changing production rewrite behavior:
+  - Added predecessor families for non-add arithmetic rewrites over local temp chains: `score_sub`, `score_mul`, `score_min`, `score_max`.
+  - Added safe/unsafe local-temp read/write-window cases where temp is consumed into output/return and then:
+    - unobserved beyond the rewrite window (equivalent),
+    - explicitly observed post-window (counterexample).
+  - Added nonzero-division/modulo local temp/output rewrite checks and kept division/modulo-by-zero unsupported behavior as explicit evidence boundaries.
+  - Added non-add return-path predecessor arithmetic coverage (`$ret` via `score_mul`).
+- This tranche is explicitly offline evidence, not correctness proof and not production behavior.
+
 ## Next safe goals
 1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite`,
-2. expand bounded equivalence fixtures for predecessor-arithmetic and local-temp read/write-window families before considering any production enablement,
+2. expand bounded equivalence fixtures for remaining candidate families and window-edge environments not yet covered by Tranche Q,
 3. only after gate stability and coverage evidence improve, move to a narrowly scoped rewrite-safe tranche.
