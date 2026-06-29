@@ -1,149 +1,83 @@
 /**
- * Tests for macroLineCompat() — pre-1.20.2 macro template substitution.
+ * Version gating for Minecraft function macros.
  *
- * macroLineCompat() is private, so we exercise it through emit() using
- * macro_line instructions with mcVersion < McVersion.v1_20_2.
- *
- * The function rewrites $(param) placeholders to {storage:rs:macro_args,path:param}
- * markers. Patterns that don't match \w+ (e.g. $() or $(123)) are left as-is.
+ * Function macros require Minecraft 1.20.2+. Older targets fail hard instead
+ * of emitting best-effort placeholder syntax or silently dropping macro args.
  */
 
 import { emit } from '../../emit'
 import type { LIRModule, LIRInstr } from '../../lir/types'
 import { McVersion } from '../../types/mc-version'
 
-function makeModule(template: string): LIRModule {
+const macroError = /Minecraft function macros require target Minecraft 1\.20\.2 or newer/
+
+function makeModule(instructions: LIRInstr[], macroParams: string[] = []): LIRModule {
   return {
     namespace: 'compat',
     objective: '__compat',
     functions: [
       {
         name: 'Main',
-        isMacro: false,
-        macroParams: [],
-        instructions: [
-          { kind: 'macro_line', template } satisfies LIRInstr,
-        ],
+        isMacro: macroParams.length > 0,
+        macroParams,
+        instructions,
       },
     ],
   }
 }
 
-function emitLine(template: string): string {
-  const files = emit(makeModule(template), {
+function emitMain(module: LIRModule, mcVersion: McVersion): string {
+  const files = emit(module, {
     namespace: 'compat',
-    mcVersion: McVersion.v1_20,
+    mcVersion,
   })
   const file = files.find(f => f.path === 'data/compat/function/main.mcfunction')
   if (!file) throw new Error('Missing main.mcfunction')
-  // Strip trailing newline, return single emitted line
   return file.content.trim()
 }
 
-// ---------------------------------------------------------------------------
-// Unit-style: macroLineCompat substitution via emit()
-// ---------------------------------------------------------------------------
+describe('macro version gating', () => {
+  test('macro_line emits for Minecraft 1.20.2+', () => {
+    const mod = makeModule([
+      { kind: 'macro_line', template: 'tp @s $(x) ~ ~' },
+    ])
 
-describe('macroLineCompat: pre-1.20.2 $(param) substitution', () => {
-  test('single param: $(p0) becomes {storage:rs:macro_args,path:p0}', () => {
-    expect(emitLine('tp @s $(x) ~ ~')).toBe('tp @s {storage:rs:macro_args,path:x} ~ ~')
+    expect(emitMain(mod, McVersion.v1_20_2)).toBe('$tp @s $(x) ~ ~')
   })
 
-  test('multiple params in one template are all replaced', () => {
-    expect(emitLine('setblock $(x) $(y) $(z) minecraft:stone')).toBe(
-      'setblock {storage:rs:macro_args,path:x} {storage:rs:macro_args,path:y} {storage:rs:macro_args,path:z} minecraft:stone'
-    )
+  test('macro_line fails hard before Minecraft 1.20.2', () => {
+    const mod = makeModule([
+      { kind: 'macro_line', template: 'tp @s $(x) ~ ~' },
+    ])
+
+    expect(() => emitMain(mod, McVersion.v1_20)).toThrow(macroError)
   })
 
-  test('template with no params is returned unchanged', () => {
-    expect(emitLine('say hello world')).toBe('say hello world')
+  test('call_macro fails hard before Minecraft 1.20.2 instead of dropping storage args', () => {
+    const mod = makeModule([
+      { kind: 'call_macro', fn: 'compat:helper', storage: 'rs:macro_args' },
+    ])
+
+    expect(() => emitMain(mod, McVersion.v1_20)).toThrow(macroError)
   })
 
-  test('template with only literal text and no $ is returned unchanged', () => {
-    expect(emitLine('give @a minecraft:diamond 1')).toBe('give @a minecraft:diamond 1')
+  test('function macro params fail hard before Minecraft 1.20.2 even before body emission', () => {
+    const mod = makeModule([
+      { kind: 'raw', cmd: 'say body' },
+    ], ['x'])
+
+    expect(() => emitMain(mod, McVersion.v1_20)).toThrow(macroError)
   })
 
-  test('$() with empty parens does not match (no \\ w+ inside)', () => {
-    // \w+ requires at least one word character — $() has none
-    expect(emitLine('say $()')).toBe('say $()')
-  })
+  test('nested store command macro syntax is version-gated', () => {
+    const mod = makeModule([
+      {
+        kind: 'store_cmd_to_score',
+        dst: { player: '$out', obj: '__compat' },
+        cmd: { kind: 'call_macro', fn: 'compat:helper', storage: 'rs:macro_args' },
+      },
+    ])
 
-  test('$(123) with leading digit does not match (digits are \\w but \\w+ matches them too — verify actual behavior)', () => {
-    // \w includes [0-9], so $(123) WILL match and produce path:123
-    // This test documents the current behavior rather than asserting a non-match
-    expect(emitLine('say $(123)')).toBe('say {storage:rs:macro_args,path:123}')
-  })
-
-  test('$(param_name) with underscore is replaced (underscore is \\w)', () => {
-    expect(emitLine('data merge entity @s $(entity_data)')).toBe(
-      'data merge entity @s {storage:rs:macro_args,path:entity_data}'
-    )
-  })
-
-  test('adjacent params without space are each replaced independently', () => {
-    expect(emitLine('$(a)$(b)')).toBe(
-      '{storage:rs:macro_args,path:a}{storage:rs:macro_args,path:b}'
-    )
-  })
-
-  test('$(p) at start of template is replaced', () => {
-    expect(emitLine('$(target) add tag test')).toBe(
-      '{storage:rs:macro_args,path:target} add tag test'
-    )
-  })
-
-  test('$(p) at end of template is replaced', () => {
-    expect(emitLine('tag @s add $(tag)')).toBe('tag @s add {storage:rs:macro_args,path:tag}')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Integration: mcVersion >= v1_20_2 emits raw $-prefixed macro lines
-// ---------------------------------------------------------------------------
-
-describe('macro_line: modern vs legacy emission path', () => {
-  test('mcVersion v1_20_2 emits raw $(param) syntax with leading $', () => {
-    const files = emit(makeModule('tp @s $(x) $(y) $(z)'), {
-      namespace: 'compat',
-      mcVersion: McVersion.v1_20_2,
-    })
-    const file = files.find(f => f.path === 'data/compat/function/main.mcfunction')
-    if (!file) throw new Error('Missing main.mcfunction')
-    expect(file.content.trim()).toBe('$tp @s $(x) $(y) $(z)')
-  })
-
-  test('mcVersion v1_21 emits raw $(param) syntax with leading $', () => {
-    const files = emit(makeModule('summon minecraft:marker ~ ~ ~ $(nbt)'), {
-      namespace: 'compat',
-      mcVersion: McVersion.v1_21,
-    })
-    const file = files.find(f => f.path === 'data/compat/function/main.mcfunction')
-    if (!file) throw new Error('Missing main.mcfunction')
-    expect(file.content.trim()).toBe('$summon minecraft:marker ~ ~ ~ $(nbt)')
-  })
-
-  test('mcVersion v1_20 (pre-1.20.2) emits compat substitution markers', () => {
-    const files = emit(makeModule('tp @s $(x) $(y) $(z)'), {
-      namespace: 'compat',
-      mcVersion: McVersion.v1_20,
-    })
-    const file = files.find(f => f.path === 'data/compat/function/main.mcfunction')
-    if (!file) throw new Error('Missing main.mcfunction')
-    expect(file.content.trim()).toBe(
-      'tp @s {storage:rs:macro_args,path:x} {storage:rs:macro_args,path:y} {storage:rs:macro_args,path:z}'
-    )
-    // Must NOT contain raw $(param) or leading $
-    expect(file.content).not.toContain('$(')
-    expect(file.content.trim()).not.toMatch(/^\$/)
-  })
-
-  test('no mcVersion option defaults to modern behavior (no compat substitution)', () => {
-    const files = emit(makeModule('tp @s $(x) ~ ~'), {
-      namespace: 'compat',
-      // mcVersion omitted — should use DEFAULT_MC_VERSION (>= v1_20_2)
-    })
-    const file = files.find(f => f.path === 'data/compat/function/main.mcfunction')
-    if (!file) throw new Error('Missing main.mcfunction')
-    expect(file.content.trim()).toBe('$tp @s $(x) ~ ~')
+    expect(() => emitMain(mod, McVersion.v1_20)).toThrow(macroError)
   })
 })

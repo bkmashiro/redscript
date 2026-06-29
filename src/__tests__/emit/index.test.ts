@@ -204,7 +204,7 @@ describe('emit: direct LIR emission', () => {
     expect(files.find(f => f.path === 'data/emitns/function/empty.sourcemap.json')).toBeUndefined()
   })
 
-  test('falls back to legacy macro emission for pre-1.20.2 and handles empty execute context', () => {
+  test('pre-1.20.2 non-macro emission still handles empty execute context', () => {
     const module: LIRModule = {
       namespace: 'legacy',
       objective: '__legacy',
@@ -214,8 +214,6 @@ describe('emit: direct LIR emission', () => {
           isMacro: false,
           macroParams: [],
           instructions: [
-            { kind: 'call_macro', fn: 'legacy:macro_target', storage: 'rs:macro_args' },
-            { kind: 'macro_line', template: 'setblock $(x) $(y) $(z) minecraft:stone' },
             { kind: 'call_context', fn: 'legacy:plain', subcommands: [] },
             { kind: 'store_nbt_to_score', dst: { player: '$x', obj: '__legacy' }, ns: 'legacy:data', path: 'p', scale: 2 },
           ],
@@ -229,14 +227,33 @@ describe('emit: direct LIR emission', () => {
     })
 
     const main = getFile(files, 'data/legacy/function/legacy.mcfunction')
-    expect(main).toContain('function legacy:macro_target')
-    expect(main).not.toContain('with storage')
-    expect(main).toContain('setblock {storage:rs:macro_args,path:x} {storage:rs:macro_args,path:y} {storage:rs:macro_args,path:z} minecraft:stone')
     expect(main).toContain('function legacy:plain')
     expect(main).toContain('execute store result score $x __legacy run data get storage legacy:data p 2.0')
     expect(files.find(f => f.path === 'data/minecraft/tags/function/tick.json')).toBeUndefined()
     // load.json is always emitted because load.mcfunction is unconditionally generated
     expect(JSON.parse(getFile(files, 'data/minecraft/tags/function/load.json')).values).toEqual(['legacy:load'])
+  })
+
+  test('pre-1.20.2 macro syntax fails instead of falling back', () => {
+    const module: LIRModule = {
+      namespace: 'legacy',
+      objective: '__legacy',
+      functions: [
+        {
+          name: 'Legacy',
+          isMacro: false,
+          macroParams: [],
+          instructions: [
+            { kind: 'call_macro', fn: 'legacy:macro_target', storage: 'rs:macro_args' },
+          ],
+        },
+      ],
+    }
+
+    expect(() => emit(module, {
+      namespace: 'legacy',
+      mcVersion: McVersion.v1_20,
+    })).toThrow(/Minecraft function macros require target Minecraft 1\.20\.2 or newer/)
   })
 
   test('always emits load.json even when there are no user-defined @load functions', () => {

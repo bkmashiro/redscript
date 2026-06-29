@@ -316,6 +316,8 @@ deadSlotElimModule
 
 ## P7 — Macro/version hard errors
 
+**Status:** ✅ Done
+
 **Product promise:** Targeting a Minecraft version without macro support does not silently emit semantically wrong datapacks.
 
 **Primary files:**
@@ -444,7 +446,7 @@ Return:
 - [x] P4 raw/macro opaque policy.
 - [x] P5 slot-classification split.
 - [x] P6 LIR pass manager/idempotence.
-- [ ] P7 macro/version hard errors.
+- [x] P7 macro/version hard errors.
 - [ ] P8 function path/reference validation.
 - [ ] P9 emit/compile decomposition.
 - [ ] P10 semantic equivalence/property tests.

@@ -112,6 +112,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const objective = module.objective
   const genSourceMap = options.generateSourceMap ?? false
   const mcVersion = options.mcVersion ?? DEFAULT_MC_VERSION
+  assertMacroVersionSupported(module, mcVersion)
   const files: DatapackFile[] = []
   const namespaceMapBuilder = genSourceMap ? new NamespaceSourceMapBuilder() : null
   const functionTags = new Map(options.functionTags ?? [])
@@ -380,6 +381,27 @@ function functionTagFilePath(tagId: string): string {
     throw new Error(`Invalid function tag id '${tagId}'. Expected namespace:path`)
   }
   return `data/${match[1]}/tags/function/${match[2]}.json`
+}
+
+function instructionRequiresMacroSupport(instr: LIRInstr): boolean {
+  if (instr.kind === 'macro_line' || instr.kind === 'call_macro') return true
+  if (instr.kind === 'store_cmd_to_score') return instructionRequiresMacroSupport(instr.cmd)
+  return false
+}
+
+function assertMacroVersionSupported(module: LIRModule, mcVersion: McVersion): void {
+  if (mcVersion >= McVersion.v1_20_2) return
+
+  for (const fn of module.functions) {
+    if (fn.macroParams.length > 0) {
+      throw new Error(`Minecraft function macros require target Minecraft 1.20.2 or newer (function ${fn.name} has macro parameters).`)
+    }
+    for (const instr of fn.instructions) {
+      if (instructionRequiresMacroSupport(instr)) {
+        throw new Error(`Minecraft function macros require target Minecraft 1.20.2 or newer (function ${fn.name} emits macro syntax).`)
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -828,8 +850,7 @@ function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersio
       if (mcVersion >= McVersion.v1_20_2) {
         return `function ${instr.fn} with storage ${instr.storage}`
       }
-      // Pre-1.20.2: macros not supported; call function directly (args in storage are ignored)
-      return `function ${instr.fn}`
+      throw new Error('Minecraft function macros require target Minecraft 1.20.2 or newer')
 
     case 'call_if_matches':
       return `execute if score ${slot(instr.slot)} matches ${instr.range} run function ${instr.fn}`
@@ -857,10 +878,7 @@ function emitInstr(instr: LIRInstr, ns: string, obj: string, mcVersion: McVersio
       if (mcVersion >= McVersion.v1_20_2) {
         return `$${instr.template}`
       }
-      // Pre-1.20.2: function macros not available. Emit as a plain command with
-      // $(param) placeholders replaced by storage reads via data get (best-effort
-      // compat for string/id params; numeric coords will not be dynamic).
-      return macroLineCompat(instr.template)
+      throw new Error('Minecraft function macros require target Minecraft 1.20.2 or newer')
 
     case 'raw':
       return instr.cmd
@@ -929,17 +947,6 @@ function scoreCondition(sense: 'if' | 'unless', op: CmpOp, a: string, b: string)
     return `${flipped} score ${a} = ${b}`
   }
   return `${sense} score ${a} ${cmpToMC(op)} ${b}`
-}
-
-/**
- * Pre-1.20.2 compat: emit a macro template as a plain command.
- * $(param) placeholders are replaced with `storage rs:macro_args <param>` data-get
- * expressions for string/id values, or left as literal "0" for coordinates.
- * This is best-effort — dynamic numeric positions cannot be truly emulated.
- */
-function macroLineCompat(template: string): string {
-  // Replace $(param) with data-get-style substitution marker
-  return template.replace(/\$\((\w+)\)/g, (_m, p) => `{storage:rs:macro_args,path:${p}}`)
 }
 
 // ---------------------------------------------------------------------------
