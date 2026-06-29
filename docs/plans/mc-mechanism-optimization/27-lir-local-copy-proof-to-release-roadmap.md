@@ -198,7 +198,7 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 ### Track AE — Non-adjacent pass-design gap classification
 
-**Status:** [ ] Not started — next recommended track
+**Status:** [x] Completed — controller verified
 
 **Product promise:** Split the 328 `non-adjacent-window-needs-pass-design` residuals into actionable design buckets before writing any optimizer rewrite.
 
@@ -220,24 +220,86 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 **Implementation outline:**
 
-- [ ] Add a Track AE summary nested under or adjacent to `trackABResidualDiagnostics` for the `non-adjacent-window-needs-pass-design` bucket.
-- [ ] Classify the gap into deterministic buckets such as:
+- [x] Add a Track AE summary nested under `trackABResidualDiagnostics` for the `non-adjacent-window-needs-pass-design` bucket.
+- [x] Classify the gap into deterministic buckets such as:
   - `copy-chain-wider-window-required`
   - `merge-or-control-flow-boundary`
   - `helper-function-boundary`
   - `requires-new-lir-dataflow-pass`
   - `insufficient-command-context`
   - `not-worth-pursuing`
-- [ ] Include counts, top case names, capped examples, and recommendation.
-- [ ] Add synthetic tests for bucket sorting/capping and one all-case report test proving Track AE is populated.
+- [x] Include counts, top case names, capped examples, and recommendation.
+- [x] Add synthetic tests for bucket sorting/capping and one all-case report test proving Track AE is populated.
+- [x] Update this roadmap with controller gate counts and the next decision.
+
+**Definition of Done:**
+
+- [x] Track AE explains the 328 non-adjacent residuals with pass-design buckets.
+- [x] No optimizer behavior changes.
+- [x] Full controller gates pass.
+- [x] Roadmap records whether Track AA remains blocked, a wider-pass design ADR is needed, or the residual family should stop.
+
+### Track AE evidence (2026-06-29 controller run)
+
+- `npm run gate:lir-local-copy -- --output /tmp/redscript-lir-track-ae-controller.json`
+- `gate = "pass"`
+- `rollout = "pass"`
+- `recommendation = "manual-experimental-opt-in-only"`
+- `commandDelta = -193`
+- `scoreCopyDelta = -193`
+- `offlineFixtures = 29`
+- `offlineFailed = 0`
+- `trackABResidualDiagnostics.totalCount = 328`
+- `trackAEResidualDiagnostics.totalCount = 328`
+- `trackAEResidualDiagnostics.recommendation = "collect-more-data"`
+- `trackAEResidualDiagnostics.byLabel`:
+  - `insufficient-command-context: 318`
+  - `merge-or-control-flow-boundary: 10`
+- **Decision:** Track AA remains blocked. The dominant blocker is still missing command context, with a smaller control-flow/merge-boundary bucket. Continue diagnostics-only context capture before any rewrite work.
+
+---
+
+### Track AF — Structured context capture for insufficient-command residuals
+
+**Status:** [ ] Not started — next recommended track
+
+**Product promise:** Explain the 318 `insufficient-command-context` Track AE residuals with richer same-function context before considering any pass design.
+
+**Why now:** Track AE split the non-adjacent bucket into `insufficient-command-context: 318` and `merge-or-control-flow-boundary: 10`. The dominant blocker is missing structured context, not an implementable rewrite shape.
+
+**Allowed files:**
+
+- `benchmarks/arithmetic-probes.ts`
+- `src/__tests__/arithmetic-probes.test.ts`
+- this roadmap and linked docs under `docs/plans/mc-mechanism-optimization/`
+
+**Forbidden:**
+
+- No changes to `src/optimizer/lir/rmw.ts`.
+- No pass-order changes.
+- No default/CLI behavior changes.
+- No production-emitted behavior changes.
+- No VIR changes.
+
+**Implementation outline:**
+
+- [ ] Add structured context details for Track AE `insufficient-command-context` residuals, such as bounded previous/next parsed command windows, same-function boundary metadata, and whether the copy source/destination appears again later in the function.
+- [ ] Split the bucket into deterministic causes, for example:
+  - `needs-wider-same-function-window`
+  - `needs-function-boundary-map`
+  - `needs-slot-use-def-map`
+  - `opaque-command-context`
+  - `context-capture-not-worth-pursuing`
+- [ ] Include counts, top case names, capped examples, and a conservative recommendation.
+- [ ] Add synthetic tests and one all-case report test proving the 318 bucket is split or explicitly remains opaque.
 - [ ] Update this roadmap with controller gate counts and the next decision.
 
 **Definition of Done:**
 
-- [ ] Track AE explains the 328 non-adjacent residuals with pass-design buckets.
+- [ ] Track AF explains the 318 insufficient-context residuals with named context-capture buckets.
 - [ ] No optimizer behavior changes.
 - [ ] Full controller gates pass.
-- [ ] Roadmap records whether Track AA remains blocked, a wider-pass design ADR is needed, or the residual family should stop.
+- [ ] Roadmap records whether a pass-design ADR is worth writing or the residual family should stop.
 
 ---
 
@@ -400,3 +462,10 @@ Append a short note here after each completed tranche.
 - Controller gate `/tmp/redscript-lir-track-ab-controller.json` reports all 328 target residuals as `non-adjacent-window-needs-pass-design`.
 - `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -193`, `scoreCopyDelta = -193`, offline fixtures `29/29` pass.
 - Track AA remains blocked; next unchecked non-blocked track is Track AE.
+
+### 2026-06-29 — Track AE completed
+
+- Added `trackAEResidualDiagnostics` for Track AB `non-adjacent-window-needs-pass-design` residuals.
+- Controller gate `/tmp/redscript-lir-track-ae-controller.json` reports `insufficient-command-context: 318` and `merge-or-control-flow-boundary: 10`.
+- `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -193`, `scoreCopyDelta = -193`, offline fixtures `29/29` pass.
+- Track AA remains blocked; next unchecked non-blocked track is Track AF.

@@ -1833,10 +1833,13 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(residualSummary).toBeDefined()
     expect(residualSummary?.trackZResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackABResidualDiagnostics).toBeDefined()
+    expect(residualSummary?.trackAEResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackZResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
     expect(residualSummary?.trackZResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
     expect(residualSummary?.trackABResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
     expect(residualSummary?.trackABResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
+    expect(residualSummary?.trackAEResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
+    expect(residualSummary?.trackAEResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
     expect(residualSummary?.mode).toBe('experimental-local-copy-rewrite')
     expect(residualSummary?.status).toBe('diagnostic')
     expect(residualSummary?.onCaseCount).toBe(onReport.cases.length)
@@ -1845,6 +1848,169 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(residualSummary?.topResidualCaseNames).toEqual(expect.any(Array))
     expect(residualSummary?.residualByStatus).toEqual(expect.any(Array))
     expect(residualSummary?.perCase).toContainEqual(caseResidualSummary)
+  })
+
+  it('proves Track AE all-label synthetic coverage with deterministic aggregate sorting and cap behavior', () => {
+    const caseAlpha = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-alpha',
+      optLevel: 'O1',
+      opportunities: {
+        total: 8,
+        currentlyOptimized: 0,
+        safeCandidate: 8,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [
+          {
+            status: 'safeCandidate',
+            pattern: 'safe',
+            count: 8,
+            examples: ['case-alpha:1', 'case-alpha:2', 'case-alpha:3', 'case-alpha:4', 'case-alpha:5', 'case-alpha:6', 'case-alpha:7', 'case-alpha:8'],
+          },
+        ],
+      },
+      rewriteOpportunityTrackAEResidualSummary: {
+        totalCount: 18,
+        byLabel: [
+          {
+            label: 'copy-chain-wider-window-required',
+            count: 4,
+            caseNames: [],
+            examples: ['case-alpha:c1', 'case-alpha:c2', 'case-alpha:c3', 'case-alpha:c4', 'case-alpha:c5'],
+          },
+          {
+            label: 'helper-function-boundary',
+            count: 4,
+            caseNames: [],
+            examples: ['case-alpha:h1', 'case-alpha:h2', 'case-alpha:h3', 'case-alpha:h4', 'case-alpha:h5'],
+          },
+          {
+            label: 'requires-new-lir-dataflow-pass',
+            count: 4,
+            caseNames: [],
+            examples: ['case-alpha:r1', 'case-alpha:r2', 'case-alpha:r3', 'case-alpha:r4', 'case-alpha:r5'],
+          },
+          {
+            label: 'merge-or-control-flow-boundary',
+            count: 3,
+            caseNames: [],
+            examples: ['case-alpha:m1', 'case-alpha:m2', 'case-alpha:m3'],
+          },
+          {
+            label: 'insufficient-command-context',
+            count: 2,
+            caseNames: [],
+            examples: ['case-alpha:i1', 'case-alpha:i2'],
+          },
+          {
+            label: 'not-worth-pursuing',
+            count: 1,
+            caseNames: [],
+            examples: ['case-alpha:n1'],
+          },
+        ],
+      },
+    })
+
+    const caseBeta = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-beta',
+      optLevel: 'O1',
+      opportunities: {
+        total: 4,
+        currentlyOptimized: 1,
+        safeCandidate: 3,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [
+          { status: 'safeCandidate', pattern: 'safe', count: 3, examples: ['case-beta:1', 'case-beta:2', 'case-beta:3'] },
+        ],
+      },
+      rewriteOpportunityTrackAEResidualSummary: {
+        totalCount: 7,
+        byLabel: [
+          {
+            label: 'requires-new-lir-dataflow-pass',
+            count: 2,
+            caseNames: [],
+            examples: ['case-beta:r6', 'case-beta:r7'],
+          },
+          {
+            label: 'helper-function-boundary',
+            count: 1,
+            caseNames: [],
+            examples: ['case-beta:h7'],
+          },
+          {
+            label: 'copy-chain-wider-window-required',
+            count: 1,
+            caseNames: [],
+            examples: ['case-beta:c5'],
+          },
+        ],
+      },
+    })
+
+    const aggregate = summarizeExperimentalLocalCopyRewriteResidualSummary([caseAlpha, caseBeta])
+
+    expect(aggregate.trackAEResidualDiagnostics).toBeDefined()
+    const trackAE = aggregate.trackAEResidualDiagnostics
+    expect(trackAE?.targetPattern).toBe('score_copy -> score_arith')
+    expect(trackAE?.totalCount).toBe(25)
+    expect(trackAE?.topCaseNames).toEqual(['case-alpha', 'case-beta'])
+    expect(trackAE?.byLabel).toEqual([
+      {
+        label: 'requires-new-lir-dataflow-pass',
+        count: 6,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:r1', 'case-alpha:r2', 'case-alpha:r3'],
+      },
+      {
+        label: 'copy-chain-wider-window-required',
+        count: 5,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:c1', 'case-alpha:c2', 'case-alpha:c3'],
+      },
+      {
+        label: 'helper-function-boundary',
+        count: 5,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:h1', 'case-alpha:h2', 'case-alpha:h3'],
+      },
+      {
+        label: 'merge-or-control-flow-boundary',
+        count: 3,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:m1', 'case-alpha:m2', 'case-alpha:m3'],
+      },
+      {
+        label: 'insufficient-command-context',
+        count: 2,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:i1', 'case-alpha:i2'],
+      },
+      {
+        label: 'not-worth-pursuing',
+        count: 1,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:n1'],
+      },
+    ])
+    expect(trackAE?.recommendation).toBe('collect-more-data')
+  })
+
+  it('proves Track AE Track AB non-adjacent residuals are populated in all-case experimental summaries', () => {
+    const report = runArithmeticProbeReport('all', [1], true)
+    const residualSummary = report.experimentalLocalCopyRewriteResidualSummary
+
+    expect(residualSummary?.trackABResidualDiagnostics).toBeDefined()
+    expect(residualSummary?.trackAEResidualDiagnostics).toBeDefined()
+    expect(residualSummary?.trackABResidualDiagnostics?.totalCount).toBe(328)
+    expect(residualSummary?.trackAEResidualDiagnostics?.totalCount).toBe(328)
+    expect(residualSummary?.trackAEResidualDiagnostics?.topCaseNames.length).toBeGreaterThan(0)
+    expect(residualSummary?.trackAEResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
+    expect(
+      residualSummary?.trackAEResidualDiagnostics?.byLabel.reduce((sum, entry) => sum + entry.count, 0),
+    ).toBe(residualSummary?.trackAEResidualDiagnostics?.totalCount)
   })
 
   it('caps residual examples conservatively at deterministic depth', () => {
