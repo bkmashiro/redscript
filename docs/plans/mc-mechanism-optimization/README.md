@@ -3,7 +3,7 @@
 > **For Hermes/Spark:** The previous VIR arithmetic spike plan is archived. Use the active roadmap below for new Spark-sized implementation tranches.
 
 **Active decision:** [21 — Post-VIR Decision ADR](./21-post-vir-decision-adr.md)
-**Active roadmap/tracker:** [27 — LIR Local-Copy Manual Opt-In Active Roadmap](./27-lir-local-copy-active-roadmap.md)
+**Active roadmap/tracker:** [27 — LIR Local-Copy Proof-to-Release Roadmap](./27-lir-local-copy-proof-to-release-roadmap.md)
 **Historical tranche log:** [16 — Post-VIR Optimizer Spark Roadmap](./16-post-vir-optimizer-spark-roadmap.md)
 
 ## Archived plan set
@@ -24,5 +24,5 @@ That archive contains the original 00–15 docs, including the cost-model split,
 
 ## Current decision
 
-Use [21](./21-post-vir-decision-adr.md) as the decision source and [27](./27-lir-local-copy-active-roadmap.md) as the active tracker for future `/goal` or Spark continuation prompts.
+Use [21](./21-post-vir-decision-adr.md) as the decision source and [27](./27-lir-local-copy-proof-to-release-roadmap.md) as the active tracker for future `/goal` or Spark continuation prompts.
 The older [16](./16-post-vir-optimizer-spark-roadmap.md) remains a historical tranche log through Phase Y.

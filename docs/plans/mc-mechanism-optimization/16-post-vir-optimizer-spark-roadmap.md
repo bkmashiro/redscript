@@ -758,12 +758,12 @@ git status --short --branch
 
 ## Suggested next `/goal` for Hermes
 
-Use the active tracker [27 — LIR Local-Copy Manual Opt-In Active Roadmap](./27-lir-local-copy-active-roadmap.md) for new long-running goals. This file is now a historical tranche log through Y.
+Use the active tracker [27 — LIR Local-Copy Proof-to-Release Roadmap](./27-lir-local-copy-proof-to-release-roadmap.md) for new long-running goals. This file is now a historical tranche log through Y.
 
-The next non-blocked track in [27](./27-lir-local-copy-active-roadmap.md) is Track Z: residual safeCandidate fixture/proof split.
+The next non-blocked track in [27](./27-lir-local-copy-proof-to-release-roadmap.md) is Track AB: window/proof diagnostics for unknown residuals.
 
 ```text
-In /Users/yuzhe/projects/redscript, continue the LIR local-copy optimizer lane by reading and following docs/plans/mc-mechanism-optimization/27-lir-local-copy-active-roadmap.md as the source of truth.
+In /Users/yuzhe/projects/redscript, continue the LIR local-copy optimizer lane by reading and following docs/plans/mc-mechanism-optimization/27-lir-local-copy-proof-to-release-roadmap.md as the source of truth.
 Start with the first unchecked non-blocked track. Keep default behavior unchanged, keep VIR read-only, use Spark only for bounded implementation slices, run controller gates, update the roadmap, then signed commit/push after verification.
 ```
 
