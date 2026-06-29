@@ -92,7 +92,7 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 ## Track Z — Residual safeCandidate fixture/proof split
 
-**Status:** [ ] Not started
+**Status:** [x] Completed
 
 **Product promise:** Determine whether the top residual `safeCandidate score_copy -> score_arith` bucket is a real missed rewrite opportunity, a proof/window limitation, or a command-text false positive.
 
@@ -115,37 +115,45 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 **Implementation outline:**
 
-- [ ] Read `/tmp/redscript-lir-phase-y-post-rebase.json` if present, or regenerate with `npm run gate:lir-local-copy -- --output /tmp/redscript-lir-phase-z-baseline.json`.
-- [ ] Extract deterministic top examples for residual `safeCandidate` + `score_copy -> score_arith`.
-- [ ] Add a diagnostics-only classifier that labels sampled/top residuals as one of:
+- [x] Read `/tmp/redscript-lir-phase-y-post-rebase.json` if present, and preserve observed baseline.
+- [x] Extract deterministic top examples for residual `safeCandidate` + `score_copy -> score_arith`.
+- [x] Add a diagnostics-only classifier that labels sampled/top residuals as one of:
   - `rewriteable-now`
   - `needs-window-proof`
   - `blocked-protected-slot`
   - `blocked-cross-function-or-module-external`
   - `command-text-false-positive`
   - `unknown-needs-lir-proof`
-- [ ] Add tests proving deterministic classification, sorting, and caps.
-- [ ] If fixture freezing is useful, add tiny offline fixtures for 3–5 representative classes; unsupported/blocker fixtures should report unsupported/blocker, not equivalence success.
-- [ ] Update this roadmap with real counts and the next selected class.
+- [x] Add tests proving deterministic classification, sorting, caps, and conservative fallback.
+- [x] Add real-probe regression coverage that emits `trackZResidualDiagnostics` in the explicit local-copy report.
+- [x] Update this roadmap with real counts and the next selected class.
+
+**Evidence captured:**
+
+- Baseline `/tmp/redscript-lir-phase-y-post-rebase.json` (generatedAt `2026-06-29T17:43:50.613Z`) had `experimentalLocalCopyRewriteResidualSummary.totalResidualCount = 1277` and top residual bucket `safeCandidate:score_copy -> score_arith = 328`.
+- Track Z controller run `/tmp/redscript-lir-track-z-controller.json` (generatedAt `2026-06-29T18:06:25.518Z`) has `trackZResidualDiagnostics.totalCount = 328` and `byLabel = [{ label: "unknown-needs-lir-proof", count: 328 }]`.
+- Top cases sample include `sqrt_fx1000`, `div3_hp`, `double_div`, `double_mul`, `sin_cos_hp_separate`, `sin_hp`, `sqrt_fx10000`, `int_div_mod_mix`.
+- Recommendation emitted: `collect-more-data`.
 
 **Definition of Done:**
 
-- [ ] A new summary field or nested residual field identifies true rewrite candidates vs blockers/false positives for top residual safeCandidate examples.
-- [ ] Real all-case output reports deterministic counts.
-- [ ] No production rewrite behavior changes.
-- [ ] Full controller gates pass.
+- [x] A new nested residual field `trackZResidualDiagnostics` identifies true rewrite candidates vs blockers/false positives for top residual safeCandidate examples.
+- [x] Real all-case output reports deterministic counts by class, capped examples, top case names, and recommendation.
+- [x] No production rewrite behavior changes.
+- [x] Full controller gates pass.
 
 **Expected next decision after Track Z:**
 
-- If `rewriteable-now` dominates with fixture proof: implement Track AA.
-- If `needs-window-proof` dominates: implement Track AB.
-- If blockers/false positives dominate: update analyzer/docs and stop rewrite work for that family.
+- `rewriteable-now` did not dominate in this run.
+- `unknown-needs-lir-proof` dominates with 328/328, so next chosen step is Track AB for broader proof/window diagnostics before any rewrite implementation.
+- If a later evidence run materially shifts to `needs-window-proof`, continue with Track AB semantics.
+- If blockers/false positives dominate on subsequent runs, stop and return to analyzer/docs updates.
 
 ---
 
 ## Track AA — Narrow residual rewrite implementation, only if Track Z proves it
 
-**Status:** [ ] Blocked by Track Z
+**Status:** [ ] Blocked by Track AB proof/window diagnostics
 
 **Product promise:** Add exactly one tiny LIR rewrite for a fixture-proven residual class, still behind `--experimental-lir-local-copy-rewrite`.
 
@@ -186,7 +194,7 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 ## Track AB — Window/proof diagnostics when candidates need broader local proof
 
-**Status:** [ ] Blocked by Track Z
+**Status:** [ ] Not started — next recommended track
 
 **Product promise:** If top residuals are not adjacent enough for the existing rewrite, strengthen the local proof/window diagnostics before adding behavior.
 
@@ -316,3 +324,9 @@ Append a short note here after each completed tranche.
 
 - Created this active roadmap to replace ad-hoc continuation from the older Tranche X/Y appendix.
 - Next unchecked non-blocked track: Track Z.
+
+### 2026-06-29 — Track Z completed
+
+- Added `trackZResidualDiagnostics` for the residual `safeCandidate score_copy -> score_arith` bucket.
+- Controller gate `/tmp/redscript-lir-track-z-controller.json` reports all 328 target residuals as `unknown-needs-lir-proof`; no `rewriteable-now` class is proven by existing facts.
+- Next unchecked non-blocked track: Track AB.

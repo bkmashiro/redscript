@@ -1473,6 +1473,173 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(summary.recommendation).toBe('diagnose-residuals-first')
   })
 
+  it('classifies top residual safeCandidate score_copy->score_arith by deterministic Track Z labels', () => {
+    const lines = [
+      { path: 'data/test/function/probe.mcfunction', line: 1, content: 'scoreboard players operation $tmp0 o = $seed0 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 2, content: 'scoreboard players operation $tmp0 o += $tmp0 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 3, content: 'scoreboard players operation $tmp1 o = $seed1 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 4, content: 'scoreboard players operation $tmp1 o += $tmp1 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 5, content: 'scoreboard players operation $tmp2 o = $seed2 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 6, content: 'scoreboard players operation $tmp2 o += $tmp2 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 7, content: 'scoreboard players operation $tmp3 o = $tmp2 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 8, content: 'scoreboard players operation $tmp4 o = $seed4 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 9, content: 'scoreboard players operation $tmp4 o += $tmp4 o' },
+    ]
+
+    const synthesis = summarizeRewriteOpportunitiesWithProvenance(lines)
+    const trackZ = synthesis.trackZResidualSummary
+    const caseSummary = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-track-z',
+      optLevel: 'O1',
+      opportunities: synthesis.opportunities,
+      rewriteOpportunityProvenanceSummary: synthesis.provenanceSummary,
+      rewriteOpportunityTrackZResidualSummary: synthesis.trackZResidualSummary,
+    })
+    const residualTrackZ = caseSummary.trackZResidualDiagnostics
+
+    expect(trackZ.totalCount).toBe(4)
+    expect(residualTrackZ).toBeDefined()
+    expect(residualTrackZ?.targetPattern).toBe('score_copy -> score_arith')
+    expect(residualTrackZ?.totalCount).toBe(4)
+    expect(residualTrackZ?.byLabel.map(entry => entry.label)).toEqual([
+      'rewriteable-now',
+      'needs-window-proof',
+    ])
+    expect(residualTrackZ?.byLabel).toEqual([
+      {
+        label: 'rewriteable-now',
+        count: 3,
+        caseNames: ['case-track-z'],
+        examples: [
+          'data/test/function/probe.mcfunction:1: scoreboard players operation $tmp0 o = $seed0 o',
+          'data/test/function/probe.mcfunction:3: scoreboard players operation $tmp1 o = $seed1 o',
+          'data/test/function/probe.mcfunction:8: scoreboard players operation $tmp4 o = $seed4 o',
+        ],
+      },
+      {
+        label: 'needs-window-proof',
+        count: 1,
+        caseNames: ['case-track-z'],
+        examples: ['data/test/function/probe.mcfunction:5: scoreboard players operation $tmp2 o = $seed2 o'],
+      },
+    ])
+    expect(residualTrackZ?.recommendation).toBe('prioritize-AA')
+  })
+
+  it('provides deterministic aggregate Track Z sorting, capping, and fallback recommendations on synthetic case inputs', () => {
+    const caseAlpha = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-alpha',
+      optLevel: 'O1',
+      opportunities: {
+        total: 7,
+        currentlyOptimized: 0,
+        safeCandidate: 4,
+        blockedByBarrier: 2,
+        unknown: 1,
+        topOpportunities: [
+          { status: 'safeCandidate', pattern: 'score_copy -> score_arith', count: 4, examples: ['case-alpha:1', 'case-alpha:2', 'case-alpha:3', 'case-alpha:4'] },
+          { status: 'unknown', pattern: 'other', count: 2, examples: ['case-alpha:5', 'case-alpha:6'] },
+          { status: 'blockedByBarrier', pattern: 'other', count: 1, examples: ['case-alpha:7'] },
+        ],
+      },
+      rewriteOpportunityTrackZResidualSummary: {
+        totalCount: 10,
+        byLabel: [
+          { label: 'unknown-needs-lir-proof', count: 2, caseNames: [], examples: ['case-alpha:u1', 'case-alpha:u2', 'case-alpha:u3', 'case-alpha:u4', 'case-alpha:u5'] },
+          { label: 'rewriteable-now', count: 4, caseNames: [], examples: ['case-alpha:r1', 'case-alpha:r2', 'case-alpha:r3', 'case-alpha:r4', 'case-alpha:r5'] },
+          { label: 'needs-window-proof', count: 3, caseNames: [], examples: ['case-alpha:n1', 'case-alpha:n2', 'case-alpha:n3', 'case-alpha:n4'] },
+          { label: 'command-text-false-positive', count: 1, caseNames: [], examples: ['case-alpha:c1'] },
+        ],
+      },
+    })
+    const caseBeta = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-beta',
+      optLevel: 'O1',
+      opportunities: {
+        total: 4,
+        currentlyOptimized: 0,
+        safeCandidate: 4,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [
+          { status: 'safeCandidate', pattern: 'score_copy -> score_arith', count: 4, examples: ['case-beta:1', 'case-beta:2', 'case-beta:3', 'case-beta:4'] },
+        ],
+      },
+      rewriteOpportunityTrackZResidualSummary: {
+        totalCount: 3,
+        byLabel: [
+          { label: 'needs-window-proof', count: 2, caseNames: [], examples: ['case-beta:n1', 'case-beta:n2', 'case-beta:n3', 'case-beta:n4'] },
+          { label: 'blocked-protected-slot', count: 1, caseNames: [], examples: ['case-beta:b1', 'case-beta:b2', 'case-beta:b3', 'case-beta:b4'] },
+        ],
+      },
+    })
+
+    const aggregate = summarizeExperimentalLocalCopyRewriteResidualSummary([caseAlpha, caseBeta])
+
+    expect(aggregate.trackZResidualDiagnostics).toBeDefined()
+    const trackZ = aggregate.trackZResidualDiagnostics
+    expect(trackZ?.targetPattern).toBe('score_copy -> score_arith')
+    expect(trackZ?.totalCount).toBe(13)
+    expect(trackZ?.topCaseNames).toEqual(['case-alpha', 'case-beta'])
+    expect(trackZ?.byLabel).toEqual([
+      {
+        label: 'needs-window-proof',
+        count: 5,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: [
+          'case-alpha:n1',
+          'case-alpha:n2',
+          'case-alpha:n3',
+        ],
+      },
+      {
+        label: 'rewriteable-now',
+        count: 4,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:r1', 'case-alpha:r2', 'case-alpha:r3'],
+      },
+      {
+        label: 'unknown-needs-lir-proof',
+        count: 2,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:u1', 'case-alpha:u2', 'case-alpha:u3'],
+      },
+      {
+        label: 'blocked-protected-slot',
+        count: 1,
+        caseNames: ['case-beta'],
+        examples: ['case-beta:b1', 'case-beta:b2', 'case-beta:b3'],
+      },
+      {
+        label: 'command-text-false-positive',
+        count: 1,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:c1'],
+      },
+    ])
+    expect(trackZ?.recommendation).toBe('collect-more-data')
+  })
+
+  it('uses conservative Track Z fallback when no candidate summary is available', () => {
+    const caseSummary = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-none',
+      optLevel: 'O1',
+      opportunities: {
+        total: 1,
+        currentlyOptimized: 1,
+        safeCandidate: 0,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [],
+      },
+    })
+
+    const aggregate = summarizeExperimentalLocalCopyRewriteResidualSummary([caseSummary])
+
+    expect(caseSummary.trackZResidualDiagnostics).toBeUndefined()
+    expect(aggregate.trackZResidualDiagnostics).toBeUndefined()
+  })
+
   it('returns conservative residual summary for empty or fully optimized input sets', () => {
     const emptyCaseSummary = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
       caseName: 'case-none',
@@ -1508,6 +1675,9 @@ describe('arithmetic probe benchmark tooling', () => {
     const caseResidualSummary = onReport.cases[0].experimentalLocalCopyRewriteResidualSummary
 
     expect(residualSummary).toBeDefined()
+    expect(residualSummary?.trackZResidualDiagnostics).toBeDefined()
+    expect(residualSummary?.trackZResidualDiagnostics?.topCaseNames).toEqual(expect.any(Array))
+    expect(residualSummary?.trackZResidualDiagnostics?.byLabel).toEqual(expect.any(Array))
     expect(residualSummary?.mode).toBe('experimental-local-copy-rewrite')
     expect(residualSummary?.status).toBe('diagnostic')
     expect(residualSummary?.onCaseCount).toBe(onReport.cases.length)

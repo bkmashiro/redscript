@@ -496,6 +496,47 @@ export interface RewriteProvenanceSummary {
   shapeFamilySummary?: RewriteShapeFamilySummary
 }
 
+export type RewriteTrackZDiagnosticLabel =
+  | 'rewriteable-now'
+  | 'needs-window-proof'
+  | 'blocked-protected-slot'
+  | 'blocked-cross-function-or-module-external'
+  | 'command-text-false-positive'
+  | 'unknown-needs-lir-proof'
+
+export type RewriteTrackZDiagnosticRecommendation =
+  | 'prioritize-AA'
+  | 'prioritize-AB'
+  | 'investigate-blockers'
+  | 'collect-more-data'
+
+export interface RewriteTrackZDiagnosticBucket {
+  label: RewriteTrackZDiagnosticLabel
+  count: number
+  caseNames: string[]
+  examples: string[]
+}
+
+export interface RewriteTrackZDiagnosticCaseSummary {
+  byLabel: RewriteTrackZDiagnosticBucket[]
+  targetPattern: 'score_copy -> score_arith'
+  totalCount: number
+  recommendation: RewriteTrackZDiagnosticRecommendation
+}
+
+export interface RewriteTrackZDiagnosticAggregateSummary {
+  byLabel: RewriteTrackZDiagnosticBucket[]
+  targetPattern: 'score_copy -> score_arith'
+  totalCount: number
+  topCaseNames: string[]
+  recommendation: RewriteTrackZDiagnosticRecommendation
+}
+
+export interface RewriteTrackZDiagnosticCandidateSummary {
+  totalCount: number
+  byLabel: RewriteTrackZDiagnosticBucket[]
+}
+
 export interface CopyRewriteOpportunityEntry {
   status: CopyRewriteStatus
   pattern: string
@@ -959,6 +1000,7 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary 
   residualByPattern: ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry[]
   residualByFamily: ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry[]
   residualByProvenanceReason: RewriteProvenanceBucket[]
+  trackZResidualDiagnostics?: RewriteTrackZDiagnosticCaseSummary
   recommendation: 'candidate-family-ready' | 'diagnose-residuals-first' | 'no-residuals'
 }
 
@@ -971,6 +1013,7 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteResidualSummary {
   residualByPattern: ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry[]
   residualByFamily: ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry[]
   residualByProvenanceReason: RewriteProvenanceBucket[]
+  trackZResidualDiagnostics?: RewriteTrackZDiagnosticAggregateSummary
   topResidualCaseNames: string[]
   recommendation: 'candidate-family-ready' | 'diagnose-residuals-first' | 'no-residuals'
   perCase: ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary[]
@@ -1032,6 +1075,7 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteRolloutReadinessSumm
 
 const OFFLINE_REWRITE_EQUIVALENCE_PACK_MAX_FAILED_FIXTURE_NAMES = 5
 const ROLLOUT_READINESS_MAX_IMPROVED_CASE_NAMES = 5
+const TRACK_Z_TARGET_PATTERN: 'score_copy -> score_arith' = 'score_copy -> score_arith'
 const MAX_RESIDUAL_CASE_SUMMARY_ENTRIES = 8
 const MAX_RESIDUAL_PATTERNS_PER_SUMMARY = 12
 const MAX_RESIDUAL_FAMILIES_PER_SUMMARY = 12
@@ -3390,6 +3434,38 @@ function classifyCopyRewriteOpportunityWithProvenance(
   }
 }
 
+function classifyTrackZDiagnosticLabel(
+  status: CopyRewriteStatus,
+  pattern: string,
+  reason: RewriteProvenanceReason,
+): RewriteTrackZDiagnosticLabel | null {
+  if (status !== 'safeCandidate' || pattern !== TRACK_Z_TARGET_PATTERN) return null
+  if (reason === 'safe-adjacent-score-copy-arith') return 'rewriteable-now'
+  if (reason === 'blocked-by-alias-safety' || reason === 'blocked-by-temp-not-dead-after-consuming-op') return 'needs-window-proof'
+  if (reason === 'blocked-by-cross-function-module-external-mention') return 'blocked-cross-function-or-module-external'
+  if (reason === 'blocked-by-protected-slot') return 'blocked-protected-slot'
+  if (reason === 'insufficient-command-level-information') return 'command-text-false-positive'
+  if (reason === 'blocked-by-pattern-not-exact-adjacent-score-copy-arith' || reason === 'blocked-by-barrier-or-non-adjacent-shape') {
+    return 'unknown-needs-lir-proof'
+  }
+  return 'unknown-needs-lir-proof'
+}
+
+function toTrackZCandidateSummary(
+  byLabel: Map<RewriteTrackZDiagnosticLabel, { count: number; examples: string[] }>,
+  totalCount: number,
+): RewriteTrackZDiagnosticCandidateSummary {
+  return {
+    totalCount,
+    byLabel: [...byLabel.entries()].map(([label, value]) => ({
+      label,
+      count: value.count,
+      caseNames: [],
+      examples: value.examples,
+    })),
+  }
+}
+
 function makeZeroRewriteProvenanceSummary(): RewriteProvenanceSummary {
   return {
     total: 0,
@@ -3404,7 +3480,11 @@ function makeZeroRewriteProvenanceSummary(): RewriteProvenanceSummary {
 
 export function summarizeRewriteOpportunitiesWithProvenance(
   lines: Array<{ path: string; line: number; content: string }>,
-): { opportunities: CopyRewriteOpportunitySummary; provenanceSummary: RewriteProvenanceSummary } {
+): {
+  opportunities: CopyRewriteOpportunitySummary
+  provenanceSummary: RewriteProvenanceSummary
+  trackZResidualSummary: RewriteTrackZDiagnosticCandidateSummary
+} {
   const opportunities = summarizeRewriteOpportunities(lines)
   const provenanceSummary = makeZeroRewriteProvenanceSummary()
   const byReason = new Map<string, RewriteProvenanceSummary['byReason'][number]>()
@@ -3431,6 +3511,8 @@ export function summarizeRewriteOpportunitiesWithProvenance(
       { count: number; caseNames: Set<string>; examples: string[] }
     >
   }>()
+  const trackZByLabel = new Map<RewriteTrackZDiagnosticLabel, { count: number; examples: string[] }>()
+  let trackZResidualTotalCount = 0
   let patternNotExactTotal = 0
 
   for (let i = 0; i < lines.length; i += 1) {
@@ -3456,6 +3538,23 @@ export function summarizeRewriteOpportunitiesWithProvenance(
       i,
     )
     if (!entry) continue
+
+    const trackZLabel = classifyTrackZDiagnosticLabel(entry.status, entry.pattern, entry.reason)
+    if (trackZLabel) {
+      let trackZBucket = trackZByLabel.get(trackZLabel)
+      if (!trackZBucket) {
+        trackZBucket = {
+          count: 0,
+          examples: [],
+        }
+        trackZByLabel.set(trackZLabel, trackZBucket)
+      }
+      trackZBucket.count += 1
+      trackZResidualTotalCount += 1
+      if (trackZBucket.examples.length < MAX_RESIDUAL_EXAMPLES_PER_BUCKET) {
+        trackZBucket.examples.push(`${current.path}:${current.line}: ${current.content}`)
+      }
+    }
 
     provenanceSummary.total += 1
     if (entry.reason === 'safe-adjacent-score-copy-arith') {
@@ -3724,7 +3823,11 @@ export function summarizeRewriteOpportunitiesWithProvenance(
     },
   }
 
-  return { opportunities, provenanceSummary: opportunities.provenanceSummary }
+  return {
+    opportunities,
+    provenanceSummary: opportunities.provenanceSummary,
+    trackZResidualSummary: toTrackZCandidateSummary(trackZByLabel, trackZResidualTotalCount),
+  }
 }
 
 function mergeRewriteOpportunitiesProvenance(
@@ -4938,12 +5041,77 @@ function toSortedResidualTopCaseNames(
     .map(item => item.caseName)
 }
 
+function toSortedTrackZCandidateBuckets(
+  buckets: RewriteTrackZDiagnosticBucket[],
+): RewriteTrackZDiagnosticBucket[] {
+  return buckets
+    .map(entry => ({
+      ...entry,
+      caseNames: [...entry.caseNames].sort(),
+      examples: entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+    }))
+    .sort((left, right) => (
+      right.count - left.count || left.label.localeCompare(right.label)
+    ))
+}
+
+function toTrackZCaseTopNames(
+  caseTotals: Map<string, number>,
+): string[] {
+  return [...caseTotals.entries()]
+    .filter(([, total]) => total > 0)
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, MAX_RESIDUAL_CASE_SUMMARY_ENTRIES)
+    .map(([caseName]) => caseName)
+}
+
+function summarizeTrackZRecommendation(
+  byLabel: RewriteTrackZDiagnosticBucket[],
+  totalCount: number,
+): RewriteTrackZDiagnosticRecommendation {
+  if (totalCount === 0) return 'collect-more-data'
+  const top = byLabel[0]
+  if (!top) return 'collect-more-data'
+
+  if (top.label === 'rewriteable-now' && top.count === totalCount) return 'prioritize-AA'
+  if (top.label === 'needs-window-proof' && top.count >= totalCount) return 'prioritize-AB'
+  if (top.label === 'needs-window-proof' && top.count > totalCount / 2) return 'prioritize-AB'
+  if (top.label === 'rewriteable-now') return 'prioritize-AA'
+  if (top.label === 'blocked-protected-slot' || top.label === 'blocked-cross-function-or-module-external') {
+    return 'investigate-blockers'
+  }
+  if (top.label === 'command-text-false-positive' || top.label === 'unknown-needs-lir-proof') {
+    return 'collect-more-data'
+  }
+  return 'collect-more-data'
+}
+
+function summarizeTrackZCaseSummary(
+  caseName: string,
+  candidateSummary: RewriteTrackZDiagnosticCandidateSummary,
+): RewriteTrackZDiagnosticCaseSummary {
+  const byLabel = toSortedTrackZCandidateBuckets(candidateSummary.byLabel)
+    .map(entry => ({
+      ...entry,
+      caseNames: entry.count > 0 ? [caseName] : [],
+    }))
+
+  const recommendation = summarizeTrackZRecommendation(byLabel, candidateSummary.totalCount)
+  return {
+    byLabel,
+    targetPattern: TRACK_Z_TARGET_PATTERN,
+    totalCount: candidateSummary.totalCount,
+    recommendation,
+  }
+}
+
 export function summarizeExperimentalLocalCopyRewriteResidualCaseSummary(
   caseSummary: {
     caseName: string
     optLevel: `O${OptimizationLevel}`
     opportunities: CopyRewriteOpportunitySummary
     rewriteOpportunityProvenanceSummary?: RewriteProvenanceSummary
+    rewriteOpportunityTrackZResidualSummary?: RewriteTrackZDiagnosticCandidateSummary
   },
 ): ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary {
   const caseName = caseSummary.caseName
@@ -4957,6 +5125,9 @@ export function summarizeExperimentalLocalCopyRewriteResidualCaseSummary(
   const provenanceSummary = caseSummary.rewriteOpportunityProvenanceSummary
   const byFamily = summarizeLocalCopyRewriteResidualFamiliesFromProvenance(provenanceSummary, caseName)
   const byProvenance = summarizeLocalCopyRewriteResidualReasonsFromProvenance(provenanceSummary, caseName)
+  const trackZResidualDiagnostics = caseSummary.rewriteOpportunityTrackZResidualSummary
+    ? summarizeTrackZCaseSummary(caseName, caseSummary.rewriteOpportunityTrackZResidualSummary)
+    : undefined
   const residualByStatus = toSortedResidualByStatus(byStatus)
   const residualByPattern = toSortedResidualByPattern(byPattern).slice(0, MAX_RESIDUAL_PATTERNS_PER_SUMMARY)
   const residualByFamily = toSortedResidualByFamily(byFamily).slice(0, MAX_RESIDUAL_FAMILIES_PER_SUMMARY)
@@ -4975,6 +5146,7 @@ export function summarizeExperimentalLocalCopyRewriteResidualCaseSummary(
         caseNames: [...entry.caseNames].sort().slice(0, 1),
       }))
       .sort((left, right) => right.count - left.count || left.reason.localeCompare(right.reason)),
+    ...(trackZResidualDiagnostics ? { trackZResidualDiagnostics } : {}),
     recommendation,
   }
 }
@@ -4989,6 +5161,18 @@ export function summarizeExperimentalLocalCopyRewriteResidualSummary(
       residualByPattern: [...item.residualByPattern],
       residualByFamily: [...item.residualByFamily],
       residualByProvenanceReason: [...item.residualByProvenanceReason],
+      ...(item.trackZResidualDiagnostics ? {
+        trackZResidualDiagnostics: {
+          byLabel: item.trackZResidualDiagnostics.byLabel.map(bucket => ({
+            ...bucket,
+            caseNames: [...bucket.caseNames],
+            examples: [...bucket.examples],
+          })),
+          targetPattern: item.trackZResidualDiagnostics.targetPattern,
+          totalCount: item.trackZResidualDiagnostics.totalCount,
+          recommendation: item.trackZResidualDiagnostics.recommendation,
+        },
+      } : {}),
     }))
     .sort((left, right) => left.caseName.localeCompare(right.caseName) || left.optLevel.localeCompare(right.optLevel))
 
@@ -4997,6 +5181,9 @@ export function summarizeExperimentalLocalCopyRewriteResidualSummary(
   const byPattern = new Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry>()
   const byFamily = new Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry>()
   const byProvenance = new Map<string, RewriteProvenanceBucket>()
+  const byTrackZLabel = new Map<string, RewriteTrackZDiagnosticBucket>()
+  const trackZCaseTotals = new Map<string, number>()
+  let totalTrackZCount = 0
 
   for (const item of perCase) {
     if (item.residualCount <= 0) continue
@@ -5084,7 +5271,55 @@ export function summarizeExperimentalLocalCopyRewriteResidualSummary(
         aggregate.examples.push(example)
       }
     }
+    const trackZ = item.trackZResidualDiagnostics
+    if (trackZ && trackZ.totalCount > 0) {
+      totalTrackZCount += trackZ.totalCount
+      trackZCaseTotals.set(item.caseName, trackZ.totalCount)
+      for (const bucket of trackZ.byLabel) {
+        if (bucket.count <= 0) continue
+        let aggregate = byTrackZLabel.get(bucket.label)
+        if (!aggregate) {
+          aggregate = {
+            label: bucket.label,
+            count: 0,
+            caseNames: [],
+            examples: [],
+          }
+          byTrackZLabel.set(bucket.label, aggregate)
+        }
+        aggregate.count += bucket.count
+        if (!aggregate.caseNames.includes(item.caseName)) {
+          aggregate.caseNames.push(item.caseName)
+        }
+        for (const example of bucket.examples) {
+          if (aggregate.examples.length >= MAX_RESIDUAL_EXAMPLES_PER_BUCKET) break
+          aggregate.examples.push(example)
+        }
+      }
+    }
   }
+
+  const residualTrackZDiagnosticsByLabel = [...byTrackZLabel.values()].map(entry => ({
+    ...entry,
+    caseNames: [...entry.caseNames].sort(),
+    examples: entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+  })).sort((left, right) => (
+    right.count - left.count || left.label.localeCompare(right.label)
+  ))
+  const residualTrackZRecommendation = summarizeTrackZRecommendation(
+    residualTrackZDiagnosticsByLabel,
+    totalTrackZCount,
+  )
+  const residualTrackZTopCaseNames = toTrackZCaseTopNames(trackZCaseTotals)
+  const residualTrackZResidualDiagnostics = totalTrackZCount > 0 || residualTrackZTopCaseNames.length > 0
+    ? {
+      byLabel: residualTrackZDiagnosticsByLabel,
+      targetPattern: TRACK_Z_TARGET_PATTERN,
+      totalCount: totalTrackZCount,
+      topCaseNames: residualTrackZTopCaseNames,
+      recommendation: residualTrackZRecommendation,
+    }
+    : undefined
 
   const byStatusArray = toSortedResidualByStatus(byStatus)
   const byPatternArray = toSortedResidualByPattern(byPattern)
@@ -5113,6 +5348,7 @@ export function summarizeExperimentalLocalCopyRewriteResidualSummary(
     residualByPattern: byPatternArray,
     residualByFamily: byFamilyArray,
     residualByProvenanceReason,
+    ...(residualTrackZResidualDiagnostics ? { trackZResidualDiagnostics: residualTrackZResidualDiagnostics } : {}),
     topResidualCaseNames,
     recommendation,
     perCase,
@@ -7538,6 +7774,7 @@ export function runArithmeticProbe(
         optLevel: `O${optLevel}`,
         opportunities: rewriteOpportunityAnalysis.opportunities,
         rewriteOpportunityProvenanceSummary: rewriteOpportunityAnalysis.provenanceSummary,
+        rewriteOpportunityTrackZResidualSummary: rewriteOpportunityAnalysis.trackZResidualSummary,
       })
       : undefined,
     virDecision,
