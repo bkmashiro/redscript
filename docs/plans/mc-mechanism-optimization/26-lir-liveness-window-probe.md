@@ -277,7 +277,25 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
   - Default compile/publish behavior remains unchanged when the flag is absent.
   - No production optimizer behavior changed; this tranche is manual experimental opt-in only.
 
+### Tranche Y outcome update
+- Added deterministic residual score-copy blocker/provenance output for explicit Phase X experimental benchmark runs in `benchmarks/arithmetic-probes.ts`.
+- Added `ArithmeticProbeReport.experimentalLocalCopyRewriteResidualSummary` with buckets derived from existing per-case opportunity provenance:
+  - `residualByStatus`,
+  - `residualByPattern`,
+  - `residualByFamily`,
+  - `residualByProvenanceReason`,
+  - sorted/capped `topResidualCaseNames`,
+  - and deterministic `perCase` entries with per-case residual buckets.
+- Added and preserved conservative fallback behavior for missing/empty data (including `no-residuals` recommendation).
+- Added and validated residual cap constants to keep deterministic, review-stable output:
+  - `MAX_RESIDUAL_CASE_SUMMARY_ENTRIES`
+  - `MAX_RESIDUAL_PATTERNS_PER_SUMMARY`
+  - `MAX_RESIDUAL_FAMILIES_PER_SUMMARY`
+  - `MAX_RESIDUAL_EXAMPLES_PER_BUCKET`.
+- Kept all behavior evidence-only; benchmark output remains off/on-compatible and no compiler/optimizer rewrite semantics changed.
+
 ## Next safe goals
 1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite` via the new wrapper.
-2. use the new Phase U/U+V fixture and readiness results to guide the next gated rewrite candidate tranche,
-3. only after gate stability and coverage evidence improve, move to a narrowly scoped rewrite-safe tranche.
+2. use residual-blocker provenance from explicit local-copy residual summaries to target the next gated rewrite candidates,
+3. use the new Phase U/U+V fixture and readiness results to guide the next gated rewrite candidate tranche,
+4. only after gate stability and coverage evidence improve, move to a narrowly scoped rewrite-safe tranche.

@@ -906,6 +906,7 @@ export interface ArithmeticProbeResult {
     unsupportedReasonTags?: VirUnsupportedReasonTag[]
     }
   warnings: string[]
+  experimentalLocalCopyRewriteResidualSummary?: ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary
 }
 
 export interface ArithmeticProbeReport {
@@ -925,6 +926,54 @@ export interface ArithmeticProbeReport {
   experimentalLocalCopyRewriteComparison?: ArithmeticProbeExperimentalLocalCopyRewriteComparison
   experimentalLocalCopyRewriteNoRegressionGate?: ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate
   experimentalLocalCopyRewriteRolloutReadinessSummary?: ArithmeticProbeExperimentalLocalCopyRewriteRolloutReadinessSummary
+  experimentalLocalCopyRewriteResidualSummary?: ArithmeticProbeExperimentalLocalCopyRewriteResidualSummary
+}
+
+export interface ArithmeticProbeExperimentalLocalCopyRewriteResidualByStatus {
+  status: CopyRewriteStatus
+  count: number
+  caseNames: string[]
+  examples: string[]
+}
+
+export interface ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry {
+  status: CopyRewriteStatus
+  pattern: string
+  count: number
+  caseNames: string[]
+  examples: string[]
+}
+
+export interface ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry {
+  family: string
+  count: number
+  caseNames: string[]
+  examples: string[]
+}
+
+export interface ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary {
+  caseName: string
+  optLevel: `O${OptimizationLevel}`
+  residualCount: number
+  residualByStatus: ArithmeticProbeExperimentalLocalCopyRewriteResidualByStatus[]
+  residualByPattern: ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry[]
+  residualByFamily: ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry[]
+  residualByProvenanceReason: RewriteProvenanceBucket[]
+  recommendation: 'candidate-family-ready' | 'diagnose-residuals-first' | 'no-residuals'
+}
+
+export interface ArithmeticProbeExperimentalLocalCopyRewriteResidualSummary {
+  mode: 'experimental-local-copy-rewrite'
+  status: 'diagnostic'
+  onCaseCount: number
+  totalResidualCount: number
+  residualByStatus: ArithmeticProbeExperimentalLocalCopyRewriteResidualByStatus[]
+  residualByPattern: ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry[]
+  residualByFamily: ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry[]
+  residualByProvenanceReason: RewriteProvenanceBucket[]
+  topResidualCaseNames: string[]
+  recommendation: 'candidate-family-ready' | 'diagnose-residuals-first' | 'no-residuals'
+  perCase: ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary[]
 }
 
 export interface ArithmeticProbeExperimentTotals {
@@ -983,6 +1032,10 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteRolloutReadinessSumm
 
 const OFFLINE_REWRITE_EQUIVALENCE_PACK_MAX_FAILED_FIXTURE_NAMES = 5
 const ROLLOUT_READINESS_MAX_IMPROVED_CASE_NAMES = 5
+const MAX_RESIDUAL_CASE_SUMMARY_ENTRIES = 8
+const MAX_RESIDUAL_PATTERNS_PER_SUMMARY = 12
+const MAX_RESIDUAL_FAMILIES_PER_SUMMARY = 12
+const MAX_RESIDUAL_EXAMPLES_PER_BUCKET = 3
 const OFFLINE_REWRITE_FAMILY_READINESS_REQUIRED_FAMILIES = [
   'local-copy-forwarding',
   'predecessor-arithmetic',
@@ -4720,6 +4773,352 @@ function mergeRewriteOpportunities(summaries: CopyRewriteOpportunitySummary[]): 
   return totals
 }
 
+function summarizeLocalCopyRewriteResidualByStatusFromTopOpportunities(
+  topOpportunities: CopyRewriteOpportunitySummary['topOpportunities'],
+  caseName: string,
+): Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualByStatus> {
+  const byStatus = new Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualByStatus>()
+  for (const opportunity of topOpportunities) {
+    if (opportunity.status === 'currentlyOptimized') continue
+    let entry = byStatus.get(opportunity.status)
+    if (!entry) {
+      entry = {
+        status: opportunity.status,
+        count: 0,
+        caseNames: [caseName],
+        examples: [],
+      }
+      byStatus.set(opportunity.status, entry)
+    }
+    entry.count += opportunity.count
+    for (const example of opportunity.examples) {
+      if (entry.examples.length >= MAX_RESIDUAL_EXAMPLES_PER_BUCKET) break
+      entry.examples.push(example)
+    }
+  }
+  for (const entry of byStatus.values()) {
+    entry.examples = entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET)
+  }
+  return byStatus
+}
+
+function summarizeLocalCopyRewriteResidualPatterns(
+  topOpportunities: CopyRewriteOpportunitySummary['topOpportunities'],
+  caseName: string,
+): Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry> {
+  const byPattern = new Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry>()
+  for (const opportunity of topOpportunities) {
+    if (opportunity.status === 'currentlyOptimized') continue
+    const key = `${opportunity.status}|${opportunity.pattern}`
+    let entry = byPattern.get(key)
+    if (!entry) {
+      entry = {
+        status: opportunity.status,
+        pattern: opportunity.pattern,
+        count: 0,
+        caseNames: [caseName],
+        examples: [],
+      }
+      byPattern.set(key, entry)
+    }
+    entry.count += opportunity.count
+    if (!entry.caseNames.includes(caseName)) {
+      entry.caseNames.push(caseName)
+    }
+    for (const example of opportunity.examples) {
+      if (entry.examples.length >= MAX_RESIDUAL_EXAMPLES_PER_BUCKET) break
+      entry.examples.push(example)
+    }
+  }
+  for (const entry of byPattern.values()) {
+    entry.examples = entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET)
+  }
+  return byPattern
+}
+
+function summarizeLocalCopyRewriteResidualFamiliesFromProvenance(
+  provenanceSummary: RewriteProvenanceSummary | undefined,
+  caseName: string,
+): Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry> {
+  const families = new Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry>()
+  if (!provenanceSummary?.shapeFamilySummary?.families) {
+    return families
+  }
+  for (const family of provenanceSummary.shapeFamilySummary.families) {
+    if (family.count <= 0) continue
+    families.set(family.family, {
+      family: family.family,
+      count: family.count,
+      caseNames: [caseName],
+      examples: family.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+    })
+  }
+  return families
+}
+
+function summarizeLocalCopyRewriteResidualReasonsFromProvenance(
+  provenanceSummary: RewriteProvenanceSummary | undefined,
+  caseName: string,
+): RewriteProvenanceBucket[] {
+  return [...(provenanceSummary?.byReason ?? [])]
+    .filter(item => item.reason !== 'already-optimized-by-existing-pass')
+    .map(item => ({
+      reason: item.reason,
+      count: item.count,
+      caseNames: item.count > 0 ? [caseName] : [],
+      examples: item.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+    }))
+}
+
+function summarizeExperimentalLocalCopyRewriteResidualRecommendation(
+  byStatus: ArithmeticProbeExperimentalLocalCopyRewriteResidualByStatus[],
+  residualCount: number,
+): ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary['recommendation'] {
+  if (residualCount === 0) return 'no-residuals'
+  const hasSafeCandidate = byStatus.some(item => item.status === 'safeCandidate' && item.count > 0)
+  const hasBlockedByBarrier = byStatus.some(item => item.status === 'blockedByBarrier' && item.count > 0)
+  const hasUnknown = byStatus.some(item => item.status === 'unknown' && item.count > 0)
+
+  if (!hasBlockedByBarrier && !hasUnknown && hasSafeCandidate) return 'candidate-family-ready'
+  return 'diagnose-residuals-first'
+}
+
+function toSortedResidualByStatus(
+  byStatus: Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualByStatus>,
+): ArithmeticProbeExperimentalLocalCopyRewriteResidualByStatus[] {
+  return [...byStatus.values()]
+    .map(entry => ({
+      ...entry,
+      caseNames: [...entry.caseNames].sort(),
+      examples: entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+    }))
+    .sort((left, right) => (
+      right.count - left.count || statusSortWeight(left.status) - statusSortWeight(right.status)
+    ))
+}
+
+function toSortedResidualByPattern(
+  byPattern: Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry>,
+): ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry[] {
+  return [...byPattern.values()]
+    .map(entry => ({
+      ...entry,
+      caseNames: [...entry.caseNames].sort(),
+      examples: entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+    }))
+    .sort((left, right) => {
+      if (right.count !== left.count) return right.count - left.count
+      if (statusSortWeight(left.status) !== statusSortWeight(right.status)) {
+        return statusSortWeight(left.status) - statusSortWeight(right.status)
+      }
+      return left.pattern.localeCompare(right.pattern)
+    })
+}
+
+function toSortedResidualByFamily(
+  families: Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry>,
+): ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry[] {
+  return [...families.values()]
+    .map(entry => ({
+      ...entry,
+      caseNames: [...entry.caseNames].sort(),
+      examples: entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+    }))
+    .sort((left, right) => right.count - left.count || left.family.localeCompare(right.family))
+}
+
+function toSortedResidualTopCaseNames(
+  cases: ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary[],
+): string[] {
+  return [...cases]
+    .filter(item => item.residualCount > 0)
+    .sort((left, right) =>
+      right.residualCount - left.residualCount || left.caseName.localeCompare(right.caseName) || left.optLevel.localeCompare(right.optLevel))
+    .slice(0, MAX_RESIDUAL_CASE_SUMMARY_ENTRIES)
+    .map(item => item.caseName)
+}
+
+export function summarizeExperimentalLocalCopyRewriteResidualCaseSummary(
+  caseSummary: {
+    caseName: string
+    optLevel: `O${OptimizationLevel}`
+    opportunities: CopyRewriteOpportunitySummary
+    rewriteOpportunityProvenanceSummary?: RewriteProvenanceSummary
+  },
+): ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary {
+  const caseName = caseSummary.caseName
+  const opportunities = caseSummary.opportunities
+  const residualCount = Math.max(0, opportunities.total - opportunities.currentlyOptimized)
+  const byStatus = summarizeLocalCopyRewriteResidualByStatusFromTopOpportunities(
+    opportunities.topOpportunities,
+    caseName,
+  )
+  const byPattern = summarizeLocalCopyRewriteResidualPatterns(opportunities.topOpportunities, caseName)
+  const provenanceSummary = caseSummary.rewriteOpportunityProvenanceSummary
+  const byFamily = summarizeLocalCopyRewriteResidualFamiliesFromProvenance(provenanceSummary, caseName)
+  const byProvenance = summarizeLocalCopyRewriteResidualReasonsFromProvenance(provenanceSummary, caseName)
+  const residualByStatus = toSortedResidualByStatus(byStatus)
+  const residualByPattern = toSortedResidualByPattern(byPattern).slice(0, MAX_RESIDUAL_PATTERNS_PER_SUMMARY)
+  const residualByFamily = toSortedResidualByFamily(byFamily).slice(0, MAX_RESIDUAL_FAMILIES_PER_SUMMARY)
+  const recommendation = summarizeExperimentalLocalCopyRewriteResidualRecommendation(residualByStatus, residualCount)
+
+  return {
+    caseName,
+    optLevel: caseSummary.optLevel,
+    residualCount,
+    residualByStatus,
+    residualByPattern,
+    residualByFamily,
+    residualByProvenanceReason: byProvenance
+      .map(entry => ({
+        ...entry,
+        caseNames: [...entry.caseNames].sort().slice(0, 1),
+      }))
+      .sort((left, right) => right.count - left.count || left.reason.localeCompare(right.reason)),
+    recommendation,
+  }
+}
+
+export function summarizeExperimentalLocalCopyRewriteResidualSummary(
+  summaries: Array<ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary>,
+): ArithmeticProbeExperimentalLocalCopyRewriteResidualSummary {
+  const perCase = [...summaries]
+    .map(item => ({
+      ...item,
+      residualByStatus: [...item.residualByStatus],
+      residualByPattern: [...item.residualByPattern],
+      residualByFamily: [...item.residualByFamily],
+      residualByProvenanceReason: [...item.residualByProvenanceReason],
+    }))
+    .sort((left, right) => left.caseName.localeCompare(right.caseName) || left.optLevel.localeCompare(right.optLevel))
+
+  const totalResidualCount = perCase.reduce((sum, current) => sum + current.residualCount, 0)
+  const byStatus = new Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualByStatus>()
+  const byPattern = new Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualPatternEntry>()
+  const byFamily = new Map<string, ArithmeticProbeExperimentalLocalCopyRewriteResidualFamilyEntry>()
+  const byProvenance = new Map<string, RewriteProvenanceBucket>()
+
+  for (const item of perCase) {
+    if (item.residualCount <= 0) continue
+    for (const statusEntry of item.residualByStatus) {
+      let aggregate = byStatus.get(statusEntry.status)
+      if (!aggregate) {
+        aggregate = {
+          status: statusEntry.status,
+          count: 0,
+          caseNames: [],
+          examples: [],
+        }
+        byStatus.set(statusEntry.status, aggregate)
+      }
+      aggregate.count += statusEntry.count
+      if (!aggregate.caseNames.includes(item.caseName)) {
+        aggregate.caseNames.push(item.caseName)
+      }
+      for (const example of statusEntry.examples) {
+        if (aggregate.examples.length >= MAX_RESIDUAL_EXAMPLES_PER_BUCKET) break
+        aggregate.examples.push(example)
+      }
+    }
+    for (const patternEntry of item.residualByPattern) {
+      const key = `${patternEntry.status}|${patternEntry.pattern}`
+      let aggregate = byPattern.get(key)
+      if (!aggregate) {
+        aggregate = {
+          status: patternEntry.status,
+          pattern: patternEntry.pattern,
+          count: 0,
+          caseNames: [],
+          examples: [],
+        }
+        byPattern.set(key, aggregate)
+      }
+      aggregate.count += patternEntry.count
+      if (!aggregate.caseNames.includes(item.caseName)) {
+        aggregate.caseNames.push(item.caseName)
+      }
+      for (const example of patternEntry.examples) {
+        if (aggregate.examples.length >= MAX_RESIDUAL_EXAMPLES_PER_BUCKET) break
+        aggregate.examples.push(example)
+      }
+    }
+    for (const familyEntry of item.residualByFamily) {
+      let aggregate = byFamily.get(familyEntry.family)
+      if (!aggregate) {
+        aggregate = {
+          family: familyEntry.family,
+          count: 0,
+          caseNames: [],
+          examples: [],
+        }
+        byFamily.set(familyEntry.family, aggregate)
+      }
+      aggregate.count += familyEntry.count
+      if (!aggregate.caseNames.includes(item.caseName)) {
+        aggregate.caseNames.push(item.caseName)
+      }
+      for (const example of familyEntry.examples) {
+        if (aggregate.examples.length >= MAX_RESIDUAL_EXAMPLES_PER_BUCKET) break
+        aggregate.examples.push(example)
+      }
+    }
+    for (const provenanceEntry of item.residualByProvenanceReason) {
+      let aggregate = byProvenance.get(provenanceEntry.reason)
+      if (!aggregate) {
+        aggregate = {
+          reason: provenanceEntry.reason,
+          count: 0,
+          caseNames: [],
+          examples: [],
+        }
+        byProvenance.set(provenanceEntry.reason, aggregate)
+      }
+      aggregate.count += provenanceEntry.count
+      for (const caseName of provenanceEntry.caseNames) {
+        if (!aggregate.caseNames.includes(caseName)) {
+          aggregate.caseNames.push(caseName)
+        }
+      }
+      for (const example of provenanceEntry.examples) {
+        if (aggregate.examples.length >= MAX_RESIDUAL_EXAMPLES_PER_BUCKET) break
+        aggregate.examples.push(example)
+      }
+    }
+  }
+
+  const byStatusArray = toSortedResidualByStatus(byStatus)
+  const byPatternArray = toSortedResidualByPattern(byPattern)
+    .slice(0, MAX_RESIDUAL_PATTERNS_PER_SUMMARY)
+  const byFamilyArray = toSortedResidualByFamily(byFamily).slice(0, MAX_RESIDUAL_FAMILIES_PER_SUMMARY)
+  const residualByProvenanceReason = [...byProvenance.values()]
+    .map(entry => ({
+      ...entry,
+      caseNames: [...entry.caseNames].sort(),
+      examples: entry.examples.slice(0, MAX_RESIDUAL_EXAMPLES_PER_BUCKET),
+    }))
+    .sort((left, right) => right.count - left.count || left.reason.localeCompare(right.reason))
+
+  const recommendation = summarizeExperimentalLocalCopyRewriteResidualRecommendation(
+    byStatusArray,
+    totalResidualCount,
+  )
+  const topResidualCaseNames = toSortedResidualTopCaseNames(perCase)
+
+  return {
+    mode: 'experimental-local-copy-rewrite',
+    status: 'diagnostic',
+    onCaseCount: perCase.length,
+    totalResidualCount,
+    residualByStatus: byStatusArray,
+    residualByPattern: byPatternArray,
+    residualByFamily: byFamilyArray,
+    residualByProvenanceReason,
+    topResidualCaseNames,
+    recommendation,
+    perCase,
+  }
+}
+
 function summarizeCopyOrigins(lines: Array<{ path: string; line: number; content: string }>): CopyOriginSummary {
   const totals: CopyOriginSummary = {
     twoAddressMaterialization: 0,
@@ -7133,6 +7532,14 @@ export function runArithmeticProbe(
     copyOrigins: summarizeCopyOrigins(lines),
     scoreCopyPatterns: summarizeScoreCopyPatterns(result.files),
     rewriteOpportunities: rewriteOpportunityAnalysis.opportunities,
+    experimentalLocalCopyRewriteResidualSummary: experimentalLirLocalCopyRewrite
+      ? summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+        caseName: probe.name,
+        optLevel: `O${optLevel}`,
+        opportunities: rewriteOpportunityAnalysis.opportunities,
+        rewriteOpportunityProvenanceSummary: rewriteOpportunityAnalysis.provenanceSummary,
+      })
+      : undefined,
     virDecision,
     warnings: result.warnings,
   }
@@ -7154,6 +7561,13 @@ export function runArithmeticProbeReport(
   const cases = experimentalLirLocalCopyRewrite
     ? selected.flatMap(probe => optLevels.map(level => runArithmeticProbe(probe, level, true))
     ) : offCases
+  const experimentalLocalCopyRewriteResidualSummaries = experimentalLirLocalCopyRewrite
+    ? cases
+      .map(result => result.experimentalLocalCopyRewriteResidualSummary)
+      .filter((summary): summary is ArithmeticProbeExperimentalLocalCopyRewriteResidualCaseSummary =>
+        summary !== undefined
+      )
+    : []
   const lirOpportunitySummary = buildLirOpportunitySummary(cases)
   const offlineRewriteEquivalenceRun = experimentalLirLocalCopyRewrite
     ? runOfflineRewriteEquivalenceFixtures()
@@ -7183,6 +7597,9 @@ export function runArithmeticProbeReport(
       offlineRewriteEquivalencePackSummary,
     })
     : undefined
+  const experimentalLocalCopyRewriteResidualSummary = experimentalLirLocalCopyRewrite
+    ? summarizeExperimentalLocalCopyRewriteResidualSummary(experimentalLocalCopyRewriteResidualSummaries)
+    : undefined
   return {
     ...meta,
     cases,
@@ -7193,6 +7610,7 @@ export function runArithmeticProbeReport(
     experimentalLocalCopyRewriteComparison,
     experimentalLocalCopyRewriteNoRegressionGate,
     experimentalLocalCopyRewriteRolloutReadinessSummary,
+    experimentalLocalCopyRewriteResidualSummary,
     lirOpportunitySummary,
     futureRewriteFixtureExportSummary: lirOpportunitySummary?.futureRewriteFixtureExportSummary,
     unknownCauseSplitSummary: lirOpportunitySummary?.unknownCauseSplitSummary,

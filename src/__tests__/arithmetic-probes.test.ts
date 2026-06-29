@@ -12,6 +12,8 @@ import {
   parseProbeCliArgs,
   type ArithmeticProbeResult,
   type ArithmeticProbeExperimentalLocalCopyRewriteComparison,
+  summarizeExperimentalLocalCopyRewriteResidualCaseSummary,
+  summarizeExperimentalLocalCopyRewriteResidualSummary,
   type OfflineRewriteEquivalencePackSummary,
   type OfflineRewriteFamilyReadinessSummary,
   type RewriteProvenanceSummary,
@@ -1157,6 +1159,416 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(comparison?.on.caseCount).toBe(1)
     expect(comparison?.off.commandTotal).toBe(offCase.commands.total)
     expect(comparison?.on.commandTotal).toBe(onCase.commands.total)
+  })
+
+  it('summarizes per-case experimental local-copy residual opportunities deterministically', () => {
+    const summary = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-zyx',
+      optLevel: 'O1',
+      opportunities: {
+        total: 7,
+        currentlyOptimized: 1,
+        safeCandidate: 3,
+        blockedByBarrier: 1,
+        unknown: 2,
+        topOpportunities: [
+          {
+            status: 'unknown',
+            pattern: 'candidate-pattern-b',
+            count: 2,
+            examples: ['case-zyx:2', 'case-zyx:4', 'case-zyx:3', 'case-zyx:1'],
+          },
+          {
+            status: 'safeCandidate',
+            pattern: 'candidate-pattern-a',
+            count: 3,
+            examples: ['case-zyx:8', 'case-zyx:6', 'case-zyx:7'],
+          },
+          {
+            status: 'blockedByBarrier',
+            pattern: 'candidate-pattern-c',
+            count: 1,
+            examples: ['case-zyx:5'],
+          },
+        ],
+      },
+      rewriteOpportunityProvenanceSummary: {
+        total: 6,
+        byReason: [
+          {
+            reason: 'blocked-by-cross-function-module-external-mention',
+            count: 2,
+            caseNames: ['case-zyx'],
+            examples: ['case-zyx:10'],
+          },
+          {
+            reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+            count: 4,
+            caseNames: ['case-zyx'],
+            examples: ['case-zyx:11'],
+          },
+        ],
+        safeAdjacentScoreCopyArithCount: 0,
+        blockedCount: 2,
+        insufficientInfoCount: 0,
+        unknownCount: 0,
+        requiresLirLevelAnalysis: true,
+        shapeFamilySummary: {
+          totalPatternNotExactCount: 6,
+          families: [
+            {
+              family: 'arithmetic-copy-feeds-const-or-add-imm',
+              count: 4,
+              caseNames: ['case-zyx'],
+              examples: ['case-zyx:1', 'case-zyx:2'],
+              likelyNextAction: 'local-canonicalization',
+              requiresLirLevelAnalysis: true,
+            },
+            {
+              family: 'copy-feeds-copy-chain',
+              count: 2,
+              caseNames: ['case-zyx'],
+              examples: ['case-zyx:3'],
+              likelyNextAction: 'local-canonicalization',
+              requiresLirLevelAnalysis: true,
+            },
+          ],
+          topRecoverableFamilies: ['arithmetic-copy-feeds-const-or-add-imm'],
+          recommendation: 'stable residual probe',
+        },
+      },
+    })
+
+    expect(summary.caseName).toBe('case-zyx')
+    expect(summary.residualCount).toBe(6)
+    expect(summary.residualByStatus).toEqual([
+      { status: 'safeCandidate', count: 3, caseNames: ['case-zyx'], examples: ['case-zyx:8', 'case-zyx:6', 'case-zyx:7'] },
+      { status: 'unknown', count: 2, caseNames: ['case-zyx'], examples: ['case-zyx:2', 'case-zyx:4', 'case-zyx:3'] },
+      { status: 'blockedByBarrier', count: 1, caseNames: ['case-zyx'], examples: ['case-zyx:5'] },
+    ])
+    expect(summary.residualByPattern).toEqual([
+      { status: 'safeCandidate', pattern: 'candidate-pattern-a', count: 3, caseNames: ['case-zyx'], examples: ['case-zyx:8', 'case-zyx:6', 'case-zyx:7'] },
+      { status: 'unknown', pattern: 'candidate-pattern-b', count: 2, caseNames: ['case-zyx'], examples: ['case-zyx:2', 'case-zyx:4', 'case-zyx:3'] },
+      { status: 'blockedByBarrier', pattern: 'candidate-pattern-c', count: 1, caseNames: ['case-zyx'], examples: ['case-zyx:5'] },
+    ])
+    expect(summary.residualByFamily).toEqual([
+      {
+        family: 'arithmetic-copy-feeds-const-or-add-imm',
+        count: 4,
+        caseNames: ['case-zyx'],
+        examples: ['case-zyx:1', 'case-zyx:2'],
+      },
+      {
+        family: 'copy-feeds-copy-chain',
+        count: 2,
+        caseNames: ['case-zyx'],
+        examples: ['case-zyx:3'],
+      },
+    ])
+    expect(summary.residualByProvenanceReason).toEqual([
+      {
+        reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+        count: 4,
+        caseNames: ['case-zyx'],
+        examples: ['case-zyx:11'],
+      },
+      {
+        reason: 'blocked-by-cross-function-module-external-mention',
+        count: 2,
+        caseNames: ['case-zyx'],
+        examples: ['case-zyx:10'],
+      },
+    ])
+    expect(summary.recommendation).toBe('diagnose-residuals-first')
+  })
+
+  it('builds deterministic aggregate residual summaries with capped examples and stable ordering', () => {
+    const caseSummaryAlpha = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-alpha',
+      optLevel: 'O1',
+      opportunities: {
+        total: 6,
+        currentlyOptimized: 0,
+        safeCandidate: 4,
+        blockedByBarrier: 0,
+        unknown: 2,
+        topOpportunities: [
+          {
+            status: 'safeCandidate',
+            pattern: 'safe-shape',
+            count: 4,
+            examples: ['case-alpha:1', 'case-alpha:2', 'case-alpha:3', 'case-alpha:4'],
+          },
+          {
+            status: 'unknown',
+            pattern: 'unknown-shape',
+            count: 2,
+            examples: ['case-alpha:5', 'case-alpha:6'],
+          },
+        ],
+      },
+      rewriteOpportunityProvenanceSummary: {
+        total: 6,
+        byReason: [
+          {
+            reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+            count: 4,
+            caseNames: ['case-alpha'],
+            examples: ['case-alpha:1'],
+          },
+          {
+            reason: 'blocked-by-protected-slot',
+            count: 2,
+            caseNames: ['case-alpha'],
+            examples: ['case-alpha:5'],
+          },
+        ],
+        safeAdjacentScoreCopyArithCount: 4,
+        blockedCount: 0,
+        insufficientInfoCount: 0,
+        unknownCount: 2,
+        requiresLirLevelAnalysis: true,
+        shapeFamilySummary: {
+          totalPatternNotExactCount: 6,
+          families: [
+            {
+              family: 'arithmetic-copy-feeds-const-or-add-imm',
+              count: 4,
+              caseNames: ['case-alpha'],
+              examples: ['case-alpha:1', 'case-alpha:2'],
+              likelyNextAction: 'local-canonicalization',
+              requiresLirLevelAnalysis: true,
+            },
+          ],
+          topRecoverableFamilies: ['arithmetic-copy-feeds-const-or-add-imm'],
+          recommendation: 'sort test',
+        },
+      },
+    })
+
+    const caseSummaryGamma = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-gamma',
+      optLevel: 'O1',
+      opportunities: {
+        total: 3,
+        currentlyOptimized: 0,
+        safeCandidate: 0,
+        blockedByBarrier: 3,
+        unknown: 0,
+        topOpportunities: [
+          {
+            status: 'blockedByBarrier',
+            pattern: 'blocked-shape',
+            count: 3,
+            examples: ['case-gamma:1', 'case-gamma:2', 'case-gamma:3', 'case-gamma:4'],
+          },
+        ],
+      },
+      rewriteOpportunityProvenanceSummary: {
+        total: 3,
+        byReason: [
+          {
+            reason: 'blocked-by-cross-function-module-external-mention',
+            count: 3,
+            caseNames: ['case-gamma'],
+            examples: ['case-gamma:1'],
+          },
+        ],
+        safeAdjacentScoreCopyArithCount: 0,
+        blockedCount: 3,
+        insufficientInfoCount: 0,
+        unknownCount: 0,
+        requiresLirLevelAnalysis: true,
+        shapeFamilySummary: {
+          totalPatternNotExactCount: 3,
+          families: [
+            {
+              family: 'copy-feeds-copy-chain',
+              count: 3,
+              caseNames: ['case-gamma'],
+              examples: ['case-gamma:1'],
+              likelyNextAction: 'local-canonicalization',
+              requiresLirLevelAnalysis: true,
+            },
+          ],
+          topRecoverableFamilies: ['copy-feeds-copy-chain'],
+          recommendation: 'sort test',
+        },
+      },
+    })
+
+    const caseSummaryDelta = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-delta',
+      optLevel: 'O1',
+      opportunities: {
+        total: 1,
+        currentlyOptimized: 1,
+        safeCandidate: 0,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [],
+      },
+    })
+
+    const summary = summarizeExperimentalLocalCopyRewriteResidualSummary([
+      caseSummaryGamma,
+      caseSummaryAlpha,
+      caseSummaryDelta,
+    ])
+
+    expect(summary.mode).toBe('experimental-local-copy-rewrite')
+    expect(summary.status).toBe('diagnostic')
+    expect(summary.onCaseCount).toBe(3)
+    expect(summary.totalResidualCount).toBe(9)
+    expect(summary.residualByStatus).toEqual([
+      { status: 'safeCandidate', count: 4, caseNames: ['case-alpha'], examples: ['case-alpha:1', 'case-alpha:2', 'case-alpha:3'] },
+      { status: 'blockedByBarrier', count: 3, caseNames: ['case-gamma'], examples: ['case-gamma:1', 'case-gamma:2', 'case-gamma:3'] },
+      { status: 'unknown', count: 2, caseNames: ['case-alpha'], examples: ['case-alpha:5', 'case-alpha:6'] },
+    ])
+    expect(summary.residualByPattern).toEqual([
+      { status: 'safeCandidate', pattern: 'safe-shape', count: 4, caseNames: ['case-alpha'], examples: ['case-alpha:1', 'case-alpha:2', 'case-alpha:3'] },
+      { status: 'blockedByBarrier', pattern: 'blocked-shape', count: 3, caseNames: ['case-gamma'], examples: ['case-gamma:1', 'case-gamma:2', 'case-gamma:3'] },
+      { status: 'unknown', pattern: 'unknown-shape', count: 2, caseNames: ['case-alpha'], examples: ['case-alpha:5', 'case-alpha:6'] },
+    ])
+    expect(summary.residualByFamily).toEqual([
+      {
+        family: 'arithmetic-copy-feeds-const-or-add-imm',
+        count: 4,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:1', 'case-alpha:2'],
+      },
+      {
+        family: 'copy-feeds-copy-chain',
+        count: 3,
+        caseNames: ['case-gamma'],
+        examples: ['case-gamma:1'],
+      },
+    ])
+    expect(summary.residualByProvenanceReason).toEqual([
+      {
+        reason: 'blocked-by-pattern-not-exact-adjacent-score-copy-arith',
+        count: 4,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:1'],
+      },
+      {
+        reason: 'blocked-by-cross-function-module-external-mention',
+        count: 3,
+        caseNames: ['case-gamma'],
+        examples: ['case-gamma:1'],
+      },
+      {
+        reason: 'blocked-by-protected-slot',
+        count: 2,
+        caseNames: ['case-alpha'],
+        examples: ['case-alpha:5'],
+      },
+    ])
+    expect(summary.topResidualCaseNames).toEqual(['case-alpha', 'case-gamma'])
+    expect(summary.perCase).toEqual([
+      caseSummaryAlpha,
+      caseSummaryDelta,
+      caseSummaryGamma,
+    ])
+    expect(summary.recommendation).toBe('diagnose-residuals-first')
+  })
+
+  it('returns conservative residual summary for empty or fully optimized input sets', () => {
+    const emptyCaseSummary = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-none',
+      optLevel: 'O2',
+      opportunities: {
+        total: 1,
+        currentlyOptimized: 1,
+        safeCandidate: 0,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [],
+      },
+    })
+
+    const aggregate = summarizeExperimentalLocalCopyRewriteResidualSummary([emptyCaseSummary])
+
+    expect(aggregate.totalResidualCount).toBe(0)
+    expect(aggregate.onCaseCount).toBe(1)
+    expect(aggregate.residualByStatus).toEqual([])
+    expect(aggregate.residualByPattern).toEqual([])
+    expect(aggregate.residualByFamily).toEqual([])
+    expect(aggregate.topResidualCaseNames).toEqual([])
+    expect(aggregate.recommendation).toBe('no-residuals')
+    expect(aggregate.perCase).toEqual([emptyCaseSummary])
+  })
+
+  it('adds residual summaries only for experimental local-copy report paths', () => {
+    const offReport = runArithmeticProbeReport('int_arithmetic', [1], false)
+    const onReport = runArithmeticProbeReport('int_arithmetic', [1], true)
+
+    expect(offReport.experimentalLocalCopyRewriteResidualSummary).toBeUndefined()
+    const residualSummary = onReport.experimentalLocalCopyRewriteResidualSummary
+    const caseResidualSummary = onReport.cases[0].experimentalLocalCopyRewriteResidualSummary
+
+    expect(residualSummary).toBeDefined()
+    expect(residualSummary?.mode).toBe('experimental-local-copy-rewrite')
+    expect(residualSummary?.status).toBe('diagnostic')
+    expect(residualSummary?.onCaseCount).toBe(onReport.cases.length)
+    expect(residualSummary?.totalResidualCount)
+      .toBe(onReport.cases.reduce((sum, result) => Math.max(0, result.rewriteOpportunities.total - result.rewriteOpportunities.currentlyOptimized), 0))
+    expect(residualSummary?.topResidualCaseNames).toEqual(expect.any(Array))
+    expect(residualSummary?.residualByStatus).toEqual(expect.any(Array))
+    expect(residualSummary?.perCase).toContainEqual(caseResidualSummary)
+  })
+
+  it('caps residual examples conservatively at deterministic depth', () => {
+    const caseSummary = summarizeExperimentalLocalCopyRewriteResidualCaseSummary({
+      caseName: 'case-capped',
+      optLevel: 'O1',
+      opportunities: {
+        total: 5,
+        currentlyOptimized: 0,
+        safeCandidate: 5,
+        blockedByBarrier: 0,
+        unknown: 0,
+        topOpportunities: [
+          {
+            status: 'safeCandidate',
+            pattern: 'safe-rich',
+            count: 5,
+            examples: ['case-capped:1', 'case-capped:2', 'case-capped:3', 'case-capped:4', 'case-capped:5'],
+          },
+        ],
+      },
+      rewriteOpportunityProvenanceSummary: {
+        total: 5,
+        byReason: [],
+        safeAdjacentScoreCopyArithCount: 0,
+        blockedCount: 0,
+        insufficientInfoCount: 0,
+        unknownCount: 0,
+        requiresLirLevelAnalysis: true,
+      },
+    })
+
+    expect(caseSummary.residualByPattern[0].examples).toEqual(['case-capped:1', 'case-capped:2', 'case-capped:3'])
+    expect(caseSummary.residualByStatus[0].examples).toEqual(['case-capped:1', 'case-capped:2', 'case-capped:3'])
+    expect(caseSummary.recommendation).toBe('candidate-family-ready')
+  })
+
+  it('keeps no-regression and rollout gates passing with residual diagnostic presence on deterministic run', () => {
+    const report = runArithmeticProbeReport('int_arithmetic', [1], true)
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      report.experimentalLocalCopyRewriteComparison,
+      report.offlineRewriteEquivalencePackSummary,
+    )
+    const readiness = evaluateExperimentalLocalCopyRewriteRolloutReadinessSummary({
+      comparison: report.experimentalLocalCopyRewriteComparison,
+      noRegressionGate: gate,
+      offlineRewriteEquivalencePackSummary: report.offlineRewriteEquivalencePackSummary,
+    })
+
+    expect(gate.status).toBe('pass')
+    expect(readiness.status).toBe('pass')
+    expect(report.experimentalLocalCopyRewriteResidualSummary?.onCaseCount).toBe(1)
+    expect(readiness.improvedCaseNames).toEqual(expect.any(Array))
   })
 
   it('adds rollout readiness summary with aggregate improvement on explicit all-case experimental report path', () => {

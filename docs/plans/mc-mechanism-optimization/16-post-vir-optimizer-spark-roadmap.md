@@ -104,6 +104,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | V | Offline rewrite family readiness contract | Add explicit required-family readiness metadata and fail the evidence gate when required fixture families are missing or failed | Medium | Small diagnostics-only slice | Completed |
 | W | Explicit local-copy rollout readiness summary for manual opt-in | Add deterministic aggregate+regression evidence summary for manual experimental rollout readiness | Medium | Small diagnostics-only slice | Completed |
 | X | CLI experimental local-copy opt-in manual gate | Expose manual CLI flag passthrough to existing experimental LIR local-copy rewrite path; no default/on by default changes | Low | Small TDD slice | Completed |
+| Y | Residual local-copy blocker/provenance diagnostics | Add deterministic residual blocker summary for score-copy opportunities after explicit local-copy flag-on | Low | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -732,11 +733,32 @@ git status --short --branch
     - verify help text documents the new experimental wording.
   - This tranche is evidence-only/manual opt-in only. No production pipeline behavior changed.
 
+## Tranche Y — residual local-copy blocker/provenance diagnostics
+
+- Status: Completed as diagnostics-only.
+- Outcome:
+  - Added residual diagnostics on explicit experimental local-copy benchmark runs at
+    `ArithmeticProbeReport.experimentalLocalCopyRewriteResidualSummary`.
+  - The summary is derived from existing opportunity evidence and adds deterministic fields for residual explanations when flag-on data is available:
+    - `totalResidualCount`, `status`, `recommendation`, `onCaseCount`,
+    - deterministic `residualByStatus` entries,
+    - deterministic `residualByPattern` buckets,
+    - deterministic `residualByFamily` buckets with capped `examples`,
+    - deterministic `residualByProvenanceReason` buckets,
+    - sorted/capped `topResidualCaseNames` plus per-case residual summaries.
+  - Added explicit residual bucket caps for review stability:
+    - `MAX_RESIDUAL_CASE_SUMMARY_ENTRIES = 8`
+    - `MAX_RESIDUAL_PATTERNS_PER_SUMMARY = 12`
+    - `MAX_RESIDUAL_FAMILIES_PER_SUMMARY = 12`
+    - `MAX_RESIDUAL_EXAMPLES_PER_BUCKET = 3`
+  - Added tests for deterministic ordering/capping, empty-input conservatism (`no-residuals`), and presence only on experimental local-copy report paths.
+  - No optimizer logic, pipeline, CLI semantics, or benchmark behavior changed; this remains bounded diagnostics-only provenance for future gated rewrite candidates.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through X and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through Y and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -761,11 +783,12 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche X with J/K/L/O/P/Q/R/S/T/U/V/W/X diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche Y with J/K/L/O/P/Q/R/S/T/U/V/W/X/Y diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.
 
 Next safe work remains:
 1. keep the explicit no-regression gate path operational while coverage evidence stabilizes,
-2. proceed to a separately gated rewrite implementation tranche only after bounded offline evidence and gate stability justify implementation.
+2. use residual blocker/provenance summaries to isolate the highest-signal candidate families for the next gated rewrite-safe tranche,
+3. proceed to a separately gated rewrite implementation tranche only after bounded offline evidence and gate stability justify implementation.
