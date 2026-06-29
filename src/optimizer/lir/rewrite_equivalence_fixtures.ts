@@ -267,6 +267,47 @@ export const offlineRewriteEquivalenceFixtures: OfflineRewriteEquivalenceFixture
     samples: [sample([[mkSlot('$src'), 11], [mkSlot('$rhs'), 4], [mkSlot('$tmp'), -2], [mkSlot('$out'), 0], [mkSlot('$marker'), 1]])],
   },
   {
+    name: 'local-temp-multi-rmw-window-safe-if-temp-not-observed',
+    family: 'read-write-window',
+    expectedStatus: 'equivalent',
+    before: mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$rhs1') },
+      { kind: 'score_mul', dst: mkSlot('$tmp'), src: mkSlot('$rhs2') },
+      { kind: 'score_sub', dst: mkSlot('$tmp'), src: mkSlot('$rhs3') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ]),
+    after: mkFn([
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$out'), src: mkSlot('$rhs1') },
+      { kind: 'score_mul', dst: mkSlot('$out'), src: mkSlot('$rhs2') },
+      { kind: 'score_sub', dst: mkSlot('$out'), src: mkSlot('$rhs3') },
+    ]),
+    observedSlots: [mkSlot('$out')],
+    samples: [
+      sample([[mkSlot('$src'), 2], [mkSlot('$rhs1'), 3], [mkSlot('$rhs2'), 4], [mkSlot('$rhs3'), 5], [mkSlot('$tmp'), 99], [mkSlot('$out'), 0]]),
+      sample([[mkSlot('$src'), -7], [mkSlot('$rhs1'), 10], [mkSlot('$rhs2'), -2], [mkSlot('$rhs3'), 8], [mkSlot('$tmp'), 1], [mkSlot('$out'), 5]]),
+    ],
+  },
+  {
+    name: 'local-temp-multi-rmw-window-observed-temp-is-counterexample',
+    family: 'read-write-window',
+    expectedStatus: 'counterexample',
+    before: mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$rhs1') },
+      { kind: 'score_mul', dst: mkSlot('$tmp'), src: mkSlot('$rhs2') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ]),
+    after: mkFn([
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$out'), src: mkSlot('$rhs1') },
+      { kind: 'score_mul', dst: mkSlot('$out'), src: mkSlot('$rhs2') },
+    ]),
+    observedSlots: [mkSlot('$out'), mkSlot('$tmp')],
+    samples: [sample([[mkSlot('$src'), 3], [mkSlot('$rhs1'), 4], [mkSlot('$rhs2'), 5], [mkSlot('$tmp'), 6], [mkSlot('$out'), 0]])],
+  },
+  {
     name: 'local-temp-observed-after-window-is-unsafe',
     family: 'read-write-window',
     expectedStatus: 'counterexample',

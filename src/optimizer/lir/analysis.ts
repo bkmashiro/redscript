@@ -265,6 +265,12 @@ export function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseI
       hasBarrierAfter = true
       nextReadBySlot.clear()
       nextWriteBySlot.clear()
+      for (const slot of getReadSlots(instrs[index])) {
+        nextReadBySlot.set(slotKey(slot), index)
+      }
+      for (const slot of getWriteSlots(instrs[index])) {
+        nextWriteBySlot.set(slotKey(slot), index)
+      }
       continue
     }
 
@@ -296,10 +302,9 @@ export function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseI
     },
     isDeadAfter(index: number, slot: Slot): boolean {
       if (index < 0 || index >= n) return false
-      const hasBarrier = barrierAfter[index]
       const hasRead = nextReadAfter[index].has(key(slot))
       const hasWrite = nextWriteAfter[index].has(key(slot))
-      return !hasBarrier && !hasRead && !hasWrite
+      return !hasRead && !hasWrite
     },
   }
 }

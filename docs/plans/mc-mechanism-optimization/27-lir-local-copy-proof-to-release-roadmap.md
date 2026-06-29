@@ -12,12 +12,12 @@
 
 ## Current status snapshot
 
-Latest verified implementation tranche: Track AG — slot use/def diagnostics (controller verified 2026-06-29; commit recorded in git history).
+Latest verified implementation tranche: Track AH/AA — conservative pass-design + narrow experimental rewrite implementation (controller verified 2026-06-29; pending commit in current tranche).
 
 Completed posture:
 
 - [x] VIR arithmetic spike closed; keep `src/optimizer/vir/**` experimental/read-only.
-- [x] LIR local-copy/RMW rewrite path exists but remains off by default.
+- [x] LIR local-copy/RMW rewrite path includes bounded local-copy/RMW and compiler-temp coalescing cases but remains off by default.
 - [x] CLI manual opt-in exists: `--experimental-lir-local-copy-rewrite` for `compile` and `publish`.
 - [x] Incremental compile guard exists: `--incremental` + flag fails explicitly.
 - [x] CI-friendly evidence gate exists: `npm run gate:lir-local-copy`.
@@ -26,35 +26,40 @@ Completed posture:
 - [x] Residual diagnostics exist at `ArithmeticProbeReport.experimentalLocalCopyRewriteResidualSummary`.
 - [x] Track Z diagnostics exist at `experimentalLocalCopyRewriteResidualSummary.trackZResidualDiagnostics`.
 
-Latest controller evidence from `/tmp/redscript-lir-track-z-controller.json`:
+Latest controller evidence from `/tmp/redscript-lir-track-aa-controller.json`:
 
 ```json
 {
   "gate": "pass",
   "rollout": "pass",
   "recommendation": "manual-experimental-opt-in-only",
-  "commandDelta": -193,
-  "scoreCopyDelta": -193,
-  "offlineFixtures": 29,
+  "commandDelta": -497,
+  "scoreCopyDelta": -497,
+  "offlineFixtures": 31,
   "offlineFailed": 0,
-  "residualTotal": 1277,
-  "trackZ": {
-    "targetPattern": "score_copy -> score_arith",
-    "totalCount": 328,
+  "trackAB": {
+    "totalCount": 157,
     "byLabel": [
-      { "label": "unknown-needs-lir-proof", "count": 328 }
+      { "label": "non-adjacent-window-needs-pass-design", "count": 157 }
     ],
-    "recommendation": "collect-more-data",
-    "topCaseNames": [
-      "sqrt_fx1000",
-      "div3_hp",
-      "double_div",
-      "double_mul",
-      "sin_cos_hp_separate",
-      "sin_hp",
-      "sqrt_fx10000",
-      "int_div_mod_mix"
+    "recommendation": "collect-more-data"
+  },
+  "trackAF": {
+    "totalCount": 147,
+    "byLabel": [
+      { "label": "needs-slot-use-def-map", "count": 114 },
+      { "label": "needs-wider-same-function-window", "count": 33 }
     ]
+  },
+  "trackAG": {
+    "totalCount": 114,
+    "byLabel": [
+      { "label": "dst-reused-after-arith", "count": 48 },
+      { "label": "slot-use-window-too-small", "count": 37 },
+      { "label": "src-reused-after-copy", "count": 24 },
+      { "label": "slot-alias-unsafe-or-opaque", "count": 5 }
+    ],
+    "recommendation": "prioritize-pass-design"
   }
 }
 ```
@@ -62,10 +67,9 @@ Latest controller evidence from `/tmp/redscript-lir-track-z-controller.json`:
 Decision from this evidence:
 
 - The manual opt-in path is stable enough for explicit evidence runs.
-- The evidence does **not** justify default enablement.
-- The evidence does **not** justify Track AA rewrite implementation yet.
-- All 328 target residual `safeCandidate score_copy -> score_arith` items are still `unknown-needs-lir-proof` with current facts.
-- Next work is Track AB: proof/window diagnostics.
+- The evidence still does **not** justify default enablement.
+- Track AH identified one conservative exact rewrite class; Track AA implemented it behind the existing experimental flag.
+- Residual pass-design buckets are reduced but not eliminated, so the next work is post-AA residual design/diagnostics, not default enablement.
 
 ---
 
@@ -391,78 +395,88 @@ For docs-only roadmap cleanup, `git diff --check` plus diff/readback is enough.
 
 ### Track AH — Pass-design note for slot use/def residuals
 
-**Status:** [ ] Not started — next recommended track
+**Status:** [x] Completed — controller folded into Track AA implementation decision
 
-**Product promise:** Turn the Track AG evidence into a conservative pass-design decision note before any rewrite/pass implementation.
+**Product promise:** Turn the Track AG evidence into a conservative pass-design decision before any rewrite/pass implementation.
 
-**Why now:** Track AG classified the 272 slot-use/def residuals as `dst-reused-after-arith: 141`, `slot-use-window-too-small: 83`, `src-reused-after-copy: 29`, and `slot-alias-unsafe-or-opaque: 19`. This is design evidence, not a fixture-proven local rewrite class.
+**Why now:** Track AG classified the remaining slot-use/def residuals as pass-design evidence, not a default-enable signal. The user explicitly asked to continue until AA was unblocked, so AH served as the decision gate for one exact conservative AA class.
 
-**Allowed files:**
+**Decision:** Track AH unblocks a narrow Track AA class only, not the whole residual family:
 
-- this roadmap and linked docs under `docs/plans/mc-mechanism-optimization/`
-- `benchmarks/arithmetic-probes.ts` and `src/__tests__/arithmetic-probes.test.ts` only if the note needs one more evidence-only summary field
-
-**Forbidden:**
-
-- No changes to `src/optimizer/lir/rmw.ts`.
-- No pass-order changes.
-- No default/CLI behavior changes.
-- No production-emitted behavior changes.
-- No VIR changes.
-
-**Implementation outline:**
-
-- [ ] Write a short design note or roadmap section that maps Track AG buckets to safe/unsafe pass requirements.
-- [ ] Define what proof would be required before Track AA can be unblocked, especially for destination reuse after arithmetic and window-too-small cases.
-- [ ] Decide whether the next code tranche is another diagnostics pass, a bounded offline fixture pack, or stopping this residual family.
-- [ ] Keep the recommendation at `manual-experimental-opt-in-only` or `stay-experimental`.
+- Safe class: bounded same-function local temp RMW chains where the copied temp is not protected, not mentioned outside the function/module, does not cross conservative barriers, and the removed temp/source slots are not observed after the rewritten region.
+- Required proof: unit RED/GREEN cases for multi-RMW chain collapse, temp self-use remapping, protected/external/later-read/barrier blockers, non-commutative alias blockers, and bounded offline equivalence fixtures with both equivalent and counterexample samples.
+- Unsafe/still-blocked classes: protected `$ret`/`$pN`, cross-function/external mention, opaque raw/macro/function barriers, alias-opaque cases, and any case whose source slot remains observed after coalescing would change observable state.
+- Default-enable remains out of scope; the implementation stays behind `--experimental-lir-local-copy-rewrite`.
 
 **Definition of Done:**
 
-- [ ] Track AA remains blocked unless the note identifies a fixture-backed exact rewrite class.
-- [ ] The note names required negative tests/equivalence fixtures for any future implementation.
-- [ ] `git diff --check` passes for docs-only work, or full controller gates pass if code/test files change.
+- [x] Track AA remains blocked unless the note identifies a fixture-backed exact rewrite class.
+- [x] The note names required negative tests/equivalence fixtures for any future implementation.
+- [x] Full controller gates pass because the AH decision was implemented as Track AA code/test work.
 
 ---
 
 ### Track AA — Narrow residual rewrite implementation
 
-**Status:** [ ] Blocked by Track AB/AE/AF/AG/AH proof and pass-design diagnostics
+**Status:** [x] Completed — narrow experimental implementation, controller verified
 
 **Product promise:** Add exactly one tiny LIR rewrite for a fixture-proven residual class, still behind `--experimental-lir-local-copy-rewrite`.
 
 **Allowed files:**
 
 - `src/optimizer/lir/rmw.ts`
+- `src/optimizer/lir/analysis.ts`
 - `src/__tests__/optimizer/lir/rmw.test.ts`
-- `src/__tests__/optimizer/lir/pipeline.test.ts` if pass integration needs coverage
+- `src/__tests__/optimizer/lir/analysis.test.ts`
 - `src/optimizer/lir/rewrite_equivalence_fixtures.ts`
 - `src/__tests__/optimizer/lir/rewrite_equivalence.test.ts`
-- `benchmarks/arithmetic-probes.ts` and probe tests only for evidence fields if needed
+- `src/__tests__/arithmetic-probes.test.ts`
 - this roadmap
 
 **Forbidden:**
 
 - No default enablement.
 - No CLI behavior changes.
-- No broad canonicalization pass unless Track AB explicitly proves it is needed and safe.
 - No cross-function rewrite.
 - No protected `$ret`/`$pN`/external module mention rewrite.
+- No VIR changes.
+
+**What shipped:**
+
+- Extended the experimental RMW local-copy rule from a single RMW op to a bounded sequence of same-temp RMW ops followed by output materialization.
+- Added a conservative compiler-temp coalescing pass for generated `_tN` temporaries, with bounded iteration and source/destination/external/barrier/later-read guards.
+- Adjusted straight-line liveness so opaque barriers stop carrying reads from beyond the barrier while explicit reads on the barrier itself still count.
+- Added offline equivalence fixtures for multi-RMW safe/counterexample shapes.
 
 **Implementation outline:**
 
-- [ ] Write RED tests for the exact proven fixture class.
-- [ ] Implement the smallest pattern in the existing experimental RMW/local-copy path.
-- [ ] Add negative tests for protected slot, boundary, external mention, non-adjacent, and non-commutative alias cases as relevant.
-- [ ] Run the explicit comparison gate and record command/scoreCopy deltas.
-- [ ] Update this roadmap with before/after residual counts.
+- [x] Write RED tests for the exact proven fixture class.
+- [x] Implement the smallest pattern in the existing experimental RMW/local-copy path.
+- [x] Add negative tests for protected slot, boundary, external mention, non-adjacent, and non-commutative alias cases as relevant.
+- [x] Run the explicit comparison gate and record command/scoreCopy deltas.
+- [x] Update this roadmap with before/after residual counts.
+
+**Controller gate evidence:** `npm run gate:lir-local-copy -- --output /tmp/redscript-lir-track-aa-controller.json`
+
+- `gate = "pass"`
+- `rollout = "pass"`
+- `recommendation = "manual-experimental-opt-in-only"`
+- `commandDelta = -497`
+- `scoreCopyDelta = -497`
+- `offlineFixtures = 31`
+- `offlineFailed = 0`
+- Residual diagnostics after AA:
+  - Track AB: `157` remaining `non-adjacent-window-needs-pass-design`
+  - Track AE: `insufficient-command-context: 147`, `merge-or-control-flow-boundary: 10`
+  - Track AF: `needs-slot-use-def-map: 114`, `needs-wider-same-function-window: 33`
+  - Track AG: `dst-reused-after-arith: 48`, `slot-use-window-too-small: 37`, `src-reused-after-copy: 24`, `slot-alias-unsafe-or-opaque: 5`
 
 **Definition of Done:**
 
-- [ ] Targeted LIR optimizer tests pass.
-- [ ] Offline equivalence fixtures pass.
-- [ ] `gate:lir-local-copy` still passes with no regressions.
-- [ ] Manual experimental flag remains required.
+- [x] Targeted LIR optimizer tests pass.
+- [x] Offline equivalence fixtures pass.
+- [x] `gate:lir-local-copy` still passes with no regressions.
+- [x] Manual experimental flag remains required.
 
 ---
 
@@ -530,7 +544,7 @@ Rules:
 - Do not enable --experimental-lir-local-copy-rewrite by default.
 - Treat benchmark gates as evidence, not semantic proof.
 
-Start with the first unchecked non-blocked track in the roadmap. At the time this goal was last updated, that is Track AH: pass-design note for slot use/def residuals.
+Start with the first unchecked non-blocked track in the roadmap. At the time this goal was last updated, Track AH/AA are complete; the next work is post-AA residual design/diagnostics or Track AC docs, not default enablement.
 
 Expected workflow:
 1. Check git status and recent log.
@@ -605,3 +619,11 @@ Append a short note here after each completed tranche.
 - Controller gate `/tmp/redscript-lir-track-ag-controller.json` reports `dst-reused-after-arith: 141`, `slot-use-window-too-small: 83`, `src-reused-after-copy: 29`, and `slot-alias-unsafe-or-opaque: 19`.
 - `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -193`, `scoreCopyDelta = -193`, offline fixtures `29/29` pass.
 - Track AA remains blocked; next unchecked non-blocked track is Track AH.
+
+### 2026-06-29 — Track AH/AA completed
+
+- Track AH identified one fixture-backed exact class: bounded same-function local-temp RMW chains with conservative source/temp/external/barrier/later-read guards.
+- Track AA implemented that class behind `--experimental-lir-local-copy-rewrite` by extending bounded RMW windows and adding compiler `_tN` temp coalescing.
+- Controller gate `/tmp/redscript-lir-track-aa-controller.json` reports `gate = "pass"`, rollout remains `manual-experimental-opt-in-only`, `commandDelta = -497`, `scoreCopyDelta = -497`, offline fixtures `31/31` pass.
+- Residuals are reduced but not gone: Track AB `157`, Track AF `needs-slot-use-def-map: 114`, Track AG `dst-reused-after-arith: 48`, `slot-use-window-too-small: 37`, `src-reused-after-copy: 24`, `slot-alias-unsafe-or-opaque: 5`.
+- Default enablement remains not ready; next work is post-AA residual design/diagnostics or Track AC manual opt-in docs.

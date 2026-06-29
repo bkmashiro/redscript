@@ -89,6 +89,44 @@ function remapTemp(slot: Slot, temp: Slot, out: Slot): Slot {
   return sameSlot(slot, temp) ? out : slot
 }
 
+function remapSlot(slot: Slot, from: Slot, to: Slot): Slot {
+  return sameSlot(slot, from) ? to : slot
+}
+
+function remapInstructionSlot(instr: LIRInstr, from: Slot, to: Slot): LIRInstr {
+  switch (instr.kind) {
+    case 'score_set':
+      return { ...instr, dst: remapSlot(instr.dst, from, to) }
+    case 'score_copy':
+    case 'score_add':
+    case 'score_sub':
+    case 'score_mul':
+    case 'score_div':
+    case 'score_mod':
+    case 'score_min':
+    case 'score_max':
+      return { ...instr, dst: remapSlot(instr.dst, from, to), src: remapSlot(instr.src, from, to) }
+    case 'score_swap':
+      return { ...instr, a: remapSlot(instr.a, from, to), b: remapSlot(instr.b, from, to) }
+    case 'store_cmd_to_score':
+      return { ...instr, dst: remapSlot(instr.dst, from, to), cmd: remapInstructionSlot(instr.cmd, from, to) }
+    case 'store_score_to_nbt':
+      return { ...instr, src: remapSlot(instr.src, from, to) }
+    case 'store_nbt_to_score':
+      return { ...instr, dst: remapSlot(instr.dst, from, to) }
+    case 'return_value':
+      return { ...instr, slot: remapSlot(instr.slot, from, to) }
+    case 'call_if_matches':
+    case 'call_unless_matches':
+      return { ...instr, slot: remapSlot(instr.slot, from, to) }
+    case 'call_if_score':
+    case 'call_unless_score':
+      return { ...instr, a: remapSlot(instr.a, from, to), b: remapSlot(instr.b, from, to) }
+    default:
+      return instr
+  }
+}
+
 const selfCopyRule: RewriteRule = (context): { replacement: LIRInstr[]; consume: number } | null => {
   const current = context.window[0]
   if (context.window.length === 0 || !current || current.kind !== 'score_copy') return null
@@ -198,25 +236,49 @@ const copyToRmwRule = (isExternallyMentioned: (slot: Slot) => boolean): RewriteR
 }
 
 const copyRmwRule = (isExternallyMentioned: (slot: Slot) => boolean): RewriteRule => (context): { replacement: LIRInstr[]; consume: number } | null => {
-  const [copyIn, op, copyOut] = context.window
-  if (!copyIn || !op || !copyOut) return null
-  if (copyIn.kind !== 'score_copy') return null
-  if (!isRmwOp(op)) return null
-  if (copyOut.kind !== 'score_copy') return null
-  if (!sameSlot(copyIn.dst, op.dst)) return null
-  if (!sameSlot(copyOut.src, copyIn.dst)) return null
-  if (copyIn.dst.obj !== copyOut.dst.obj || op.src.obj !== copyOut.dst.obj) return null
-  if (sameSlot(copyOut.dst, op.src) && !sameSlot(copyOut.dst, copyIn.src)) return null
+  const copyIn = context.window[0]
+  if (!copyIn || copyIn.kind !== 'score_copy') return null
 
   const temp = copyIn.dst
-  if (!isTemporarySafe(temp, context.start + 2, context, isExternallyMentioned)) return null
+  const ops: Array<Extract<LIRInstr, { kind: 'score_add' | 'score_sub' | 'score_mul' | 'score_div' | 'score_mod' | 'score_min' | 'score_max' }>> = []
+  let copyOutOffset = -1
+  for (let offset = 1; offset < context.window.length; offset += 1) {
+    const current = context.window[offset]
+    if (!current) return null
+    if (isRmwOp(current) && sameSlot(current.dst, temp)) {
+      ops.push(current)
+      continue
+    }
+    if (current.kind === 'score_copy' && sameSlot(current.src, temp)) {
+      copyOutOffset = offset
+    }
+    break
+  }
+
+  if (ops.length === 0 || copyOutOffset < 0) return null
+  const copyOut = context.window[copyOutOffset]
+  if (!copyOut || copyOut.kind !== 'score_copy') return null
+  if (copyIn.dst.obj !== copyOut.dst.obj) return null
+
+  for (const op of ops) {
+    if (op.src.obj !== copyOut.dst.obj) return null
+    if (sameSlot(copyOut.dst, op.src) && !sameSlot(copyOut.dst, copyIn.src)) return null
+  }
+
+  if (!isTemporarySafe(temp, context.start + copyOutOffset, context, isExternallyMentioned)) return null
+
+  const replacement: LIRInstr[] = sameSlot(copyOut.dst, copyIn.src)
+    ? []
+    : [makeScoreCopy(copyOut.dst, copyIn.src, copyIn.sourceLoc)]
+  replacement.push(...ops.map(op => ({
+    ...op,
+    dst: copyOut.dst,
+    src: remapTemp(op.src, temp, copyOut.dst),
+  })))
 
   return {
-    replacement: [
-      makeScoreCopy(copyOut.dst, copyIn.src, copyIn.sourceLoc),
-      { ...op, dst: copyOut.dst, src: remapTemp(op.src, temp, copyOut.dst) },
-    ],
-    consume: 3,
+    replacement,
+    consume: copyOutOffset + 1,
   }
 }
 
@@ -257,14 +319,95 @@ function rewriteRules(isExternallyMentioned: (slot: Slot) => boolean): RewriteRu
   ]
 }
 
+function isLikelyLocalTemp(slot: Slot): boolean {
+  return slot.player.startsWith('$') && /_t\d+$/.test(slot.player)
+}
+
+function coalesceDeadSourceCopySlots(
+  fn: LIRFunction,
+  isExternallyMentioned: (slot: Slot) => boolean,
+): LIRFunction {
+  const out: LIRInstr[] = []
+  let changed = false
+  const instrs = fn.instructions
+
+  for (let i = 0; i < instrs.length; i += 1) {
+    const instr = instrs[i]
+    if (instr.kind !== 'score_copy') {
+      out.push(instr)
+      continue
+    }
+
+    const { dst, src } = instr
+    if (dst.obj !== src.obj || !isLikelyLocalTemp(dst) || !isLikelyLocalTemp(src)) {
+      out.push(instr)
+      continue
+    }
+    if (isProtectedSlot(dst) || isProtectedSlot(src) || isExternallyMentioned(dst) || isExternallyMentioned(src)) {
+      out.push(instr)
+      continue
+    }
+
+    let lastDstMention = -1
+    let unsafe = false
+    for (let j = i + 1; j < instrs.length; j += 1) {
+      const candidate = instrs[j]
+      if (isConservativeBarrierInstruction(candidate)) break
+      const mentionsDst = getReadSlots(candidate).some(slot => sameSlot(slot, dst))
+        || getWriteSlots(candidate).some(slot => sameSlot(slot, dst))
+      const mentionsSrc = getReadSlots(candidate).some(slot => sameSlot(slot, src))
+        || getWriteSlots(candidate).some(slot => sameSlot(slot, src))
+      if (mentionsSrc && !mentionsDst) {
+        unsafe = true
+        break
+      }
+      if (mentionsDst) lastDstMention = j
+    }
+
+    if (unsafe || lastDstMention < 0) {
+      out.push(instr)
+      continue
+    }
+
+    const regionLength = lastDstMention - i
+    if (regionLength > 32) {
+      out.push(instr)
+      continue
+    }
+
+    changed = true
+    for (let j = i + 1; j <= lastDstMention; j += 1) {
+      out.push(remapInstructionSlot(instrs[j], dst, src))
+    }
+    i = lastDstMention
+  }
+
+  return changed ? { ...fn, instructions: out } : fn
+}
+
 export function scoreboardRmwPass(fn: LIRFunction, options: RmwPassOptions = {}): LIRFunction {
   const isExternallyMentioned = options.isExternallyMentioned ?? (() => false)
   const liveness = analyzeStraightLineSlotLiveness(fn.instructions)
-  const result = applyLocalRewriteWindows(fn, rewriteRules(isExternallyMentioned), {
-    maxWindowSize: 4,
+  const windowOptimized = applyLocalRewriteWindows(fn, rewriteRules(isExternallyMentioned), {
+    maxWindowSize: 10,
     isBarrier: isConservativeBarrierInstruction,
     isExternallyMentioned,
     liveness,
+  })
+  let coalesced = windowOptimized
+  for (let iteration = 0; iteration < 4; iteration += 1) {
+    const next = coalesceDeadSourceCopySlots(coalesced, isExternallyMentioned)
+    if (next === coalesced) break
+    coalesced = next
+  }
+  const coalescedLiveness = coalesced === windowOptimized
+    ? liveness
+    : analyzeStraightLineSlotLiveness(coalesced.instructions)
+  const result = applyLocalRewriteWindows(coalesced, rewriteRules(isExternallyMentioned), {
+    maxWindowSize: 10,
+    isBarrier: isConservativeBarrierInstruction,
+    isExternallyMentioned,
+    liveness: coalescedLiveness,
   })
 
   return result

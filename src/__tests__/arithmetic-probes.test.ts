@@ -1100,7 +1100,7 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(summary).toBeDefined()
     expect(summary?.status).toBe('pass')
     expect(summary?.failedFixtures).toBe(0)
-    expect(summary?.totalFixtures).toBe(29)
+    expect(summary?.totalFixtures).toBe(31)
     expect(summary?.evidenceStatus).toBe('bounded-offline-evidence-only')
     expect(summary?.familySummaries.map(item => item.family)).toEqual([
       'local-copy-forwarding',
@@ -2376,21 +2376,21 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(residualSummary?.trackABResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackAEResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackAFResidualDiagnostics).toBeDefined()
-    expect(residualSummary?.trackABResidualDiagnostics?.totalCount).toBe(328)
-    expect(residualSummary?.trackAEResidualDiagnostics?.totalCount).toBe(328)
+    expect(residualSummary?.trackABResidualDiagnostics?.totalCount).toBe(157)
+    expect(residualSummary?.trackAEResidualDiagnostics?.totalCount).toBe(157)
     expect(residualSummary?.trackAFResidualDiagnostics?.totalCount).toBe(
       residualSummary?.trackAEResidualDiagnostics?.byLabel.find(item => item.label === 'insufficient-command-context')?.count ?? 0,
     )
-    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(272)
-    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-wider-same-function-window')?.count).toBe(46)
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(114)
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-wider-same-function-window')?.count).toBe(33)
     expect(residualSummary?.trackAEResidualDiagnostics?.topCaseNames.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAEResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAGResidualDiagnostics).toBeDefined()
-    expect(residualSummary?.trackAGResidualDiagnostics?.totalCount).toBe(272)
+    expect(residualSummary?.trackAGResidualDiagnostics?.totalCount).toBe(114)
     expect(
       residualSummary?.trackAGResidualDiagnostics?.byLabel.reduce((sum, item) => sum + item.count, 0),
-    ).toBe(272)
+    ).toBe(114)
     expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(
       residualSummary?.trackAGResidualDiagnostics?.byLabel.reduce((sum, item) => sum + item.count, 0) ?? 0,
     )
@@ -2465,8 +2465,8 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(readiness?.requiredGateStatus).toBe('pass')
     expect(readiness?.offlinePackStatus).toBe('pass')
     expect(readiness?.familyReadinessStatus).toBe('pass')
-    expect(readiness?.commandDelta).toBe(-193)
-    expect(readiness?.scoreCopyDelta).toBe(-193)
+    expect(readiness?.commandDelta).toBe(-497)
+    expect(readiness?.scoreCopyDelta).toBe(-497)
     expect(readiness?.commandRegressedCount).toBe(0)
     expect(readiness?.scoreCopyRegressedCount).toBe(0)
     expect(readiness?.notes).toMatch(/does not authorize production default enablement/)

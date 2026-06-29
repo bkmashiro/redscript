@@ -113,7 +113,28 @@ describe('LIR optimizer analysis helpers', () => {
     expect(liveness.isDeadAfter(2, out)).toBe(true)
   })
 
-  test('treats conservative barriers as blocking cross-window liveness checks', () => {
+  test('treats conservative barriers as blocking cross-window liveness checks but keeps explicit barrier reads', () => {
+    const src = mkSlot('$src')
+    const tmp = mkSlot('$tmp')
+    const later = mkSlot('$later')
+
+    const fn: LIRFunction = mkFn([
+      { kind: 'score_copy', dst: tmp, src },
+      { kind: 'score_add', dst: later, src: tmp },
+      { kind: 'raw', cmd: 'execute if score $tmp __test matches 1.. run say barrier' },
+      { kind: 'score_copy', dst: later, src: tmp },
+    ])
+
+    const liveness = analyzeStraightLineSlotLiveness(fn.instructions)
+
+    expect(isConservativeBarrierInstruction(fn.instructions[2])).toBe(true)
+    expect(liveness.nextReadAfter(0, tmp)).toBe(1)
+    expect(liveness.hasLaterRead(1, tmp)).toBe(true)
+    expect(liveness.hasLaterRead(0, tmp)).toBe(true)
+    expect(liveness.isDeadAfter(1, tmp)).toBe(false)
+  })
+
+  test('does not carry liveness reads from beyond an opaque barrier', () => {
     const src = mkSlot('$src')
     const tmp = mkSlot('$tmp')
     const later = mkSlot('$later')
@@ -127,9 +148,7 @@ describe('LIR optimizer analysis helpers', () => {
 
     const liveness = analyzeStraightLineSlotLiveness(fn.instructions)
 
-    expect(isConservativeBarrierInstruction(fn.instructions[2])).toBe(true)
     expect(liveness.nextReadAfter(0, tmp)).toBe(1)
     expect(liveness.hasLaterRead(1, tmp)).toBe(true)
-    expect(liveness.hasLaterRead(0, tmp)).toBe(true)
-    expect(liveness.isDeadAfter(1, tmp)).toBe(false)
+    expect(liveness.isDeadAfter(1, tmp)).toBe(true)
   })

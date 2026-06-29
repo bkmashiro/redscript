@@ -119,7 +119,7 @@ describe('LIR scoreboard RMW optimizer', () => {
     const fn = mkFn([
       { kind: 'score_copy', dst: mkSlot('$tmp1'), src: mkSlot('$src') },
       { kind: 'score_copy', dst: mkSlot('$tmp2'), src: mkSlot('$tmp1') },
-      { kind: 'raw', cmd: 'say chain barrier' },
+      { kind: 'raw', cmd: 'execute if score $tmp1 __test matches 1.. run say chain barrier' },
       { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp2') },
     ])
 
@@ -528,6 +528,83 @@ describe('LIR scoreboard RMW optimizer', () => {
       { kind: 'raw', cmd: 'say barrier' },
       { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$rhs') },
       { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result).toBe(fn)
+  })
+
+  test('collapses bounded multi-RMW temp chain into direct output RMW sequence', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$rhs1') },
+      { kind: 'score_mul', dst: mkSlot('$tmp'), src: mkSlot('$rhs2') },
+      { kind: 'score_sub', dst: mkSlot('$tmp'), src: mkSlot('$rhs3') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+      { kind: 'return_value', slot: mkSlot('$out') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result.instructions).toEqual([
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$out'), src: mkSlot('$rhs1') },
+      { kind: 'score_mul', dst: mkSlot('$out'), src: mkSlot('$rhs2') },
+      { kind: 'score_sub', dst: mkSlot('$out'), src: mkSlot('$rhs3') },
+      { kind: 'return_value', slot: mkSlot('$out') },
+    ])
+  })
+
+  test('remaps temp self-use in multi-RMW temp chain', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$tmp') },
+      { kind: 'score_mul', dst: mkSlot('$tmp'), src: mkSlot('$rhs') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result.instructions).toEqual([
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$out'), src: mkSlot('$out') },
+      { kind: 'score_mul', dst: mkSlot('$out'), src: mkSlot('$rhs') },
+    ])
+  })
+
+  test('does not collapse multi-RMW temp chain when output is an old non-commutative operand', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_sub', dst: mkSlot('$tmp'), src: mkSlot('$out') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result).toBe(fn)
+  })
+
+  test('does not collapse multi-RMW temp chain when temp is read after materialization', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$rhs1') },
+      { kind: 'score_mul', dst: mkSlot('$tmp'), src: mkSlot('$rhs2') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+      { kind: 'score_add', dst: mkSlot('$later'), src: mkSlot('$tmp') },
+    ])
+
+    const result = scoreboardRmwPass(fn)
+
+    expect(result).toBe(fn)
+  })
+
+  test('does not coalesce temp copy into source when source is read after coalesced region', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$case_t1'), src: mkSlot('$case_t0') },
+      { kind: 'score_add', dst: mkSlot('$case_t1'), src: mkSlot('$rhs') },
+      { kind: 'score_mul', dst: mkSlot('$case_t1'), src: mkSlot('$scale') },
+      { kind: 'score_copy', dst: mkSlot('$later'), src: mkSlot('$case_t0') },
     ])
 
     const result = scoreboardRmwPass(fn)

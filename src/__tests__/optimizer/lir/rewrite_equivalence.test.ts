@@ -37,9 +37,9 @@ describe('offline bounded LIR rewrite equivalence fixture pack', () => {
     }
 
     expect(totals).toEqual({
-      total: 29,
-      equivalent: 16,
-      counterexample: 4,
+      total: 31,
+      equivalent: 17,
+      counterexample: 5,
       unsupported: 9,
       failed: 0,
     })
@@ -79,9 +79,9 @@ describe('offline bounded LIR rewrite equivalence fixture pack', () => {
       },
       {
         family: 'read-write-window',
-        total: 2,
-        equivalent: 1,
-        counterexample: 1,
+        total: 4,
+        equivalent: 2,
+        counterexample: 2,
         unsupported: 0,
         failed: 0,
       },
