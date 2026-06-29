@@ -10,52 +10,117 @@
  *  - slots used in side-effectful instructions (calls, stores, nbt ops, raw)
  */
 
-import type { LIRFunction, LIRModule } from '../../lir/types'
-import { getPureWriteDst, getReadSlots, isProtectedSlot, slotKey } from './analysis'
+import type { LIRFunction, LIRModule, Slot } from '../../lir/types'
+import {
+  analyzeStraightLineSlotLiveness,
+  getPureWriteDst,
+  getReadSlots,
+  isConservativeBarrierInstruction,
+  isProtectedSlot,
+  slotKey,
+} from './analysis'
 
-export function deadSlotElim(fn: LIRFunction): LIRFunction {
-  // 1. Collect all read slots across the function
+function collectReadSlots(instructions: LIRFunction['instructions']): Set<string> {
   const readSet = new Set<string>()
-  for (const instr of fn.instructions) {
+
+  for (const instr of instructions) {
     for (const s of getReadSlots(instr)) {
       readSet.add(slotKey(s))
     }
   }
 
-  // 2. Filter out pure writes to slots that are never read
-  const filtered = fn.instructions.filter(instr => {
-    const dst = getPureWriteDst(instr)
-    if (dst === null) return true // not a pure write → keep
-    if (isProtectedSlot(dst)) return true
-    return readSet.has(slotKey(dst))
-  })
+  return readSet
+}
 
-  if (filtered.length === fn.instructions.length) return fn
-  return { ...fn, instructions: filtered }
+function isCompilerOwnedLocalTempSlot(slot: Slot): boolean {
+  return /^\$t\d+$/.test(slot.player) || /^\$_t\d+$/.test(slot.player)
+}
+
+function eliminateDeadWrites(
+  fn: LIRFunction,
+  readSet: Set<string>,
+  canElideOverwrittenTemp: (slot: Slot) => boolean,
+): { instructions: LIRFunction['instructions']; changed: boolean } {
+  const { instructions } = fn
+  if (instructions.length === 0) return { instructions, changed: false }
+
+  const liveness = analyzeStraightLineSlotLiveness(instructions)
+  const keep = new Array<boolean>(instructions.length).fill(true)
+  const nextPureWrite = new Map<string, number>()
+
+  for (let index = instructions.length - 1; index >= 0; index -= 1) {
+    const instr = instructions[index]
+    const dst = getPureWriteDst(instr)
+
+    if (isConservativeBarrierInstruction(instr)) {
+      nextPureWrite.clear()
+    }
+
+    if (dst === null) continue
+    if (isProtectedSlot(dst)) continue
+
+    const key = slotKey(dst)
+    if (!readSet.has(key)) {
+      keep[index] = false
+    } else if (isCompilerOwnedLocalTempSlot(dst) && canElideOverwrittenTemp(dst)) {
+      const nextWrite = nextPureWrite.get(key)
+      if (nextWrite !== undefined) {
+        const nextRead = liveness.nextReadAfter(index, dst)
+        if (nextRead === null || nextRead > nextWrite) {
+          keep[index] = false
+        }
+      }
+    }
+
+    nextPureWrite.set(key, index)
+  }
+
+  const filtered = keep.every(v => v)
+    ? instructions
+    : instructions.filter((_, index) => keep[index])
+
+  return { instructions: filtered, changed: filtered.length !== instructions.length }
+}
+
+export function deadSlotElim(fn: LIRFunction): LIRFunction {
+  const readSet = collectReadSlots(fn.instructions)
+  const { instructions, changed } = eliminateDeadWrites(fn, readSet, () => true)
+  if (!changed) return fn
+  return { ...fn, instructions }
 }
 
 export function deadSlotElimModule(mod: LIRModule): LIRModule {
   // Collect all slots read across ALL functions (cross-function visibility)
   const globalReadSet = new Set<string>()
-  for (const fn of mod.functions) {
+  const readFunctionMap = new Map<string, Set<number>>()
+
+  for (const [fnIndex, fn] of mod.functions.entries()) {
     for (const instr of fn.instructions) {
       for (const s of getReadSlots(instr)) {
-        globalReadSet.add(slotKey(s))
+        const key = slotKey(s)
+        globalReadSet.add(key)
+        let functions = readFunctionMap.get(key)
+        if (functions === undefined) {
+          functions = new Set<number>()
+          readFunctionMap.set(key, functions)
+        }
+        functions.add(fnIndex)
       }
     }
   }
 
   let changed = false
-  const functions = mod.functions.map(fn => {
-    const filtered = fn.instructions.filter(instr => {
-      const dst = getPureWriteDst(instr)
-      if (dst === null) return true
-      if (isProtectedSlot(dst)) return true
-      return globalReadSet.has(slotKey(dst))
-    })
-    if (filtered.length !== fn.instructions.length) changed = true
-    if (filtered.length === fn.instructions.length) return fn
-    return { ...fn, instructions: filtered }
+  const functions = mod.functions.map((fn, fnIndex) => {
+    const { instructions, changed: fnChanged } = eliminateDeadWrites(
+      fn,
+      globalReadSet,
+      dst => {
+        const readers = readFunctionMap.get(slotKey(dst))
+        return readers !== undefined && readers.size === 1 && readers.has(fnIndex)
+      },
+    )
+    if (fnChanged) changed = true
+    return fnChanged ? { ...fn, instructions } : fn
   })
 
   return changed ? { ...mod, functions } : mod

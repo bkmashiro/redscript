@@ -34,6 +34,8 @@ Practical estimate:
 
 ### R1 — LIR dead-store / dead-temp elimination
 
+**Status:** First conservative slice implemented 2026-06-29: compiler-temp overwrite-before-read elimination in the existing dead-slot pass.
+
 **Product promise:** Remove writes to compiler-owned temps when the value is never read before being overwritten or crossing an observable boundary.
 
 **Why first:** It reuses the existing LIR liveness/barrier infrastructure and should be lower risk than cross-function optimization.

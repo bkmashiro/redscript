@@ -38,6 +38,31 @@ describe('dead slot elimination', () => {
     expect(result.instructions.some(i => i.kind === 'score_copy')).toBe(false)
   })
 
+  test('removes earlier compiler temp write when same temp is overwritten before read', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+      { kind: 'return_value', slot: mkSlot('$t0') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(2)
+    expect(result.instructions[0]).toEqual({ kind: 'score_set', dst: mkSlot('$t0'), value: 2 })
+    expect(result.instructions[1]).toEqual({ kind: 'return_value', slot: mkSlot('$t0') })
+  })
+
+  test('handles a chain where only the last temp value is read', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 3 },
+      { kind: 'return_value', slot: mkSlot('$t0') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(2)
+    expect(result.instructions[0]).toEqual({ kind: 'score_set', dst: mkSlot('$t0'), value: 3 })
+    expect(result.instructions[1]).toEqual({ kind: 'return_value', slot: mkSlot('$t0') })
+  })
+
   test('keeps writes to $ret slot', () => {
     const fn = mkFn('test', [
       { kind: 'score_set', dst: mkSlot('$ret'), value: 10 },
@@ -63,6 +88,18 @@ describe('dead slot elimination', () => {
     expect(result.instructions).toHaveLength(2)
   })
 
+  test('keeps protected temp-ABI-like slots even when they are overwritten', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$ret'), value: 4 },
+      { kind: 'score_set', dst: mkSlot('$ret'), value: 5 },
+      { kind: 'score_set', dst: mkSlot('$p0'), value: 1 },
+      { kind: 'score_set', dst: mkSlot('$p0'), value: 2 },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$ret') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(4)
+  })
+
   test('keeps non-pure-write instructions even if dst is unread', () => {
     const fn = mkFn('test', [
       { kind: 'score_add', dst: mkSlot('$x'), src: mkSlot('$y') },
@@ -78,6 +115,40 @@ describe('dead slot elimination', () => {
       { kind: 'score_set', dst: mkSlot('$t'), value: 5 },
       { kind: 'score_add', dst: mkSlot('$x'), src: mkSlot('$t') },
       { kind: 'return_value', slot: mkSlot('$x') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(3)
+  })
+
+  test('keeps earlier temp write when temp is read before overwrite', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+      { kind: 'score_copy', dst: mkSlot('$x'), src: mkSlot('$t0') },
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+      { kind: 'return_value', slot: mkSlot('$t0') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(3)
+    expect(result.instructions[0]).toEqual({ kind: 'score_set', dst: mkSlot('$t0'), value: 1 })
+  })
+
+  test('keeps non-temp user slot overwrite unless no-read behavior applies', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$user_tmp'), value: 1 },
+      { kind: 'score_set', dst: mkSlot('$user_tmp'), value: 2 },
+      { kind: 'return_value', slot: mkSlot('$user_tmp') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(3)
+    expect(result.instructions[0]).toEqual({ kind: 'score_set', dst: mkSlot('$user_tmp'), value: 1 })
+  })
+
+  test('keeps temp writes around opaque boundaries when they cannot be proven safe', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+      { kind: 'call', fn: 'test:side_effect' },
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$t0') },
     ])
     const result = deadSlotElim(fn)
     expect(result.instructions).toHaveLength(3)
@@ -152,5 +223,52 @@ describe('dead slot elimination (module-level)', () => {
     ])
     const result = deadSlotElimModule(mod)
     expect(result.functions[0].instructions).toHaveLength(1)
+  })
+
+  test('removes earlier compiler temp write in module function when overwritten before read', () => {
+    const mod = mkModule([
+      mkFn('fn1', [
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+        { kind: 'return_value', slot: mkSlot('$t0') },
+      ]),
+      mkFn('fn2', [
+        { kind: 'score_set', dst: mkSlot('$tmp'), value: 1 },
+      ]),
+    ])
+    const result = deadSlotElimModule(mod)
+    expect(result.functions[0].instructions).toHaveLength(2)
+    expect(result.functions[0].instructions[0]).toEqual({ kind: 'score_set', dst: mkSlot('$t0'), value: 2 })
+  })
+
+  test('keeps overwritten temp writes when another function can observe the slot', () => {
+    const mod = mkModule([
+      mkFn('fn1', [
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+        { kind: 'return_value', slot: mkSlot('$t0') },
+      ]),
+      mkFn('fn2', [
+        { kind: 'call', fn: 'other:consumer' },
+        { kind: 'score_add', dst: mkSlot('$x'), src: mkSlot('$t0') },
+      ]),
+    ])
+    const result = deadSlotElimModule(mod)
+    expect(result.functions[0].instructions).toHaveLength(3)
+  })
+
+  test('keeps overwritten temp writes when another function mentions the slot in raw text', () => {
+    const mod = mkModule([
+      mkFn('fn1', [
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+        { kind: 'return_value', slot: mkSlot('$t0') },
+      ]),
+      mkFn('fn2', [
+        { kind: 'raw', cmd: 'execute if score $t0 __test matches 1.. run say observed' },
+      ]),
+    ])
+    const result = deadSlotElimModule(mod)
+    expect(result.functions[0].instructions).toHaveLength(3)
   })
 })
