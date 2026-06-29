@@ -758,27 +758,13 @@ git status --short --branch
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through Y and may be reopened only for a new, explicitly scoped tranche.
-Use this only for a follow-on, explicitly scoped LIR-only plan:
+Use the active tracker [27 — LIR Local-Copy Manual Opt-In Active Roadmap](./27-lir-local-copy-active-roadmap.md) for new long-running goals. This file is now a historical tranche log through Y.
+
+The next non-blocked track in [27](./27-lir-local-copy-active-roadmap.md) is Track Z: residual safeCandidate fixture/proof split.
 
 ```text
-In /Users/yuzhe/projects/redscript, start a new production-safe LIR-only optimizer tranche using docs/plans/mc-mechanism-optimization/21-post-vir-decision-adr.md and docs/plans/mc-mechanism-optimization/20-lir-opportunity-closeout.md as evidence.
-
-Goal: turn the diagnostic `lirOpportunitySummary` into one narrow LIR-only rewrite or blocker-provenance spike. Prefer the top `score_copy -> score_arith` candidate class, but implement no behavior change unless tests prove slot/barrier safety.
-
-Rules:
-- Use Spark/Codex as implementation worker where useful.
-- Controller must review diff and run real gates.
-- Keep VIR experimental/read-only.
-- Do not touch production compiler pipeline, parser, typechecker, LSP, registry, declarations, package metadata, public language semantics, or `src/optimizer/vir/**`.
-- Do not commit or push unless explicitly asked.
-
-Return:
-1. Selected LIR-only slice and why.
-2. Changed files, if any.
-3. Exact tests/commands and results.
-4. Representative before/after benchmark or diagnostic output.
-5. Blockers/risky assumptions.
+In /Users/yuzhe/projects/redscript, continue the LIR local-copy optimizer lane by reading and following docs/plans/mc-mechanism-optimization/27-lir-local-copy-active-roadmap.md as the source of truth.
+Start with the first unchecked non-blocked track. Keep default behavior unchanged, keep VIR read-only, use Spark only for bounded implementation slices, run controller gates, update the roadmap, then signed commit/push after verification.
 ```
 
 ## Done criteria for this roadmap
