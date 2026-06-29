@@ -59,6 +59,16 @@ describe('LIR verifier — objective checks', () => {
     expect(errors[0].message).toContain('__bad')
   })
 
+  test('accepts vanilla scoreboard interop slots with external objectives', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'store_score_to_nbt', ns: 'rs:data', path: 'value', type: 'int', scale: 1, src: { player: '#p', obj: 'external_obj' } },
+        { kind: 'store_nbt_to_score', dst: { player: '#p', obj: 'external_obj' }, ns: 'rs:data', path: 'value', scale: 1 },
+      ]),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
+  })
+
   test('checks slots in score_swap', () => {
     const mod = mkModule([
       mkFn('main', [
@@ -146,6 +156,14 @@ describe('LIR verifier — function references', () => {
     const mod = mkModule([
       mkFn('main', [{ kind: 'call', fn: 'test:helper' }]),
       mkFn('helper', []),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
+  })
+
+  test('accepts unqualified local function refs including impl-style names', () => {
+    const mod = mkModule([
+      mkFn('main', [{ kind: 'call', fn: 'Type::method' }]),
+      mkFn('Type::method', []),
     ])
     expect(verifyLIR(mod)).toEqual([])
   })

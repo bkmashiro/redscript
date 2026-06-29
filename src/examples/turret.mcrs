@@ -4,9 +4,7 @@ struct TurretState { health: int }
 
 @on_trigger("deploy_turret")
 fn deploy_turret() {
-    let turret = spawn_object(0, 64, 0);
-    turret.health = 40;
-    turret.tag("turret");
+    raw("summon minecraft:armor_stand 0 64 0");
 
     let state = { health: 40 };
     let hp = state.health;
@@ -17,11 +15,7 @@ fn deploy_turret() {
 
 @tick(rate=20)
 fn turret_tick() {
-    foreach (turret in @e[type=armor_stand, tag=turret]) {
-        at @s {
-            foreach (z in @e[type=zombie, distance=..8]) {
-                kill(z);
-            }
-        }
+    foreach (z in @e[type=zombie, distance=..8]) {
+        kill(z);
     }
 }

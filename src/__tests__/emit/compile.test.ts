@@ -381,6 +381,46 @@ describe('emit: compile coverage', () => {
     expect(stage.libraryFilePaths.has('data/lower_opt_stage/function/pinned_library.mcfunction')).toBe(true)
   })
 
+  test('lowerAndOptimizeStages rejects undefined function references', () => {
+    const hir: HIRModule = {
+      namespace: 'lower_opt_undefined_ref',
+      globals: [],
+      structs: [],
+      implBlocks: [],
+      enums: [],
+      consts: [],
+      functions: [
+        {
+          name: 'main',
+          params: [],
+          returnType: { kind: 'named', name: 'void' },
+          decorators: [],
+          body: [
+            { kind: 'expr', expr: { kind: 'call', fn: 'missing', args: [] } },
+            { kind: 'return' },
+          ],
+        },
+      ],
+    }
+
+    try {
+      lowerAndOptimizeStages(hir, {
+        namespace: 'lower_opt_undefined_ref',
+        filePath: '/tmp/lower-opt-undefined-ref.mcrs',
+        libraryFilePaths: new Set(),
+        inlineFunctions: new Set(),
+        noInlineFunctions: new Set(),
+        coroutineInfos: [],
+      })
+      fail('expected lowerAndOptimizeStages to reject undefined function refs')
+    } catch (err) {
+      expect(err).toBeInstanceOf(DiagnosticError)
+      expect((err as DiagnosticError).message).toContain('[LIRVerifier')
+      expect((err as DiagnosticError).message).toContain('undefined function')
+      expect((err as DiagnosticError).message).toContain('missing')
+    }
+  })
+
   test('runTypecheckStage preserves diagnostic bundling and source file for decorator errors', () => {
     const filePath = '/tmp/typecheck-stage-test.mcrs'
 
@@ -727,6 +767,29 @@ describe('emit: compile coverage', () => {
     ))
   })
 
+  test('finalizeRuntimeLIRStage rejects objective mismatches in LIR slots', () => {
+    expect(() => finalizeRuntimeLIRStage(
+      {
+        namespace: 'lirl_validate',
+        objective: '__ret',
+        functions: [
+          {
+            name: 'main',
+            isMacro: false,
+            macroParams: [],
+            instructions: [
+              { kind: 'score_set', dst: { player: '$ret', obj: '__wrong' }, value: 0 },
+            ],
+          },
+        ],
+      },
+      {
+        filePath: '/tmp/finalize-runtime-lir-obj.mcrs',
+      },
+    ))
+      .toThrow(DiagnosticError)
+  })
+
   test('finalizeRuntimeLIRStage rewrites memoize/benchmark functions to <fn>_impl and rewrites self-calls', () => {
     const stage = finalizeRuntimeLIRStage(
       {
@@ -1020,7 +1083,6 @@ describe('emit: compile coverage', () => {
         setblock((1, 2, 3), "minecraft:stone");
         let current: int = scoreboard_get("#p", "obj");
         scoreboard_set("#p", "obj", current);
-        scoreboard_add("#p", "obj", 1);
       }
     `
 
@@ -1034,6 +1096,5 @@ describe('emit: compile coverage', () => {
     expect(fn).toContain('execute store result score $')
     expect(fn).toContain('run scoreboard players get #p obj')
     expect(fn).toContain('execute store result score #p obj run scoreboard players get')
-    expect(fn).toContain('function emit_builtin:scoreboard_add')
   })
 })

@@ -10,11 +10,7 @@ import { Lexer } from '../lexer'
 import { Parser } from '../parser'
 import { preprocessSourceWithMetadata, type PreprocessedSource, type SourceRange } from '../compile'
 import { CheckFailedError, DiagnosticBundleError, DiagnosticError, parseErrorMessage } from '../diagnostics'
-
-function extractErrorMessage(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err)
-  return message.trim() || 'unknown error'
-}
+import { verifyLIR, type LIRVerifyError } from '../lir/verify'
 import { lowerToHIR } from '../hir/lower'
 import { monomorphize } from '../hir/monomorphize'
 import { checkDeprecatedCalls } from '../hir/deprecated'
@@ -33,6 +29,26 @@ import { isEventTypeName } from '../events/types'
 import type { FnDecl, Program } from '../ast/types'
 import type { HIRModule, HIRStruct, HIRFunction, HIRStmt, HIRExpr } from '../hir/types'
 import { EVENT_RUNTIME_MANIFESTS, getAllEventRuntimeAssets, type EventRuntimeManifest } from '../events/manifest'
+
+function extractErrorMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.trim() || 'unknown error'
+}
+
+function formatLIRVerifyErrors(errors: readonly LIRVerifyError[]): string {
+  if (errors.length === 0) return '0 errors'
+  return errors.map(err => `${err.fn}: ${err.message}`).join('; ')
+}
+
+function throwOnVerifyLIRFailure(module: LIRModule, filePath: string | undefined, stage: string): void {
+  const errors = verifyLIR(module)
+  if (errors.length === 0) return
+  throw new DiagnosticError(
+    'LoweringError',
+    `[LIRVerifier:${stage}] ${errors.length} error${errors.length === 1 ? '' : 's'}: ${formatLIRVerifyErrors(errors)}`,
+    { file: filePath, line: 1, col: 1 },
+  )
+}
 
 export interface CompileOptions {
   namespace?: string
@@ -762,7 +778,9 @@ export function lowerAndOptimizeStages(
   const mirFinal = coroResult.module
 
   const lir = lowerToLIR(mirFinal)
+  throwOnVerifyLIRFailure(lir, filePath, 'after-lower-to-lir')
   const lirOpt = lirOptimizeModule(lir, lirOptimizeOptions)
+  throwOnVerifyLIRFailure(lirOpt, filePath, 'after-lir-optimize')
   addDerivedLibraryFunctionPaths(lirOpt, namespace, libraryFilePaths, userRootNames)
 
   return {
@@ -946,6 +964,8 @@ export function finalizeRuntimeLIRStage(
   for (const fnName of benchmarkFunctions) {
     renameToImpl(fnName)
   }
+
+  throwOnVerifyLIRFailure(finalizedLIR, filePath, 'finalize-runtime-lir')
 
   return { lir: finalizedLIR, singletonObjectives, warnings }
 }

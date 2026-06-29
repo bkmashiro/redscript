@@ -2,7 +2,7 @@
  * LIR Verifier — validates structural invariants of LIR modules.
  *
  * Checks:
- * 1. All Slots use the module's objective
+ * 1. Compiler-owned fake-player Slots use the module's objective
  * 2. No undefined function references (call/call_if_* targets exist)
  * 3. macro_line only appears in isMacro functions
  */
@@ -17,9 +17,10 @@ export interface LIRVerifyError {
 export function verifyLIR(module: LIRModule): LIRVerifyError[] {
   const errors: LIRVerifyError[] = []
   const fnNames = new Set(module.functions.map(f => `${module.namespace}:${f.name}`))
+  const localFnNames = new Set(module.functions.map(f => f.name))
 
   for (const fn of module.functions) {
-    errors.push(...verifyFunction(fn, module, fnNames))
+    errors.push(...verifyFunction(fn, module, fnNames, localFnNames))
   }
 
   return errors
@@ -29,13 +30,17 @@ function verifyFunction(
   fn: LIRFunction,
   module: LIRModule,
   fnNames: Set<string>,
+  localFnNames: Set<string>,
 ): LIRVerifyError[] {
   const errors: LIRVerifyError[] = []
 
   for (const instr of fn.instructions) {
-    // Check objective on all slots
+    // Check compiler-owned objective consistency. Vanilla scoreboard interop
+    // slots may intentionally target external players/objectives such as
+    // `#p obj`; compiler temps/return/param slots are fake players prefixed
+    // with `$` and must stay on the module objective.
     for (const slot of getSlotsFromInstr(instr)) {
-      if (slot.obj !== module.objective) {
+      if (slot.player.startsWith('$') && slot.obj !== module.objective) {
         errors.push({
           fn: fn.name,
           message: `slot '${slot.player}' uses objective '${slot.obj}' but module objective is '${module.objective}'`,
@@ -47,7 +52,8 @@ function verifyFunction(
     for (const ref of getFnRefsFromInstr(instr)) {
       // Skip empty refs (used in store_cmd_to_score with cmp pattern)
       if (ref === '' || ref === `${module.namespace}:`) continue
-      if (!fnNames.has(ref)) {
+      const refersToLocalFn = fnNames.has(ref) || localFnNames.has(ref)
+      if (!refersToLocalFn) {
         errors.push({
           fn: fn.name,
           message: `references undefined function '${ref}'`,

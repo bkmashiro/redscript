@@ -118,6 +118,8 @@ npm run gate:lir-local-copy -- --output /tmp/redscript-p1-lir-effects.json
 
 ## P2 — Wire `verifyLIR` into real compile stages
 
+**Status:** ✅ Done
+
 **Product promise:** Illegal LIR cannot silently continue through optimize/finalize/emit.
 
 **Primary files:**
