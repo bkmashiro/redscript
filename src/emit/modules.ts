@@ -20,7 +20,7 @@ import { monomorphize } from '../hir/monomorphize'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
 import { lowerToLIR } from '../lir/lower'
-import { lirOptimizeModule } from '../optimizer/lir/pipeline'
+import { lirOptimizeModule, type LIROptimizeOptions } from '../optimizer/lir/pipeline'
 import { emit, type DatapackFile } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import type { HIRModule, HIRFunction, HIRExpr, HIRStmt, HIRBlock } from '../hir/types'
@@ -48,6 +48,8 @@ export interface ModuleInput {
 export interface CompileModulesOptions {
   /** Datapack namespace (e.g. "mypack") */
   namespace?: string
+  /** Experimental opt-in LIR local-copy/RMW rewrites. Defaults off. */
+  experimentalLirLocalCopyRewrite?: boolean
 }
 
 export interface CompileModulesResult {
@@ -60,6 +62,9 @@ export function compileModules(
   options: CompileModulesOptions = {},
 ): CompileModulesResult {
   const namespace = options.namespace ?? 'redscript'
+  const lirOptimizeOptions: LIROptimizeOptions = {
+    experimentalLocalCopyRewrite: options.experimentalLirLocalCopyRewrite === true,
+  }
   const warnings: string[] = []
 
   if (modules.length === 0) {
@@ -285,6 +290,7 @@ export function compileModules(
       isNamed ? mod.name : undefined,
       mod.filePath,
       modSource,
+      lirOptimizeOptions,
     )
     warnings.push(...modFiles.warnings)
 
@@ -414,6 +420,7 @@ function compileSingleModule(
   moduleName: string | undefined,
   filePath: string | undefined,
   source: string,
+  lirOptimizeOptions: LIROptimizeOptions,
 ): SingleModuleResult {
   const warnings: string[] = []
 
@@ -463,7 +470,7 @@ function compileSingleModule(
 
     const lir = lowerToLIR(mirFinal)
     lir.objective = objective
-    const lirOpt = lirOptimizeModule(lir)
+    const lirOpt = lirOptimizeModule(lir, lirOptimizeOptions)
 
     const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions })
 

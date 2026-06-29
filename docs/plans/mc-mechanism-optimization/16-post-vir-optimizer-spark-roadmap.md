@@ -93,6 +93,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | K | Unknown-cause split | Deterministic triage buckets for unknown-like proof-miss causes | Low | Small diagnostics-only slice | Completed |
 | L | Offline rewrite-test harness v0 | Deterministic fixture-consumption harness metadata without production rewrites | Low | Small diagnostics-only slice | Completed |
 | M | Offline bounded equivalence harness | Test-only LIR interpreter/checker proves smallest exported rewrite fixtures over bounded samples | Medium | Small TDD slice | Completed |
+| N | Explicit gated local-copy rewrite path | Existing local-copy/RMW rewrite pass is available only through an experimental opt-in pipeline flag, with default compiler behavior flag-off | Medium | Small TDD slice | Completed |
 
 ---
 
@@ -533,6 +534,24 @@ git status --short --branch
   - `requiredBeforeRewriteEnablement`
   - `rewriteEnablementStatus` fixed to `'disabled-diagnostics-only'`
 - Harness remains offline and future-facing; production rewrites are still disabled.
+
+## Tranche M — offline bounded equivalence harness
+
+- Status: Completed.
+- Outcome: added `src/optimizer/lir/equivalence.ts` as a conservative, test-only bounded LIR interpreter/checker.
+- Added coverage for local copy forwarding, predecessor arithmetic feeding a local temp, counterexamples, division/modulo by zero refusal, and opaque instruction refusal.
+- This harness is evidence for future rewrites only; it is not a production proof by itself.
+
+## Tranche N — explicit gated local-copy rewrite path
+
+- Status: Completed.
+- Outcome: added `LIROptimizeOptions.experimentalLocalCopyRewrite` and wired it through `compile`, `compileModules`, and `lirOptimizeModule`.
+- The local-copy/RMW rewrite pass is now explicitly opt-in for pipeline callers; default compiler behavior keeps the rewrite flag off while equivalence/bench gates mature.
+- Added pipeline tests proving:
+  - default `lirOptimizeModule(mod)` does not run the experimental local-copy rewrite;
+  - `lirOptimizeModule(mod, { experimentalLocalCopyRewrite: true })` runs the existing local copy/output and local copy/return collapses;
+  - existing LIR pass tests remain valid through the standalone `scoreboardRmwPass` entrypoint.
+- This is a gated integration slice, not default production enablement. Next safe work is a flag-off/flag-on benchmark comparison and a broader equivalence fixture pack before any default enablement decision.
 
 ---
 

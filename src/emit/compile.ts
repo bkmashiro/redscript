@@ -21,7 +21,7 @@ import { checkDeprecatedCalls } from '../hir/deprecated'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
 import { lowerToLIR } from '../lir/lower'
-import { lirOptimizeModule } from '../optimizer/lir/pipeline'
+import { lirOptimizeModule, type LIROptimizeOptions } from '../optimizer/lir/pipeline'
 import { emit, type DatapackFile, type EmitOptions } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import { analyzeBudget } from '../lir/budget'
@@ -64,6 +64,11 @@ export interface CompileOptions {
   snapshotStages?: CompileStageName[]
   /** Optional caller-owned sink for deterministic compile stage summaries. */
   stageSnapshots?: CompileStageSnapshot[]
+  /**
+   * Experimental opt-in LIR local-copy/RMW rewrites. Defaults off while bounded
+   * equivalence and benchmark gates mature.
+   */
+  experimentalLirLocalCopyRewrite?: boolean
 }
 
 export interface CompileResult {
@@ -699,6 +704,7 @@ export interface LowerAndOptimizeStagesOptions {
   inlineFunctions: ReadonlySet<string>
   noInlineFunctions: ReadonlySet<string>
   coroutineInfos: readonly CoroutineInfo[]
+  lirOptimizeOptions?: LIROptimizeOptions
 }
 
 export interface LowerAndOptimizeStagesResult {
@@ -720,6 +726,7 @@ export function lowerAndOptimizeStages(
     inlineFunctions,
     noInlineFunctions,
     coroutineInfos,
+    lirOptimizeOptions,
   } = options
 
   const warnings: string[] = []
@@ -755,7 +762,7 @@ export function lowerAndOptimizeStages(
   const mirFinal = coroResult.module
 
   const lir = lowerToLIR(mirFinal)
-  const lirOpt = lirOptimizeModule(lir)
+  const lirOpt = lirOptimizeModule(lir, lirOptimizeOptions)
   addDerivedLibraryFunctionPaths(lirOpt, namespace, libraryFilePaths, userRootNames)
 
   return {
@@ -1453,6 +1460,9 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       inlineFunctions,
       noInlineFunctions,
       coroutineInfos,
+      lirOptimizeOptions: {
+        experimentalLocalCopyRewrite: options.experimentalLirLocalCopyRewrite === true,
+      },
     })
     recordStageSnapshot(options, 'lowerAndOptimize', () => summarizeLowerAndOptimizeStages(lowered))
     const lirOpt = lowered.lirOpt

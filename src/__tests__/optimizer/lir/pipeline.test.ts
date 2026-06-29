@@ -66,7 +66,7 @@ describe('LIR optimization pipeline', () => {
     )).toBe(false)
   })
 
-  test('runs scoreboard RMW copy/temp collapse before later LIR passes', () => {
+  test('does not run experimental local-copy rewrite by default', () => {
     const mod = mkModule([
       mkFn('main', [
         { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
@@ -79,6 +79,22 @@ describe('LIR optimization pipeline', () => {
     const result = lirOptimizeModule(mod)
     const instrs = result.functions[0].instructions
 
+    expect(instrs).toEqual(mod.functions[0].instructions)
+  })
+
+  test('runs experimental local-copy rewrite before later LIR passes when explicitly enabled', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+        { kind: 'score_add', dst: mkSlot('$tmp'), src: mkSlot('$rhs') },
+        { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+        { kind: 'return_value', slot: mkSlot('$out') },
+      ]),
+    ])
+
+    const result = lirOptimizeModule(mod, { experimentalLocalCopyRewrite: true })
+    const instrs = result.functions[0].instructions
+
     expect(instrs).toEqual([
       { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
       { kind: 'score_add', dst: mkSlot('$out'), src: mkSlot('$rhs') },
@@ -86,7 +102,7 @@ describe('LIR optimization pipeline', () => {
     ])
   })
 
-  test('runs scoreboard RMW return collapse before later LIR passes', () => {
+  test('runs experimental local-copy return collapse when explicitly enabled', () => {
     const mod = mkModule([
       mkFn('main', [
         { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
@@ -95,7 +111,7 @@ describe('LIR optimization pipeline', () => {
       ]),
     ])
 
-    const result = lirOptimizeModule(mod)
+    const result = lirOptimizeModule(mod, { experimentalLocalCopyRewrite: true })
     const instrs = result.functions[0].instructions
 
     expect(instrs).toEqual([

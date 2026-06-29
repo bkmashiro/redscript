@@ -156,7 +156,13 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
   - conservative refusal of `raw`/opaque instructions.
 - This is still offline harness evidence only. It does not connect to `lirOptimizeModule`, does not add a production rewrite pass, and does not enable any rewrite by default.
 
+### Tranche N outcome update
+- Added an explicit opt-in gate for the existing local-copy/RMW rewrite pass via `LIROptimizeOptions.experimentalLocalCopyRewrite`.
+- Wired the same gate through `compile` and `compileModules` as `experimentalLirLocalCopyRewrite`, defaulting to `false`.
+- Updated pipeline coverage so `lirOptimizeModule(mod)` leaves local-copy/RMW rewrites off by default, while `lirOptimizeModule(mod, { experimentalLocalCopyRewrite: true })` enables the local copy/output and local copy/return collapses.
+- This is a pipeline integration gate only; it is not default production enablement and does not claim corpus-wide correctness. Next proof work should compare flag-off vs flag-on benchmark impact and expand bounded equivalence fixtures before any default-on decision.
+
 ## Next safe goals
-1. implement the first local-copy rewrite pass behind an explicit experimental flag, using the bounded equivalence harness cases as safety fixtures.
-2. add bench impact comparison for flag-off vs flag-on output before any default enablement.
-3. expand equivalence fixtures for copy-chain/no-reuse and predecessor-arithmetic families before broadening the rewrite pass.
+1. add bench impact comparison for flag-off vs flag-on output before any default enablement.
+2. expand equivalence fixtures for copy-chain/no-reuse and predecessor-arithmetic families before broadening/defaulting the rewrite pass.
+3. add a narrow default-enable decision gate only after benchmark impact and bounded equivalence fixtures agree.
