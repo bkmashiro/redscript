@@ -63,6 +63,53 @@ describe('dead slot elimination', () => {
     expect(result.instructions[1]).toEqual({ kind: 'return_value', slot: mkSlot('$t0') })
   })
 
+  test('removes unused const materialization when it is not referenced', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$__const_7'), value: 7 },
+      { kind: 'score_set', dst: mkSlot('$live'), value: 1 },
+      { kind: 'return_value', slot: mkSlot('$live') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(2)
+    expect(result.instructions[0]).toEqual({ kind: 'score_set', dst: mkSlot('$live'), value: 1 })
+    expect(result.instructions[1]).toEqual({ kind: 'return_value', slot: mkSlot('$live') })
+  })
+
+  test('keeps unused const materialization when followed by raw barrier', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$__const_7'), value: 7 },
+      { kind: 'raw', cmd: 'say something opaque' },
+      { kind: 'score_set', dst: mkSlot('$live'), value: 1 },
+      { kind: 'return_value', slot: mkSlot('$live') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(4)
+  })
+
+  test('keeps unused const materialization when followed by call barrier', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$__const_9'), value: 9 },
+      { kind: 'call', fn: 'test:side_effect' },
+      { kind: 'score_set', dst: mkSlot('$live'), value: 1 },
+      { kind: 'return_value', slot: mkSlot('$live') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(4)
+  })
+
+  test('treats function-local temp names as compiler-owned', () => {
+    const fn = mkFn('my_fn', [
+      { kind: 'score_set', dst: mkSlot('$my_fn_t0'), value: 1 },
+      { kind: 'score_set', dst: mkSlot('$my_fn_t0'), value: 2 },
+      { kind: 'score_copy', dst: mkSlot('$x'), src: mkSlot('$my_fn_t0') },
+      { kind: 'return_value', slot: mkSlot('$x') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(3)
+    expect(result.instructions[0]).toEqual({ kind: 'score_set', dst: mkSlot('$my_fn_t0'), value: 2 })
+    expect(result.instructions[1]).toEqual({ kind: 'score_copy', dst: mkSlot('$x'), src: mkSlot('$my_fn_t0') })
+  })
+
   test('keeps writes to $ret slot', () => {
     const fn = mkFn('test', [
       { kind: 'score_set', dst: mkSlot('$ret'), value: 10 },
@@ -298,5 +345,19 @@ describe('dead slot elimination (module-level)', () => {
     ])
     const result = deadSlotElimModule(mod)
     expect(result.functions[0].instructions).toHaveLength(3)
+  })
+
+  test('keeps cross-function-safe const materialization when an opaque call barrier exists', () => {
+    const mod = mkModule([
+      mkFn('producer', [
+        { kind: 'score_set', dst: mkSlot('$__const_3'), value: 3 },
+        { kind: 'call', fn: 'test:side_effect' },
+      ]),
+      mkFn('consumer', [
+        { kind: 'score_set', dst: mkSlot('$live'), value: 1 },
+      ]),
+    ])
+    const result = deadSlotElimModule(mod)
+    expect(result.functions[0].instructions).toHaveLength(2)
   })
 })

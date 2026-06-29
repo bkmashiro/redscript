@@ -242,6 +242,8 @@ Alternative acceptable shape: `score_add_imm` / `score_remove_imm`.
 
 ## P5 — Split ABI-visible and compiler-owned slots
 
+**Status:** ✅ Done
+
 **Product promise:** DCE can remove unused compiler-owned materialization while still protecting ABI/runtime-visible slots.
 
 **Primary files:**

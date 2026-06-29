@@ -2,11 +2,14 @@ import fc from 'fast-check'
 import {
   analyzeStraightLineSlotLiveness,
   createModuleSlotReferenceIndex,
+  isAbiSlot,
   getReadSlots,
   getSemanticReadSlots,
   getSourceOperandSlots,
+  isPotentiallyMentionedByOpaqueBarrier,
   instructionMentionsSlot,
   isConservativeBarrierInstruction,
+  isProtectedSlot,
   sameSlot,
   slotKey,
 } from '../../../optimizer/lir/analysis'
@@ -96,6 +99,37 @@ describe('LIR optimizer analysis helpers', () => {
     expect(isConservativeBarrierInstruction(callMacro)).toBe(true)
   })
 
+  test('keeps ABI slots protected while not protecting const slots', () => {
+    expect(isProtectedSlot(mkSlot('$ret'))).toBe(true)
+    expect(isProtectedSlot(mkSlot('$ret_x'))).toBe(true)
+    expect(isProtectedSlot(mkSlot('$p0'))).toBe(true)
+    expect(isProtectedSlot(mkSlot('$__const_1'))).toBe(false)
+    expect(isProtectedSlot(mkSlot('$tmp'))).toBe(false)
+  })
+
+  test('treats opaque barriers as potentially mentioning any slot', () => {
+    const shared = mkSlot('$shared_tmp')
+    const raw: LIRInstr = { kind: 'raw', cmd: 'say hi' }
+    const macro: LIRInstr = { kind: 'macro_line', template: 'say $(arg)' }
+    const call: LIRInstr = { kind: 'call', fn: 'test:leaf' }
+    const callMacro: LIRInstr = { kind: 'call_macro', fn: 'test:macro', storage: 'rs:macro_args' }
+    const callContext: LIRInstr = {
+      kind: 'call_context',
+      fn: 'test:body',
+      subcommands: [{ kind: 'if_matches', score: '$other __test', range: '1..' }],
+    }
+
+    expect(isPotentiallyMentionedByOpaqueBarrier(raw, shared)).toBe(true)
+    expect(isPotentiallyMentionedByOpaqueBarrier(macro, shared)).toBe(true)
+    expect(isPotentiallyMentionedByOpaqueBarrier(call, shared)).toBe(true)
+    expect(isPotentiallyMentionedByOpaqueBarrier(callMacro, shared)).toBe(true)
+    expect(isPotentiallyMentionedByOpaqueBarrier(callContext, shared)).toBe(true)
+    expect(isPotentiallyMentionedByOpaqueBarrier(
+      { kind: 'score_set', dst: mkSlot('$x'), value: 1 },
+      shared,
+    )).toBe(false)
+  })
+
   test('exposes opaque barrier metadata for raw and macro_line', () => {
     const raw: LIRInstr = { kind: 'raw', cmd: 'say something about $shared_tmp __test' }
     const macro: LIRInstr = { kind: 'macro_line', template: '$execute if score $shared_tmp __test matches $(range) run say hit' }
@@ -177,7 +211,11 @@ describe('LIR optimizer analysis helpers', () => {
     expect(index.isMentionedOutside(producer, mkSlot('$tmp'))).toBe(true)
     expect(index.isMentionedOutside(consumer, mkSlot('$src'))).toBe(true)
     expect(index.isMentionedOutside(producer, mkSlot('$missing'))).toBe(false)
-    })
+  })
+  test('distinguishes ABI/runtime slots from compiler-owned names', () => {
+    expect(isAbiSlot(mkSlot('$ret'))).toBe(true)
+    expect(isAbiSlot(mkSlot('$p1'))).toBe(true)
+    expect(isAbiSlot(mkSlot('$x'))).toBe(false)
   })
 
   test('captures straight-line next-read/write and dead-after information', () => {
@@ -241,3 +279,5 @@ describe('LIR optimizer analysis helpers', () => {
     expect(liveness.hasLaterRead(1, tmp)).toBe(true)
     expect(liveness.isDeadAfter(1, tmp)).toBe(true)
   })
+
+})

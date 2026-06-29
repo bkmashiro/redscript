@@ -17,6 +17,7 @@ import {
   extractSlotsFromText,
   getSemanticReadSlots,
   isConservativeBarrierInstruction,
+  isPotentiallyMentionedByOpaqueBarrier,
   isProtectedSlot,
   slotKey,
 } from './analysis'
@@ -42,14 +43,33 @@ function collectReadSlots(instructions: LIRFunction['instructions']): Set<string
   return readSet
 }
 
-function isCompilerOwnedLocalTempSlot(slot: Slot): boolean {
-  return /^\$t\d+$/.test(slot.player) || /^\$_t\d+$/.test(slot.player)
+function isFunctionPrefixedTempSlot(fnName: string, player: string): boolean {
+  const prefix = `$${fnName}_t`
+  if (!player.startsWith(prefix)) return false
+  return /^\d+$/.test(player.slice(prefix.length))
+}
+
+function isCompilerOwnedLocalTempSlot(fnName: string, slot: Slot): boolean {
+  return /^\$t\d+$/.test(slot.player) ||
+    /^\$_t\d+$/.test(slot.player) ||
+    isFunctionPrefixedTempSlot(fnName, slot.player)
+}
+
+function hasLaterOpaqueBarrierMention(
+  instructions: LIRFunction['instructions'],
+  fromIndex: number,
+  slot: Slot,
+): boolean {
+  for (let index = fromIndex + 1; index < instructions.length; index += 1) {
+    if (isPotentiallyMentionedByOpaqueBarrier(instructions[index], slot)) return true
+  }
+  return false
 }
 
 function eliminateDeadWrites(
   fn: LIRFunction,
   readSet: Set<string>,
-  canElideOverwrittenTemp: (slot: Slot) => boolean,
+  canElideOverwrittenTemp: (slot: Slot, fnName: string) => boolean,
 ): { instructions: LIRFunction['instructions']; changed: boolean } {
   const { instructions } = fn
   if (instructions.length === 0) return { instructions, changed: false }
@@ -70,9 +90,9 @@ function eliminateDeadWrites(
     if (isProtectedSlot(dst)) continue
 
     const key = slotKey(dst)
-    if (!readSet.has(key)) {
+    if (!readSet.has(key) && !hasLaterOpaqueBarrierMention(instructions, index, dst)) {
       keep[index] = false
-    } else if (isCompilerOwnedLocalTempSlot(dst) && canElideOverwrittenTemp(dst)) {
+    } else if (isCompilerOwnedLocalTempSlot(fn.name, dst) && canElideOverwrittenTemp(dst, fn.name)) {
       const nextWrite = nextPureWrite.get(key)
       if (nextWrite !== undefined) {
         const nextRead = liveness.nextReadAfter(index, dst)

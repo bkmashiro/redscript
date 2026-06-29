@@ -15,14 +15,21 @@ export function sameSlot(a: Slot, b: Slot): boolean {
   return a.player === b.player && a.obj === b.obj
 }
 
-/** Slots that should be treated as ABI-visible or compiler-owned. */
-export function isProtectedSlot(slot: Slot): boolean {
+/** Slots that represent ABI/runtime-visible state and must be preserved by dead-slot elimination. */
+export function isAbiSlot(slot: Slot): boolean {
   const player = slot.player
   return (
     player === '$ret' ||
     player.startsWith('$ret_') ||
-    /^\$p\d+$/.test(player) ||
-    player.startsWith('$__const_') ||
+    /^\$p\d+$/.test(player)
+  )
+}
+
+/** Slots preserved by dead-slot elimination regardless of local proof. */
+export function isProtectedSlot(slot: Slot): boolean {
+  const player = slot.player
+  return (
+    isAbiSlot(slot) ||
     player.includes('__rf_') ||
     player.includes('__opt_')
   )
@@ -144,6 +151,21 @@ export function instructionMentionsSlot(instr: LIRInstr, slot: Slot): boolean {
       return instr.subcommands.some(subcmd => subcommandMentionsSlot(subcmd as { kind: string } & Record<string, unknown>, slot))
     default:
       return false
+  }
+}
+
+export function isPotentiallyMentionedByOpaqueBarrier(instr: LIRInstr, slot: Slot): boolean {
+  if (!isConservativeBarrierInstruction(instr)) return false
+
+  switch (instr.kind) {
+    case 'raw':
+    case 'macro_line':
+    case 'call':
+    case 'call_macro':
+    case 'call_context':
+      return true
+    default:
+      return instructionMentionsSlot(instr, slot)
   }
 }
 

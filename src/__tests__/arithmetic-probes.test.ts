@@ -5066,13 +5066,13 @@ describe('arithmetic probe benchmark tooling', () => {
     const summary = summarizeRewriteOpportunitiesWithProvenance(lines).provenanceSummary
 
     expect(summary.total).toBe(5)
-    expect(summary.safeAdjacentScoreCopyArithCount).toBe(2)
-    expect(summary.blockedCount).toBe(3)
+    expect(summary.safeAdjacentScoreCopyArithCount).toBe(3)
+    expect(summary.blockedCount).toBe(2)
     expect(summary.unknownCount).toBe(0)
-    expect(summary.byReason.find(item => item.reason === 'safe-adjacent-score-copy-arith')?.count).toBe(2)
+    expect(summary.byReason.find(item => item.reason === 'safe-adjacent-score-copy-arith')?.count).toBe(3)
     expect(summary.byReason.find(item => item.reason === 'blocked-by-alias-safety')).toBeUndefined()
     expect(summary.byReason.find(item => item.reason === 'blocked-by-temp-not-dead-after-consuming-op')?.count).toBe(1)
-    expect(summary.byReason.find(item => item.reason === 'blocked-by-protected-slot')?.count).toBe(1)
+    expect(summary.byReason.find(item => item.reason === 'blocked-by-protected-slot')).toBeUndefined()
     expect(summary.byReason.find(item => item.reason === 'blocked-by-cross-function-module-external-mention')?.count).toBe(1)
     expect(summary.insufficientInfoCount).toBe(0)
   })
