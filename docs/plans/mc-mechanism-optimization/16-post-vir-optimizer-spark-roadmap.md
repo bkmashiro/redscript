@@ -663,11 +663,33 @@ git status --short --branch
   - Updated deterministic suite expectations so totals and per-family summaries reflect the new families while preserving stable ordering of existing families.
   - No production compiler behavior changed; this tranche is strictly bounded/offline evidence and is not production correctness proof.
 
+## Tranche V — offline rewrite family readiness contract for explicit local-copy gate
+
+- Status: Completed as evidence-only.
+- Outcome:
+  - Added deterministic required-family readiness metadata under `OfflineRewriteEquivalencePackSummary.offlineRewriteFamilyReadinessSummary` with bounded evidence-only semantics:
+    - `status: 'pass' | 'fail'`
+    - `evidenceStatus: 'bounded-offline-evidence-only'`
+    - deterministic required family entries for:
+      - `local-copy-forwarding`
+      - `predecessor-arithmetic`
+      - `read-write-window`
+      - `score-swap-window`
+      - `score-set-overwrite-window`
+      - `unsupported-boundary`
+      - `unsupported-typed-boundary`
+    - `missingFamilies`
+    - `failedFamilies`
+    - `notes`/`gateReason` text calling out bounded/offline scope and non-production status.
+  - Updated no-regression evaluator to fail when the readiness summary is missing, required families are missing, required-family failures are present, or the offline pack itself fails.
+  - Added tests for deterministic required-family ordering, fail-paths for missing/failed required families, and explicit inclusion of readiness metadata in report+gate outputs.
+  - No production optimizer behavior changed; this remains evidence-only readiness contract work.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through U and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through V and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -692,7 +714,7 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche U with J/K/L/O/P/Q/R/S/T/U diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche V with J/K/L/O/P/Q/R/S/T/U/V diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.

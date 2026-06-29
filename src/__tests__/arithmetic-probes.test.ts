@@ -12,6 +12,7 @@ import {
   type ArithmeticProbeResult,
   type ArithmeticProbeExperimentalLocalCopyRewriteComparison,
   type OfflineRewriteEquivalencePackSummary,
+  type OfflineRewriteFamilyReadinessSummary,
   type RewriteProvenanceSummary,
   type RewriteProofMissLirAdjacentWindowBreakdownKind,
   type RewriteProofMissLirAdjacentWindowSummary,
@@ -436,6 +437,48 @@ function makeAdjacentWindowDiagnosticCase(options: {
   } as ArithmeticProbeResult
 }
 
+const OFFLINE_REWRITE_FAMILY_READINESS_REQUIRED_FAMILIES = [
+  'local-copy-forwarding',
+  'predecessor-arithmetic',
+  'read-write-window',
+  'score-swap-window',
+  'score-set-overwrite-window',
+  'unsupported-boundary',
+  'unsupported-typed-boundary',
+] as const
+
+function makeOfflineRewriteFamilyReadinessSummary(
+  options: {
+    missingFamilies?: string[]
+    failedFamilies?: string[]
+    status?: 'pass' | 'fail'
+    requiredFamilies?: OfflineRewriteFamilyReadinessSummary['requiredFamilies']
+    notes?: string
+    gateReason?: string
+  } = {},
+): OfflineRewriteFamilyReadinessSummary {
+  const missingFamilies = options.missingFamilies ?? []
+  const failedFamilies = options.failedFamilies ?? []
+  const requiredFamilies = options.requiredFamilies ?? OFFLINE_REWRITE_FAMILY_READINESS_REQUIRED_FAMILIES
+    .map((family) => ({
+      family,
+      total: missingFamilies.includes(family) ? 0 : 1,
+      failed: failedFamilies.includes(family) ? 1 : 0,
+      status: missingFamilies.includes(family) || failedFamilies.includes(family) ? 'fail' : 'pass',
+    }))
+
+  return {
+    status: options.status ?? (missingFamilies.length > 0 || failedFamilies.length > 0 ? 'fail' : 'pass'),
+    evidenceStatus: 'bounded-offline-evidence-only',
+    requiredFamilies,
+    missingFamilies,
+    failedFamilies,
+    notes: options.notes ?? 'Synthetic offline readiness evidence for local-copy gate.',
+    gateReason: options.gateReason ?? 'bounded-offline-evidence-only',
+    ...options,
+  }
+}
+
 function makeOfflineRewriteEquivalencePackSummary(
   overrides: Partial<OfflineRewriteEquivalencePackSummary> = {},
 ): OfflineRewriteEquivalencePackSummary {
@@ -457,6 +500,7 @@ function makeOfflineRewriteEquivalencePackSummary(
       },
     ],
     evidenceStatus: 'bounded-offline-evidence-only',
+    offlineRewriteFamilyReadinessSummary: makeOfflineRewriteFamilyReadinessSummary(),
     ...overrides,
   }
 }
@@ -580,6 +624,15 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(packSummary.totalFixtures).toBe(4)
     expect(packSummary.failedFixtures).toBe(0)
     expect(packSummary.evidenceStatus).toBe('bounded-offline-evidence-only')
+    expect(packSummary.offlineRewriteFamilyReadinessSummary.status).toBe('fail')
+    expect(packSummary.offlineRewriteFamilyReadinessSummary.missingFamilies).toEqual([
+      'predecessor-arithmetic',
+      'read-write-window',
+      'score-swap-window',
+      'score-set-overwrite-window',
+      'unsupported-boundary',
+      'unsupported-typed-boundary',
+    ])
     expect(packSummary.familySummaries.map(item => item.family)).toEqual([
       'copy-feeds-copy-chain',
       'local-copy-forwarding',
@@ -625,6 +678,56 @@ describe('arithmetic probe benchmark tooling', () => {
     ])
   })
 
+  it('includes deterministic family readiness in gate input and fails when required family is missing', () => {
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      SYNTHETIC_NO_REGRESSION_COMPARISON,
+      makeOfflineRewriteEquivalencePackSummary({
+        offlineRewriteFamilyReadinessSummary: makeOfflineRewriteFamilyReadinessSummary({
+          missingFamilies: ['score-swap-window'],
+        }),
+      }),
+    )
+
+    expect(gate.status).toBe('fail')
+    expect(gate.failReasons).toEqual([
+      'offline rewrite family readiness did not pass: status=fail',
+      'offline rewrite family readiness missing required families: score-swap-window',
+    ])
+  })
+
+  it('includes deterministic family readiness in gate input and fails when required family has failures', () => {
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      SYNTHETIC_NO_REGRESSION_COMPARISON,
+      makeOfflineRewriteEquivalencePackSummary({
+        offlineRewriteFamilyReadinessSummary: makeOfflineRewriteFamilyReadinessSummary({
+          failedFamilies: ['read-write-window'],
+        }),
+      }),
+    )
+
+    expect(gate.status).toBe('fail')
+    expect(gate.failReasons).toEqual([
+      'offline rewrite family readiness did not pass: status=fail',
+      'offline rewrite family readiness failed families: read-write-window',
+    ])
+  })
+
+  it('fails the no-regression gate when offline family readiness status is fail even without family details', () => {
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      SYNTHETIC_NO_REGRESSION_COMPARISON,
+      makeOfflineRewriteEquivalencePackSummary({
+        offlineRewriteFamilyReadinessSummary: makeOfflineRewriteFamilyReadinessSummary({
+          status: 'fail',
+        }),
+      }),
+    )
+
+    expect(gate.status).toBe('fail')
+    expect(gate.failReasons).toEqual([
+      'offline rewrite family readiness did not pass: status=fail',
+    ])
+  })
+
   it('fails the no-regression gate when offline rewrite equivalence pack fails', () => {
     const failingOfflinePackSummary = makeOfflineRewriteEquivalencePackSummary({
       totalFixtures: 2,
@@ -654,6 +757,19 @@ describe('arithmetic probe benchmark tooling', () => {
       'offline rewrite equivalence pack did not pass: status=fail, failedFixtures=1',
       'offline rewrite equivalence pack failed fixture names: equiv_fail:counterexample-shape',
     ])
+  })
+
+  it('fails the no-regression gate when offline family readiness summary is missing', () => {
+    const failingSummary = makeOfflineRewriteEquivalencePackSummary()
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      SYNTHETIC_NO_REGRESSION_COMPARISON,
+      ({
+        ...failingSummary,
+        offlineRewriteFamilyReadinessSummary: undefined as unknown as OfflineRewriteFamilyReadinessSummary,
+      }) as OfflineRewriteEquivalencePackSummary,
+    )
+    expect(gate.status).toBe('fail')
+    expect(gate.failReasons).toContain('Missing offlineRewriteFamilyReadinessSummary')
   })
 
   it('passes explicit no-regression gate for a synthetic non-regressing comparison', () => {
@@ -778,6 +894,28 @@ describe('arithmetic probe benchmark tooling', () => {
       'score-set-overwrite-window',
       'unsupported-typed-boundary',
     ])
+    expect(summary?.offlineRewriteFamilyReadinessSummary.status).toBe('pass')
+    expect(summary?.offlineRewriteFamilyReadinessSummary.evidenceStatus).toBe('bounded-offline-evidence-only')
+    expect(summary?.offlineRewriteFamilyReadinessSummary.requiredFamilies.map(item => item.family)).toEqual([
+      'local-copy-forwarding',
+      'predecessor-arithmetic',
+      'read-write-window',
+      'score-swap-window',
+      'score-set-overwrite-window',
+      'unsupported-boundary',
+      'unsupported-typed-boundary',
+    ])
+    expect(summary?.offlineRewriteFamilyReadinessSummary.missingFamilies).toEqual([])
+    expect(summary?.offlineRewriteFamilyReadinessSummary.failedFamilies).toEqual([])
+    expect(summary?.offlineRewriteFamilyReadinessSummary.notes).toMatch(/Evidence-only|not production|bounded-offline/)
+
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      report.experimentalLocalCopyRewriteComparison,
+      summary,
+    )
+    expect(gate.status).toBe('pass')
+    expect(gate.failReasons).toHaveLength(0)
+    expect(gate.offlineRewriteFamilyReadinessSummary).toEqual(summary!.offlineRewriteFamilyReadinessSummary)
   })
 
   it('runs experimental local-copy rewrite probes deterministically with explicit comparison totals', () => {

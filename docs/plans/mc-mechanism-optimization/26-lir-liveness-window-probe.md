@@ -235,7 +235,24 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
 - Updated test expectations so totals and deterministic family summaries reflect the expanded families.
 - This tranche is evidence-only and does **not** represent production rewrite correctness or enable any production optimizer path.
 
+### Tranche V outcome update
+- Added bounded evidence-only readiness gating metadata under `offlineRewriteEquivalencePackSummary.offlineRewriteFamilyReadinessSummary` for explicit local-copy benchmark mode:
+  - required families are explicitly listed and deterministically ordered:
+    - `local-copy-forwarding`
+    - `predecessor-arithmetic`
+    - `read-write-window`
+    - `score-swap-window`
+    - `score-set-overwrite-window`
+    - `unsupported-boundary`
+    - `unsupported-typed-boundary`
+  - each family is reported with `total`, `failed`, and family-local pass/fail status.
+  - top-level readiness status/missing/failed arrays are surfaced.
+  - evidence/notes explicitly call out bounded-offline evidence-only scope.
+- Updated `evaluateExperimentalLocalCopyRewriteNoRegressionGate` to fail the gate if the readiness summary is missing, any required family is absent, or any required family has failed fixtures.
+- Updated tests to assert deterministic required-family ordering, deterministic fail reasons, and presence of readiness metadata in explicit report/gate outputs.
+- This tranche is diagnostics-only and does not change production optimizer behavior.
+
 ## Next safe goals
 1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite` via the new wrapper.
-2. use the new Phase U fixture edges to guide the next gated rewrite candidate tranche,
+2. use the new Phase U/U+V fixture and readiness results to guide the next gated rewrite candidate tranche,
 3. only after gate stability and coverage evidence improve, move to a narrowly scoped rewrite-safe tranche.

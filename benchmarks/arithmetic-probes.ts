@@ -330,6 +330,23 @@ export interface OfflineRewriteEquivalencePackFamilySummary {
   failedFixtures: number
 }
 
+export interface OfflineRewriteFamilyReadinessEntry {
+  family: string
+  total: number
+  failed: number
+  status: 'pass' | 'fail'
+}
+
+export interface OfflineRewriteFamilyReadinessSummary {
+  status: 'pass' | 'fail'
+  evidenceStatus: 'bounded-offline-evidence-only'
+  requiredFamilies: OfflineRewriteFamilyReadinessEntry[]
+  missingFamilies: string[]
+  failedFamilies: string[]
+  notes?: string
+  gateReason?: string
+}
+
 export interface OfflineRewriteEquivalencePackSummary {
   status: 'pass' | 'fail'
   totalFixtures: number
@@ -340,6 +357,7 @@ export interface OfflineRewriteEquivalencePackSummary {
   familySummaries: OfflineRewriteEquivalencePackFamilySummary[]
   failedFixtureNames?: string[]
   evidenceStatus: 'bounded-offline-evidence-only'
+  offlineRewriteFamilyReadinessSummary: OfflineRewriteFamilyReadinessSummary
 }
 
 export interface RewriteProofMissLirLocalTempProofWindowSummary {
@@ -943,9 +961,19 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate {
   status: 'pass' | 'fail'
   failReasons: string[]
   rationale: 'benchmark-evidence-only-no-production'
+  offlineRewriteFamilyReadinessSummary?: OfflineRewriteFamilyReadinessSummary
 }
 
 const OFFLINE_REWRITE_EQUIVALENCE_PACK_MAX_FAILED_FIXTURE_NAMES = 5
+const OFFLINE_REWRITE_FAMILY_READINESS_REQUIRED_FAMILIES = [
+  'local-copy-forwarding',
+  'predecessor-arithmetic',
+  'read-write-window',
+  'score-swap-window',
+  'score-set-overwrite-window',
+  'unsupported-boundary',
+  'unsupported-typed-boundary',
+] as const
 
 type ProbeCliArgs = ReturnType<typeof parseCliArgs> & {
   caseName: string
@@ -4866,6 +4894,7 @@ export function summarizeOfflineRewriteEquivalencePack(options: {
   familySummaries: RunnerOfflineRewriteFamilySummary[]
   failedFixtureNames: string[]
 }): OfflineRewriteEquivalencePackSummary {
+  const offlineRewriteFamilyReadinessSummary = summarizeOfflineRewriteFamilyReadiness(options.familySummaries)
   const failedFixtureNames = options.failedFixtureNames.slice(0, OFFLINE_REWRITE_EQUIVALENCE_PACK_MAX_FAILED_FIXTURE_NAMES)
   return {
     status: options.totals.failed === 0 ? 'pass' : 'fail',
@@ -4884,6 +4913,46 @@ export function summarizeOfflineRewriteEquivalencePack(options: {
     })),
     failedFixtureNames: failedFixtureNames.length > 0 ? failedFixtureNames : undefined,
     evidenceStatus: 'bounded-offline-evidence-only',
+    offlineRewriteFamilyReadinessSummary,
+  }
+}
+
+function summarizeOfflineRewriteFamilyReadiness(
+  familySummaries: RunnerOfflineRewriteFamilySummary[],
+): OfflineRewriteFamilyReadinessSummary {
+  const summaryByFamily = new Map<string, RunnerOfflineRewriteFamilySummary>()
+  for (const summary of familySummaries) {
+    summaryByFamily.set(summary.family, summary)
+  }
+
+  const requiredFamilies = OFFLINE_REWRITE_FAMILY_READINESS_REQUIRED_FAMILIES
+    .map((family): OfflineRewriteFamilyReadinessEntry => {
+      const familySummary = summaryByFamily.get(family)
+      const total = familySummary?.total ?? 0
+      const failed = familySummary?.failed ?? 0
+      return {
+        family,
+        total,
+        failed,
+        status: total > 0 && failed === 0 ? 'pass' : 'fail',
+      }
+    })
+
+  const missingFamilies = requiredFamilies
+    .filter(entry => entry.total === 0)
+    .map(entry => entry.family)
+  const failedFamilies = requiredFamilies
+    .filter(entry => entry.failed > 0)
+    .map(entry => entry.family)
+
+  return {
+    status: missingFamilies.length === 0 && failedFamilies.length === 0 ? 'pass' : 'fail',
+    evidenceStatus: 'bounded-offline-evidence-only',
+    requiredFamilies,
+    missingFamilies,
+    failedFamilies,
+    notes: 'Evidence-only bounded offline family readiness; this is not production correctness proof.',
+    gateReason: 'bounded-offline-evidence-only readiness check for explicit local-copy gate path.',
   }
 }
 
@@ -6781,12 +6850,39 @@ export function evaluateExperimentalLocalCopyRewriteNoRegressionGate(
   if (comparison) {
     if (!offlineRewriteEquivalencePackSummary) {
       failReasons.push('Missing offlineRewriteEquivalencePackSummary')
-    } else if (offlineRewriteEquivalencePackSummary.status === 'fail') {
-      failReasons.push(
-        `offline rewrite equivalence pack did not pass: status=${offlineRewriteEquivalencePackSummary.status}, failedFixtures=${offlineRewriteEquivalencePackSummary.failedFixtures}`,
-      )
-      if (offlineRewriteEquivalencePackSummary.failedFixtureNames && offlineRewriteEquivalencePackSummary.failedFixtureNames.length > 0) {
-        failReasons.push(`offline rewrite equivalence pack failed fixture names: ${offlineRewriteEquivalencePackSummary.failedFixtureNames.join(', ')}`)
+    } else {
+      if (offlineRewriteEquivalencePackSummary.status === 'fail') {
+        failReasons.push(
+          `offline rewrite equivalence pack did not pass: status=${offlineRewriteEquivalencePackSummary.status}, failedFixtures=${offlineRewriteEquivalencePackSummary.failedFixtures}`,
+        )
+        if (
+          offlineRewriteEquivalencePackSummary.failedFixtureNames &&
+          offlineRewriteEquivalencePackSummary.failedFixtureNames.length > 0
+        ) {
+          failReasons.push(
+            `offline rewrite equivalence pack failed fixture names: ${offlineRewriteEquivalencePackSummary.failedFixtureNames.join(', ')}`,
+          )
+        }
+      }
+      if (!offlineRewriteEquivalencePackSummary.offlineRewriteFamilyReadinessSummary) {
+        failReasons.push('Missing offlineRewriteFamilyReadinessSummary')
+      } else {
+        const readinessSummary = offlineRewriteEquivalencePackSummary.offlineRewriteFamilyReadinessSummary
+        if (readinessSummary.status === 'fail') {
+          failReasons.push(
+            `offline rewrite family readiness did not pass: status=${readinessSummary.status}`,
+          )
+        }
+        if (readinessSummary.missingFamilies.length > 0) {
+          failReasons.push(
+            `offline rewrite family readiness missing required families: ${readinessSummary.missingFamilies.join(', ')}`,
+          )
+        }
+        if (readinessSummary.failedFamilies.length > 0) {
+          failReasons.push(
+            `offline rewrite family readiness failed families: ${readinessSummary.failedFamilies.join(', ')}`,
+          )
+        }
       }
     }
   }
@@ -6796,6 +6892,7 @@ export function evaluateExperimentalLocalCopyRewriteNoRegressionGate(
     status: failReasons.length === 0 ? 'pass' : 'fail',
     failReasons,
     rationale: 'benchmark-evidence-only-no-production',
+    offlineRewriteFamilyReadinessSummary: offlineRewriteEquivalencePackSummary?.offlineRewriteFamilyReadinessSummary,
   }
 }
 
