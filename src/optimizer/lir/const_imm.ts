@@ -11,6 +11,7 @@
 
 import type { LIRFunction, LIRInstr, Slot } from '../../lir/types'
 import { SCORE_INT_MIN, isScoreInt } from '../../lir/types'
+import { extractSlotsFromText } from './analysis'
 import { getSourceOperandSlots } from './effects'
 
 function slotKey(s: Slot): string {
@@ -29,15 +30,19 @@ function constFoldScoreMinMax(a: number, b: number, op: 'score_min' | 'score_max
   return op === 'score_min' ? Math.min(a, b) : Math.max(a, b)
 }
 
-/** Count how many times a slot is used as a source operand. */
-function countSlotUses(instrs: LIRInstr[], target: string): number {
-  let count = 0
-  for (const instr of instrs) {
-    for (const s of getSourceOperandSlots(instr)) {
-      if (slotKey(s) === target) count++
-    }
-  }
-  return count
+/**
+ * Slots that make a const materialization unsafe to remove.
+ *
+ * Typed source operands are true semantic uses. Raw/macro text matches are only
+ * conservative safety hints, not proof for rewriting, but they still prevent
+ * this pass from deleting the materialized slot behind an opaque command.
+ */
+function getConstMaterializationUses(instr: LIRInstr): Slot[] {
+  const uses = [...getSourceOperandSlots(instr)]
+  if (instr.kind === 'raw') uses.push(...extractSlotsFromText(instr.cmd))
+  if (instr.kind === 'macro_line') uses.push(...extractSlotsFromText(instr.template))
+  if (instr.kind === 'store_cmd_to_score') uses.push(...getConstMaterializationUses(instr.cmd))
+  return uses
 }
 
 export function constImmFold(fn: LIRFunction): LIRFunction {
@@ -47,7 +52,7 @@ export function constImmFold(fn: LIRFunction): LIRFunction {
   // Pre-compute use counts for all const slots
   const useCounts = new Map<string, number>()
   for (const instr of instrs) {
-    for (const s of getSourceOperandSlots(instr)) {
+    for (const s of getConstMaterializationUses(instr)) {
       const key = slotKey(s)
       useCounts.set(key, (useCounts.get(key) || 0) + 1)
     }

@@ -40,11 +40,13 @@ export function textMentionsSlot(text: string, slot: Slot): boolean {
 
 /**
  * Extract explicit scoreboard-looking slots from raw text.
- * This is intentionally conservative and only recognizes fake-player style
- * references that are useful for optimizer safety barriers.
+ * This is intentionally conservative and used only as a safety/debug hint.
+ * It does not establish command-level semantic correctness and must not be
+ * used as proof for aggressive transforms.
  */
 export function extractSlotsFromText(text: string): Slot[] {
   const slots: Slot[] = []
+  // Conservative slot-hint extraction only.
   const re = /(\$[\w.:]+)\s+(\S+)/g
   let match: RegExpExecArray | null
   while ((match = re.exec(text)) !== null) {
@@ -203,6 +205,8 @@ export function analyzeStraightLineSlotLiveness(instrs: LIRInstr[]): LIRNextUseI
   let hasBarrierAfter = false
 
   function getConservativeBarrierReadSlots(instr: LIRInstr): Slot[] {
+    // Conservative slot-hint read extraction for opacity bookkeeping only.
+    // These tokens are not semantic proof and never authorize optimizations.
     if (instr.kind === 'raw') return extractSlotsFromText(instr.cmd)
     if (instr.kind === 'macro_line') return extractSlotsFromText(instr.template)
     return getReadSlots(instr)

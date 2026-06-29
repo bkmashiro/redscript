@@ -214,6 +214,8 @@ Alternative acceptable shape: `score_add_imm` / `score_remove_imm`.
 
 ## P4 — Raw/macro opaque policy and const folding guard
 
+**Status:** ✅ Done (validated by required unit/integration/build/probe/gate commands)
+
 **Product promise:** Optimizers treat raw/macro as opaque safety boundaries unless a future typed command IR represents the operation exactly.
 
 **Primary files:**
@@ -435,7 +437,7 @@ Return:
 - [x] P1 shared LIR effect model.
 - [x] P2 compile-stage LIR verification.
 - [x] P3 typed immediate LIR and ScoreInt guard.
-- [ ] P4 raw/macro opaque policy.
+- [x] P4 raw/macro opaque policy.
 - [ ] P5 slot-classification split.
 - [ ] P6 LIR pass manager/idempotence.
 - [ ] P7 macro/version hard errors.

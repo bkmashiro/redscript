@@ -4,6 +4,9 @@ type Subcommand = { kind: string } & Record<string, unknown>
 
 function extractSlotsFromText(text: string): Slot[] {
   const slots: Slot[] = []
+  // Conservative slot-hint extraction only.
+  // This is not a correctness proof; it is only a safety/debug hint and should
+  // never justify non-opaque transforms on its own.
   const re = /(\$[\w.:]+)\s+(\S+)/g
   let match: RegExpExecArray | null
   while ((match = re.exec(text)) !== null) {

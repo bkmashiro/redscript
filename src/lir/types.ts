@@ -112,10 +112,14 @@ export type LIRInstr = LIRInstrBase & (
   | { kind: 'macro_line'; template: string }
   // A line starting with $ in a macro function.
   // template uses $(param) substitutions
+  // treated as an opaque optimizer barrier; command text is not a semantic
+  // contract for typed transforms.
 
   // ── Arbitrary MC command ─────────────────────────────────────────────────
   | { kind: 'raw'; cmd: string }
   // Emitted verbatim. Use sparingly — prefer typed instructions.
+  // Raw text is an optimizer barrier for safety; do not infer semantics from
+  // substring matches.
 )
 
 // ---------------------------------------------------------------------------

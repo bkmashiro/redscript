@@ -129,6 +129,52 @@ describe('constant immediate folding', () => {
     expect(result.instructions).toHaveLength(3)
   })
 
+  test('does not fold across raw barrier even with slot-looking raw text', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      {
+        kind: 'raw',
+        cmd: 'execute if score $shared_tmp __test matches 1.. run tellraw @s {"text":"$__const_5"}',
+      },
+      { kind: 'score_add', dst: mkSlot('$x'), src: mkSlot('$__const_5') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual(fn.instructions)
+  })
+
+  test('does not fold across macro_line barrier when command text merely resembles a slot', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_7'), value: 7 },
+      {
+        kind: 'macro_line',
+        template: '$execute if data storage rs:tmp {dummy:"$(slotLike)$__const_7"}',
+      },
+      { kind: 'score_sub', dst: mkSlot('$x'), src: mkSlot('$__const_7') },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual(fn.instructions)
+  })
+
+  test('does not delete const materialization when later raw text mentions the slot', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_5'), value: 5 },
+      { kind: 'score_add', dst: mkSlot('$x'), src: mkSlot('$__const_5') },
+      { kind: 'raw', cmd: 'scoreboard players get $__const_5 __test' },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual(fn.instructions)
+  })
+
+  test('does not delete const materialization when later macro text mentions the slot', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$__const_7'), value: 7 },
+      { kind: 'score_sub', dst: mkSlot('$x'), src: mkSlot('$__const_7') },
+      { kind: 'macro_line', template: '$scoreboard players get $__const_7 __test' },
+    ])
+    const result = constImmFold(fn)
+    expect(result.instructions).toEqual(fn.instructions)
+  })
+
   test('eliminates multiply by 1', () => {
     const fn = mkFn([
       { kind: 'score_set', dst: mkSlot('$__const_1'), value: 1 },
