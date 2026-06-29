@@ -113,6 +113,98 @@ describe('execute store peephole', () => {
     })
   })
 
+  test('merges adjacent duplicate-destination score_set writes to keep only the second value', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 1 },
+      { kind: 'score_set', dst: mkSlot('$x'), value: 2 },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(1)
+    expect(result.instructions[0]).toEqual({
+      kind: 'score_set',
+      dst: mkSlot('$x'),
+      value: 2,
+    })
+  })
+
+  test('merges runs of adjacent duplicate-destination score_set writes to keep only the final value', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 1 },
+      { kind: 'score_set', dst: mkSlot('$x'), value: 2 },
+      { kind: 'score_set', dst: mkSlot('$x'), value: 3 },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(1)
+    expect(result.instructions[0]).toEqual({
+      kind: 'score_set',
+      dst: mkSlot('$x'),
+      value: 3,
+    })
+  })
+
+  test('merges multiple independent adjacent duplicate-score_set pairs', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$a'), value: 1 },
+      { kind: 'score_set', dst: mkSlot('$a'), value: 2 },
+      { kind: 'score_set', dst: mkSlot('$b'), value: 3 },
+      { kind: 'score_set', dst: mkSlot('$b'), value: 4 },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(2)
+    expect(result.instructions[0]).toEqual({
+      kind: 'score_set',
+      dst: mkSlot('$a'),
+      value: 2,
+    })
+    expect(result.instructions[1]).toEqual({
+      kind: 'score_set',
+      dst: mkSlot('$b'),
+      value: 4,
+    })
+  })
+
+  test('does not merge adjacent score_set writes when destination player differs', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$a'), value: 1 },
+      { kind: 'score_set', dst: mkSlot('$b'), value: 2 },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(2)
+    expect(result).toBe(fn)
+  })
+
+  test('does not merge adjacent score_set writes when objective differs', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 1 },
+      { kind: 'score_set', dst: { player: '$x', obj: 'other_obj' }, value: 2 },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(2)
+    expect(result).toBe(fn)
+  })
+
+  test('does not merge non-adjacent same-destination sets when instructions intervene', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: 1 },
+      { kind: 'call', fn: 'ns:other' },
+      { kind: 'score_set', dst: mkSlot('$x'), value: 2 },
+      { kind: 'raw', cmd: 'say done' },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(4)
+    expect(result).toBe(fn)
+  })
+
+  test('does not merge score_copy(dst, src) + score_set(dst, value)', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$x'), src: mkSlot('$y') },
+      { kind: 'score_set', dst: mkSlot('$x'), value: 2 },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(2)
+    expect(result).toBe(fn)
+  })
+
   test('returns same reference when nothing changed', () => {
     const fn = mkFn([
       { kind: 'call', fn: 'ns:myfn' },

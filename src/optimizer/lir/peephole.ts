@@ -11,7 +11,9 @@
  *
  *   execute store result score $result __ns [subcommands] run function ns:fn
  *
- * Pattern 2: Merges a `score_set(dst, 0)` immediately followed by a `raw` command
+ * Pattern 2: Collapses adjacent `score_set(dst, A); score_set(dst, B)` into only the second write.
+ *
+ * Pattern 3: Merges a `score_set(dst, 0)` immediately followed by a `raw` command
  * of the form `execute <cond> run scoreboard players set $dst __ns 1`:
  *
  *   scoreboard players set $dst __ns 0            ← score_set(dst, 0)
@@ -69,7 +71,20 @@ export function execStorePeephole(fn: LIRFunction): LIRFunction {
       continue
     }
 
-    // Pattern 2: score_set(dst, 0) + raw("execute <cond> run scoreboard players set $dst OBJ 1")
+    // Pattern 2: adjacent `score_set` writes to the same destination slot
+    if (
+      next &&
+      curr.kind === 'score_set' &&
+      next.kind === 'score_set' &&
+      curr.dst.player === next.dst.player &&
+      curr.dst.obj === next.dst.obj
+    ) {
+      changed = true
+      i++
+      continue
+    }
+
+    // Pattern 3: score_set(dst, 0) + raw("execute <cond> run scoreboard players set $dst OBJ 1")
     // → raw("execute store success score $dst OBJ <cond>")
     if (
       next &&
