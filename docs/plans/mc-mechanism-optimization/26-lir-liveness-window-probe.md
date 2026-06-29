@@ -227,7 +227,15 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
   - Added `gate:lir-local-copy` script and corresponding CI workflow step so this no-regression gate runs in explicit CI paths without dumping full benchmark JSON to logs.
   - This remains bounded to `bounded-offline-evidence-only` and does not authorize production behavior.
 
+### Tranche U outcome update
+- Expanded the bounded offline rewrite-equivalence fixture pack in `src/optimizer/lir/rewrite_equivalence_fixtures.ts` with three new evidence families while preserving existing family order:
+  - `score-swap-window` (both safe local-window equivalent cases and explicit counterexamples when swap temp is externally observable);
+  - `score-set-overwrite-window` (safe if overwritten temp is not observed, counterexample if it remains observable);
+  - `unsupported-typed-boundary` (evidence-only unsupported cases for typed boundary commands, storage/NBT/call/macro forms).
+- Updated test expectations so totals and deterministic family summaries reflect the expanded families.
+- This tranche is evidence-only and does **not** represent production rewrite correctness or enable any production optimizer path.
+
 ## Next safe goals
 1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite` via the new wrapper.
-2. expand bounded equivalence fixtures for remaining candidate families and window-edge environments not yet covered by Tranches Q + R + S + T,
+2. use the new Phase U fixture edges to guide the next gated rewrite candidate tranche,
 3. only after gate stability and coverage evidence improve, move to a narrowly scoped rewrite-safe tranche.

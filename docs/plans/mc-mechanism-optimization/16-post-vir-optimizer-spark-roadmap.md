@@ -100,6 +100,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | R | Offline rewrite-equivalence fixture pack and runner | Deterministic fixture metadata + reusable offline runner for bounded equivalence checks | Medium | Small TDD slice | Completed |
 | S | Offline equivalence pack + benchmark gate integration | Add deterministic offline-pack evidence into explicit local-copy benchmark paths and no-regression gate checks | Medium | Small diagnostics-only slice | Completed |
 | T | CI-friendly explicit local-copy no-regression gate path | Add concise, CI-safe wrapper and workflow step to run evidence-only gate with full JSON artifact | Medium | Small diagnostics-only slice | Completed |
+| U | Offline rewrite fixture family/window expansion | Expand bounded equivalence fixture coverage for score-swap, score-set-overwrite, and unsupported typed boundary cases | Low | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -651,11 +652,22 @@ git status --short --branch
   - Added `gate:lir-local-copy` npm script and CI step named `Evidence-only experimental LIR local-copy no-regression gate`.
   - The path is explicitly `bounded-offline-evidence-only` and does not enable production rewrite behavior.
 
+## Tranche U — bounded rewrite fixture family expansion
+
+- Status: Completed as evidence-only.
+- Outcome:
+  - Expanded `src/optimizer/lir/rewrite_equivalence_fixtures.ts` with a deterministic, bounded offline pack extension for three additional evidence families:
+    - `score-swap-window` (safe/equivalent when only swap result is observed, counterexample when local temp remains observed);
+    - `score-set-overwrite-window` (safe/equivalent when overwritten temp is not observed, counterexample when it is).
+    - `unsupported-typed-boundary` (typed boundary instructions that are intentionally unsupported by the bounded checker, such as storage/NBT/store/call/macro typed nodes).
+  - Updated deterministic suite expectations so totals and per-family summaries reflect the new families while preserving stable ordering of existing families.
+  - No production compiler behavior changed; this tranche is strictly bounded/offline evidence and is not production correctness proof.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through T and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through U and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -680,11 +692,11 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche T with J/K/L/O/P/Q/R/S/T diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche U with J/K/L/O/P/Q/R/S/T/U diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.
 
 Next safe work remains:
-1. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments not covered by Phases Q+R+S+T,
-2. proceed to a separately gated rewrite implementation tranche only after gate stability and coverage evidence are stable.
+1. keep the explicit no-regression gate path operational while coverage evidence stabilizes,
+2. proceed to a separately gated rewrite implementation tranche only after bounded offline evidence and gate stability justify implementation.

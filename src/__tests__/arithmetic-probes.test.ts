@@ -764,7 +764,7 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(summary).toBeDefined()
     expect(summary?.status).toBe('pass')
     expect(summary?.failedFixtures).toBe(0)
-    expect(summary?.totalFixtures).toBe(19)
+    expect(summary?.totalFixtures).toBe(29)
     expect(summary?.evidenceStatus).toBe('bounded-offline-evidence-only')
     expect(summary?.familySummaries.map(item => item.family)).toEqual([
       'local-copy-forwarding',
@@ -774,6 +774,9 @@ describe('arithmetic probe benchmark tooling', () => {
       'read-write-window',
       'return-path',
       'unsupported-boundary',
+      'score-swap-window',
+      'score-set-overwrite-window',
+      'unsupported-typed-boundary',
     ])
   })
 

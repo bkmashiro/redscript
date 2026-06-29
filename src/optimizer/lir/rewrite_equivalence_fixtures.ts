@@ -285,6 +285,162 @@ export const offlineRewriteEquivalenceFixtures: OfflineRewriteEquivalenceFixture
     samples: [sample([[mkSlot('$src'), 9], [mkSlot('$rhs'), 4], [mkSlot('$tail'), 5], [mkSlot('$tmp'), 1], [mkSlot('$out'), 0]])],
   },
   {
+    name: 'score-swap-window-only-output-is-equivalent',
+    family: 'score-swap-window',
+    expectedStatus: 'equivalent',
+    before: mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_swap', a: mkSlot('$tmp'), b: mkSlot('$rhs') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$rhs') }]),
+    observedSlots: [mkSlot('$out')],
+    samples: [
+      sample([[mkSlot('$src'), 12], [mkSlot('$rhs'), 5], [mkSlot('$tmp'), 0], [mkSlot('$out'), 0]]),
+      sample([[mkSlot('$src'), -3], [mkSlot('$rhs'), 9], [mkSlot('$tmp'), 7], [mkSlot('$out'), -1]]),
+    ],
+  },
+  {
+    name: 'score-swap-window-observed-temp-is-counterexample',
+    family: 'score-swap-window',
+    expectedStatus: 'counterexample',
+    before: mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_swap', a: mkSlot('$tmp'), b: mkSlot('$rhs') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$rhs') }]),
+    observedSlots: [mkSlot('$out'), mkSlot('$tmp')],
+    samples: [
+      sample([[mkSlot('$src'), 1], [mkSlot('$rhs'), 8], [mkSlot('$tmp'), 4], [mkSlot('$out'), 0]]),
+      sample([[mkSlot('$src'), -7], [mkSlot('$rhs'), 2], [mkSlot('$tmp'), -2], [mkSlot('$out'), 9]]),
+    ],
+  },
+  {
+    name: 'score-set-overwrite-window-not-observed-is-equivalent',
+    family: 'score-set-overwrite-window',
+    expectedStatus: 'equivalent',
+    before: mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+      { kind: 'score_set', dst: mkSlot('$tmp'), value: 5 },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') }]),
+    observedSlots: [mkSlot('$out')],
+    samples: [
+      sample([[mkSlot('$src'), 4], [mkSlot('$tmp'), 11], [mkSlot('$out'), 0]]),
+      sample([[mkSlot('$src'), -9], [mkSlot('$tmp'), 77], [mkSlot('$out'), 7]]),
+    ],
+  },
+  {
+    name: 'score-set-overwrite-window-observed-temp-is-counterexample',
+    family: 'score-set-overwrite-window',
+    expectedStatus: 'counterexample',
+    before: mkFn([
+      { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+      { kind: 'score_set', dst: mkSlot('$tmp'), value: 5 },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') }]),
+    observedSlots: [mkSlot('$out'), mkSlot('$tmp')],
+    samples: [
+      sample([[mkSlot('$src'), 3], [mkSlot('$tmp'), 2], [mkSlot('$out'), 0]]),
+      sample([[mkSlot('$src'), 0], [mkSlot('$tmp'), -6], [mkSlot('$out'), 5]]),
+    ],
+  },
+  {
+    name: 'unsupported-boundary-store-cmd-to-score',
+    family: 'unsupported-typed-boundary',
+    expectedStatus: 'unsupported',
+    before: mkFn([
+      {
+        kind: 'store_cmd_to_score',
+        dst: mkSlot('$tmp'),
+        cmd: { kind: 'score_copy', dst: mkSlot('$tmp'), src: mkSlot('$src') },
+      },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$tmp') },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') }]),
+    observedSlots: [mkSlot('$out')],
+    samples: [sample([[mkSlot('$src'), 2], [mkSlot('$tmp'), 9], [mkSlot('$out'), 0]])],
+  },
+  {
+    name: 'unsupported-boundary-store-score-to-nbt',
+    family: 'unsupported-typed-boundary',
+    expectedStatus: 'unsupported',
+    before: mkFn([
+      {
+        kind: 'store_score_to_nbt',
+        ns: 'rs:dp',
+        path: 'value',
+        type: 'int',
+        scale: 1,
+        src: mkSlot('$src'),
+      },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') }]),
+    observedSlots: [mkSlot('$out')],
+    samples: [sample([[mkSlot('$src'), 8], [mkSlot('$out'), 0]])],
+  },
+  {
+    name: 'unsupported-boundary-nbt-set-literal',
+    family: 'unsupported-typed-boundary',
+    expectedStatus: 'unsupported',
+    before: mkFn([
+      { kind: 'nbt_set_literal', ns: 'rs:dp', path: 'v', value: '0' },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') }]),
+    observedSlots: [mkSlot('$out')],
+    samples: [sample([[mkSlot('$src'), 15], [mkSlot('$out'), 0]])],
+  },
+  {
+    name: 'unsupported-boundary-call-if-matches',
+    family: 'unsupported-typed-boundary',
+    expectedStatus: 'unsupported',
+    before: mkFn([
+      {
+        kind: 'call_if_matches',
+        fn: 'rs:helper',
+        slot: mkSlot('$src'),
+        range: '1..3',
+      },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') }]),
+    observedSlots: [mkSlot('$out')],
+    samples: [sample([[mkSlot('$src'), 2], [mkSlot('$out'), 0]])],
+  },
+  {
+    name: 'unsupported-boundary-call-context',
+    family: 'unsupported-typed-boundary',
+    expectedStatus: 'unsupported',
+    before: mkFn([
+      {
+        kind: 'call_context',
+        fn: 'rs:helper',
+        subcommands: [],
+      },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') }]),
+    observedSlots: [mkSlot('$out')],
+    samples: [sample([[mkSlot('$src'), 7], [mkSlot('$zero'), 0], [mkSlot('$out'), 0]])],
+  },
+  {
+    name: 'unsupported-boundary-macro-line',
+    family: 'unsupported-typed-boundary',
+    expectedStatus: 'unsupported',
+    before: mkFn([
+      { kind: 'macro_line', template: 'say $(msg)' },
+      { kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') },
+    ]),
+    after: mkFn([{ kind: 'score_copy', dst: mkSlot('$out'), src: mkSlot('$src') }]),
+    observedSlots: [mkSlot('$out')],
+    samples: [sample([[mkSlot('$src'), 5], [mkSlot('$out'), 0]])],
+  },
+  {
     name: 'copy-chain/no-reuse',
     family: 'local-copy-forwarding',
     expectedStatus: 'equivalent',
@@ -404,6 +560,9 @@ export const offlineRewriteEquivalenceFamilies = [
   'read-write-window',
   'return-path',
   'unsupported-boundary',
+  'score-swap-window',
+  'score-set-overwrite-window',
+  'unsupported-typed-boundary',
 ] as const
 
 const familyOrder = new Map<string, number>(
