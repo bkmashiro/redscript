@@ -98,6 +98,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | P | Explicit no-regression benchmark gate | Add explicit evidence-only gate that fails on command/score-copy regressions when experimental local-copy comparison is explicitly enabled | Medium | Small diagnostics-only slice | Completed |
 | Q | Predecessor arithmetic + read/write-window bounded equivalence | Expand offline local-temp rewrite evidence for non-add families and temp read/write-window boundaries | Medium | Small TDD slice | Completed |
 | R | Offline rewrite-equivalence fixture pack and runner | Deterministic fixture metadata + reusable offline runner for bounded equivalence checks | Medium | Small TDD slice | Completed |
+| S | Offline equivalence pack + benchmark gate integration | Add deterministic offline-pack evidence into explicit local-copy benchmark paths and no-regression gate checks | Medium | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -621,6 +622,20 @@ git status --short --branch
   - Refactored `src/__tests__/optimizer/lir/rewrite_equivalence.test.ts` to consume the reusable pack and to validate deterministic evidence summaries and non-equivalence for unsafe/unsupported cases.
   - This tranche is offline bounded evidence prep for future local-copy/RMW rewrite experiments and does not alter production optimizer behavior or enable rewrites.
 
+## Tranche S — offline equivalence pack evidence in local-copy benchmark gate
+
+- Status: Completed as evidence-only.
+- Outcome:
+  - Wired `runOfflineRewriteEquivalenceFixtures()` into the explicit experimental local-copy benchmark path and added additive summary output under:
+    - `ArithmeticProbeReport.offlineRewriteEquivalencePackSummary`.
+  - Added benchmark-only, deterministic schema with stable family ordering from the fixture runner:
+    - overall pack counts and per-family summaries,
+    - `status: 'pass' | 'fail'`,
+    - failed fixture list with cap,
+    - `evidenceStatus: 'bounded-offline-evidence-only'`.
+  - Updated no-regression evaluator to require (in explicit gate path) both `experimentalLocalCopyRewriteComparison` and the offline equivalence pack summary to pass.
+  - Added deterministic tests for summary conversion, stable family order, failed offline summary integration into the no-regression gate, and report attachment.
+
 ---
 
 ## Suggested next `/goal` for Hermes
@@ -650,12 +665,12 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche R with J/K/L/O/P/Q/R diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche S with J/K/L/O/P/Q/R/S diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.
 
 Next safe work remains:
 1. run the new no-regression gate in explicit CI/benchmark paths using `--require-experimental-lir-local-copy-no-regressions`,
-2. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments not covered by Phases Q+R,
+2. expand bounded equivalence fixtures for remaining candidate families and parser-edge environments not covered by Phases Q+R+S,
 3. proceed to a separately gated rewrite implementation tranche only after gate stability and coverage evidence are stable.

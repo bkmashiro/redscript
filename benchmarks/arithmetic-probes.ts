@@ -16,6 +16,11 @@ import {
   type VirToLirDecisionReport,
 } from '../src/optimizer/vir/lower/vir-to-lir'
 import { lowerMirToVir } from '../src/optimizer/vir/lower/mir-to-vir'
+import {
+  runOfflineRewriteEquivalenceFixtures,
+  type OfflineRewriteFamilySummary as RunnerOfflineRewriteFamilySummary,
+  type OfflineRewriteSummary as RunnerOfflineRewriteSummary,
+} from '../src/optimizer/lir/rewrite_equivalence_fixtures'
 import type { VirUnsupportedReasonTag } from '../src/optimizer/vir/lower/unsupported-tags'
 import { isProtectedSlot, sameSlot } from '../src/optimizer/lir/analysis'
 
@@ -314,6 +319,27 @@ export interface OfflineRewriteTestHarnessSummary {
   blockedFixtureCount: number
   supportedTestKinds: string[]
   requiredBeforeRewriteEnablement: string[]
+}
+
+export interface OfflineRewriteEquivalencePackFamilySummary {
+  family: string
+  totalFixtures: number
+  equivalentFixtures: number
+  counterexampleFixtures: number
+  unsupportedFixtures: number
+  failedFixtures: number
+}
+
+export interface OfflineRewriteEquivalencePackSummary {
+  status: 'pass' | 'fail'
+  totalFixtures: number
+  equivalentFixtures: number
+  counterexampleFixtures: number
+  unsupportedFixtures: number
+  failedFixtures: number
+  familySummaries: OfflineRewriteEquivalencePackFamilySummary[]
+  failedFixtureNames?: string[]
+  evidenceStatus: 'bounded-offline-evidence-only'
 }
 
 export interface RewriteProofMissLirLocalTempProofWindowSummary {
@@ -873,6 +899,7 @@ export interface ArithmeticProbeReport {
   copyOrigins?: CopyOriginSummary
   rewriteOpportunities: CopyRewriteOpportunitySummary
   lirOpportunitySummary?: LirOpportunitySummary
+  offlineRewriteEquivalencePackSummary?: OfflineRewriteEquivalencePackSummary
   virDecisionDashboard: VirArithmeticDecisionAggregate
   futureRewriteFixtureExportSummary?: FutureRewriteFixtureExportSummary
   unknownCauseSplitSummary?: RewriteProofMissUnknownCauseSplitSummary
@@ -917,6 +944,8 @@ export interface ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate {
   failReasons: string[]
   rationale: 'benchmark-evidence-only-no-production'
 }
+
+const OFFLINE_REWRITE_EQUIVALENCE_PACK_MAX_FAILED_FIXTURE_NAMES = 5
 
 type ProbeCliArgs = ReturnType<typeof parseCliArgs> & {
   caseName: string
@@ -4832,6 +4861,32 @@ export function buildLirOpportunitySummary(cases: ArithmeticProbeResult[]): LirO
   return totals
 }
 
+export function summarizeOfflineRewriteEquivalencePack(options: {
+  totals: RunnerOfflineRewriteSummary
+  familySummaries: RunnerOfflineRewriteFamilySummary[]
+  failedFixtureNames: string[]
+}): OfflineRewriteEquivalencePackSummary {
+  const failedFixtureNames = options.failedFixtureNames.slice(0, OFFLINE_REWRITE_EQUIVALENCE_PACK_MAX_FAILED_FIXTURE_NAMES)
+  return {
+    status: options.totals.failed === 0 ? 'pass' : 'fail',
+    totalFixtures: options.totals.total,
+    equivalentFixtures: options.totals.equivalent,
+    counterexampleFixtures: options.totals.counterexample,
+    unsupportedFixtures: options.totals.unsupported,
+    failedFixtures: options.totals.failed,
+    familySummaries: options.familySummaries.map(summary => ({
+      family: summary.family,
+      totalFixtures: summary.total,
+      equivalentFixtures: summary.equivalent,
+      counterexampleFixtures: summary.counterexample,
+      unsupportedFixtures: summary.unsupported,
+      failedFixtures: summary.failed,
+    })),
+    failedFixtureNames: failedFixtureNames.length > 0 ? failedFixtureNames : undefined,
+    evidenceStatus: 'bounded-offline-evidence-only',
+  }
+}
+
 function mergeScoreCopyPatterns(summaries: ScoreCopyPatternSummary[]): ScoreCopyPatternSummary {
   const patterns = new Map<string, ScoreCopyPatternEntry>()
   let total = 0
@@ -6685,6 +6740,7 @@ function buildExperimentalLocalCopyRewriteComparison(
 
 export function evaluateExperimentalLocalCopyRewriteNoRegressionGate(
   comparison: ArithmeticProbeExperimentalLocalCopyRewriteComparison | undefined,
+  offlineRewriteEquivalencePackSummary?: OfflineRewriteEquivalencePackSummary,
 ): ArithmeticProbeExperimentalLocalCopyRewriteNoRegressionGate {
   const failReasons: string[] = []
 
@@ -6719,6 +6775,19 @@ export function evaluateExperimentalLocalCopyRewriteNoRegressionGate(
     }
     if (comparison.scoreCopyDelta > 0) {
       failReasons.push(`aggregate scoreCopy delta regression: ${comparison.scoreCopyDelta}`)
+    }
+  }
+
+  if (comparison) {
+    if (!offlineRewriteEquivalencePackSummary) {
+      failReasons.push('Missing offlineRewriteEquivalencePackSummary')
+    } else if (offlineRewriteEquivalencePackSummary.status === 'fail') {
+      failReasons.push(
+        `offline rewrite equivalence pack did not pass: status=${offlineRewriteEquivalencePackSummary.status}, failedFixtures=${offlineRewriteEquivalencePackSummary.failedFixtures}`,
+      )
+      if (offlineRewriteEquivalencePackSummary.failedFixtureNames && offlineRewriteEquivalencePackSummary.failedFixtureNames.length > 0) {
+        failReasons.push(`offline rewrite equivalence pack failed fixture names: ${offlineRewriteEquivalencePackSummary.failedFixtureNames.join(', ')}`)
+      }
     }
   }
 
@@ -6866,6 +6935,18 @@ export function runArithmeticProbeReport(
     ? selected.flatMap(probe => optLevels.map(level => runArithmeticProbe(probe, level, true))
     ) : offCases
   const lirOpportunitySummary = buildLirOpportunitySummary(cases)
+  const offlineRewriteEquivalenceRun = experimentalLirLocalCopyRewrite
+    ? runOfflineRewriteEquivalenceFixtures()
+    : undefined
+  const offlineRewriteEquivalencePackSummary = offlineRewriteEquivalenceRun
+    ? summarizeOfflineRewriteEquivalencePack({
+      totals: offlineRewriteEquivalenceRun.totals,
+      familySummaries: offlineRewriteEquivalenceRun.summaryByFamily,
+      failedFixtureNames: offlineRewriteEquivalenceRun.fixtureResults
+        .filter(fixture => !fixture.passed)
+        .map(fixture => fixture.name),
+    })
+    : undefined
   const experimentalLocalCopyRewriteComparison = experimentalLirLocalCopyRewrite
     ? buildExperimentalLocalCopyRewriteComparison(offCases, cases)
     : undefined
@@ -6875,6 +6956,7 @@ export function runArithmeticProbeReport(
     scoreCopyPatterns: mergeScoreCopyPatterns(cases.map(result => result.scoreCopyPatterns)),
     copyOrigins: mergeCopyOrigins(cases.map(result => result.copyOrigins)),
     rewriteOpportunities: mergeRewriteOpportunities(cases.map(result => result.rewriteOpportunities)),
+    offlineRewriteEquivalencePackSummary,
     experimentalLocalCopyRewriteComparison,
     lirOpportunitySummary,
     futureRewriteFixtureExportSummary: lirOpportunitySummary?.futureRewriteFixtureExportSummary,
@@ -6953,6 +7035,7 @@ function main(): void {
   if (args.requireNoRegressionInExperimentalLocalCopyRewrite) {
     const noRegressionGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
       report.experimentalLocalCopyRewriteComparison,
+      report.offlineRewriteEquivalencePackSummary,
     )
     report.experimentalLocalCopyRewriteNoRegressionGate = noRegressionGate
     if (noRegressionGate.status !== 'pass') {

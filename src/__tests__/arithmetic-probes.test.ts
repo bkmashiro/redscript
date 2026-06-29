@@ -7,9 +7,11 @@ import {
   summarizeDeltaSeries,
   mergeRejectionCategoryTotals,
   evaluateExperimentalLocalCopyRewriteNoRegressionGate,
+  summarizeOfflineRewriteEquivalencePack,
   parseProbeCliArgs,
   type ArithmeticProbeResult,
   type ArithmeticProbeExperimentalLocalCopyRewriteComparison,
+  type OfflineRewriteEquivalencePackSummary,
   type RewriteProvenanceSummary,
   type RewriteProofMissLirAdjacentWindowBreakdownKind,
   type RewriteProofMissLirAdjacentWindowSummary,
@@ -434,6 +436,81 @@ function makeAdjacentWindowDiagnosticCase(options: {
   } as ArithmeticProbeResult
 }
 
+function makeOfflineRewriteEquivalencePackSummary(
+  overrides: Partial<OfflineRewriteEquivalencePackSummary> = {},
+): OfflineRewriteEquivalencePackSummary {
+  return {
+    status: 'pass',
+    totalFixtures: 2,
+    equivalentFixtures: 2,
+    counterexampleFixtures: 0,
+    unsupportedFixtures: 0,
+    failedFixtures: 0,
+    familySummaries: [
+      {
+        family: 'local-copy-forwarding',
+        totalFixtures: 2,
+        equivalentFixtures: 2,
+        counterexampleFixtures: 0,
+        unsupportedFixtures: 0,
+        failedFixtures: 0,
+      },
+    ],
+    evidenceStatus: 'bounded-offline-evidence-only',
+    ...overrides,
+  }
+}
+
+const SYNTHETIC_NO_REGRESSION_COMPARISON: ArithmeticProbeExperimentalLocalCopyRewriteComparison = {
+  mode: 'experimental-local-copy-rewrite',
+  status: 'experimental',
+  enabled: true,
+  off: { caseCount: 2, commandTotal: 20, scoreCopyTotal: 8 },
+  on: { caseCount: 2, commandTotal: 16, scoreCopyTotal: 4 },
+  commandDelta: -4,
+  scoreCopyDelta: -4,
+  commandDeltaSummary: {
+    min: 0,
+    max: 0,
+    total: -4,
+    average: -2,
+    improvedCount: 2,
+    regressedCount: 0,
+    unchangedCount: 0,
+  },
+  scoreCopyDeltaSummary: {
+    min: 0,
+    max: 0,
+    total: -4,
+    average: -2,
+    improvedCount: 2,
+    regressedCount: 0,
+    unchangedCount: 0,
+  },
+  perCaseDeltas: [
+    {
+      caseName: 'case-a',
+      optLevel: 'O1',
+      offCommandsTotal: 10,
+      onCommandsTotal: 8,
+      commandDelta: -2,
+      offScoreCopyTotal: 4,
+      onScoreCopyTotal: 2,
+      scoreCopyDelta: -2,
+    },
+    {
+      caseName: 'case-b',
+      optLevel: 'O1',
+      offCommandsTotal: 10,
+      onCommandsTotal: 8,
+      commandDelta: -2,
+      offScoreCopyTotal: 4,
+      onScoreCopyTotal: 2,
+      scoreCopyDelta: -2,
+    },
+  ],
+}
+
 describe('arithmetic probe benchmark tooling', () => {
   it('lists stable named arithmetic probes', () => {
     const names = ARITHMETIC_PROBES.map(probe => probe.name)
@@ -469,58 +546,121 @@ describe('arithmetic probe benchmark tooling', () => {
     ])
   })
 
-  it('passes explicit no-regression gate for a synthetic non-regressing comparison', () => {
-    const comparison: ArithmeticProbeExperimentalLocalCopyRewriteComparison = {
-      mode: 'experimental-local-copy-rewrite',
-      status: 'experimental',
-      enabled: true,
-      off: { caseCount: 2, commandTotal: 20, scoreCopyTotal: 8 },
-      on: { caseCount: 2, commandTotal: 16, scoreCopyTotal: 4 },
-      commandDelta: -4,
-      scoreCopyDelta: -4,
-      commandDeltaSummary: {
-        min: 0,
-        max: 0,
-        total: -4,
-        average: -2,
-        improvedCount: 2,
-        regressedCount: 0,
-        unchangedCount: 0,
+  it('summarizes offline rewrite equivalence pack fixtures with deterministic family order', () => {
+    const packSummary = summarizeOfflineRewriteEquivalencePack({
+      totals: {
+        total: 4,
+        equivalent: 2,
+        counterexample: 1,
+        unsupported: 1,
+        failed: 0,
       },
-      scoreCopyDeltaSummary: {
-        min: 0,
-        max: 0,
-        total: -4,
-        average: -2,
-        improvedCount: 2,
-        regressedCount: 0,
-        unchangedCount: 0,
-      },
-      perCaseDeltas: [
+      familySummaries: [
         {
-          caseName: 'case-a',
-          optLevel: 'O1',
-          offCommandsTotal: 10,
-          onCommandsTotal: 8,
-          commandDelta: -2,
-          offScoreCopyTotal: 4,
-          onScoreCopyTotal: 2,
-          scoreCopyDelta: -2,
+          family: 'copy-feeds-copy-chain',
+          total: 2,
+          equivalent: 2,
+          counterexample: 0,
+          unsupported: 0,
+          failed: 0,
         },
         {
-          caseName: 'case-b',
-          optLevel: 'O1',
-          offCommandsTotal: 10,
-          onCommandsTotal: 8,
-          commandDelta: -2,
-          offScoreCopyTotal: 4,
-          onScoreCopyTotal: 2,
-          scoreCopyDelta: -2,
+          family: 'local-copy-forwarding',
+          total: 2,
+          equivalent: 0,
+          counterexample: 1,
+          unsupported: 1,
+          failed: 0,
         },
       ],
-    }
+      failedFixtureNames: ['counterexample-failed'],
+    })
 
-    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(comparison)
+    expect(packSummary.status).toBe('pass')
+    expect(packSummary.totalFixtures).toBe(4)
+    expect(packSummary.failedFixtures).toBe(0)
+    expect(packSummary.evidenceStatus).toBe('bounded-offline-evidence-only')
+    expect(packSummary.familySummaries.map(item => item.family)).toEqual([
+      'copy-feeds-copy-chain',
+      'local-copy-forwarding',
+    ])
+  })
+
+  it('caps failed offline rewrite equivalence fixture names deterministically', () => {
+    const packSummary = summarizeOfflineRewriteEquivalencePack({
+      totals: {
+        total: 6,
+        equivalent: 0,
+        counterexample: 0,
+        unsupported: 0,
+        failed: 6,
+      },
+      familySummaries: [
+        {
+          family: 'local-copy-forwarding',
+          total: 6,
+          equivalent: 0,
+          counterexample: 0,
+          unsupported: 0,
+          failed: 6,
+        },
+      ],
+      failedFixtureNames: [
+        'fixture-1',
+        'fixture-2',
+        'fixture-3',
+        'fixture-4',
+        'fixture-5',
+        'fixture-6',
+      ],
+    })
+
+    expect(packSummary.status).toBe('fail')
+    expect(packSummary.failedFixtureNames).toEqual([
+      'fixture-1',
+      'fixture-2',
+      'fixture-3',
+      'fixture-4',
+      'fixture-5',
+    ])
+  })
+
+  it('fails the no-regression gate when offline rewrite equivalence pack fails', () => {
+    const failingOfflinePackSummary = makeOfflineRewriteEquivalencePackSummary({
+      totalFixtures: 2,
+      equivalentFixtures: 0,
+      counterexampleFixtures: 0,
+      unsupportedFixtures: 0,
+      failedFixtures: 1,
+      failedFixtureNames: ['equiv_fail:counterexample-shape'],
+      familySummaries: [
+        {
+          family: 'local-copy-forwarding',
+          totalFixtures: 2,
+          equivalentFixtures: 0,
+          counterexampleFixtures: 0,
+          unsupportedFixtures: 0,
+          failedFixtures: 1,
+        },
+      ],
+      status: 'fail',
+    })
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      SYNTHETIC_NO_REGRESSION_COMPARISON,
+      failingOfflinePackSummary,
+    )
+    expect(gate.status).toBe('fail')
+    expect(gate.failReasons).toEqual([
+      'offline rewrite equivalence pack did not pass: status=fail, failedFixtures=1',
+      'offline rewrite equivalence pack failed fixture names: equiv_fail:counterexample-shape',
+    ])
+  })
+
+  it('passes explicit no-regression gate for a synthetic non-regressing comparison', () => {
+    const gate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      SYNTHETIC_NO_REGRESSION_COMPARISON,
+      makeOfflineRewriteEquivalencePackSummary(),
+    )
     expect(gate.status).toBe('pass')
     expect(gate.failReasons).toHaveLength(0)
     expect(gate.mode).toBe('experimental-no-regression-evidence-only')
@@ -568,7 +708,10 @@ describe('arithmetic probe benchmark tooling', () => {
       ],
     }
 
-    const commandGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(commandRegressionComparison)
+    const commandGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      commandRegressionComparison,
+      makeOfflineRewriteEquivalencePackSummary(),
+    )
     expect(commandGate.status).toBe('fail')
     expect(commandGate.failReasons).toEqual([
       'command regressions detected in summary: 1',
@@ -592,7 +735,10 @@ describe('arithmetic probe benchmark tooling', () => {
         regressedCount: 0,
       },
     }
-    const perCaseGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(perCaseOnlyRegressionComparison)
+    const perCaseGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      perCaseOnlyRegressionComparison,
+      makeOfflineRewriteEquivalencePackSummary(),
+    )
     expect(perCaseGate.status).toBe('fail')
     expect(perCaseGate.failReasons).toEqual([
       'command regressions detected in per-case deltas: 1',
@@ -603,9 +749,32 @@ describe('arithmetic probe benchmark tooling', () => {
       ...commandRegressionComparison,
       on: { ...commandRegressionComparison.on, caseCount: 2 },
     }
-    const mismatchGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(caseMismatchComparison)
+    const mismatchGate = evaluateExperimentalLocalCopyRewriteNoRegressionGate(
+      caseMismatchComparison,
+      makeOfflineRewriteEquivalencePackSummary(),
+    )
     expect(mismatchGate.status).toBe('fail')
     expect(mismatchGate.failReasons).toContain('off/on case count mismatch: off=1, on=2')
+  })
+
+  it('adds deterministic offline rewrite equivalence pack summary to experimental local-copy reports', () => {
+    const report = runArithmeticProbeReport('int_arithmetic', [1], true)
+    const summary = report.offlineRewriteEquivalencePackSummary
+
+    expect(summary).toBeDefined()
+    expect(summary?.status).toBe('pass')
+    expect(summary?.failedFixtures).toBe(0)
+    expect(summary?.totalFixtures).toBe(19)
+    expect(summary?.evidenceStatus).toBe('bounded-offline-evidence-only')
+    expect(summary?.familySummaries.map(item => item.family)).toEqual([
+      'local-copy-forwarding',
+      'observed-temp-counterexample',
+      'observed-temp-safety',
+      'predecessor-arithmetic',
+      'read-write-window',
+      'return-path',
+      'unsupported-boundary',
+    ])
   })
 
   it('runs experimental local-copy rewrite probes deterministically with explicit comparison totals', () => {
