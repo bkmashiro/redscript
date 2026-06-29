@@ -86,6 +86,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | D | Allocation-check failure reduction | Planner failures shrink or become explained with minimal fixes | Medium | Goal-sized | Complete (diagnostic only) |
 | E | Production-safe LIR opportunity lane | One LIR optimization or diagnostic promoted without VIR | Medium | Goal-sized | Completed (diagnostic only) |
 | F | Decision ADR and next roadmap refresh | Go/pause criteria after B–E | Low | Docs-only | Completed; see [21](./21-post-vir-decision-adr.md) |
+| G | Read-only local-temp proof-gap readiness triage | Deterministic readiness buckets for local-temp exact-proof-gap cases | Low | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -451,6 +452,13 @@ git status --short --branch
 - LIR lane result: Tranche F now captures adjacent-window context from **real** arithmetic probe per-line provenance (not synthetic merges), making `lirAdjacentWindowSummary.proofMissAdjacentWindowBreakdown` observable for real bench output.
 - Safety reminder: this tranche is diagnostic-only and does not alter rewrite behavior or proof eligibility in production.
 
+## Tranche G — local-temp exact-proof-gap readiness buckets
+
+- Status: Completed as a diagnostics-only tranche; no production rewrite gates or optimizer behavior were enabled.
+- Outcome: added deterministic readiness grouping under `lirAdjacentWindowSummary.localTempProofGapReadinessSummary` for `local-temp-exact-proof-gap` cases.
+- Conservative buckets now cover candidates versus blocked/unknown, with deterministic `candidateCaseNames` and `blockedOrUnknownCaseNames` arrays and reproducible goal guidance.
+- Scope: this is rewrite-test triage evidence only; it does not assert proof of rewrite-correctness or production rewrite enablement.
+
 ---
 
 ## Suggested next `/goal` for Hermes
@@ -479,7 +487,7 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is done after Tranche F and is closed at this point.
+This roadmap is done after Tranche G and is closed at this point.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, write Tranche F and stop.
 

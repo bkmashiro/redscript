@@ -71,6 +71,17 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
   - `local-temp-exact-proof-gap`
   - `candidate-shape-not-satisfying-lir-local-proof`
 
+### Tranche G outcome update
+- Added deterministic readiness partitioning under `lirAdjacentWindowSummary.localTempProofGapReadinessSummary` for `local-temp-exact-proof-gap` cases:
+  - `rewrite-test-candidate-local-window`
+  - `needs-predecessor-window-proof`
+  - `needs-successor-window-proof`
+  - `needs-cross-function-boundary-proof`
+  - `unknown-local-temp-proof-gap`
+- Added companion aggregate bucket arrays for candidate names vs blocked-or-unknown names so the output is directly usable for rewrite-test triage planning.
+- `localTempProofGapReadinessSummary.totalCandidateLike` is the exact `local-temp-exact-proof-gap` population, and bucket counts are conservative and deterministic by case-path.
+- This tranche is explicitly diagnostics-only and does **not** enable production rewrite behavior; it only increases readiness metadata for future, separate rewrite-test gates.
+
 ## Next safe goals
 1. Expand candidate-window parser support to classify short local proof spans into `single-adjacent-arith-no-reuse` / `copy-chain-no-reuse` where provable.
 2. Add deterministic evidence examples for unknown causes (`insufficient-window`, `unparsed-command`) to improve triage quality.

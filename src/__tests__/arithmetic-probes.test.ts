@@ -10,6 +10,7 @@ import {
   type RewriteProvenanceSummary,
   type RewriteProofMissLirAdjacentWindowBreakdownKind,
   type RewriteProofMissLirAdjacentWindowSummary,
+  type RewriteProofMissLirLocalTempProofGapReadinessSummary,
   type RewriteProofMissSourceKind,
   type VirUnsupportedMirCallTarget,
   type VirUnsupportedMirCallTargetFamilyBreakdownEntry,
@@ -35,6 +36,7 @@ function makeAdjacentWindowDiagnosticCase(options: {
   caseName: string
   totalCopies: number
   sourceKind?: RewriteProofMissSourceKind
+  localTempProofGapReadinessSummary?: RewriteProofMissLirLocalTempProofGapReadinessSummary
   needsLivenessWindowCount?: number
   insufficientContextCount?: number
   localTempExactProofGapCases?: number
@@ -58,6 +60,27 @@ function makeAdjacentWindowDiagnosticCase(options: {
   const candidateShapeNotSatisfyingLirLocalProofCases = options.candidateShapeNotSatisfyingLirLocalProofCases ?? 0
   const unknownUnparsedCommandCases = options.unknownUnparsedCommandCases ?? 0
   const totalCandidateLike = totalCopies
+  const localTempProofGapReadinessSummary = options.localTempProofGapReadinessSummary
+    ?? {
+      byReadiness: localTempExactProofGapCases > 0
+        ? [
+          {
+            readiness: 'unknown-local-temp-proof-gap',
+            count: localTempExactProofGapCases,
+            caseNames: [caseName],
+            examples: [`${caseName}:1`],
+          },
+        ]
+        : [],
+      candidateCaseNames: localTempExactProofGapCases > 0 && sourceKind === 'local-temp-only' && byFamilySourceKind === 'local-temp-only'
+        ? [caseName]
+        : [],
+      blockedOrUnknownCaseNames: localTempExactProofGapCases > 0 ? [caseName] : [],
+      totalCandidateLike: localTempExactProofGapCases,
+      candidateCount: 0,
+      blockedOrUnknownCount: localTempExactProofGapCases,
+      nextSafeDiagnosticGoals: ['Keep collecting structured adjacent-window evidence before enabling rewrite-test expansion.'],
+    }
   const proofMissAdjacentWindowBreakdown = [] as RewriteProofMissLirAdjacentWindowSummary['proofMissAdjacentWindowBreakdown']
   if (localTempExactProofGapCases > 0) {
     proofMissAdjacentWindowBreakdown.push({
@@ -226,23 +249,24 @@ function makeAdjacentWindowDiagnosticCase(options: {
                     },
                   ],
                   proofReadiness: 'candidate-after-liveness-window',
-                  recommendation: 'collect structured-window context',
-                  candidateCount: Math.min(totalCopies, localTempExactProofGapCases + adjacentWindowMissingOrIncompleteCases),
-                  needsLivenessWindowCount,
-                  insufficientContextCount,
-                  lirAdjacentWindowSummary: {
-                    proofMissAdjacentWindowBreakdown,
+                    recommendation: 'collect structured-window context',
+                    candidateCount: Math.min(totalCopies, localTempExactProofGapCases + adjacentWindowMissingOrIncompleteCases),
+                    needsLivenessWindowCount,
+                    insufficientContextCount,
+                    lirAdjacentWindowSummary: {
+                      proofMissAdjacentWindowBreakdown,
                     unknownUnparsedCommandCases: unknownUnparsedCommandCases,
                     localTempExactProofGapCases: localTempExactProofGapCases,
                     protectedBoundaryBlockedCases: protectedBoundaryBlockedCases,
                     adjacentWindowMissingOrIncompleteCases: adjacentWindowMissingOrIncompleteCases,
-                    candidateShapeNotSatisfyingLirLocalProofCases: candidateShapeNotSatisfyingLirLocalProofCases,
-                    totalCandidateLike,
-                    proofReadiness: 'unknown',
-                    nextSafeDiagnosticGoals: [],
-                    recommendation: 'synthetic adjacent-window probe',
-                  },
-                },
+                        candidateShapeNotSatisfyingLirLocalProofCases: candidateShapeNotSatisfyingLirLocalProofCases,
+                        totalCandidateLike,
+                        localTempProofGapReadinessSummary,
+                        proofReadiness: 'unknown',
+                        nextSafeDiagnosticGoals: [],
+                        recommendation: 'synthetic adjacent-window probe',
+                      },
+                    },
               ],
               candidateCount: totalCopies,
               needsLivenessWindowCount,
@@ -1360,6 +1384,44 @@ describe('arithmetic probe benchmark tooling', () => {
       expect(item.caseNames).toEqual([...item.caseNames].sort())
       expect(item.examples.length).toBeLessThanOrEqual(3)
     }
+  })
+
+  it('classifies local-temp exact proof gaps into deterministic readiness buckets', () => {
+    const lines = [
+      { path: 'data/test/function/probe.mcfunction', line: 1, content: 'scoreboard players operation $prev0 o = $seed o' },
+      { path: 'data/test/function/probe.mcfunction', line: 2, content: 'scoreboard players operation $tmp_t1 o = $tmp_t0 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 3, content: 'scoreboard players operation $sink o = $other o' },
+      { path: 'data/test/function/probe.mcfunction', line: 4, content: 'scoreboard players operation $prev1 o = $seed2 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 5, content: 'scoreboard players operation $__const_keep o = $tmp_t3 o' },
+      { path: 'data/test/function/probe.mcfunction', line: 6, content: 'scoreboard players operation $sink2 o = $other2 o' },
+    ]
+
+    const summary = summarizeRewriteOpportunitiesWithProvenance(lines).provenanceSummary
+    const proofMissSummary = summary.shapeFamilySummary?.proofMissSummary
+    const slotSummary = proofMissSummary?.slotProvenanceSummary
+    const localProofEvidenceSummary = slotSummary?.localProofEvidenceSummary
+    const adjacentWindowSummary = localProofEvidenceSummary?.lirAdjacentWindowSummary
+
+    expect(localProofEvidenceSummary).toBeDefined()
+    expect(adjacentWindowSummary).toBeDefined()
+    if (!adjacentWindowSummary) return
+
+    const readinessSummary = adjacentWindowSummary.localTempProofGapReadinessSummary
+    expect(readinessSummary).toBeDefined()
+    expect(readinessSummary.totalCandidateLike).toBe(adjacentWindowSummary.localTempExactProofGapCases)
+    expect(readinessSummary.candidateCount + readinessSummary.blockedOrUnknownCount).toBe(readinessSummary.totalCandidateLike)
+    expect(adjacentWindowSummary.localTempProofGapReadinessSummary.byReadiness).toEqual([...adjacentWindowSummary.localTempProofGapReadinessSummary.byReadiness].sort(
+      (left, right) => right.count - left.count || left.readiness.localeCompare(right.readiness),
+    ))
+    for (const bucket of readinessSummary.byReadiness) {
+      expect(bucket.readiness).toMatch(
+        /^(rewrite-test-candidate-local-window|needs-predecessor-window-proof|needs-successor-window-proof|needs-cross-function-boundary-proof|unknown-local-temp-proof-gap)$/,
+      )
+    }
+    expect(readinessSummary.totalCandidateLike).toBeGreaterThanOrEqual(0)
+    expect(readinessSummary.candidateCaseNames.sort()).toEqual(Array.from(new Set(readinessSummary.candidateCaseNames)).sort())
+    expect(readinessSummary.blockedOrUnknownCaseNames.sort())
+      .toEqual(Array.from(new Set(readinessSummary.blockedOrUnknownCaseNames)).sort())
   })
 
   it('emits structured adjacent-window buckets for proof misses instead of generic unknown', () => {
