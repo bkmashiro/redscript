@@ -11,9 +11,11 @@
  *
  *   execute store result score $result __ns [subcommands] run function ns:fn
  *
- * Pattern 2: Collapses adjacent `score_set(dst, A); score_set(dst, B)` into only the second write.
+ * Pattern 2: Removes typed self-copy no-ops (`score_copy(dst, dst)`).
  *
- * Pattern 3: Merges a `score_set(dst, 0)` immediately followed by a `raw` command
+ * Pattern 3: Collapses adjacent `score_set(dst, A); score_set(dst, B)` into only the second write.
+ *
+ * Pattern 4: Merges a `score_set(dst, 0)` immediately followed by a `raw` command
  * of the form `execute <cond> run scoreboard players set $dst __ns 1`:
  *
  *   scoreboard players set $dst __ns 0            ← score_set(dst, 0)
@@ -32,7 +34,7 @@
 import type { LIRFunction, LIRInstr } from '../../lir/types'
 
 /**
- * Regex for Pattern 2's second instruction:
+ * Regex for Pattern 4's second instruction:
  * execute (if|unless) score ... run scoreboard players set $X OBJ 1
  *
  * Captures:
@@ -44,7 +46,6 @@ const SET_ZERO_SET_ONE_RE = /^execute (.+) run scoreboard players set (\S+) (\S+
 
 export function execStorePeephole(fn: LIRFunction): LIRFunction {
   const instrs = fn.instructions
-  if (instrs.length < 2) return fn
 
   const result: LIRInstr[] = []
   let changed = false
@@ -53,6 +54,17 @@ export function execStorePeephole(fn: LIRFunction): LIRFunction {
   while (i < instrs.length) {
     const curr = instrs[i]
     const next = instrs[i + 1]
+
+    // Pattern 2: typed score_copy self-no-op
+    if (
+      curr.kind === 'score_copy' &&
+      curr.dst.player === curr.src.player &&
+      curr.dst.obj === curr.src.obj
+    ) {
+      changed = true
+      i++
+      continue
+    }
 
     // Pattern 1: call_context immediately followed by score_set
     if (
@@ -71,7 +83,7 @@ export function execStorePeephole(fn: LIRFunction): LIRFunction {
       continue
     }
 
-    // Pattern 2: adjacent `score_set` writes to the same destination slot
+    // Pattern 3: adjacent `score_set` writes to the same destination slot
     if (
       next &&
       curr.kind === 'score_set' &&
@@ -84,7 +96,7 @@ export function execStorePeephole(fn: LIRFunction): LIRFunction {
       continue
     }
 
-    // Pattern 3: score_set(dst, 0) + raw("execute <cond> run scoreboard players set $dst OBJ 1")
+    // Pattern 4: score_set(dst, 0) + raw("execute <cond> run scoreboard players set $dst OBJ 1")
     // → raw("execute store success score $dst OBJ <cond>")
     if (
       next &&

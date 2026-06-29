@@ -96,6 +96,7 @@ Practical estimate:
 ### R4 — Function-level command peephole/canonicalization
 
 **Status:** Tranche added: adjacent same-slot `score_set` overwrite canonicalization (`score_set(dst, A); score_set(dst, B)` -> `score_set(dst, B)`) in `src/optimizer/lir/peephole.ts`, controller-verified on 2026-06-29 via unit/LIR/probe/build/MC gates and `/tmp/redscript-r4-score-set-overwrite-controller.json`.
+R4 continuation implemented: typed self-copy no-op canonicalization (`score_copy(dst,dst)`) was added in `src/optimizer/lir/peephole.ts` and controller-verified on 2026-06-29 via unit/LIR/probe/build/MC gates and `/tmp/redscript-r4-score-copy-self-noop-controller.json` (no default enablement implied).
 
 **Product promise:** Canonicalize adjacent emitted command patterns that are clearly equivalent, especially redundant scoreboard set/copy sequences within one function.
 

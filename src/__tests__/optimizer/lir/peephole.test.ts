@@ -205,6 +205,56 @@ describe('execute store peephole', () => {
     expect(result).toBe(fn)
   })
 
+  test('removes lone typed score_copy(dst, dst) instruction', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$x'), src: mkSlot('$x') },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(0)
+  })
+
+  test('removes typed score_copy(dst, dst) in the middle while preserving surrounding typed instructions', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$a'), value: 1 },
+      { kind: 'score_copy', dst: mkSlot('$x'), src: mkSlot('$x') },
+      { kind: 'score_add', dst: mkSlot('$y'), src: mkSlot('$a') },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(2)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$a'), value: 1 },
+      { kind: 'score_add', dst: mkSlot('$y'), src: mkSlot('$a') },
+    ])
+  })
+
+  test('does not remove score_copy(dst, src) when objectives differ', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$x'), src: { player: '$x', obj: 'other_obj' } },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(1)
+    expect(result).toBe(fn)
+  })
+
+  test('does not remove score_copy(dst, src) when players differ', () => {
+    const fn = mkFn([
+      { kind: 'score_copy', dst: mkSlot('$x'), src: { player: '$y', obj: '__test' } },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(1)
+    expect(result).toBe(fn)
+  })
+
+  test('does not inspect or rewrite raw self-copy-looking command text', () => {
+    const cmd = 'scoreboard players operation $x __test = $x __test'
+    const fn = mkFn([
+      { kind: 'raw', cmd },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toHaveLength(1)
+    expect(result).toBe(fn)
+  })
+
   test('returns same reference when nothing changed', () => {
     const fn = mkFn([
       { kind: 'call', fn: 'ns:myfn' },
