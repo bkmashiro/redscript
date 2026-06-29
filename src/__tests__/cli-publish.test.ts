@@ -69,6 +69,14 @@ fn heartbeat(): void {
     expect(fs.existsSync(outZip)).toBe(true)
   })
 
+  it('accepts --experimental-lir-local-copy-rewrite and still publishes', () => {
+    const outZip = path.join(tempDir, 'experimental.zip')
+    const result = runCli(['publish', srcFile, '--namespace', 'my_pack', '--experimental-lir-local-copy-rewrite', '-o', outZip])
+
+    expect(result.status).toBe(0)
+    expect(fs.existsSync(outZip)).toBe(true)
+  })
+
   it('zip contains pack.mcmeta at root', () => {
     const outZip = path.join(tempDir, 'test.zip')
     runCli(['publish', srcFile, '--namespace', 'test_ns', '-o', outZip])

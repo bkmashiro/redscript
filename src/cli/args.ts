@@ -22,6 +22,7 @@ export interface ParsedArgs {
   list?: boolean
   snapshotStages?: string
   snapshotOutput?: string
+  experimentalLirLocalCopyRewrite?: boolean
 }
 
 export function parseArgs(args: string[]): ParsedArgs {
@@ -91,6 +92,9 @@ export function parseArgs(args: string[]): ParsedArgs {
       i++
     } else if (arg === '--snapshot-output') {
       result.snapshotOutput = args[++i]
+      i++
+    } else if (arg === '--experimental-lir-local-copy-rewrite') {
+      result.experimentalLirLocalCopyRewrite = true
       i++
     } else if (!result.command) {
       result.command = arg

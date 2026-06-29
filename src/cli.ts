@@ -87,6 +87,9 @@ Options:
   --lenient              Treat type errors as warnings instead of blocking compilation
   --include <dir>        Add a directory to the import search path (repeatable)
   --incremental          Enable file-level incremental compilation cache
+  --experimental-lir-local-copy-rewrite
+                        EXPERIMENTAL manual opt-in for local-copy/LIR rewrites
+                        (off by default; not a default/production path)
   --fix                  (check) Apply safe auto-fixes for lint-detected issues
   --dry-run              (test) Verify compilation only — no MC server connection needed
   --mc-url <url>         (test) MC server HTTP API URL for running tests live
@@ -308,6 +311,7 @@ function compileCommand(
   lenient = false,
   includeDirs?: string[],
   incremental = false,
+  experimentalLirLocalCopyRewrite = false,
   snapshotStageSpec?: string,
   snapshotOutput?: string,
 ): void {
@@ -337,6 +341,11 @@ function compileCommand(
 
   if (incremental && (snapshotStages || snapshotOutput)) {
     console.error('Error: --snapshot-stages/--snapshot-output are only supported for non-incremental compile')
+    process.exit(1)
+  }
+
+  if (incremental && experimentalLirLocalCopyRewrite) {
+    console.error('Error: --experimental-lir-local-copy-rewrite is not supported with --incremental')
     process.exit(1)
   }
 
@@ -392,6 +401,7 @@ function compileCommand(
       mcVersion,
       lenient,
       includeDirs,
+      experimentalLirLocalCopyRewrite,
       snapshotStages,
       stageSnapshots: snapshotStages ? stageSnapshots : undefined,
     })
@@ -701,6 +711,7 @@ async function publishCommand(
   mcVersionStr: string | undefined,
   lenient = false,
   includeDirs?: string[],
+  experimentalLirLocalCopyRewrite = false,
 ): Promise<void> {
   if (!fs.existsSync(file)) {
     console.error(`Error: File not found: ${file}`)
@@ -728,6 +739,7 @@ async function publishCommand(
       mcVersion,
       lenient,
       includeDirs,
+      experimentalLirLocalCopyRewrite,
     })
   } catch (err) {
     console.error(formatError(err as Error, source, file))
@@ -825,6 +837,7 @@ async function main(): Promise<void> {
           parsed.lenient,
           includeDirs,
           parsed.incremental,
+          parsed.experimentalLirLocalCopyRewrite,
           parsed.snapshotStages,
           parsed.snapshotOutput,
         )
@@ -871,6 +884,7 @@ async function main(): Promise<void> {
           mcVersionStr,
           parsed.lenient,
           includeDirs,
+          parsed.experimentalLirLocalCopyRewrite,
         )
       }
       break

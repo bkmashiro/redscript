@@ -263,11 +263,19 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
   - explicit `requiredGateStatus` / `offlinePackStatus` / `familyReadinessStatus`,
   - capped deterministic `improvedCaseNames`.
 - The script wrapper prints a concise rollout/readiness line derived from this summary while writing the full JSON artifact; it exits non-zero if either the no-regression gate or rollout readiness summary fails.
-- Summary pass criteria is conservative:
+  - Summary pass criteria is conservative:
   - no regression gate/family evidence is allowed to fail,
   - no aggregate or per-case regressions are allowed,
   - at least one aggregate benchmark signal must improve.
-- Tranche W remains bounded offline-evidence only and does **not** change production/default optimizer behavior; it is explicitly for manual experimental opt-in review and does not authorize default enablement.
+  - Tranche W remains bounded offline-evidence only and does **not** change production/default optimizer behavior; it is explicitly for manual experimental opt-in review and does not authorize default enablement.
+
+### Tranche X (CLI opt-in) outcome update
+- Added and validated Phase X CLI exposure for manual local-copy/LIR experimental opt-in:
+  - `--experimental-lir-local-copy-rewrite` is now a compile/publish CLI flag with explicit `Experimental` wording in help.
+  - `compile` and `publish` call `compile(...)` with `experimentalLirLocalCopyRewrite` only when the flag is present.
+  - `compile --incremental --experimental-lir-local-copy-rewrite` fails with explicit unsupported-scenario error.
+  - Default compile/publish behavior remains unchanged when the flag is absent.
+  - No production optimizer behavior changed; this tranche is manual experimental opt-in only.
 
 ## Next safe goals
 1. keep running the explicit no-regression gate on benchmark CI paths that choose `--experimental-lir-local-copy-rewrite` via the new wrapper.

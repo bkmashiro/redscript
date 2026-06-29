@@ -1,4 +1,5 @@
 import { compile, check } from '../index'
+import { parseArgs } from '../cli/args'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
@@ -9,6 +10,16 @@ import { execFileSync, spawnSync } from 'child_process'
 describe('CLI API', () => {
   const cliPath = path.resolve(__dirname, '..', 'cli.ts')
   const cliRunner = [require.resolve('ts-node/register/transpile-only')]
+
+  describe('parseArgs', () => {
+    it('parses --experimental-lir-local-copy-rewrite for compile', () => {
+      const parsed = parseArgs(['compile', 'file.mcrs', '--experimental-lir-local-copy-rewrite'])
+
+      expect(parsed.experimentalLirLocalCopyRewrite).toBe(true)
+      expect(parsed.command).toBe('compile')
+      expect(parsed.file).toBe('file.mcrs')
+    })
+  })
 
   describe('imports', () => {
     it('compiles a file with imported helpers', () => {
@@ -167,6 +178,22 @@ describe('CLI API', () => {
   })
 
   describe('tune CLI', () => {
+    it('documents experimental local-copy rewrite flag in help output', () => {
+      const result = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, '--help'],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('--experimental-lir-local-copy-rewrite')
+      expect(result.stdout).toContain('EXPERIMENTAL')
+      expect(result.stdout).toContain('off by default')
+    })
+
     it('documents reviewable tuner artifact options in the main help output', () => {
       const result = spawnSync(
         process.execPath,
@@ -299,6 +326,82 @@ describe('CLI API', () => {
   })
 
   describe('compile CLI', () => {
+    it('supports manual experimental local-copy rewrite flag and keeps default compile path available', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-compile-flag-'))
+      const filePath = path.join(tempDir, 'main.mcrs')
+      const defaultOut = path.join(tempDir, 'off')
+      const experimentalOut = path.join(tempDir, 'on')
+      fs.writeFileSync(filePath, 'fn f(x: int): int { let t: int = x; t = t + 1; return t; }')
+
+      const defaultResult = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, 'compile', filePath, '--namespace', 'localcopy', '-o', defaultOut],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+      const experimentalResult = spawnSync(
+        process.execPath,
+        [
+          '-r',
+          ...cliRunner,
+          cliPath,
+          'compile',
+          filePath,
+          '--namespace',
+          'localcopy',
+          '--experimental-lir-local-copy-rewrite',
+          '-o',
+          experimentalOut,
+        ],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(defaultResult.status).toBe(0)
+      expect(experimentalResult.status).toBe(0)
+
+      const defaultFunction = fs.readFileSync(path.join(defaultOut, 'data', 'localcopy', 'function', 'f.mcfunction'), 'utf-8')
+      const experimentalFunction = fs.readFileSync(path.join(experimentalOut, 'data', 'localcopy', 'function', 'f.mcfunction'), 'utf-8')
+
+      const scoreOperationCount = (text: string): number => (
+        text.match(/scoreboard players operation/g) ?? []
+      ).length
+
+      expect(defaultFunction).not.toBe(experimentalFunction)
+      expect(scoreOperationCount(defaultFunction)).toBe(3)
+      expect(scoreOperationCount(experimentalFunction)).toBe(2)
+    })
+
+    it('fails with an explicit incremental guard for experimental local-copy rewrite', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-compile-flag-inc-'))
+      const filePath = path.join(tempDir, 'main.mcrs')
+      fs.writeFileSync(filePath, 'fn f() { say("hi"); }')
+
+      const result = spawnSync(
+        process.execPath,
+        [
+          '-r',
+          ...cliRunner,
+          cliPath,
+          'compile',
+          filePath,
+          '--incremental',
+          '--experimental-lir-local-copy-rewrite',
+        ],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('Error: --experimental-lir-local-copy-rewrite is not supported with --incremental')
+    })
+
     it('writes selected compile stage snapshots to a JSON file', () => {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-compile-cli-'))
       const filePath = path.join(tempDir, 'main.mcrs')

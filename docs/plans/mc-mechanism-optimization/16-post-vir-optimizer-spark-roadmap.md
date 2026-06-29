@@ -103,6 +103,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | U | Offline rewrite fixture family/window expansion | Expand bounded equivalence fixture coverage for score-swap, score-set-overwrite, and unsupported typed boundary cases | Low | Small diagnostics-only slice | Completed |
 | V | Offline rewrite family readiness contract | Add explicit required-family readiness metadata and fail the evidence gate when required fixture families are missing or failed | Medium | Small diagnostics-only slice | Completed |
 | W | Explicit local-copy rollout readiness summary for manual opt-in | Add deterministic aggregate+regression evidence summary for manual experimental rollout readiness | Medium | Small diagnostics-only slice | Completed |
+| X | CLI experimental local-copy opt-in manual gate | Expose manual CLI flag passthrough to existing experimental LIR local-copy rewrite path; no default/on by default changes | Low | Small TDD slice | Completed |
 
 ---
 
@@ -712,11 +713,30 @@ git status --short --branch
     - real explicit `runArithmeticProbeReport('all', [1], true)` pass path with `-193/-193`.
   - This tranche does not change production/default optimizer behavior; it is bounded evidence for manual experimental opt-in only.
 
+## Tranche X — CLI experimental local-copy opt-in flag
+
+- Status: Completed.
+- Outcome:
+  - Added `--experimental-lir-local-copy-rewrite` to CLI parsing as an explicit manual opt-in flag.
+  - Updated `redscript compile` and `redscript publish` command wiring to pass
+    `experimentalLirLocalCopyRewrite` into `compile(...)`.
+  - Added a hard error when `--incremental` is paired with `--experimental-lir-local-copy-rewrite`
+    with exact message:
+    `Error: --experimental-lir-local-copy-rewrite is not supported with --incremental`.
+  - Updated CLI help text to label the flag as experimental/manual opt-in and off-by-default.
+  - Added CLI tests that:
+    - prove the parser accepts the new flag,
+    - verify `compile` with and without the flag can succeed and produce different output for a tiny local-copy-sensitive fixture,
+    - verify `publish` accepts the same flag and produces a zip,
+    - verify incremental use returns the explicit unsupported error,
+    - verify help text documents the new experimental wording.
+  - This tranche is evidence-only/manual opt-in only. No production pipeline behavior changed.
+
 ---
 
 ## Suggested next `/goal` for Hermes
 
-This roadmap is still reference-complete through W and may be reopened only for a new, explicitly scoped tranche.
+This roadmap is still reference-complete through X and may be reopened only for a new, explicitly scoped tranche.
 Use this only for a follow-on, explicitly scoped LIR-only plan:
 
 ```text
@@ -741,7 +761,7 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is currently complete through Tranche W with J/K/L/O/P/Q/R/S/T/U/V/W diagnostics-only offline planning and evidence outputs.
+This roadmap is currently complete through Tranche X with J/K/L/O/P/Q/R/S/T/U/V/W/X diagnostics-only offline planning and evidence outputs.
 It does not authorize production rewrite enablement.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, move to a bounded, explicitly gated next tranche and stop.
