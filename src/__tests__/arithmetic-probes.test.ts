@@ -1548,6 +1548,244 @@ describe('arithmetic probe benchmark tooling', () => {
       .toEqual([...new Set(shortWindowProofSummary.needsWiderWindowCaseNames)].sort())
   })
 
+  it('adds deterministic fixture-selection entries with per-bucket caps for short-window buckets', () => {
+    const summary = buildLirOpportunitySummary([
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'case-alpha',
+        totalCopies: 1,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'single-predecessor-copy-into-local-temp',
+              count: 1,
+              caseNames: ['case-alpha'],
+              examples: ['case-alpha:4'],
+            },
+            {
+              proofWindowKind: 'copy-chain-needs-wider-window',
+              count: 1,
+              caseNames: ['case-alpha'],
+              examples: ['case-alpha:5'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: ['case-alpha'],
+          needsWiderWindowCaseNames: ['case-alpha'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'case-beta',
+        totalCopies: 1,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'predecessor-arith-feeds-local-temp',
+              count: 1,
+              caseNames: ['case-beta'],
+              examples: ['case-beta:1'],
+            },
+            {
+              proofWindowKind: 'copy-chain-needs-wider-window',
+              count: 1,
+              caseNames: ['case-beta'],
+              examples: ['case-beta:2'],
+            },
+            {
+              proofWindowKind: 'opaque-or-unparsed-window',
+              count: 1,
+              caseNames: ['case-beta'],
+              examples: ['case-beta:3'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: ['case-beta'],
+          needsWiderWindowCaseNames: ['case-beta'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'case-delta',
+        totalCopies: 1,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'predecessor-arith-feeds-local-temp',
+              count: 1,
+              caseNames: ['case-delta'],
+              examples: ['case-delta:1'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: ['case-delta'],
+          needsWiderWindowCaseNames: ['case-delta'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'case-epsilon',
+        totalCopies: 1,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'single-predecessor-copy-into-local-temp',
+              count: 1,
+              caseNames: ['case-epsilon'],
+              examples: ['case-epsilon:2'],
+            },
+            {
+              proofWindowKind: 'cross-function-or-boundary-window',
+              count: 1,
+              caseNames: ['case-epsilon'],
+              examples: ['case-epsilon:6'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: ['case-epsilon'],
+          needsWiderWindowCaseNames: ['case-epsilon'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'case-zeta',
+        totalCopies: 1,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'single-predecessor-copy-into-local-temp',
+              count: 1,
+              caseNames: ['case-zeta'],
+              examples: ['case-zeta:3'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: ['case-zeta'],
+          needsWiderWindowCaseNames: ['case-zeta'],
+        },
+      }),
+      makeAdjacentWindowDiagnosticCase({
+        caseName: 'case-eta',
+        totalCopies: 1,
+        sourceKind: 'local-temp-only',
+        byFamilySourceKind: 'local-temp-only',
+        localTempExactProofGapCases: 1,
+        shortWindowProofSummary: {
+          totalCandidateLike: 1,
+          byProofWindowKind: [
+            {
+              proofWindowKind: 'single-predecessor-copy-into-local-temp',
+              count: 1,
+              caseNames: ['case-eta'],
+              examples: ['case-eta:7'],
+            },
+            {
+              proofWindowKind: 'cross-function-or-boundary-window',
+              count: 1,
+              caseNames: ['case-eta'],
+              examples: ['case-eta:8'],
+            },
+          ],
+          futureRewriteTestCandidateCaseNames: ['case-eta'],
+          needsWiderWindowCaseNames: ['case-eta'],
+        },
+      }),
+    ])
+
+    const fixtureSelectionSummary = summary.provenanceSummary.shapeFamilySummary?.proofMissSummary?.slotProvenanceSummary
+      ?.localProofEvidenceSummary?.lirAdjacentWindowSummary?.shortWindowProofSummary?.fixtureSelectionSummary
+    expect(fixtureSelectionSummary).toBeDefined()
+    if (!fixtureSelectionSummary) return
+
+    expect(fixtureSelectionSummary.rewriteEnablementStatus).toBe('disabled-diagnostics-only')
+    expect(fixtureSelectionSummary.candidateFixtures).toEqual([
+      {
+        bucket: 'predecessor-arith-feeds-local-temp',
+        caseName: 'case-beta',
+        example: 'case-beta:1',
+        reason: 'Gather one-adjacent arithmetic predecessor evidence for a short-window rewrite-test candidate.',
+        recommendedTestKind: 'short-window-local-copy-fixture',
+      },
+      {
+        bucket: 'predecessor-arith-feeds-local-temp',
+        caseName: 'case-delta',
+        example: 'case-delta:1',
+        reason: 'Gather one-adjacent arithmetic predecessor evidence for a short-window rewrite-test candidate.',
+        recommendedTestKind: 'short-window-local-copy-fixture',
+      },
+      {
+        bucket: 'single-predecessor-copy-into-local-temp',
+        caseName: 'case-alpha',
+        example: 'case-alpha:4',
+        reason: 'Gather exact predecessor-copy traces for a short-window rewrite-test candidate.',
+        recommendedTestKind: 'short-window-local-copy-fixture',
+      },
+      {
+        bucket: 'single-predecessor-copy-into-local-temp',
+        caseName: 'case-epsilon',
+        example: 'case-epsilon:2',
+        reason: 'Gather exact predecessor-copy traces for a short-window rewrite-test candidate.',
+        recommendedTestKind: 'short-window-local-copy-fixture',
+      },
+      {
+        bucket: 'single-predecessor-copy-into-local-temp',
+        caseName: 'case-zeta',
+        example: 'case-zeta:3',
+        reason: 'Gather exact predecessor-copy traces for a short-window rewrite-test candidate.',
+        recommendedTestKind: 'short-window-local-copy-fixture',
+      },
+    ])
+    expect(fixtureSelectionSummary.candidateFixtures.filter(item => item.bucket === 'predecessor-arith-feeds-local-temp')).toHaveLength(2)
+    expect(fixtureSelectionSummary.candidateFixtures.filter(item => item.bucket === 'single-predecessor-copy-into-local-temp')).toHaveLength(3)
+
+    expect(fixtureSelectionSummary.blockedFixtureFamilies).toEqual([
+      {
+        bucket: 'copy-chain-needs-wider-window',
+        count: 2,
+        caseNames: ['case-alpha', 'case-beta'],
+        examples: ['case-alpha:5', 'case-beta:2'],
+        reason: 'Collect wider-window evidence for copy-chain structures before rewrite-test expansion.',
+      },
+      {
+        bucket: 'cross-function-or-boundary-window',
+        count: 2,
+        caseNames: ['case-epsilon', 'case-eta'],
+        examples: ['case-epsilon:6', 'case-eta:8'],
+        reason: 'Keep collecting safe boundary-aware evidence before candidate rewrite tests.',
+      },
+      {
+        bucket: 'opaque-or-unparsed-window',
+        count: 1,
+        caseNames: ['case-beta'],
+        examples: ['case-beta:3'],
+        reason: 'Collect parse-complete neighboring command evidence before rewrite-test expansion.',
+      },
+    ])
+
+    for (const bucket of ['predecessor-arith-feeds-local-temp', 'single-predecessor-copy-into-local-temp']) {
+      const bucketCount = fixtureSelectionSummary.candidateFixtures.filter(item => item.bucket === bucket).length
+      expect(bucketCount).toBeLessThanOrEqual(3)
+    }
+
+    expect(fixtureSelectionSummary.nextSafeDiagnosticGoals).toEqual([
+      'Collect wider-window evidence for copy-chain structures before rewrite-test expansion.',
+      'Keep collecting safe boundary-aware evidence before candidate rewrite tests.',
+      'Collect parse-complete neighboring command evidence before rewrite-test expansion.',
+      'Gather one-adjacent arithmetic predecessor evidence for a short-window rewrite-test candidate.',
+      'Gather exact predecessor-copy traces for a short-window rewrite-test candidate.',
+    ])
+  })
+
   it('reports non-empty short-window proof buckets for full real arithmetic bench output', () => {
     const summary = runArithmeticProbeReport('all', [1]).lirOpportunitySummary
     const localProofEvidenceSummary = summary?.provenanceSummary?.shapeFamilySummary?.proofMissSummary
@@ -1575,6 +1813,33 @@ describe('arithmetic probe benchmark tooling', () => {
       expect(bucket.caseNames).toEqual([...bucket.caseNames].sort())
       expect([...new Set(bucket.caseNames)]).toEqual(bucket.caseNames)
       expect(bucket.examples.length).toBeLessThanOrEqual(3)
+    }
+    const fixtureSelectionSummary = shortWindowProofSummary.fixtureSelectionSummary
+    expect(fixtureSelectionSummary).toBeDefined()
+    if (!fixtureSelectionSummary) return
+    expect(fixtureSelectionSummary.rewriteEnablementStatus).toBe('disabled-diagnostics-only')
+    expect(fixtureSelectionSummary.candidateFixtures.length).toBeGreaterThan(0)
+    expect(fixtureSelectionSummary.nextSafeDiagnosticGoals.length).toBeGreaterThan(0)
+    expect(fixtureSelectionSummary.blockedFixtureFamilies.length).toBeGreaterThan(0)
+
+    const candidateBuckets = new Set(fixtureSelectionSummary.candidateFixtures.map(item => item.bucket))
+    const blockedBuckets = new Set(fixtureSelectionSummary.blockedFixtureFamilies.map(item => item.bucket))
+    for (const bucket of shortWindowProofSummary.byProofWindowKind.filter(item => item.count > 0)) {
+      expect(candidateBuckets.has(bucket.proofWindowKind) || blockedBuckets.has(bucket.proofWindowKind)).toBe(true)
+    }
+    for (const fixture of fixtureSelectionSummary.candidateFixtures) {
+      const fixtureCaseName = fixture.example.includes(':') ? fixture.example.split(':')[0] : fixture.example
+      expect(fixture.caseName).toBe(fixtureCaseName)
+    }
+    for (const bucket of fixtureSelectionSummary.blockedFixtureFamilies) {
+      expect(bucket.caseNames).toEqual([...bucket.caseNames].sort())
+      expect([...new Set(bucket.caseNames)]).toEqual(bucket.caseNames)
+      expect(bucket.examples).toEqual([...bucket.examples].sort())
+      expect(bucket.examples.length).toBeLessThanOrEqual(3)
+    }
+    for (const bucket of ['single-predecessor-copy-into-local-temp', 'predecessor-arith-feeds-local-temp', 'copy-chain-needs-wider-window', 'cross-function-or-boundary-window', 'opaque-or-unparsed-window']) {
+      const fixtureCount = fixtureSelectionSummary.candidateFixtures.filter(item => item.bucket === bucket).length
+      expect(fixtureCount).toBeLessThanOrEqual(3)
     }
   })
 

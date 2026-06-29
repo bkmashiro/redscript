@@ -218,11 +218,43 @@ export interface RewriteProofMissLirLocalTempProofWindowSummaryBucket {
   examples: string[]
 }
 
+export type RewriteProofMissLirFixtureEnablementStatus = 'disabled-diagnostics-only' | 'enabled'
+
+export type RewriteProofMissLirFixtureRecommendedTestKind =
+  | 'short-window-local-copy-fixture'
+  | 'wider-window-local-copy-fixture'
+  | 'cross-function-boundary-fixture'
+  | 'opaque-context-fixture'
+
+export interface RewriteProofMissLirFixtureSelectionCandidate {
+  bucket: RewriteProofMissLirLocalTempProofWindowKind
+  caseName: string
+  example: string
+  reason: string
+  recommendedTestKind: RewriteProofMissLirFixtureRecommendedTestKind
+}
+
+export interface RewriteProofMissLirBlockedFixtureFamily {
+  bucket: RewriteProofMissLirLocalTempProofWindowKind
+  count: number
+  caseNames: string[]
+  examples: string[]
+  reason: string
+}
+
+export interface RewriteProofMissLirFixtureSelectionSummary {
+  candidateFixtures: RewriteProofMissLirFixtureSelectionCandidate[]
+  blockedFixtureFamilies: RewriteProofMissLirBlockedFixtureFamily[]
+  rewriteEnablementStatus: RewriteProofMissLirFixtureEnablementStatus
+  nextSafeDiagnosticGoals: string[]
+}
+
 export interface RewriteProofMissLirLocalTempProofWindowSummary {
   totalCandidateLike: number
   byProofWindowKind: RewriteProofMissLirLocalTempProofWindowSummaryBucket[]
   futureRewriteTestCandidateCaseNames: string[]
   needsWiderWindowCaseNames: string[]
+  fixtureSelectionSummary?: RewriteProofMissLirFixtureSelectionSummary
 }
 
 export interface RewriteProofMissLirAdjacentWindowSummary {
@@ -1363,6 +1395,93 @@ const SHORT_WINDOW_PROOF_KIND_GOALS: Record<
   'opaque-or-unparsed-window': 'Collect parse-complete neighboring command evidence before rewrite-test expansion.',
 }
 
+const MAX_FIXTURE_EXAMPLES_PER_BUCKET = 3
+const MAX_BLOCKED_FAMILY_CASES_PER_BUCKET = 3
+const MAX_BLOCKED_FAMILY_EXAMPLES_PER_BUCKET = 3
+
+const SHORT_WINDOW_FIXTURE_REWRITE_BUCKETS: Set<RewriteProofMissLirLocalTempProofWindowKind> = new Set([
+  'single-predecessor-copy-into-local-temp',
+  'predecessor-arith-feeds-local-temp',
+  'successor-arith-consumes-local-temp',
+])
+
+const SHORT_WINDOW_FIXTURE_RECOMMENDED_TEST_KIND: Record<
+  RewriteProofMissLirLocalTempProofWindowKind,
+  RewriteProofMissLirFixtureRecommendedTestKind
+> = {
+  'single-predecessor-copy-into-local-temp': 'short-window-local-copy-fixture',
+  'predecessor-arith-feeds-local-temp': 'short-window-local-copy-fixture',
+  'successor-arith-consumes-local-temp': 'short-window-local-copy-fixture',
+  'copy-chain-needs-wider-window': 'wider-window-local-copy-fixture',
+  'cross-function-or-boundary-window': 'cross-function-boundary-fixture',
+  'opaque-or-unparsed-window': 'opaque-context-fixture',
+}
+
+function toStableCaseName(example: string): string {
+  const divider = example.indexOf(':')
+  return divider >= 0 ? example.slice(0, divider) : example
+}
+
+function summarizeShortWindowFixtureSelection(
+  byProofWindowKind: RewriteProofMissLirLocalTempProofWindowSummaryBucket[],
+): RewriteProofMissLirFixtureSelectionSummary {
+  const sortedBuckets = [...byProofWindowKind]
+    .filter(entry => entry.count > 0)
+    .sort((left, right) => left.proofWindowKind.localeCompare(right.proofWindowKind))
+
+  const candidateFixtures = sortedBuckets
+    .flatMap((bucket) => {
+      if (!SHORT_WINDOW_FIXTURE_REWRITE_BUCKETS.has(bucket.proofWindowKind)) return []
+
+      const exampleSeed = bucket.examples.length > 0
+        ? bucket.examples
+        : bucket.caseNames
+          .slice(0, MAX_FIXTURE_EXAMPLES_PER_BUCKET)
+          .map(caseName => `${caseName}:1`)
+      const dedupe = new Set<string>()
+      return exampleSeed
+        .slice(0, MAX_FIXTURE_EXAMPLES_PER_BUCKET)
+        .filter(example => {
+          if (dedupe.has(example)) return false
+          dedupe.add(example)
+          return true
+        })
+        .map(example => ({
+          bucket: bucket.proofWindowKind,
+          caseName: toStableCaseName(example),
+          example,
+          reason: SHORT_WINDOW_PROOF_KIND_GOALS[bucket.proofWindowKind],
+          recommendedTestKind: SHORT_WINDOW_FIXTURE_RECOMMENDED_TEST_KIND[bucket.proofWindowKind],
+        }))
+        .sort((left, right) => left.caseName.localeCompare(right.caseName) || left.example.localeCompare(right.example))
+    })
+    .sort((left, right) => left.bucket.localeCompare(right.bucket) || left.caseName.localeCompare(right.caseName) || left.example.localeCompare(right.example))
+
+  const candidateBuckets = new Set(sortedBuckets
+    .filter(bucket => SHORT_WINDOW_FIXTURE_REWRITE_BUCKETS.has(bucket.proofWindowKind))
+    .map(item => item.proofWindowKind))
+  const blockedFixtureFamilies = sortedBuckets
+    .filter(bucket => !candidateBuckets.has(bucket.proofWindowKind))
+    .filter(bucket => bucket.count > 0)
+    .map(bucket => ({
+      bucket: bucket.proofWindowKind,
+      count: bucket.count,
+      caseNames: [...bucket.caseNames].sort().slice(0, MAX_BLOCKED_FAMILY_CASES_PER_BUCKET),
+      examples: [...bucket.examples].sort().slice(0, MAX_BLOCKED_FAMILY_EXAMPLES_PER_BUCKET),
+      reason: SHORT_WINDOW_PROOF_KIND_GOALS[bucket.proofWindowKind],
+    }))
+    .sort((left, right) => right.count - left.count || left.bucket.localeCompare(right.bucket))
+
+  const nextSafeDiagnosticGoals = [...new Set(sortedBuckets.map(item => SHORT_WINDOW_PROOF_KIND_GOALS[item.proofWindowKind]))]
+
+  return {
+    candidateFixtures,
+    blockedFixtureFamilies,
+    rewriteEnablementStatus: 'disabled-diagnostics-only',
+    nextSafeDiagnosticGoals,
+  }
+}
+
 function classifyLocalTempProofGapShortWindowKind(
   family: string,
   sourceKind: RewriteProofMissSourceKind,
@@ -1475,6 +1594,7 @@ function summarizeLocalTempProofGapShortWindowSummary(
     byProofWindowKind: normalized,
     futureRewriteTestCandidateCaseNames: [...futureRewriteTestCandidateCaseNames].sort(),
     needsWiderWindowCaseNames: [...needsWiderWindowCaseNames].sort(),
+    fixtureSelectionSummary: summarizeShortWindowFixtureSelection(normalized),
   }
 }
 

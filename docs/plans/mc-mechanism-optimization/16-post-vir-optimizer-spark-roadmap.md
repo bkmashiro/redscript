@@ -88,6 +88,7 @@ Any future mature-toolchain experiment must be a separate bounded Spark tranche 
 | F | Decision ADR and next roadmap refresh | Go/pause criteria after B–E | Low | Docs-only | Completed; see [21](./21-post-vir-decision-adr.md) |
 | G | Read-only local-temp proof-gap readiness triage | Deterministic readiness buckets for local-temp exact-proof-gap cases | Low | Small diagnostics-only slice | Completed |
 | H | Short-window local-temp proof-gap diagnostics | Deterministic short-window trace-kind and fixture-selection buckets | Low | Small diagnostics-only slice | Completed |
+| I | Short-window fixture-selection evidence pack | Deterministic candidate/blocked fixture slices for rewrite-test design | Low | Small diagnostics-only slice | Completed |
 
 ---
 
@@ -476,6 +477,18 @@ git status --short --branch
   - `needsWiderWindowCaseNames` marks cases that still need additional local window context.
 - Safety reminder: this tranche is strictly for future rewrite-test fixture planning and selection, not a proof of rewrite correctness and not an optimization enablement mechanism.
 
+## Tranche I — short-window fixture-selection pack
+
+- Status: Completed as a diagnostics-only tranche; no production rewrite gates or optimizer behavior was changed.
+- Outcome: added deterministic fixture-selection summaries under:
+  - `benchmark.lirOpportunitySummary...shortWindowProofSummary.fixtureSelectionSummary` (via aggregated short-window summary paths)
+- `fixtureSelectionSummary` includes:
+  - `candidateFixtures` with deterministic top-per-bucket entries (`caseName`, `example`, `reason`, `recommendedTestKind`)
+  - `blockedFixtureFamilies` for wider-window / cross-function / opaque-unparsed families
+  - `rewriteEnablementStatus` fixed to `'disabled-diagnostics-only'`
+  - `nextSafeDiagnosticGoals`
+- Next-safe direction: design explicit rewrite-test fixtures from these buckets next; keep production behavior unchanged.
+
 ---
 
 ## Suggested next `/goal` for Hermes
@@ -504,7 +517,7 @@ Return:
 
 ## Done criteria for this roadmap
 
-This roadmap is done after Tranche H and is closed at this point.
+This roadmap is done after Tranche I and is closed at this point.
 
 Do not keep adding diagnostic fields indefinitely. Once proof/allocation/corpus-split evidence is clear, write Tranche F and stop.
 

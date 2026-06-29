@@ -90,6 +90,16 @@ Output file (from this run): `/tmp/redscript-lir-liveness-window-controller.json
 - Added deterministic family-aware merged ordering for `byProofWindowKind` and deduplicated case-name sets.
 - This tranche is diagnostic-only and intended to pick high-signal rewrite-test fixtures, not to assert correctness or authorize production optimization enablement.
 
+### Tranche I outcome update
+- Added deterministic fixture-selection evidence output for short-window proof buckets (without enabling any production rewrite behavior).
+- Added `fixtureSelectionSummary` under short-window summary output with:
+  - `candidateFixtures`: deterministic entries with `bucket`, `caseName`, `example`, `reason`, and `recommendedTestKind`.
+  - `blockedFixtureFamilies`: deterministic blocked families for cross-function / boundary / opaque contexts.
+  - `rewriteEnablementStatus`: `'disabled-diagnostics-only'`.
+  - `nextSafeDiagnosticGoals`: stable recommendation hints for the next safe fixture-design tranche.
+- Added matching tests validating deterministic ordering, per-bucket caps, and real-bench emission.
+- Next safe work remains explicit rewrite-test fixture design; this tranche does **not** enable production rewrites.
+
 ## Next safe goals
 1. Expand candidate-window parser support to classify short local proof spans into `single-adjacent-arith-no-reuse` / `copy-chain-no-reuse` where provable.
 2. Add deterministic evidence examples for unknown causes (`insufficient-window`, `unparsed-command`) to improve triage quality.
