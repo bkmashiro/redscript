@@ -153,9 +153,17 @@ git diff --check
 
 ## P15 - Local-copy/RMW default-enablement ADR
 
-**Status:** Planned.
+**Status:** Done.
+
+**Decision (2026-06-30):** Default enablement rejected/deferred in [`34-local-copy-rmw-default-enablement-adr.md`](./34-local-copy-rmw-default-enablement-adr.md). The gate passes as evidence, but its own rollout recommendation remains `manual-experimental-opt-in-only`, the VIR dashboard says `stay-experimental`, and bounded offline evidence is not production correctness proof.
 
 **Scope:** Use `gate:lir-local-copy` as evidence only. Default enablement requires an ADR with CI evidence, stable offline equivalence families, no benchmark regressions, and a rollback plan.
+
+**P15 gates run (2026-06-30):**
+
+- `npm run gate:lir-local-copy -- --output /tmp/redscript-p15-lir-local-copy-adr.json`
+- `npm run build`
+- `git diff --check`
 
 ## P16 - Storage/NBT/raw-boundary sidecar spike
 
@@ -169,5 +177,5 @@ git diff --check
 - [x] P12 safe typed LIR peephole expansion.
 - [x] P13 temp lifetime/dead materialization expansion.
 - [x] P14 call/return ABI readiness spike.
-- [ ] P15 local-copy/RMW default-enablement ADR.
+- [x] P15 local-copy/RMW default-enablement ADR.
 - [ ] P16 storage/NBT/raw-boundary sidecar spike.
