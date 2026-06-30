@@ -12,6 +12,10 @@ function compileWith(extra: string) {
   return compile(SRC + '\n' + extra, { namespace: 'test' })
 }
 
+function allContent(result: ReturnType<typeof compile>): string {
+  return result.files.map(f => f.content).join('\n')
+}
+
 describe('stdlib/inventory.mcrs', () => {
   test('compiles without errors', () => {
     const r = compileWith('')
@@ -35,6 +39,6 @@ describe('stdlib/inventory.mcrs', () => {
 
   test('remove_item is emitted', () => {
     const r = compileWith(`@keep fn t() { remove_item(@s, "minecraft:diamond_sword"); }`)
-    expect(r.files.some(f => f.path.includes('remove_item'))).toBe(true)
+    expect(allContent(r)).toContain('function test:remove_item with storage rs:macro_args')
   })
 })

@@ -12,6 +12,10 @@ function compileWith(extra: string) {
   return compile(SRC + '\n' + extra, { namespace: 'test' })
 }
 
+function allContent(result: ReturnType<typeof compile>): string {
+  return result.files.map(f => f.content).join('\n')
+}
+
 describe('stdlib/teams.mcrs', () => {
   test('compiles without errors', () => {
     const r = compileWith('')
@@ -20,7 +24,7 @@ describe('stdlib/teams.mcrs', () => {
 
   test('create_team is emitted', () => {
     const r = compileWith(`@keep fn t() { create_team("red", "red"); }`)
-    expect(r.files.some(f => f.path.includes('create_team'))).toBe(true)
+    expect(allContent(r)).toContain('function test:create_team with storage rs:macro_args')
   })
 
   test('create_red_team is emitted', () => {
@@ -30,7 +34,7 @@ describe('stdlib/teams.mcrs', () => {
 
   test('add_to_team is emitted', () => {
     const r = compileWith(`@keep fn t() { add_to_team(@a, "red"); }`)
-    expect(r.files.some(f => f.path.includes('add_to_team'))).toBe(true)
+    expect(allContent(r)).toContain('function test:add_to_team with storage rs:macro_args')
   })
 
   test('remove_from_teams is emitted', () => {

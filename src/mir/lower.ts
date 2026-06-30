@@ -226,6 +226,9 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
   // Collect module-level global variable names (mutable lets at top level)
   const globalVarNames = new Set<string>(hir.globals.map(g => g.name))
   const stringLiteralSpecializedFns = collectStringLiteralSpecializedFunctionNames(hir.functions, fnParamInfo)
+  for (const macroFnName of macroInfo.keys()) {
+    stringLiteralSpecializedFns.delete(macroFnName)
+  }
 
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
@@ -271,7 +274,7 @@ function collectStringLiteralSpecializedFunctionNames(
   const stringParamFns = new Set<string>()
   for (const fn of functions) {
     const hasStringParam = fn.params.some(p => p.type.kind === 'named' && (p.type.name === 'string' || p.type.name === 'format_string'))
-    if (hasStringParam && fn.decorators.length === 0) stringParamFns.add(fn.name)
+    if (hasStringParam && isStringLiteralSpecializationCandidate(fn)) stringParamFns.add(fn.name)
   }
 
   const calls = new Map<string, { total: number; literalSafe: number }>()
@@ -296,6 +299,12 @@ function collectStringLiteralSpecializedFunctionNames(
     if (entry.total > 0 && entry.total === entry.literalSafe) result.add(fnName)
   }
   return result
+}
+
+function isStringLiteralSpecializationCandidate(fn: HIRFunction): boolean {
+  if (fn.isLibraryFn || fn.decorators.length > 0) return false
+  const sourceFile = fn.sourceFile ?? ''
+  return !sourceFile.includes('/stdlib/') && !sourceFile.includes('\\stdlib\\')
 }
 
 function walkHIRBlock(block: HIRBlock, visitExpr: (expr: HIRExpr) => void): void {
@@ -1648,6 +1657,28 @@ function lowerStmt(
         a.pattern.kind === 'PatExpr' && a.pattern.expr.kind === 'str_lit'
       )
       if (hasStringPats) {
+        for (const arm of stmt.arms) {
+          const pat = arm.pattern
+          if (pat.kind !== 'PatWild' && !(pat.kind === 'PatExpr' && pat.expr.kind === 'str_lit')) {
+            const loc = stmt.span && ctx.sourceFile
+              ? { file: ctx.sourceFile, line: stmt.span.line, col: stmt.span.col }
+              : { line: 1, col: 1 }
+            throw new DiagnosticError('LoweringError', `Unsupported string match pattern: ${pat.kind}`, loc)
+          }
+        }
+
+        const staticMatchValue = getStaticStringLiteral(stmt.expr, ctx)
+        if (staticMatchValue !== undefined) {
+          const matchingArm = stmt.arms.find(arm => {
+            const pat = arm.pattern
+            return pat.kind === 'PatWild' || (pat.kind === 'PatExpr' && pat.expr.kind === 'str_lit' && pat.expr.value === staticMatchValue)
+          })
+          if (matchingArm) {
+            lowerBlock(matchingArm.body, ctx, new Map(scope))
+          }
+          break
+        }
+
         const matchPath = lowerStringExprToPath(stmt.expr, ctx, scope, 'match')
         if (!matchPath) {
           const loc = stmt.span && ctx.sourceFile
@@ -3030,7 +3061,7 @@ function lowerExpr(
       {
         const targetHirFn = ctx.hirFunctions.get(expr.fn)
         const targetParams = ctx.fnParamInfo.get(expr.fn)
-        if (targetHirFn && targetParams && ctx.specializedFnsRegistry) {
+        if (targetHirFn && targetParams && isStringLiteralSpecializationCandidate(targetHirFn) && !ctx.macroInfo.has(expr.fn) && ctx.specializedFnsRegistry) {
           const stringLiteralBindings = new Map<string, string>()
           for (let i = 0; i < targetParams.length && i < expr.args.length; i++) {
             const param = targetParams[i]

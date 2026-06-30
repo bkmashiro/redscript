@@ -12,6 +12,10 @@ function compileWith(extra: string) {
   return compile(SRC + '\n' + extra, { namespace: 'test' })
 }
 
+function allContent(result: ReturnType<typeof compile>): string {
+  return result.files.map(f => f.content).join('\n')
+}
+
 describe('stdlib/bossbar.mcrs', () => {
   test('compiles without errors', () => {
     const r = compileWith('')
@@ -20,12 +24,12 @@ describe('stdlib/bossbar.mcrs', () => {
 
   test('create_timer_bar is emitted', () => {
     const r = compileWith(`@keep fn t() { create_timer_bar("rs:timer", "Timer", 60); }`)
-    expect(r.files.some(f => f.path.includes('create_timer_bar'))).toBe(true)
+    expect(allContent(r)).toContain('function test:create_timer_bar with storage rs:macro_args')
   })
 
   test('create_health_bar is emitted', () => {
     const r = compileWith(`@keep fn t() { create_health_bar("rs:hp", "HP", 100); }`)
-    expect(r.files.some(f => f.path.includes('create_health_bar'))).toBe(true)
+    expect(allContent(r)).toContain('function test:create_health_bar with storage rs:macro_args')
   })
 
   test('update_bar is emitted', () => {
@@ -35,11 +39,11 @@ describe('stdlib/bossbar.mcrs', () => {
 
   test('hide_bar is emitted', () => {
     const r = compileWith(`@keep fn t() { hide_bar("rs:hp"); }`)
-    expect(r.files.some(f => f.path.includes('hide_bar'))).toBe(true)
+    expect(allContent(r)).toContain('function test:hide_bar with storage rs:macro_args')
   })
 
   test('remove_bar is emitted', () => {
     const r = compileWith(`@keep fn t() { remove_bar("rs:hp"); }`)
-    expect(r.files.some(f => f.path.includes('remove_bar'))).toBe(true)
+    expect(allContent(r)).toContain('function test:remove_bar with storage rs:macro_args')
   })
 })

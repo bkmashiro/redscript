@@ -22,7 +22,7 @@ module.exports = {
       displayName: 'unit',
       testEnvironment: 'node',
       roots: ['<rootDir>/src'],
-      testPathIgnorePatterns: ['mc-integration.test.ts', 'mc-integration/'],
+      testPathIgnorePatterns: ['mc-integration.test.ts', 'mc-integration/', '/__tests__/helpers/'],
       transform: tsJestTransform,
     },
   ],

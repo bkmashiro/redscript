@@ -24,7 +24,7 @@ describe('compiler: string match', () => {
     expect(content).toContain('say other')
   })
 
-  test('copies string call arguments into string parameter slots before matching', () => {
+  test('specializes literal string call arguments before matching', () => {
     const result = compile(`
       fn handle_cmd(cmd: string): void {
         match cmd {
@@ -39,7 +39,8 @@ describe('compiler: string match', () => {
     `, { namespace: 'test' })
 
     const content = allContent(result)
-    expect(content).toContain('data modify storage rs:strings __sp0 set from storage rs:strings')
-    expect(content).toContain('set value "help"')
+    expect(content).toContain('function test:handle_cmd__str_cmd__help')
+    expect(content).toContain('say help')
+    expect(content).not.toContain('say other')
   })
 })
