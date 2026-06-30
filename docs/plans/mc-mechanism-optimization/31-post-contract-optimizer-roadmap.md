@@ -167,9 +167,16 @@ git diff --check
 
 ## P16 - Storage/NBT/raw-boundary sidecar spike
 
-**Status:** Planned.
+**Status:** Done.
+
+**Outcome (2026-06-30):** Completed exploratory sidecar design in [`35-storage-nbt-raw-boundary-sidecar-spike.md`](./35-storage-nbt-raw-boundary-sidecar-spike.md). Recommended next action is a derived diagnostic helper for typed `LIRInstr` effects; no production raw parser and no behavior-changing optimizer pass.
 
 **Scope:** Explore typed sidecar metadata for storage/NBT/raw boundaries. Do not add a production raw command parser.
+
+**P16 gates run (2026-06-30):**
+
+- `npm run build`
+- `git diff --check`
 
 ## Roadmap status
 
@@ -178,4 +185,4 @@ git diff --check
 - [x] P13 temp lifetime/dead materialization expansion.
 - [x] P14 call/return ABI readiness spike.
 - [x] P15 local-copy/RMW default-enablement ADR.
-- [ ] P16 storage/NBT/raw-boundary sidecar spike.
+- [x] P16 storage/NBT/raw-boundary sidecar spike.
