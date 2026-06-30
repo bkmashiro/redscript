@@ -251,10 +251,10 @@ git diff --check
 
 **Executable slices:**
 
-- [ ] B1. Reproduce one skipped file failure directly with CLI/build output and add a focused RED test for the smallest language pattern.
-- [ ] B2. Fix `interactions.mcrs` / `foreach + module-level const` if it is a bounded MIR/typecheck/import issue; otherwise convert to clear diagnostic and mark blocked.
+- [x] B1. Reproduce one skipped file failure directly with CLI/build output and add a focused RED test for the smallest language pattern.
+- [x] B2. Fix `interactions.mcrs` / `foreach + module-level const` if it is a bounded MIR/typecheck/import issue; otherwise convert to clear diagnostic and mark blocked.
 - [ ] B3. Fix the smallest array-return-call pattern blocking `src/templates/` or one example, with RED/GREEN tests.
-- [ ] B4. Remove fixed files from compile-all skip manifest and prove compile-all still passes.
+- [x] B4. Remove fixed files from compile-all skip manifest and prove compile-all still passes.
 - [ ] B5. Repeat for high-value tutorial/example skips until remaining items require broad language design.
 
 **Gates:**
@@ -432,7 +432,8 @@ For every executable slice:
 ## Completion Log
 
 - 2026-06-30: Roadmap created from current repo discovery. Baseline: clean `main`, latest CI success for `1f24338`, full unit/local gates recently green, 51 stdlib modules all directly covered at some level, compile-all skip list and struct MIR stubs identified as highest-value next gaps.
-- 2026-06-30: Completed Track A coverage matrix and skip manifest bootstrap. Added `docs/plans/redscript-coverage-matrix.md`, machine-readable `docs/plans/redscript-coverage-matrix.json`, typed compile-all skip helper, and `src/__tests__/coverage-matrix.test.ts`. Gates: `npm test -- --selectProjects unit --runTestsByPath src/__tests__/coverage-matrix.test.ts src/__tests__/compile-all.test.ts --runInBand` passed 2 suites / 103 tests; `npm run build` passed; `git diff --check` passed. Commit pending in current local slice; next recommended slice is Track B1 reproducing the first compile-all language skip.
+- 2026-06-30: Completed Track A coverage matrix and skip manifest bootstrap. Added `docs/plans/redscript-coverage-matrix.md`, machine-readable `docs/plans/redscript-coverage-matrix.json`, typed compile-all skip helper, and `src/__tests__/coverage-matrix.test.ts`. Gates: `npm test -- --selectProjects unit --runTestsByPath src/__tests__/coverage-matrix.test.ts src/__tests__/compile-all.test.ts --runInBand` passed 2 suites / 103 tests; `npm run build` passed; `git diff --check` passed. Commit `ebe59db`. Next recommended slice is Track B1 reproducing the first compile-all language skip.
+- 2026-06-30: Completed Track B stale-skip reduction pass. Direct CLI probes showed `src/stdlib/interactions.mcrs`, `examples/game/racing.mcrs`, `examples/game/tower_defense.mcrs`, `examples/math/physics_sim.mcrs`, `src/examples/hunger_games.mcrs`, `src/examples/tutorial_04_selectors.mcrs`, and `src/examples/tutorial_10_kill_race.mcrs` now compile, so they were removed from the compile-all skip manifest. Remaining skip reasons were updated from stale array-return wording to direct observed failures: unresolved `winner`/`state`/`item` MIR lowering or external-objective LIR verifier errors. Gates: `npm test -- --selectProjects unit --runTestsByPath src/__tests__/coverage-matrix.test.ts src/__tests__/compile-all.test.ts --runInBand` passed 2 suites / 110 tests; `npm run build` passed; `npm run validate-mc` passed 15 tests; `git diff --check` passed. Commit pending for this local slice; next recommended slice is Track C audit/minimal struct-field lowering, because most remaining skips are struct/state-field shaped rather than array-return shaped.
 
 ## Reporting Format When Finally Stopping
 

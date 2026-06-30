@@ -92,9 +92,9 @@ describe('compile-all skip manifest', () => {
     const knownGaps = COMPILE_ALL_SKIP_MANIFEST.filter(entry => entry.category === 'known-language-gap')
     const patterns = knownGaps.map(entry => entry.pattern)
 
-    expect(patterns).toContain('interactions.mcrs')
     expect(patterns).toContain('src/templates/')
-    expect(patterns).toContain('tutorial_10_kill_race.mcrs')
-    expect(knownGaps.length).toBeGreaterThanOrEqual(10)
+    expect(patterns).toContain('capture_the_flag.mcrs')
+    expect(patterns).toContain('tutorial_07_random.mcrs')
+    expect(knownGaps.length).toBeGreaterThanOrEqual(7)
   })
 })

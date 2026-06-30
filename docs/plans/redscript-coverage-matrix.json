@@ -335,7 +335,7 @@
       "proofLevels": [
         "stdlib-source-present",
         "mc-integration-offline-skippable",
-        "compile-all-known-skip"
+        "compile-all-static-smoke"
       ],
       "evidenceFiles": [
         "src/__tests__/compile-all.test.ts",
@@ -344,7 +344,7 @@
         "src/__tests__/stdlib/interactions.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; compile-all static smoke is now enabled, but do not claim Paper proof until a live harness case runs."
     },
     {
       "module": "inventory",
