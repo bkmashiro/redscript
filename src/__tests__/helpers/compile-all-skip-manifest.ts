@@ -97,12 +97,6 @@ export const COMPILE_ALL_SKIP_MANIFEST: CompileAllSkipEntry[] = [
     nextAction: 'Decide whether runtime string comparison should be implemented or rewrite arena team tags to integer/enum state.',
   },
   {
-    pattern: 'showcase_game.mcrs',
-    category: 'known-language-gap',
-    reason: "After struct-return tracking was fixed, direct compile now reaches unresolved identifier 'lane' during MIR lowering.",
-    nextAction: 'Minimize the lane enum/string path and either fix bounded lowering or add a clear diagnostic.',
-  },
-  {
     pattern: 'tutorial_07_random.mcrs',
     category: 'known-language-gap',
     reason: "Direct compile now reports unsupported runtime string comparison for string variable 'item'.",

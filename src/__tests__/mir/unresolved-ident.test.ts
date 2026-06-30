@@ -50,7 +50,7 @@ describe('unresolved identifier at MIR lowering throws', () => {
     ]))
 
     expect(() => lowerToMIR(hir)).toThrow(
-      "Unresolved identifier 'ghost' at MIR lowering stage — this is a compiler bug",
+      "Unresolved identifier 'ghost' while lowering function 'f' at MIR stage — this is a compiler bug",
     )
   })
 

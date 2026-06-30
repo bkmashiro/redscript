@@ -301,12 +301,14 @@ class FnContext {
    */
   readonly tupleVars = new Map<string, Temp[]>()
   /**
-   * Array variable tracking: varName → { ns, pathPrefix, knownLen? }.
+   * Array variable tracking: varName → { ns, pathPrefix, knownLen?, literalValues? }.
    * Entries map a RedScript array variable to its NBT-backed int[] storage
    * (`<ns>:arrays <pathPrefix>[…]`).  `knownLen` is set when the length is
    * statically known (e.g. array literals), enabling bounds-checked lowering.
+   * `literalValues` is only populated for pure int literal arrays and enables
+   * safe compile-time foreach unrolling.
    */
-  readonly arrayVars = new Map<string, { ns: string; pathPrefix: string; knownLen?: number }>()
+  readonly arrayVars = new Map<string, { ns: string; pathPrefix: string; knownLen?: number; literalValues?: number[] }>()
   /**
    * String variable tracking: varName → storage path within the `rs:strings`
    * NBT storage namespace.  Inserted when a string variable is declared;
@@ -1065,13 +1067,16 @@ function lowerStmt(
         // Array literal: write to NBT storage, track the var for index access
         const ns = `${ctx.getNamespace()}:arrays`
         const pathPrefix = stmt.name
-        ctx.arrayVars.set(stmt.name, { ns, pathPrefix, knownLen: stmt.init.elements.length })
         const elems = stmt.init.elements
         // Check if all elements are pure integer literals (no side-effects)
         const allConst = elems.every(e => e.kind === 'int_lit')
+        const literalValues = allConst
+          ? elems.map(e => (e as { kind: 'int_lit'; value: number }).value)
+          : undefined
+        ctx.arrayVars.set(stmt.name, { ns, pathPrefix, knownLen: elems.length, literalValues })
         if (allConst) {
           // Emit a single raw 'data modify ... set value [...]' to initialize the whole list
-          const vals = elems.map(e => (e as { kind: 'int_lit'; value: number }).value).join(', ')
+          const vals = literalValues!.join(', ')
           ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${ns} ${pathPrefix} set value [${vals}]`, args: [] })
         } else {
           // Initialize with known int_lit values (0 for dynamic slots), then overwrite dynamic elements.
@@ -1361,6 +1366,24 @@ function lowerStmt(
     }
 
     case 'foreach': {
+      if (stmt.iterable.kind === 'ident') {
+        const arrayInfo = ctx.arrayVars.get(stmt.iterable.name)
+        if (arrayInfo?.literalValues) {
+          // Bounded compile-time unroll for pure int literal arrays. This preserves
+          // the existing selector foreach path while giving static example code a
+          // real scalar binding during MIR lowering.
+          for (const value of arrayInfo.literalValues) {
+            const iterScope = new Map(scope)
+            const bindingTemp = ctx.freshTemp()
+            ctx.emit({ kind: 'const', dst: bindingTemp, value })
+            iterScope.set(stmt.binding, bindingTemp)
+            lowerBlock(stmt.body, ctx, iterScope)
+            if (!isPlaceholderTerm(ctx.current().term)) break
+          }
+          break
+        }
+      }
+
       // foreach is MC-specific entity iteration — lower to call_context
       // For now, extract body into a helper and emit call_context
       const helperName = `${ctx.getFnName()}__foreach_${ctx.freshTemp()}`
@@ -1942,7 +1965,7 @@ function lowerExpr(
       const unresolvedSpan = (expr as { span?: { line: number; col: number } }).span
       throw new DiagnosticError(
         'LoweringError',
-        `Unresolved identifier '${expr.name}' at MIR lowering stage — this is a compiler bug`,
+        `Unresolved identifier '${expr.name}' while lowering function '${ctx.getFnName()}' at MIR stage — this is a compiler bug`,
         unresolvedSpan && ctx.sourceFile ? { file: ctx.sourceFile, line: unresolvedSpan.line, col: unresolvedSpan.col } : { line: unresolvedSpan?.line ?? 1, col: unresolvedSpan?.col ?? 1 },
       )
     }
