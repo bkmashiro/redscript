@@ -7,7 +7,7 @@
 - Golden coverage exists for several core command paths, but the release-readiness track still benefits from a small public examples/templates gate that proves representative examples compile and emit stable artifact shapes.
 - P0 release-evidence tranche is complete and now maintenance-only; next expansion tranche is P1.
 - Static validation and live Paper oracle coverage must remain separate: compile-only/offline tests are useful release gates, not live Minecraft behavior proof.
-- Local real harness evidence includes `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passing `24/24` descriptor-driven cases on 2026-06-30, including first P1 world/inventory/random/spawn smokes (runtime proof for local run only).
+- Local real harness evidence includes `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passing `25/25` descriptor-driven cases on 2026-06-30, including first P1 world/inventory/random/spawn/particle smokes (runtime proof for local run only).
 
 ### Evidence labels for release claims (required)
 

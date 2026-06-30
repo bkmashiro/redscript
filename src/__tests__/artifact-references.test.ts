@@ -24,6 +24,8 @@ const TAG_PATHS = {
 const FUNCTION_REF_RE = /\bfunction\s+([0-9a-z_.-]+:[0-9a-z_./-]+)\b/g
 const FUNCTION_WITH_STORAGE_RE = /\bfunction\s+([0-9a-z_.-]+:[0-9a-z_./-]+)\s+with\s+storage\s+[0-9a-z_.-:]+\b/g
 const EXECUTE_RUN_FUNCTION_RE = /\bexecute\b[^#\n]*\brun\s+function\s+([0-9a-z_.-]+:[0-9a-z_./-]+)\b/g
+const MACRO_TEMPLATE_LINE_RE = /^\$([a-z][a-z0-9_]*)\b/
+const MACRO_TEMPLATE_LINE_BODY_RE = /^\$(.+)$/
 
 const EXTERNAL_NAMESPACES = new Set(['minecraft'])
 
@@ -76,10 +78,77 @@ function extractFunctionRefs(line: string): string[] {
   return [...refs]
 }
 
+interface MacroTemplateLine {
+  file: string
+  line: number
+  text: string
+  root: string | null
+}
+
+function collectMacroTemplateLines(files: DatapackFile[]): MacroTemplateLine[] {
+  const lines: MacroTemplateLine[] = []
+  for (const file of files) {
+    if (!file.path.endsWith('.mcfunction')) continue
+
+    const linesInFile = file.content.split('\n')
+    for (let lineNumber = 0; lineNumber < linesInFile.length; lineNumber++) {
+      const trimmed = linesInFile[lineNumber].trim()
+      if (!trimmed.startsWith('$')) continue
+
+      const match = trimmed.match(MACRO_TEMPLATE_LINE_RE)
+      lines.push({
+        file: file.path,
+        line: lineNumber + 1,
+        text: trimmed,
+        root: match ? match[1] : null,
+      })
+    }
+  }
+  return lines
+}
+
+function collectMacroTemplateRootSet(files: DatapackFile[]): Set<string> {
+  const roots = new Set<string>()
+  for (const line of collectMacroTemplateLines(files)) {
+    if (line.root) roots.add(line.root)
+  }
+  return roots
+}
+
+function collectMacroTemplateViolations(
+  templateLines: MacroTemplateLine[],
+  allowedRoots: Set<string>,
+): string[] {
+  const violations: string[] = []
+
+  for (const line of templateLines) {
+    if (!MACRO_TEMPLATE_LINE_BODY_RE.test(line.text)) {
+      violations.push(`${line.file}:${line.line}: malformed macro template line`)
+      continue
+    }
+
+    if (!line.root || !allowedRoots.has(line.root)) {
+      violations.push(
+        `${line.file}:${line.line}: unsupported macro template root ${
+          line.root ? `'${line.root}'` : '<none>'
+        }`,
+      )
+      continue
+    }
+  }
+
+  return violations
+}
+
 function getTagFile(files: DatapackFile[], tagType: 'load' | 'tick'): DatapackFile | undefined {
   const candidates = TAG_PATHS[tagType]
   return files.find(file => candidates.includes(file.path))
 }
+
+const macroFixtureSource = fs.readFileSync(
+  path.join(__dirname, 'fixtures', 'macro-test.mcrs'),
+  'utf-8',
+)
 
 function collectReferenceViolations(files: DatapackFile[], namespace: string): string[] {
   const emitted = collectEmittedFunctionIds(files)
@@ -182,12 +251,11 @@ describe('artifact-reference guard for emitted datapacks', () => {
     {
       label: 'existing macro fixture',
       namespace: 'p5_artifact_guard_macro',
-      source: fs.readFileSync(
-        path.join(__dirname, 'fixtures', 'macro-test.mcrs'),
-        'utf-8',
-      ),
+      source: macroFixtureSource,
     },
   ]
+
+  const macroAllowedTemplateRoots = collectMacroTemplateRootSet(compile(macroFixtureSource, { namespace: 'p5_artifact_guard_macro' }).files)
 
   test.each(fixtures)('$label', ({ namespace, source, expectLoadTag, expectTickTag }) => {
     const result = compile(source, { namespace })
@@ -203,6 +271,29 @@ describe('artifact-reference guard for emitted datapacks', () => {
     }
 
     expect(violations).toEqual([])
+  })
+
+  test('asserts macro template lines match currently emitted root shape', () => {
+    const result = compile(macroFixtureSource, { namespace: 'p5_artifact_guard_macro' })
+    const templateLines = collectMacroTemplateLines(result.files)
+    const violations = collectMacroTemplateViolations(templateLines, macroAllowedTemplateRoots)
+
+    expect(templateLines.length).toBeGreaterThan(0)
+    expect(violations).toEqual([])
+  })
+
+  test('flags unsupported or malformed macro template lines in synthetic artifacts', () => {
+    const syntheticFile = mkDatapackFile(
+      'data/p5_artifact_guard_macro/functions/_macro_template_guard_test.mcfunction',
+      '$unsupported_macro_root foo\n$',
+    )
+    const lines = collectMacroTemplateLines([syntheticFile])
+    const violations = collectMacroTemplateViolations(lines, macroAllowedTemplateRoots)
+
+    expect(violations).toEqual([
+      'data/p5_artifact_guard_macro/functions/_macro_template_guard_test.mcfunction:1: unsupported macro template root \'unsupported_macro_root\'',
+      'data/p5_artifact_guard_macro/functions/_macro_template_guard_test.mcfunction:2: malformed macro template line',
+    ])
   })
 
   test('flags same-namespace missing function references in emitted functions', () => {

@@ -1,6 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { execFileSync, execSync } from 'node:child_process'
+import { execFileSync, execSync, spawnSync } from 'node:child_process'
 
 const REPO_ROOT = path.resolve(__dirname, '../..')
 const REPORT_COMPILE_COST_SCRIPT = path.join(REPO_ROOT, 'scripts', 'report-compile-cost.js')
@@ -34,6 +34,27 @@ function runCostReport(sources: string[]): any {
     encoding: 'utf8',
   })
   return JSON.parse(output)
+}
+
+interface CliResult {
+  exitCode: number
+  stdout: string
+  stderr: string
+  combined: string
+}
+
+function runCostReportCli(args: string[]): CliResult {
+  const result = spawnSync('node', [REPORT_COMPILE_COST_SCRIPT, ...args], {
+    encoding: 'utf8',
+  })
+  const stdout = result.stdout ?? ''
+  const stderr = result.stderr ?? ''
+  return {
+    exitCode: result.status ?? 0,
+    stdout,
+    stderr,
+    combined: `${stdout}${stderr}`,
+  }
 }
 
 interface CostFileSummary {
@@ -106,5 +127,39 @@ describe('scripts/report-compile-cost.js', () => {
       expect(actualPaths).toEqual(sortedPaths)
       assertExpectedFamilyKeys(summary.commandFamilyCounts)
     }
+  })
+
+  it('prints usage and exits 0 for --help', () => {
+    const result = runCostReportCli(['--help'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain('Usage:')
+    expect(result.combined).toContain('Options:')
+    expect(result.combined).toContain('--namespace <name>')
+    expect(result.combined).toContain('--pretty')
+  })
+
+  it('errors when source is missing', () => {
+    const result = runCostReportCli([])
+
+    expect(result.exitCode).not.toBe(0)
+    expect(result.combined).toContain('Missing source.mcrs')
+    expect(result.combined).toContain('Usage:')
+  })
+
+  it('errors on unknown options', () => {
+    const result = runCostReportCli(['--does-not-exist'])
+
+    expect(result.exitCode).not.toBe(0)
+    expect(result.combined).toContain('Unknown option')
+    expect(result.combined).toContain('Usage:')
+  })
+
+  it('errors when --namespace is missing a value', () => {
+    const result = runCostReportCli([TUTORIAL_RANDOM, '--namespace'])
+
+    expect(result.exitCode).not.toBe(0)
+    expect(result.combined).toContain('Missing value for --namespace')
+    expect(result.combined).toContain('Usage:')
   })
 })

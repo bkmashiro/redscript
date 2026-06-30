@@ -15,8 +15,8 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 
 ## Current live baseline
 
-- `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed `24/24` descriptor-driven cases on 2026-06-30 against the local harness at `localhost:25561` (actual runtime proof only for this local run).
-- Existing live coverage already includes scoreboard arithmetic, branch/loop returns, macro-with-storage, NBT read/write loops, foreach context, load/tick lifecycle hooks, timer countdown, world setblock, inventory equipment, bounded random range, and entity spawn.
+- `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed `25/25` descriptor-driven cases on 2026-06-30 against the local harness at `localhost:25561` (actual runtime proof only for this local run).
+- Existing live coverage already includes scoreboard arithmetic, branch/loop returns, macro-with-storage, NBT read/write loops, foreach context, load/tick lifecycle hooks, timer countdown, world setblock, inventory equipment, bounded random range, entity spawn, and particle command smoke.
 
 ## Candidate priorities
 
@@ -64,8 +64,16 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 - Category: `minecraft-boundary/high-risk`
 - Current proof levels: static-mc-validation, mc-integration-offline-skippable, compile-all-static-smoke, live-paper-oracle
 - Candidate reason: Entity summon + entity-selector verification is a high-risk runtime boundary and should stay deterministic and cleanup-safe.
-- Evidence (completed): Added descriptor-driven `spawn entity smoke` in `tests/mc-cases/core-oracle.mcrs` and `tests/mc-cases/core-oracle-cases.ts` using `summon ... pig` + `kill` before/after and `execute if entity` pass flag assertion; included in the 24/24 local live Paper baseline.
+- Evidence (completed): Added descriptor-driven `spawn entity smoke` in `tests/mc-cases/core-oracle.mcrs` and `tests/mc-cases/core-oracle-cases.ts` using `summon ... pig` + `kill` before/after and `execute if entity` pass flag assertion; included in the 25/25 local live Paper baseline.
 - Suggested next case shape: keep as one-point deterministic smoke unless summon behavior, persistence, or selector semantics regressions are observed.
+
+### particle command boundary — medium
+
+- Category: `minecraft-boundary/high-risk`
+- Current proof levels: static-mc-validation, mc-integration-offline-skippable, compile-all-static-smoke, live-paper-oracle
+- Candidate reason: Particle emission is a high-risk command boundary with version-sensitive syntax and side-effect-free smoke patterns.
+- Evidence (completed): Added descriptor-driven `particle command smoke` in `tests/mc-cases/core-oracle.mcrs` and `tests/mc-cases/core-oracle-cases.ts` using a stable `particle minecraft:flame ... force` command plus a pass-flag assertion after command execution; included in the 25/25 local live Paper baseline.
+- Suggested next case shape: keep as one-point command boundary smoke unless particle syntax/version regressions are observed.
 
 ### events — low
 

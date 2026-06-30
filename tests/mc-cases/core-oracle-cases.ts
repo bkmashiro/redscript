@@ -288,4 +288,15 @@ export const CORE_ORACLE_CASES: McCoreCaseDescriptor[] = [
       { player: '#spawn_entity_check', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
     ],
   },
+  {
+    name: 'particle command smoke',
+    namespace: CORE_ORACLE_NAMESPACE,
+    sourcePath: CORE_ORACLE_SOURCE_PATH,
+    setupCommands: ['scoreboard players set #particle_check core_oracle 0'],
+    entrypoints: [{ kind: 'function', target: 'test_particle_smoke' }],
+    waitTicks: 2,
+    scoreboardAssertions: [
+      { player: '#particle_check', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
+    ],
+  },
 ]

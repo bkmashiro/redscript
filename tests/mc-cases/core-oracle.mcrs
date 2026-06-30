@@ -282,3 +282,9 @@ fn test_spawn_entity_smoke() {
   raw("execute if entity @e[type=pig,tag=core_oracle_spawn,limit=1] run scoreboard players set #spawn_entity_check core_oracle 1")
   raw("kill @e[type=pig,tag=core_oracle_spawn]")
 }
+
+fn test_particle_smoke() {
+  raw("scoreboard players set #particle_check core_oracle 0")
+  raw("particle minecraft:flame 0 65 0 0 0 0 0 1 force")
+  scoreboard_set("#particle_check", "core_oracle", 1)
+}
