@@ -2,6 +2,17 @@
 
 Generated from `docs/plans/redscript-coverage-matrix.json` as the Track D bounded-candidate selection. This is intentionally selective: live cases should prove semantics only where Minecraft runtime behavior is a real risk, not duplicate every static stdlib compile test.
 
+## Evidence labels (for candidate inclusion)
+
+- `compile-only`: compiler accepts source and emits datapack files, but no runtime verification.
+- `static-mc-validation`: static checker accepts command strings and references under the current validator subset.
+- `golden-artifact-shape`: stable emitted command/file artifacts are asserted by golden checks.
+- `live-paper-oracle`: only this label means runtime proof from a running Paper harness with structured assertion results.
+
+Scope rule: only promote a claim to `live-paper-oracle` when a live run is executed; do not reclassify offline, compile, or static-validator signals as runtime proof.
+
+Cross-reference: release-level intent and gating policy are tracked in the [coverage matrix](redscript-coverage-matrix.md) and [follow-up audit](redscript-release-readiness-followup-audit.md).
+
 ## Current live baseline
 
 - `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed 19/19 descriptor-driven cases on 2026-06-30 against the local harness at `localhost:25561`.

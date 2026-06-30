@@ -4,6 +4,15 @@ This file summarizes current stdlib and feature proof levels for the autonomous 
 
 Machine-readable source: `docs/plans/redscript-coverage-matrix.json`.
 
+## Evidence labels
+
+- `compile-only`: compiler accepts source and emits datapack artifacts (commands/functions/tags) without runtime execution.
+- `static-mc-validation`: generated command strings pass the current static validator subset.
+- `golden-artifact-shape`: stable emitted file tree and command fragments are pinned by goldens.
+- `live-paper-oracle`: a running Paper/TestHarnessPlugin returns structured live results (`/command`, `/scoreboard`, etc.).
+
+For release-readiness, only `live-paper-oracle` is treated as server-runtime proof. `compile-only`, `static-mc-validation`, and `golden-artifact-shape` are useful release gates but are **not** equivalent. See [release-readiness follow-up audit](redscript-release-readiness-followup-audit.md) and [live-oracle candidate map](redscript-live-oracle-candidate-map.md) for where each is expected to be used.
+
 ## Proof levels
 
 - `stdlib-source-present` — Module file exists under src/stdlib.

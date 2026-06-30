@@ -145,13 +145,41 @@ describe('LIR verifier — ScoreInt immediates', () => {
     expect(verifyLIR(mod)).toEqual([])
   })
 
+  test('allows macro-substitution fake-players beyond $(player) on external objectives', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_set', dst: { player: '$(target)', obj: 'health' }, value: 4 },
+      ]),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
+  })
+
   test('allows user display fake-player on external objective', () => {
     const mod = mkModule([
       mkFn('main', [
         { kind: 'score_set', dst: { player: '$wave', obj: 'zs_display' }, value: 7 },
+        { kind: 'score_set', dst: { player: '$zombies', obj: 'zs_display' }, value: 3 },
+        { kind: 'score_set', dst: { player: '$score_calcx', obj: 'zs_display' }, value: 9 },
       ]),
     ])
     expect(verifyLIR(mod)).toEqual([])
+  })
+
+  test('rejects compiler-owned fake-player slot shapes on external objectives', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_set', dst: { player: '$ret', obj: 'external_obj' }, value: 1 },
+        { kind: 'score_set', dst: { player: '$ret_x', obj: 'external_obj' }, value: 2 },
+        { kind: 'score_set', dst: { player: '$p0', obj: 'external_obj' }, value: 3 },
+        { kind: 'score_set', dst: { player: '$p1', obj: 'external_obj' }, value: 4 },
+        { kind: 'score_set', dst: { player: '$__const_wave', obj: 'external_obj' }, value: 5 },
+      ]),
+    ])
+    const errors = verifyLIR(mod)
+    expect(errors).toHaveLength(5)
+    for (const player of ['$ret', '$ret_x', '$p0', '$p1', '$__const_wave']) {
+      expect(errors.some(error => error.message.includes(`compiler-owned fake-player slot '${player} external_obj'`))).toBe(true)
+    }
   })
 
   test('still rejects current-function compiler temp slot on external objective', () => {
@@ -164,6 +192,15 @@ describe('LIR verifier — ScoreInt immediates', () => {
     expect(errors.length).toBe(1)
     expect(errors[0].message).toContain('compiler-owned fake-player slot')
     expect(errors[0].message).toContain('$score_calc_tmp external_obj')
+  })
+
+  test('allows a same-prefix temp label from a different function to stay external-user-owned', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_set', dst: { player: '$score_calc_tmp', obj: 'external_obj' }, value: 4 },
+      ]),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
   })
 
   test('accepts vanilla scoreboard interop slots with external objectives', () => {

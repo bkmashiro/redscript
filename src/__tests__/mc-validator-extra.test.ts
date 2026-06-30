@@ -64,6 +64,17 @@ describe('MCCommandValidator — extended coverage', () => {
     expect(result.valid).toBe(false)
   })
 
+  test('static syntax: accepts function command with storage when fully well-formed', () => {
+    const result = v.validate('function rs:macro_target with storage rs:macro_args')
+    expect(result.valid).toBe(true)
+  })
+
+  test('static syntax: rejects function with storage missing storage id', () => {
+    const result = v.validate('function rs:macro_target with storage')
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('function with storage expects exactly 5 tokens')
+  })
+
   // ─── validateExecute ───────────────────────────────────────────────────
   test('execute run at index 1 is invalid (malformed)', () => {
     const result = v.validate('execute run scoreboard players set x obj 0')
@@ -86,6 +97,21 @@ describe('MCCommandValidator — extended coverage', () => {
     // execute if score — this is valid MC syntax
     const result = v.validate('execute as @a at @s run function myns:myfn')
     expect(result.valid).toBe(true)
+  })
+
+  test('static syntax: accepts execute if score + return run function with storage', () => {
+    const result = v.validate(
+      'execute if score $cond __bc matches 1 run return run function rs:macro_then with storage rs:macro_args',
+    )
+    expect(result.valid).toBe(true)
+  })
+
+  test('static syntax: rejects execute if score + return run function missing namespaced function id', () => {
+    const result = v.validate(
+      'execute if score $cond __bc matches 1 run return run function with storage rs:macro_args',
+    )
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('function requires a namespaced function id')
   })
 
   // ─── validateScoreboard ────────────────────────────────────────────────

@@ -7,6 +7,15 @@
 - Golden coverage exists for several core command paths, but the release-readiness track still benefits from a small public examples/templates gate that proves representative examples compile and emit stable artifact shapes.
 - Static validation and live Paper oracle coverage must remain separate: compile-only/offline tests are useful release gates, not live Minecraft behavior proof.
 
+### Evidence labels for release claims (required)
+
+- `compile-only`: proves the source compiles and datapack files emit.
+- `static-mc-validation`: proves generated strings pass current static MC validation subset.
+- `golden-artifact-shape`: proves stable emitted artifacts and command fragments via snapshots/goldens.
+- `live-paper-oracle`: proves runtime semantics when the harness returns structured results from a live Paper server.
+
+A release-readiness gate is considered live-proof only where `live-paper-oracle` evidence exists; do not reclassify other labels as runtime proof.
+
 Inspected surfaces from the Spark audit worktree included:
 
 - `docs/plans/compiler-mc-hardening-roadmap.md`
