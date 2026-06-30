@@ -61,41 +61,6 @@ export const COMPILE_ALL_SKIP_MANIFEST: CompileAllSkipEntry[] = [
     reason: 'Contains datapack test inputs with intentionally unsupported or non-source patterns.',
     nextAction: 'Keep excluded; targeted datapack validation owns this tree.',
   },
-  {
-    pattern: 'src/templates/combat.mcrs',
-    category: 'known-language-gap',
-    reason: "Direct compile fails LIR verification because vanilla scoreboard objective 'health' is external to the module objective '__combat'.",
-    nextAction: 'Decide whether external scoreboard objectives are valid template ABI or should produce a clearer diagnostic.',
-    expectedFailureSubstrings: ["external scoreboard objective 'health'", "module objective '__combat'"],
-  },
-  {
-    pattern: 'src/templates/economy.mcrs',
-    category: 'known-language-gap',
-    reason: "Direct compile fails LIR verification because vanilla scoreboard objective 'coins' is external to the module objective '__economy'.",
-    nextAction: 'Decide whether external scoreboard objectives are valid template ABI or should produce a clearer diagnostic.',
-    expectedFailureSubstrings: ["external scoreboard objective 'coins'", "module objective '__economy'"],
-  },
-  {
-    pattern: 'src/templates/quest.mcrs',
-    category: 'known-language-gap',
-    reason: "Direct compile fails LIR verification because vanilla scoreboard objectives like 'quest_id' are external to the module objective '__quest'.",
-    nextAction: 'Decide whether external scoreboard objectives are valid template ABI or should produce a clearer diagnostic.',
-    expectedFailureSubstrings: ["external scoreboard objective 'quest_id'", "module objective '__quest'"],
-  },
-  {
-    pattern: 'parkour_race.mcrs',
-    category: 'known-language-gap',
-    reason: "Direct compile currently fails LIR verification because scoreboard slots such as '$(player)' use external objectives.",
-    nextAction: 'Decide whether external scoreboard objectives are valid template/example ABI or should produce a clearer diagnostic.',
-    expectedFailureSubstrings: ["external scoreboard objective 'pk_checkpoint'", "module objective '__parkour_race'"],
-  },
-  {
-    pattern: 'zombie_survival.mcrs',
-    category: 'known-language-gap',
-    reason: "Direct compile currently fails LIR verification because display slots use an objective different from the module objective.",
-    nextAction: 'Decide whether external display scoreboard objectives are valid ABI or should be an explicit diagnostic.',
-    expectedFailureSubstrings: ["external scoreboard objective 'zs_display'", "module objective '__zombie_survival'"],
-  },
 ]
 
 export const COMPILE_ALL_SKIP_PATTERNS = COMPILE_ALL_SKIP_MANIFEST.map(entry => entry.pattern)

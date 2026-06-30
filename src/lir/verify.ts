@@ -69,7 +69,11 @@ function verifyFunction(
     // `#p obj`; compiler temps/return/param slots are fake players prefixed
     // with `$` and must stay on the module objective.
     for (const slot of getSlotsFromInstr(instr)) {
-      if (slot.player.startsWith('$') && slot.obj !== module.objective && !slot.obj.startsWith('__rs_')) {
+      if (
+        slot.obj !== module.objective &&
+        !slot.obj.startsWith('__rs_') &&
+        isCompilerOwnedFakePlayerInCurrentFunction(slot.player, fn)
+      ) {
         errors.push({
           fn: fn.name,
           message: `compiler-owned fake-player slot '${slot.player} ${slot.obj}' uses external scoreboard objective '${slot.obj}' but must use module objective '${module.objective}'; use a non-$ player name for external scoreboard interop or route through a typed helper`,
@@ -116,6 +120,15 @@ function verifyFunction(
   }
 
   return errors
+}
+
+function isCompilerOwnedFakePlayerInCurrentFunction(player: string, fn: LIRFunction): boolean {
+  if (!player.startsWith('$')) return false
+  if (player.startsWith('$(')) return false
+  if (player === '$ret' || player.startsWith('$ret_')) return true
+  if (/^\$p\d+$/.test(player)) return true
+  if (player.startsWith('$__const_')) return true
+  return player.startsWith(`$${fn.name}_`)
 }
 
 function normalizeFunctionPathPart(name: string): string {

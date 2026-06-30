@@ -121,30 +121,49 @@ describe('LIR verifier — ScoreInt immediates', () => {
   })
 })
 
-  test('rejects slot with wrong objective using actionable compiler-owned fake-player wording', () => {
+  test('rejects compiler-owned slot with wrong objective using actionable wording', () => {
     const mod = mkModule([
       mkFn('main', [
-        { kind: 'score_set', dst: { player: '$x', obj: 'health' }, value: 42 },
+        { kind: 'score_set', dst: { player: '$main_x', obj: 'health' }, value: 42 },
       ]),
     ])
     const errors = verifyLIR(mod)
     expect(errors.length).toBe(1)
     expect(errors[0].message).toContain('compiler-owned fake-player slot')
-    expect(errors[0].message).toContain("'$x health'")
+    expect(errors[0].message).toContain("'$main_x health'")
     expect(errors[0].message).toContain("module objective '__test'")
     expect(errors[0].message).toContain('external scoreboard objective')
     expect(errors[0].message).toContain('use a non-$ player name')
   })
 
-  test('rejects wrong objective in src slot', () => {
+  test('allows macro-substitution fake-player on external objective', () => {
     const mod = mkModule([
       mkFn('main', [
-        { kind: 'score_copy', dst: slot('x'), src: { player: '$y', obj: '__bad' } },
+        { kind: 'score_set', dst: { player: '$(player)', obj: 'health' }, value: 5 },
+      ]),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
+  })
+
+  test('allows user display fake-player on external objective', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'score_set', dst: { player: '$wave', obj: 'zs_display' }, value: 7 },
+      ]),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
+  })
+
+  test('still rejects current-function compiler temp slot on external objective', () => {
+    const mod = mkModule([
+      mkFn('score_calc', [
+        { kind: 'score_set', dst: { player: '$score_calc_tmp', obj: 'external_obj' }, value: 9 },
       ]),
     ])
     const errors = verifyLIR(mod)
     expect(errors.length).toBe(1)
-    expect(errors[0].message).toContain('__bad')
+    expect(errors[0].message).toContain('compiler-owned fake-player slot')
+    expect(errors[0].message).toContain('$score_calc_tmp external_obj')
   })
 
   test('accepts vanilla scoreboard interop slots with external objectives', () => {
@@ -160,7 +179,7 @@ describe('LIR verifier — ScoreInt immediates', () => {
   test('checks slots in score_swap', () => {
     const mod = mkModule([
       mkFn('main', [
-        { kind: 'score_swap', a: { player: '$x', obj: '__bad' }, b: slot('y') },
+        { kind: 'score_swap', a: { player: '$main_x', obj: '__bad' }, b: slot('y') },
       ]),
     ])
     const errors = verifyLIR(mod)
@@ -177,7 +196,7 @@ describe('LIR verifier — ScoreInt immediates', () => {
           cmd: {
             kind: 'call_if_score',
             fn: 'test:main',
-            a: { player: '$a', obj: '__bad' },
+            a: { player: '$main_a', obj: '__bad' },
             op: 'eq' as const,
             b: slot('b'),
           },
@@ -195,7 +214,7 @@ describe('LIR verifier — ScoreInt immediates', () => {
         {
           kind: 'call_if_matches',
           fn: 'test:main',
-          slot: { player: '$c', obj: '__bad' },
+          slot: { player: '$main_c', obj: '__bad' },
           range: '1',
         },
       ]),
@@ -207,7 +226,7 @@ describe('LIR verifier — ScoreInt immediates', () => {
   test('checks slot in return_value', () => {
     const mod = mkModule([
       mkFn('main', [
-        { kind: 'return_value', slot: { player: '$r', obj: '__bad' } },
+        { kind: 'return_value', slot: { player: '$ret', obj: '__bad' } },
       ]),
     ])
     const errors = verifyLIR(mod)
@@ -217,8 +236,8 @@ describe('LIR verifier — ScoreInt immediates', () => {
   test('checks slots in store_score_to_nbt and store_nbt_to_score', () => {
     const mod = mkModule([
       mkFn('main', [
-        { kind: 'store_score_to_nbt', ns: 'rs:data', path: 'value', type: 'int', scale: 1, src: { player: '$bad', obj: '__bad' } },
-        { kind: 'store_nbt_to_score', dst: { player: '$also_bad', obj: '__bad' }, ns: 'rs:data', path: 'value', scale: 1 },
+        { kind: 'store_score_to_nbt', ns: 'rs:data', path: 'value', type: 'int', scale: 1, src: { player: '$main_bad', obj: '__bad' } },
+        { kind: 'store_nbt_to_score', dst: { player: '$main_bad2', obj: '__bad' }, ns: 'rs:data', path: 'value', scale: 1 },
       ]),
     ])
     const errors = verifyLIR(mod)
