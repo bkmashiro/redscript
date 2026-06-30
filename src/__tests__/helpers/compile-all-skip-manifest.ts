@@ -81,14 +81,14 @@ export const COMPILE_ALL_SKIP_MANIFEST: CompileAllSkipEntry[] = [
   {
     pattern: 'pvp_arena.mcrs',
     category: 'known-language-gap',
-    reason: "Direct compile currently fails with unresolved identifier 'state' during MIR lowering.",
-    nextAction: 'Minimize the struct/state field access path and fold it into Track C if bounded.',
+    reason: "After struct-return tracking was fixed, direct compile now reaches unresolved identifier 'tagName' during MIR lowering.",
+    nextAction: 'Minimize the string/dynamic name path and decide whether it is unsupported dynamic string state or needs a clear diagnostic.',
   },
   {
     pattern: 'showcase_game.mcrs',
     category: 'known-language-gap',
-    reason: "Direct compile currently fails with unresolved identifier 'state' during MIR lowering.",
-    nextAction: 'Re-test after Track C static struct field access/assignment is implemented or clearly diagnosed.',
+    reason: "After struct-return tracking was fixed, direct compile now reaches unresolved identifier 'lane' during MIR lowering.",
+    nextAction: 'Minimize the lane enum/string path and either fix bounded lowering or add a clear diagnostic.',
   },
   {
     pattern: 'tutorial_07_random.mcrs',

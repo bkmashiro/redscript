@@ -106,4 +106,39 @@ describe('struct-extends: compile', () => {
       }
     `, { namespace: 'test' })).not.toThrow()
   })
+
+  test('returns a local struct variable through __rf field slots', () => {
+    expect(() => compile(`
+      struct FighterState { health: int, eliminations: int, alive: int }
+
+      fn snapshot_fighter() -> FighterState {
+        let health: int = 20
+        let eliminations: int = 2
+        let alive: int = 1
+        let state: FighterState = { health: health, eliminations: eliminations, alive: alive }
+        return state
+      }
+
+      fn read_health(): int {
+        let state = snapshot_fighter()
+        return state.health
+      }
+    `, { namespace: 'test' })).not.toThrow()
+  })
+
+  test('tracks unannotated locals initialized from struct-returning functions', () => {
+    expect(() => compile(`
+      struct Vec2 { x: int, y: int }
+
+      fn make_vec() -> Vec2 {
+        return { x: 3, y: 4 }
+      }
+
+      fn sum(): int {
+        let v = make_vec()
+        v.x = 9
+        return v.x + v.y
+      }
+    `, { namespace: 'test' })).not.toThrow()
+  })
 })

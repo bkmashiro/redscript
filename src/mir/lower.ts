@@ -1006,8 +1006,10 @@ function lowerStmt(
         const fieldTemps = new Map<string, Temp>([['has', hasTemp], ['val', valTemp]])
         ctx.structVars.set(stmt.name, { typeName: '__option', fields: fieldTemps })
       } else if (
-        // Struct-typed let: explicit annotation OR inferred from @singleton::get() return
+        // Struct-typed let: explicit annotation, inferred regular function call,
+        // inferred method chain, or inferred @singleton::get() return.
         stmt.type?.kind === 'struct' ||
+        inferStructReturnType(stmt.init, ctx) !== undefined ||
         (stmt.init.kind === 'static_call' &&
           ctx.singletonStructs.has((stmt.init as { kind: 'static_call'; type: string; method: string }).type) &&
           (stmt.init as { kind: 'static_call'; method: string }).method === 'get')
@@ -1015,7 +1017,8 @@ function lowerStmt(
         // Struct-typed let with non-literal init (e.g., call returning struct)
         const inferredStructName = stmt.type?.kind === 'struct'
           ? stmt.type.name
-          : (stmt.init as { kind: 'static_call'; type: string }).type
+          : inferStructReturnType(stmt.init, ctx)
+            ?? (stmt.init as { kind: 'static_call'; type: string }).type
         const fields = ctx.structDefs.get(inferredStructName)
         if (fields) {
           lowerExpr(stmt.init, ctx, scope)
@@ -1215,6 +1218,16 @@ function lowerStmt(
           if (!valT) throw new Error(`__option struct var '${stmt.value.name}' is missing 'val' field`)
           ctx.emit({ kind: 'copy', dst: '__rf_has', src: { kind: 'temp', name: hasT } })
           ctx.emit({ kind: 'copy', dst: '__rf_val', src: { kind: 'temp', name: valT } })
+          ctx.terminate({ kind: 'return', value: null })
+        } else if (sv) {
+          const fields = sv.typeName === '__option'
+            ? ['has', 'val']
+            : (ctx.structDefs.get(sv.typeName) ?? [])
+          for (const fieldName of fields) {
+            const fieldTemp = sv.fields.get(fieldName)
+            if (!fieldTemp) continue
+            ctx.emit({ kind: 'copy', dst: `__rf_${fieldName}`, src: { kind: 'temp', name: fieldTemp } })
+          }
           ctx.terminate({ kind: 'return', value: null })
         } else {
           const val = lowerExpr(stmt.value, ctx, scope)
@@ -3282,6 +3295,23 @@ function requireStaticTimerId(method: string, idTemp: Temp | undefined, ctx: FnC
 
 function isIntrinsicTimerStruct(sv: { typeName: string; fields: Map<string, Temp> }): boolean {
   return sv.typeName === 'Timer' && sv.fields.has('_id') && sv.fields.has('_duration')
+}
+
+/**
+ * Infer a struct type returned by an expression whose result is carried in
+ * `__rf_<field>` slots. This is intentionally narrow: it recognizes regular
+ * function calls and existing invoke-chain inference, but does not invent new
+ * object/reference semantics.
+ */
+function inferStructReturnType(
+  expr: HIRExpr,
+  ctx: FnContext,
+): string | undefined {
+  if (expr.kind === 'call') {
+    const fn = ctx.hirFunctions.get(expr.fn)
+    return fn?.returnType.kind === 'struct' ? fn.returnType.name : undefined
+  }
+  return inferInvokeReturnStructType(expr, ctx)
 }
 
 /**
