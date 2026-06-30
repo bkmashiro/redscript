@@ -61,10 +61,22 @@ export const COMPILE_ALL_SKIP_MANIFEST: CompileAllSkipEntry[] = [
     nextAction: 'Keep excluded; targeted datapack validation owns this tree.',
   },
   {
-    pattern: 'src/templates/',
+    pattern: 'src/templates/combat.mcrs',
     category: 'known-language-gap',
-    reason: 'Current templates fail standalone compile through unresolved struct-field-like locals or objective-mismatch verification errors.',
-    nextAction: 'Split templates into the smallest unresolved-field and objective-mismatch repros before removing this directory skip.',
+    reason: "Direct compile fails LIR verification because vanilla scoreboard objective 'health' is external to the module objective '__combat'.",
+    nextAction: 'Decide whether external scoreboard objectives are valid template ABI or should produce a clearer diagnostic.',
+  },
+  {
+    pattern: 'src/templates/economy.mcrs',
+    category: 'known-language-gap',
+    reason: "Direct compile fails LIR verification because vanilla scoreboard objective 'coins' is external to the module objective '__economy'.",
+    nextAction: 'Decide whether external scoreboard objectives are valid template ABI or should produce a clearer diagnostic.',
+  },
+  {
+    pattern: 'src/templates/quest.mcrs',
+    category: 'known-language-gap',
+    reason: "Direct compile fails LIR verification because vanilla scoreboard objectives like 'quest_id' are external to the module objective '__quest'.",
+    nextAction: 'Decide whether external scoreboard objectives are valid template ABI or should produce a clearer diagnostic.',
   },
   {
     pattern: 'capture_the_flag.mcrs',
