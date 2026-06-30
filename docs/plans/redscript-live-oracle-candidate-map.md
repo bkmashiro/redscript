@@ -15,8 +15,8 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 
 ## Current live baseline
 
-- `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed `22/22` descriptor-driven cases on 2026-06-30 against the local harness at `localhost:25561` (actual runtime proof only for this local run).
-- Existing live coverage already includes scoreboard arithmetic, branch/loop returns, macro-with-storage, NBT read/write loops, foreach context, load/tick lifecycle hooks, timer countdown, world setblock, and bounded random range.
+- `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed `23/23` descriptor-driven cases on 2026-06-30 against the local harness at `localhost:25561` (actual runtime proof only for this local run).
+- Existing live coverage already includes scoreboard arithmetic, branch/loop returns, macro-with-storage, NBT read/write loops, foreach context, load/tick lifecycle hooks, timer countdown, world setblock, inventory equipment, and bounded random range.
 
 ## Candidate priorities
 
@@ -42,6 +42,14 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 - Candidate reason: Boundary command lowering for setblock/block-state assertions benefits from one deterministic runtime smoke.
 - Evidence (completed): Added descriptor-driven `world setblock smoke` with deterministic setblock + `execute if block` pass-flag assertion and cleanup.
 - Suggested next case shape: only extend if side-effect cleanup or block-state variants become release blockers.
+
+### inventory/equipment boundary — medium
+
+- Category: `minecraft-boundary/high-risk`
+- Current proof levels: static-mc-validation, mc-integration-offline-skippable, compile-all-static-smoke, live-paper-oracle
+- Candidate reason: Inventory-adjacent commands (`item replace entity`) are high-risk command-boundaries due selector-slot syntax and nbt shape changes across versions.
+- Evidence (completed): Added descriptor-driven `inventory equipment smoke` using deterministic armor-stand fixture and `execute store success ... run item replace entity ... weapon.mainhand with minecraft:diamond_sword`.
+- Suggested next case shape: keep scope to deterministic fixture setup/teardown + explicit pass-flag scoring; expand only if version-specific nbt assertions become fragile.
 
 ### timer — medium
 

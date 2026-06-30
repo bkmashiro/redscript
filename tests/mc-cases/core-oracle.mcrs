@@ -261,6 +261,14 @@ fn test_world_block_smoke() {
   raw("setblock 14 65 0 air")
 }
 
+fn test_inventory_equipment_smoke() {
+  raw("kill @e[type=armor_stand,tag=core_oracle_inventory]")
+  raw("summon minecraft:armor_stand 18 65 0 {Tags:['core_oracle_inventory'],NoGravity:1b,NoAI:1b,PersistenceRequired:1b,Invulnerable:1b}")
+  raw("scoreboard players set #item_replace_check core_oracle 0")
+  raw("execute store success score #item_replace_check core_oracle run item replace entity @e[type=armor_stand,tag=core_oracle_inventory,limit=1] weapon.mainhand with minecraft:diamond_sword")
+  raw("kill @e[type=armor_stand,tag=core_oracle_inventory]")
+}
+
 fn test_random_range_smoke() {
   raw("scoreboard players set #random_range_check core_oracle 0")
   raw("execute store result score #random_value core_oracle run random value 0..4")

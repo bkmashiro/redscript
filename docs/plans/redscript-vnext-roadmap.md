@@ -10,7 +10,7 @@ Verified on 2026-06-30:
 - Latest CI for `test(release): validate compile-all mc commands` completed successfully.
 - `compile-all` has zero `known-language-gap` entries in the typed skip manifest.
 - All non-skipped `.mcrs` compile-all sources are now covered by static `.mcfunction` command validation.
-- Core live Paper oracle has passed `22/22` descriptor-driven cases against the local TestHarness on 2026-06-30, including P1 world setblock and bounded random range smoke (local harness only).
+- Core live Paper oracle has passed `23/23` descriptor-driven cases against the local TestHarness on 2026-06-30, including P1 world setblock, inventory equipment, and bounded random range smoke (local harness only).
 - Existing production pipeline remains: Source → AST → TypeCheck → HIR → MIR → Optimizer → LIR → Emit datapack.
 
 Evidence labels:

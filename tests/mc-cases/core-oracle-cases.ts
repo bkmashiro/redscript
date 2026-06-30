@@ -253,6 +253,17 @@ export const CORE_ORACLE_CASES: McCoreCaseDescriptor[] = [
     ],
   },
   {
+    name: 'inventory equipment smoke',
+    namespace: CORE_ORACLE_NAMESPACE,
+    sourcePath: CORE_ORACLE_SOURCE_PATH,
+    setupCommands: ['scoreboard players set #item_replace_check core_oracle 0'],
+    entrypoints: [{ kind: 'function', target: 'test_inventory_equipment_smoke' }],
+    waitTicks: 3,
+    scoreboardAssertions: [
+      { player: '#item_replace_check', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
+    ],
+  },
+  {
     name: 'bounded random range smoke',
     namespace: CORE_ORACLE_NAMESPACE,
     sourcePath: CORE_ORACLE_SOURCE_PATH,
