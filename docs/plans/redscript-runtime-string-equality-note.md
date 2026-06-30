@@ -33,11 +33,17 @@ Unsupported as a simple lowering target:
 
 Do not implement general runtime string equality in the current release-readiness track.
 
-Instead, fix shipped examples/tutorials that only need finite choices by using integer/enum state:
+Do exploit safe subsets:
 
-- `capture_the_flag.mcrs`: represent winner/team as an int/enum code.
-- `pvp_arena.mcrs`: represent arena team/state as an int/enum code or static branch selection.
-- `tutorial_07_random.mcrs`: represent random item choice as an int/enum code, then branch to literal item commands.
+1. **Compile-time string literal specialization.** If a string parameter is only called with literal arguments, the compiler can clone/specialize the callee or constant-fold the string branch before MIR scalar lowering. This should handle patterns like `end_game("red")` / `end_game("blue")` and `count_team("red")` / `count_team("blue")` without any Minecraft runtime string comparison.
+2. **Explicit storage/NBT literal predicates, later.** A future bounded helper or syntax may lower an explicitly storage-backed comparison to `execute if data storage ...`/SNBT matching. That should be opt-in and documented as NBT predicate semantics, not normal scalar `string == string`.
+3. **Finite-choice branch expansion or int/enum state.** If a value is genuinely selected at runtime from a finite set of string literals and later used as a command argument, prefer branch expansion or int/enum state unless/until RedScript has a designed string-storage ABI.
+
+For current shipped examples/tutorials:
+
+- `capture_the_flag.mcrs`: first try literal specialization for `end_game("red"|"blue")`; only rewrite to int/enum if specialization is not bounded.
+- `pvp_arena.mcrs`: first try literal specialization for `count_team("red"|"blue")`; only rewrite to int/enum/static branch helpers if specialization is not bounded.
+- `tutorial_07_random.mcrs`: likely needs finite-choice branch expansion or int item codes, because `pick_loot_item(seed)` returns a runtime-selected string used by `give` and `item_name`.
 
 ## Rationale
 

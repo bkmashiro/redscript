@@ -242,15 +242,20 @@ Practical interpretation for RedScript:
 - Two dynamic string-like NBT values can be compared indirectly with storage/data-command tricks, but that is a command-sequence protocol, not a normal expression primitive. It has storage layout, mutation, equality-vs-copy-success, and MC-version semantics that must be designed and tested.
 - Scoreboard expressions cannot store or compare arbitrary strings. RedScript's current MIR/LIR scalar lowering is scoreboard-oriented, so lowering `winner == "red"`, `tagName == "red"`, or `item == "minecraft:diamond"` as ordinary runtime string equality would require a new string/NBT comparison lowering contract.
 
-**Decision for the current release-readiness track:** do **not** implement general runtime string equality yet. Treat it as a future language ADR. For product readiness, rewrite the remaining shipped examples/tutorials that only need finite choices to use integer/enum state instead of runtime strings.
+**Decision for the current release-readiness track:** do **not** implement general runtime string equality yet. Treat it as a future language ADR. But do exploit the safe subset before rewriting examples: compile-time string literal specialization and, later, explicitly storage-backed NBT literal predicates. For product readiness, only rewrite examples to int/enum state when the value is genuinely dynamic finite choice and cannot be eliminated by specialization.
+
+**Useful half-support slices:**
+
+- Compile-time string literal specialization: if a string parameter is only called with literals, clone/specialize the callee or constant-fold the branch. This should fix `end_game("red"|"blue")` and `count_team("red"|"blue")` without any Minecraft runtime string compare.
+- Explicit NBT/storage literal predicate support: future bounded helper/syntax may lower `storage.path == "literal"` into `execute if data storage ... {path:"literal"}`-style predicates. This is not the same as ordinary `string == string`.
+- Dynamic finite choices: if a function returns one of several string literals and the result is later used as a command argument, prefer int/enum lowering or a finite-choice branch expansion unless a string-storage ABI is explicitly designed.
 
 **Active executable slices:**
 
-- [x] P1.1. Add a short language-design note documenting the above Minecraft capability boundary and RedScript decision: runtime string equality is not a scalar expression in this release; finite-choice examples should use int/enum state. See `docs/plans/redscript-runtime-string-equality-note.md`.
-- [ ] P1.2. Rewrite `capture_the_flag.mcrs` from `winner` string comparison to integer/enum team state, preserving user-visible behavior where practical.
-- [ ] P1.3. Rewrite `pvp_arena.mcrs` from `tagName` string comparison to integer/enum team state or static branch selection, preserving the arena semantics.
-- [ ] P1.4. Rewrite `tutorial_07_random.mcrs` from random item string comparison to integer/enum item codes, preserving the tutorial lesson.
-- [ ] P1.5. Remove the fixed string-comparison entries from `COMPILE_ALL_SKIP_MANIFEST`, update coverage expectations, and prove compile-all/build/validate-mc.
+- [x] P1.1. Add a short language-design note documenting the above Minecraft capability boundary and RedScript decision: runtime string equality is not a scalar expression in this release; finite-choice examples should use specialization or int/enum state. See `docs/plans/redscript-runtime-string-equality-note.md`.
+- [ ] P1.2. Try compile-time literal string specialization for `capture_the_flag.mcrs` (`end_game("red"|"blue")`) and `pvp_arena.mcrs` (`count_team("red"|"blue")`) with focused tests; only rewrite examples if specialization is not bounded.
+- [ ] P1.3. For `tutorial_07_random.mcrs`, choose between finite-choice branch expansion and int/enum item codes; avoid general string runtime.
+- [ ] P1.4. Remove the fixed string-comparison entries from `COMPILE_ALL_SKIP_MANIFEST`, update coverage expectations, and prove compile-all/build/validate-mc.
 
 **Gates:**
 
@@ -340,7 +345,7 @@ For every executable slice:
 - 2026-06-30: Closed Track F2/F3 CI hygiene reconciliation. No RED production test was needed because this was a CI-roadmap inspection slice. Inspected `.github/workflows/ci.yml`, `.github/workflows/docs-check.yml`, and `package.json`: default CI runs build, serial unit tests, `validate-mc`, and report-only `gate:lir-local-copy`; docs check is manual/scheduled; no workflow currently dumps benchmark JSON or adds live Paper to default push. F2 marked complete; F3 marked blocked/no-op until a concrete workflow change is justified. Gates: `git diff --check` and `npm run build` passed. Commit `547d181`; next recommended slice is B7 product-decision classification.
 - 2026-06-30: Classified remaining open roadmap items as blocked/deferred after bounded rediscovery. B7: `showcase_game.mcrs`/`lane` is fixed and compile-all covered; remaining `winner`/`tagName`/`item` failures are runtime string comparison semantics and require a product choice (implement runtime string equality vs rewrite examples to int/enum state). E2/E3: previous typed optimizer report found no bounded typed-local RED candidate; remaining opportunity mass is raw/opaque/lowering-compat and excluded from this mega-goal. No RED production test was needed for this classification slice; direct CLI probes and prior `gate:lir-local-copy` evidence are the blocker evidence. Commit `d3bd668`; safest next step is release-readiness decision work.
 - 2026-06-30: Cleaned the active roadmap after user direction. Archived the consumed Track A–F queue into a compact completed-work list, promoted a release-readiness active queue, and recorded the Minecraft runtime-string boundary: MC supports NBT/SNBT string matching and data-command workarounds, but not a cheap/native scoreboard string comparison expression. Current decision for Priority 1 is to avoid general runtime string equality for this release and rewrite finite-choice examples/tutorials to int/enum state first. Gates: `git diff --check` passed. Commit `be718a6`.
-- 2026-06-30: Completed Priority 1.1 runtime string boundary note. Added `docs/plans/redscript-runtime-string-equality-note.md` and marked P1.1 complete in the active roadmap. The note records that general runtime string equality is future-ADR territory; current release-readiness work should rewrite finite-choice examples to int/enum state. Gates pending. Commit pending.
+- 2026-06-30: Refined Priority 1 after user asked whether Minecraft's partial string support can be exploited. Updated the active queue and `docs/plans/redscript-runtime-string-equality-note.md`: use compile-time string literal specialization first for literal-argument patterns (`end_game("red"|"blue")`, `count_team("red"|"blue")`), reserve explicit storage/NBT literal predicates for a later opt-in semantic, and only rewrite to int/enum for genuinely dynamic finite choices such as `pick_loot_item(seed)`. Gates pending. Commit pending.
 
 ## Reporting Format When Finally Stopping
 
