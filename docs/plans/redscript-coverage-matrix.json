@@ -25,7 +25,11 @@
         "src/__tests__/stdlib/advanced.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "bigint",
@@ -45,7 +49,11 @@
         "src/__tests__/stdlib/bigint.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "bits",
@@ -63,7 +71,11 @@
         "src/__tests__/stdlib/bits.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "bossbar",
@@ -79,7 +91,11 @@
         "src/__tests__/stdlib/bossbar.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "calculus",
@@ -95,7 +111,11 @@
         "src/__tests__/stdlib/calculus.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "color",
@@ -113,7 +133,11 @@
         "src/__tests__/stdlib/color.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "combat",
@@ -129,7 +153,11 @@
         "src/__tests__/stdlib/combat.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "cooldown",
@@ -146,7 +174,11 @@
         "src/__tests__/stdlib/cooldown.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "dialog",
@@ -162,7 +194,11 @@
         "src/__tests__/stdlib/dialog.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "easing",
@@ -180,7 +216,11 @@
         "src/__tests__/stdlib/easing.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "ecs",
@@ -198,7 +238,11 @@
         "src/__tests__/stdlib/ecs.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "effects",
@@ -214,7 +258,11 @@
         "src/__tests__/stdlib/effects.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "events",
@@ -236,7 +284,11 @@
         "src/__tests__/stdlib/events.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "low",
+        "reason": "Lifecycle hooks are partly live-covered; more event cases need harness control and should stay selective."
+      }
     },
     {
       "module": "expr",
@@ -252,7 +304,11 @@
         "src/__tests__/stdlib/expr.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "fft",
@@ -272,7 +328,11 @@
         "src/__tests__/stdlib/fft.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "geometry",
@@ -290,7 +350,11 @@
         "src/__tests__/stdlib/geometry.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "graph",
@@ -308,7 +372,11 @@
         "src/__tests__/stdlib/graph.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "heap",
@@ -326,7 +394,11 @@
         "src/__tests__/stdlib/heap.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "interactions",
@@ -344,7 +416,11 @@
         "src/__tests__/stdlib/interactions.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; compile-all static smoke is now enabled, but do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; compile-all static smoke is now enabled, but do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "inventory",
@@ -361,7 +437,11 @@
         "src/__tests__/stdlib/inventory.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "linalg",
@@ -379,7 +459,11 @@
         "src/__tests__/stdlib/linalg.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "list",
@@ -398,7 +482,11 @@
         "src/__tests__/stdlib/list.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "map",
@@ -414,7 +502,11 @@
         "src/__tests__/stdlib/map.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "math",
@@ -442,7 +534,11 @@
         "src/__tests__/mc-integration/stdlib-coverage-5.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "medium",
+        "reason": "Arithmetic is broadly covered but fixed/scale-sensitive helpers benefit from live scoreboard proof."
+      }
     },
     {
       "module": "math_hp",
@@ -463,7 +559,11 @@
         "src/__tests__/stdlib/math_hp.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "matrix",
@@ -479,7 +579,11 @@
         "src/__tests__/stdlib/matrix.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "mobs",
@@ -495,7 +599,11 @@
         "src/__tests__/stdlib/mobs.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "noise",
@@ -513,7 +621,11 @@
         "src/__tests__/stdlib/noise.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "ode",
@@ -532,7 +644,11 @@
         "src/__tests__/stdlib/ode.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "parabola",
@@ -550,7 +666,11 @@
         "src/__tests__/stdlib/parabola.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "particles",
@@ -567,7 +687,11 @@
         "src/__tests__/stdlib/particles.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "pathfind",
@@ -583,7 +707,11 @@
         "src/__tests__/stdlib/pathfind.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "physics",
@@ -599,7 +727,11 @@
         "src/__tests__/stdlib/physics.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "player",
@@ -615,7 +747,11 @@
         "src/__tests__/stdlib/player.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "quaternion",
@@ -633,7 +769,11 @@
         "src/__tests__/stdlib/quaternion.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "queue",
@@ -649,7 +789,11 @@
         "src/__tests__/stdlib/queue.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "random",
@@ -668,7 +812,11 @@
         "src/__tests__/stdlib/random.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "medium",
+        "reason": "Random helpers require semantic smoke around bounded ranges/distribution shape without promising determinism."
+      }
     },
     {
       "module": "result",
@@ -682,7 +830,11 @@
         "src/__tests__/stdlib/result.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "scheduler",
@@ -698,7 +850,11 @@
         "src/__tests__/stdlib/scheduler.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "set_int",
@@ -714,7 +870,11 @@
         "src/__tests__/stdlib/set_int.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "sets",
@@ -728,7 +888,11 @@
         "src/__tests__/stdlib/sets.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "signal",
@@ -746,7 +910,11 @@
         "src/__tests__/stdlib/signal.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "sort",
@@ -766,7 +934,11 @@
         "src/__tests__/stdlib/sort.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "spawn",
@@ -783,7 +955,11 @@
         "src/__tests__/stdlib/spawn.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "state",
@@ -799,7 +975,11 @@
         "src/__tests__/stdlib/state.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "strings",
@@ -816,7 +996,11 @@
         "src/__tests__/stdlib/strings.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "tags",
@@ -832,7 +1016,11 @@
         "src/__tests__/stdlib/tags.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "teams",
@@ -848,7 +1036,11 @@
         "src/__tests__/stdlib/teams.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "timer",
@@ -866,7 +1058,11 @@
         "src/__tests__/stdlib/timer.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "medium",
+        "reason": "Timer intrinsics lower to scoreboard slots and schedules; good candidate for bounded live smoke."
+      }
     },
     {
       "module": "vec",
@@ -886,7 +1082,11 @@
         "src/__tests__/stdlib/vec.test.ts"
       ],
       "livePaperStatus": "not-selected",
-      "notes": ""
+      "notes": "",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     },
     {
       "module": "world",
@@ -905,7 +1105,11 @@
         "src/__tests__/stdlib/world.test.ts"
       ],
       "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "liveOracleCandidate": {
+        "priority": "none",
+        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+      }
     }
   ],
   "languageFeatures": [
@@ -962,5 +1166,14 @@
       ],
       "notes": "Manual experimental opt-in only; not default-enabled."
     }
-  ]
+  ],
+  "liveOracleBaseline": {
+    "date": "2026-06-30",
+    "harness": "localhost:25561",
+    "statusCommand": "curl -fsS --max-time 2 http://localhost:25561/status",
+    "status": "online, Paper 1.21.4, TPS ~20, 0 players",
+    "testCommand": "MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live",
+    "result": "pass: 1 suite, 19 tests, 19 descriptor cases including compile support test",
+    "scope": "core language/runtime semantics; high-risk stdlib candidates remain selective and should not be promoted to mandatory CI without workflow decision"
+  }
 }

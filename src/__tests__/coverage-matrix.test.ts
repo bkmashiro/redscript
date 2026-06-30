@@ -5,6 +5,7 @@ import { COMPILE_ALL_SKIP_MANIFEST } from './helpers/compile-all-skip-manifest'
 const REPO_ROOT = path.resolve(__dirname, '../../')
 const MATRIX_JSON = path.join(REPO_ROOT, 'docs/plans/redscript-coverage-matrix.json')
 const MATRIX_MD = path.join(REPO_ROOT, 'docs/plans/redscript-coverage-matrix.md')
+const LIVE_CANDIDATE_MD = path.join(REPO_ROOT, 'docs/plans/redscript-live-oracle-candidate-map.md')
 const STDLIB_DIR = path.join(REPO_ROOT, 'src/stdlib')
 
 describe('RedScript coverage matrix manifest', () => {
@@ -65,6 +66,28 @@ describe('RedScript coverage matrix manifest', () => {
     for (const entry of matrix.stdlibModules) {
       expect(entry.proofLevels).not.toContain('live-paper')
     }
+  })
+
+  it('tracks bounded live-oracle candidates without requiring live harness for every stdlib module', () => {
+    const matrix = readMatrix()
+    const liveCandidates = matrix.stdlibModules
+      .filter((entry: any) => entry.liveOracleCandidate?.priority !== 'none')
+
+    expect(liveCandidates.length).toBeGreaterThanOrEqual(3)
+    expect(liveCandidates.map((entry: any) => entry.module)).toEqual(expect.arrayContaining([
+      'events',
+      'timer',
+      'random',
+    ]))
+    for (const candidate of liveCandidates) {
+      expect(candidate.liveOracleCandidate.reason.length).toBeGreaterThan(20)
+    }
+
+    const doc = fs.readFileSync(LIVE_CANDIDATE_MD, 'utf-8')
+    expect(doc).toContain('RedScript Live Oracle Candidate Map')
+    expect(doc).toContain('events')
+    expect(doc).toContain('timer')
+    expect(doc).toContain('Do not add live cases for now')
   })
 
   it('has a human-readable markdown companion that references the JSON source', () => {
