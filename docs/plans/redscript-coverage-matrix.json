@@ -1,0 +1,966 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "Hermes Track A coverage matrix bootstrap",
+  "scope": "RedScript stdlib modules and compile-all skips",
+  "proofLevelLegend": {
+    "stdlib-source-present": "Module file exists under src/stdlib.",
+    "import-resolution-unit": "Import path behavior is covered by unit tests.",
+    "mcruntime-e2e": "Functions from the module are exercised in MCRuntime/e2e tests.",
+    "mc-integration-offline-skippable": "Module appears in MC integration tests; offline skip is not live Paper proof.",
+    "compile-all-static-smoke": "Module is not in the compile-all skip manifest.",
+    "compile-all-known-skip": "Module is intentionally skipped by compile-all with a manifest reason."
+  },
+  "stdlibModules": [
+    {
+      "module": "advanced",
+      "path": "src/stdlib/advanced.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/stdlib/advanced.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "bigint",
+      "path": "src/stdlib/bigint.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/stdlib/advanced.test.ts",
+        "src/__tests__/stdlib/bigint.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "bits",
+      "path": "src/stdlib/bits.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-3.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-8.test.ts",
+        "src/__tests__/stdlib/bits.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "bossbar",
+      "path": "src/stdlib/bossbar.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/bossbar.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    },
+    {
+      "module": "calculus",
+      "path": "src/stdlib/calculus.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-2.test.ts",
+        "src/__tests__/stdlib/calculus.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "color",
+      "path": "src/stdlib/color.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage.test.ts",
+        "src/__tests__/stdlib/color.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "combat",
+      "path": "src/stdlib/combat.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage.test.ts",
+        "src/__tests__/stdlib/combat.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "cooldown",
+      "path": "src/stdlib/cooldown.mcrs",
+      "category": "general-helper",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-3.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-8.test.ts",
+        "src/__tests__/stdlib/cooldown.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "dialog",
+      "path": "src/stdlib/dialog.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-7.test.ts",
+        "src/__tests__/stdlib/dialog.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "easing",
+      "path": "src/stdlib/easing.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage.test.ts",
+        "src/__tests__/stdlib/easing.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "ecs",
+      "path": "src/stdlib/ecs.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/ecs-stdlib.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/ecs.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "effects",
+      "path": "src/stdlib/effects.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/effects.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "events",
+      "path": "src/stdlib/events.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/cli.test.ts",
+        "src/__tests__/e2e/events-stdlib.test.ts",
+        "src/__tests__/emit/compile.test.ts",
+        "src/__tests__/events-manifest.test.ts",
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/item-entity-events.test.ts",
+        "src/__tests__/stdlib/events.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    },
+    {
+      "module": "expr",
+      "path": "src/stdlib/expr.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/stdlib/expr.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "fft",
+      "path": "src/stdlib/fft.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/array-dynamic.test.ts",
+        "src/__tests__/e2e/fft-stdlib.test.ts",
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/fft.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "geometry",
+      "path": "src/stdlib/geometry.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage.test.ts",
+        "src/__tests__/stdlib/geometry.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "graph",
+      "path": "src/stdlib/graph.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/stdlib/graph.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "heap",
+      "path": "src/stdlib/heap.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/compile-all.test.ts",
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/stdlib/heap.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "interactions",
+      "path": "src/stdlib/interactions.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-known-skip"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/compile-all.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-6.test.ts",
+        "src/__tests__/stdlib/interactions.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    },
+    {
+      "module": "inventory",
+      "path": "src/stdlib/inventory.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-6.test.ts",
+        "src/__tests__/stdlib/inventory.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    },
+    {
+      "module": "linalg",
+      "path": "src/stdlib/linalg.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/stdlib/linalg.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "list",
+      "path": "src/stdlib/list.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-3.test.ts",
+        "src/__tests__/stdlib/list.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "map",
+      "path": "src/stdlib/map.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-7.test.ts",
+        "src/__tests__/stdlib/map.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "math",
+      "path": "src/stdlib/math.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "import-resolution-unit",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/array-dynamic.test.ts",
+        "src/__tests__/cache/cache-behavior.test.ts",
+        "src/__tests__/compile-preprocess.test.ts",
+        "src/__tests__/e2e/fft-stdlib.test.ts",
+        "src/__tests__/e2e/ode-stdlib.test.ts",
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/emit/compile.test.ts",
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-2.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-3.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "math_hp",
+      "path": "src/stdlib/math_hp.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/double.test.ts",
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/stdlib/linalg.test.ts",
+        "src/__tests__/stdlib/math_hp.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "matrix",
+      "path": "src/stdlib/matrix.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-2.test.ts",
+        "src/__tests__/stdlib/matrix.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "mobs",
+      "path": "src/stdlib/mobs.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/mobs.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    },
+    {
+      "module": "noise",
+      "path": "src/stdlib/noise.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage.test.ts",
+        "src/__tests__/stdlib/noise.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "ode",
+      "path": "src/stdlib/ode.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/ode-stdlib.test.ts",
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/ode.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "parabola",
+      "path": "src/stdlib/parabola.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/stdlib/parabola.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "particles",
+      "path": "src/stdlib/particles.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-6.test.ts",
+        "src/__tests__/stdlib/particles.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    },
+    {
+      "module": "pathfind",
+      "path": "src/stdlib/pathfind.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/stdlib/pathfind.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "physics",
+      "path": "src/stdlib/physics.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/stdlib/physics.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "player",
+      "path": "src/stdlib/player.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/player.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "quaternion",
+      "path": "src/stdlib/quaternion.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/stdlib/quaternion.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "queue",
+      "path": "src/stdlib/queue.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-8.test.ts",
+        "src/__tests__/stdlib/queue.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "random",
+      "path": "src/stdlib/random.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-3.test.ts",
+        "src/__tests__/stdlib/random.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "result",
+      "path": "src/stdlib/result.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/stdlib/result.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "scheduler",
+      "path": "src/stdlib/scheduler.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-7.test.ts",
+        "src/__tests__/stdlib/scheduler.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    },
+    {
+      "module": "set_int",
+      "path": "src/stdlib/set_int.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-7.test.ts",
+        "src/__tests__/stdlib/set_int.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "sets",
+      "path": "src/stdlib/sets.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/stdlib/sets.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "signal",
+      "path": "src/stdlib/signal.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-2.test.ts",
+        "src/__tests__/stdlib/signal.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "sort",
+      "path": "src/stdlib/sort.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/compile-all.test.ts",
+        "src/__tests__/mc-integration.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-3.test.ts",
+        "src/__tests__/stdlib/advanced.test.ts",
+        "src/__tests__/stdlib/sort-v2.test.ts",
+        "src/__tests__/stdlib/sort.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "spawn",
+      "path": "src/stdlib/spawn.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-6.test.ts",
+        "src/__tests__/stdlib/spawn.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    },
+    {
+      "module": "state",
+      "path": "src/stdlib/state.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-7.test.ts",
+        "src/__tests__/stdlib/state.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "strings",
+      "path": "src/stdlib/strings.mcrs",
+      "category": "data-structure/algorithm",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/string.test.ts",
+        "src/__tests__/stdlib/strings.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "tags",
+      "path": "src/stdlib/tags.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/tags.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "teams",
+      "path": "src/stdlib/teams.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/stdlib/teams.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "timer",
+      "path": "src/stdlib/timer.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-integration/stdlib-coverage-3.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-8.test.ts",
+        "src/__tests__/mir/lower-extra4.test.ts",
+        "src/__tests__/stdlib/timer.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    },
+    {
+      "module": "vec",
+      "path": "src/stdlib/vec.mcrs",
+      "category": "pure-or-mostly-arithmetic",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-4.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage.test.ts",
+        "src/__tests__/stdlib/geometry.test.ts",
+        "src/__tests__/stdlib/vec.test.ts"
+      ],
+      "livePaperStatus": "not-selected",
+      "notes": ""
+    },
+    {
+      "module": "world",
+      "path": "src/stdlib/world.mcrs",
+      "category": "minecraft-boundary/high-risk",
+      "proofLevels": [
+        "stdlib-source-present",
+        "mcruntime-e2e",
+        "mc-integration-offline-skippable",
+        "compile-all-static-smoke"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/stdlib-e2e.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
+        "src/__tests__/mc-integration/stdlib-coverage-6.test.ts",
+        "src/__tests__/stdlib/world.test.ts"
+      ],
+      "livePaperStatus": "candidate-high-value",
+      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs."
+    }
+  ],
+  "languageFeatures": [
+    {
+      "feature": "imports / stdlib include resolution",
+      "proofLevels": [
+        "parser/typechecker",
+        "compile-all/static",
+        "unit"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/stdlib-include.test.ts"
+      ]
+    },
+    {
+      "feature": "foreach + module-level const",
+      "proofLevels": [
+        "known-blocker/compile-all-skip"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/compile-all.test.ts"
+      ],
+      "notes": "Blocks interactions.mcrs; Track B should reproduce and minimize."
+    },
+    {
+      "feature": "array-return-call / array argument to array-returning fn",
+      "proofLevels": [
+        "known-blocker/compile-all-skip"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/compile-all.test.ts"
+      ],
+      "notes": "Blocks src/templates and several shipped examples/tutorials."
+    },
+    {
+      "feature": "struct field access / assignment",
+      "proofLevels": [
+        "known-mir-stub"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/e2e/migrate.test.ts",
+        "src/__tests__/compiler/struct-extends.test.ts"
+      ],
+      "notes": "Track C should either implement static cases or add clear diagnostics."
+    },
+    {
+      "feature": "typed LIR local-copy rewrite",
+      "proofLevels": [
+        "flag-gated-evidence-only"
+      ],
+      "evidenceFiles": [
+        "scripts/check-lir-local-copy-gate.ts",
+        "docs/plans/mc-mechanism-optimization/36-typed-boundary-and-diagnostic-roadmap.md"
+      ],
+      "notes": "Manual experimental opt-in only; not default-enabled."
+    }
+  ]
+}

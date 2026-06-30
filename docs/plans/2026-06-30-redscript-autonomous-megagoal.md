@@ -219,10 +219,10 @@ Do not commit or push.
 
 **Executable slices:**
 
-- [ ] A1. Create `docs/plans/redscript-coverage-matrix.md` listing all 51 stdlib modules and major language features with current proof level.
-- [ ] A2. Move compile-all skip data into a typed manifest/helper or at least a structured table in `src/__tests__/compile-all.test.ts`, preserving current behavior first.
-- [ ] A3. Add a cheap test that every `src/stdlib/*.mcrs` module is represented in the matrix or a machine-readable coverage manifest.
-- [ ] A4. Add a completion log entry here with gate outputs and commit hash.
+- [x] A1. Create `docs/plans/redscript-coverage-matrix.md` listing all 51 stdlib modules and major language features with current proof level.
+- [x] A2. Move compile-all skip data into a typed manifest/helper or at least a structured table in `src/__tests__/compile-all.test.ts`, preserving current behavior first.
+- [x] A3. Add a cheap test that every `src/stdlib/*.mcrs` module is represented in the matrix or a machine-readable coverage manifest.
+- [x] A4. Add a completion log entry here with gate outputs and commit hash.
 
 **Gates:**
 
@@ -432,6 +432,7 @@ For every executable slice:
 ## Completion Log
 
 - 2026-06-30: Roadmap created from current repo discovery. Baseline: clean `main`, latest CI success for `1f24338`, full unit/local gates recently green, 51 stdlib modules all directly covered at some level, compile-all skip list and struct MIR stubs identified as highest-value next gaps.
+- 2026-06-30: Completed Track A coverage matrix and skip manifest bootstrap. Added `docs/plans/redscript-coverage-matrix.md`, machine-readable `docs/plans/redscript-coverage-matrix.json`, typed compile-all skip helper, and `src/__tests__/coverage-matrix.test.ts`. Gates: `npm test -- --selectProjects unit --runTestsByPath src/__tests__/coverage-matrix.test.ts src/__tests__/compile-all.test.ts --runInBand` passed 2 suites / 103 tests; `npm run build` passed; `git diff --check` passed. Commit pending in current local slice; next recommended slice is Track B1 reproducing the first compile-all language skip.
 
 ## Reporting Format When Finally Stopping
 
