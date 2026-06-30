@@ -270,32 +270,35 @@ git diff --check
 
 ### Priority 2 — External Scoreboard Objective ABI Decision
 
-Remaining compile-all skips after Priority 1 are expected to be external scoreboard objective issues:
+External-scoreboard objective handling is now decided and implemented as a minimal release-readiness ABI boundary:
 
-- `src/templates/combat.mcrs` (`health`)
-- `src/templates/economy.mcrs` (`coins`)
-- `src/templates/quest.mcrs` (`quest_id`)
-- `parkour_race.mcrs` (`pk_checkpoint`)
-- `zombie_survival.mcrs` (`zs_display`)
+- Compiler-owned fake players remain protected from external objectives.
+- Explicit external scoreboard interop remains valid for non-compiler-owned slots, including `$(player)` macro substitution and user display fake players like `$wave`.
+- The five previously affected templates/examples now compile directly:
+  - `src/templates/combat.mcrs`, `src/templates/economy.mcrs`, `src/templates/quest.mcrs`
+  - `src/examples/parkour_race.mcrs`, `src/examples/zombie_survival.mcrs`
+- Skip-manifest/coverage expectations now treat these as restored, not `known-language-gap`.
 
-**Decision still needed:** whether external scoreboard objectives are a supported template/example ABI and, if yes, what explicit syntax/helper declares that boundary.
-
-**Preferred next design:** add a small ADR and a minimal explicit interop mechanism. Do not globally relax `verifyLIR` just to make examples pass.
+**Decision:** minimal ABI boundary via ownership policy in verifier. See `docs/plans/redscript-external-scoreboard-objective-abi.md`.
 
 **Active executable slices after Priority 1:**
 
-- [ ] P2.1. Write ADR: compiler-owned objectives vs external/vanilla scoreboard objectives.
-- [ ] P2.2. Choose and implement a minimal explicit declaration/helper or diagnostic-only policy.
-- [ ] P2.3. Update affected templates/examples and remove fixed skip-manifest entries.
+- [x] P2.1. Write ADR: compiler-owned objectives vs external/vanilla scoreboard objectives. (`docs/plans/redscript-external-scoreboard-objective-abi.md`)
+- [x] P2.2. Implemented as a minimal ownership-policy verifier mechanism (`$` compiler temp ownership in `src/lir/verify.ts`), not a broad ABI redesign.
+- [x] P2.3. Restore `combat`, `economy`, `quest`, `parkour_race`, and `zombie_survival`; remove fixed external-objective skip entries after direct CLI proof.
 
 ### Priority 3 — Golden Examples Gate
 
 After compile-all product skips are reduced by explicit decisions, add a small golden examples gate for representative public examples/tutorials:
 
 - compile;
-- static MC validation;
+- static artifact shape;
 - selective generated command-shape assertions;
 - optional live Paper smoke only for core semantic cases.
+
+**Active executable slices:**
+
+- [x] P3.1. Add a focused public examples/templates golden gate that compiles restored release examples and asserts `pack.mcmeta`, `.mcfunction` output, and selected stable command fragments. Implemented in `src/__tests__/golden-examples.test.ts`.
 
 **Do not:** make every example a live Paper test.
 
@@ -351,6 +354,7 @@ For every executable slice:
 - 2026-06-30: Completed a robustness/CI maintenance slice after the pushed CI exposed full-unit failures missed by focused gates. Fixed Jest unit discovery so helper modules under `src/__tests__/helpers/` are not executed as empty test suites, constrained string literal specialization to non-stdlib/non-macro functions, preserved macro callees during specialization analysis, constant-folded static string matches only after validating all string-match patterns, and updated macro-stdlib tests to assert emitted call-site command shape rather than nonexistent macro callee files. Gates: focused regression gate passed 6 suites / 42 tests; CI-equivalent local gate passed `npm run build`, `MC_OFFLINE=true npx jest --selectProjects unit --runInBand` (285 suites / 5291 tests), `npm run validate-mc` (15 tests), `npm run gate:lir-local-copy`, and `git diff --check`. Commit recorded in this entry's containing commit.
 
 - 2026-06-30: Completed P2 external-objective ownership hardening with a minimal policy, not a broad ABI redesign. `src/lir/verify.ts` now treats compiler-owned fake-players as function-scoped/known patterns (`$ret_*`, `$ret`, `$pN`, `$__const_*`, and `$<fn>_*` in the current LIR function) and no longer rejects `$(player)` macro slots or user display labels like `$wave`/`$zombies` on external objectives. Direct CLI probes show `src/templates/combat.mcrs`, `src/templates/economy.mcrs`, `src/templates/quest.mcrs`, `src/examples/parkour_race.mcrs`, and `src/examples/zombie_survival.mcrs` now compile; removed those entries from `src/__tests__/helpers/compile-all-skip-manifest.ts`; tightened known gap expectation in `src/__tests__/coverage-matrix.test.ts` to 0; updated `src/__tests__/lir/verify.test.ts` with compiler-owned/non-owned fixture coverage. Gates: `npm test -- --selectProjects unit --runTestsByPath src/__tests__/lir/verify.test.ts src/__tests__/compile-all-skip-manifest.test.ts src/__tests__/coverage-matrix.test.ts src/__tests__/compile-all.test.ts --runInBand` passed 4 suites / 155 tests; `npm run build` passed; `npm run validate-mc` passed 15 tests; `node dist/src/cli.js compile ...` passed all five fixtures above; `git diff --check` passed.
+- 2026-06-30: Completed P2 docs/status alignment and P3.1 public golden examples gate via parallel Spark worktrees with controller review. Added `docs/plans/redscript-external-scoreboard-objective-abi.md` and `docs/plans/redscript-release-readiness-followup-audit.md`; updated Priority 2 to point at the minimal external-scoreboard ABI boundary; added `src/__tests__/golden-examples.test.ts` to compile representative restored examples/templates and assert `pack.mcmeta`, `.mcfunction` output, and stable command fragments. Gate: `npm test -- --selectProjects unit --runTestsByPath src/__tests__/golden-examples.test.ts --runInBand` passed 1 suite / 8 tests before final batch gates.
 
 ## Reporting Format When Finally Stopping
 
