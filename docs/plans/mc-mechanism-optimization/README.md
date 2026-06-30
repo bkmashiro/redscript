@@ -1,32 +1,32 @@
 # Minecraft Mechanism / Optimizer Plans
 
-> **For Hermes/Spark:** Use the active roadmap below as the source of truth for new RedScript backend optimizer work. The previous VIR/local-copy/post-local-copy plan sets are archived for reference only.
+> **For Hermes/Codex:** Use the active roadmap below as the source of truth for new RedScript backend optimizer work. Previous VIR/local-copy/post-local-copy plan sets are archived for reference only.
 
 ## Active roadmap
 
+- [36 - Typed Boundary and Diagnostic Optimizer Roadmap](./36-typed-boundary-and-diagnostic-roadmap.md)
+
+The backend contract-hardening and post-contract optimizer foundations are complete:
+
+- [30 - Backend Contract Hardening Roadmap](./30-backend-contract-hardening-roadmap.md)
 - [31 - Post-Contract Optimizer Roadmap](./31-post-contract-optimizer-roadmap.md)
+- [32 - LIR Optimizer Coverage Audit](./32-lir-optimizer-coverage-audit.md)
+- [33 - Call/Return ABI Readiness Spike](./33-call-return-abi-readiness-spike.md)
+- [34 - Local-copy/RMW Default Enablement ADR](./34-local-copy-rmw-default-enablement-adr.md)
+- [35 - Storage/NBT/Raw-Boundary Sidecar Spike](./35-storage-nbt-raw-boundary-sidecar-spike.md)
 
-The backend contract-hardening foundation is complete in [30 - Backend Contract Hardening Roadmap](./30-backend-contract-hardening-roadmap.md). The next phase builds on those contracts with bounded optimizer/backend work:
+## Current phase
 
-1. shared LIR effect model;
-2. `verifyLIR` in the real compile pipeline;
-3. typed immediate scoreboard LIR + ScoreInt checks;
-4. raw/macro opaque safety policy;
-5. protected-vs-compiler-owned slot classification;
-6. LIR pass-manager/idempotence cleanup;
-7. macro/version hard errors;
-8. function path/reference validation;
-9. emit/compile decomposition;
-10. semantic equivalence/property tests.
+Roadmap `36` continues from the P14-P16 conclusions:
 
-Next active order:
-
-1. P11 optimizer coverage audit and fixture classification.
-2. P12 safe algebraic/no-op peephole expansion using typed LIR plus equivalence tests.
-3. P13 temp lifetime/dead materialization expansion with ABI barriers.
-4. P14 call/return ABI cleanup readiness spike.
-5. P15 default-enablement ADR for local-copy/RMW only if gates justify it.
-6. P16 storage/NBT/raw-boundary typed sidecar spike.
+1. derive typed boundary sidecar metadata without storing it on mutable LIR instructions;
+2. use sidecar metadata in diagnostics/gate JSON only;
+3. pin call/return ABI with compile-golden fixture families before cleanup;
+4. validate or type the raw branch-return shape before relying on it;
+5. expand storage/NBT boundary fixtures while keeping raw/macro opaque;
+6. revisit local-copy/RMW evidence after diagnostics improve, still experimental by default;
+7. optionally run Paper/TestHarness semantic smoke only when a live server is confirmed;
+8. close with an explicit next decision index.
 
 ## Archived plan sets
 
@@ -40,5 +40,7 @@ The second archive contains the former active root docs `16`–`29`, including t
 - RedScript should not be rewritten from scratch.
 - The existing Source → AST → TypeCheck → HIR → MIR → Optimizer → LIR → Emit datapack architecture remains the production path.
 - New work should harden stage contracts and correctness gates before adding higher-risk optimizer rewrites.
-- Spark work must be split into bounded tranches with explicit allowed files, forbidden scope, exact commands, and controller review.
+- Raw/macro text remains opaque; regex-like extraction may be used only as conservative safety/debug hints.
+- Local-copy/RMW remains manual experimental opt-in unless a future ADR with stronger gates changes that decision.
+- Spark/Codex work must be split into bounded tranches with explicit allowed files, forbidden scope, exact commands, and controller review.
 - Mature compiler toolchains are guidance/oracle material only. Keep production optimizer infrastructure project-owned in TypeScript unless a future ADR approves a bounded dependency.
