@@ -97,6 +97,18 @@ describe('RedScript coverage matrix manifest', () => {
     expect(md).toContain('## Language feature / product-readiness gaps')
   })
 
+  it('records compile-all static MC validation as product-readiness evidence', () => {
+    const matrix = readMatrix()
+    const compileAllFeature = matrix.languageFeatures
+      .find((entry: any) => entry.feature === 'compile-all language / product skips')
+    const md = fs.readFileSync(MATRIX_MD, 'utf-8')
+
+    expect(compileAllFeature).toBeDefined()
+    expect(compileAllFeature.proofLevels).toContain('static-mc-validation')
+    expect(compileAllFeature.evidenceFiles).toContain('src/__tests__/compile-all-static-mc-validation.test.ts')
+    expect(md).toContain('src/__tests__/compile-all-static-mc-validation.test.ts')
+  })
+
   it('does not claim compile-all skip blockers in language-feature coverage when manifest has none', () => {
     const matrix = readMatrix()
     const matrixLanguageFeatureStatuses = matrix.languageFeatures

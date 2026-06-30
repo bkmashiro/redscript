@@ -48,6 +48,11 @@ describe('MCCommandValidator — extended coverage', () => {
     expect(result.valid).toBe(true)
   })
 
+  test('function with valid tag id is valid', () => {
+    const result = v.validate('function #myns:my_tag')
+    expect(result.valid).toBe(true)
+  })
+
   test('function with extra tokens is invalid', () => {
     const result = v.validate('function myns:path extra')
     expect(result.valid).toBe(false)
@@ -69,10 +74,20 @@ describe('MCCommandValidator — extended coverage', () => {
     expect(result.valid).toBe(true)
   })
 
+  test('static syntax: accepts function command with storage path when fully well-formed', () => {
+    const result = v.validate('function rs:macro_target with storage rs:macro_args payload')
+    expect(result.valid).toBe(true)
+  })
+
+  test('static syntax: accepts function tag command with storage when fully well-formed', () => {
+    const result = v.validate('function #rs:macro_targets with storage rs:macro_args')
+    expect(result.valid).toBe(true)
+  })
+
   test('static syntax: rejects function with storage missing storage id', () => {
     const result = v.validate('function rs:macro_target with storage')
     expect(result.valid).toBe(false)
-    expect(result.error).toContain('function with storage expects exactly 5 tokens')
+    expect(result.error).toContain('function with storage expects 5 or 6 tokens')
   })
 
   // ─── validateExecute ───────────────────────────────────────────────────

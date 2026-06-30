@@ -27,7 +27,7 @@ fn roll_until_six(): int {
 // repeat N: fixed iterations
 fn spawn_particles() {
     repeat 10 {
-        particle("minecraft:flame", @s, 0.5, 0.5, 0.5, 0.1, 5);
+        raw("particle minecraft:flame ~ ~ ~ 0.5 0.5 0.5 0.1 5");
     }
 }
 

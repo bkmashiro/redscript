@@ -155,7 +155,7 @@ fn compare_and_branch() {
   test('rejects malformed function commands with storage', () => {
     const missingStorageArg = validator.validate('function rs:macro_target with storage')
     expect(missingStorageArg.valid).toBe(false)
-    expect(missingStorageArg.error).toContain('function with storage expects exactly 5 tokens')
+    expect(missingStorageArg.error).toContain('function with storage expects 5 or 6 tokens')
 
     const missingFunctionId = validator.validate('function macro_target with storage rs:macro_args')
     expect(missingFunctionId.valid).toBe(false)

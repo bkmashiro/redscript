@@ -1129,14 +1129,16 @@
       "proofLevels": [
         "zero known-language-gap",
         "compile-all test",
+        "static-mc-validation",
         "skip-manifest test"
       ],
       "evidenceFiles": [
         "src/__tests__/compile-all.test.ts",
+        "src/__tests__/compile-all-static-mc-validation.test.ts",
         "src/__tests__/compile-all-skip-manifest.test.ts",
         "src/__tests__/coverage-matrix.test.ts"
       ],
-      "notes": "Known-language-gap entries are no longer required for compile-all once compile and manifest checks pass."
+      "notes": "Known-language-gap entries are now cleared from manifest; compile-all also statically validates all emitted non-comment .mcfunction commands under the current validator subset."
     },
     {
       "feature": "string comparison",

@@ -25,7 +25,9 @@ export interface ValidationResult {
 }
 
 const FUNCTION_ID_RE = /^[0-9a-z_.-]+:[0-9a-z_./-]+$/i
+const FUNCTION_OR_TAG_ID_RE = /^#?[0-9a-z_.-]+:[0-9a-z_./-]+$/i
 const FUNCTION_WITH_STORAGE_MIN_TOKENS = 5
+const FUNCTION_WITH_STORAGE_MAX_TOKENS = 6
 const INTEGER_RE = /^-?\d+$/
 const SCORE_RANGE_RE = /^-?\d+\.\.$|^\.\.-?\d+$|^-?\d+\.\.-?\d+$|^-?\d+$/
 const COMMENT_PREFIXES = [
@@ -188,16 +190,16 @@ export class MCCommandValidator {
 
   private validateFunction(tokens: string[]): ValidationResult {
     if (tokens[2] === 'with' && tokens[3] === 'storage') {
-      if (tokens.length !== FUNCTION_WITH_STORAGE_MIN_TOKENS) {
-        return { valid: false, error: 'function with storage expects exactly 5 tokens' }
+      if (tokens.length < FUNCTION_WITH_STORAGE_MIN_TOKENS || tokens.length > FUNCTION_WITH_STORAGE_MAX_TOKENS) {
+        return { valid: false, error: 'function with storage expects 5 or 6 tokens' }
       }
-      if (!FUNCTION_ID_RE.test(tokens[1]) || !FUNCTION_ID_RE.test(tokens[4])) {
+      if (!FUNCTION_OR_TAG_ID_RE.test(tokens[1]) || !FUNCTION_ID_RE.test(tokens[4])) {
         return { valid: false, error: 'function and storage identifiers must be namespaced ids' }
       }
       return { valid: true }
     }
 
-    if (tokens.length !== 2 || !FUNCTION_ID_RE.test(tokens[1])) {
+    if (tokens.length !== 2 || !FUNCTION_OR_TAG_ID_RE.test(tokens[1])) {
       return { valid: false, error: 'function requires a namespaced function id' }
     }
 

@@ -59,7 +59,7 @@ fn phase_idle() {
 fn phase_moving() {
     actionbar(@a, "[NPC] Moving — closing distance");
     // Simulate movement toward nearest player
-    raw("execute as @e[type=minecraft:zombie,tag=npc_ai] at @s run tp @s @p[limit=1] 0 0 0");
+    raw("execute as @e[type=minecraft:zombie,tag=npc_ai] at @s run tp @s @p[limit=1]");
     if (npc.ticks >= 60) {
         npc.phase = Phase.Attacking;
         npc.ticks = 0;
