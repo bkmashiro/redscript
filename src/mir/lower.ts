@@ -1939,10 +1939,11 @@ function lowerExpr(
       // Unresolved ident: not in scope, constants, globals, or double/string vars.
       // This means an earlier compiler stage failed to resolve the name —
       // silently emitting zero here would mask that bug entirely.
+      const unresolvedSpan = (expr as { span?: { line: number; col: number } }).span
       throw new DiagnosticError(
         'LoweringError',
         `Unresolved identifier '${expr.name}' at MIR lowering stage — this is a compiler bug`,
-        { line: 1, col: 1 },
+        unresolvedSpan && ctx.sourceFile ? { file: ctx.sourceFile, line: unresolvedSpan.line, col: unresolvedSpan.col } : { line: unresolvedSpan?.line ?? 1, col: unresolvedSpan?.col ?? 1 },
       )
     }
 

@@ -6,6 +6,7 @@
  * The fix throws an Error with a descriptive message instead.
  */
 
+import { DiagnosticError } from '../../diagnostics'
 import { lowerToMIR } from '../../mir/lower'
 import type { HIRModule, HIRFunction } from '../../hir/types'
 
@@ -85,6 +86,22 @@ describe('unresolved identifier at MIR lowering throws', () => {
     expect(msg1).toContain('alpha')
     expect(msg2).toContain('beta')
     expect(msg1).not.toBe(msg2)
+  })
+
+  test('unresolved ident diagnostic uses expression span when available', () => {
+    const hir = makeModule(makeIntFn('f', [
+      {
+        kind: 'return',
+        value: { kind: 'ident', name: 'ghost_at_span', span: { line: 12, col: 7 } } as any,
+      },
+    ]))
+
+    let caught: unknown
+    try { lowerToMIR(hir) } catch (e) { caught = e }
+
+    expect(caught).toBeInstanceOf(DiagnosticError)
+    expect((caught as DiagnosticError).location).toEqual({ line: 12, col: 7 })
+    expect((caught as Error).message).toContain('ghost_at_span')
   })
 
   test('unresolved ident used in binary expression throws', () => {
