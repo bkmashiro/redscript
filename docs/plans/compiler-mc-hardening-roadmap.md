@@ -158,11 +158,10 @@ Tasks:
   - array-param stdlib calls and NBT batch cache invalidation are covered by live heap/sort tests.
 - [x] Make the harness reload/command path return structured errors/log snippets; do not rely on “request succeeded” as semantic proof.
 - [x] Add a local/manual command to run only core MC oracle cases (`npm run test:mc-core`).
-- [ ] Add CI separation:
-  - unit/static always
-  - offline integration allowed to skip
-  - real Paper oracle explicit/manual or nightly first
-  - Current hook: `npm run test:mc-core` remains offline-safe, and `npm run test:mc-core:live` requires an online harness via `MC_CORE_REQUIRE_ONLINE=true`; a GitHub manual/nightly workflow is still pending.
+- [x] Add CI separation:
+  - unit/static always (`.github/workflows/ci.yml`).
+  - offline integration remains allowed to skip via `npm run test:mc-core`.
+  - real Paper oracle is explicit/manual or nightly via `.github/workflows/live-mc-core.yml`; it skips clearly when `MC_SERVER_DIR`/harness config is unavailable and only runs `npm run test:mc-core:live` with `MC_CORE_REQUIRE_ONLINE=true` when configured.
 
 Suggested files:
 

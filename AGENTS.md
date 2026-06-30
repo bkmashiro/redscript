@@ -77,7 +77,7 @@ Follow the priorities from `review-report.md` on branch `codex/comp-harness-offl
 
 ## Active roadmap
 
-The active roadmap is `docs/plans/compiler-mc-hardening-roadmap.md`. Follow that document before starting new implementation slices.
+The current vNext roadmap is `docs/plans/redscript-vnext-roadmap.md`; the compiler/Minecraft hardening detail roadmap remains `docs/plans/compiler-mc-hardening-roadmap.md`. Follow these documents before starting new implementation slices.
 
 Current priority order:
 

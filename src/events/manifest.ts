@@ -1,4 +1,3 @@
-import path from 'path'
 import type { TypeNode } from '../ast/types'
 
 export interface EventRuntimeManifest {
@@ -34,6 +33,16 @@ export interface RuntimeAssetValidationOptions {
 
 const STDLIB_RUNTIME_ASSET_PREFIX = 'src/stdlib/'
 
+function isAbsoluteRuntimeAssetPath(value: string): boolean {
+  return value.startsWith('/') || /^[A-Za-z]:/i.test(value) || value.startsWith('~/')
+}
+
+function resolveRuntimeAssetPath(rootPath: string | undefined, normalized: string): string {
+  if (!rootPath) return normalized
+  const root = rootPath.replace(/\\/g, '/').replace(/\/+$/, '')
+  return `${root}/${normalized}`
+}
+
 function validateRuntimeAssetPath(value: string, options: RuntimeAssetValidationOptions = {}): string {
   if (value.includes('\\')) {
     throw new Error(`Invalid runtime asset path '${value}': backslashes are not allowed`)
@@ -43,7 +52,7 @@ function validateRuntimeAssetPath(value: string, options: RuntimeAssetValidation
     throw new Error('Invalid runtime asset path: empty path is not allowed')
   }
 
-  if (path.isAbsolute(value) || /^[A-Za-z]:/i.test(value) || value.startsWith('~/')) {
+  if (isAbsoluteRuntimeAssetPath(value)) {
     throw new Error(`Invalid runtime asset path '${value}': absolute paths are not allowed`)
   }
 
@@ -63,7 +72,7 @@ function validateRuntimeAssetPath(value: string, options: RuntimeAssetValidation
     )
   }
 
-  const resolved = options.rootPath ? path.resolve(options.rootPath, normalized) : normalized
+  const resolved = resolveRuntimeAssetPath(options.rootPath, normalized)
   const fileExists = options.fileExists
   if (fileExists && !fileExists(resolved)) {
     throw new Error(`Invalid runtime asset path '${value}': file does not exist at ${resolved}`)
