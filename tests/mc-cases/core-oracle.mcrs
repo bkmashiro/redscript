@@ -253,3 +253,16 @@ fn test_controlled_timer_countdown() {
   scoreboard_set("#timer_countdown", "core_oracle", 3)
   scoreboard_set("#timer_done", "core_oracle", 0)
 }
+
+fn test_world_block_smoke() {
+  raw("setblock 14 65 0 air")
+  raw("setblock 14 65 0 stone")
+  raw("execute if block 14 65 0 minecraft:stone run scoreboard players set #world_block_check core_oracle 1")
+  raw("setblock 14 65 0 air")
+}
+
+fn test_random_range_smoke() {
+  raw("scoreboard players set #random_range_check core_oracle 0")
+  raw("execute store result score #random_value core_oracle run random value 0..4")
+  raw("execute if score #random_value core_oracle matches 0..4 run scoreboard players set #random_range_check core_oracle 1")
+}

@@ -15,8 +15,8 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 
 ## Current live baseline
 
-- `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed 19/19 descriptor-driven cases on 2026-06-30 against the local harness at `localhost:25561`.
-- Existing live coverage already includes scoreboard arithmetic, branch/loop returns, macro-with-storage, NBT read/write loops, foreach context, and load/tick lifecycle hooks.
+- `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed `22/22` descriptor-driven cases on 2026-06-30 against the local harness at `localhost:25561` (actual runtime proof only for this local run).
+- Existing live coverage already includes scoreboard arithmetic, branch/loop returns, macro-with-storage, NBT read/write loops, foreach context, load/tick lifecycle hooks, timer countdown, world setblock, and bounded random range.
 
 ## Candidate priorities
 
@@ -32,14 +32,23 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 - Category: `pure-or-mostly-arithmetic`
 - Current proof levels: stdlib-source-present, mcruntime-e2e, mc-integration-offline-skippable, compile-all-static-smoke
 - Candidate reason: Random helpers require semantic smoke around bounded ranges/distribution shape without promising determinism.
-- Suggested next case shape: only add after a minimized bug or deterministic harness setup exists.
+- Evidence (completed): Added descriptor-driven `bounded random range smoke` using `execute store result score ... run random value 0..4` plus scoreboard range pass-flag assertion. This is range proof only, not distribution proof.
+- Suggested next case shape: keep as range-pass only; distribution claims remain out of scope.
+
+### world block boundary — medium
+
+- Category: `minecraft-boundary/high-risk`
+- Current proof levels: static-mc-validation, mc-integration-offline-skippable, compile-all-static-smoke, live-paper-oracle
+- Candidate reason: Boundary command lowering for setblock/block-state assertions benefits from one deterministic runtime smoke.
+- Evidence (completed): Added descriptor-driven `world setblock smoke` with deterministic setblock + `execute if block` pass-flag assertion and cleanup.
+- Suggested next case shape: only extend if side-effect cleanup or block-state variants become release blockers.
 
 ### timer — medium
 
 - Category: `minecraft-boundary/high-risk`
 - Current proof levels: stdlib-source-present, mc-integration-offline-skippable, compile-all-static-smoke
 - Candidate reason: Timer intrinsics lower to scoreboard slots and schedules; good candidate for bounded live smoke.
-- Evidence (completed): Added descriptor-driven controlled countdown case in `tests/mc-cases/core-oracle.mcrs` (`test_controlled_timer_countdown`) with `controlledTicks=4` countdown/done assertions in `tests/mc-cases/core-oracle-cases.ts`, proving deterministic timer-like tick behavior in live harness once available.
+- Evidence (completed): Added descriptor-driven controlled countdown case in `tests/mc-cases/core-oracle.mcrs` (`test_controlled_timer_countdown`) with `controlledTicks=4` countdown/done assertions in `tests/mc-cases/core-oracle-cases.ts`; included in the 22/22 local live Paper baseline.
 - Suggested next case shape: only add after a minimized bug or deterministic harness setup exists.
 
 ### events — low

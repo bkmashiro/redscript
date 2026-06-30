@@ -10,7 +10,7 @@ Verified on 2026-06-30:
 - Latest CI for `test(release): validate compile-all mc commands` completed successfully.
 - `compile-all` has zero `known-language-gap` entries in the typed skip manifest.
 - All non-skipped `.mcrs` compile-all sources are now covered by static `.mcfunction` command validation.
-- Core live Paper oracle recently passed 19/19 descriptor-driven cases against the local TestHarness.
+- Core live Paper oracle has passed `22/22` descriptor-driven cases against the local TestHarness on 2026-06-30, including P1 world setblock and bounded random range smoke (local harness only).
 - Existing production pipeline remains: Source → AST → TypeCheck → HIR → MIR → Optimizer → LIR → Emit datapack.
 
 Evidence labels:
@@ -26,40 +26,44 @@ Only `live-paper-oracle` is runtime proof. Offline/static gates must not be desc
 
 **Goal:** make release readiness auditable rather than anecdotal.
 
-### P0.1 CI evidence separation
+### P0.1 CI evidence separation — complete (maintenance)
 
-- Keep unit/static gates mandatory on normal pushes.
-- Add an explicit manual/nightly live-oracle workflow that runs only when a Paper/TestHarness environment is configured.
-- If no harness/server directory is configured, the workflow must skip with a clear reason and must not claim live proof.
-- Continue to avoid waiting on slow CI in local autonomous loops unless the workflow itself is the target.
+- Completed with `live-mc-core.yml` checked in and configured for manual/nightly execution only when `MC_SERVER_DIR`/harness env is present.
+- Keep unit/static gates mandatory on normal pushes; live-paper checks remain explicit and operator-gated.
+- Maintenance check: ensure the workflow still skips with a clear reason when harness/server config is missing.
 
-Acceptance:
+Release maintenance commands:
 
 ```bash
 npm run build
 npm test -- --selectProjects unit --runInBand
 npm run validate-mc
 npm run test:mc-core
-# manual/nightly only, with real harness configured:
+# manual/nightly only, with real harness configured
 MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live
 ```
 
-### P0.2 Core oracle descriptors
+### P0.2 Core oracle descriptors — complete (maintenance)
 
-- Keep core Paper cases descriptor-driven under `tests/mc-cases/**`.
-- Each case should state source, namespace, setup commands, entrypoint(s), wait/controlled ticks, and structured assertions.
-- Prefer adding a new descriptor over embedding ad-hoc live behavior in a test body.
-- Split source fixtures further only if `core-oracle.mcrs` becomes difficult to review.
+- Completed with descriptor-driven core cases under `tests/mc-cases/**` and structured assertions.
+- Current baseline includes a controlled timer countdown descriptor path in `tests/mc-cases/core-oracle.mcrs` and `tests/mc-cases/core-oracle-cases.ts` with deterministic ticking.
+- Maintenance rule: only add/adjust descriptors when there is a targeted bug, behavior regression, or coverage gap.
 
-### P0.3 Release smoke checklist
+### P0.3 Release smoke checklist — complete (maintenance)
 
-Before tagging or publishing a release, verify:
+Before tagging or publishing a release, re-run:
 
-- package tarball can be packed/installed and compile a tiny datapack;
-- browser IDE bundle can load the compiler and compile a tiny program;
-- README examples are not obviously stale against the current compiler surface;
-- docs generation/check is run only when docs output is intentionally touched;
-- npm/VSCode publish automation is treated as a separate workflow result, not part of compiler semantic proof.
+- package tarball smoke:
+  - `npm run smoke:package`
+- browser IDE compiler-load smoke:
+  - `npm run smoke:browser-ide -- --ide-dir /Users/yuzhe/projects/redscript-ide`
+- static compile/validation gates (as already listed above) and README/docs drift checks.
+- `npm run docs:check` only when docs outputs are intentionally edited.
+
+Evidence labels in this track:
+
+- `compile-only` / `static-mc-validation` / `golden-artifact-shape` remain offline/static gates.
+- `live-paper-oracle` comes only from configured runs of `test:mc-core:live`.
 
 Concrete checklist: [`redscript-release-evidence-checklist.md`](redscript-release-evidence-checklist.md).
 
@@ -218,9 +222,8 @@ Do not spend vNext budget on:
 
 ## Recommended first tranche
 
-Start with P0:
+P0 artifacts are in place, so start with P1:
 
-1. add/manualize live-oracle workflow separation;
-2. keep/clean descriptor-driven core oracle cases;
-3. add release smoke checklist including browser IDE compiler-load smoke;
-4. fix any compiler/browser compatibility regression before expanding features.
+1. add selective `timer`/`events`/`inventory` live core slices with controlled ticks and assertions;
+2. keep/clean descriptor-driven core oracle cases where harness evidence is still bounded/risky;
+3. keep release smoke gates (package + browser IDE) in the publish workflow.

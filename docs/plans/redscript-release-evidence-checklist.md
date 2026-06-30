@@ -10,6 +10,8 @@ npm test -- --selectProjects unit --runInBand
 npm run validate-mc
 npm run test:mc-core
 npm run gate:lir-local-copy -- --output /tmp/redscript-release-lir-local-copy.json
+npm run smoke:package
+npm run smoke:browser-ide -- --ide-dir /Users/yuzhe/projects/redscript-ide
 git diff --check
 ```
 
@@ -31,11 +33,17 @@ MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live
 
 Meaning: only this produces `live-paper-oracle` proof for core runtime behavior.
 
-GitHub workflow:
+GitHub workflow and release evidence artifact:
 
-- `.github/workflows/live-mc-core.yml` is manual/nightly.
-- It skips clearly when no harness/server directory is configured.
-- Set repository variables `MC_HOST`, `MC_PORT`, and `MC_SERVER_DIR` for a runner that can reach and write to the server.
+- `.github/workflows/live-mc-core.yml` must exist and document that it is manual/nightly.
+- Use workflow-scope variables for host/port/server directory.
+- The workflow should skip clearly when `MC_SERVER_DIR` is not set.
+- Current local baseline from 2026-06-30 is `22/22` live-cases (`test:mc-core:live`), descriptor-driven and covering the timer countdown plus first P1 world/random smokes.
+
+Smoke suite availability:
+
+- `smoke:package` smoke verifies package install/pack integrity.
+- `smoke:browser-ide` smoke verifies browser IDE compiler load and tiny compile path.
 
 ## Package tarball smoke
 

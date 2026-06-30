@@ -241,4 +241,26 @@ export const CORE_ORACLE_CASES: McCoreCaseDescriptor[] = [
       { player: '#timer_done', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
     ],
   },
+  {
+    name: 'world setblock smoke',
+    namespace: CORE_ORACLE_NAMESPACE,
+    sourcePath: CORE_ORACLE_SOURCE_PATH,
+    setupCommands: ['scoreboard players set #world_block_check core_oracle 0'],
+    entrypoints: [{ kind: 'function', target: 'test_world_block_smoke' }],
+    waitTicks: 2,
+    scoreboardAssertions: [
+      { player: '#world_block_check', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
+    ],
+  },
+  {
+    name: 'bounded random range smoke',
+    namespace: CORE_ORACLE_NAMESPACE,
+    sourcePath: CORE_ORACLE_SOURCE_PATH,
+    setupCommands: ['scoreboard players set #random_range_check core_oracle 0'],
+    entrypoints: [{ kind: 'function', target: 'test_random_range_smoke' }],
+    waitTicks: 2,
+    scoreboardAssertions: [
+      { player: '#random_range_check', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
+    ],
+  },
 ]

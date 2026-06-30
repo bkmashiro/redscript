@@ -5,7 +5,9 @@
 - `known-language-gap` has been reduced to zero by the recent string-specialization and external-scoreboard verifier slices.
 - Priority 2 is now a minimal ABI boundary rather than an open broad-design question: compiler-owned fake players stay protected, while explicit external scoreboard slots such as `$(player)` and user display labels remain valid.
 - Golden coverage exists for several core command paths, but the release-readiness track still benefits from a small public examples/templates gate that proves representative examples compile and emit stable artifact shapes.
+- P0 release-evidence tranche is complete and now maintenance-only; next expansion tranche is P1.
 - Static validation and live Paper oracle coverage must remain separate: compile-only/offline tests are useful release gates, not live Minecraft behavior proof.
+- Local real harness evidence includes `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passing `22/22` descriptor-driven cases on 2026-06-30, including first P1 world/random smokes (runtime proof for local run only).
 
 ### Evidence labels for release claims (required)
 
@@ -69,6 +71,6 @@ Sequential constraints:
 
 ## 5) Stale docs requiring follow-up
 
-- The active release roadmap should point Priority 3 at the new public golden examples gate once it is controller-verified.
+- The active release roadmap should keep `P0` as complete and `P1` as the next tranche.
 - `docs/plans/redscript-coverage-matrix.md` and `.json` may still contain older wording around compile-all blockers; update only after checking current generated expectations.
 - The optimizer docs remain deferred/evidence-only and should not be mixed into this release-readiness gate unless the user opens a new optimizer track.
