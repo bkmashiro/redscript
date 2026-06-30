@@ -1142,6 +1142,36 @@ export function runTypecheckStage(
   return { warnings }
 }
 
+export interface ApplyConfigGlobalsStageResult {
+  appliedGlobals: string[]
+}
+
+export function applyConfigGlobalsStage(
+  ast: Program,
+  configValues: Record<string, number> = {},
+): ApplyConfigGlobalsStageResult {
+  const configGlobalNames = new Set<string>()
+  for (const g of ast.globals) {
+    if (g.configKey !== undefined) {
+      const resolvedValue = Object.prototype.hasOwnProperty.call(configValues, g.configKey)
+        ? configValues[g.configKey]
+        : (g.configDefault ?? 0)
+      const intValue = Math.round(resolvedValue)
+      ast.consts.push({
+        name: g.name,
+        type: { kind: 'named', name: 'int' },
+        value: { kind: 'int_lit', value: intValue },
+        span: g.span,
+      })
+      configGlobalNames.add(g.name)
+    }
+  }
+  if (configGlobalNames.size > 0) {
+    ast.globals = ast.globals.filter(g => !configGlobalNames.has(g.name))
+  }
+  return { appliedGlobals: [...configGlobalNames] }
+}
+
 function recordStageSnapshot(
   options: Pick<CompileOptions, 'snapshotStages' | 'stageSnapshots'>,
   stage: CompileStageName,
@@ -1472,28 +1502,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       recordStageSnapshot(options, 'runtimeAssets', () => summarizeRuntimeAssetsStage(plannedRuntimeAssets))
     }
 
-    {
-      const configValues = options.config ?? {}
-      const configGlobalNames = new Set<string>()
-      for (const g of ast.globals) {
-        if (g.configKey !== undefined) {
-          const resolvedValue = Object.prototype.hasOwnProperty.call(configValues, g.configKey)
-            ? configValues[g.configKey]
-            : (g.configDefault ?? 0)
-          const intValue = Math.round(resolvedValue)
-          ast.consts.push({
-            name: g.name,
-            type: { kind: 'named', name: 'int' },
-            value: { kind: 'int_lit', value: intValue },
-            span: g.span,
-          })
-          configGlobalNames.add(g.name)
-        }
-      }
-      if (configGlobalNames.size > 0) {
-        ast.globals = ast.globals.filter(g => !configGlobalNames.has(g.name))
-      }
-    }
+    applyConfigGlobalsStage(ast, options.config ?? {})
 
     {
       const typechecked = runTypecheckStage(ast, processedSource, { filePath, lenient, stopAfterCheck })

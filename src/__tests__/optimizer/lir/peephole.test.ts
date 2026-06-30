@@ -227,6 +227,19 @@ describe('execute store peephole', () => {
     ])
   })
 
+  test('removes typed score_delta by zero while preserving surrounding typed instructions', () => {
+    const fn = mkFn([
+      { kind: 'score_set', dst: mkSlot('$x'), value: -1 },
+      { kind: 'score_delta', dst: mkSlot('$x'), value: 0 },
+      { kind: 'score_delta', dst: mkSlot('$x'), value: 1 },
+    ])
+    const result = execStorePeephole(fn)
+    expect(result.instructions).toEqual([
+      { kind: 'score_set', dst: mkSlot('$x'), value: -1 },
+      { kind: 'score_delta', dst: mkSlot('$x'), value: 1 },
+    ])
+  })
+
   test('does not remove score_copy(dst, src) when objectives differ', () => {
     const fn = mkFn([
       { kind: 'score_copy', dst: mkSlot('$x'), src: { player: '$x', obj: 'other_obj' } },

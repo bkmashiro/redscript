@@ -11,7 +11,7 @@
  *
  *   execute store result score $result __ns [subcommands] run function ns:fn
  *
- * Pattern 2: Removes typed self-copy no-ops (`score_copy(dst, dst)`).
+ * Pattern 2: Removes typed no-ops (`score_copy(dst, dst)`, `score_delta(dst, 0)`).
  *
  * Pattern 3: Collapses adjacent `score_set(dst, A); score_set(dst, B)` into only the second write.
  *
@@ -55,11 +55,12 @@ export function execStorePeephole(fn: LIRFunction): LIRFunction {
     const curr = instrs[i]
     const next = instrs[i + 1]
 
-    // Pattern 2: typed score_copy self-no-op
+    // Pattern 2: typed no-ops
     if (
-      curr.kind === 'score_copy' &&
-      curr.dst.player === curr.src.player &&
-      curr.dst.obj === curr.src.obj
+      (curr.kind === 'score_copy' &&
+        curr.dst.player === curr.src.player &&
+        curr.dst.obj === curr.src.obj) ||
+      (curr.kind === 'score_delta' && curr.value === 0)
     ) {
       changed = true
       i++

@@ -4,9 +4,9 @@
 
 ## Active roadmap
 
-- [30 — Backend Contract Hardening Roadmap](./30-backend-contract-hardening-roadmap.md)
+- [31 - Post-Contract Optimizer Roadmap](./31-post-contract-optimizer-roadmap.md)
 
-This roadmap integrates the Oracle review with the completed LIR local-copy/R1/R2/R4/R5 evidence. It reorders future work around compiler backend contracts first:
+The backend contract-hardening foundation is complete in [30 - Backend Contract Hardening Roadmap](./30-backend-contract-hardening-roadmap.md). The next phase builds on those contracts with bounded optimizer/backend work:
 
 1. shared LIR effect model;
 2. `verifyLIR` in the real compile pipeline;
@@ -18,6 +18,15 @@ This roadmap integrates the Oracle review with the completed LIR local-copy/R1/R
 8. function path/reference validation;
 9. emit/compile decomposition;
 10. semantic equivalence/property tests.
+
+Next active order:
+
+1. P11 optimizer coverage audit and fixture classification.
+2. P12 safe algebraic/no-op peephole expansion using typed LIR plus equivalence tests.
+3. P13 temp lifetime/dead materialization expansion with ABI barriers.
+4. P14 call/return ABI cleanup readiness spike.
+5. P15 default-enablement ADR for local-copy/RMW only if gates justify it.
+6. P16 storage/NBT/raw-boundary typed sidecar spike.
 
 ## Archived plan sets
 

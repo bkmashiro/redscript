@@ -362,6 +362,8 @@ deadSlotElimModule
 
 ## P9 — Emit/compile decomposition after behavior is pinned
 
+**Status:** ✅ Done — command rendering moved to `src/emit/command.ts`; compile-time config global lowering is now an explicit `applyConfigGlobalsStage` helper. Targeted emit/compile gates passed with unchanged public emitter behavior.
+
 **Product promise:** Reduce maintenance cost without semantic churn.
 
 **Order:**
@@ -380,6 +382,8 @@ deadSlotElimModule
 ---
 
 ## P10 — Semantic equivalence and property tests
+
+**Status:** ✅ Done — added a bounded test-only LIR scoreboard interpreter plus deterministic equivalence fixtures for const-immediate folding, dead-slot elimination, the local-copy/RMW pass, and the LIR pass manager.
 
 **Product promise:** Optimizer correctness is tested by behavior, not just output shape.
 
@@ -449,6 +453,6 @@ Return:
 - [x] P5 slot-classification split.
 - [x] P6 LIR pass manager/idempotence.
 - [x] P7 macro/version hard errors.
-- [ ] P8 function path/reference validation.
-- [ ] P9 emit/compile decomposition.
-- [ ] P10 semantic equivalence/property tests.
+- [x] P8 function path/reference validation.
+- [x] P9 emit/compile decomposition.
+- [x] P10 semantic equivalence/property tests.
