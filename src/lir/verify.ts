@@ -72,7 +72,7 @@ function verifyFunction(
       if (slot.player.startsWith('$') && slot.obj !== module.objective && !slot.obj.startsWith('__rs_')) {
         errors.push({
           fn: fn.name,
-          message: `slot '${slot.player}' uses objective '${slot.obj}' but module objective is '${module.objective}'`,
+          message: `compiler-owned fake-player slot '${slot.player} ${slot.obj}' uses external scoreboard objective '${slot.obj}' but must use module objective '${module.objective}'; use a non-$ player name for external scoreboard interop or route through a typed helper`,
         })
       }
     }

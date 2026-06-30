@@ -121,16 +121,19 @@ describe('LIR verifier — ScoreInt immediates', () => {
   })
 })
 
-  test('rejects slot with wrong objective', () => {
+  test('rejects slot with wrong objective using actionable compiler-owned fake-player wording', () => {
     const mod = mkModule([
       mkFn('main', [
-        { kind: 'score_set', dst: { player: '$x', obj: '__wrong' }, value: 42 },
+        { kind: 'score_set', dst: { player: '$x', obj: 'health' }, value: 42 },
       ]),
     ])
     const errors = verifyLIR(mod)
     expect(errors.length).toBe(1)
-    expect(errors[0].message).toContain('objective')
-    expect(errors[0].message).toContain('__wrong')
+    expect(errors[0].message).toContain('compiler-owned fake-player slot')
+    expect(errors[0].message).toContain("'$x health'")
+    expect(errors[0].message).toContain("module objective '__test'")
+    expect(errors[0].message).toContain('external scoreboard objective')
+    expect(errors[0].message).toContain('use a non-$ player name')
   })
 
   test('rejects wrong objective in src slot', () => {
