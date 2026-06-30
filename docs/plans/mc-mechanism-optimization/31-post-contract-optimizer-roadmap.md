@@ -88,7 +88,9 @@ npm run gate:lir-local-copy -- --output /tmp/redscript-p12-safe-peephole.json
 
 ## P13 - Temp lifetime/dead materialization expansion
 
-**Status:** Planned.
+**Status:** Done.
+
+**Outcome (2026-06-30):** Added negative ABI/barrier fixtures before any production change. Existing `deadSlotElim`/`deadSlotElimModule` behavior already preserves the covered `$ret_*`/`$pN`, macro, call-macro, call-context, storage/NBT, and cross-function mention cases, so no optimizer implementation change was made.
 
 **Scope:** Expand dead materialization cleanup only where protected slots, cross-function mentions, call barriers, raw/macro barriers, and observed outputs are explicit in tests.
 
@@ -129,6 +131,13 @@ npm run build
 git diff --check
 ```
 
+**P13 gates run (2026-06-30):**
+
+- `npm test -- --selectProjects unit --runTestsByPath src/__tests__/optimizer/lir/dead_slot.test.ts src/__tests__/optimizer/lir/equivalence.test.ts src/__tests__/optimizer/lir/pipeline.test.ts --runInBand`
+- `npm run test:lir`
+- `npm run build`
+- `git diff --check`
+
 ## P14 - Call/return ABI cleanup readiness spike
 
 **Status:** Planned.
@@ -151,7 +160,7 @@ git diff --check
 
 - [x] P11 optimizer coverage audit.
 - [x] P12 safe typed LIR peephole expansion.
-- [ ] P13 temp lifetime/dead materialization expansion.
+- [x] P13 temp lifetime/dead materialization expansion.
 - [ ] P14 call/return ABI readiness spike.
 - [ ] P15 local-copy/RMW default-enablement ADR.
 - [ ] P16 storage/NBT/raw-boundary sidecar spike.

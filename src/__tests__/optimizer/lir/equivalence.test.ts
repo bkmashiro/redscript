@@ -106,6 +106,33 @@ describe('LIR optimizer semantic equivalence', () => {
     expectFunctionEquivalent(before, after, [slot('$live'), slot('$ret')])
   })
 
+  test('deadSlotElim preserves ABI slots while removing only unobservable materialization', () => {
+    const before = mkFn('dead_slot_abi', [
+      { kind: 'score_set', dst: slot('$ret_saved'), value: -5 },
+      { kind: 'score_set', dst: slot('$p12'), value: 12 },
+      { kind: 'score_set', dst: slot('$dead'), value: 99 },
+      { kind: 'score_copy', dst: slot('$out'), src: slot('$p12') },
+      { kind: 'return_value', slot: slot('$out') },
+    ])
+    const after = deadSlotElim(before)
+
+    expect(after.instructions.some(instr => instr.kind === 'score_set' && instr.dst.player === '$dead')).toBe(false)
+    expectFunctionEquivalent(before, after, [slot('$ret_saved'), slot('$p12'), slot('$ret')])
+  })
+
+  test('deadSlotElim overwritten-temp cleanup observes only visible result slots', () => {
+    const before = mkFn('dead_slot_overwrite', [
+      { kind: 'score_set', dst: slot('$t0'), value: SCORE_INT_MIN },
+      { kind: 'score_set', dst: slot('$t0'), value: SCORE_INT_MAX },
+      { kind: 'score_copy', dst: slot('$out'), src: slot('$t0') },
+      { kind: 'return_value', slot: slot('$out') },
+    ])
+    const after = deadSlotElim(before)
+
+    expect(after.instructions).toHaveLength(3)
+    expectFunctionEquivalent(before, after, [slot('$out'), slot('$ret')])
+  })
+
   test('deadSlotElimModule preserves observable state across supported functions', () => {
     const before = mkModule([
       mkFn('main', [

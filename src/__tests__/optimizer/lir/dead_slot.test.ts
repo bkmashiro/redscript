@@ -135,6 +135,15 @@ describe('dead slot elimination', () => {
     expect(result.instructions).toHaveLength(2)
   })
 
+  test('keeps writes to future $pN parameter slots', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$p12'), value: 12 },
+      { kind: 'score_set', dst: mkSlot('$p12'), value: 13 },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(2)
+  })
+
   test('keeps protected temp-ABI-like slots even when they are overwritten', () => {
     const fn = mkFn('test', [
       { kind: 'score_set', dst: mkSlot('$ret'), value: 4 },
@@ -227,6 +236,61 @@ describe('dead slot elimination', () => {
     ])
     const result = deadSlotElim(fn)
     expect(result.instructions).toHaveLength(3)
+  })
+
+  test('keeps temp writes across macro_line barriers', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+      { kind: 'macro_line', template: '$say $(opaque)' },
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+      { kind: 'return_value', slot: mkSlot('$t0') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(4)
+  })
+
+  test('keeps temp writes across call_macro barriers', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+      { kind: 'call_macro', fn: 'test:macro_target', storage: 'test:args' },
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+      { kind: 'return_value', slot: mkSlot('$t0') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(4)
+  })
+
+  test('keeps temp writes across storage/NBT barriers', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+      { kind: 'nbt_set_literal', ns: 'test:state', path: 'value', value: '1' },
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+      { kind: 'return_value', slot: mkSlot('$t0') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(4)
+  })
+
+  test('keeps typed storage score materialization and NBT score readback barriers', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$src'), value: 5 },
+      { kind: 'store_score_to_nbt', src: mkSlot('$src'), ns: 'test:state', path: 'value', type: 'int', scale: 1 },
+      { kind: 'store_nbt_to_score', dst: mkSlot('$out'), ns: 'test:state', path: 'value', scale: 1 },
+      { kind: 'return_value', slot: mkSlot('$out') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(4)
+  })
+
+  test('keeps temp writes across NBT copy barriers', () => {
+    const fn = mkFn('test', [
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+      { kind: 'nbt_copy', srcNs: 'test:state', srcPath: 'a', dstNs: 'test:state', dstPath: 'b' },
+      { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+      { kind: 'return_value', slot: mkSlot('$t0') },
+    ])
+    const result = deadSlotElim(fn)
+    expect(result.instructions).toHaveLength(4)
   })
 
   test('returns same reference when nothing removed', () => {
@@ -341,6 +405,36 @@ describe('dead slot elimination (module-level)', () => {
       ]),
       mkFn('fn2', [
         { kind: 'raw', cmd: 'execute if score $t0 __test matches 1.. run say observed' },
+      ]),
+    ])
+    const result = deadSlotElimModule(mod)
+    expect(result.functions[0].instructions).toHaveLength(3)
+  })
+
+  test('keeps overwritten temp writes when another function mentions the slot in macro text', () => {
+    const mod = mkModule([
+      mkFn('fn1', [
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+        { kind: 'return_value', slot: mkSlot('$t0') },
+      ]),
+      mkFn('fn2', [
+        { kind: 'macro_line', template: '$scoreboard players get $t0 __test' },
+      ]),
+    ])
+    const result = deadSlotElimModule(mod)
+    expect(result.functions[0].instructions).toHaveLength(3)
+  })
+
+  test('keeps overwritten temp writes when another function mentions the slot in call_context', () => {
+    const mod = mkModule([
+      mkFn('fn1', [
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 1 },
+        { kind: 'score_set', dst: mkSlot('$t0'), value: 2 },
+        { kind: 'return_value', slot: mkSlot('$t0') },
+      ]),
+      mkFn('fn2', [
+        { kind: 'call_context', fn: 'test:target', subcommands: [{ kind: 'if_score', a: '$t0 __test', op: 'eq', b: '$rhs __test' }] },
       ]),
     ])
     const result = deadSlotElimModule(mod)
