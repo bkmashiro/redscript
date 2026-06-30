@@ -14,10 +14,23 @@ export interface LIRVerifyError {
   message: string
 }
 
-export function verifyLIR(module: LIRModule): LIRVerifyError[] {
+export interface LIRVerifyOptions {
+  /** Fully-qualified function refs that are intentionally not emitted by this module. */
+  allowedFunctionRefs?: Iterable<string>
+  /** When true, verifier leaves undefined-function diagnostics to earlier pipeline stages. */
+  allowUnknownFunctionRefs?: boolean
+  /** Functions whose unresolved refs are intentionally external to this module (e.g. standalone library files). */
+  allowedExternalRefFunctions?: Iterable<string>
+}
+
+export function verifyLIR(module: LIRModule, options: LIRVerifyOptions = {}): LIRVerifyError[] {
   const errors: LIRVerifyError[] = []
   const normalizedFunctionRefs = new Set<string>()
   const normalizedFunctionPaths = new Map<string, string>()
+
+  for (const ref of options.allowedFunctionRefs ?? []) {
+    normalizedFunctionRefs.add(normalizeFunctionRef(ref, module.namespace))
+  }
 
   for (const fn of module.functions) {
     const normalizedPath = normalizeFunctionPathPart(fn.name)
@@ -33,7 +46,7 @@ export function verifyLIR(module: LIRModule): LIRVerifyError[] {
   }
 
   for (const fn of module.functions) {
-    errors.push(...verifyFunction(fn, module, normalizedFunctionRefs))
+    errors.push(...verifyFunction(fn, module, normalizedFunctionRefs, options))
   }
 
   return errors
@@ -43,8 +56,12 @@ function verifyFunction(
   fn: LIRFunction,
   module: LIRModule,
   normalizedFunctionRefs: Set<string>,
+  options: LIRVerifyOptions,
 ): LIRVerifyError[] {
   const errors: LIRVerifyError[] = []
+  const allowsExternalRefs = new Set(
+    [...(options.allowedExternalRefFunctions ?? [])].map(fnName => normalizeFunctionPathPart(fnName)),
+  ).has(normalizeFunctionPathPart(fn.name))
 
   for (const instr of fn.instructions) {
     // Check compiler-owned objective consistency. Vanilla scoreboard interop
@@ -52,7 +69,7 @@ function verifyFunction(
     // `#p obj`; compiler temps/return/param slots are fake players prefixed
     // with `$` and must stay on the module objective.
     for (const slot of getSlotsFromInstr(instr)) {
-      if (slot.player.startsWith('$') && slot.obj !== module.objective) {
+      if (slot.player.startsWith('$') && slot.obj !== module.objective && !slot.obj.startsWith('__rs_')) {
         errors.push({
           fn: fn.name,
           message: `slot '${slot.player}' uses objective '${slot.obj}' but module objective is '${module.objective}'`,
@@ -66,7 +83,7 @@ function verifyFunction(
       if (ref === '' || ref === `${module.namespace}:`) continue
       const normalizedRef = normalizeFunctionRef(ref, module.namespace)
       const refersToLocalFn = normalizedFunctionRefs.has(normalizedRef)
-      if (!refersToLocalFn) {
+      if (!refersToLocalFn && !options.allowUnknownFunctionRefs && !allowsExternalRefs) {
         errors.push({
           fn: fn.name,
           message: `references undefined function '${ref}'`,

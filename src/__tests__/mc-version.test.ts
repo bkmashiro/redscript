@@ -133,22 +133,19 @@ fn main() {
 // ---------------------------------------------------------------------------
 
 describe('codegen — compat syntax (< 1.20.2)', () => {
-  it('does NOT emit $ prefix for macro lines on 1.20 (< 1.20.2)', () => {
-    const result = compile(macroSource, { namespace: 'test', mcVersion: McVersion.v1_20 })
-    const fn = getMcFunction(result.files, 'spawn_zombie')
-    // Should not start a line with $summon
-    const lines = fn.split('\n')
-    expect(lines.every(l => !l.startsWith('$summon'))).toBe(true)
+  it('rejects macro lines on 1.20 (< 1.20.2)', () => {
+    expect(() => compile(macroSource, { namespace: 'test', mcVersion: McVersion.v1_20 })).toThrow(
+      /Minecraft function macros require target Minecraft 1\.20\.2 or newer/,
+    )
   })
 
-  it('does NOT emit $ prefix for macro lines on 1.19', () => {
-    const result = compile(macroSource, { namespace: 'test', mcVersion: McVersion.v1_19 })
-    const fn = getMcFunction(result.files, 'spawn_zombie')
-    const lines = fn.split('\n')
-    expect(lines.every(l => !l.startsWith('$'))).toBe(true)
+  it('rejects macro lines on 1.19', () => {
+    expect(() => compile(macroSource, { namespace: 'test', mcVersion: McVersion.v1_19 })).toThrow(
+      /Minecraft function macros require target Minecraft 1\.20\.2 or newer/,
+    )
   })
 
-  it('emits plain `function` call (no `with storage`) on 1.19', () => {
+  it('rejects macro function calls on 1.19', () => {
     const callerSource = `
 fn spawn_zombie(x: int, y: int, z: int) {
   summon("minecraft:zombie", x, y, z);
@@ -157,11 +154,9 @@ fn main() {
   spawn_zombie(1, 2, 3);
 }
 `
-    const result = compile(callerSource, { namespace: 'test', mcVersion: McVersion.v1_19 })
-    const fn = getMcFunction(result.files, 'main')
-    // Should call the function but NOT use "with storage"
-    expect(fn).not.toContain('with storage')
-    expect(fn).toContain('function test:spawn_zombie')
+    expect(() => compile(callerSource, { namespace: 'test', mcVersion: McVersion.v1_19 })).toThrow(
+      /Minecraft function macros require target Minecraft 1\.20\.2 or newer/,
+    )
   })
 })
 

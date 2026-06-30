@@ -40,8 +40,15 @@ function formatLIRVerifyErrors(errors: readonly LIRVerifyError[]): string {
   return errors.map(err => `${err.fn}: ${err.message}`).join('; ')
 }
 
-function throwOnVerifyLIRFailure(module: LIRModule, filePath: string | undefined, stage: string): void {
-  const errors = verifyLIR(module)
+function throwOnVerifyLIRFailure(
+  module: LIRModule,
+  filePath: string | undefined,
+  stage: string,
+  allowedFunctionRefs: ReadonlySet<string> = new Set(),
+  allowUnknownFunctionRefs: boolean = false,
+  allowedExternalRefFunctions: ReadonlySet<string> = new Set(),
+): void {
+  const errors = verifyLIR(module, { allowedFunctionRefs, allowUnknownFunctionRefs, allowedExternalRefFunctions })
   if (errors.length === 0) return
   throw new DiagnosticError(
     'LoweringError',
@@ -630,6 +637,45 @@ function functionNameFromFilePath(filePath: string): string | null {
   return match?.[1] ?? null
 }
 
+function functionRefFromFilePath(filePath: string): string | null {
+  const match = filePath.match(/^data\/([^/]+)\/function\/(.+)\.mcfunction$/)
+  return match ? `${match[1]}:${match[2]}` : null
+}
+
+function declaredFunctionRef(namespace: string, fnName: string): string {
+  return fnName.includes(':') ? fnName : `${namespace}:${fnName}`
+}
+
+function collectExternalLIRFunctionRefs(
+  namespace: string,
+  libraryFilePaths: ReadonlySet<string>,
+  declaredFunctionNames: ReadonlySet<string>,
+  hir: HIRModule,
+): Set<string> {
+  const refs = new Set<string>()
+  const hirFunctionNames = new Set(hir.functions.map(fn => fn.name))
+  for (const filePath of libraryFilePaths) {
+    const ref = functionRefFromFilePath(filePath)
+    if (ref) refs.add(ref)
+  }
+  for (const fnName of declaredFunctionNames) refs.add(declaredFunctionRef(namespace, fnName))
+  for (const fn of hir.functions) {
+    for (const callee of collectHIRFunctionCalls(fn)) {
+      if (!hirFunctionNames.has(callee)) refs.add(declaredFunctionRef(namespace, callee))
+    }
+  }
+  for (const struct of hir.structs) {
+    if (!struct.isSingleton) continue
+    refs.add(`${namespace}:${struct.name}/get`)
+    refs.add(`${namespace}:${struct.name}/set`)
+  }
+  return refs
+}
+
+function collectLibraryFunctionNames(hir: HIRModule): Set<string> {
+  return new Set(hir.functions.filter(fn => fn.isLibraryFn).map(fn => fn.name))
+}
+
 function isDerivedFunctionName(fnName: string, rootNames: ReadonlySet<string>): boolean {
   for (const rootName of rootNames) {
     if (fnName.startsWith(`${rootName}__`)) return true
@@ -717,6 +763,8 @@ export interface LowerAndOptimizeStagesOptions {
   namespace: string
   filePath?: string
   libraryFilePaths: ReadonlySet<string>
+  declaredFunctionNames?: ReadonlySet<string>
+  allowExternalRefsInLibraryFunctions?: boolean
   inlineFunctions: ReadonlySet<string>
   noInlineFunctions: ReadonlySet<string>
   coroutineInfos: readonly CoroutineInfo[]
@@ -739,6 +787,8 @@ export function lowerAndOptimizeStages(
     namespace,
     filePath,
     libraryFilePaths: incomingLibraryFilePaths,
+    declaredFunctionNames = new Set(),
+    allowExternalRefsInLibraryFunctions = false,
     inlineFunctions,
     noInlineFunctions,
     coroutineInfos,
@@ -777,10 +827,12 @@ export function lowerAndOptimizeStages(
   warnings.push(...coroResult.warnings)
   const mirFinal = coroResult.module
 
+  const allowedFunctionRefs = collectExternalLIRFunctionRefs(namespace, libraryFilePaths, declaredFunctionNames, hir)
+  const allowedExternalRefFunctions = allowExternalRefsInLibraryFunctions ? collectLibraryFunctionNames(hir) : new Set<string>()
   const lir = lowerToLIR(mirFinal)
-  throwOnVerifyLIRFailure(lir, filePath, 'after-lower-to-lir')
+  throwOnVerifyLIRFailure(lir, filePath, 'after-lower-to-lir', allowedFunctionRefs, true, allowedExternalRefFunctions)
   const lirOpt = lirOptimizeModule(lir, lirOptimizeOptions)
-  throwOnVerifyLIRFailure(lirOpt, filePath, 'after-lir-optimize')
+  throwOnVerifyLIRFailure(lirOpt, filePath, 'after-lir-optimize', allowedFunctionRefs, true, allowedExternalRefFunctions)
   addDerivedLibraryFunctionPaths(lirOpt, namespace, libraryFilePaths, userRootNames)
 
   return {
@@ -797,6 +849,8 @@ export interface FinalizeRuntimeLIRStageOptions {
   memoizeFunctions?: readonly string[]
   benchmarkFunctions?: readonly string[]
   coroutineInfos?: readonly CoroutineInfo[]
+  allowedFunctionRefs?: ReadonlySet<string>
+  allowedExternalRefFunctions?: ReadonlySet<string>
   filePath?: string
 }
 
@@ -847,6 +901,8 @@ export function finalizeRuntimeLIRStage(
     memoizeFunctions = [],
     benchmarkFunctions = [],
     coroutineInfos = [],
+    allowedFunctionRefs = new Set(),
+    allowedExternalRefFunctions = new Set(),
     filePath,
   } = options
 
@@ -965,7 +1021,7 @@ export function finalizeRuntimeLIRStage(
     renameToImpl(fnName)
   }
 
-  throwOnVerifyLIRFailure(finalizedLIR, filePath, 'finalize-runtime-lir')
+  throwOnVerifyLIRFailure(finalizedLIR, filePath, 'finalize-runtime-lir', allowedFunctionRefs, true, allowedExternalRefFunctions)
 
   return { lir: finalizedLIR, singletonObjectives, warnings }
 }
@@ -1477,6 +1533,8 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       namespace,
       filePath,
       libraryFilePaths: hirStage.libraryFilePaths,
+      declaredFunctionNames: new Set((ast.declaredFunctions ?? []).map(fn => fn.name)),
+      allowExternalRefsInLibraryFunctions: ast.isLibrary === true,
       inlineFunctions,
       noInlineFunctions,
       coroutineInfos,
@@ -1495,6 +1553,13 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       memoizeFunctions,
       benchmarkFunctions,
       coroutineInfos,
+      allowedFunctionRefs: collectExternalLIRFunctionRefs(
+        namespace,
+        libraryFilePaths,
+        new Set((ast.declaredFunctions ?? []).map(fn => fn.name)),
+        hirStage.hir,
+      ),
+      allowedExternalRefFunctions: ast.isLibrary === true ? collectLibraryFunctionNames(hirStage.hir) : new Set(),
       filePath,
     })
     recordStageSnapshot(options, 'finalizeRuntimeLIR', () => summarizeFinalizeRuntimeLIRStage(lirRuntime))

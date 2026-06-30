@@ -143,8 +143,8 @@ describe('compile.ts — INT32 overflow warning', () => {
             {
               name: 'overflow_fn',
               instructions: [
-                { kind: 'score_set', dst: { player: '$x', obj: 'ns' }, value: 9999999999 },
-                { kind: 'score_set', dst: { player: '$y', obj: 'ns' }, value: -9999999999 },
+                { kind: 'score_set', dst: { player: '$x', obj: lir.objective }, value: 9999999999 },
+                { kind: 'score_set', dst: { player: '$y', obj: lir.objective }, value: -9999999999 },
               ],
               isMacro: false,
               macroParams: [],

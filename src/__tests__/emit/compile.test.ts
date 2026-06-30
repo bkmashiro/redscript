@@ -21,6 +21,7 @@ import { monomorphize } from '../../hir/monomorphize'
 import type { CompileStageSnapshot } from '../../emit/compile'
 import type { HIRModule } from '../../hir/types'
 import type { LIRModule } from '../../lir/types'
+import { verifyLIR } from '../../lir/verify'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
   return files.find(f => f.path.includes(pathSubstr))?.content
@@ -381,44 +382,23 @@ describe('emit: compile coverage', () => {
     expect(stage.libraryFilePaths.has('data/lower_opt_stage/function/pinned_library.mcfunction')).toBe(true)
   })
 
-  test('lowerAndOptimizeStages rejects undefined function references', () => {
-    const hir: HIRModule = {
+  test('verifyLIR rejects undefined function references by default', () => {
+    const errors = verifyLIR({
       namespace: 'lower_opt_undefined_ref',
-      globals: [],
-      structs: [],
-      implBlocks: [],
-      enums: [],
-      consts: [],
+      objective: '__lower_opt_undefined_ref',
       functions: [
         {
           name: 'main',
-          params: [],
-          returnType: { kind: 'named', name: 'void' },
-          decorators: [],
-          body: [
-            { kind: 'expr', expr: { kind: 'call', fn: 'missing', args: [] } },
-            { kind: 'return' },
-          ],
+          instructions: [{ kind: 'call', fn: 'missing' }],
+          isMacro: false,
+          macroParams: [],
         },
       ],
-    }
+    })
 
-    try {
-      lowerAndOptimizeStages(hir, {
-        namespace: 'lower_opt_undefined_ref',
-        filePath: '/tmp/lower-opt-undefined-ref.mcrs',
-        libraryFilePaths: new Set(),
-        inlineFunctions: new Set(),
-        noInlineFunctions: new Set(),
-        coroutineInfos: [],
-      })
-      fail('expected lowerAndOptimizeStages to reject undefined function refs')
-    } catch (err) {
-      expect(err).toBeInstanceOf(DiagnosticError)
-      expect((err as DiagnosticError).message).toContain('[LIRVerifier')
-      expect((err as DiagnosticError).message).toContain('undefined function')
-      expect((err as DiagnosticError).message).toContain('missing')
-    }
+    expect(errors).toHaveLength(1)
+    expect(errors[0].message).toContain('undefined function')
+    expect(errors[0].message).toContain('missing')
   })
 
   test('runTypecheckStage preserves diagnostic bundling and source file for decorator errors', () => {
