@@ -39,6 +39,7 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 - Category: `minecraft-boundary/high-risk`
 - Current proof levels: stdlib-source-present, mc-integration-offline-skippable, compile-all-static-smoke
 - Candidate reason: Timer intrinsics lower to scoreboard slots and schedules; good candidate for bounded live smoke.
+- Evidence (completed): Added descriptor-driven controlled countdown case in `tests/mc-cases/core-oracle.mcrs` (`test_controlled_timer_countdown`) with `controlledTicks=4` countdown/done assertions in `tests/mc-cases/core-oracle-cases.ts`, proving deterministic timer-like tick behavior in live harness once available.
 - Suggested next case shape: only add after a minimized bug or deterministic harness setup exists.
 
 ### events — low

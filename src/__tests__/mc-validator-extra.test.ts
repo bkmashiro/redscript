@@ -293,6 +293,77 @@ describe('MCCommandValidator — extended coverage', () => {
     expect(result.valid).toBe(false)
     expect(result.error).toContain('return run requires an inner command')
   })
+
+  // ─── world/visual command families (setblock/fill/summon/title/playsound/particle/bossbar) ─
+  test('valid setblock command shape', () => {
+    const result = v.validate('setblock 0 64 0 minecraft:stone')
+    expect(result.valid).toBe(true)
+  })
+
+  test('invalid setblock command shape without coordinates', () => {
+    const result = v.validate('setblock minecraft:stone')
+    expect(result.valid).toBe(false)
+  })
+
+  test('valid fill command shape', () => {
+    const result = v.validate('fill 0 64 0 3 64 3 minecraft:air replace')
+    expect(result.valid).toBe(true)
+  })
+
+  test('invalid fill command shape with missing coordinates', () => {
+    const result = v.validate('fill 0 64 0 3 64')
+    expect(result.valid).toBe(false)
+  })
+
+  test('valid summon command shape', () => {
+    const result = v.validate('summon minecraft:zombie ~ ~ ~ {Tags:["rs_test"]}')
+    expect(result.valid).toBe(true)
+  })
+
+  test('invalid summon command missing required entity id', () => {
+    const result = v.validate('summon ~ ~ ~')
+    expect(result.valid).toBe(false)
+  })
+
+  test('valid title text command shape', () => {
+    const result = v.validate('title @a title {"text":"Welcome"}')
+    expect(result.valid).toBe(true)
+  })
+
+  test('invalid title command missing payload', () => {
+    const result = v.validate('title @a title')
+    expect(result.valid).toBe(false)
+  })
+
+  test('valid playsound command shape', () => {
+    const result = v.validate('playsound minecraft:block.anvil.use ambient @a ~ ~ ~ 1 1')
+    expect(result.valid).toBe(true)
+  })
+
+  test('invalid playsound command missing target', () => {
+    const result = v.validate('playsound minecraft:block.anvil.use ambient')
+    expect(result.valid).toBe(false)
+  })
+
+  test('valid particle command shape', () => {
+    const result = v.validate('particle minecraft:end_rod ~ ~ ~ 0 0 0 0 1')
+    expect(result.valid).toBe(true)
+  })
+
+  test('invalid particle command missing coordinates', () => {
+    const result = v.validate('particle minecraft:end_rod ~ ~ ~ 0 0')
+    expect(result.valid).toBe(false)
+  })
+
+  test('valid bossbar command shape', () => {
+    const result = v.validate('bossbar add test:rs-bossbar {"text":"Test"}')
+    expect(result.valid).toBe(true)
+  })
+
+  test('invalid bossbar set command missing value', () => {
+    const result = v.validate('bossbar set test:rs-bossbar value')
+    expect(result.valid).toBe(false)
+  })
 })
 
 // ─── MCCommandValidator constructor error handling ─────────────────────────

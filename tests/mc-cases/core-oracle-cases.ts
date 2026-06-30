@@ -225,4 +225,20 @@ export const CORE_ORACLE_CASES: McCoreCaseDescriptor[] = [
       { player: '#tick_marker', obj: CORE_ORACLE_OBJECTIVE, value: 5, op: 'gte' },
     ],
   },
+  {
+    name: 'controlled timer countdown via tick hook',
+    namespace: CORE_ORACLE_NAMESPACE,
+    sourcePath: CORE_ORACLE_SOURCE_PATH,
+    setupCommands: [
+      'scoreboard players set #tick_marker core_oracle 0',
+      'scoreboard players set #timer_countdown core_oracle 0',
+      'scoreboard players set #timer_done core_oracle 0',
+    ],
+    entrypoints: [{ kind: 'function', target: 'test_controlled_timer_countdown' }],
+    controlledTicks: 4,
+    scoreboardAssertions: [
+      { player: '#timer_countdown', obj: CORE_ORACLE_OBJECTIVE, value: 0 },
+      { player: '#timer_done', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
+    ],
+  },
 ]

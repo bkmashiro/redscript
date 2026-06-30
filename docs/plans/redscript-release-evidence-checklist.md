@@ -40,18 +40,7 @@ GitHub workflow:
 ## Package tarball smoke
 
 ```bash
-npm pack --pack-destination /tmp
-TMP_DIR=$(mktemp -d)
-cd "$TMP_DIR"
-npm init -y >/dev/null
-npm install /tmp/redscript-mc-*.tgz
-node - <<'NODE'
-const { compile } = require('redscript-mc')
-const result = compile('@load fn init() { say("release smoke"); }', { namespace: 'release_smoke' })
-if (!result.files.some(file => file.path === 'pack.mcmeta')) throw new Error('missing pack.mcmeta')
-if (!result.files.some(file => file.path.endsWith('init.mcfunction'))) throw new Error('missing init function')
-console.log('release package smoke OK')
-NODE
+npm run smoke:package
 ```
 
 ## Browser IDE compiler-load smoke
@@ -59,23 +48,7 @@ NODE
 The online IDE bundles `redscript-mc` for a browser target with Node builtins stubbed. Before deploying a compiler update, verify the bundle can initialize and compile a tiny program:
 
 ```bash
-cd ~/projects/redscript-ide
-npm install ../redscript --save
-npm run build
-node - <<'NODE'
-const fs = require('fs')
-const vm = require('vm')
-const code = fs.readFileSync('public/compiler.js', 'utf8')
-const ctx = { console }
-ctx.globalThis = ctx
-ctx.window = ctx
-vm.createContext(ctx)
-vm.runInContext(code, ctx, { filename: 'compiler.js' })
-const result = ctx.RedScriptCompiler.compileRedScript('@load fn init() { say("ide smoke"); }')
-if (!result.ok) throw new Error(result.error)
-if (!result.files.some(file => file.path === 'pack.mcmeta')) throw new Error('missing pack.mcmeta')
-console.log('browser compiler smoke OK')
-NODE
+npm run smoke:browser-ide -- --ide-dir /Users/yuzhe/projects/redscript-ide
 ```
 
 If the deployed site shows `Cannot read properties of undefined (reading 'compileRedScript')`, first check whether `public/compiler.js` failed during module initialization. A common regression is importing Node-only helpers during top-level compiler module load.

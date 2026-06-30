@@ -27,6 +27,8 @@
     "gate:optimizer": "npm run build && npm run test:lir && npm run test:probe && git diff --check",
     "gate:fast": "npm run build && npm run test:unit && npm run validate-mc && git diff --check",
     "gate:full": "npm run build && npm run validate-mc && npm test -- --runInBand && npm run docs:check && git diff --check",
+    "smoke:package": "node scripts/smoke-package.js",
+    "smoke:browser-ide": "node scripts/smoke-browser-ide.js",
     "bench": "npx ts-node benchmarks/compiler-perf.ts",
     "bench:arithmetic": "npx ts-node benchmarks/arithmetic-probes.ts",
     "gate:lir-local-copy": "npx ts-node scripts/check-lir-local-copy-gate.ts",

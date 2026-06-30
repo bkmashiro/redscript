@@ -2,9 +2,21 @@
   scoreboard_set("#load_marker", "core_oracle", 41)
 }
 
+fn _control_timer_tick() {
+  let remaining: int = scoreboard_get("#timer_countdown", "core_oracle")
+  if (remaining > 0) {
+    let next: int = remaining - 1
+    scoreboard_set("#timer_countdown", "core_oracle", next)
+    if (next == 0) {
+      scoreboard_set("#timer_done", "core_oracle", 1)
+    }
+  }
+}
+
 @tick fn __tick() {
   let tickVal: int = scoreboard_get("#tick_marker", "core_oracle")
   scoreboard_set("#tick_marker", "core_oracle", tickVal + 1)
+  _control_timer_tick()
 }
 
 fn test_arithmetic() {
@@ -235,4 +247,9 @@ fn test_foreach_is_check_scores() {
   }
 
   raw("kill @e[type=armor_stand,tag=core_oracle_foreach]")
+}
+
+fn test_controlled_timer_countdown() {
+  scoreboard_set("#timer_countdown", "core_oracle", 3)
+  scoreboard_set("#timer_done", "core_oracle", 0)
 }
