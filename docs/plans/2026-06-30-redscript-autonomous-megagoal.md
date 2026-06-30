@@ -45,9 +45,9 @@ Yuzhe wants a long autonomous goal that can keep progressing without repeated �
 
 Verified on 2026-06-30:
 
-- Latest pushed commit for this mega-goal is `dbb0d97` (`docs: add typed optimizer opportunity report`), pushed to `main`.
-- Recent CI run for `dbb0d97` was triggered after the batched push; CI may still be slow and should be queried once rather than watched unless explicitly needed.
-- Local verified slices already landed: coverage matrix/skip manifest, stale skip reduction, bounded struct-return local tracking, live-oracle candidate map, and typed optimizer opportunity report.
+- Latest pushed commit before the release-readiness roadmap cleanup is `d3bd668` (`docs: classify remaining roadmap blockers`), pushed to `main`.
+- Recent CI for the batched push should be treated as slow/background; query once when needed rather than watching.
+- Local verified slices already landed: coverage matrix/skip manifest, stale skip reduction, bounded struct-return local tracking, live-oracle candidate map, typed optimizer opportunity report, static-array `foreach` lowering for `showcase_game.mcrs`, skip-manifest failure evidence, struct migration verification, and CI hygiene reconciliation.
 - Latest known live oracle baseline: `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed 1 suite / 19 tests against live Paper/TestHarness on 2026-06-30.
 - Stdlib:
   - 51 modules under `src/stdlib/*.mcrs`.
@@ -211,214 +211,92 @@ After each verified slice and local signed commit:
 4. Add any newly discovered high-value bounded findings back to this roadmap before implementing them.
 5. Do not let rediscovery expand into excluded work. If the only remaining path needs a compiler rewrite, new IR, raw/macro semantic parser, default optimizer enablement, or broad ABI cleanup, mark it blocked/deferred and stop.
 
-## Autonomous Execution Queue
+## Completed Work Archive — Cleaned from Active Queue
 
-### Track A — Coverage Matrix and Skip Manifest
+The original mega-goal execution queue has been consumed. Do **not** restart these as active slices unless a fresh regression reopens them:
 
-**Product promise:** The project can answer which language features and stdlib modules are covered at which proof level, and every compile-all skip has a clear reason.
+- Coverage matrix and typed skip manifest exist and are guarded by unit tests.
+- Stale compile-all skips were removed after direct CLI proof.
+- Static struct field/return tracking gaps were closed for the bounded common paths.
+- Live oracle candidate map and live core baseline were recorded.
+- Report-only typed optimizer evidence was recorded; local-copy/RMW remains manual experimental opt-in.
+- Template external-objective failures now have actionable diagnostics.
+- Dynamic string comparison failures now produce clear unsupported-language diagnostics.
+- `showcase_game.mcrs` / static int-array `foreach` is fixed and back in compile-all.
+- Skip-manifest failure evidence is guarded by targeted tests.
+- Struct migration smoke and CI hygiene items were reconciled and closed.
 
-**Primary files to inspect:**
+This cleanup intentionally leaves the detailed historical evidence in the Completion Log below, but the active queue now starts from product/release decisions rather than already-completed implementation slices.
 
-- `src/__tests__/compile-all.test.ts`
-- `src/stdlib/*.mcrs`
-- `src/__tests__/stdlib/*.test.ts`
-- `src/__tests__/e2e/stdlib-e2e.test.ts`
-- `src/__tests__/mc-integration/stdlib-coverage*.test.ts`
-- `package.json`
+## Release Readiness Roadmap — Active Queue
 
-**Current gap:** Stdlib modules all have some coverage, but there is no maintained proof-level matrix. Compile-all skips are hard-coded strings with comments, not an auditable manifest.
+### Priority 1 — Runtime String Equality Product Decision
 
-**Desired end state:** A checked-in coverage matrix plus a small manifest/test that prevents adding modules/skips silently.
+**Question:** does Minecraft support runtime string comparison?
 
-**Executable slices:**
+**Answer:** Minecraft has **NBT/SNBT string matching and data-command workarounds**, but it does **not** have a cheap/native scoreboard-style string comparison operator that RedScript can lower into the same scalar expression path as ints/bools.
 
-- [x] A1. Create `docs/plans/redscript-coverage-matrix.md` listing all 51 stdlib modules and major language features with current proof level.
-- [x] A2. Move compile-all skip data into a typed manifest/helper or at least a structured table in `src/__tests__/compile-all.test.ts`, preserving current behavior first.
-- [x] A3. Add a cheap test that every `src/stdlib/*.mcrs` module is represented in the matrix or a machine-readable coverage manifest.
-- [x] A4. Add a completion log entry here with gate outputs and commit hash.
+Practical interpretation for RedScript:
 
-**Gates:**
+- Literal NBT matching is supported by Minecraft command semantics, e.g. checking whether an entity/storage compound partially matches `{id:"minecraft:diamond"}` or whether an entity has a tag string in an NBT list.
+- Two dynamic string-like NBT values can be compared indirectly with storage/data-command tricks, but that is a command-sequence protocol, not a normal expression primitive. It has storage layout, mutation, equality-vs-copy-success, and MC-version semantics that must be designed and tested.
+- Scoreboard expressions cannot store or compare arbitrary strings. RedScript's current MIR/LIR scalar lowering is scoreboard-oriented, so lowering `winner == "red"`, `tagName == "red"`, or `item == "minecraft:diamond"` as ordinary runtime string equality would require a new string/NBT comparison lowering contract.
 
-```bash
-npm test -- --selectProjects unit --runTestsByPath src/__tests__/compile-all.test.ts --runInBand
-npm run build
-git diff --check
-```
+**Decision for the current release-readiness track:** do **not** implement general runtime string equality yet. Treat it as a future language ADR. For product readiness, rewrite the remaining shipped examples/tutorials that only need finite choices to use integer/enum state instead of runtime strings.
 
-**Do not:** claim Paper proof for a module unless a live test actually ran.
+**Active executable slices:**
 
-### Track B — Compile-All Skip Reduction
-
-**Product promise:** Shipped examples/tutorials become real compile-smoke assets rather than hidden broken examples.
-
-**Primary files to inspect:**
-
-- `src/__tests__/compile-all.test.ts`
-- skipped `.mcrs` files named in its skip list
-- `src/mir/lower.ts`
-- parser/typechecker/HIR/MIR tests relevant to the skipped pattern
-
-**Current gap:** The skip manifest now names individual remaining product gaps. Recent direct probes split `src/templates/` into specific objective-mismatch skips; `src/templates/mini-game-framework.mcrs` compiles and is no longer hidden by a directory-wide skip. Remaining high-value skips are unresolved dynamic identifiers (`winner`, `tagName`, `lane`, `item`) and external-objective LIR verification/design issues.
-
-**Desired end state:** The skip list shrinks materially. Remaining skips have manifest entries and are either blocked by a real design decision or out of scope.
-
-**Executable slices:**
-
-- [x] B1. Reproduce one skipped file failure directly with CLI/build output and add a focused RED test for the smallest language pattern.
-- [x] B2. Fix `interactions.mcrs` / `foreach + module-level const` if it is a bounded MIR/typecheck/import issue; otherwise convert to clear diagnostic and mark blocked.
-- [blocked] B3. Original `src/templates/` array-return-call hypothesis was stale. Direct probes showed `src/templates/mini-game-framework.mcrs` now compiles, while the remaining template failures are external-objective LIR verifier issues (`combat`, `economy`, `quest`). Treat this as B6 diagnostic/product-decision work, not array-return implementation.
-- [x] B4. Remove fixed files from compile-all skip manifest and prove compile-all still passes.
-- [x] B5. Repeat for high-value tutorial/example skips until remaining items require broad language design.
-- [x] B6. Add clearer diagnostics for the remaining external-objective skips (`combat`, `economy`, `quest`, `parkour_race`, `zombie_survival`) or document the product decision if external objectives are accepted template ABI.
-- [blocked] B7. Minimize and fix/diagnose the remaining unresolved dynamic identifiers (`winner`, `tagName`, `item`) and keep `showcase_game.mcrs` covered by compile-all after the `lane` fix. The `lane` compiler bug is fixed; remaining `winner`/`tagName`/`item` cases are runtime string comparisons and now fail clearly, so the next step is a product decision: implement runtime string equality semantics or rewrite those examples to integer/enum state.
+- [ ] P1.1. Add a short language-design note documenting the above Minecraft capability boundary and RedScript decision: runtime string equality is not a scalar expression in this release; finite-choice examples should use int/enum state.
+- [ ] P1.2. Rewrite `capture_the_flag.mcrs` from `winner` string comparison to integer/enum team state, preserving user-visible behavior where practical.
+- [ ] P1.3. Rewrite `pvp_arena.mcrs` from `tagName` string comparison to integer/enum team state or static branch selection, preserving the arena semantics.
+- [ ] P1.4. Rewrite `tutorial_07_random.mcrs` from random item string comparison to integer/enum item codes, preserving the tutorial lesson.
+- [ ] P1.5. Remove the fixed string-comparison entries from `COMPILE_ALL_SKIP_MANIFEST`, update coverage expectations, and prove compile-all/build/validate-mc.
 
 **Gates:**
 
 ```bash
-npm test -- --selectProjects unit --runTestsByPath src/__tests__/compile-all.test.ts <new-focused-test> --runInBand
+npm test -- --selectProjects unit --runTestsByPath src/__tests__/compile-all.test.ts src/__tests__/compile-all-skip-manifest.test.ts src/__tests__/coverage-matrix.test.ts --runInBand
 npm run build
 npm run validate-mc
 git diff --check
 ```
 
-**Do not:** rewrite examples to avoid real compiler bugs unless the example is genuinely invalid or low-value. Do not redesign arrays broadly without a failing minimal test and bounded plan.
+**Do not:** implement a broad string object model, a general NBT string runtime, or a raw-command parser in this track.
 
-### Track C — Struct Field Access / Assignment Closure
+### Priority 2 — External Scoreboard Objective ABI Decision
 
-**Product promise:** Struct field access/assignment is no longer a silent MIR stub for common static cases, or unsupported cases fail clearly.
+Remaining compile-all skips after Priority 1 are expected to be external scoreboard objective issues:
 
-**Primary files to inspect:**
+- `src/templates/combat.mcrs` (`health`)
+- `src/templates/economy.mcrs` (`coins`)
+- `src/templates/quest.mcrs` (`quest_id`)
+- `parkour_race.mcrs` (`pk_checkpoint`)
+- `zombie_survival.mcrs` (`zs_display`)
 
-- `src/mir/lower.ts`
-- `src/__tests__/e2e/migrate.test.ts`
-- `src/__tests__/compiler/struct-extends.test.ts`
-- `src/__tests__/typechecker*.test.ts`
-- parser/AST/HIR struct-related files as needed
+**Decision still needed:** whether external scoreboard objectives are a supported template/example ABI and, if yes, what explicit syntax/helper declares that boundary.
 
-**Current gap:** Tests contain TODOs stating struct field access/assignment is stubbed at MIR level and struct impl methods depend on that stubbed capability. Audit result from this run: simple static struct literals, field reads, and field writes already had MIR support through `FnContext.structVars`; the bounded missing path was returning a local struct variable via `return state` and then assigning an unannotated local from a struct-returning regular function (`let state = snapshot_fighter()`). That path lost struct tracking because return fields were not copied to `__rf_<field>` slots and unannotated call results were not registered in `structVars`. Remaining example failures after the bounded fix are not the original `state` failures: `pvp_arena.mcrs` now reaches unresolved `tagName`, `showcase_game.mcrs` now reaches unresolved `lane`, `capture_the_flag.mcrs` still reaches unresolved `winner`, and several skips are external-objective verifier/design issues.
+**Preferred next design:** add a small ADR and a minimal explicit interop mechanism. Do not globally relax `verifyLIR` just to make examples pass.
 
-**Desired end state:** Static struct field read/write and impl-method access either work through compile/emit tests or produce explicit diagnostics for unsupported dynamic cases.
+**Active executable slices after Priority 1:**
 
-**Executable slices:**
+- [ ] P2.1. Write ADR: compiler-owned objectives vs external/vanilla scoreboard objectives.
+- [ ] P2.2. Choose and implement a minimal explicit declaration/helper or diagnostic-only policy.
+- [ ] P2.3. Update affected templates/examples and remove fixed skip-manifest entries.
 
-- [x] C1. Add a focused audit note to this roadmap identifying the exact AST/HIR/MIR representation and current stub path.
-- [x] C2. Write RED tests for simple struct field read and write through compile output or runtime where feasible.
-- [x] C3. Implement minimal static-field lowering if bounded.
-- [x] C4. Add negative tests for unsupported dynamic paths with clear diagnostic text.
-- [x] C5. Re-enable any migration/e2e tests that were only blocked by the stub; verification found the migration struct smoke tests are already enabled and passing after the struct-return/static-field fixes.
+### Priority 3 — Golden Examples Gate
 
-**Gates:**
+After compile-all product skips are reduced by explicit decisions, add a small golden examples gate for representative public examples/tutorials:
 
-```bash
-npm test -- --selectProjects unit --runTestsByPath src/__tests__/e2e/migrate.test.ts src/__tests__/compiler/struct-extends.test.ts <new-tests> --runInBand
-npm run build
-npm run validate-mc
-git diff --check
-```
+- compile;
+- static MC validation;
+- selective generated command-shape assertions;
+- optional live Paper smoke only for core semantic cases.
 
-**Do not:** introduce heap/object-model redesign, dynamic references, or broad data-layout rewrite. If static struct lowering is not bounded, mark this track blocked with evidence.
+**Do not:** make every example a live Paper test.
 
-### Track D — High-Value Paper/TestHarness Stdlib Smoke
+### Priority 4 — Optimizer Design Track, Deferred
 
-**Product promise:** The stdlib functions that depend on real Minecraft semantics get focused live smoke tests, while pure math/string helpers stay on cheaper MCRuntime/unit gates.
-
-**Primary files to inspect:**
-
-- `src/__tests__/mc-core.test.ts`
-- `src/__tests__/mc-integration/stdlib-coverage*.test.ts`
-- `src/mc-test/client.ts`
-- `src/mc-test/case-runner.ts`
-- high-risk stdlib modules: `events`, `timer`, `scheduler`, `bossbar`, `inventory`, `world`, `spawn`, `mobs`, `particles`, `interactions`, storage/NBT helpers
-
-**Current gap:** Live core oracle exists and passed, but high-risk stdlib live coverage is not summarized or systematically selected.
-
-**Desired end state:** A small focused set of high-value live cases covers real-MC-only stdlib boundaries without making every push depend on Paper.
-
-**Executable slices:**
-
-- [x] D1. Use Track A matrix to pick 3–5 high-risk stdlib APIs lacking live proof.
-- [x] D2. Add or extend descriptor-driven live cases where possible.
-- [x] D3. Keep live tests skippable unless `MC_CORE_REQUIRE_ONLINE=true` or the relevant live env is set.
-- [x] D4. When `localhost:25561` is online, run live smoke and record exact evidence in the matrix.
-
-**Gates:**
-
-```bash
-npm test -- --selectProjects unit --runTestsByPath <new-live-test-or-core-test> --runInBand
-curl -fsS --max-time 2 http://localhost:25561/status && MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live
-npm run build
-git diff --check
-```
-
-**Do not:** require live Paper on normal CI unless an explicit workflow decision is made. Do not attempt live proof for every pure helper.
-
-### Track E — Safe Typed Optimizer Improvements
-
-**Product promise:** Continue optimizer gains only in typed, local, measurable places with no change to risky defaults.
-
-**Primary files to inspect:**
-
-- `src/optimizer/lir/*`
-- `src/__tests__/optimizer/lir/*.test.ts`
-- `benchmarks/arithmetic-probes.ts`
-- `scripts/check-lir-local-copy-gate.ts`
-- `docs/plans/mc-mechanism-optimization/36-typed-boundary-and-diagnostic-roadmap.md`
-
-**Current gap:** The diagnostic sidecar and evidence gate now exist; local-copy/RMW still stays manual. There may be low-risk typed peepholes/dead-temp improvements left.
-
-**Desired end state:** A small number of safe typed optimizer improvements land with equivalence tests and benchmark/evidence output, or a clear diagnostic report says the remaining gains need broader pass design and are out of scope.
-
-**Executable slices:**
-
-- [x] E1. Add a residual optimizer opportunity report using `deriveBoundarySidecar()` labels if the existing gate does not already expose enough actionable buckets.
-- [blocked] E2. Pick one typed-only peephole with obvious local semantics, e.g. adjacent overwrite or self-copy no-op, only if existing tests show a gap. The latest opportunity report did not identify a bounded typed-local RED candidate; remaining obvious mass is raw/opaque/lowering-compat.
-- [blocked] E3. Add RED equivalence/interpreter tests before implementing. Blocked until E2 produces a bounded candidate; do not invent one merely to spend budget.
-- [x] E4. Run local-copy evidence gate and record command/score-copy deltas.
-- [x] E5. If candidate requires non-local dataflow, mark blocked/deferred rather than implementing.
-
-**Gates:**
-
-```bash
-npm run test:lir
-npm run test:probe
-npm run gate:lir-local-copy -- --output /tmp/redscript-megagoal-lir-local-copy.json
-npm run build
-git diff --check
-```
-
-**Do not:** default-enable local-copy/RMW, alter `$ret/$pN` ABI cleanup, parse raw/macro text as proof, or introduce a new IR.
-
-### Track F — CI / Gate Hygiene for Product Readiness
-
-**Product promise:** The project’s gates communicate maturity and blockers clearly without making ordinary pushes flaky or too expensive.
-
-**Primary files to inspect:**
-
-- `.github/workflows/*`
-- `package.json`
-- `src/__tests__/compile-all.test.ts`
-- any new coverage matrix/manifest files from Track A
-
-**Current gap:** CI is green and includes build/unit/static/local-copy evidence. Live Paper is manual/local. Coverage/skip information is not yet a first-class gate.
-
-**Desired end state:** Cheap CI catches missing coverage metadata and compile-all regressions; expensive live gates stay explicit/manual.
-
-**Executable slices:**
-
-- [x] F1. Add a cheap coverage/skip manifest check to unit tests if Track A produced one.
-- [x] F2. Ensure CI logs stay concise; current CI uses build, serial unit/static gates, `validate-mc`, and report-only `gate:lir-local-copy` without dumping benchmark JSON.
-- [blocked] F3. If adding workflow changes, use current official action versions and verify with one CI run. No workflow change is currently justified; keep this blocked unless a concrete CI/product need appears.
-
-**Gates:**
-
-```bash
-npm run build
-npm test -- --selectProjects unit --runTestsByPath <new-manifest-test> --runInBand
-npm run validate-mc
-git diff --check
-```
-
-**Do not:** add live Paper to default push CI without explicit approval. Do not add heavyweight benchmark matrices to every push.
+Optimizer implementation remains deferred unless the user explicitly opens a new optimizer design track. The current evidence says the remaining obvious mass is raw/opaque/lowering-compat, not a bounded typed-local peephole.
 
 ## Per-Slice Checklist
 
@@ -460,7 +338,8 @@ For every executable slice:
 - 2026-06-30: Completed Track F1 skip-manifest failure-evidence guard. RED: `src/__tests__/compile-all-skip-manifest.test.ts` required every `known-language-gap` skip to carry current expected compiler-output substrings and failed while entries lacked them. GREEN: added `expectedFailureSubstrings` to the typed skip manifest and a focused unit test that matches each known gap to exactly one `.mcrs` file, proves direct CLI compile still fails, and checks the diagnostic substring. Also tightened the coverage-matrix skip count after `showcase_game.mcrs` rejoined compile-all. Gates: `npm test -- --selectProjects unit --runTestsByPath src/__tests__/compile-all-skip-manifest.test.ts --runInBand` passed 1 test; `npm test -- --selectProjects unit --runTestsByPath src/__tests__/compile-all-skip-manifest.test.ts src/__tests__/coverage-matrix.test.ts src/__tests__/compile-all.test.ts --runInBand` passed 3 suites / 114 tests; `npm run build` passed; `npm run validate-mc` passed 15 tests; `git diff --check` passed. Commit `71fa4bb`; next recommended slice is reassessing whether remaining skips are all product decisions, then bounded rediscovery outside compile-all if they are.
 - 2026-06-30: Closed Track C5 verification-only. No RED production test was needed because this was a roadmap reconciliation slice: `src/__tests__/e2e/migrate.test.ts` already contains enabled struct declaration/literal/access/assignment/static-method smoke coverage. Gate `npm test -- --selectProjects unit --runTestsByPath src/__tests__/e2e/migrate.test.ts src/__tests__/compiler/struct-extends.test.ts --runInBand` passed 2 suites / 254 tests, so no disabled migration/e2e test remained to re-enable for the bounded struct stub. Commit `4074092`; next recommended slice is to classify remaining B7 skips as product decisions or continue bounded rediscovery.
 - 2026-06-30: Closed Track F2/F3 CI hygiene reconciliation. No RED production test was needed because this was a CI-roadmap inspection slice. Inspected `.github/workflows/ci.yml`, `.github/workflows/docs-check.yml`, and `package.json`: default CI runs build, serial unit tests, `validate-mc`, and report-only `gate:lir-local-copy`; docs check is manual/scheduled; no workflow currently dumps benchmark JSON or adds live Paper to default push. F2 marked complete; F3 marked blocked/no-op until a concrete workflow change is justified. Gates: `git diff --check` and `npm run build` passed. Commit `547d181`; next recommended slice is B7 product-decision classification.
-- 2026-06-30: Classified remaining open roadmap items as blocked/deferred after bounded rediscovery. B7: `showcase_game.mcrs`/`lane` is fixed and compile-all covered; remaining `winner`/`tagName`/`item` failures are runtime string comparison semantics and require a product choice (implement runtime string equality vs rewrite examples to int/enum state). E2/E3: previous typed optimizer report found no bounded typed-local RED candidate; remaining opportunity mass is raw/opaque/lowering-compat and excluded from this mega-goal. No RED production test was needed for this classification slice; direct CLI probes and prior `gate:lir-local-copy` evidence are the blocker evidence. Gates pending. Commit pending; safest next step is for the user to choose runtime string equality semantics vs example rewrites, or approve a new optimizer design track.
+- 2026-06-30: Classified remaining open roadmap items as blocked/deferred after bounded rediscovery. B7: `showcase_game.mcrs`/`lane` is fixed and compile-all covered; remaining `winner`/`tagName`/`item` failures are runtime string comparison semantics and require a product choice (implement runtime string equality vs rewrite examples to int/enum state). E2/E3: previous typed optimizer report found no bounded typed-local RED candidate; remaining opportunity mass is raw/opaque/lowering-compat and excluded from this mega-goal. No RED production test was needed for this classification slice; direct CLI probes and prior `gate:lir-local-copy` evidence are the blocker evidence. Commit `d3bd668`; safest next step is release-readiness decision work.
+- 2026-06-30: Cleaned the active roadmap after user direction. Archived the consumed Track A–F queue into a compact completed-work list, promoted a release-readiness active queue, and recorded the Minecraft runtime-string boundary: MC supports NBT/SNBT string matching and data-command workarounds, but not a cheap/native scoreboard string comparison expression. Current decision for Priority 1 is to avoid general runtime string equality for this release and rewrite finite-choice examples/tutorials to int/enum state first. Gates: `git diff --check` passed. Commit pending.
 
 ## Reporting Format When Finally Stopping
 
