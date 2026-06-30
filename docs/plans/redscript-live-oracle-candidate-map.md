@@ -15,8 +15,8 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 
 ## Current live baseline
 
-- `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed `23/23` descriptor-driven cases on 2026-06-30 against the local harness at `localhost:25561` (actual runtime proof only for this local run).
-- Existing live coverage already includes scoreboard arithmetic, branch/loop returns, macro-with-storage, NBT read/write loops, foreach context, load/tick lifecycle hooks, timer countdown, world setblock, inventory equipment, and bounded random range.
+- `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed `24/24` descriptor-driven cases on 2026-06-30 against the local harness at `localhost:25561` (actual runtime proof only for this local run).
+- Existing live coverage already includes scoreboard arithmetic, branch/loop returns, macro-with-storage, NBT read/write loops, foreach context, load/tick lifecycle hooks, timer countdown, world setblock, inventory equipment, bounded random range, and entity spawn.
 
 ## Candidate priorities
 
@@ -58,6 +58,14 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 - Candidate reason: Timer intrinsics lower to scoreboard slots and schedules; good candidate for bounded live smoke.
 - Evidence (completed): Added descriptor-driven controlled countdown case in `tests/mc-cases/core-oracle.mcrs` (`test_controlled_timer_countdown`) with `controlledTicks=4` countdown/done assertions in `tests/mc-cases/core-oracle-cases.ts`; included in the 22/22 local live Paper baseline.
 - Suggested next case shape: only add after a minimized bug or deterministic harness setup exists.
+
+### entity spawn boundary — medium
+
+- Category: `minecraft-boundary/high-risk`
+- Current proof levels: static-mc-validation, mc-integration-offline-skippable, compile-all-static-smoke, live-paper-oracle
+- Candidate reason: Entity summon + entity-selector verification is a high-risk runtime boundary and should stay deterministic and cleanup-safe.
+- Evidence (completed): Added descriptor-driven `spawn entity smoke` in `tests/mc-cases/core-oracle.mcrs` and `tests/mc-cases/core-oracle-cases.ts` using `summon ... pig` + `kill` before/after and `execute if entity` pass flag assertion; included in the 24/24 local live Paper baseline.
+- Suggested next case shape: keep as one-point deterministic smoke unless summon behavior, persistence, or selector semantics regressions are observed.
 
 ### events — low
 

@@ -274,3 +274,11 @@ fn test_random_range_smoke() {
   raw("execute store result score #random_value core_oracle run random value 0..4")
   raw("execute if score #random_value core_oracle matches 0..4 run scoreboard players set #random_range_check core_oracle 1")
 }
+
+fn test_spawn_entity_smoke() {
+  raw("kill @e[type=pig,tag=core_oracle_spawn]")
+  raw("scoreboard players set #spawn_entity_check core_oracle 0")
+  raw("summon minecraft:pig 20 65 0 {Tags:['core_oracle_spawn'],PersistenceRequired:1b,NoGravity:1b}")
+  raw("execute if entity @e[type=pig,tag=core_oracle_spawn,limit=1] run scoreboard players set #spawn_entity_check core_oracle 1")
+  raw("kill @e[type=pig,tag=core_oracle_spawn]")
+}

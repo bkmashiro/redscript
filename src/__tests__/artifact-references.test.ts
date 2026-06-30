@@ -123,7 +123,11 @@ function collectReferenceViolations(files: DatapackFile[], namespace: string): s
     }
 
     for (const value of values) {
-      if (typeof value !== 'string' || value.startsWith('#')) continue
+      if (typeof value !== 'string') {
+        violations.push(`Invalid ${tagType}.json value '${String(value)}' in ${tagFile.path}`)
+        continue
+      }
+      if (value.startsWith('#')) continue
       const normalized = normalize(value)
       if (normalized.endsWith(':*')) continue
       const parsed = parseFunctionRef(normalized)
@@ -140,6 +144,10 @@ function collectReferenceViolations(files: DatapackFile[], namespace: string): s
   }
 
   return violations
+}
+
+function mkDatapackFile(pathname: string, content: string): DatapackFile {
+  return { path: pathname, content }
 }
 
 describe('artifact-reference guard for emitted datapacks', () => {
@@ -193,6 +201,82 @@ describe('artifact-reference guard for emitted datapacks', () => {
       const tickTag = getTagFile(result.files, 'tick')
       expect(tickTag).toBeDefined()
     }
+
+    expect(violations).toEqual([])
+  })
+
+  test('flags same-namespace missing function references in emitted functions', () => {
+    const files = [
+      mkDatapackFile(
+        'data/guard_ns/functions/caller.mcfunction',
+        'function guard_ns:missing\n',
+      ),
+    ]
+
+    const violations = collectReferenceViolations(files, 'guard_ns')
+
+    expect(violations).toEqual([
+      "data/guard_ns/functions/caller.mcfunction:1: 'guard_ns:missing'",
+    ])
+  })
+
+  test('does not flag resolved execute run function references in the same namespace', () => {
+    const files = [
+      mkDatapackFile(
+        'data/guard_ns/functions/caller.mcfunction',
+        'execute as @e run function guard_ns:present\n',
+      ),
+      mkDatapackFile('data/guard_ns/functions/present.mcfunction', 'scoreboard players set score foo 0\n'),
+    ]
+
+    const violations = collectReferenceViolations(files, 'guard_ns')
+
+    expect(violations).toEqual([])
+  })
+
+  test('flags missing same-namespace references in load/tick tag values', () => {
+    const files = [
+      mkDatapackFile(
+        'data/minecraft/tags/function/load.json',
+        JSON.stringify({ values: ['guard_ns:missing'] }),
+      ),
+      mkDatapackFile(
+        'data/minecraft/tags/function/tick.json',
+        JSON.stringify({ values: ['guard_ns:missing'] }),
+      ),
+    ]
+
+    const violations = collectReferenceViolations(files, 'guard_ns')
+
+    expect(violations).toEqual([
+      "data/minecraft/tags/function/load.json: 'guard_ns:missing'",
+      "data/minecraft/tags/function/tick.json: 'guard_ns:missing'",
+    ])
+  })
+
+  test('flags invalid tag values for same-namespace tags', () => {
+    const files = [
+      mkDatapackFile(
+        'data/minecraft/tags/function/load.json',
+        JSON.stringify({ values: [123] }),
+      ),
+      mkDatapackFile(
+        'data/minecraft/tags/function/tick.json',
+        JSON.stringify({ values: ['not-a-function-id'] }),
+      ),
+    ]
+
+    const violations = collectReferenceViolations(files, 'guard_ns')
+
+    expect(violations).toEqual([
+      "Invalid load.json value '123' in data/minecraft/tags/function/load.json",
+      "Invalid tick.json value 'not-a-function-id' in data/minecraft/tags/function/tick.json",
+    ])
+  })
+
+  test('ignores external namespace references even when checking same namespace', () => {
+    const files = [mkDatapackFile('data/guard_ns/functions/caller.mcfunction', 'function minecraft:load\n')]
+    const violations = collectReferenceViolations(files, 'minecraft')
 
     expect(violations).toEqual([])
   })

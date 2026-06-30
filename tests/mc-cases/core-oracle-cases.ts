@@ -274,4 +274,18 @@ export const CORE_ORACLE_CASES: McCoreCaseDescriptor[] = [
       { player: '#random_range_check', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
     ],
   },
+  {
+    name: 'spawn entity smoke',
+    namespace: CORE_ORACLE_NAMESPACE,
+    sourcePath: CORE_ORACLE_SOURCE_PATH,
+    setupCommands: [
+      'kill @e[type=pig,tag=core_oracle_spawn]',
+      'scoreboard players set #spawn_entity_check core_oracle 0',
+    ],
+    entrypoints: [{ kind: 'function', target: 'test_spawn_entity_smoke' }],
+    waitTicks: 2,
+    scoreboardAssertions: [
+      { player: '#spawn_entity_check', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
+    ],
+  },
 ]

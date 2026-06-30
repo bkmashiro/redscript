@@ -38,7 +38,7 @@ GitHub workflow and release evidence artifact:
 - `.github/workflows/live-mc-core.yml` must exist and document that it is manual/nightly.
 - Use workflow-scope variables for host/port/server directory.
 - The workflow should skip clearly when `MC_SERVER_DIR` is not set.
-- Current local baseline from 2026-06-30 is `23/23` live-cases (`test:mc-core:live`), descriptor-driven and covering the timer countdown plus first P1 world/inventory/random smokes.
+- Current local baseline from 2026-06-30 is `24/24` live-cases (`test:mc-core:live`), descriptor-driven and covering the timer countdown plus first P1 world/inventory/random/spawn smokes.
 
 Smoke suite availability:
 
