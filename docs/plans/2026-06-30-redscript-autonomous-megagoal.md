@@ -38,35 +38,26 @@ Yuzhe wants a long autonomous goal that can keep progressing without repeated â€
 - Do not spend time on low-return/high-risk tracks: VIR/new IR redesign, MLIR/Cranelift/Binaryen integration, default optimizer enablement, full Paper proof for every stdlib function, visual/gameplay example redesigns, or broad LSP/package/editor churn.
 - Do not commit generated VSCode/package artifacts unless the slice explicitly targets packaging/release.
 - Do not hide live-oracle skips as success. Offline/static gates are useful but not Paper semantic proof.
-- Use signed commits and push after each verified coherent slice unless blocked.
+- Use signed commits for every verified coherent slice. Prefer local-first cadence: commit each slice locally, batch pushes occasionally after several verified commits or before stopping, and do not wait on slow CI unless a workflow/product decision specifically requires it.
 - Preserve uncommitted work: start every slice with `git status -sb`.
 
 ## Current State Discovered
 
 Verified on 2026-06-30:
 
-- Git working tree was clean on `main...origin/main` after latest work.
-- Latest CI for commit `1f24338` succeeded: build, unit, static MC syntax, evidence-only local-copy gate.
-- Local full unit previously passed: 282 suites / 5264 tests.
-- `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed 19/19 against live Paper/TestHarness.
-- Codebase size by `uvx pygount` excluding dependencies/build artifacts:
-  - TypeScript: 432 files, ~83,866 code lines.
-  - Markdown: 117 files.
-  - MCFunction fixtures/artifacts: 167 files.
-  - Total scanned: 940 files, ~133,064 code lines.
-- Tests:
-  - 297 `.test.ts` files under `src/__tests__`.
-  - Test buckets include root, stdlib, optimizer, emit, compiler, MIR, mc-integration, e2e, HIR, LSP, tuner, lint, LIR, etc.
+- Latest pushed commit for this mega-goal is `dbb0d97` (`docs: add typed optimizer opportunity report`), pushed to `main`.
+- Recent CI run for `dbb0d97` was triggered after the batched push; CI may still be slow and should be queried once rather than watched unless explicitly needed.
+- Local verified slices already landed: coverage matrix/skip manifest, stale skip reduction, bounded struct-return local tracking, live-oracle candidate map, and typed optimizer opportunity report.
+- Latest known live oracle baseline: `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed 1 suite / 19 tests against live Paper/TestHarness on 2026-06-30.
 - Stdlib:
   - 51 modules under `src/stdlib/*.mcrs`.
-  - All 51 modules are directly referenced by tests or have own test files.
-  - `src/__tests__/stdlib/` contains 54 stdlib-focused test files.
-- Known active gaps:
-  - `src/__tests__/compile-all.test.ts` has an explicit skip list for unsupported patterns/examples.
-  - Skip reasons include `interactions.mcrs` using `foreach + module-level const`, templates using unsupported array-return-call patterns, and multiple examples using unsupported array-passing-to-array-returning-fn patterns.
-  - Tests mention struct field access/assignment is stubbed at MIR level; struct impl methods depend on that stubbed capability.
-  - Some live probes are intentionally gated/skipped unless env flags are set: enchantment-level ALU, item-modifier ALU, display-decomposition.
-  - Stdlib has module-level coverage, but not every high-risk stdlib API has Paper-level semantic proof.
+  - Coverage matrix and candidate map now exist: `docs/plans/redscript-coverage-matrix.json`, `docs/plans/redscript-coverage-matrix.md`, `docs/plans/redscript-live-oracle-candidate-map.md`.
+- Known active gaps after latest slices:
+  - Remaining compile-all skips are now represented in `src/__tests__/helpers/compile-all-skip-manifest.ts` with structured reason/nextAction fields.
+  - Several old stale skips were removed after direct CLI proof; do not re-add them unless a fresh regression is reproduced.
+  - `pvp_arena.mcrs` and `showcase_game.mcrs` advanced past the old unresolved `state` failure and now fail on narrower `tagName`/`lane` paths.
+  - `capture_the_flag.mcrs` still reaches unresolved `winner`; `tutorial_07_random.mcrs` still reaches unresolved `item`; template skips include external-objective verifier/design issues.
+  - Track E report concluded that no new optimizer peephole should be implemented until there is a bounded typed-local RED equivalence candidate; local-copy/RMW remains manual experimental opt-in only.
 
 ## Desired Future State
 
@@ -182,7 +173,7 @@ The user permits Spark. Use it as implementation hands, not final authority.
 - Controller must inspect diff and run gates before accepting.
 - Do not dispatch parallel Spark workers touching overlapping files.
 - If a Spark worker stalls or returns partial diff, salvage only after controller review; report that the final result is controller-verified.
-- Suggested cadence: one coherent Spark tranche per track/slice, then controller review/gate/commit/push before the next tranche.
+- Suggested cadence: one coherent Spark tranche per track/slice, then controller review/gate/local commit before the next tranche. Batch pushes occasionally; after pushing, query CI once but do not wait/watch slow CI by default.
 - The 20 Ã— 150 budget is permission to continue deeply, not permission to do excluded broad rewrites.
 
 Suggested Spark worker prompt shape:
@@ -197,6 +188,28 @@ Run: <focused commands>
 Return: changed files, exact summary, commands/results, blockers.
 Do not commit or push.
 ```
+
+## Long-Run Loop / Bounded Rediscovery
+
+This roadmap should consume a large plan budget by repeatedly finding and executing **high-value bounded work**, not by attempting broad risky rewrites.
+
+After each verified slice and local signed commit:
+
+1. Re-read `git status -sb` and the updated roadmap.
+2. Pick the highest-value remaining executable item, preferring this order unless fresh evidence says otherwise:
+   1. compile-all skip reduction and stale skip deletion;
+   2. clearer diagnostics for remaining unsupported language/example gaps;
+   3. coverage matrix and stdlib proof-level hardening;
+   4. deterministic MCRuntime/Paper semantic smoke for high-risk stdlib only;
+   5. report-first typed optimizer opportunities, with implementation only after a bounded RED equivalence candidate exists.
+3. If the visible queue appears exhausted, perform bounded rediscovery before stopping:
+   - inspect `src/__tests__/helpers/compile-all-skip-manifest.ts`;
+   - run or sample direct CLI compile probes for skipped `.mcrs` files;
+   - search active TODO/FIXME only in touched compiler/test areas;
+   - compare `docs/plans/redscript-coverage-matrix.json` against `src/stdlib/*.mcrs` and relevant tests;
+   - inspect stale roadmap claims and examples that are not compiled.
+4. Add any newly discovered high-value bounded findings back to this roadmap before implementing them.
+5. Do not let rediscovery expand into excluded work. If the only remaining path needs a compiler rewrite, new IR, raw/macro semantic parser, default optimizer enablement, or broad ABI cleanup, mark it blocked/deferred and stop.
 
 ## Autonomous Execution Queue
 
@@ -415,8 +428,8 @@ For every executable slice:
 4. Run the focused gate.
 5. Update this roadmap checkboxes and add a completion log entry.
 6. Run the global gate appropriate to the touched area.
-7. Commit with `git commit -S` and push unless forbidden.
-8. Verify `git log -1 --show-signature --oneline`, `git status -sb`, and one-shot CI status if a push triggered CI.
+7. Commit locally with `git commit -S`; push only when batching several verified commits, before stopping, or when remote CI/status is specifically needed.
+8. Verify `git log -1 --show-signature --oneline`, `git status -sb`, and, after a push, do one-shot CI status query without waiting/watching slow CI by default.
 9. Continue to the next highest-priority unblocked slice.
 
 ## Roadmap Tracking Rules
@@ -436,7 +449,8 @@ For every executable slice:
 - 2026-06-30: Completed Track B stale-skip reduction pass. Direct CLI probes showed `src/stdlib/interactions.mcrs`, `examples/game/racing.mcrs`, `examples/game/tower_defense.mcrs`, `examples/math/physics_sim.mcrs`, `src/examples/hunger_games.mcrs`, `src/examples/tutorial_04_selectors.mcrs`, and `src/examples/tutorial_10_kill_race.mcrs` now compile, so they were removed from the compile-all skip manifest. Remaining skip reasons were updated from stale array-return wording to direct observed failures: unresolved `winner`/`state`/`item` MIR lowering or external-objective LIR verifier errors. Gates: `npm test -- --selectProjects unit --runTestsByPath src/__tests__/coverage-matrix.test.ts src/__tests__/compile-all.test.ts --runInBand` passed 2 suites / 110 tests; `npm run build` passed; `npm run validate-mc` passed 15 tests; `git diff --check` passed. Commit `a1da89b`; next recommended slice is Track C audit/minimal struct-field lowering, because most remaining skips are struct/state-field shaped rather than array-return shaped.
 - 2026-06-30: Completed Track C bounded struct-return tracking slice. Audit found static struct field read/write already supported, but `return state` for a local struct variable and `let state = snapshot_fighter()` from a regular struct-returning function lost `structVars` metadata. Added compile regressions in `src/__tests__/compiler/struct-extends.test.ts`, copied local struct returns into `__rf_<field>` slots, and inferred unannotated struct-return call locals from `ctx.hirFunctions`. Gates: `npm test -- --selectProjects unit --runTestsByPath src/__tests__/compiler/struct-extends.test.ts --runInBand` passed 10 tests; combined `struct-extends` + coverage + compile-all gate passed 3 suites / 120 tests; `npm run build` passed; `npm run validate-mc` passed 15 tests; `git diff --check` passed. Direct CLI probes after build showed `pvp_arena.mcrs` and `showcase_game.mcrs` advanced past the old `state` failure to `tagName`/`lane`, so remaining skips are narrower diagnostics/design issues. Commit `c5c5c09`; next recommended slice is C4 clear diagnostics for unsupported unresolved dynamic identifiers or Track D live-candidate selection.
 - 2026-06-30: Completed Track D live-candidate selection and live baseline refresh. Added `docs/plans/redscript-live-oracle-candidate-map.md`, augmented `docs/plans/redscript-coverage-matrix.json` with bounded `liveOracleCandidate` priorities and `liveOracleBaseline`, and extended the coverage-matrix unit test to guard the candidate map. Did not add rote live tests for every stdlib module; candidates are selective (`events`, `math`, `random`, `timer`; storage remains covered as a core lowering/runtime boundary rather than a stdlib module) and lower-priority modules stay static until a deterministic harness fixture/bug exists. Gates: `curl -fsS --max-time 2 http://localhost:25561/status` returned online Paper 1.21.4 / ~20 TPS; `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed 1 suite / 19 tests in 47.5s; `npm test -- --selectProjects unit --runTestsByPath src/__tests__/coverage-matrix.test.ts --runInBand` passed 1 suite / 7 tests; `npm run build` passed; `git diff --check` passed. Commit `241cd94`; next recommended slice is Track E report-only optimizer opportunity audit before any peephole implementation.
-- 2026-06-30: Completed Track E report-only optimizer opportunity audit and stopped before risky optimizer work. Added `docs/plans/redscript-typed-optimizer-opportunity-report.md` from `npm run gate:lir-local-copy -- --output /tmp/redscript-megagoal-e-local-copy.json`. Gate passed with rollout recommendation still `manual-experimental-opt-in-only`; command delta `-497`, score-copy delta `-497`, command/score-copy regressions `0`; offline equivalence pack passed 31/31. Boundary sidecar mix: total 3446 instructions, exact 2211, conservative 355, opaque 880; typed-lir 2211, lowering-compat 351, macro-helper 5, raw-user-command 879; opaque storage 1235. Decision: no default enablement and no new peephole yet, because the obvious remaining mass is raw/opaque/lowering-compat rather than a clearly safe typed-local transform; E2/E3 remain deferred pending a minimized RED equivalence candidate. Commit pending for this local slice; this is a real risk/product decision stop for optimizer implementation.
+- 2026-06-30: Completed Track E report-only optimizer opportunity audit and stopped before risky optimizer work. Added `docs/plans/redscript-typed-optimizer-opportunity-report.md` from `npm run gate:lir-local-copy -- --output /tmp/redscript-megagoal-e-local-copy.json`. Gate passed with rollout recommendation still `manual-experimental-opt-in-only`; command delta `-497`, score-copy delta `-497`, command/score-copy regressions `0`; offline equivalence pack passed 31/31. Boundary sidecar mix: total 3446 instructions, exact 2211, conservative 355, opaque 880; typed-lir 2211, lowering-compat 351, macro-helper 5, raw-user-command 879; opaque storage 1235. Decision: no default enablement and no new peephole yet, because the obvious remaining mass is raw/opaque/lowering-compat rather than a clearly safe typed-local transform; E2/E3 remain deferred pending a minimized RED equivalence candidate. Commit `dbb0d97`; this is a real risk/product decision stop for optimizer implementation.
+- 2026-06-30: Updated this roadmap for long-run budget consumption after user discussion. Added local-first/batched-push cadence, bounded rediscovery loop, refreshed current-state notes, and strengthened the short prompt so future goal sessions continue through high-value executable work instead of stopping after visible checkboxes. Gates: documentation-only update; `git diff --check` and `npm run build` should be run before commit.
 
 ## Reporting Format When Finally Stopping
 
@@ -455,5 +469,17 @@ Next safest action: ...
 ## Short Prompt to Start This Mega-Goal
 
 ```text
-Read docs/plans/2026-06-30-redscript-autonomous-megagoal.md fully, then execute it in /Users/yuzhe/projects/redscript. Do not stop after one slice. Continue through multiple verified slices: update the roadmap, run gates, signed commit, push, then continue until blocked by a real product/resource/risk decision or all executable work is done. You may use Spark/Codex-Spark for bounded implementation workers, but skip excluded low-return/high-risk work: no compiler rewrite, no new IR/VIR redesign, no default local-copy/RMW enablement, no raw/macro semantic parser, no broad ABI cleanup.
+Read docs/plans/2026-06-30-redscript-autonomous-megagoal.md fully, then execute it in /Users/yuzhe/projects/redscript as a long-running local-first autonomous loop.
+
+Do not stop after one slice. Repeatedly pick the highest-value executable slice from the roadmap or from newly discovered roadmap-consistent gaps, then: inspect current state, write a focused RED test or justify why not practical, implement the minimal bounded change, run focused gates and relevant global gates, update the roadmap checkboxes/completion log, make a signed local commit, and continue.
+
+Batch pushes occasionally after several verified commits or before stopping, but do not wait for slow CI; after pushing, only do a one-shot CI status query.
+
+Respect all explicit non-goals: no compiler rewrite, no new IR/VIR redesign, no default local-copy/RMW enablement, no raw/macro semantic parser, no broad ABI cleanup, no low-return/high-risk churn.
+
+Prefer these tracks in order unless current evidence suggests otherwise: compile-all skip reduction and stale skip deletion; clearer diagnostics for remaining unsupported language/example gaps; coverage matrix and stdlib proof-level hardening; deterministic MCRuntime/Paper semantic smoke for high-risk stdlib only; report-first typed optimizer opportunities, with implementation only after a bounded RED equivalence test exists.
+
+If a track appears exhausted, perform bounded rediscovery: search the skip manifest, TODO/FIXME in touched compiler/test areas, failing or skipped tests, stale roadmap claims, examples that are not compiled, and coverage matrix gaps; add any high-value executable findings back to the roadmap and continue.
+
+Continue until blocked by a real product/resource/risk decision, repeated gate failure requiring human choice, or all executable work is done. When stopping, report commits, gates, remaining blockers, git status, and safest next slice.
 ```
