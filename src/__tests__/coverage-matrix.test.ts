@@ -121,6 +121,7 @@ describe('compile-all skip manifest', () => {
     expect(patterns).toContain('src/templates/quest.mcrs')
     expect(patterns).toContain('capture_the_flag.mcrs')
     expect(patterns).toContain('tutorial_07_random.mcrs')
-    expect(knownGaps.length).toBeGreaterThanOrEqual(9)
+    expect(patterns).not.toContain('showcase_game.mcrs')
+    expect(knownGaps).toHaveLength(8)
   })
 })
