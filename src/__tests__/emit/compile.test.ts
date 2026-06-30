@@ -20,8 +20,9 @@ import { lowerToHIR } from '../../hir/lower'
 import { monomorphize } from '../../hir/monomorphize'
 import type { CompileStageSnapshot } from '../../emit/compile'
 import type { HIRModule } from '../../hir/types'
-import type { LIRModule } from '../../lir/types'
+import type { LIRFunction, LIRModule } from '../../lir/types'
 import { verifyLIR } from '../../lir/verify'
+import { emit } from '../../emit'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
   return files.find(f => f.path.includes(pathSubstr))?.content
@@ -30,6 +31,10 @@ function getFile(files: { path: string; content: string }[], pathSubstr: string)
 function collectRuntimeMetadataFromSource(source: string, namespace = 'metadata_stage_test') {
   const parsed = parseSourceStage(source, namespace)
   return collectRuntimeMetadataStage(monomorphize(lowerToHIR(parsed.ast)), namespace)
+}
+
+function slot(player: string, objective = '__emit'): { player: string; obj: string } {
+  return { player, obj: objective }
 }
 
 describe('emit: compile coverage', () => {
@@ -1076,5 +1081,143 @@ describe('emit: compile coverage', () => {
     expect(fn).toContain('execute store result score $')
     expect(fn).toContain('run scoreboard players get #p obj')
     expect(fn).toContain('execute store result score #p obj run scoreboard players get')
+  })
+
+  test('stores function-macro result via execute store wrapper without changing semantics', () => {
+    const namespace = 'emit_boundary'
+    const module: LIRModule = {
+      namespace,
+      objective: '__emit',
+      functions: [
+        {
+          name: 'main',
+          isMacro: false,
+          macroParams: [],
+          instructions: [
+            {
+              kind: 'store_cmd_to_score',
+              dst: slot('$macro_ret'),
+              cmd: {
+                kind: 'call_macro',
+                fn: `${namespace}:macro_capture`,
+                storage: 'rs:macro_args',
+              },
+            },
+          ],
+        },
+        {
+          name: 'macro_capture',
+          isMacro: true,
+          macroParams: ['arg'],
+          instructions: [{ kind: 'return_value', slot: slot('$macro_result') }],
+          params: [],
+        } as LIRFunction,
+      ],
+    }
+
+    const files = emit(module, { namespace })
+    const main = getFile(files, '/main.mcfunction')
+
+    expect(main).toBeDefined()
+    if (!main) return
+    expect(main).toContain(
+      'execute store result score $macro_ret __emit run function emit_boundary:macro_capture with storage rs:macro_args',
+    )
+  })
+
+  test('keeps typed storage boundary commands exact and side-by-side', () => {
+    const files = emit({
+      namespace: 'emit_storage',
+      objective: '__emit',
+      functions: [
+        {
+          name: 'storage_boundary',
+          isMacro: false,
+          macroParams: [],
+          instructions: [
+            {
+              kind: 'store_score_to_nbt',
+              ns: 'rs:d',
+              path: 'value',
+              type: 'double',
+              scale: 10000,
+              src: slot('$src'),
+            },
+            {
+              kind: 'store_nbt_to_score',
+              dst: slot('$dst'),
+              ns: 'rs:d',
+              path: 'value',
+              scale: 0.0001,
+            },
+          ],
+        },
+      ],
+    }, { namespace: 'emit_storage' })
+
+    const body = getFile(files, '/storage_boundary.mcfunction')
+    expect(body).toBeDefined()
+    if (!body) return
+    expect(body).toContain('execute store result storage rs:d value double 10000 run scoreboard players get $src __emit')
+    expect(body).toContain('execute store result score $dst __emit run data get storage rs:d value 0.0001')
+  })
+
+  test('keeps call_context as explicit execute wrapper around target function', () => {
+    const files = emit({
+      namespace: 'emit_context_barrier',
+      objective: '__emit',
+      functions: [
+        {
+          name: 'caller',
+          isMacro: false,
+          macroParams: [],
+          instructions: [
+            {
+              kind: 'call_context',
+              fn: 'emit_context_barrier:ctx_target',
+              subcommands: [{ kind: 'as', selector: '@s' }],
+            },
+          ],
+        },
+        {
+          name: 'ctx_target',
+          isMacro: false,
+          macroParams: [],
+          instructions: [],
+        },
+      ],
+    }, { namespace: 'emit_context_barrier' })
+
+    const body = getFile(files, '/caller.mcfunction')
+    expect(body).toBeDefined()
+    if (!body) return
+    expect(body).toContain('execute as @s run function emit_context_barrier:ctx_target')
+  })
+
+  test('tracks branch-return storage boundary as opaque typed boundaries', () => {
+    const files = emit({
+      namespace: 'emit_branch_boundary',
+      objective: '__emit',
+      functions: [
+        {
+          name: 'caller',
+          isMacro: false,
+          macroParams: [],
+          instructions: [
+            {
+              kind: 'raw',
+              cmd: 'execute if score $cond __emit matches 1 run return run function emit_branch_boundary:then_target with storage rs:macro_args',
+            },
+          ],
+        },
+      ],
+    }, { namespace: 'emit_branch_boundary' })
+
+    const body = getFile(files, '/caller.mcfunction')
+    expect(body).toBeDefined()
+    if (!body) return
+    expect(body).toContain(
+      'execute if score $cond __emit matches 1 run return run function emit_branch_boundary:then_target with storage rs:macro_args',
+    )
   })
 })

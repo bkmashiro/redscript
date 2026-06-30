@@ -224,6 +224,17 @@ function compileOutput(source: string): string {
   return files.map((f: { path: string; content: string }) => f.content).join('\n')
 }
 
+const SCALAR_RETURN_SRC = `
+@keep fn return_input(x: int): int {
+  return x
+}
+
+fn scalar_caller(): int {
+  let value: int = return_input(7)
+  return value + 1
+}
+`
+
 // ---------------------------------------------------------------------------
 // 7. End-to-end compile: does not throw
 // ---------------------------------------------------------------------------
@@ -247,6 +258,14 @@ describe('tuple type — end-to-end compile', () => {
 // ---------------------------------------------------------------------------
 
 describe('tuple return — compiled output', () => {
+  test('scalar return call uses unnumbered $ret copyback slot', () => {
+    const allOutput = compileOutput(SCALAR_RETURN_SRC)
+
+    // Scalar returns use the legacy single ABI slot.
+    expect(allOutput).toMatch(/scoreboard players operation \$ret\s+\S+\s+=/)
+    expect(allOutput).not.toContain('$ret_0')
+  })
+
   test('compiled output contains scoreboard operations for both return slots', () => {
     const allOutput = compileOutput(TUPLE_TYPE_SRC)
     // Tuple return compiles to scoreboard operations for ret_0 and ret_1 slots

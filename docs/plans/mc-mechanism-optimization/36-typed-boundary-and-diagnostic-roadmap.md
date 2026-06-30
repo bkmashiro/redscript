@@ -334,11 +334,20 @@ npm run gate:lir-local-copy -- --output /tmp/redscript-typed-boundary-roadmap-fi
 
 ## Roadmap status
 
-- [ ] P17 derived LIR boundary sidecar helper and exhaustive tests.
-- [ ] P18 diagnostic-only sidecar integration.
-- [ ] P19 call/return ABI compile-golden fixture family.
-- [ ] P20 typed branch-return validation spike.
-- [ ] P21 storage/NBT boundary fixture family.
-- [ ] P22 local-copy/RMW evidence closeout v2.
-- [ ] P23 optional Paper/TestHarness semantic smoke.
-- [ ] P24 roadmap/ADR closeout and next decision index.
+- [x] P17 derived LIR boundary sidecar helper and exhaustive tests.
+  Evidence: `src/optimizer/lir/boundary_sidecar.ts`, `src/__tests__/optimizer/lir/boundary_sidecar.test.ts`, gates pass:
+  `npm test -- --selectProjects unit --runTestsByPath src/__tests__/optimizer/lir/boundary_sidecar.test.ts src/__tests__/optimizer/lir/analysis.test.ts --runInBand`, `npm run test:lir`, `npm run build`, `git diff --check`.
+- [x] P18 diagnostic-only sidecar integration.
+  Evidence: `benchmarks/arithmetic-probes.ts`, `scripts/check-lir-local-copy-gate.ts`, `src/__tests__/arithmetic-probes.test.ts`; gate output `/tmp/redscript-p18-sidecar-diagnostics.json`.
+- [x] P19 call/return ABI compile-golden fixture family.
+  Evidence: `src/__tests__/compiler/tuple-type.test.ts`, `src/__tests__/double.test.ts`, `src/__tests__/emit/compile.test.ts`; gates pass: tuple/ABI compile tests + build.
+- [x] P20 typed branch-return validation spike.
+  Evidence: `src/__tests__/lir/verify.test.ts`, `src/__tests__/emit/execute-chain.test.ts`, `src/__tests__/mc-syntax.test.ts`; gates pass: unit tests + `npm run validate-mc` + `npm run build`.
+- [x] P21 storage/NBT boundary fixture family.
+  Evidence: `src/__tests__/emit/compile.test.ts`, `src/__tests__/optimizer/lir/boundary_sidecar.test.ts`, `src/__tests__/mc-syntax.test.ts`, `src/__tests__/optimizer/lir/equivalence.test.ts`; gates pass: unit tests + `npm run validate-mc` + `npm run build`.
+- [x] P22 local-copy/RMW evidence closeout v2.
+  Evidence: P17–P21 diagnostics re-run and gate output in `/tmp/redscript-p22-local-copy-v2.json`; recommendation remains experimental/manual opt-in.
+- [ ] P23 optional Paper/TestHarness semantic smoke. **Blocked.**
+  Blocked: skipped (curl to `http://localhost:25561/status` failed: connection refused on this run), so offline/static gates only.
+- [x] P24 roadmap/ADR closeout and next decision index.
+  Completed with this closeout summary and status updates; P23 remains the current blocker for semantic proof.

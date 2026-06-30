@@ -402,4 +402,14 @@ describe('LIR verifier — clean module', () => {
     ])
     expect(verifyLIR(mod)).toEqual([])
   })
+
+  test('raw execute return-run-function branch shape remains verifier-opaque', () => {
+    const mod = mkModule([
+      mkFn('main', [
+        { kind: 'raw', cmd: 'execute if score $cond __test matches 1 run return run function rs:then_target' },
+        { kind: 'raw', cmd: 'execute unless score $cond __test matches 1 run return run function rs:else_target with storage rs:macro_args' },
+      ]),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
+  })
 })

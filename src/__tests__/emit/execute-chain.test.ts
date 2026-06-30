@@ -111,4 +111,21 @@ describe('execute chain optimization: compilation output', () => {
     )
     expect(content).not.toContain('run execute if')
   })
+
+  test('preserves raw execute branch-return shape for branch and macro-storage variants', () => {
+    const instructions: LIRInstr[] = [
+      { kind: 'raw', cmd: 'execute if score $cond rs.vars matches 1 run return run function rs:then_target' },
+      {
+        kind: 'raw',
+        cmd: 'execute unless score $cond rs.vars matches 1 run return run function rs:else_target with storage rs:macro_args',
+      },
+    ]
+    const files = emit(buildModule(instructions), { namespace: 'rs' })
+    const content = getFile(files, 'test_fn.mcfunction')
+
+    expect(content).toContain('execute if score $cond rs.vars matches 1 run return run function rs:then_target')
+    expect(content).toContain(
+      'execute unless score $cond rs.vars matches 1 run return run function rs:else_target with storage rs:macro_args',
+    )
+  })
 })

@@ -2598,6 +2598,30 @@ describe('arithmetic probe benchmark tooling', () => {
     }
   })
 
+  it('includes boundary sidecar summaries in probe and case diagnostics', () => {
+    const report = runArithmeticProbeReport('int_arithmetic', [1], true)
+    const caseSummary = report.cases[0]?.boundarySidecarSummary
+
+    expect(report.boundarySidecarSummary).toBeDefined()
+    expect(caseSummary).toBeDefined()
+
+    if (report.boundarySidecarSummary && caseSummary) {
+      expect(report.boundarySidecarSummary.totalInstructions).toBe(caseSummary.totalInstructions)
+      expect(report.boundarySidecarSummary.totalInstructions).toBe(
+        report.boundarySidecarSummary.byConfidence.exact
+        + report.boundarySidecarSummary.byConfidence.conservative
+        + report.boundarySidecarSummary.byConfidence.opaque,
+      )
+      expect(report.boundarySidecarSummary.byProvenance['typed-lir']).toBeGreaterThanOrEqual(0)
+      expect(report.boundarySidecarSummary.byProvenance['macro-helper']).toBeGreaterThanOrEqual(0)
+      expect(report.boundarySidecarSummary.byProvenance['lowering-compat']).toBeGreaterThanOrEqual(0)
+      expect(report.boundarySidecarSummary.byProvenance['raw-user-command']).toBeGreaterThanOrEqual(0)
+      expect(caseSummary.totalInstructions).toBeGreaterThan(0)
+      expect(caseSummary.rawTextInstructions).toBeGreaterThanOrEqual(0)
+      expect(caseSummary.barrierInstructions).toBeGreaterThanOrEqual(0)
+    }
+  })
+
   it('reports per-case rewrite-opportunity statuses that cover all score-copy commands', () => {
     const result = runArithmeticProbeReport('int_arithmetic', [1])
     const [probeResult] = result.cases

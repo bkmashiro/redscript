@@ -9,7 +9,12 @@ import {
   summarizeFiles,
   writeJsonReport,
 } from './_shared'
-import type { Slot } from '../src/lir/types'
+import {
+  deriveBoundarySidecar,
+  type BoundaryConfidence,
+  type BoundaryProvenance,
+} from '../src/optimizer/lir/boundary_sidecar'
+import type { LIRModule, Slot } from '../src/lir/types'
 import {
   chooseVirLoweringPlan,
   type VirFunctionLoweringDecision,
@@ -45,6 +50,16 @@ export interface CommandCategorySummary {
   teleport: number
   macro: number
   rawCommandLike: number
+}
+
+export interface BoundarySidecarSummary {
+  totalInstructions: number
+  byConfidence: Record<BoundaryConfidence, number>
+  byProvenance: Record<BoundaryProvenance, number>
+  barrierInstructions: number
+  rawTextInstructions: number
+  macroSubstitutionInstructions: number
+  opaqueStorageInstructions: number
 }
 
 export interface CopyOriginSummary {
@@ -1081,6 +1096,7 @@ export interface ArithmeticProbeResult {
   copyOrigins: CopyOriginSummary
   scoreCopyPatterns: ScoreCopyPatternSummary
   rewriteOpportunities: CopyRewriteOpportunitySummary
+  boundarySidecarSummary?: BoundarySidecarSummary
   virDecision?: {
     status: VirToLirDecisionReport['kind']
     selectedMode: VirToLirDecisionReport['selectedMode']
@@ -1113,6 +1129,7 @@ export interface ArithmeticProbeReport {
   generatedAt: string
   host: ReturnType<typeof benchmarkMeta>['host']
   cases: ArithmeticProbeResult[]
+  boundarySidecarSummary?: BoundarySidecarSummary
   scoreCopyPatterns: ScoreCopyPatternSummary
   copyOrigins?: CopyOriginSummary
   rewriteOpportunities: CopyRewriteOpportunitySummary
@@ -8640,6 +8657,42 @@ function toComparisonCaseKey(result: ArithmeticProbeResult): string {
   return `${result.case}::${result.optLevel}`
 }
 
+function summarizeBoundarySidecarsFromLir(lir: LIRModule): BoundarySidecarSummary {
+  const summary: BoundarySidecarSummary = {
+    totalInstructions: 0,
+    byConfidence: {
+      exact: 0,
+      conservative: 0,
+      opaque: 0,
+    },
+    byProvenance: {
+      'typed-lir': 0,
+      'macro-helper': 0,
+      'raw-user-command': 0,
+      'lowering-compat': 0,
+    },
+    barrierInstructions: 0,
+    rawTextInstructions: 0,
+    macroSubstitutionInstructions: 0,
+    opaqueStorageInstructions: 0,
+  }
+
+  for (const fn of lir.functions) {
+    for (const instr of fn.instructions) {
+      summary.totalInstructions += 1
+      const sidecar = deriveBoundarySidecar(instr)
+      summary.byConfidence[sidecar.confidence] += 1
+      summary.byProvenance[sidecar.provenance] += 1
+      if (sidecar.barrier) summary.barrierInstructions += 1
+      if (sidecar.rawText) summary.rawTextInstructions += 1
+      if (sidecar.macroSubstitution) summary.macroSubstitutionInstructions += 1
+      if (sidecar.opaqueStorageRead || sidecar.opaqueStorageWrite) summary.opaqueStorageInstructions += 1
+    }
+  }
+
+  return summary
+}
+
 function buildExperimentalLocalCopyRewriteComparison(
   offCases: ArithmeticProbeResult[],
   onCases: ArithmeticProbeResult[],
@@ -8996,6 +9049,7 @@ export function runArithmeticProbe(
     },
     files: summarizeFiles(result.files),
     commands: summarizeCommandCategories(result.files),
+    boundarySidecarSummary: summarizeBoundarySidecarsFromLir(result.lir),
     estimatedCost: summarizeCommandCosts(result.files),
     copyOrigins: summarizeCopyOrigins(lines),
     scoreCopyPatterns: summarizeScoreCopyPatterns(result.files),
@@ -9073,9 +9127,15 @@ export function runArithmeticProbeReport(
   const experimentalLocalCopyRewriteResidualSummary = experimentalLirLocalCopyRewrite
     ? summarizeExperimentalLocalCopyRewriteResidualSummary(experimentalLocalCopyRewriteResidualSummaries)
     : undefined
+  const boundarySidecarSummary = cases.length === 0
+    ? undefined
+    : summarizeBoundarySidecarSummaries(cases.map(result => result.boundarySidecarSummary).filter(
+      (summary): summary is BoundarySidecarSummary => summary !== undefined,
+    ))
   return {
     ...meta,
     cases,
+    boundarySidecarSummary,
     scoreCopyPatterns: mergeScoreCopyPatterns(cases.map(result => result.scoreCopyPatterns)),
     copyOrigins: mergeCopyOrigins(cases.map(result => result.copyOrigins)),
     rewriteOpportunities: mergeRewriteOpportunities(cases.map(result => result.rewriteOpportunities)),
@@ -9090,6 +9150,43 @@ export function runArithmeticProbeReport(
     offlineRewriteTestHarnessSummary: lirOpportunitySummary?.offlineRewriteTestHarnessSummary,
     virDecisionDashboard: buildVirArithmeticDecisionDashboard(cases),
   }
+}
+
+function summarizeBoundarySidecarSummaries(summaries: BoundarySidecarSummary[]): BoundarySidecarSummary {
+  const merged: BoundarySidecarSummary = {
+    totalInstructions: 0,
+    byConfidence: {
+      exact: 0,
+      conservative: 0,
+      opaque: 0,
+    },
+    byProvenance: {
+      'typed-lir': 0,
+      'macro-helper': 0,
+      'raw-user-command': 0,
+      'lowering-compat': 0,
+    },
+    barrierInstructions: 0,
+    rawTextInstructions: 0,
+    macroSubstitutionInstructions: 0,
+    opaqueStorageInstructions: 0,
+  }
+
+  for (const summary of summaries) {
+    merged.totalInstructions += summary.totalInstructions
+    merged.barrierInstructions += summary.barrierInstructions
+    merged.rawTextInstructions += summary.rawTextInstructions
+    merged.macroSubstitutionInstructions += summary.macroSubstitutionInstructions
+    merged.opaqueStorageInstructions += summary.opaqueStorageInstructions
+    for (const [confidence, count] of Object.entries(summary.byConfidence) as Array<[BoundaryConfidence, number]>) {
+      merged.byConfidence[confidence] += count
+    }
+    for (const [provenance, count] of Object.entries(summary.byProvenance) as Array<[BoundaryProvenance, number]>) {
+      merged.byProvenance[provenance] += count
+    }
+  }
+
+  return merged
 }
 
 export function parseProbeCliArgs(argv: string[]): ProbeCliArgs {

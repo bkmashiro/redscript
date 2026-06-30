@@ -161,4 +161,34 @@ fn compare_and_branch() {
     expect(missingFunctionId.valid).toBe(false)
     expect(missingFunctionId.error).toContain('must be namespaced ids')
   })
+
+  test('accepts execute branch-return shape as a control-flow boundary', () => {
+    const result = validator.validate(
+      'execute if score $cond __bc matches 1 run return run function rs:branch_then',
+    )
+    expect(result.valid).toBe(true)
+  })
+
+  test('accepts execute branch-return function-macro shape with with storage', () => {
+    const result = validator.validate(
+      'execute if score $cond __bc matches 1 run return run function rs:macro_then with storage rs:macro_args',
+    )
+    expect(result.valid).toBe(true)
+  })
+
+  test('accepts and rejects typed storage boundaries', () => {
+    const validStore = validator.validate(
+      'execute store result storage rs:typed val int 100 run scoreboard players get #p core',
+    )
+    const validGet = validator.validate(
+      'execute store result score #tmp core run data get storage rs:typed val 100',
+    )
+    const invalidStorageScale = validator.validate(
+      'execute store result score #tmp core run data get storage rs:typed val invalid',
+    )
+
+    expect(validStore.valid).toBe(true)
+    expect(validGet.valid).toBe(true)
+    expect(invalidStorageScale.valid).toBe(false)
+  })
 })

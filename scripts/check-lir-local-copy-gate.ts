@@ -52,6 +52,7 @@ function main(): void {
   const rolloutReadiness = report.experimentalLocalCopyRewriteRolloutReadinessSummary
   const comparison = report.experimentalLocalCopyRewriteComparison
   const offlinePack = report.offlineRewriteEquivalencePackSummary
+  const boundarySidecarSummary = report.boundarySidecarSummary
 
   if (!gate) {
     console.error('Missing experimentalLocalCopyRewriteNoRegressionGate in explicit local-copy report output')
@@ -100,6 +101,28 @@ function main(): void {
     `regressedCount command=${comparison?.commandDeltaSummary?.regressedCount ?? 0}`
     + ` scoreCopy=${comparison?.scoreCopyDeltaSummary?.regressedCount ?? 0}`,
   )
+  if (boundarySidecarSummary) {
+    console.log(
+      `sidecar totals: totalInstructions=${boundarySidecarSummary.totalInstructions}`
+      + ` exact=${boundarySidecarSummary.byConfidence.exact}`
+      + ` conservative=${boundarySidecarSummary.byConfidence.conservative}`
+      + ` opaque=${boundarySidecarSummary.byConfidence.opaque}`,
+    )
+    console.log(
+      `sidecar provenance: typed-lir=${boundarySidecarSummary.byProvenance['typed-lir']}`
+      + ` macro-helper=${boundarySidecarSummary.byProvenance['macro-helper']}`
+      + ` raw-user-command=${boundarySidecarSummary.byProvenance['raw-user-command']}`
+      + ` lowering-compat=${boundarySidecarSummary.byProvenance['lowering-compat']}`,
+    )
+    console.log(
+      `sidecar barriers: barriers=${boundarySidecarSummary.barrierInstructions}`
+      + ` rawText=${boundarySidecarSummary.rawTextInstructions}`
+      + ` macroSub=${boundarySidecarSummary.macroSubstitutionInstructions}`
+      + ` opaqueStorage=${boundarySidecarSummary.opaqueStorageInstructions}`,
+    )
+  } else {
+    console.log('sidecar totals: missing')
+  }
   console.log(`output: ${outputPath}`)
 
   if (gate.status !== 'pass' || rolloutReadiness.status !== 'pass') {
