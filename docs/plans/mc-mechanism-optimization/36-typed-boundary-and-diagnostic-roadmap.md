@@ -347,7 +347,7 @@ npm run gate:lir-local-copy -- --output /tmp/redscript-typed-boundary-roadmap-fi
   Evidence: `src/__tests__/emit/compile.test.ts`, `src/__tests__/optimizer/lir/boundary_sidecar.test.ts`, `src/__tests__/mc-syntax.test.ts`, `src/__tests__/optimizer/lir/equivalence.test.ts`; gates pass: unit tests + `npm run validate-mc` + `npm run build`.
 - [x] P22 local-copy/RMW evidence closeout v2.
   Evidence: P17–P21 diagnostics re-run and gate output in `/tmp/redscript-p22-local-copy-v2.json`; recommendation remains experimental/manual opt-in.
-- [ ] P23 optional Paper/TestHarness semantic smoke. **Blocked.**
-  Blocked: skipped (curl to `http://localhost:25561/status` failed: connection refused on this run), so offline/static gates only.
+- [x] P23 optional Paper/TestHarness semantic smoke.
+  Evidence: `curl -fsS --max-time 2 http://localhost:25561/status` returned online server status, then `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passed 19/19 live MC core oracle tests.
 - [x] P24 roadmap/ADR closeout and next decision index.
-  Completed with this closeout summary and status updates; P23 remains the current blocker for semantic proof.
+  Completed with this closeout summary and status updates; local-copy/RMW remains manual experimental opt-in by gate evidence.
