@@ -273,6 +273,31 @@ describe('emit: direct LIR emission', () => {
     expect(JSON.parse(loadJson!.content).values).toEqual(['ns:load'])
   })
 
+  test('rejects normalized function path collisions at artifact emission', () => {
+    const module: LIRModule = {
+      namespace: 'ns',
+      objective: '__obj',
+      functions: [
+        { name: 'Foo::bar', isMacro: false, macroParams: [], instructions: [{ kind: 'raw', cmd: 'say upper' }] },
+        { name: 'foo/bar', isMacro: false, macroParams: [], instructions: [{ kind: 'raw', cmd: 'say slash' }] },
+      ],
+    }
+
+    expect(() => emit(module, { namespace: 'ns' })).toThrow(/Duplicate datapack artifact path 'data\/ns\/function\/foo\/bar\.mcfunction'/)
+  })
+
+  test('rejects generated helper collisions with emitted user functions', () => {
+    const module: LIRModule = {
+      namespace: 'ns',
+      objective: '__obj',
+      functions: [
+        { name: 'load', isMacro: false, macroParams: [], instructions: [] },
+      ],
+    }
+
+    expect(() => emit(module, { namespace: 'ns' })).toThrow(/Duplicate datapack artifact path 'data\/ns\/function\/load\.mcfunction'/)
+  })
+
   describe('ne operator emission', () => {
     const sourceLoc = { file: 'src/ne.mcrs', line: 1, col: 1 }
     const a = { player: '$x', obj: '__ne' }

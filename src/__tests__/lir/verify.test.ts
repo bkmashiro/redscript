@@ -253,6 +253,26 @@ describe('LIR verifier — function references', () => {
     expect(verifyLIR(mod)).toEqual([])
   })
 
+  test('resolves qualified refs after path normalization', () => {
+    const mod = mkModule([
+      mkFn('main', [{ kind: 'call', fn: 'test:type/method' }]),
+      mkFn('Type::Method', []),
+    ])
+    expect(verifyLIR(mod)).toEqual([])
+  })
+
+  test('rejects functions whose normalized datapack paths collide', () => {
+    const mod = mkModule([
+      mkFn('Foo::bar', []),
+      mkFn('foo/bar', []),
+      mkFn('FOO::BAR', []),
+    ])
+    const errors = verifyLIR(mod)
+    expect(errors).toHaveLength(2)
+    expect(errors[0].message).toContain('function path collision')
+    expect(errors[0].message).toContain('test:foo/bar')
+  })
+
   test('rejects call to undefined function', () => {
     const mod = mkModule([
       mkFn('main', [{ kind: 'call', fn: 'test:nonexistent' }]),

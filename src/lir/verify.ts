@@ -16,11 +16,24 @@ export interface LIRVerifyError {
 
 export function verifyLIR(module: LIRModule): LIRVerifyError[] {
   const errors: LIRVerifyError[] = []
-  const fnNames = new Set(module.functions.map(f => `${module.namespace}:${f.name}`))
-  const localFnNames = new Set(module.functions.map(f => f.name))
+  const normalizedFunctionRefs = new Set<string>()
+  const normalizedFunctionPaths = new Map<string, string>()
 
   for (const fn of module.functions) {
-    errors.push(...verifyFunction(fn, module, fnNames, localFnNames))
+    const normalizedPath = normalizeFunctionPathPart(fn.name)
+    const previous = normalizedFunctionPaths.get(normalizedPath)
+    if (previous !== undefined && previous !== fn.name) {
+      errors.push({
+        fn: fn.name,
+        message: `function path collision: '${previous}' and '${fn.name}' both emit as '${module.namespace}:${normalizedPath}'`,
+      })
+    }
+    normalizedFunctionPaths.set(normalizedPath, fn.name)
+    normalizedFunctionRefs.add(normalizeFunctionRef(fn.name, module.namespace))
+  }
+
+  for (const fn of module.functions) {
+    errors.push(...verifyFunction(fn, module, normalizedFunctionRefs))
   }
 
   return errors
@@ -29,8 +42,7 @@ export function verifyLIR(module: LIRModule): LIRVerifyError[] {
 function verifyFunction(
   fn: LIRFunction,
   module: LIRModule,
-  fnNames: Set<string>,
-  localFnNames: Set<string>,
+  normalizedFunctionRefs: Set<string>,
 ): LIRVerifyError[] {
   const errors: LIRVerifyError[] = []
 
@@ -52,7 +64,8 @@ function verifyFunction(
     for (const ref of getFnRefsFromInstr(instr)) {
       // Skip empty refs (used in store_cmd_to_score with cmp pattern)
       if (ref === '' || ref === `${module.namespace}:`) continue
-      const refersToLocalFn = fnNames.has(ref) || localFnNames.has(ref)
+      const normalizedRef = normalizeFunctionRef(ref, module.namespace)
+      const refersToLocalFn = normalizedFunctionRefs.has(normalizedRef)
       if (!refersToLocalFn) {
         errors.push({
           fn: fn.name,
@@ -86,6 +99,18 @@ function verifyFunction(
   }
 
   return errors
+}
+
+function normalizeFunctionPathPart(name: string): string {
+  return name.replace(/::/g, '/').toLowerCase()
+}
+
+function normalizeFunctionRef(ref: string, namespace: string): string {
+  const colon = ref.indexOf(':')
+  if (colon >= 0 && ref[colon + 1] !== ':') {
+    return `${ref.slice(0, colon)}:${normalizeFunctionPathPart(ref.slice(colon + 1))}`
+  }
+  return `${namespace}:${normalizeFunctionPathPart(ref)}`
 }
 
 function getInstrsFromInstr(instr: LIRInstr): LIRInstr[] {

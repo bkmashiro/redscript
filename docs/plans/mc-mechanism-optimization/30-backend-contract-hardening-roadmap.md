@@ -341,6 +341,8 @@ deadSlotElimModule
 
 ## P8 — Function path/reference/collision validation
 
+**Status:** ✅ Done
+
 **Product promise:** Emitted function paths and references are unique and resolvable after lowercasing/path normalization.
 
 **Primary files:**

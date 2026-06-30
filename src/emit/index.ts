@@ -368,7 +368,19 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     }
   }
 
+  assertNoConflictingDatapackPaths(files)
   return files
+}
+
+function assertNoConflictingDatapackPaths(files: DatapackFile[]): void {
+  const byPath = new Map<string, DatapackFile>()
+  for (const file of files) {
+    const previous = byPath.get(file.path)
+    if (previous && previous.content !== file.content) {
+      throw new Error(`Duplicate datapack artifact path '${file.path}' generated with different content`)
+    }
+    byPath.set(file.path, file)
+  }
 }
 
 function uniqueValues(values: string[]): string[] {
