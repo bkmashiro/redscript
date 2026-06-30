@@ -225,6 +225,7 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
 
   // Collect module-level global variable names (mutable lets at top level)
   const globalVarNames = new Set<string>(hir.globals.map(g => g.name))
+  const stringLiteralSpecializedFns = collectStringLiteralSpecializedFunctionNames(hir.functions, fnParamInfo)
 
   const allFunctions: MIRFunction[] = []
   for (const f of hir.functions) {
@@ -234,8 +235,11 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
     if (f.isLibraryFn && f.params.some(p => p.type.kind === 'array')) {
       continue
     }
+    if (stringLiteralSpecializedFns.has(f.name)) {
+      continue
+    }
 
-    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, structFieldTypes, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues, singletonStructs, displayImpls, globalVarNames)
+    const { fn, helpers } = lowerFunction(f, hir.namespace, structDefs, structFieldTypes, implMethods, macroInfo, fnParamInfo, enumDefs, sourceFile, timerCounter, undefined, undefined, hirFnMap, specializedFnsRegistry, undefined, enumPayloads, constValues, singletonStructs, displayImpls, globalVarNames)
     allFunctions.push(fn, ...helpers)
   }
 
@@ -257,6 +261,180 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
     functions: allFunctions,
     namespace: hir.namespace,
     objective: `__${hir.namespace}`,
+  }
+}
+
+function collectStringLiteralSpecializedFunctionNames(
+  functions: HIRFunction[],
+  fnParamInfo: Map<string, HIRParam[]>,
+): Set<string> {
+  const stringParamFns = new Set<string>()
+  for (const fn of functions) {
+    const hasStringParam = fn.params.some(p => p.type.kind === 'named' && (p.type.name === 'string' || p.type.name === 'format_string'))
+    if (hasStringParam && fn.decorators.length === 0) stringParamFns.add(fn.name)
+  }
+
+  const calls = new Map<string, { total: number; literalSafe: number }>()
+  const noteCall = (expr: HIRExpr) => {
+    if (expr.kind !== 'call' || !stringParamFns.has(expr.fn)) return
+    const params = fnParamInfo.get(expr.fn)
+    if (!params) return
+    const entry = calls.get(expr.fn) ?? { total: 0, literalSafe: 0 }
+    entry.total++
+    const safe = params.every((param, index) => {
+      if (!(param.type.kind === 'named' && (param.type.name === 'string' || param.type.name === 'format_string'))) return true
+      return expr.args[index]?.kind === 'str_lit'
+    })
+    if (safe) entry.literalSafe++
+    calls.set(expr.fn, entry)
+  }
+
+  for (const fn of functions) walkHIRBlock(fn.body, noteCall)
+
+  const result = new Set<string>()
+  for (const [fnName, entry] of calls) {
+    if (entry.total > 0 && entry.total === entry.literalSafe) result.add(fnName)
+  }
+  return result
+}
+
+function walkHIRBlock(block: HIRBlock, visitExpr: (expr: HIRExpr) => void): void {
+  for (const stmt of block) walkHIRStmt(stmt, visitExpr)
+}
+
+function walkHIRStmt(stmt: HIRStmt, visitExpr: (expr: HIRExpr) => void): void {
+  switch (stmt.kind) {
+    case 'let':
+      walkHIRExpr(stmt.init, visitExpr)
+      break
+    case 'const_decl':
+      walkHIRExpr(stmt.value, visitExpr)
+      break
+    case 'let_destruct':
+      walkHIRExpr(stmt.init, visitExpr)
+      break
+    case 'expr':
+      walkHIRExpr(stmt.expr, visitExpr)
+      break
+    case 'return':
+      if (stmt.value) walkHIRExpr(stmt.value, visitExpr)
+      break
+    case 'if':
+      walkHIRExpr(stmt.cond, visitExpr)
+      walkHIRBlock(stmt.then, visitExpr)
+      if (stmt.else_) walkHIRBlock(stmt.else_, visitExpr)
+      break
+    case 'while':
+      walkHIRExpr(stmt.cond, visitExpr)
+      walkHIRBlock(stmt.body, visitExpr)
+      if (stmt.step) walkHIRBlock(stmt.step, visitExpr)
+      break
+    case 'foreach':
+      walkHIRExpr(stmt.iterable, visitExpr)
+      walkHIRBlock(stmt.body, visitExpr)
+      break
+    case 'match':
+      walkHIRExpr(stmt.expr, visitExpr)
+      stmt.arms.forEach(arm => walkHIRBlock(arm.body, visitExpr))
+      break
+    case 'execute':
+      walkHIRBlock(stmt.body, visitExpr)
+      break
+    case 'if_let_some':
+      walkHIRExpr(stmt.init, visitExpr)
+      walkHIRBlock(stmt.then, visitExpr)
+      if (stmt.else_) walkHIRBlock(stmt.else_, visitExpr)
+      break
+    case 'while_let_some':
+      walkHIRExpr(stmt.init, visitExpr)
+      walkHIRBlock(stmt.body, visitExpr)
+      break
+    case 'labeled_loop':
+      walkHIRStmt(stmt.body, visitExpr)
+      break
+    case 'raw':
+    case 'break':
+    case 'continue':
+    case 'break_label':
+    case 'continue_label':
+      break
+  }
+}
+
+function walkHIRExpr(expr: HIRExpr, visitExpr: (expr: HIRExpr) => void): void {
+  visitExpr(expr)
+  switch (expr.kind) {
+    case 'array_lit':
+      expr.elements.forEach(e => walkHIRExpr(e, visitExpr))
+      break
+    case 'struct_lit':
+      expr.fields.forEach(f => walkHIRExpr(f.value, visitExpr))
+      break
+    case 'str_interp':
+      expr.parts.forEach(p => { if (typeof p !== 'string') walkHIRExpr(p, visitExpr) })
+      break
+    case 'f_string':
+      expr.parts.forEach(p => { if (p.kind === 'expr') walkHIRExpr(p.expr, visitExpr) })
+      break
+    case 'binary':
+      walkHIRExpr(expr.left, visitExpr)
+      walkHIRExpr(expr.right, visitExpr)
+      break
+    case 'unary':
+      walkHIRExpr(expr.operand, visitExpr)
+      break
+    case 'is_check':
+      walkHIRExpr(expr.expr, visitExpr)
+      break
+    case 'assign':
+      walkHIRExpr(expr.value, visitExpr)
+      break
+    case 'member_assign':
+      walkHIRExpr(expr.obj, visitExpr)
+      walkHIRExpr(expr.value, visitExpr)
+      break
+    case 'index_assign':
+      walkHIRExpr(expr.obj, visitExpr)
+      walkHIRExpr(expr.index, visitExpr)
+      walkHIRExpr(expr.value, visitExpr)
+      break
+    case 'member':
+      walkHIRExpr(expr.obj, visitExpr)
+      break
+    case 'index':
+      walkHIRExpr(expr.obj, visitExpr)
+      walkHIRExpr(expr.index, visitExpr)
+      break
+    case 'call':
+      expr.args.forEach(a => walkHIRExpr(a, visitExpr))
+      break
+    case 'invoke':
+      walkHIRExpr(expr.callee, visitExpr)
+      expr.args.forEach(a => walkHIRExpr(a, visitExpr))
+      break
+    case 'static_call':
+      expr.args.forEach(a => walkHIRExpr(a, visitExpr))
+      break
+    case 'enum_construct':
+      expr.args.forEach(a => walkHIRExpr(a.value, visitExpr))
+      break
+    case 'lambda':
+      if (Array.isArray(expr.body)) walkHIRBlock(expr.body, visitExpr)
+      else walkHIRExpr(expr.body, visitExpr)
+      break
+    case 'tuple_lit':
+      expr.elements.forEach(e => walkHIRExpr(e, visitExpr))
+      break
+    case 'some_lit':
+      walkHIRExpr(expr.value, visitExpr)
+      break
+    case 'unwrap_or':
+      walkHIRExpr(expr.opt, visitExpr)
+      walkHIRExpr(expr.default_, visitExpr)
+      break
+    case 'type_cast':
+      walkHIRExpr(expr.expr, visitExpr)
+      break
   }
 }
 
@@ -315,6 +493,8 @@ class FnContext {
    * overwritten on reassignment.
    */
   readonly stringVars = new Map<string, string>()
+  /** String parameters specialized to compile-time literal values. */
+  stringLiteralVars = new Map<string, string>()
   /** Macro function info for all functions in the module */
   readonly macroInfo: Map<string, MacroFunctionInfo>
   /** Function parameter info for call_macro generation */
@@ -413,6 +593,7 @@ class FnContext {
     helperCtx.singletonStructs = this.singletonStructs
     helperCtx.displayImpls = this.displayImpls
     helperCtx.globalVarNames = this.globalVarNames
+    helperCtx.stringLiteralVars = new Map(this.stringLiteralVars)
     return helperCtx
   }
 
@@ -562,6 +743,8 @@ function lowerFunction(
   timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
   /** Pre-bound array variable info for array-parameter monomorphization */
   arrayArgBindings?: Map<string, { ns: string; pathPrefix: string }>,
+  /** Pre-bound compile-time string literal parameters for call-site specialization */
+  stringLiteralArgBindings?: Map<string, string>,
   /** HIR function map for generating specialized callees */
   hirFnMap?: Map<string, HIRFunction>,
   /** Shared registry of already-generated specialized MIR functions */
@@ -637,6 +820,9 @@ function lowerFunction(
       ctx.arrayVars.set(paramName, arrInfo)
     }
   }
+  if (stringLiteralArgBindings) {
+    ctx.stringLiteralVars = new Map(stringLiteralArgBindings)
+  }
 
   // Create temps for parameters, skipping array-type params that are pre-bound,
   // legacy event executor aliases, and double-type params (which are passed via
@@ -672,6 +858,9 @@ function lowerFunction(
       return
     }
     if (p.type.kind === 'named' && (p.type.name === 'string' || p.type.name === 'format_string')) {
+      if (ctx.stringLiteralVars.has(p.name)) {
+        return
+      }
       ctx.stringVars.set(p.name, `__sp${stringParamSlot++}`)
       return
     }
@@ -1827,6 +2016,17 @@ function lowerStmt(
 // Expression lowering → produces an Operand (temp or const)
 // ---------------------------------------------------------------------------
 
+function getStaticStringLiteral(expr: HIRExpr, ctx: FnContext): string | undefined {
+  if (expr.kind === 'str_lit') return expr.value
+  if (expr.kind === 'ident') return ctx.stringLiteralVars.get(expr.name)
+  return undefined
+}
+
+function sanitizeSpecializationKey(value: string): string {
+  const sanitized = value.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  return sanitized.length > 0 ? sanitized : 'empty'
+}
+
 /**
  * Lower a HIR expression to an `Operand` usable in MIR instructions.
  *
@@ -1977,6 +2177,17 @@ function lowerExpr(
       }
       if (expr.op === '||') {
         return lowerShortCircuitOr(expr, ctx, scope)
+      }
+
+      if (expr.op === '==' || expr.op === '!=') {
+        const leftString = getStaticStringLiteral(expr.left, ctx)
+        const rightString = getStaticStringLiteral(expr.right, ctx)
+        if (leftString !== undefined && rightString !== undefined) {
+          const t = ctx.freshTemp()
+          const equal = leftString === rightString
+          ctx.emit({ kind: 'const', dst: t, value: expr.op === '==' ? (equal ? 1 : 0) : (equal ? 0 : 1) })
+          return { kind: 'temp', name: t }
+        }
       }
 
       // Double arithmetic intrinsics: double op double → call math_hp:double_add/sub/mul/div
@@ -2781,6 +2992,7 @@ function lowerExpr(
                 ctx.sourceFile,
                 ctx.timerCounter,
                 arrayArgBindings,
+                undefined,
                 ctx.hirFunctions,
                 ctx.specializedFnsRegistry,
                 specializedName,
@@ -2808,6 +3020,74 @@ function lowerExpr(
         }
       }
       // --- end array monomorphization ---
+
+      // --- String-literal parameter specialization ---
+      // If a regular function with string params is called with literal string
+      // arguments, generate a call-site specialized copy where those params are
+      // compile-time constants. This lets branches such as
+      // `if (winner == "red")` fold without introducing a general runtime
+      // string-comparison model.
+      {
+        const targetHirFn = ctx.hirFunctions.get(expr.fn)
+        const targetParams = ctx.fnParamInfo.get(expr.fn)
+        if (targetHirFn && targetParams && ctx.specializedFnsRegistry) {
+          const stringLiteralBindings = new Map<string, string>()
+          for (let i = 0; i < targetParams.length && i < expr.args.length; i++) {
+            const param = targetParams[i]
+            const arg = expr.args[i]
+            if (param.type.kind === 'named' && (param.type.name === 'string' || param.type.name === 'format_string') && arg.kind === 'str_lit') {
+              stringLiteralBindings.set(param.name, arg.value)
+            }
+          }
+
+          if (stringLiteralBindings.size > 0) {
+            const bindingKey = [...stringLiteralBindings.entries()]
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([p, value]) => `${p}__${sanitizeSpecializationKey(value)}`)
+              .join('__')
+            const specializedName = `${expr.fn}__str_${bindingKey}`
+
+            if (!ctx.specializedFnsRegistry.has(specializedName)) {
+              ctx.specializedFnsRegistry.set(specializedName, [])
+              const { fn: specFn, helpers: specHelpers } = lowerFunction(
+                targetHirFn,
+                ctx.getNamespace(),
+                ctx.structDefs,
+                ctx.structFieldTypes,
+                ctx.implMethods,
+                ctx.macroInfo,
+                ctx.fnParamInfo,
+                ctx.enumDefs,
+                ctx.sourceFile,
+                ctx.timerCounter,
+                undefined,
+                stringLiteralBindings,
+                ctx.hirFunctions,
+                ctx.specializedFnsRegistry,
+                specializedName,
+                ctx.enumPayloads,
+                ctx.constValues,
+                ctx.singletonStructs,
+                ctx.displayImpls,
+                ctx.globalVarNames,
+              )
+              ctx.specializedFnsRegistry.set(specializedName, [specFn, ...specHelpers])
+            }
+
+            const nonStringLiteralArgs: Operand[] = []
+            for (let i = 0; i < expr.args.length; i++) {
+              const param = targetParams[i]
+              if (!param || !stringLiteralBindings.has(param.name)) {
+                nonStringLiteralArgs.push(lowerExpr(expr.args[i], ctx, scope))
+              }
+            }
+            const t = ctx.freshTemp()
+            ctx.emit({ kind: 'call', dst: t, fn: specializedName, args: nonStringLiteralArgs })
+            return { kind: 'temp', name: t }
+          }
+        }
+      }
+      // --- end string-literal specialization ---
 
       // Check if any args are double-typed — pass via NBT __dp<i> slots
       {

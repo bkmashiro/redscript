@@ -12,6 +12,11 @@ namespace tutorial07
 import random::*
 import noise::*
 
+const LOOT_DIAMOND: int = 1
+const LOOT_GOLD: int = 2
+const LOOT_IRON: int = 3
+const LOOT_BREAD: int = 4
+
 // ─── State ──────────────────────────────────────────────────────────────────
 
 @load
@@ -33,27 +38,52 @@ fn advance_seed() -> int {
 
 // ─── Loot table using random_range ───────────────────────────────────────────
 
-fn pick_loot_item(seed: int) -> string {
+fn pick_loot_item(seed: int) -> int {
     // random_range returns a value in [lo, hi)
     let roll: int = random_range(seed, 0, 10)  // 0..9
 
     if (roll < 2) {
-        return "minecraft:diamond"        // 20%
+        return LOOT_DIAMOND        // 20%
     }
     if (roll < 5) {
-        return "minecraft:gold_ingot"     // 30%
+        return LOOT_GOLD           // 30%
     }
     if (roll < 8) {
-        return "minecraft:iron_ingot"     // 30%
+        return LOOT_IRON           // 30%
     }
-    return "minecraft:bread"              // 20%
+    return LOOT_BREAD              // 20%
 }
 
-fn item_name(item: string) -> string {
-    if (item == "minecraft:diamond") { return "Diamond" }
-    if (item == "minecraft:gold_ingot") { return "Gold Ingot" }
-    if (item == "minecraft:iron_ingot") { return "Iron Ingot" }
-    return "Bread"
+fn give_loot(target: selector, item: int, count: int) {
+    if (item == LOOT_DIAMOND) {
+        give(target, "minecraft:diamond", count)
+    } else {
+        if (item == LOOT_GOLD) {
+            give(target, "minecraft:gold_ingot", count)
+        } else {
+            if (item == LOOT_IRON) {
+                give(target, "minecraft:iron_ingot", count)
+            } else {
+                give(target, "minecraft:bread", count)
+            }
+        }
+    }
+}
+
+fn tell_loot(target: selector, item: int, count: int) {
+    if (item == LOOT_DIAMOND) {
+        tell(target, f"Found: {count}x Diamond")
+    } else {
+        if (item == LOOT_GOLD) {
+            tell(target, f"Found: {count}x Gold Ingot")
+        } else {
+            if (item == LOOT_IRON) {
+                tell(target, f"Found: {count}x Iron Ingot")
+            } else {
+                tell(target, f"Found: {count}x Bread")
+            }
+        }
+    }
 }
 
 // ─── Open a treasure chest ───────────────────────────────────────────────────
@@ -64,8 +94,7 @@ fn open_chest() {
 
     // 1. Pick loot item
     let seed1: int = advance_seed()
-    let item: string = pick_loot_item(seed1)
-    let name: string = item_name(item)
+    let item: int = pick_loot_item(seed1)
 
     // 2. Reward multiplier from value_noise_1d
     // value_noise_1d returns [0, 10000]  → scale to [1, 3] count
@@ -79,16 +108,16 @@ fn open_chest() {
     let seed3: int = advance_seed()
     let bonus: int = binomial_sample(3, 2500, seed3)   // 3 trials, 25% each → 0..3
 
-    tell(@s, f"Found: {count}x {name}")
-    give(@s, item, count)
+    tell_loot(@s, item, count)
+    give_loot(@s, item, count)
 
     if (bonus > 0) {
         tell(@s, f"BONUS! +{bonus} extra chests!")
         let b: int = 0
         while (b < bonus) {
             let bseed: int = advance_seed()
-            let bitem: string = pick_loot_item(bseed)
-            give(@s, bitem, 1)
+            let bitem: int = pick_loot_item(bseed)
+            give_loot(@s, bitem, 1)
             b = b + 1
         }
     } else {

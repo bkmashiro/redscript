@@ -225,6 +225,37 @@ describe('string value diagnostics', () => {
       expect((err as Error).message).not.toContain('compiler bug')
     }
   })
+
+  test('literal string arguments specialize helper branches without runtime string compare', () => {
+    expect(() => compileSource(`
+      fn choose(tagName: string) -> int {
+        if (tagName == "red") {
+          return 1
+        }
+        return 2
+      }
+
+      fn test() {
+        let red: int = choose("red")
+        let blue: int = choose("blue")
+      }
+    `)).not.toThrow()
+  })
+
+  test('mixed dynamic string calls still report unsupported runtime string comparison', () => {
+    expect(() => compileSource(`
+      fn choose(tagName: string) -> int {
+        if (tagName == "red") {
+          return 1
+        }
+        return 2
+      }
+
+      fn test(tagName: string) {
+        let dynamic: int = choose(tagName)
+      }
+    `)).toThrow(DiagnosticError)
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -83,32 +83,11 @@ export const COMPILE_ALL_SKIP_MANIFEST: CompileAllSkipEntry[] = [
     expectedFailureSubstrings: ["external scoreboard objective 'quest_id'", "module objective '__quest'"],
   },
   {
-    pattern: 'capture_the_flag.mcrs',
-    category: 'known-language-gap',
-    reason: "Direct compile now reports unsupported runtime string comparison for string variable 'winner'.",
-    nextAction: 'Decide whether runtime string comparison should be implemented or rewrite the example to integer/enum state.',
-    expectedFailureSubstrings: ["String value 'winner'", 'runtime string comparison is not yet supported'],
-  },
-  {
     pattern: 'parkour_race.mcrs',
     category: 'known-language-gap',
     reason: "Direct compile currently fails LIR verification because scoreboard slots such as '$(player)' use external objectives.",
     nextAction: 'Decide whether external scoreboard objectives are valid template/example ABI or should produce a clearer diagnostic.',
     expectedFailureSubstrings: ["external scoreboard objective 'pk_checkpoint'", "module objective '__parkour_race'"],
-  },
-  {
-    pattern: 'pvp_arena.mcrs',
-    category: 'known-language-gap',
-    reason: "After struct-return tracking was fixed, direct compile now reports unsupported runtime string comparison for string variable 'tagName'.",
-    nextAction: 'Decide whether runtime string comparison should be implemented or rewrite arena team tags to integer/enum state.',
-    expectedFailureSubstrings: ["String value 'tagName'", 'runtime string comparison is not yet supported'],
-  },
-  {
-    pattern: 'tutorial_07_random.mcrs',
-    category: 'known-language-gap',
-    reason: "Direct compile now reports unsupported runtime string comparison for string variable 'item'.",
-    nextAction: 'Decide whether runtime string comparison should be implemented or rewrite the random tutorial item choice to integer/enum state.',
-    expectedFailureSubstrings: ["String value 'item'", 'runtime string comparison is not yet supported'],
   },
   {
     pattern: 'zombie_survival.mcrs',
