@@ -1125,35 +1125,46 @@
       ]
     },
     {
-      "feature": "foreach + module-level const",
+      "feature": "compile-all language / product skips",
       "proofLevels": [
-        "known-blocker/compile-all-skip"
+        "zero known-language-gap",
+        "compile-all test",
+        "skip-manifest test"
       ],
       "evidenceFiles": [
-        "src/__tests__/compile-all.test.ts"
+        "src/__tests__/compile-all.test.ts",
+        "src/__tests__/compile-all-skip-manifest.test.ts",
+        "src/__tests__/coverage-matrix.test.ts"
       ],
-      "notes": "Blocks interactions.mcrs; Track B should reproduce and minimize."
+      "notes": "Known-language-gap entries are no longer required for compile-all once compile and manifest checks pass."
     },
     {
-      "feature": "array-return-call / array argument to array-returning fn",
+      "feature": "string comparison",
       "proofLevels": [
-        "known-blocker/compile-all-skip"
+        "literal specialization",
+        "finite-choice handling",
+        "runtime string equality deferred"
       ],
       "evidenceFiles": [
-        "src/__tests__/compile-all.test.ts"
+        "docs/plans/redscript-runtime-string-equality-note.md",
+        "src/__tests__/compiler/string-advanced.test.ts"
       ],
-      "notes": "Blocks src/templates and several shipped examples/tutorials."
+      "notes": "Use literal specialization/int finite-choice paths where practical; general runtime string equality remains deferred for a future ADR."
     },
     {
-      "feature": "struct field access / assignment",
+      "feature": "external scoreboard objectives",
       "proofLevels": [
-        "known-mir-stub"
+        "compile restored",
+        "static restored",
+        "ownership-policy boundary"
       ],
       "evidenceFiles": [
-        "src/__tests__/e2e/migrate.test.ts",
-        "src/__tests__/compiler/struct-extends.test.ts"
+        "docs/plans/redscript-external-scoreboard-objective-abi.md",
+        "src/__tests__/lir/verify.test.ts",
+        "src/__tests__/compile-all-skip-manifest.test.ts",
+        "src/__tests__/coverage-matrix.test.ts"
       ],
-      "notes": "Track C should either implement static cases or add clear diagnostics."
+      "notes": "Boundary is constrained to minimal ownership checks; no broad external scoreboard ABI redesign."
     },
     {
       "feature": "typed LIR local-copy rewrite",

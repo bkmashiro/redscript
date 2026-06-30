@@ -96,6 +96,21 @@ describe('RedScript coverage matrix manifest', () => {
     expect(md).toContain('| Module | Category | Proof levels | Evidence | Live Paper status |')
     expect(md).toContain('## Language feature / product-readiness gaps')
   })
+
+  it('does not claim compile-all skip blockers in language-feature coverage when manifest has none', () => {
+    const matrix = readMatrix()
+    const matrixLanguageFeatureStatuses = matrix.languageFeatures
+      .flatMap((entry: any) => entry.proofLevels as string[])
+    const hasCompileAllBlockerStatus = matrixLanguageFeatureStatuses.includes('known-blocker/compile-all-skip')
+    const hasKnownLanguageGaps = COMPILE_ALL_SKIP_MANIFEST.some(entry => entry.category === 'known-language-gap')
+    const md = fs.readFileSync(MATRIX_MD, 'utf-8')
+    const mdClaimsCompileAllBlocker = md.includes('`known-blocker/compile-all-skip`')
+
+    if (!hasKnownLanguageGaps) {
+      expect(hasCompileAllBlockerStatus).toBe(false)
+      expect(mdClaimsCompileAllBlocker).toBe(false)
+    }
+  })
 })
 
 describe('compile-all skip manifest', () => {

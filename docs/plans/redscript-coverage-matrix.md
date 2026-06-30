@@ -83,10 +83,10 @@ For release-readiness, only `live-paper-oracle` is treated as server-runtime pro
 | Feature | Current proof / status | Evidence | Notes |
 |---|---|---|---|
 | imports / stdlib include resolution | `parser/typechecker`<br>`compile-all/static`<br>`unit` | `src/__tests__/stdlib-include.test.ts` |  |
-| foreach + module-level const | `known-blocker/compile-all-skip` | `src/__tests__/compile-all.test.ts` | Blocks interactions.mcrs; Track B should reproduce and minimize. |
-| array-return-call / array argument to array-returning fn | `known-blocker/compile-all-skip` | `src/__tests__/compile-all.test.ts` | Blocks src/templates and several shipped examples/tutorials. |
-| struct field access / assignment | `known-mir-stub` | `src/__tests__/e2e/migrate.test.ts`<br>`src/__tests__/compiler/struct-extends.test.ts` | Track C should either implement static cases or add clear diagnostics. |
-| typed LIR local-copy rewrite | `flag-gated-evidence-only` | `scripts/check-lir-local-copy-gate.ts`<br>`docs/plans/mc-mechanism-optimization/36-typed-boundary-and-diagnostic-roadmap.md` | Manual experimental opt-in only; not default-enabled. |
+| compile-all language / product skips | `zero known-language-gap`<br>`guarded by compile-all + skip-manifest tests` | `src/__tests__/compile-all.test.ts`<br>`src/__tests__/compile-all-skip-manifest.test.ts`<br>`src/__tests__/coverage-matrix.test.ts` | Known-language-gap skips are now cleared from manifest; remaining skip classes are non-language source-reason categories. |
+| string comparison | `literal specialization + finite-choice patterns`<br>`general runtime string equality deferred (future ADR/non-goal)` | `docs/plans/redscript-runtime-string-equality-note.md`<br>`src/__tests__/compiler/string-advanced.test.ts` | Release path uses literal-specialization and finite-choice rewrites where practical; broader runtime `string == string` remains deferred. |
+| external scoreboard objectives | `compile/static restored`<br>`minimal ownership-policy boundary`<br>`not broad ABI redesign` | `docs/plans/redscript-external-scoreboard-objective-abi.md`<br>`src/__tests__/lir/verify.test.ts` | Interop is restored under a narrow ownership-policy rule for compiler-owned temporary slots and user-facing objectives. |
+| typed LIR local-copy rewrite | `evidence-only`<br>`manual experimental opt-in`<br>`not default-enabled` | `scripts/check-lir-local-copy-gate.ts`<br>`docs/plans/mc-mechanism-optimization/36-typed-boundary-and-diagnostic-roadmap.md` | Manual experimental optimizer path remains available, but is intentionally non-default. |
 
 ## High-value live candidates
 

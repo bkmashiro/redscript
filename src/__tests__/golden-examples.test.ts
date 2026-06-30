@@ -2,6 +2,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { compile } from '../compile'
+import { MCCommandValidator } from '../mc-validator'
 
 interface GoldenExample {
   label: string
@@ -61,6 +62,17 @@ const GOLDEN_EXAMPLES: GoldenExample[] = [
   },
 ]
 
+const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'mc-commands-1.21.4.json')
+
+function getMcCommands(result: ReturnType<typeof compile>): string[] {
+  return result.files
+    .filter(file => file.path.endsWith('.mcfunction'))
+    .flatMap(file => file.content.split('\n'))
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .filter(line => !line.startsWith('#'))
+}
+
 function emitDatapack(result: ReturnType<typeof compile>, outDir: string): void {
   for (const file of result.files) {
     const outputPath = path.join(outDir, file.path)
@@ -69,31 +81,49 @@ function emitDatapack(result: ReturnType<typeof compile>, outDir: string): void 
   }
 }
 
-describe('golden examples/templates emit stable datapack artifacts', () => {
-  test.each(GOLDEN_EXAMPLES)('$label', ({ sourcePath, namespace, commandFragments }) => {
-    const source = fs.readFileSync(sourcePath, 'utf-8')
-    const result = compile(source, { namespace, filePath: sourcePath })
+describe('golden examples/templates compile and static-validate emitted MC commands', () => {
+  const validator = new MCCommandValidator(FIXTURE_PATH)
 
-    expect(result.files.some(file => file.path === 'pack.mcmeta')).toBe(true)
-    const compiledFunctions = result.files.filter(file => file.path.endsWith('.mcfunction'))
-    expect(compiledFunctions.length).toBeGreaterThan(0)
+  test.each(GOLDEN_EXAMPLES)(
+    '$label (compile + static MC command validation, no live runtime proof)',
+    ({ sourcePath, namespace, commandFragments }) => {
+      const source = fs.readFileSync(sourcePath, 'utf-8')
+      const result = compile(source, { namespace, filePath: sourcePath })
+      const commandLines = getMcCommands(result)
+      const invalidCommands = commandLines
+        .map(cmd => ({ cmd, result: validator.validate(cmd) }))
+        .filter(entry => !entry.result.valid)
+        .map(entry => ({ cmd: entry.cmd, error: entry.result.error }))
 
-    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-golden-examples-'))
-    try {
-      emitDatapack(result, outDir)
-      expect(fs.existsSync(path.join(outDir, 'pack.mcmeta'))).toBe(true)
-      expect(fs.existsSync(path.join(outDir, compiledFunctions[0].path))).toBe(true)
+      expect(result.files.some(file => file.path === 'pack.mcmeta')).toBe(true)
+      const compiledFunctions = result.files.filter(file => file.path.endsWith('.mcfunction'))
+      expect(compiledFunctions.length).toBeGreaterThan(0)
 
-      const emittedMcfunctionText = result.files
-        .filter(file => file.path.endsWith('.mcfunction'))
-        .map(file => file.content)
-        .join('\n')
-
-      for (const fragment of commandFragments) {
-        expect(emittedMcfunctionText).toContain(fragment)
+      if (invalidCommands.length > 0) {
+        const summary = invalidCommands
+          .map(entry => `${entry.cmd}\n  ${entry.error}`)
+          .join('\n')
+        throw new Error(`Invalid emitted MC commands:\n${summary}`)
       }
-    } finally {
-      fs.rmSync(outDir, { recursive: true, force: true })
+
+      const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-golden-examples-'))
+      try {
+        emitDatapack(result, outDir)
+        expect(fs.existsSync(path.join(outDir, 'pack.mcmeta'))).toBe(true)
+        expect(fs.existsSync(path.join(outDir, compiledFunctions[0].path))).toBe(true)
+
+        const emittedMcfunctionText = result.files
+          .filter(file => file.path.endsWith('.mcfunction'))
+          .map(file => file.content)
+          .join('\n')
+
+        for (const fragment of commandFragments) {
+          expect(emittedMcfunctionText).toContain(fragment)
+        }
+      } finally {
+        fs.rmSync(outDir, { recursive: true, force: true })
+      }
+      expect(invalidCommands).toHaveLength(0)
     }
-  })
+  )
 })
