@@ -140,9 +140,16 @@ git diff --check
 
 ## P14 - Call/return ABI cleanup readiness spike
 
-**Status:** Planned.
+**Status:** Done.
+
+**Outcome (2026-06-30):** Completed read-only inventory in [`33-call-return-abi-readiness-spike.md`](./33-call-return-abi-readiness-spike.md). Current `$pN`/`$ret*` slots are shared ABI-visible state, call/macro/context/storage boundaries remain conservative barriers, and no production ABI cleanup is safe without a narrower typed branch/return validation tranche first.
 
 **Scope:** Read-only or diagnostic first. Inventory return/parameter materialization shapes and blockers. Do not rewrite ABI/call paths until negative fixtures exist.
+
+**P14 gates run (2026-06-30):**
+
+- `npm run build`
+- `git diff --check`
 
 ## P15 - Local-copy/RMW default-enablement ADR
 
@@ -161,6 +168,6 @@ git diff --check
 - [x] P11 optimizer coverage audit.
 - [x] P12 safe typed LIR peephole expansion.
 - [x] P13 temp lifetime/dead materialization expansion.
-- [ ] P14 call/return ABI readiness spike.
+- [x] P14 call/return ABI readiness spike.
 - [ ] P15 local-copy/RMW default-enablement ADR.
 - [ ] P16 storage/NBT/raw-boundary sidecar spike.
