@@ -12,6 +12,7 @@ import { lowerToMIR } from '../../mir/lower'
 import { verifyMIR } from '../../mir/verify'
 import { compile } from '../../emit/compile'
 import { TypeChecker } from '../../typechecker'
+import { DiagnosticError } from '../../diagnostics'
 
 function parse(source: string) {
   const tokens = new Lexer(source).tokenize()
@@ -189,6 +190,40 @@ describe('enhanced f-string interpolation', () => {
     // MIR arithmetic uses 'add', 'sub', 'mul', etc. (not 'arith')
     const arithInstrs = allInstrs.filter(i => ['add', 'sub', 'mul', 'div'].includes(i.kind))
     expect(arithInstrs.length).toBeGreaterThan(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Unsupported string value contexts
+// ---------------------------------------------------------------------------
+
+describe('string value diagnostics', () => {
+  test('string parameter in scoreboard expression reports unsupported string value instead of compiler bug', () => {
+    expect(() => compileSource(`
+      fn choose(tagName: string) -> int {
+        if (tagName == "red") {
+          return 1
+        }
+        return 0
+      }
+    `)).toThrow(DiagnosticError)
+
+    try {
+      compileSource(`
+        fn choose(tagName: string) -> int {
+          if (tagName == "red") {
+            return 1
+          }
+          return 0
+        }
+      `)
+    } catch (err) {
+      expect(err).toBeInstanceOf(DiagnosticError)
+      expect((err as DiagnosticError).kind).toBe('LoweringError')
+      expect((err as Error).message).toContain("String value 'tagName'")
+      expect((err as Error).message).toContain('cannot be lowered to a scoreboard expression')
+      expect((err as Error).message).not.toContain('compiler bug')
+    }
   })
 })
 

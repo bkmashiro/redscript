@@ -81,8 +81,8 @@ export const COMPILE_ALL_SKIP_MANIFEST: CompileAllSkipEntry[] = [
   {
     pattern: 'capture_the_flag.mcrs',
     category: 'known-language-gap',
-    reason: "Direct compile currently fails with unresolved identifier 'winner' during MIR lowering.",
-    nextAction: 'Minimize the unresolved winner/state pattern and decide whether it is a struct field lowering slice or an invalid example diagnostic.',
+    reason: "Direct compile now reports unsupported runtime string comparison for string variable 'winner'.",
+    nextAction: 'Decide whether runtime string comparison should be implemented or rewrite the example to integer/enum state.',
   },
   {
     pattern: 'parkour_race.mcrs',
@@ -93,8 +93,8 @@ export const COMPILE_ALL_SKIP_MANIFEST: CompileAllSkipEntry[] = [
   {
     pattern: 'pvp_arena.mcrs',
     category: 'known-language-gap',
-    reason: "After struct-return tracking was fixed, direct compile now reaches unresolved identifier 'tagName' during MIR lowering.",
-    nextAction: 'Minimize the string/dynamic name path and decide whether it is unsupported dynamic string state or needs a clear diagnostic.',
+    reason: "After struct-return tracking was fixed, direct compile now reports unsupported runtime string comparison for string variable 'tagName'.",
+    nextAction: 'Decide whether runtime string comparison should be implemented or rewrite arena team tags to integer/enum state.',
   },
   {
     pattern: 'showcase_game.mcrs',
@@ -105,8 +105,8 @@ export const COMPILE_ALL_SKIP_MANIFEST: CompileAllSkipEntry[] = [
   {
     pattern: 'tutorial_07_random.mcrs',
     category: 'known-language-gap',
-    reason: "Direct compile currently fails with unresolved identifier 'item' during MIR lowering.",
-    nextAction: 'Minimize the item field/state pattern and either fix bounded lowering or add a clear diagnostic.',
+    reason: "Direct compile now reports unsupported runtime string comparison for string variable 'item'.",
+    nextAction: 'Decide whether runtime string comparison should be implemented or rewrite the random tutorial item choice to integer/enum state.',
   },
   {
     pattern: 'zombie_survival.mcrs',

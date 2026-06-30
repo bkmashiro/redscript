@@ -1928,10 +1928,22 @@ function lowerExpr(
       if (ctx.commandArgAliases.has(expr.name)) {
         return { kind: 'const', value: 0 }
       }
-      // Unresolved ident: not in scope, constants, globals, or double vars.
+      if (ctx.stringVars.has(expr.name)) {
+        const span = (expr as { span?: { line: number; col: number } }).span
+        throw new DiagnosticError(
+          'LoweringError',
+          `String value '${expr.name}' cannot be lowered to a scoreboard expression; string variables are only supported in string/macro/command contexts, and runtime string comparison is not yet supported`,
+          span && ctx.sourceFile ? { file: ctx.sourceFile, line: span.line, col: span.col } : { line: span?.line ?? 1, col: span?.col ?? 1 },
+        )
+      }
+      // Unresolved ident: not in scope, constants, globals, or double/string vars.
       // This means an earlier compiler stage failed to resolve the name —
       // silently emitting zero here would mask that bug entirely.
-      throw new Error(`Unresolved identifier '${expr.name}' at MIR lowering stage — this is a compiler bug`)
+      throw new DiagnosticError(
+        'LoweringError',
+        `Unresolved identifier '${expr.name}' at MIR lowering stage — this is a compiler bug`,
+        { line: 1, col: 1 },
+      )
     }
 
     case 'binary': {
