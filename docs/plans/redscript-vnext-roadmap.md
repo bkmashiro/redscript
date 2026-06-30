@@ -10,7 +10,8 @@ Verified on 2026-06-30:
 - Latest CI for `test(release): validate compile-all mc commands` completed successfully.
 - `compile-all` has zero `known-language-gap` entries in the typed skip manifest.
 - All non-skipped `.mcrs` compile-all sources are now covered by static `.mcfunction` command validation.
-- Core live Paper oracle has passed `25/25` descriptor-driven cases against the local TestHarness on 2026-06-30, including P1 world setblock, inventory equipment, bounded random range, entity spawn, and particle command smokes (local harness only).
+- Core live Paper oracle has passed `26/26` descriptor-driven cases against the local TestHarness on 2026-06-30, including P1 world setblock, inventory equipment, bounded random range, entity spawn, particle command, and visual/UI command smokes (local harness only).
+- Visual/UI boundary coverage is included via `visual command boundary smoke` (`title`, `playsound`, `bossbar`) in core oracle descriptors, with bossbar cleanup and isolated `core_oracle` scoring markers.
 - Existing production pipeline remains: Source → AST → TypeCheck → HIR → MIR → Optimizer → LIR → Emit datapack.
 
 Evidence labels:
@@ -53,6 +54,7 @@ MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live
 
 Before tagging or publishing a release, re-run:
 
+- `npm --silent run report:release-evidence` to materialize the local/static evidence inventory for audit logs.
 - package tarball smoke:
   - `npm run smoke:package`
 - browser IDE compiler-load smoke:
@@ -64,6 +66,8 @@ Evidence labels in this track:
 
 - `compile-only` / `static-mc-validation` / `golden-artifact-shape` remain offline/static gates.
 - `live-paper-oracle` comes only from configured runs of `test:mc-core:live`.
+
+`npm --silent run report:release-evidence` is an evidence inventory helper; it summarizes proof labels and gate commands but does not itself constitute runtime proof.
 
 Concrete checklist: [`redscript-release-evidence-checklist.md`](redscript-release-evidence-checklist.md).
 
@@ -77,7 +81,7 @@ Priority modules/cases:
 2. `events` — runtime asset merge, dispatcher tags, executor context.
 3. `inventory` — minimal give/clear/assert path.
 4. `world` — deterministic setblock/assert-block path.
-5. `spawn` / `mobs` / `particles` / `bossbar` / `interactions` — only if the harness can create and clean deterministic fixtures.
+5. `spawn` / `mobs` / `particles` / `bossbar` / `title` / `playsound` / `interactions` — only if the harness can create and clean deterministic fixtures.
 6. `random` — bounded range smoke only; do not claim distribution proof.
 
 Rules:

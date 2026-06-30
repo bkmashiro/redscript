@@ -15,6 +15,15 @@ npm run smoke:browser-ide -- --ide-dir /Users/yuzhe/projects/redscript-ide
 git diff --check
 ```
 
+Evidence inventory helper (metadata only):
+
+```bash
+npm --silent run report:release-evidence
+```
+
+This command writes a local JSON summary of required evidence labels, local/static command inventory, and live-oracle metadata.
+It is intended for release evidence tracking only and does not produce proof by itself.
+
 Expected meaning:
 
 - `build` proves the TypeScript/package entrypoints compile.
@@ -38,12 +47,15 @@ GitHub workflow and release evidence artifact:
 - `.github/workflows/live-mc-core.yml` must exist and document that it is manual/nightly.
 - Use workflow-scope variables for host/port/server directory.
 - The workflow should skip clearly when `MC_SERVER_DIR` is not set.
-- Current local baseline from 2026-06-30 is `25/25` live-cases (`test:mc-core:live`), descriptor-driven and covering the timer countdown plus first P1 world/inventory/random/spawn/particle smokes.
+- Current local baseline from 2026-06-30 is `26/26` live-cases (`test:mc-core:live`), descriptor-driven and covering the timer countdown plus first P1 world/inventory/random/spawn/particle/visual-UI smokes.
+- Visual/UI boundary tranche (`visual command boundary smoke`) is included in the local live proof baseline for title/playsound/bossbar command execution.
 
 Smoke suite availability:
 
 - `smoke:package` smoke verifies package install/pack integrity.
 - `smoke:browser-ide` smoke verifies browser IDE compiler load and tiny compile path.
+
+Use `npm --silent run report:release-evidence` to publish the local/static evidence inventory used by the release checklist.
 
 ## Package tarball smoke
 

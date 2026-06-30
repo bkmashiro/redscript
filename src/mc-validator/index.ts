@@ -37,6 +37,10 @@ const COMMENT_PREFIXES = [
 ]
 const SCOREBOARD_PLAYER_ACTIONS = new Set(['set', 'add', 'remove', 'get', 'operation', 'enable'])
 const SCOREBOARD_OPERATIONS = new Set(['=', '+=', '-=', '*=', '/=', '%=', '<', '>', '><'])
+const TITLE_TEXT_ACTIONS = new Set(['title', 'subtitle', 'actionbar'])
+const TITLE_ACTIONS = new Set([...TITLE_TEXT_ACTIONS, 'times', 'clear', 'reset'])
+const BOSSBAR_ACTIONS = new Set(['add', 'set', 'remove', 'get', 'list'])
+const BOSSBAR_SET_MIN_TOKENS = 5
 
 export class MCCommandValidator {
   private readonly root: BrigadierNode
@@ -95,6 +99,14 @@ export class MCCommandValidator {
         return this.validateScoreboard(tokens)
       case 'function':
         return this.validateFunction(tokens)
+      case 'particle':
+        return this.validateParticle(tokens)
+      case 'playsound':
+        return this.validatePlaysound(tokens)
+      case 'title':
+        return this.validateTitle(tokens)
+      case 'bossbar':
+        return this.validateBossbar(tokens)
       case 'data':
         return this.validateData(tokens)
       case 'return':
@@ -201,6 +213,123 @@ export class MCCommandValidator {
 
     if (tokens.length !== 2 || !FUNCTION_OR_TAG_ID_RE.test(tokens[1])) {
       return { valid: false, error: 'function requires a namespaced function id' }
+    }
+
+    return this.validateAgainstTree(tokens)
+  }
+
+  private validateParticle(tokens: string[]): ValidationResult {
+    if (tokens.length < 5) {
+      return { valid: false, error: 'particle command requires position, delta, and speed arguments' }
+    }
+
+    if (tokens.length > 5 && tokens.length < 9) {
+      return { valid: false, error: 'particle command requires position, delta, and speed arguments' }
+    }
+
+    if (tokens[8] && !isNumberish(tokens[8])) {
+      return { valid: false, error: `particle speed must be numeric: ${tokens[8]}` }
+    }
+
+    return this.validateAgainstTree(tokens)
+  }
+
+  private validatePlaysound(tokens: string[]): ValidationResult {
+    if (tokens.length < 4) {
+      return { valid: false, error: 'playsound requires sound, source, targets, coordinates, volume, and pitch' }
+    }
+
+    if (tokens.length > 4 && tokens.length < 9) {
+      return { valid: false, error: 'playsound requires sound, source, targets, coordinates, volume, and pitch' }
+    }
+
+    if (tokens[7] && !isNumberish(tokens[7])) {
+      return { valid: false, error: `playsound volume must be numeric: ${tokens[7]}` }
+    }
+
+    if (tokens[8] && !isNumberish(tokens[8])) {
+      return { valid: false, error: `playsound pitch must be numeric: ${tokens[8]}` }
+    }
+
+    if (tokens.length >= 10 && !isNumberish(tokens[9])) {
+      return { valid: false, error: `playsound minimum volume must be numeric: ${tokens[9]}` }
+    }
+
+    if (tokens.length >= 11 && !isNumberish(tokens[10])) {
+      return { valid: false, error: `playsound maximum volume must be numeric: ${tokens[10]}` }
+    }
+
+    return this.validateAgainstTree(tokens)
+  }
+
+  private validateTitle(tokens: string[]): ValidationResult {
+    if (tokens.length < 3) {
+      return { valid: false, error: 'title requires target and subcommand' }
+    }
+
+    const action = tokens[2]
+    if (!TITLE_ACTIONS.has(action)) {
+      return this.validateAgainstTree(tokens)
+    }
+
+    if (TITLE_TEXT_ACTIONS.has(action)) {
+      if (tokens.length < 4) {
+        return { valid: false, error: `title ${action} requires one JSON component payload` }
+      }
+      return this.validateAgainstTree(tokens)
+    }
+
+    if (action === 'times') {
+      if (tokens.length !== 6) {
+        return { valid: false, error: 'title times requires exactly three timing values' }
+      }
+
+      if (!isNumberish(tokens[3]) || !isNumberish(tokens[4]) || !isNumberish(tokens[5])) {
+        return { valid: false, error: 'title times values must be numeric' }
+      }
+
+      return this.validateAgainstTree(tokens)
+    }
+
+    if (action === 'clear' || action === 'reset') {
+      if (tokens.length !== 3) {
+        return { valid: false, error: `title ${action} does not take a payload` }
+      }
+      return this.validateAgainstTree(tokens)
+    }
+
+    return this.validateAgainstTree(tokens)
+  }
+
+  private validateBossbar(tokens: string[]): ValidationResult {
+    if (tokens.length < 2) {
+      return { valid: false, error: 'bossbar requires action' }
+    }
+
+    const action = tokens[1]
+    if (!BOSSBAR_ACTIONS.has(action)) {
+      return this.validateAgainstTree(tokens)
+    }
+
+    if (action === 'add') {
+      if (tokens.length < 4) {
+        return { valid: false, error: 'bossbar add requires id and name' }
+      }
+      return this.validateAgainstTree(tokens)
+    }
+
+    if (action === 'set') {
+      if (tokens.length < BOSSBAR_SET_MIN_TOKENS) {
+        return { valid: false, error: 'bossbar set requires id, property, and value' }
+      }
+      return this.validateAgainstTree(tokens)
+    }
+
+    if (action === 'remove') {
+      if (tokens.length !== 3) {
+        return { valid: false, error: 'bossbar remove requires id' }
+      }
+      return this.validateAgainstTree(tokens)
     }
 
     return this.validateAgainstTree(tokens)

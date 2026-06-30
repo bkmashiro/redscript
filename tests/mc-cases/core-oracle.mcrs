@@ -261,6 +261,22 @@ fn test_world_block_smoke() {
   raw("setblock 14 65 0 air")
 }
 
+fn test_visual_command_boundary_smoke() {
+  raw("title @a actionbar {\"text\":\"core_oracle\"}")
+  scoreboard_set("#visual_title_smoke", "core_oracle", 1)
+
+  raw("playsound minecraft:entity.player.levelup master @a 0 65 0 1 1 1")
+  scoreboard_set("#visual_playsound_smoke", "core_oracle", 1)
+
+  raw("bossbar remove core_oracle:visual_smoke")
+  raw("bossbar add core_oracle:visual_smoke {\"text\":\"core_oracle\"}")
+  raw("bossbar set core_oracle:visual_smoke value 5")
+  raw("bossbar set core_oracle:visual_smoke max 10")
+  raw("bossbar set core_oracle:visual_smoke visible true")
+  raw("bossbar remove core_oracle:visual_smoke")
+  scoreboard_set("#visual_bossbar_smoke", "core_oracle", 1)
+}
+
 fn test_inventory_equipment_smoke() {
   raw("kill @e[type=armor_stand,tag=core_oracle_inventory]")
   raw("summon minecraft:armor_stand 18 65 0 {Tags:['core_oracle_inventory'],NoGravity:1b,NoAI:1b,PersistenceRequired:1b,Invulnerable:1b}")

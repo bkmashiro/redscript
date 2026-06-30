@@ -253,6 +253,23 @@ export const CORE_ORACLE_CASES: McCoreCaseDescriptor[] = [
     ],
   },
   {
+    name: 'visual command boundary smoke',
+    namespace: CORE_ORACLE_NAMESPACE,
+    sourcePath: CORE_ORACLE_SOURCE_PATH,
+    setupCommands: [
+      'scoreboard players set #visual_title_smoke core_oracle 0',
+      'scoreboard players set #visual_playsound_smoke core_oracle 0',
+      'scoreboard players set #visual_bossbar_smoke core_oracle 0',
+    ],
+    entrypoints: [{ kind: 'function', target: 'test_visual_command_boundary_smoke' }],
+    waitTicks: 3,
+    scoreboardAssertions: [
+      { player: '#visual_title_smoke', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
+      { player: '#visual_playsound_smoke', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
+      { player: '#visual_bossbar_smoke', obj: CORE_ORACLE_OBJECTIVE, value: 1 },
+    ],
+  },
+  {
     name: 'inventory equipment smoke',
     namespace: CORE_ORACLE_NAMESPACE,
     sourcePath: CORE_ORACLE_SOURCE_PATH,

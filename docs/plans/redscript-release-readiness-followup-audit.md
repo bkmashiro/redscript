@@ -7,7 +7,8 @@
 - Golden coverage exists for several core command paths, but the release-readiness track still benefits from a small public examples/templates gate that proves representative examples compile and emit stable artifact shapes.
 - P0 release-evidence tranche is complete and now maintenance-only; next expansion tranche is P1.
 - Static validation and live Paper oracle coverage must remain separate: compile-only/offline tests are useful release gates, not live Minecraft behavior proof.
-- Local real harness evidence includes `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passing `25/25` descriptor-driven cases on 2026-06-30, including first P1 world/inventory/random/spawn/particle smokes (runtime proof for local run only).
+- Local real harness evidence includes `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` passing `26/26` descriptor-driven cases on 2026-06-30, including first P1 world/inventory/random/spawn/particle/visual-UI smokes (runtime proof for local run only).
+  The `visual command boundary smoke` tranche (`title`, `playsound`, `bossbar`) is now included in that local live-paper-oracle baseline.
 
 ### Evidence labels for release claims (required)
 
@@ -48,6 +49,7 @@ Inspected surfaces from the Spark audit worktree included:
 | S3 | Add extra verifier edge tests for `$(target)` and user display labels that resemble compiler slots but are not current-function-owned. | `src/__tests__/lir/verify.test.ts` | `src/lir/verify.ts` unless a real bug appears | Low | `npm test -- --selectProjects unit --runTestsByPath src/__tests__/lir/verify.test.ts --runInBand` | Isolated contract tests; no verifier behavior change unless RED exposes a precise bug. |
 | S4 | Add focused static validator cases for high-risk function-with-storage/macro boundaries, explicitly labelled as static-not-live proof. | `src/__tests__/mc-syntax.test.ts`, `src/__tests__/mc-validator-coverage.test.ts`, `src/__tests__/mc-validator-extra.test.ts` | `src/mc-validator/**`, live harness code | Medium | `npm test -- --selectProjects unit --runTestsByPath src/__tests__/mc-syntax.test.ts src/__tests__/mc-validator-coverage.test.ts src/__tests__/mc-validator-extra.test.ts --runInBand` | Test-only static command coverage; avoids runtime semantics and broad validator rewrites. |
 | S5 | Add coverage-matrix note distinguishing compile/static evidence from live-oracle evidence for release-green claims. | `docs/plans/redscript-coverage-matrix.md`, `docs/plans/redscript-live-oracle-candidate-map.md` | code/tests/package files | Low | `git diff --check` | Docs-only traceability; reduces future overclaim risk. |
+| S6 | Add visual/UI command boundary smoke (`title`, `playsound`, `bossbar`) to core Oracle descriptors with player-independent setup/teardown and bossbar cleanup. | `tests/mc-cases/core-oracle.mcrs`, `tests/mc-cases/core-oracle-cases.ts` | compiler/runtime/validator code, generated datapack outputs | Low | `MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live` | Adds deterministic smoke for runtime-sensitive visual/UI boundary commands; included in the 26/26 local live Paper baseline. |
 
 ## 3) Parallelization plan
 

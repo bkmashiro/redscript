@@ -135,6 +135,18 @@ fn compare_and_branch() {
 
     const scoreboard = validator.validate('$scoreboard players set #macro_result core_oracle $(value)')
     expect(scoreboard.valid).toBe(true)
+
+    const particle = validator.validate('$particle minecraft:flame $(x) $(y) $(z) $(dx) $(dy) $(dz) $(speed) $(count) force')
+    expect(particle.valid).toBe(true)
+
+    const playsound = validator.validate('$playsound minecraft:block.note_block.pling master @a $(x) $(y) $(z) $(volume) $(pitch)')
+    expect(playsound.valid).toBe(true)
+
+    const title = validator.validate('$title @a actionbar {"text":"$(text)"}')
+    expect(title.valid).toBe(true)
+
+    const bossbar = validator.validate('$bossbar add rs:macro_bossbar {"text":"$(name)"}')
+    expect(bossbar.valid).toBe(true)
   })
 
   test('rejects malformed macro template commands instead of accepting all $ lines', () => {

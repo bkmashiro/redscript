@@ -325,44 +325,86 @@ describe('MCCommandValidator — extended coverage', () => {
     expect(result.valid).toBe(false)
   })
 
-  test('valid title text command shape', () => {
-    const result = v.validate('title @a title {"text":"Welcome"}')
+  test('valid title actionbar command shape', () => {
+    const result = v.validate('title @a actionbar {"text":"Hi"}')
     expect(result.valid).toBe(true)
   })
 
-  test('invalid title command missing payload', () => {
-    const result = v.validate('title @a title')
+  test('valid title times command shape', () => {
+    const result = v.validate('title @a times 10 20 30')
+    expect(result.valid).toBe(true)
+  })
+
+  test('valid title clear command shape', () => {
+    const result = v.validate('title @a clear')
+    expect(result.valid).toBe(true)
+  })
+
+  test('invalid title times command missing timings', () => {
+    const result = v.validate('title @a times 10 20')
     expect(result.valid).toBe(false)
+    expect(result.error).toContain('title times requires exactly three timing values')
+  })
+
+  test('invalid title clear with payload', () => {
+    const result = v.validate('title @a clear {"text":"ignored"}')
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('title clear does not take a payload')
   })
 
   test('valid playsound command shape', () => {
-    const result = v.validate('playsound minecraft:block.anvil.use ambient @a ~ ~ ~ 1 1')
+    const result = v.validate('playsound minecraft:block.note_block.pling master @a 0 65 0 1 1')
     expect(result.valid).toBe(true)
   })
 
-  test('invalid playsound command missing target', () => {
-    const result = v.validate('playsound minecraft:block.anvil.use ambient')
+  test('invalid playsound command missing pitch', () => {
+    const result = v.validate('playsound minecraft:block.note_block.pling master @a 0 65 0 1')
     expect(result.valid).toBe(false)
+    expect(result.error).toContain('playsound requires sound, source, targets, coordinates, volume, and pitch')
   })
 
   test('valid particle command shape', () => {
-    const result = v.validate('particle minecraft:end_rod ~ ~ ~ 0 0 0 0 1')
+    const result = v.validate('particle minecraft:flame 0 65 0 0 0 0 0 1 force')
     expect(result.valid).toBe(true)
   })
 
-  test('invalid particle command missing coordinates', () => {
-    const result = v.validate('particle minecraft:end_rod ~ ~ ~ 0 0')
+  test('invalid particle command missing speed', () => {
+    const result = v.validate('particle minecraft:flame 0 65 0 0 0 0')
     expect(result.valid).toBe(false)
+    expect(result.error).toContain('particle command requires position, delta, and speed')
   })
 
   test('valid bossbar command shape', () => {
-    const result = v.validate('bossbar add test:rs-bossbar {"text":"Test"}')
-    expect(result.valid).toBe(true)
+    const add = v.validate('bossbar add test:rs-bossbar {"text":"Test"}')
+    const set = v.validate('bossbar set test:rs-bossbar visible true')
+    const remove = v.validate('bossbar remove test:rs-bossbar')
+    expect(add.valid).toBe(true)
+    expect(set.valid).toBe(true)
+    expect(remove.valid).toBe(true)
   })
 
   test('invalid bossbar set command missing value', () => {
-    const result = v.validate('bossbar set test:rs-bossbar value')
+    const result = v.validate('bossbar set test:rs-bossbar visible')
     expect(result.valid).toBe(false)
+    expect(result.error).toContain('bossbar set requires id, property, and value')
+  })
+
+  test('invalid bossbar remove command missing id', () => {
+    const result = v.validate('bossbar remove')
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('bossbar remove requires id')
+  })
+
+  test('valid world/visual macro templates', () => {
+    const particle = v.validate('$particle minecraft:flame $(x) $(y) $(z) $(dx) $(dy) $(dz) $(speed) $(count) force')
+    const playsound = v.validate('$playsound minecraft:block.note_block.pling master @a $(x) $(y) $(z) $(volume) $(pitch)')
+    const title = v.validate('$title @a actionbar {"text":"$(value)"}')
+    const bossbar = v.validate('$bossbar add test:rs-macro-bossbar {"text":"$(value)"}')
+
+    expect(particle.valid).toBe(true)
+    expect(playsound.valid).toBe(true)
+    expect(title.valid).toBe(true)
+    expect(bossbar.valid).toBe(true)
   })
 })
 
