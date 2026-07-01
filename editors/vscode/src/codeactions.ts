@@ -1,10 +1,14 @@
 import * as vscode from 'vscode'
+import { getMigrationQuickFixesFromLine } from './codeaction-helpers'
 
 /**
  * Code action provider for RedScript.
  * Currently provides:
  *  - "Add minecraft: namespace" quick fix for unnamespaced entity types
  *    e.g. type=zombie → type=minecraft:zombie
+ *  - Scoreboard objective migration quick fixes
+ *    e.g. score(@s, "health") → score(@s, #health)
+ *  - Known resource migration quick fixes in clearly detected builtins
  */
 export function registerCodeActions(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
@@ -16,6 +20,10 @@ export function registerCodeActions(context: vscode.ExtensionContext): void {
   )
 }
 
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 class RedScriptCodeActionProvider implements vscode.CodeActionProvider {
   provideCodeActions(
     document: vscode.TextDocument,
@@ -23,6 +31,13 @@ class RedScriptCodeActionProvider implements vscode.CodeActionProvider {
     context: vscode.CodeActionContext
   ): vscode.CodeAction[] {
     const actions: vscode.CodeAction[] = []
+    const seen = new Set<string>()
+
+    const addAction = (action: vscode.CodeAction, key: string): void => {
+      if (seen.has(key)) return
+      seen.add(key)
+      actions.push(action)
+    }
 
     for (const diag of context.diagnostics) {
       if (diag.source !== 'redscript') continue
@@ -51,39 +66,27 @@ class RedScriptCodeActionProvider implements vscode.CodeActionProvider {
           const end = document.positionAt(match.index + 'type='.length + typeName.length)
           edit.replace(document.uri, new vscode.Range(start, end), `minecraft:${typeName}`)
         }
+
         fix.edit = edit
-        actions.push(fix)
+        addAction(fix, `doc:${typeName}`)
       }
     }
 
-    // Also scan the current line for unnamespaced type= patterns
-    // even without a diagnostic (as a proactive suggestion)
+    // Also scan the current line for unnamespaced type= patterns and migration contexts
     const lineText = document.lineAt(range.start.line).text
-    const lineTypeRe = /\btype=([a-z][a-z0-9_]*)(?!\s*[:a-z0-9_])/g
-    let lm: RegExpExecArray | null
-    while ((lm = lineTypeRe.exec(lineText)) !== null) {
-      const typeName = lm[1]
-      // Skip already-namespaced or already have a fix above
-      if (typeName.includes(':')) continue
-      if (actions.some(a => a.title.includes(typeName))) continue
+    const lineFixes = getMigrationQuickFixesFromLine(lineText)
+    for (const lineFix of lineFixes) {
+      const action = new vscode.CodeAction(lineFix.title, vscode.CodeActionKind.QuickFix)
+      action.isPreferred = Boolean(lineFix.preferred)
+      action.edit = new vscode.WorkspaceEdit()
+      const start = new vscode.Position(range.start.line, lineFix.startColumn)
+      const end = new vscode.Position(range.start.line, lineFix.endColumn)
+      action.edit.replace(document.uri, new vscode.Range(start, end), lineFix.replacement)
 
-      const fix = new vscode.CodeAction(
-        `Add namespace: type=minecraft:${typeName}`,
-        vscode.CodeActionKind.QuickFix
-      )
-      const col = lm.index + 'type='.length
-      const start = new vscode.Position(range.start.line, col)
-      const end = new vscode.Position(range.start.line, col + typeName.length)
-      const edit = new vscode.WorkspaceEdit()
-      edit.replace(document.uri, new vscode.Range(start, end), `minecraft:${typeName}`)
-      fix.edit = edit
-      actions.push(fix)
+      const key = `${range.start.line}:${lineFix.startColumn}-${lineFix.endColumn}:${lineFix.replacement}`
+      addAction(action, key)
     }
 
     return actions
   }
-}
-
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

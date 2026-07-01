@@ -45,48 +45,26 @@ Tasks:
 
 Evidence: `src/__tests__/vscode-grammar.test.ts` covers the grammar contexts and package contribution; `cd editors/vscode && npm run build` and `git diff --check` passed. This remains static/editor grammar evidence, not compiler or live Paper proof.
 
-### G — Migration quick fixes — NEXT
+### G — Migration quick fixes — completed 2026-07-01
 
 Goal: old RedScript idioms are easy to migrate safely.
 
 Tasks:
 
-- [ ] G1. Preserve/verify existing `type=zombie` → `type=minecraft:zombie` quick fix.
-- [ ] G2. Add string objective → `#objective` quick fix in scoreboard contexts.
-- [ ] G3. Add quoted known resource → unquoted `minecraft:path` quick fix in typed resource contexts.
-- [ ] G4. Add deprecated `float` / old interpolation suggestions only where safe; avoid destructive false positives.
+- [x] G1. Preserve/verify existing `type=zombie` → `type=minecraft:zombie` quick fix.
+- [x] G2. Add string objective → `#objective` quick fix in scoreboard contexts.
+- [x] G3. Add quoted known resource → unquoted `minecraft:path` quick fix in typed resource contexts.
+- [x] G4. Add deprecated `float` / old interpolation suggestions only where safe; avoid destructive false positives.
 
-Suggested Spark slice for G:
+Evidence:
+- G1–G4 implemented in `editors/vscode/src/codeactions.ts` with focused helper tests in
+  `src/__tests__/vscode-codeactions.test.ts`: selector type namespace migration is preserved; quoted scoreboard
+  objective/resource candidates are only offered in detected builtin argument contexts; deprecated `float` is suggested
+  only in type-like contexts; legacy `${...}` string interpolation offers a guarded f-string conversion while current
+  f-strings and literal dollar strings remain untouched. This is static/editor quick-fix evidence, not compiler or live
+  Paper proof.
 
-```text
-In /Users/yuzhe/projects/redscript, implement Track G only: migration quick fixes.
-
-Allowed files:
-- editors/vscode/src/codeactions.ts
-- focused tests/smokes for VSCode code actions if a suitable pattern exists
-- docs/plans/2026-07-01-redscript-vscode-editor-dx-roadmap.md for checkbox/evidence update only
-
-Forbidden:
-- Do not edit compiler parser/typechecker/emit semantics.
-- Do not edit package versions or lockfiles.
-- Do not edit generated editors/vscode/out/* permanently.
-- Do not claim live Paper proof.
-- Do not commit or push from Spark.
-
-Acceptance:
-- Preserve/verify existing `type=zombie` → `type=minecraft:zombie` quick fix.
-- Add safe code actions for string scoreboard objectives and quoted known resources only in clearly-detected contexts.
-- Deprecated `float` / old interpolation suggestions must avoid destructive false positives; leave as TODO if safe context detection is unclear.
-- Run focused tests/smokes if added, plus `cd editors/vscode && npm run build`, plus `git diff --check`.
-
-Return:
-1. Changed files
-2. What changed
-3. Exact commands and results
-4. Blockers/uncertainties
-```
-
-### H — VSIX package smoke
+### H — VSIX package smoke — NEXT
 
 Goal: the extension artifact contains the LSP, grammar, snippets, and declaration surface.
 
@@ -95,6 +73,36 @@ Tasks:
 - [ ] H1. Add/verify package content smoke for VSIX contents.
 - [ ] H2. Confirm `out/lsp-server.js`, `builtins.d.mcrs`, snippets, and grammar are packaged.
 - [ ] H3. Keep package smoke separate from Web IDE smoke.
+
+Suggested Spark slice for H:
+
+```text
+In /Users/yuzhe/projects/redscript, implement Track H only: VSIX package smoke.
+
+Allowed files:
+- editors/vscode/package.json only if a package script already exists and needs a non-version smoke hook
+- scripts or focused tests for package-content smoke if a suitable existing pattern exists
+- docs/plans/2026-07-01-redscript-vscode-editor-dx-roadmap.md for checkbox/evidence update only
+
+Forbidden:
+- Do not edit compiler parser/typechecker/emit semantics.
+- Do not edit package versions or lockfiles.
+- Do not permanently commit generated editors/vscode/out/* unless package smoke explicitly requires a temporary build artifact and it is reverted before commit.
+- Do not claim Web IDE smoke or live Paper proof.
+- Do not commit or push from Spark.
+
+Acceptance:
+- Build/package the VSCode extension or inspect a generated VSIX in a temporary location.
+- Verify the VSIX/package content includes the extension entrypoint/LSP server, grammar files, snippets, and declaration surface (`builtins.d.mcrs`).
+- Keep this as package-content evidence only, separate from Web IDE/browser smoke.
+- Run the focused package smoke, `npm run build` if root outputs are relevant, `cd editors/vscode && npm run build` or package command as needed, revert generated `editors/vscode/out/*`, and `git diff --check`.
+
+Return:
+1. Changed files
+2. What changed
+3. Exact commands and results
+4. Blockers/uncertainties
+```
 
 ### I — CI/release integration
 
