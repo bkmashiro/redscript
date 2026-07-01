@@ -374,6 +374,8 @@ export interface InterfaceMethod {
   name: string
   params: Param[]
   returnType?: TypeNode
+  /** Documentation comment immediately preceding the method, if present. */
+  doc?: string
   span?: Span
 }
 

@@ -99,7 +99,9 @@ export class DeclParser extends StmtParser {
 
     const methods: FnDecl[] = []
     while (!this.check('}') && !this.check('eof')) {
-      methods.push(this.parseFnDecl(typeName))
+      const doc = this.consumeDocComment()
+      if (this.check('}') || this.check('eof')) break
+      methods.push(this.attachDoc(this.parseFnDecl(typeName), doc))
     }
 
     this.expect('}')
@@ -117,6 +119,8 @@ export class DeclParser extends StmtParser {
 
     const methods: InterfaceMethod[] = []
     while (!this.check('}') && !this.check('eof')) {
+      const doc = this.consumeDocComment()
+      if (this.check('}') || this.check('eof')) break
       const fnToken = this.expect('fn')
       const methodName = this.expect('ident').value
       this.expect('(')
@@ -124,7 +128,7 @@ export class DeclParser extends StmtParser {
       this.expect(')')
       let returnType: TypeNode | undefined
       if (this.match(':')) returnType = this.parseType()
-      methods.push(this.withLoc({ name: methodName, params, returnType }, fnToken) as InterfaceMethod)
+      methods.push(this.attachDoc(this.withLoc({ name: methodName, params, returnType }, fnToken) as InterfaceMethod, doc))
     }
 
     this.expect('}')
