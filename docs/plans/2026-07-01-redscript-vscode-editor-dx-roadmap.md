@@ -105,10 +105,10 @@ Primary files:
 
 Tasks:
 
-- [ ] C1. Add tests for `particle(...)` resource completion in the correct argument position.
-- [ ] C2. Add tests for `effect(@s, ...)` resource completion.
-- [ ] C3. Add tests for selector `type=` entity completion and ordinary-string negative cases.
-- [ ] C4. Implement minimal context detector by function name/argument index and selector key context.
+- [x] C1. Add tests for `particle(...)` resource completion in the correct argument position.
+- [x] C2. Add tests for `effect(@s, ...)` resource completion.
+- [x] C3. Add tests for selector `type=` entity completion and ordinary-string negative cases.
+- [x] C4. Implement minimal context detector by function name/argument index and selector key context.
 - [ ] C5. Include completion detail/documentation that labels category and static/editor nature.
 
 ## Track D — Semantic hover v1
@@ -247,3 +247,4 @@ git diff --check
 
 - 2026-07-01: Roadmap created after baseline audit. Current extension already has LSP diagnostics/hover/definition/completion/signature/references/rename/inlay hints, but stale syntax and duplicated metadata were found in `builtins.d.mcrs`, fallback hover/completion, snippets/fixtures, and docs. Next slice: Spark-shaped read-only audit + Track B stale syntax smoke/fix.
 - 2026-07-01: Slice B1/B2 completed. Added `resource-docs.test.ts` coverage for VSCode editor-facing stale syntax, replaced the `actionbar` `${time}` example and tellraw f-string wording in the VSCode builtins/fallback hover docs, and updated the VSCode fixture to `scoreboard_set(@s, #score, 10);`. Verification: focused `resource-docs` test passed; editor fixture compiled via `dist/src/index.js`; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed. Generated `editors/vscode/out/*` build artifacts were intentionally reverted because this slice did not target release packaging.
+- 2026-07-01: Slice C1-C4 completed as a Spark implementation slice with controller review. Spark confirmed `gpt-5.3-codex-spark`, added focused tests for selector `type=minecraft:cr` entity completion, unquoted `effect(@s, minecraft:)` effect completion, and ordinary `say("` negative context. Existing `src/lsp/resource-completions.ts` already satisfied the behavior, so no production code change was needed. Controller gate: `src/__tests__/lsp/completion.test.ts` passed 68/68; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed; generated `editors/vscode/out/*` artifacts were reverted.

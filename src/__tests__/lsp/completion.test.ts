@@ -703,9 +703,34 @@ describe('LSP completion — resource strings', () => {
     expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.entities.length)
   })
 
+  it('completes entities for selector type completion after a partially typed namespace prefix', () => {
+    const line = 'let creepers = @e[type=minecraft:cr'
+    const cursor = line.length
+    const labels = labelsFor(line, cursor)
+
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.entities)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.entities.length)
+  })
+
+  it('completes effects at unquoted resource positions in effect(@s, ...)', () => {
+    const line = 'effect(@s, minecraft:'
+    const cursor = line.length
+    const labels = labelsFor(line, cursor)
+
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.effects)
+    expect(labels).toHaveLength(BUILTIN_RESOURCE_REGISTRY.effects.length)
+  })
+
   it('does not offer selector entity completions inside ordinary strings', () => {
     const line = 'say("@e[type="'
     const cursor = line.indexOf('="') + 1
+    const labels = labelsFor(line, cursor)
+    expect(labels).toHaveLength(0)
+  })
+
+  it('does not offer resource completions at ordinary string start positions', () => {
+    const line = 'say("'
+    const cursor = line.length
     const labels = labelsFor(line, cursor)
     expect(labels).toHaveLength(0)
   })
