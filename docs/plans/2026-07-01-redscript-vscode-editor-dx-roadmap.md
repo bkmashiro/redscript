@@ -1,6 +1,6 @@
-# RedScript VSCode Editor DX Working Goal
+# RedScript VSCode Editor DX Close-out
 
-Use this file as the active goal prompt for the next RedScript VSCode editor-DX work session.
+This file is now a completed close-out record for the 2026-07-01 VSCode editor-DX pass. Do not use it as the active next-work prompt; future work should return to the main RedScript roadmaps unless a new editor-DX issue is found during manual testing.
 
 ## Context
 
@@ -14,7 +14,9 @@ A–E are already done enough to stop tracking them here:
 - Signature help exists for typed-resource builtins, scoreboard objectives, user/`declare fn` functions, and active parameter calculation; this is static/editor/LSP evidence, not live Paper proof.
 - Generated VSCode `out/*` build artifacts should be reverted unless a release/package slice explicitly wants them.
 
-## Operating rules
+## Historical operating rules
+
+These were the rules used while executing this pass:
 
 - Work on `main` in `/Users/yuzhe/projects/redscript`.
 - Check `git status -sb` before editing. Do not overwrite uncommitted user work.
@@ -24,7 +26,7 @@ A–E are already done enough to stop tracking them here:
 - After each verified slice: update this file, run the relevant gates, make a signed commit, push, then check current-head CI once.
 - Revert generated `editors/vscode/out/*` unless the slice is explicitly packaging/release.
 
-## Active work order
+## Completed work order
 
 ### F — TextMate grammar refinement — completed 2026-07-01
 
@@ -76,35 +78,6 @@ Tasks:
 
 Evidence: `npm run build && npm run smoke:vscode-vsix` passes and validates that `extension/out/extension.js`, `extension/out/lsp-server.js`, `extension/builtins.d.mcrs`, `extension/snippets/redscript.json`, `extension/syntaxes/redscript.tmLanguage.json`, `extension/syntaxes/mcfunction.tmLanguage.json`, the contributed icon theme files (`extension/icons/redscript-icons.json`, `extension/icons/mcrs.svg`), and `extension/package.json` are present in the packaged VSIX. This is package-content evidence only and separate from Web IDE/browser smoke.
 
-Suggested Spark slice for H:
-
-```text
-In /Users/yuzhe/projects/redscript, implement Track H only: VSIX package smoke.
-
-Allowed files:
-- editors/vscode/package.json only if a package script already exists and needs a non-version smoke hook
-- scripts or focused tests for package-content smoke if a suitable existing pattern exists
-- docs/plans/2026-07-01-redscript-vscode-editor-dx-roadmap.md for checkbox/evidence update only
-
-Forbidden:
-- Do not edit compiler parser/typechecker/emit semantics.
-- Do not edit package versions or lockfiles.
-- Do not permanently commit generated editors/vscode/out/* unless package smoke explicitly requires a temporary build artifact and it is reverted before commit.
-- Do not claim Web IDE smoke or live Paper proof.
-- Do not commit or push from Spark.
-
-Acceptance:
-- Build/package the VSCode extension or inspect a generated VSIX in a temporary location.
-- Verify the VSIX/package content includes the extension entrypoint/LSP server, grammar files, snippets, and declaration surface (`builtins.d.mcrs`).
-- Keep this as package-content evidence only, separate from Web IDE/browser smoke.
-- Run the focused package smoke, `npm run build` if root outputs are relevant, `cd editors/vscode && npm run build` or package command as needed, revert generated `editors/vscode/out/*`, and `git diff --check`.
-
-Return:
-1. Changed files
-2. What changed
-3. Exact commands and results
-4. Blockers/uncertainties
-```
 
 ### I — CI/release integration — completed 2026-07-01
 
@@ -121,6 +94,24 @@ Evidence:
 - I1: `CI` already ran compiler build/unit/static gates but did **not** run VSCode package steps before I2; publish workflows only caught VSIX packaging later.
 - I2: Added a low-risk CI gate in `ci.yml` under the `compiler` job: `working-directory: editors/vscode` `npm ci`, then root `npm run smoke:vscode-vsix` to verify packaged extension contents before publish.
 - I3: Controller finalization for this slice performs `gh run list --commit <HEAD>` after push and reports current-head CI/publish status in the handoff.
+
+
+## Close-out / maintenance handoff
+
+Status: **closed**. Tracks F–I are complete, committed, pushed, and covered by current-head CI/publish checks as of 2026-07-01.
+
+If manual VSCode testing finds a regression, open a new focused bug/slice rather than extending this roadmap. Keep the same proof labels:
+
+- grammar/quick-fix evidence is static/editor evidence;
+- VSIX smoke is package-content evidence;
+- CI release gating proves the smoke runs before publish;
+- none of the above is live Paper/Minecraft runtime proof.
+
+Suggested next source of truth after this pass:
+
+1. `docs/plans/redscript-vnext-roadmap.md` for the active mainline roadmap.
+2. `docs/plans/compiler-mc-hardening-roadmap.md` for compiler/Minecraft oracle hardening detail.
+3. Maintenance mode for this editor-DX lane: only fix concrete regressions from manual testing or CI failures.
 
 ## Gates
 
