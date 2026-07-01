@@ -35,7 +35,7 @@ export function parseArgs(args: string[]): ParsedArgs {
     if (arg === '-h' || arg === '--help') {
       result.help = true
       i++
-    } else if (arg === '-o' || arg === '--output') {
+    } else if (arg === '-o' || arg === '--output' || arg === '--out') {
       result.output = args[++i]
       i++
     } else if (arg === '--namespace') {

@@ -273,10 +273,10 @@ git diff --check
 
 **Executable slices:**
 
-- [ ] G1. Design CLI surface, e.g. `redscript declarations --out <path>` or an explicit compile option, with no implicit source mutation.
-- [ ] G2. Generate declaration output for exported functions/resources only.
+- [x] G1. Design CLI surface, e.g. `redscript declarations --out <path>` or an explicit compile option, with no implicit source mutation.
+- [x] G2. Generate declaration output for exported functions/resources only.
 - [ ] G3. Preserve JSDoc/doc comments where parser metadata supports it; otherwise add a follow-up doc-comment capture slice.
-- [ ] G4. Add golden tests for generated `.d.mcrs` output and a consumer typecheck smoke.
+- [x] G4. Add golden tests for generated `.d.mcrs` output and a consumer typecheck smoke.
 
 **Gates:**
 
@@ -333,6 +333,7 @@ Controller must inspect diffs, run gates in the main worktree, update this roadm
 - 2026-07-01: Completed Track F1-F2 contextual unquoted resource literals. The parser now recognizes `namespace:path` expressions as resource-literal `mc_name` nodes; the typechecker accepts them in typed `resource<...>` contexts and reports a clear error in general/ambiguous expression positions. Gates: parser/resource typechecker RED slice (`86` tests), parser + typechecker subset (`233` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 - 2026-07-01: Completed Track F3 LSP support for contextual unquoted resource literals. LSP resource completions now work for `namespace:` prefixes in typed built-in resource arguments, and hover shows `resource<...>` metadata for known and open datapack/mod IDs. Gates: focused LSP slice (`70` tests), full LSP subset (`232` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 - 2026-07-01: Completed Track F4 docs/examples smoke for contextual unquoted resource literals. The language reference now documents `particle(minecraft:flame, ...)` alongside existing string-compatible forms and states that unquoted `namespace:path` is limited to typed resource contexts. Gates: resource docs + LSP completion slice (`66` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
+- 2026-07-01: Completed Track G1-G2/G4 declaration generation CLI surface. Added `redscript declarations <file> --out <file.d.mcrs>` and `--out` alias parsing; it writes a non-mutating `.d.mcrs` surface for exported functions, exported declare stubs, and resource declarations, with CLI tests asserting generated output and a consumer `check` smoke. Track G3 remains open because parser comment capture is not implemented yet. Gates: CLI + declaration compile tests (`40` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 
 ## Stop Conditions
 

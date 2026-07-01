@@ -19,6 +19,14 @@ describe('CLI API', () => {
       expect(parsed.command).toBe('compile')
       expect(parsed.file).toBe('file.mcrs')
     })
+
+    it('parses declarations command with explicit output path', () => {
+      const parsed = parseArgs(['declarations', 'api.mcrs', '--out', 'dist/api.d.mcrs'])
+
+      expect(parsed.command).toBe('declarations')
+      expect(parsed.file).toBe('api.mcrs')
+      expect(parsed.output).toBe('dist/api.d.mcrs')
+    })
   })
 
   describe('imports', () => {
@@ -135,6 +143,49 @@ describe('CLI API', () => {
       expect(result.status).toBe(2)
       expect(result.stderr).toContain(`${filePath}:`)
       expect(result.stderr).toContain('error:')
+    })
+  })
+
+  describe('declarations CLI', () => {
+    it('writes a declaration surface without mutating source files', () => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-declarations-cli-'))
+      const filePath = path.join(tempDir, 'api.mcrs')
+      const outPath = path.join(tempDir, 'api.d.mcrs')
+      const source = [
+        'export fn add_one(x: int): int { return x + 1; }',
+        'fn internal(): void { say("hidden"); }',
+        'export declare fn external_fx(id: resource<particle>): void;',
+        'resource particle mypack:blue_spark;',
+        '',
+      ].join('\n')
+      fs.writeFileSync(filePath, source)
+
+      const result = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, 'declarations', filePath, '--out', outPath],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe(source)
+      const generated = fs.readFileSync(outPath, 'utf-8')
+      expect(generated).toContain('declare fn add_one(x: int): int;')
+      expect(generated).toContain('declare fn external_fx(id: resource<particle>): void;')
+      expect(generated).toContain('resource particle mypack:blue_spark;')
+      expect(generated).not.toContain('internal')
+
+      const checkGenerated = spawnSync(
+        process.execPath,
+        ['-r', ...cliRunner, cliPath, 'check', outPath],
+        {
+          encoding: 'utf-8',
+          env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+        }
+      )
+      expect(checkGenerated.status).toBe(0)
     })
   })
 
