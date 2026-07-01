@@ -58,6 +58,7 @@ import {
   shouldImportStructsAndTypes,
 } from './import-resolver'
 import { buildRenameWorkspaceEdit } from './rename'
+import { getObjectiveHover } from './objective-hover'
 import { getResourceCompletions, getResourceDiagnosticHints, getResourceHover } from './resource-completions'
 
 // ---------------------------------------------------------------------------
@@ -621,6 +622,17 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   const lines = source.split('\n')
   const lineText = lines[params.position.line] ?? ''
   const ch = params.position.character
+
+  const objectiveHover = getObjectiveHover(lineText, ch)
+  if (objectiveHover) {
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: objectiveHover.markdown,
+      } as MarkupContent,
+    }
+  }
+
   // Find all @xxx on this line and check if cursor is inside one
   const resourceHover = getResourceHover(lineText, ch)
   if (resourceHover) {

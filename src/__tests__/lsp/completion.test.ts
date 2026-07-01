@@ -21,6 +21,7 @@ import {
   BUILTIN_RESOURCE_REGISTRY,
 } from '../../lsp/resource-completions'
 import { getImportedFunctions, getImportedPrograms } from '../../lsp/import-resolver'
+import { getObjectiveHover } from '../../lsp/objective-hover'
 import type { Program, FnDecl, TypeNode, Block } from '../../ast/types'
 import {
   CompletionItemKind,
@@ -197,6 +198,7 @@ function buildHoverResponse(value: string): Hover {
     } as MarkupContent,
   }
 }
+
 
 // ---------------------------------------------------------------------------
 // Tests: Completion — keywords
@@ -886,6 +888,51 @@ describe('LSP completion — resource strings', () => {
     expect(labels).toContain('minecraft:flame')
     expect(labels).toContain('mypack:blue_spark')
     expect(BUILTIN_RESOURCE_REGISTRY.particles).not.toContain('mypack:blue_spark')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: Hover — scoreboard objective literals
+// ---------------------------------------------------------------------------
+
+describe('LSP hover — scoreboard objective literals', () => {
+  it('explains #coins as a scoreboard objective token', () => {
+    const line = 'scoreboard_set(@s, #coins, 5)'
+    const cursor = line.indexOf('#coins') + 1
+    const hover = getObjectiveHover(line, cursor)
+
+    expect(hover).not.toBeNull()
+    expect(hover!.token).toBe('#coins')
+    expect(hover!.markdown).toContain('scoreboard objective token')
+    expect(hover!.markdown).toContain('Static/editor documentation only')
+    expect(hover!.markdown).toContain('live Paper/server')
+  })
+
+  it('explains #score and marks static/editor semantics', () => {
+    const line = 'scoreboard_players_set(@s, #score, 1)'
+    const cursor = line.indexOf('#score') + 2
+    const hover = getObjectiveHover(line, cursor)
+
+    expect(hover).not.toBeNull()
+    expect(hover!.token).toBe('#score')
+    expect(hover!.markdown).toContain('#name')
+    expect(hover!.markdown).toContain('does not confirm objective existence')
+  })
+
+  it('does not show objective hover in string literals', () => {
+    const line = 'say("#coins")'
+    const cursor = line.indexOf('#coins') + 1
+    const hover = getObjectiveHover(line, cursor)
+
+    expect(hover).toBeNull()
+  })
+
+  it('does not show objective hover in line comments', () => {
+    const line = 'let x = 1; // #coins is a note'
+    const cursor = line.indexOf('#coins') + 1
+    const hover = getObjectiveHover(line, cursor)
+
+    expect(hover).toBeNull()
   })
 })
 
