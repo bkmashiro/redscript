@@ -189,9 +189,9 @@ git diff --check
 
 **Executable slices:**
 
-- [ ] D1. Add declaration-mode parsing/typechecking for `.d.mcrs` files without changing normal `.mcrs` behavior.
-- [ ] D2. Resolve declaration-only imports through the existing import/preprocess boundary or a small explicit declaration graph stage.
-- [ ] D3. Prove declaration-only inputs typecheck but emit zero runtime functions unless paired with executable source.
+- [x] D1. Add declaration-mode parsing/typechecking for `.d.mcrs` files without changing normal `.mcrs` behavior.
+- [x] D2. Resolve declaration-only imports through the existing import/preprocess boundary or a small explicit declaration graph stage.
+- [x] D3. Prove declaration-only inputs typecheck but emit zero runtime functions unless paired with executable source.
 - [ ] D4. Add compile-stage snapshot coverage for declaration graph metadata if it clarifies the pipeline boundary.
 - [ ] D5. Keep `builtins.d.mcrs` and editor copy excluded from compile-all executable smoke until a dedicated declaration smoke replaces the skip reason.
 
@@ -325,6 +325,7 @@ Controller must inspect diffs, run gates in the main worktree, update this roadm
 - 2026-07-01: Completed Track C1/C3 representation slice. Verified existing declaration-only function call checking and added first-class `resource<registry>` type nodes, parser support, typechecker display/matching by registry, and MIR diagnostic formatting. Gates: parser + typechecker unit subset (`205` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed Track C4 compatibility slice. String and MC-name literals now adopt the expected `resource<registry>` type in typed contexts, preserving string-compatible call surfaces while allowing typed declaration signatures. Gate: focused declared-function resource tests, then parser + typechecker subset, `npm run build`, `git diff --check`.
 - 2026-07-01: Completed Track C5 resource mismatch diagnostics. The typechecker now reuses the shared built-in registry seed to reject known built-in resource literals used in the wrong typed resource context, while keeping unknown datapack/mod IDs open. Gates: typechecker unit subset (`137` tests), LSP unit subset (`133` tests), `npm run build`, `git diff --check`.
+- 2026-07-01: Completed Track D1-D3 declaration-mode/non-emitting compile behavior. Direct `.d.mcrs` file compilation now parses and typechecks declaration-only inputs but returns zero datapack files; existing `.d.mcrs` import/preprocess tests continue to prove declaration signatures remain callable from executable source without emitting declaration bodies. Gates: compile declaration/preprocess/compile-all subset (`159` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 
 ## Stop Conditions
 

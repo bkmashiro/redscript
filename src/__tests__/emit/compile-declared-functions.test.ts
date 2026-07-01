@@ -25,6 +25,26 @@ describe('emit: declared-function boundary behavior', () => {
     expect(paths).toContain(`data/${ns}/function/load.mcfunction`)
   })
 
+  test('declared-only .d.mcrs file typechecks without emitting runtime files', () => {
+    const ns = 'declared_file_mode'
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-file-mode-'))
+    const declFile = path.join(tmpDir, 'api.d.mcrs')
+
+    fs.writeFileSync(declFile, 'declare fn ext(x: int): int;\n')
+
+    try {
+      const result = compile(fs.readFileSync(declFile, 'utf-8'), {
+        namespace: ns,
+        filePath: declFile,
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.files).toHaveLength(0)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true })
+    }
+  })
+
   test('declared-only .d.mcrs path import is inlined and callable via namespaced function command', () => {
     const ns = 'declared_imported_path'
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-'))

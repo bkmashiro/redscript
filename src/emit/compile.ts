@@ -1338,6 +1338,10 @@ function pruneLibraryFunctionFiles(
   return files.filter(file => !libraryPaths.has(file.path) || reachableFiles.has(file.path))
 }
 
+function isDeclarationFilePath(filePath: string | undefined): boolean {
+  return filePath?.endsWith('.d.mcrs') === true
+}
+
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
   const {
     namespace = 'redscript',
@@ -1508,6 +1512,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       const typechecked = runTypecheckStage(ast, processedSource, { filePath, lenient, stopAfterCheck })
       recordStageSnapshot(options, 'typecheck', () => summarizeTypecheckStage(typechecked))
       warnings.push(...typechecked.warnings)
+    }
+
+    if (isDeclarationFilePath(filePath)) {
+      return { files: [], warnings, success: true as const }
     }
 
     const hirStage = lowerToHIRStage(ast, namespace, { pruneInjectedLibraries: hasInjectedLibraries })
