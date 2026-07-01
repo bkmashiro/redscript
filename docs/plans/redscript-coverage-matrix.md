@@ -21,6 +21,7 @@ For release-readiness, only `live-paper-oracle` is treated as server-runtime pro
 - `mc-integration-offline-skippable` — Module appears in MC integration tests; offline skip is not live Paper proof.
 - `compile-all-static-smoke` — Module is not in the compile-all skip manifest.
 - `compile-all-known-skip` — Module is intentionally skipped by compile-all with a manifest reason.
+- `typed-resource-api-unit` — Unit tests prove typed resource context/category diagnostics and string-compatible resource argument behavior; this is not live Paper proof.
 
 ## Stdlib modules
 
@@ -84,6 +85,7 @@ For release-readiness, only `live-paper-oracle` is treated as server-runtime pro
 |---|---|---|---|
 | imports / stdlib include resolution | `parser/typechecker`<br>`compile-all/static`<br>`unit` | `src/__tests__/stdlib-include.test.ts` |  |
 | compile-all language / product skips | `zero known-language-gap`<br>`compile-all/static`<br>`static-mc-validation`<br>`guarded by compile-all + skip-manifest tests` | `src/__tests__/compile-all.test.ts`<br>`src/__tests__/compile-all-static-mc-validation.test.ts`<br>`src/__tests__/compile-all-skip-manifest.test.ts`<br>`src/__tests__/coverage-matrix.test.ts` | Known-language-gap skips are now cleared from manifest; compile-all also statically validates all emitted non-comment `.mcfunction` commands under the current validator subset. |
+| typed resource API diagnostics | `typed-resource-api-unit`<br>`static-mc-validation`<br>`not live Paper proof` | `src/__tests__/typechecker-declared-functions.test.ts`<br>`src/__tests__/coverage-matrix.test.ts`<br>`src/__tests__/compile-all.test.ts` | Resource IDs remain open. Built-in catalog/category checks are typed-context diagnostics and string-compatible API proof, not live Paper proof. |
 | string comparison | `literal specialization + finite-choice patterns`<br>`general runtime string equality deferred (future ADR/non-goal)` | `docs/plans/redscript-runtime-string-equality-note.md`<br>`src/__tests__/compiler/string-advanced.test.ts` | Release path uses literal-specialization and finite-choice rewrites where practical; broader runtime `string == string` remains deferred. |
 | external scoreboard objectives | `compile/static restored`<br>`minimal ownership-policy boundary`<br>`not broad ABI redesign` | `docs/plans/redscript-external-scoreboard-objective-abi.md`<br>`src/__tests__/lir/verify.test.ts` | Interop is restored under a narrow ownership-policy rule for compiler-owned temporary slots and user-facing objectives. |
 | typed LIR local-copy rewrite | `evidence-only`<br>`manual experimental opt-in`<br>`not default-enabled` | `scripts/check-lir-local-copy-gate.ts`<br>`docs/plans/mc-mechanism-optimization/36-typed-boundary-and-diagnostic-roadmap.md` | Manual experimental optimizer path remains available, but is intentionally non-default. |

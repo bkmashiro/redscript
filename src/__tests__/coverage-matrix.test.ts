@@ -109,6 +109,26 @@ describe('RedScript coverage matrix manifest', () => {
     expect(md).toContain('src/__tests__/compile-all-static-mc-validation.test.ts')
   })
 
+  it('labels typed resource API proof separately from live Paper proof', () => {
+    const matrix = readMatrix()
+    const resourceFeature = matrix.languageFeatures
+      .find((entry: any) => entry.feature === 'typed resource API diagnostics')
+    const md = fs.readFileSync(MATRIX_MD, 'utf-8')
+
+    expect(matrix.proofLevelLegend['typed-resource-api-unit']).toContain('resource')
+    expect(resourceFeature).toBeDefined()
+    expect(resourceFeature.proofLevels).toContain('typed-resource-api-unit')
+    expect(resourceFeature.proofLevels).toContain('static-mc-validation')
+    expect(resourceFeature.proofLevels).not.toContain('live-paper-oracle')
+    expect(resourceFeature.evidenceFiles).toEqual(expect.arrayContaining([
+      'src/__tests__/typechecker-declared-functions.test.ts',
+      'src/__tests__/coverage-matrix.test.ts',
+    ]))
+    expect(md).toContain('typed resource API diagnostics')
+    expect(md).toContain('`typed-resource-api-unit`')
+    expect(md).toContain('not live Paper proof')
+  })
+
   it('does not claim compile-all skip blockers in language-feature coverage when manifest has none', () => {
     const matrix = readMatrix()
     const matrixLanguageFeatureStatuses = matrix.languageFeatures

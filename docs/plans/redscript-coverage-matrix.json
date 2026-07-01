@@ -8,7 +8,8 @@
     "mcruntime-e2e": "Functions from the module are exercised in MCRuntime/e2e tests.",
     "mc-integration-offline-skippable": "Module appears in MC integration tests; offline skip is not live Paper proof.",
     "compile-all-static-smoke": "Module is not in the compile-all skip manifest.",
-    "compile-all-known-skip": "Module is intentionally skipped by compile-all with a manifest reason."
+    "compile-all-known-skip": "Module is intentionally skipped by compile-all with a manifest reason.",
+    "typed-resource-api-unit": "Unit tests prove typed resource context/category diagnostics and string-compatible resource argument behavior; this is not live Paper proof."
   },
   "stdlibModules": [
     {
@@ -1139,6 +1140,20 @@
         "src/__tests__/coverage-matrix.test.ts"
       ],
       "notes": "Known-language-gap entries are now cleared from manifest; compile-all also statically validates all emitted non-comment .mcfunction commands under the current validator subset."
+    },
+    {
+      "feature": "typed resource API diagnostics",
+      "proofLevels": [
+        "typed-resource-api-unit",
+        "static-mc-validation",
+        "not live Paper proof"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/typechecker-declared-functions.test.ts",
+        "src/__tests__/coverage-matrix.test.ts",
+        "src/__tests__/compile-all.test.ts"
+      ],
+      "notes": "Resource IDs are open; built-in catalog/category checks are typed-context diagnostics and compile/static evidence only, not runtime Paper proof."
     },
     {
       "feature": "string comparison",
