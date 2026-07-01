@@ -1,195 +1,94 @@
-# RedScript VSCode Editor DX Roadmap
+# RedScript VSCode Editor DX Working Goal
 
-> **For Hermes:** Use extension-development, spark-implementation-lane, and test-driven-development skills. Spark/worker performs bounded slices only; the controller owns scope, review, gates, commits, push, and CI status.
+Use this file as the active goal prompt for the next RedScript VSCode editor-DX work session.
 
-**Goal:** Turn the RedScript VSCode extension into a RedScript/Minecraft-aware editor experience without drifting from the compiler, LSP, or current language standard.
+## Context
 
-**Architecture:** Keep TextMate grammar lightweight and visual, keep semantic behavior in the LSP, and treat `builtins.d.mcrs`, compiler metadata, and `src/resources/catalog.ts` as the source-of-truth direction. Avoid duplicating stale builtin/resource tables in VSCode-only fallback code unless protected by drift tests.
+Repo: `/Users/yuzhe/projects/redscript`
 
-**Tech Stack:** TypeScript, VSCode extension APIs, vscode-languageclient, RedScript LSP, TextMate grammars, Jest, VSIX packaging.
+A–E are already done enough to stop tracking them here:
 
----
+- Stale editor docs/snippets/examples were audited and partially cleaned.
+- Resource/context-aware completion exists for particle/effect/selectors, with static/editor catalog caveats.
+- Semantic hover exists for builtins, decorators, selectors, resources, and `#objective`; this is static/editor guidance, not live Paper proof.
+- Signature help exists for typed-resource builtins, scoreboard objectives, user/`declare fn` functions, and active parameter calculation; this is static/editor/LSP evidence, not live Paper proof.
+- Generated VSCode `out/*` build artifacts should be reverted unless a release/package slice explicitly wants them.
 
-## Baseline — 2026-07-01
+## Operating rules
 
-Repository: `/Users/yuzhe/projects/redscript`
+- Work on `main` in `/Users/yuzhe/projects/redscript`.
+- Check `git status -sb` before editing. Do not overwrite uncommitted user work.
+- Prefer Spark for bounded implementation slices; controller owns review, gates, commits, push, and CI status.
+- Do not claim static/editor evidence as live Paper/Minecraft proof.
+- Keep TextMate grammar visual/syntactic only; do not encode compiler semantic validity in grammar.
+- After each verified slice: update this file, run the relevant gates, make a signed commit, push, then check current-head CI once.
+- Revert generated `editors/vscode/out/*` unless the slice is explicitly packaging/release.
 
-Current branch/status at roadmap creation:
+## Active work order
 
-- `main...origin/main`, clean.
-- Latest commit: `6abe267 docs(plans): record release smoke evidence`.
-- Latest current-HEAD CI/checks observed green; older failed runs were superseded by later green commits.
+### F — TextMate grammar refinement — completed 2026-07-01
 
-Existing editor capabilities:
-
-- VSCode extension under `editors/vscode/`.
-- LSP server under `src/lsp/server.ts` advertises diagnostics, hover, definition, completion, signature help, references, rename, and inlay hints.
-- Extension includes fallback hover/completion/diagnostics for missing LSP, code actions, symbol providers, TextMate grammar, snippets, `builtins.d.mcrs`, and VSIX package scripts.
-
-Initial drift/staleness findings:
-
-- `editors/vscode/builtins.d.mcrs` contains old/example strings such as f-string interpolation text, quoted resource IDs, string scoreboard objectives, and `float` in signatures/examples.
-- `editors/vscode/src/hover.ts` and `editors/vscode/src/completion.ts` duplicate builtin signatures/docs and include outdated examples/signatures.
-- `editors/vscode/snippets/redscript.json` should be audited with a compile/parse smoke rather than trusted manually.
-- TextMate grammar already recognizes f-strings and many RedScript/Minecraft tokens, but needs focused coverage for `#objective`, unquoted `minecraft:path`, `resource<...>`, `.d.mcrs` declarations, and selector internals.
-
-## Non-goals
-
-- Do not rewrite the compiler, LSP, or extension architecture.
-- Do not add generic IDE features just for breadth.
-- Do not introduce a closed enum registry model; unknown resources remain allowed where RedScript semantics allow them.
-- Do not treat static/editor evidence as live Paper/Minecraft proof.
-- Do not broaden into redscript-ide except for cross-checking examples or smoke evidence.
-- Do not commit generated VSIX/bundle noise unless the repo intentionally tracks that artifact for the release path.
-
-## Controller/Spark operating rules
-
-For each implementation slice:
-
-1. Controller defines one bounded task with allowed/forbidden files and exact gates.
-2. Spark/worker does not commit or push.
-3. Controller reviews the diff, rejects forbidden scope, and runs real gates.
-4. Controller updates this roadmap completion log.
-5. Controller commits, pushes, and performs one-shot CI/status query.
-6. If worker model cannot be verified as Spark, report it as Spark-shaped worker output, not confirmed Spark cost savings.
-
-## Track A — Metadata/source-of-truth audit
-
-**Product promise:** Builtin docs, completion labels, hover examples, and declaration surfaces should not drift from current RedScript semantics.
-
-Primary files:
-
-- `editors/vscode/builtins.d.mcrs`
-- `editors/vscode/src/hover.ts`
-- `editors/vscode/src/completion.ts`
-- `src/builtins/metadata.ts`
-- `src/lsp/server.ts`
-- `src/resources/catalog.ts`
-
-Tasks:
-
-- [ ] A1. Compare VSCode fallback builtin tables with compiler/LSP metadata and list drift categories.
-- [ ] A2. Add a lightweight drift/stale-example smoke for editor docs/snippets/declarations.
-- [ ] A3. Remove or regenerate duplicated fallback metadata where practical.
-- [ ] A4. Ensure `builtins.d.mcrs` examples use current recommended syntax.
-- [ ] A5. Gate: focused unit/smoke + `npm run build` + `cd editors/vscode && npm run build` + `git diff --check`.
-
-## Track B — Snippets/examples/current-language smoke
-
-**Product promise:** User-facing examples and snippets demonstrate current RedScript syntax and compile/parse cleanly.
-
-Primary files:
-
-- `editors/vscode/snippets/redscript.json`
-- `editors/vscode/README.md`
-- `editors/vscode/fixtures/test.mcrs`
-- `src/__tests__/...` or `scripts/...` for smoke helpers
-
-Tasks:
-
-- [x] B1. Add a smoke test/script that extracts snippets/fixtures and checks for stale syntax patterns with a documented allowlist.
-- [x] B2. Update snippets/fixtures away from old f-string/`${...}` demo style, string scoreboard objectives, and quoted resource IDs in typed contexts.
-- [ ] B3. Verify snippets still make useful editing templates rather than becoming over-specific examples.
-- [ ] B4. Gate: stale-pattern smoke + snippet/fixture parse/compile smoke where feasible + extension build.
-
-## Track C — Resource/context-aware completion v1
-
-**Product promise:** Minecraft resource IDs are discoverable at the point of use.
-
-Primary files:
-
-- `src/lsp/resource-completions.ts`
-- `src/lsp/server.ts`
-- `src/resources/catalog.ts`
-- relevant LSP tests under `src/__tests__/`
-
-Tasks:
-
-- [x] C1. Add tests for `particle(...)` resource completion in the correct argument position.
-- [x] C2. Add tests for `effect(@s, ...)` resource completion.
-- [x] C3. Add tests for selector `type=` entity completion and ordinary-string negative cases.
-- [x] C4. Implement minimal context detector by function name/argument index and selector key context.
-- [x] C5. Include completion detail/documentation that labels category and static/editor nature.
-
-## Track D — Semantic hover v1
-
-**Product promise:** Hover explains RedScript/Minecraft semantics, not just generic syntax.
-
-Primary files:
-
-- `src/lsp/server.ts`
-- `src/lsp/resource-completions.ts`
-- `editors/vscode/src/hover.ts` only for fallback cleanup
-
-Tasks:
-
-- [x] D1. Builtin hover from current metadata/declarations.
-- [x] D2. Decorator hover for lifecycle/runtime decorators (`@tick`, `@load`, `@keep`, `@test`, `@coroutine`, `@throttle`, `@retry`, `@memoize`).
-- [x] D3. Resource literal hover showing known category and static/editor caveat.
-- [x] D4. `#objective` hover explaining scoreboard objective semantics.
-- [x] D5. Selector hover/argument hover refinements.
-
-## Track E — Signature Help v1
-
-**Product promise:** MC builtin calls show current parameter names/types and active parameter accurately.
-
-Primary files:
-
-- `src/lsp/server.ts`
-- `src/builtins/metadata.ts`
-- `editors/vscode/builtins.d.mcrs`
-- focused LSP tests
-
-Tasks:
-
-- [x] E1. Tests for typed-resource builtin signature labels (`particle`, `effect`).
-- [x] E2. Tests for scoreboard objective parameter help.
-- [x] E3. Tests for user-defined and `declare fn` signature help.
-- [x] E4. Fix active parameter calculation if needed.
-
-## Track F — TextMate grammar refinement
-
-**Product promise:** Files look semantically structured even before LSP starts.
+Goal: files should look semantically structured before the LSP starts.
 
 Primary files:
 
 - `editors/vscode/syntaxes/redscript.tmLanguage.json`
-- grammar fixtures/tests if added
-- `editors/vscode/package.json` token customization defaults
+- focused grammar fixtures/tests if added
+- `editors/vscode/package.json` only if token defaults/package metadata truly need it
 
 Tasks:
 
-- [ ] F1. Add grammar smoke/fixture coverage for `#objective`, unquoted `minecraft:path`, `resource<...>`, selector internals, and `declare fn`.
-- [ ] F2. Update grammar scopes without trying to encode semantic validity.
-- [ ] F3. Keep f-string highlighting if parser supports it, but do not promote it in snippets/examples.
-- [ ] F4. Verify extension package includes grammar files.
+- [x] F1. Add or identify a cheap grammar smoke/fixture for these contexts: `#objective`, unquoted `minecraft:path`, `resource<...>`, selector internals, and `declare fn`.
+- [x] F2. Update TextMate scopes minimally for those contexts without claiming semantic validity.
+- [x] F3. Keep f-string highlighting if supported by parser, but do not promote f-string syntax in snippets/examples.
+- [x] F4. Verify extension build/package inputs still include grammar files.
 
-## Track G — Migration quick fixes
+Evidence: `src/__tests__/vscode-grammar.test.ts` covers the grammar contexts and package contribution; `cd editors/vscode && npm run build` and `git diff --check` passed. This remains static/editor grammar evidence, not compiler or live Paper proof.
 
-**Product promise:** Old RedScript idioms are easy to migrate safely.
+### G — Migration quick fixes — NEXT
 
-Primary files:
-
-- `editors/vscode/src/codeactions.ts`
-- LSP diagnostics/code actions if moved server-side later
-- focused tests/smokes
+Goal: old RedScript idioms are easy to migrate safely.
 
 Tasks:
 
 - [ ] G1. Preserve/verify existing `type=zombie` → `type=minecraft:zombie` quick fix.
 - [ ] G2. Add string objective → `#objective` quick fix in scoreboard contexts.
 - [ ] G3. Add quoted known resource → unquoted `minecraft:path` quick fix in typed resource contexts.
-- [ ] G4. Add deprecated `float`/old interpolation suggestions only where safe; avoid destructive false positives.
+- [ ] G4. Add deprecated `float` / old interpolation suggestions only where safe; avoid destructive false positives.
 
-## Track H — VSIX package smoke
+Suggested Spark slice for G:
 
-**Product promise:** The extension artifact actually contains the LSP, grammar, snippets, and declaration surface.
+```text
+In /Users/yuzhe/projects/redscript, implement Track G only: migration quick fixes.
 
-Primary files:
+Allowed files:
+- editors/vscode/src/codeactions.ts
+- focused tests/smokes for VSCode code actions if a suitable pattern exists
+- docs/plans/2026-07-01-redscript-vscode-editor-dx-roadmap.md for checkbox/evidence update only
 
-- `editors/vscode/build.mjs`
-- `editors/vscode/package.json`
-- possible smoke script under `scripts/` or `editors/vscode/`
+Forbidden:
+- Do not edit compiler parser/typechecker/emit semantics.
+- Do not edit package versions or lockfiles.
+- Do not edit generated editors/vscode/out/* permanently.
+- Do not claim live Paper proof.
+- Do not commit or push from Spark.
+
+Acceptance:
+- Preserve/verify existing `type=zombie` → `type=minecraft:zombie` quick fix.
+- Add safe code actions for string scoreboard objectives and quoted known resources only in clearly-detected contexts.
+- Deprecated `float` / old interpolation suggestions must avoid destructive false positives; leave as TODO if safe context detection is unclear.
+- Run focused tests/smokes if added, plus `cd editors/vscode && npm run build`, plus `git diff --check`.
+
+Return:
+1. Changed files
+2. What changed
+3. Exact commands and results
+4. Blockers/uncertainties
+```
+
+### H — VSIX package smoke
+
+Goal: the extension artifact contains the LSP, grammar, snippets, and declaration surface.
 
 Tasks:
 
@@ -197,9 +96,9 @@ Tasks:
 - [ ] H2. Confirm `out/lsp-server.js`, `builtins.d.mcrs`, snippets, and grammar are packaged.
 - [ ] H3. Keep package smoke separate from Web IDE smoke.
 
-## Track I — CI/release integration
+### I — CI/release integration
 
-**Product promise:** Editor DX regressions fail cheaply and release automation remains stable.
+Goal: editor-DX regressions fail cheaply and release automation remains stable.
 
 Tasks:
 
@@ -207,49 +106,39 @@ Tasks:
 - [ ] I2. Add a cheap editor-DX gate only if missing and low-risk.
 - [ ] I3. After each push, perform one-shot `gh run list --commit <HEAD>` and report current HEAD status.
 
-## Gates by slice type
+## Gates
 
-Docs/roadmap only:
+Docs-only update:
 
 ```bash
 git diff --check
 git status -sb
 ```
 
-Editor metadata/snippets/grammar:
+Grammar/editor slice:
 
 ```bash
-npm run build
+# focused smoke/test added or identified by the slice
 cd editors/vscode && npm run build
-# plus focused smoke/test added by the slice
+git checkout -- editors/vscode/out/extension.js editors/vscode/out/lsp-server.js || true
 git diff --check
 ```
 
-LSP semantic behavior:
+LSP/editor semantic slice:
 
 ```bash
 npm test -- --selectProjects unit --runTestsByPath <focused-tests> --runInBand
 npm run build
 cd editors/vscode && npm run build
+git checkout -- editors/vscode/out/extension.js editors/vscode/out/lsp-server.js || true
 git diff --check
 ```
 
-Packaging:
+Packaging slice:
 
 ```bash
 npm run build
 cd editors/vscode && npm run package
-# inspect VSIX contents via unzip/list command
+# inspect VSIX contents with unzip/list command
 git diff --check
 ```
-
-## Completion log
-
-- 2026-07-01: Roadmap created after baseline audit. Current extension already has LSP diagnostics/hover/definition/completion/signature/references/rename/inlay hints, but stale syntax and duplicated metadata were found in `builtins.d.mcrs`, fallback hover/completion, snippets/fixtures, and docs. Next slice: Spark-shaped read-only audit + Track B stale syntax smoke/fix.
-- 2026-07-01: Slice B1/B2 completed. Added `resource-docs.test.ts` coverage for VSCode editor-facing stale syntax, replaced the `actionbar` `${time}` example and tellraw f-string wording in the VSCode builtins/fallback hover docs, and updated the VSCode fixture to `scoreboard_set(@s, #score, 10);`. Verification: focused `resource-docs` test passed; editor fixture compiled via `dist/src/index.js`; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed. Generated `editors/vscode/out/*` build artifacts were intentionally reverted because this slice did not target release packaging.
-- 2026-07-01: Slice C1-C4 completed as a Spark implementation slice with controller review. Spark confirmed `gpt-5.3-codex-spark`, added focused tests for selector `type=minecraft:cr` entity completion, unquoted `effect(@s, minecraft:)` effect completion, and ordinary `say("` negative context. Existing `src/lsp/resource-completions.ts` already satisfied the behavior, so no production code change was needed. Controller gate: `src/__tests__/lsp/completion.test.ts` passed 68/68; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed; generated `editors/vscode/out/*` artifacts were reverted.
-- 2026-07-01: Slice C5 completed as a Spark implementation slice with controller review. Resource completion items now use `resource<category> (editor suggestion)` detail plus documentation that labels them as static editor catalog suggestions, includes open-registry caveats, and avoids live Paper proof language. Focused particle/effect/entity metadata tests were added. Controller gate: `src/__tests__/lsp/completion.test.ts` passed 70/70; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed; generated `editors/vscode/out/*` artifacts were reverted.
-- 2026-07-01: Slice D3 completed as a Spark implementation slice with controller review. Resource literal hover markdown now labels known and open resource IDs as `resource<...> (static/editor catalog)`, distinguishes static/editor catalog metadata from live validation, and preserves the open-registry caveat for datapack/mod/plugin/newer-version IDs. Controller gate: `src/__tests__/lsp/completion.test.ts` passed 70/70; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed; generated `editors/vscode/out/*` artifacts were reverted.
-- 2026-07-01: Slice D4 completed as a Spark implementation slice with controller correction. Spark added parser-free `#objective` hover and focused tests, but duplicated helper logic inside tests; controller extracted the production helper into `src/lsp/objective-hover.ts` so tests exercise the same code path wired into `server.ts`. Hover explains `#name` scoreboard objective semantics and marks it as static/editor documentation, not live Paper/server validation. Controller gate: `src/__tests__/lsp/completion.test.ts` passed 74/74; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed; generated `editors/vscode/out/*` artifacts were reverted.
-- 2026-07-01: Slice D1/D2/D5 completed as controller-owned salvage after a Spark implementation tranche hit the iteration limit with unverified partial helpers. Added dedicated hover helpers for builtins, decorators, and selectors; wired `server.ts` to use metadata-derived builtin hover, lifecycle/runtime decorator hover, selector token hover, and `@e[type=...]` entity-resource argument hover. Focused tests cover `say`/`actionbar` builtin metadata, `@tick`/`@retry`/`@throttle` decorator docs, `@s`/`@e` selector docs, `minecraft:zombie` selector type resource hover, and ordinary string/comment negatives. Controller gate: `src/__tests__/lsp/completion.test.ts` passed 80/80; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed. Claims remain static/editor-only, not live Paper proof; generated `editors/vscode/out/*` artifacts were reverted.
-- 2026-07-01: Slice E1-E4 completed as controller-owned salvage after a Spark implementation tranche (`gpt-5.3-codex-spark`) hit the iteration limit with unverified tests. Extracted `src/lsp/signature-help.ts` and wired `server.ts` to delegate signature help through a pure helper. Signature labels now show typed resource parameters for `particle`/`effect`, `#objective` scoreboard objective parameter labels for scoreboard builtins, same-file user and `declare fn` signatures, and robust active-parameter counting across nested calls, selector commas, and string commas. Controller fixed the RED failures for cursor positions inside string arguments and verified: new `signature-help.test.ts` passed 9/9; combined `completion.test.ts` + `signature-help.test.ts` passed 89/89; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed. Evidence remains static/editor/LSP-only, not live Paper proof.

@@ -12,8 +12,11 @@
         { "include": "#strings" },
         { "include": "#keywords" },
         { "include": "#selectors" },
+        { "include": "#mc-resource" },
+        { "include": "#resource-generic" },
         { "include": "#const-definition" },
         { "include": "#constants-upper" },
+        { "include": "#declare-fn-definition" },
         { "include": "#fn-definition" },
         { "include": "#struct-definition" },
         { "include": "#enum-definition" },
@@ -202,7 +205,7 @@
             {
               "comment": "Selector argument keys",
               "name": "support.type.property-name.redscript",
-              "match": "\\b(type|name|tag|team|scores|nbt|predicate|gamemode|distance|level|x_rotation|y_rotation|x|y|z|dx|dy|dz|limit|sort|advancements|selector)\\b"
+              "match": "\\b(type|name|tag|team|scores|nbt|predicate|gamemode|distance|level|x_rotation|y_rotation|x|y|z|dx|dy|dz|limit|sort|advancements|selector|family|tag)\\b"
             },
             {
               "comment": "Range operator: ..8, 1.., 1..10",
@@ -210,23 +213,25 @@
               "match": "\\.\\."
             },
             {
+              "comment": "Assignment and inequality operators in selector values",
+              "name": "keyword.operator.assignment.redscript",
+              "match": "(<=|>=|!=|=)"
+            },
+            {
+              "comment": "Logical operators in selector internals",
+              "name": "keyword.operator.logical.redscript",
+              "match": "(!|&&|\\|\\|)"
+            },
+            {
               "comment": "Namespaced value e.g. minecraft:zombie",
-              "match": "\\b([a-z0-9_]+):([a-z0-9_./]+)",
+              "match": "\\b([a-z0-9_]+):([a-z0-9_./-]+)",
               "captures": {
                 "1": { "name": "entity.name.namespace.redscript" },
                 "2": { "name": "entity.name.type.entity.redscript" }
               }
             },
             { "include": "#strings" },
-            { "include": "#numbers" },
-            {
-              "name": "keyword.operator.assignment.redscript",
-              "match": "="
-            },
-            {
-              "name": "keyword.operator.logical.redscript",
-              "match": "!"
-            }
+            { "include": "#numbers" }
           ]
         },
         {
@@ -235,6 +240,16 @@
           "match": "@[aesprnAESPRN]\\b"
         }
       ]
+    },
+
+    "declare-fn-definition": {
+      "comment": "declare fn name(...) — keep declaration + callee capture together",
+      "match": "\\b(declare)\\s+(fn)\\s+([a-z_][a-zA-Z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.redscript" },
+        "2": { "name": "keyword.declaration.redscript" },
+        "3": { "name": "entity.name.function.redscript" }
+      }
     },
 
     "fn-definition": {
@@ -318,15 +333,47 @@
       "comment": "#objective, #tag, #team — unquoted MC identifier literal. #rs is the special RS-internal scoreboard objective token.",
       "patterns": [
         {
+          "comment": "Special compiler token: #objective",
+          "name": "support.constant.objective.redscript",
+          "match": "#objective\\b"
+        },
+        {
           "comment": "#rs — special compiler token: resolves to the current datapack's internal scoreboard objective (__<namespace>)",
           "name": "support.constant.rs-objective.redscript",
           "match": "#rs\\b"
         },
         {
           "name": "variable.other.mc-name.redscript",
-          "match": "#[a-zA-Z_][a-zA-Z0-9_]*"
+          "match": "#(?!rs\\b|objective\\b)[a-zA-Z_][a-zA-Z0-9_]*"
         }
       ]
+    },
+
+    "mc-resource": {
+      "comment": "Unquoted namespace resource literals: minecraft:stone, custom:mod.item",
+      "patterns": [
+        {
+          "name": "support.type.mc-resource.redscript",
+          "match": "\\b([a-z][a-z0-9_]*)\\:([a-z0-9_./-]+)",
+          "captures": {
+            "1": { "name": "entity.name.namespace.redscript" },
+            "2": { "name": "entity.name.type.entity.redscript" }
+          }
+        }
+      ]
+    },
+
+    "resource-generic": {
+      "comment": "resource<...> generic type syntax for typed Minecraft resource registries/categories",
+      "name": "meta.type.resource-generic.redscript",
+      "match": "\\b(resource)\\s*(<)\\s*([a-z][a-z0-9_]*)(?::([a-z0-9_./-]+))?\\s*(>)",
+      "captures": {
+        "1": { "name": "storage.type.generic.redscript" },
+        "2": { "name": "punctuation.definition.generics.begin.redscript" },
+        "3": { "name": "support.type.resource.registry.redscript" },
+        "4": { "name": "entity.name.type.entity.redscript" },
+        "5": { "name": "punctuation.definition.generics.end.redscript" }
+      }
     },
 
     "operators": {
