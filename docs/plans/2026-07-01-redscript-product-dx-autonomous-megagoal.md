@@ -251,8 +251,8 @@ git status -sb
 
 **Executable slices:**
 
-- [ ] F1. Pick one low-risk resource family, likely particles or effects.
-- [ ] F2. Add typed signatures/aliases and compatibility tests.
+- [x] F1. Pick one low-risk resource family, likely particles or effects.
+- [x] F2. Add typed signatures/aliases and compatibility tests.
 - [ ] F3. Extend coverage matrix/docs without overclaiming live proof.
 - [ ] F4. Repeat only for additional families after F1/F2 pass.
 
@@ -378,6 +378,7 @@ If blocked, report:
 - 2026-07-01: Completed roadmap 37 C5 resource mismatch diagnostics. Built-in resource catalog data is now shared between LSP and typechecker; known built-in IDs used in the wrong typed `resource<...>` context report category-specific errors, while unknown datapack/mod IDs remain open. Gates: typechecker unit subset (`137` tests), LSP unit subset (`133` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed roadmap 37 D1-D3 declaration-mode/non-emitting compile behavior. Direct `.d.mcrs` compilation now typechecks and returns zero runtime files; declaration imports still inline type signatures for executable consumers without emitting declaration bodies. Gates: compile declaration/preprocess/compile-all subset (`159` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 - 2026-07-01: Completed roadmap 37 D5 / mega-goal E4 skip-manifest reconciliation. Declaration-only compile-all skips now point to the dedicated declaration-mode smoke and stay out of executable compile-all rather than representing known language gaps. Gates: compile-all skip manifest + declaration compile + compile-all subset (`134` tests), `npm run build`, `git diff --check`.
+- 2026-07-01: Completed roadmap 37 E1-E2 / mega-goal F1-F2 first typed resource command surface. Built-in resource argument positions now get typed `resource<...>` expectations for category diagnostics while preserving existing string-compatible calls and unknown datapack/mod IDs. Gates: typechecker subset (`139` tests), compile-all + coverage matrix (`123` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 
 ## Reporting Format When Finally Stopping
 

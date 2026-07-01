@@ -129,4 +129,23 @@ fn main(): void { use_fx("mypack:blue_spark"); }
 `)
     expect(errors).toHaveLength(0)
   })
+
+  it('checks built-in resource arguments without changing existing string APIs', () => {
+    const errors = typeCheck(`
+fn main(): void {
+  effect(@s, "minecraft:stone", 30, 0);
+}
+`)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].message).toContain("Resource 'minecraft:stone' is a known block/item, not resource<effect>")
+  })
+
+  it('keeps custom built-in resource arguments open for datapacks and mods', () => {
+    const errors = typeCheck(`
+fn main(): void {
+  particle("mypack:blue_spark", 0, 64, 0);
+}
+`)
+    expect(errors).toHaveLength(0)
+  })
 })

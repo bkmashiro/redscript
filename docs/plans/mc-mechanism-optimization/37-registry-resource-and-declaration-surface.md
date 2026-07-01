@@ -219,8 +219,8 @@ git diff --check
 
 **Executable slices:**
 
-- [ ] E1. Pick one low-risk resource family, likely particles or effects, and add typed aliases/signatures with string compatibility tests.
-- [ ] E2. Extend to item/entity/block/sound only after E1 gates pass.
+- [x] E1. Pick one low-risk resource family, likely particles or effects, and add typed aliases/signatures with string compatibility tests.
+- [x] E2. Extend to item/entity/block/sound only after E1 gates pass.
 - [ ] E3. Update coverage matrix labels to distinguish typed resource API proof from live Paper proof.
 - [ ] E4. Add docs examples that show typed and string-compatible forms side by side.
 
@@ -327,6 +327,7 @@ Controller must inspect diffs, run gates in the main worktree, update this roadm
 - 2026-07-01: Completed Track C5 resource mismatch diagnostics. The typechecker now reuses the shared built-in registry seed to reject known built-in resource literals used in the wrong typed resource context, while keeping unknown datapack/mod IDs open. Gates: typechecker unit subset (`137` tests), LSP unit subset (`133` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed Track D1-D3 declaration-mode/non-emitting compile behavior. Direct `.d.mcrs` file compilation now parses and typechecks declaration-only inputs but returns zero datapack files; existing `.d.mcrs` import/preprocess tests continue to prove declaration signatures remain callable from executable source without emitting declaration bodies. Gates: compile declaration/preprocess/compile-all subset (`159` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 - 2026-07-01: Completed Track D5 skip-manifest reconciliation. Declaration-only skip entries now explicitly remain outside executable compile-all while pointing to the dedicated declaration-mode smoke instead of implying an unresolved language gap. Gates: compile-all skip manifest + declaration compile + compile-all subset (`134` tests), `npm run build`, `git diff --check`.
+- 2026-07-01: Completed Track E1-E2 first typed resource command surface. Built-in resource argument positions for particle/effect/effect_clear/give/clear/playsound/setblock/fill/summon now receive typed `resource<...>` expectations for category diagnostics while preserving string-compatible APIs and open datapack/mod IDs. Gates: typechecker subset (`139` tests), compile-all + coverage matrix (`123` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 
 ## Stop Conditions
 

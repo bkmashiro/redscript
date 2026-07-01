@@ -32,6 +32,18 @@ const INT_TYPE: TypeNode = { kind: 'named', name: 'int' }
 const STRING_TYPE: TypeNode = { kind: 'named', name: 'string' }
 const FORMAT_STRING_TYPE: TypeNode = { kind: 'named', name: 'format_string' }
 
+const BUILTIN_RESOURCE_ARGUMENTS: Record<string, Record<number, TypeNode>> = {
+  particle: { 0: { kind: 'resource', registry: 'particle' } },
+  effect: { 1: { kind: 'resource', registry: 'effect' } },
+  effect_clear: { 1: { kind: 'resource', registry: 'effect' } },
+  give: { 1: { kind: 'resource', registry: 'item' } },
+  clear: { 1: { kind: 'resource', registry: 'item' } },
+  playsound: { 0: { kind: 'resource', registry: 'sound' } },
+  setblock: { 1: { kind: 'resource', registry: 'block' } },
+  fill: { 2: { kind: 'resource', registry: 'block' } },
+  summon: { 0: { kind: 'resource', registry: 'entity_type' } },
+}
+
 const BUILTIN_SIGNATURES: Record<string, BuiltinSignature> = {
   assert: {
     params: [{ kind: 'named', name: 'bool' }],
@@ -900,6 +912,14 @@ export class TypeChecker {
     const richTextBuiltin = this.richTextBuiltins.get(expr.fn)
     if (richTextBuiltin) {
       this.checkRichTextBuiltinCall(expr, richTextBuiltin.messageIndex)
+      return
+    }
+
+    const builtinResourceArgs = BUILTIN_RESOURCE_ARGUMENTS[expr.fn]
+    if (builtinResourceArgs) {
+      for (let i = 0; i < expr.args.length; i++) {
+        this.checkExpr(expr.args[i], builtinResourceArgs[i])
+      }
       return
     }
 
