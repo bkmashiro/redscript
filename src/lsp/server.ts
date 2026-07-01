@@ -59,6 +59,12 @@ import {
 } from './import-resolver'
 import { buildRenameWorkspaceEdit } from './rename'
 import { getObjectiveHover } from './objective-hover'
+import { getBuiltinHover } from './builtin-hover'
+import { getDecoratorHover } from './decorator-hover'
+import {
+  getSelectorTokenHover,
+  getSelectorTypeResourceHover,
+} from './selector-hover'
 import { getResourceCompletions, getResourceDiagnosticHints, getResourceHover } from './resource-completions'
 
 // ---------------------------------------------------------------------------
@@ -265,27 +271,6 @@ function lintWarningToDiagnostic(w: LintWarning): Diagnostic {
     source: 'redscript-lint',
     code: w.rule,
   }
-}
-
-// ---------------------------------------------------------------------------
-// Decorator hover docs
-// ---------------------------------------------------------------------------
-
-const DECORATOR_DOCS: Record<string, string> = {
-  tick:         'Runs every game tick.\n\n**Optional args:** `rate=N` (every N ticks, e.g. `@tick(rate=20)` = once per second)\n\nExample: `@tick fn every_tick() {}` or `@tick(rate=20) fn every_second() {}`',
-  load:         'Runs once on `/reload`. Use for initialization.\n\nExample: `@load fn init() { scoreboard_create(...) }`',
-  watch:        'Runs when a scoreboard objective changes for a player.\n\n**Required arg:** objective name.\n\nExample: `@watch("rs.kills") fn on_kill_change() {}`',
-  coroutine:    'Wraps a loop to spread execution across multiple ticks.\n\n**Required arg:** `batch=N` — iterations per tick.\n\nExample: `@coroutine(batch=10) fn scan_blocks() { for i in 0..1000 { ... } }`',
-  schedule:     'Schedules the function to run after a delay.\n\n**Required arg:** `ticks=N`\n\nExample: `@schedule(ticks=100) fn delayed() {}`',
-  on_trigger:   'Runs when a player executes `/trigger <name>`.\n\n**Required arg:** trigger objective name.\n\nExample: `@on_trigger("shop") fn open_shop() {}`',
-  keep:         'Prevents dead-code elimination. Use for exported entry points not referenced in the same file.\n\nExample: `@keep fn public_api() {}`',
-  on:           'Legacy event handler using runtime event dispatch: `@on(EventType)`.\n\nExamples: `@on(PlayerDeath)` and `@on(PlayerJoin)`.\n\nPrefer zero-parameter handlers that rely on `@s` as the execution context:\n\n`@on(PlayerDeath) fn on_death() { say(@s, "You died!") }`\n\nA legacy single `player: Player` parameter is still accepted for compatibility: `@on(PlayerJoin) fn welcome(player: Player) {}`',
-  on_advancement: 'Runs when a player earns an advancement.\n\n**Arg:** advancement id (e.g. `"story/mine_diamond"`).\n\nExample: `@on_advancement("story/mine_diamond") fn reward() {}`',
-  on_craft:     'Runs when a player crafts an item.\n\n**Arg:** item id (e.g. `"minecraft:diamond_sword"`).\n\nExample: `@on_craft("minecraft:diamond_sword") fn on_craft_sword() {}`',
-  on_death:     'Legacy decorator for player-death handlers. Prefer `@on(PlayerDeath)` with a zero-parameter handler using `@s` as executor context.\n\nExample: `@on(PlayerDeath) fn on_death() { tell(@s, "You died!") }`',
-  on_join_team: 'Runs when a player joins a team.\n\n**Arg:** team name.\n\nExample: `@on_join_team("red") fn joined_red() {}`',
-  on_login:     'Legacy decorator for player-login handlers. Prefer the runtime manifest event form where available, or explicit function tags/runtime dispatch.\n\nExample: `@on(PlayerJoin) fn welcome() { tell(@s, "Welcome back!") }`',
-  function_tag: 'Attach this function to a named function tag.\n\nSyntax: `@function_tag("namespace:path")`\n\nExample: `@function_tag("minecraft:tick") fn do_tick() { ... }`',
 }
 
 // ---------------------------------------------------------------------------
@@ -633,7 +618,16 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
     }
   }
 
-  // Find all @xxx on this line and check if cursor is inside one
+  const selectorTypeHover = getSelectorTypeResourceHover(lineText, ch)
+  if (selectorTypeHover) {
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: selectorTypeHover.markdown,
+      } as MarkupContent,
+    }
+  }
+
   const resourceHover = getResourceHover(lineText, ch)
   if (resourceHover) {
     return {
@@ -644,51 +638,23 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
     }
   }
 
-  const decorRe = /@([a-zA-Z_][a-zA-Z0-9_]*)/g
-  let dm: RegExpExecArray | null
-  while ((dm = decorRe.exec(lineText)) !== null) {
-    const atIdx = dm.index
-    const decorEnd = atIdx + dm[0].length
-    if (ch >= atIdx && ch <= decorEnd) {
-      const decoratorName = dm[1]
-      const decoratorDoc = DECORATOR_DOCS[decoratorName]
-      if (decoratorDoc) {
-        return {
-          contents: {
-            kind: MarkupKind.Markdown,
-            value: `**@${decoratorName}** — ${decoratorDoc}`,
-          } as MarkupContent,
-        }
-      }
+  const decoratorHover = getDecoratorHover(lineText, ch)
+  if (decoratorHover) {
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: decoratorHover.markdown,
+      } as MarkupContent,
     }
   }
 
-  // ── Selector hover: @a, @p, @s etc ─────────────────────────────────────────
-  const SELECTOR_DOCS: Record<string, string> = {
-    '@a': 'All online players',
-    '@p': 'Nearest player to the command source',
-    '@s': 'The entity currently executing the command (self)',
-    '@e': 'All entities (use [type=...] to filter)',
-    '@r': 'A random online player',
-    '@n': 'The nearest entity of any type',
-  }
-  // Match @x or @x[...] token at cursor
-  const selRe = /@([a-zA-Z])/g
-  let sm: RegExpExecArray | null
-  while ((sm = selRe.exec(lineText)) !== null) {
-    const selStart = sm.index
-    const selEnd = selStart + sm[0].length
-    if (ch >= selStart && ch <= selEnd) {
-      const selKey = sm[0] // e.g. '@a'
-      const selDoc = SELECTOR_DOCS[selKey]
-      if (selDoc) {
-        return {
-          contents: {
-            kind: MarkupKind.Markdown,
-            value: `**${selKey}** — ${selDoc}`,
-          } as MarkupContent,
-        }
-      }
+  const selectorHover = getSelectorTokenHover(lineText, ch)
+  if (selectorHover) {
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: selectorHover.markdown,
+      } as MarkupContent,
     }
   }
 
@@ -709,16 +675,11 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   while (hovWordStart > 0 && /\w/.test(hovLine[hovWordStart - 1])) hovWordStart--
   if (hovWordStart > 0 && hovLine[hovWordStart - 1] === '@') return null  // It's a selector, no hover
 
-  // Check builtins
-  const builtin = ALL_BUILTINS[word]
-  if (builtin) {
-    const paramStr = builtin.params
-      .map(p => `${p.name}: ${p.type}${p.required ? '' : '?'}`)
-      .join(', ')
-    const sig = `fn ${builtin.name}(${paramStr}): ${builtin.returns}`
+  const builtinHover = getBuiltinHover(word, ALL_BUILTINS)
+  if (builtinHover) {
     const content: MarkupContent = {
       kind: MarkupKind.Markdown,
-      value: `\`\`\`redscript\n${sig}\n\`\`\`\n${builtin.doc}`,
+      value: builtinHover.markdown,
     }
     return { contents: content }
   }

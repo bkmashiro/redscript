@@ -22,6 +22,9 @@ import {
 } from '../../lsp/resource-completions'
 import { getImportedFunctions, getImportedPrograms } from '../../lsp/import-resolver'
 import { getObjectiveHover } from '../../lsp/objective-hover'
+import { getBuiltinHover } from '../../lsp/builtin-hover'
+import { getDecoratorHover } from '../../lsp/decorator-hover'
+import { getSelectorTokenHover, getSelectorTypeResourceHover } from '../../lsp/selector-hover'
 import type { Program, FnDecl, TypeNode, Block } from '../../ast/types'
 import {
   CompletionItemKind,
@@ -941,27 +944,25 @@ describe('LSP hover — scoreboard objective literals', () => {
 // ---------------------------------------------------------------------------
 
 describe('LSP hover — builtin function signatures', () => {
-  it('returns markdown hover for say builtin', () => {
-    const b = BUILTIN_METADATA['say']
-    expect(b).toBeDefined()
-    const paramStr = b.params.map(p => `${p.name}: ${p.type}${p.required ? '' : '?'}`).join(', ')
-    const sig = `fn ${b.name}(${paramStr}): ${b.returns}`
-    const hover = buildHoverResponse(`\`\`\`redscript\n${sig}\n\`\`\`\n${b.doc}`)
+  it('returns metadata-derived markdown hover for say builtin', () => {
+    const hover = getBuiltinHover('say', BUILTIN_METADATA)
 
-    expect((hover.contents as MarkupContent).kind).toBe(MarkupKind.Markdown)
-    expect((hover.contents as MarkupContent).value).toContain('```redscript')
-    expect((hover.contents as MarkupContent).value).toContain('fn say')
+    expect(hover).not.toBeNull()
+    expect(hover!.markdown).toContain('```redscript')
+    expect(hover!.markdown).toContain('fn say')
+    expect(hover!.markdown).toContain(BUILTIN_METADATA.say.doc)
+    expect(hover!.markdown).toContain('Static/editor builtin metadata')
+    expect(hover!.markdown).toContain('does not validate runtime behavior against a live server')
   })
 
-  it('returns markdown hover for kill builtin', () => {
-    const b = BUILTIN_METADATA['kill']
-    expect(b).toBeDefined()
-    const paramStr = b.params.map(p => `${p.name}: ${p.type}`).join(', ')
-    const sig = `fn ${b.name}(${paramStr}): ${b.returns}`
-    const hover = buildHoverResponse(`\`\`\`redscript\n${sig}\n\`\`\`\n${b.doc}`)
+  it('returns metadata-derived markdown hover for actionbar including parameters', () => {
+    const hover = getBuiltinHover('actionbar', BUILTIN_METADATA)
 
-    expect((hover.contents as MarkupContent).value).toContain('fn kill')
-    expect(b.returns).toBe('void')
+    expect(hover).not.toBeNull()
+    expect(hover!.markdown).toContain('fn actionbar')
+    expect(hover!.markdown).toContain('**Parameters:**')
+    expect(hover!.markdown).toContain('target')
+    expect(hover!.markdown).toContain('message')
   })
 
   it('hover response matches LSP Hover protocol shape', () => {
@@ -969,6 +970,77 @@ describe('LSP hover — builtin function signatures', () => {
     expect(hover).toHaveProperty('contents')
     expect((hover.contents as MarkupContent)).toHaveProperty('kind', MarkupKind.Markdown)
     expect((hover.contents as MarkupContent)).toHaveProperty('value')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: Hover — decorators and selectors
+// ---------------------------------------------------------------------------
+
+describe('LSP hover — decorator metadata', () => {
+  it('explains @tick as a runtime lifecycle decorator', () => {
+    const line = '@tick(rate=20) fn every_second() {}'
+    const hover = getDecoratorHover(line, line.indexOf('@tick') + 1)
+
+    expect(hover).not.toBeNull()
+    expect(hover!.name).toBe('tick')
+    expect(hover!.markdown).toContain('Runtime decorator')
+    expect(hover!.markdown).toContain('@tick(rate=N)')
+    expect(hover!.markdown).toContain('Static/editor decorator metadata')
+  })
+
+  it('explains parameterized retry/throttle decorators without live-proof claims', () => {
+    const retryLine = '@retry(max=3) fn unstable() {}'
+    const throttleLine = '@throttle(ticks=20) fn limited() {}'
+
+    const retry = getDecoratorHover(retryLine, retryLine.indexOf('@retry') + 2)
+    const throttle = getDecoratorHover(throttleLine, throttleLine.indexOf('@throttle') + 2)
+
+    expect(retry).not.toBeNull()
+    expect(retry!.markdown).toContain('@retry(max=N)')
+    expect(retry!.markdown).toContain('not a live Paper/server validation')
+    expect(throttle).not.toBeNull()
+    expect(throttle!.markdown).toContain('@throttle(ticks=N)')
+  })
+
+  it('does not show decorator hover inside strings or comments', () => {
+    expect(getDecoratorHover('say("@tick")', 6)).toBeNull()
+    expect(getDecoratorHover('let x = 1 // @tick', 15)).toBeNull()
+  })
+})
+
+describe('LSP hover — selector semantics', () => {
+  it('explains @s and @e selector tokens', () => {
+    const selfLine = 'tell(@s, "hi")'
+    const entityLine = 'effect(@e[type=minecraft:zombie], minecraft:speed, 20, 1)'
+
+    const self = getSelectorTokenHover(selfLine, selfLine.indexOf('@s') + 1)
+    const entities = getSelectorTokenHover(entityLine, entityLine.indexOf('@e') + 1)
+
+    expect(self).not.toBeNull()
+    expect(self!.markdown).toContain('currently executing')
+    expect(self!.markdown).toContain('Static/editor selector semantics')
+    expect(entities).not.toBeNull()
+    expect(entities!.markdown).toContain('all entities')
+  })
+
+  it('explains selector type resource arguments as static editor metadata', () => {
+    const line = 'effect(@e[type=minecraft:zombie], minecraft:speed, 20, 1)'
+    const hover = getSelectorTypeResourceHover(line, line.indexOf('zombie'))
+
+    expect(hover).not.toBeNull()
+    expect(hover!.category).toBe('entities')
+    expect(hover!.value).toBe('minecraft:zombie')
+    expect(hover!.known).toBe(true)
+    expect(hover!.markdown).toContain('resource<entity>')
+    expect(hover!.markdown).toContain('static/editor')
+    expect(hover!.markdown).toContain('does not claim live runtime')
+  })
+
+  it('does not show selector hover inside ordinary strings or comments', () => {
+    expect(getSelectorTokenHover('say("@s")', 6)).toBeNull()
+    expect(getSelectorTokenHover('let x = 1 // @e', 15)).toBeNull()
+    expect(getSelectorTypeResourceHover('say("@e[type=minecraft:zombie]")', 20)).toBeNull()
   })
 })
 
