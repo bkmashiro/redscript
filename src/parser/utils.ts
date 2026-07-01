@@ -141,7 +141,7 @@ export class ParserBase {
       if (TOP_LEVEL_KEYWORDS.has(kind)) {
         return
       }
-      if (kind === 'ident' && this.peek().value === 'import') {
+      if (kind === 'ident' && (this.peek().value === 'import' || this.peek().value === 'resource')) {
         return
       }
       this.advance()

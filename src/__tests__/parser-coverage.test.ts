@@ -598,3 +598,32 @@ describe('Parser — global let', () => {
     expect(prog.globals[0].name).toBe('COUNTER')
   })
 })
+
+// ── Declaration surface resources ──────────────────────────────────────────
+
+describe('Parser — resource declarations', () => {
+  test('top-level resource declaration is preserved in program metadata', () => {
+    const prog = parse(`resource particle mypack:blue_spark;`)
+
+    expect(prog.resourceDeclarations).toHaveLength(1)
+    expect(prog.resourceDeclarations![0]).toMatchObject({
+      registry: 'particle',
+      id: 'mypack:blue_spark',
+      namespace: 'mypack',
+      path: 'blue_spark',
+    })
+    expect(prog.declarations).toHaveLength(0)
+  })
+
+  test('resource declarations can be mixed with declare and executable functions', () => {
+    const prog = parse(`
+resource item create:glue;
+declare fn ext(x: int): int;
+fn main(): int { return ext(1); }
+`)
+
+    expect(prog.resourceDeclarations?.map(resource => resource.id)).toEqual(['create:glue'])
+    expect(prog.declaredFunctions?.map(fn => fn.name)).toEqual(['ext'])
+    expect(prog.declarations.map(fn => fn.name)).toEqual(['main'])
+  })
+})

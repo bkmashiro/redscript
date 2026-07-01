@@ -131,9 +131,9 @@ git diff --check
 
 **Executable slices:**
 
-- [ ] B1. Represent declaration-only functions in AST with enough signature/doc/export metadata for typechecker/LSP, but do not wire emit behavior yet.
-- [ ] B2. Parse `export declare fn ...;` and mixed declaration/source files, preserving existing `export fn` behavior.
-- [ ] B3. Parse `resource <registry> <namespace:path>` declarations and preserve leading doc comments if doc plumbing already exists; otherwise store a stable placeholder for later LSP docs.
+- [x] B1. Represent declaration-only functions in AST with enough signature/doc/export metadata for typechecker/LSP, but do not wire emit behavior yet.
+- [x] B2. Parse `export declare fn ...;` and mixed declaration/source files, preserving existing `export fn` behavior.
+- [x] B3. Parse `resource <registry> <namespace:path>` declarations and preserve leading doc comments if doc plumbing already exists; otherwise store a stable placeholder for later LSP docs.
 - [ ] B4. Keep `.d.mcrs` compile-all excluded until Track D adds declaration-mode checking.
 
 **Gates:**
@@ -321,6 +321,7 @@ Controller must inspect diffs, run gates in the main worktree, update this roadm
 
 - 2026-07-01: Created as the active registry-resource / `.d.mcrs` declaration-surface roadmap during the product-DX mega-goal reset. It supersedes the archived `12-d-mcrs-declaration-surface.md` note as the implementation source of truth. No code behavior changed in this docs-only reset.
 - 2026-07-01: Completed Track A. Verified the existing built-in registry catalog/completion coverage for particles, effects, items, blocks, sounds, entity types, builtin string argument positions, and selector `type=` fragments. Added advisory-only LSP resource diagnostics for unknown built-in IDs plus an inert catalog-extension hook shape for future package/user catalogs. Gates: LSP unit suite (`133` tests), `npm run build`, `git diff --check`.
+- 2026-07-01: Completed Track B parser representation slices B1-B3. Verified existing `declare fn` / `export declare fn` AST coverage and added `resource <registry> <namespace:path>;` parsing into non-emitting `Program.resourceDeclarations` metadata with a stable empty doc placeholder until doc-comment plumbing exists. Gates: `src/__tests__/parser-coverage.test.ts` (`70` tests), `npm run build`, `git diff --check`.
 
 ## Stop Conditions
 

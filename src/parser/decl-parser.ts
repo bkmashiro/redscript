@@ -6,7 +6,7 @@
 import type {
   FnDecl, StructDecl, StructField, EnumDecl, EnumVariant, ImplBlock,
   InterfaceDecl, InterfaceMethod, ConstDecl, GlobalDecl, Decorator,
-  TypeNode, Expr,
+  TypeNode, Expr, ResourceDecl,
 } from '../ast/types'
 import { StmtParser } from './stmt-parser'
 
@@ -278,6 +278,27 @@ export class DeclParser extends StmtParser {
       },
       declareToken,
     )
+  }
+
+  parseResourceDecl(): ResourceDecl {
+    const resourceToken = this.expect('ident')
+    if (resourceToken.value !== 'resource') {
+      this.error("Expected 'resource' declaration")
+    }
+
+    const registry = this.expect('ident').value
+    const namespace = this.expect('ident').value
+    this.expect(':')
+    const path = this.expect('ident').value
+    this.match(';')
+
+    return this.withLoc({
+      registry,
+      id: `${namespace}:${path}`,
+      namespace,
+      path,
+      doc: '',
+    }, resourceToken)
   }
 
   // -------------------------------------------------------------------------

@@ -433,6 +433,20 @@ export interface ImportDecl {
 }
 
 // ---------------------------------------------------------------------------
+// Registry Resource Declarations
+// ---------------------------------------------------------------------------
+
+export interface ResourceDecl {
+  registry: string
+  id: string
+  namespace: string
+  path: string
+  /** Placeholder for future doc-comment capture; lexer currently drops comments. */
+  doc?: string
+  span?: Span
+}
+
+// ---------------------------------------------------------------------------
 // Program (Top-Level)
 // ---------------------------------------------------------------------------
 
@@ -449,6 +463,8 @@ export interface Program {
   consts: ConstDecl[]
   /** Phase 5b: module imports (`import math::sin;`) */
   imports: ImportDecl[]
+  /** Declaration-surface registry resources (`resource item namespace:path;`). */
+  resourceDeclarations?: ResourceDecl[]
   /** Interface / trait declarations */
   interfaces: InterfaceDecl[]
   /** True when the source file declares `module library;`.

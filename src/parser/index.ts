@@ -14,7 +14,7 @@
 import { DiagnosticError } from '../diagnostics'
 import type {
   Program, FnDecl, GlobalDecl, StructDecl, ImplBlock, EnumDecl,
-  ConstDecl, ImportDecl,
+  ConstDecl, ImportDecl, ResourceDecl,
   InterfaceDecl,
 } from '../ast/types'
 import { DeclParser } from './decl-parser'
@@ -34,6 +34,7 @@ export class Parser extends DeclParser {
     const enums: EnumDecl[] = []
     const consts: ConstDecl[] = []
     const imports: ImportDecl[] = []
+    const resourceDeclarations: ResourceDecl[] = []
     const interfaces: InterfaceDecl[] = []
     let isLibrary = false
     let moduleName: string | undefined
@@ -91,6 +92,8 @@ export class Parser extends DeclParser {
           consts.push(this.parseConstDecl())
         } else if (this.check('declare')) {
           declaredFunctions.push(this.parseDeclareStub())
+        } else if (this.checkIdent('resource')) {
+          resourceDeclarations.push(this.parseResourceDecl())
         } else if (this.check('export')) {
           const exportedFnDecl = this.parseExportedFnDecl()
           if (exportedFnDecl.isDeclareOnly) {
@@ -141,6 +144,7 @@ export class Parser extends DeclParser {
       enums,
       consts,
       imports,
+      resourceDeclarations,
       interfaces,
       isLibrary,
     }
