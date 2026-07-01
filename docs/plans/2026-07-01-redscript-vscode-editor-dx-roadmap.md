@@ -64,15 +64,17 @@ Evidence:
   f-strings and literal dollar strings remain untouched. This is static/editor quick-fix evidence, not compiler or live
   Paper proof.
 
-### H — VSIX package smoke — NEXT
+### H — VSIX package smoke — completed 2026-07-01
 
 Goal: the extension artifact contains the LSP, grammar, snippets, and declaration surface.
 
 Tasks:
 
-- [ ] H1. Add/verify package content smoke for VSIX contents.
-- [ ] H2. Confirm `out/lsp-server.js`, `builtins.d.mcrs`, snippets, and grammar are packaged.
-- [ ] H3. Keep package smoke separate from Web IDE smoke.
+- [x] H1. Add/verify package content smoke for VSIX contents.
+- [x] H2. Confirm `out/lsp-server.js`, `builtins.d.mcrs`, snippets, and grammar are packaged.
+- [x] H3. Keep package smoke separate from Web IDE smoke.
+
+Evidence: `npm run build && npm run smoke:vscode-vsix` passes and validates that `extension/out/extension.js`, `extension/out/lsp-server.js`, `extension/builtins.d.mcrs`, `extension/snippets/redscript.json`, `extension/syntaxes/redscript.tmLanguage.json`, `extension/syntaxes/mcfunction.tmLanguage.json`, the contributed icon theme files (`extension/icons/redscript-icons.json`, `extension/icons/mcrs.svg`), and `extension/package.json` are present in the packaged VSIX. This is package-content evidence only and separate from Web IDE/browser smoke.
 
 Suggested Spark slice for H:
 
@@ -104,7 +106,7 @@ Return:
 4. Blockers/uncertainties
 ```
 
-### I — CI/release integration
+### I — CI/release integration — NEXT
 
 Goal: editor-DX regressions fail cheaply and release automation remains stable.
 

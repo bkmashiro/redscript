@@ -28,6 +28,7 @@
     "gate:fast": "npm run build && npm run test:unit && npm run validate-mc && git diff --check",
     "gate:full": "npm run build && npm run validate-mc && npm test -- --runInBand && npm run docs:check && git diff --check",
     "smoke:package": "node scripts/smoke-package.js",
+    "smoke:vscode-vsix": "node scripts/smoke-vscode-vsix.js",
     "smoke:browser-ide": "node scripts/smoke-browser-ide.js",
     "report:release-evidence": "node scripts/report-release-evidence.js",
     "report-compile-cost": "node scripts/report-compile-cost.js",
