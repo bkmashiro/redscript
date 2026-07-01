@@ -357,6 +357,10 @@ function resourceTokenAt(lineText: string, cursor: number): { value: string; sta
   return null
 }
 
+const OPEN_REGISTRY_CAUTION =
+  'Open-registry caveat: this ID is not in the built-in static/editor catalog. '
+  + 'Open registries may define additional IDs from datapacks, mods, plugins, or newer Minecraft versions.'
+
 export function getResourceHover(lineText: string, cursor: number): ResourceHoverInfo | null {
   const token = resourceTokenAt(lineText, cursor)
   if (!token) return null
@@ -367,13 +371,15 @@ export function getResourceHover(lineText: string, cursor: number): ResourceHove
   const known = (BUILTIN_RESOURCE_REGISTRY[context.category] as readonly string[]).includes(token.value)
   const kind = RESOURCE_CATEGORY_NAME[context.category]
   const status = known
-    ? 'Known built-in catalog entry.'
-    : 'Open resource ID; may be provided by a datapack, mod, plugin, or newer Minecraft version.'
+    ? 'Known built-in resource literal from static/editor catalog metadata (static suggestion). '
+      + 'This is not a live validation signal from a running server.'
+    : `Unknown built-in catalog entry. ${OPEN_REGISTRY_CAUTION}`
   return {
     category: context.category,
     value: token.value,
     known,
-    markdown: `\`\`\`redscript\n${token.value}: resource<${kind}>\n\`\`\`\n${status}`,
+    markdown:
+      `\`\`\`redscript\n${token.value}: resource<${kind}> (static/editor catalog)\n\`\`\`\n${status}`,
   }
 }
 

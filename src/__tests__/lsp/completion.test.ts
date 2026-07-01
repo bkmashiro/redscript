@@ -825,6 +825,9 @@ describe('LSP completion — resource strings', () => {
       known: true,
     })
     expect(hover!.markdown).toContain('resource<particle>')
+    expect(hover!.markdown).toContain('static/editor catalog')
+    expect(hover!.markdown).toContain('static')
+    expect(hover!.markdown).toContain('not a live validation signal')
   })
 
   it('returns hover metadata for unquoted open datapack resource literals', () => {
@@ -835,7 +838,12 @@ describe('LSP completion — resource strings', () => {
       value: 'mypack:blue_spark',
       known: false,
     })
-    expect(hover!.markdown).toContain('datapack')
+    expect(hover!.markdown).toContain('resource<particle>')
+    expect(hover!.markdown).toContain('Open-registry')
+    expect(hover!.markdown).toContain('datapacks')
+    expect(hover!.markdown).toContain('static/editor catalog')
+    expect(hover!.markdown).not.toContain('Paper')
+    expect(hover!.markdown).not.toContain('live server')
   })
 
   it('reports advisory hints for unknown string resource IDs', () => {
