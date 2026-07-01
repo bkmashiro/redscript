@@ -970,6 +970,27 @@ Each component can be:
 
 The compiler recognises these builtins and lowers them to Minecraft commands or runtime helpers.
 
+## Resource IDs
+
+Minecraft registry IDs used by command builtins are still accepted as ordinary `string` arguments. RedScript also uses typed resource contexts such as `resource<particle>` and `resource<effect>` for compile-time category diagnostics and package/declaration surfaces.
+
+```rs
+// Existing string-compatible command calls keep working.
+particle("minecraft:flame", 0, 64, 0);
+effect(@s, "minecraft:speed", 30, 1);
+
+// Declaration/package APIs can ask for a typed registry context.
+declare fn burst(id: resource<particle>): void;
+declare fn buff(id: resource<effect>): void;
+
+burst("minecraft:flame");       // OK: string literal is checked as resource<particle>
+buff("minecraft:speed");        // OK: string literal is checked as resource<effect>
+burst("mypack:blue_spark");     // OK: datapack/mod IDs stay open
+// burst("minecraft:stone");    // typechecker diagnostic: known block/item, not particle
+```
+
+Typed resource checks are compile/typechecker diagnostics, not live Paper proof. They do not model registries as closed enums; built-in catalogs are advisory seeds, and datapacks/mods can still provide additional IDs.
+
 ### General builtins
 
 | Builtin | Returns | Notes |

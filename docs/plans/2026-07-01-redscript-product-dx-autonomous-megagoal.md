@@ -254,7 +254,7 @@ git status -sb
 - [x] F1. Pick one low-risk resource family, likely particles or effects.
 - [x] F2. Add typed signatures/aliases and compatibility tests.
 - [x] F3. Extend coverage matrix/docs without overclaiming live proof.
-- [ ] F4. Repeat only for additional families after F1/F2 pass.
+- [x] F4. Repeat only for additional families after F1/F2 pass.
 
 ### Track G — Contextual unquoted resource literals
 
@@ -380,6 +380,7 @@ If blocked, report:
 - 2026-07-01: Completed roadmap 37 D5 / mega-goal E4 skip-manifest reconciliation. Declaration-only compile-all skips now point to the dedicated declaration-mode smoke and stay out of executable compile-all rather than representing known language gaps. Gates: compile-all skip manifest + declaration compile + compile-all subset (`134` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed roadmap 37 E1-E2 / mega-goal F1-F2 first typed resource command surface. Built-in resource argument positions now get typed `resource<...>` expectations for category diagnostics while preserving existing string-compatible calls and unknown datapack/mod IDs. Gates: typechecker subset (`139` tests), compile-all + coverage matrix (`123` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 - 2026-07-01: Completed roadmap 37 E3 / mega-goal F3 coverage-matrix proof labeling. Added `typed-resource-api-unit` and a language-feature row for typed resource API diagnostics so the new typechecker/static evidence is explicit but not promoted to live Paper proof. Gates: coverage matrix (`10` tests), typechecker + compile-all subset (`126` tests), `npm run build`, `git diff --check`.
+- 2026-07-01: Completed roadmap 37 E4 public docs examples. Language reference now shows typed `resource<particle>` / `resource<effect>` declaration forms side by side with existing string-compatible command calls and explicitly marks this as compile/typechecker evidence, not live Paper proof. Gates: resource docs + coverage matrix (`11` tests), `npm run build`, `git diff --check`.
 
 ## Reporting Format When Finally Stopping
 

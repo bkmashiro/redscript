@@ -222,7 +222,7 @@ git diff --check
 - [x] E1. Pick one low-risk resource family, likely particles or effects, and add typed aliases/signatures with string compatibility tests.
 - [x] E2. Extend to item/entity/block/sound only after E1 gates pass.
 - [x] E3. Update coverage matrix labels to distinguish typed resource API proof from live Paper proof.
-- [ ] E4. Add docs examples that show typed and string-compatible forms side by side.
+- [x] E4. Add docs examples that show typed and string-compatible forms side by side.
 
 **Gates:**
 
@@ -329,6 +329,7 @@ Controller must inspect diffs, run gates in the main worktree, update this roadm
 - 2026-07-01: Completed Track D5 skip-manifest reconciliation. Declaration-only skip entries now explicitly remain outside executable compile-all while pointing to the dedicated declaration-mode smoke instead of implying an unresolved language gap. Gates: compile-all skip manifest + declaration compile + compile-all subset (`134` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed Track E1-E2 first typed resource command surface. Built-in resource argument positions for particle/effect/effect_clear/give/clear/playsound/setblock/fill/summon now receive typed `resource<...>` expectations for category diagnostics while preserving string-compatible APIs and open datapack/mod IDs. Gates: typechecker subset (`139` tests), compile-all + coverage matrix (`123` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 - 2026-07-01: Completed Track E3 coverage-matrix proof labeling. Added `typed-resource-api-unit` and a language-feature row for typed resource API diagnostics so static/typechecker evidence is visible without being counted as live Paper proof. Gates: coverage matrix (`10` tests), typechecker + compile-all subset (`126` tests), `npm run build`, `git diff --check`.
+- 2026-07-01: Completed Track E4 public docs examples. `docs/LANGUAGE_REFERENCE.md` now shows existing string-compatible resource command calls beside typed declaration/package API signatures and explicitly labels typed resource checks as compile/typechecker diagnostics, not live Paper proof. Gates: resource docs + coverage matrix (`11` tests), `npm run build`, `git diff --check`.
 
 ## Stop Conditions
 
