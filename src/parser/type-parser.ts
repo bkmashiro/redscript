@@ -47,7 +47,12 @@ export class TypeParser extends ParserBase {
       type = { kind: 'named', name: token.kind }
     } else if (token.kind === 'ident') {
       this.advance()
-      if (token.value === 'selector' && this.check('<')) {
+      if (token.value === 'resource' && this.check('<')) {
+        this.advance() // consume <
+        const registry = this.expect('ident').value
+        this.expect('>')
+        type = { kind: 'resource', registry }
+      } else if (token.value === 'selector' && this.check('<')) {
         this.advance() // consume <
         const entityType = this.expect('ident').value
         this.expect('>')
@@ -220,6 +225,11 @@ export class TypeParser extends ParserBase {
     }
 
     let length = 1
+    if (token.kind === 'ident' && ['resource', 'selector', 'Option'].includes(token.value) && this.peek(offset + 1).kind === '<') {
+      const innerLen = this.typeTokenLength(offset + 2)
+      if (innerLen === 0 || this.peek(offset + 2 + innerLen).kind !== '>') return 0
+      length = 3 + innerLen
+    }
     while (this.peek(offset + length).kind === '[' && this.peek(offset + length + 1).kind === ']') {
       length += 2
     }

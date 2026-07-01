@@ -159,9 +159,9 @@ git diff --check
 
 **Executable slices:**
 
-- [ ] C1. Add signature-only functions to symbol collection and call checking.
+- [x] C1. Add signature-only functions to symbol collection and call checking.
 - [ ] C2. Ensure declaration-only functions cannot require bodies and cannot be lowered/emitted accidentally.
-- [ ] C3. Add initial resource type representation: `resource<particle>`, `resource<effect>`, `resource<entity_type>`, `resource<item>`, `resource<block>`, `resource<sound>`.
+- [x] C3. Add initial resource type representation: `resource<particle>`, `resource<effect>`, `resource<entity_type>`, `resource<item>`, `resource<block>`, `resource<sound>`.
 - [ ] C4. Accept compatible string literals where existing stdlib signatures still use `string`, and add migration tests so current examples keep compiling.
 - [ ] C5. Add typechecker diagnostics for resource category mismatch only in typed contexts.
 
@@ -322,6 +322,7 @@ Controller must inspect diffs, run gates in the main worktree, update this roadm
 - 2026-07-01: Created as the active registry-resource / `.d.mcrs` declaration-surface roadmap during the product-DX mega-goal reset. It supersedes the archived `12-d-mcrs-declaration-surface.md` note as the implementation source of truth. No code behavior changed in this docs-only reset.
 - 2026-07-01: Completed Track A. Verified the existing built-in registry catalog/completion coverage for particles, effects, items, blocks, sounds, entity types, builtin string argument positions, and selector `type=` fragments. Added advisory-only LSP resource diagnostics for unknown built-in IDs plus an inert catalog-extension hook shape for future package/user catalogs. Gates: LSP unit suite (`133` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed Track B parser representation slices B1-B3. Verified existing `declare fn` / `export declare fn` AST coverage and added `resource <registry> <namespace:path>;` parsing into non-emitting `Program.resourceDeclarations` metadata with a stable empty doc placeholder until doc-comment plumbing exists. Gates: `src/__tests__/parser-coverage.test.ts` (`70` tests), `npm run build`, `git diff --check`.
+- 2026-07-01: Completed Track C1/C3 representation slice. Verified existing declaration-only function call checking and added first-class `resource<registry>` type nodes, parser support, typechecker display/matching by registry, and MIR diagnostic formatting. Gates: parser + typechecker unit subset (`205` tests), `npm run build`, `git diff --check`.
 
 ## Stop Conditions
 

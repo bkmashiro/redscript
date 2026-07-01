@@ -55,6 +55,7 @@ export type TypeNode =
   | { kind: 'function_type'; params: TypeNode[]; return: TypeNode }
   | { kind: 'entity'; entityType: EntityTypeName }  // Entity types
   | { kind: 'selector'; entityType?: string }  // Selector type, optionally parameterized: selector<Player>
+  | { kind: 'resource'; registry: string }  // Open Minecraft registry resource type: resource<particle>
   | { kind: 'tuple'; elements: TypeNode[] }  // Tuple type: (int, int, bool)
   | { kind: 'option'; inner: TypeNode }  // Option<T> — null safety wrapper
 

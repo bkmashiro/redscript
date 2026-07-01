@@ -1565,6 +1565,10 @@ export class TypeChecker {
       return this.typesMatch(expected.elem, actual.elem)
     }
 
+    if (expected.kind === 'resource' && actual.kind === 'resource') {
+      return expected.registry === actual.registry
+    }
+
     if (expected.kind === 'struct' && actual.kind === 'struct') {
       return expected.name === actual.name
     }
@@ -1612,6 +1616,8 @@ export class TypeChecker {
         return type.entityType
       case 'selector':
         return type.entityType ? `selector<${type.entityType}>` : 'selector'
+      case 'resource':
+        return `resource<${type.registry}>`
       case 'tuple':
         return `(${type.elements.map(e => this.typeToString(e)).join(', ')})`
       case 'option':

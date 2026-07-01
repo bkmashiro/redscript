@@ -539,6 +539,12 @@ describe('Parser — type parsing', () => {
     expect(param.type.kind).toBe('array')
     expect((param.type as any).elem.kind).toBe('array')
   })
+
+  test('resource<particle> type', () => {
+    const prog = parse(`fn f(id: resource<particle>): void { }`)
+    const param = prog.declarations[0].params[0]
+    expect(param.type).toMatchObject({ kind: 'resource', registry: 'particle' })
+  })
 })
 
 // ── Export fn declaration ──────────────────────────────────────────────────

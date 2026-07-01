@@ -96,4 +96,12 @@ fn main(): int { return ext("ok"); }
     expect(errors).toHaveLength(0)
   })
 
+  it('reports resource typed declared function arguments by registry', () => {
+    const errors = typeCheck(`
+declare fn use_fx(id: resource<particle>): void;
+fn main(): void { use_fx(1); }
+`)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].message).toContain("Argument 1 of 'use_fx' expects resource<particle>, got int")
+  })
 })

@@ -94,6 +94,8 @@ function formatTypeNode(type: TypeNode): string {
       return type.entityType
     case 'selector':
       return type.entityType ? `selector<${type.entityType}>` : 'selector'
+    case 'resource':
+      return `resource<${type.registry}>`
     case 'tuple':
       return `(${type.elements.map(formatTypeNode).join(', ')})`
     case 'option':
