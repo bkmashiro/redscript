@@ -22,7 +22,7 @@ declare fn tell(target: selector, message: string): void;
 
 /// Alias for tell(). Sends a raw text message using tellraw.
 /// @param target Target player or entity selector
-/// @param message Message text (supports f-string interpolation)
+/// @param message Message text to send
 /// @example tellraw(@s, "Hello!");
 declare fn tellraw(target: selector, message: string): void;
 
@@ -47,7 +47,7 @@ declare fn subtitle(target: selector, message: string): void;
 /// Displays text in the action bar (above the hotbar).
 /// @param target Target player(s)
 /// @param message Action bar text (above hotbar)
-/// @example actionbar(@a, "⏱ ${time}s remaining");
+/// @example actionbar(@a, "Timer updated on scoreboard #time_left.");
 declare fn actionbar(target: selector, message: string): void;
 
 /// Sets title display timing in ticks. 20 ticks = 1 second.

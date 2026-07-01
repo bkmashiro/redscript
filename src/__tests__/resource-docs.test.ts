@@ -4,6 +4,20 @@ import * as path from 'path'
 const repoRoot = path.resolve(__dirname, '..', '..')
 
 describe('typed resource docs', () => {
+  it('keeps VSCode editor-facing examples on current syntax', () => {
+    const vscodeBuiltins = fs.readFileSync(path.join(repoRoot, 'editors/vscode/builtins.d.mcrs'), 'utf-8')
+    const fallbackHover = fs.readFileSync(path.join(repoRoot, 'editors/vscode/src/hover.ts'), 'utf-8')
+    const fixture = fs.readFileSync(path.join(repoRoot, 'editors/vscode/fixtures/test.mcrs'), 'utf-8')
+
+    for (const source of [vscodeBuiltins, fallbackHover]) {
+      expect(source).not.toContain('"⏱ ${time}s remaining"')
+      expect(source).not.toContain('supports f-string interpolation')
+    }
+
+    expect(fixture).toContain('scoreboard_set(@s, #score, 10);')
+    expect(fixture).not.toContain('scoreboard_set("@s", "score", 10);')
+  })
+
   it('shows typed and string-compatible resource command forms without claiming live Paper proof', () => {
     const reference = fs.readFileSync(path.join(repoRoot, 'docs/LANGUAGE_REFERENCE.md'), 'utf-8')
 

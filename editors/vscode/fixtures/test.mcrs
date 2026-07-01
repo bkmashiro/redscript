@@ -1,6 +1,6 @@
 // Fixture for VSCode extension integration tests
 fn example() {
-    scoreboard_set("@s", "score", 10);
+    scoreboard_set(@s, #score, 10);
     say("hello");
 }
 

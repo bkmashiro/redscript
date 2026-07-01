@@ -23,6 +23,7 @@ Spark/Codex-Spark is allowed as implementation labor for bounded, file-scoped sl
 - Project guidance: `AGENTS.md`
 - This mega-goal: `docs/plans/2026-07-01-redscript-product-dx-autonomous-megagoal.md`
 - Active language/package-DX roadmap: `docs/plans/mc-mechanism-optimization/37-registry-resource-and-declaration-surface.md`
+- Active VSCode/editor-DX follow-up roadmap: `docs/plans/2026-07-01-redscript-vscode-editor-dx-roadmap.md`
 - Current vNext/release baseline: `docs/plans/redscript-vnext-roadmap.md`
 - Compiler hardening overview: `docs/plans/compiler-mc-hardening-roadmap.md`
 - Coverage matrix: `docs/plans/redscript-coverage-matrix.md` and `.json`

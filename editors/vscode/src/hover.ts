@@ -66,7 +66,7 @@ const BUILTINS: Record<string, BuiltinDoc> = {
       { name: 'target', type: 'selector', desc: 'Target player(s)' },
       { name: 'msg', type: 'string', desc: 'Action bar text' }
     ],
-    example: 'actionbar(@a, "⏱ ${time}s remaining");',
+    example: 'actionbar(@a, "Timer updated on scoreboard #time_left.");',
     mc: 'title <target> actionbar {"text":"<msg>"}'
   },
   title_times: {
