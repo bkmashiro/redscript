@@ -375,6 +375,7 @@ If blocked, report:
 
 - 2026-07-01: Created product-DX mega-goal reset from live repository state. Baseline: clean `main` at `e6fe697`, latest main CI green, release evidence helper reports `redscript-mc@3.0.4` and live baseline `26/26`, compile-all has zero `known-language-gap`, optimizer diagnostic roadmap `36` is complete and local-copy/RMW remains manual experimental opt-in. Created active roadmap `37` for registry resources and `.d.mcrs` declaration surface. Docs-only reset; no code behavior changed.
 - 2026-07-01: Reconciled mega-goal progress after the first product-DX run. Completed LSP registry catalog/completion/advisory diagnostics, parser declaration/resource representation through roadmap 37 Track B1-B3, resource type representation, and string/resource typed-context compatibility. Latest relevant commits include `b554403`, `d2cfe29`, `c14c685`, and `a0436ba`; CI for the latest pushed implementation commit passed. Remaining immediate work starts at roadmap 37 C2/C5 and Track D declaration-mode/non-emitting compile behavior.
+- 2026-07-01: Completed roadmap 37 C5 resource mismatch diagnostics. Built-in resource catalog data is now shared between LSP and typechecker; known built-in IDs used in the wrong typed `resource<...>` context report category-specific errors, while unknown datapack/mod IDs remain open. Gates: typechecker unit subset (`137` tests), LSP unit subset (`133` tests), `npm run build`, `git diff --check`.
 
 ## Reporting Format When Finally Stopping
 

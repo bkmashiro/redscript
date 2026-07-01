@@ -1,17 +1,14 @@
 import { CompletionItem, CompletionItemKind } from 'vscode-languageserver/node'
-
-export const BUILTIN_RESOURCE_REGISTRY = {
-  particles: ['minecraft:flame', 'minecraft:smoke', 'minecraft:dust'],
-  effects: ['minecraft:speed', 'minecraft:strength', 'minecraft:regeneration', 'minecraft:slowness'],
-  entities: ['minecraft:zombie', 'minecraft:skeleton', 'minecraft:creeper', 'minecraft:item'],
-  items: ['minecraft:diamond', 'minecraft:apple', 'minecraft:stone', 'minecraft:stick'],
-  sounds: ['minecraft:entity.experience_orb.pickup', 'minecraft:ui.toast.challenge_complete'],
-  blocks: ['minecraft:stone', 'minecraft:air', 'minecraft:grass_block', 'minecraft:bedrock'],
-} as const
+import {
+  BUILTIN_RESOURCE_REGISTRY,
+  RESOURCE_CATEGORY_NAME,
+  type BuiltinResourceCategory,
+  type ResourceCatalogExtension,
+} from '../resources/catalog'
+export { BUILTIN_RESOURCE_REGISTRY } from '../resources/catalog'
+export type { ResourceCatalogExtension } from '../resources/catalog'
 
 type BuiltinName = 'particle' | 'effect' | 'effect_clear' | 'give' | 'clear' | 'playsound' | 'setblock' | 'fill' | 'summon'
-type BuiltinResourceCategory = keyof typeof BUILTIN_RESOURCE_REGISTRY
-export type ResourceCatalogExtension = Partial<Record<BuiltinResourceCategory, readonly string[]>>
 
 export interface ResourceDiagnosticHint {
   line: number
@@ -62,15 +59,6 @@ const RESOURCE_CATEGORY_META: Record<
     detail: 'Minecraft block',
     documentation: 'Block ID (namespaced): e.g. minecraft:stone',
   },
-}
-
-const RESOURCE_CATEGORY_NAME: Record<BuiltinResourceCategory, string> = {
-  particles: 'particle',
-  effects: 'effect',
-  entities: 'entity',
-  items: 'item',
-  sounds: 'sound',
-  blocks: 'block',
 }
 
 function isInsideString(line: string, cursor: number): boolean {

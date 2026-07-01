@@ -11,6 +11,11 @@ import { getEventExecutorContext, isEventTypeName } from '../events/types'
 import { expandStructDeclarations } from '../structs/expand'
 import { validateFunctionDecorators } from './decorators'
 import { ENTITY_HIERARCHY, inferEntityTypeFromSelector, isEntitySubtype, isKnownEntityType } from './entities'
+import {
+  RESOURCE_CATEGORY_NAME,
+  builtinCategoriesForResourceId,
+  catalogCategoryForResourceType,
+} from '../resources/catalog'
 
 interface ScopeSymbol {
   type: TypeNode
@@ -850,8 +855,6 @@ export class TypeChecker {
       case 'int_lit':
       case 'float_lit':
       case 'bool_lit':
-      case 'str_lit':
-      case 'mc_name':
       case 'range_lit':
       case 'selector':
       case 'byte_lit':
@@ -859,10 +862,34 @@ export class TypeChecker {
       case 'long_lit':
       case 'double_lit':
         break
+      case 'str_lit':
+      case 'mc_name':
+        this.checkResourceLiteralAgainstExpected(expr.value, expectedType, expr)
+        break
       case 'type_cast':
         this.checkExpr(expr.expr)
         break
     }
+  }
+
+  private checkResourceLiteralAgainstExpected(value: string, expectedType: TypeNode | undefined, node: Expr): void {
+    if (expectedType?.kind !== 'resource') return
+
+    const expectedCategory = catalogCategoryForResourceType(expectedType.registry)
+    if (!expectedCategory) return
+
+    const knownCategories = builtinCategoriesForResourceId(value)
+    if (knownCategories.length === 0 || knownCategories.includes(expectedCategory)) return
+
+    const knownNames = knownCategories
+      .map(category => RESOURCE_CATEGORY_NAME[category])
+      .sort()
+      .join('/')
+
+    this.report(
+      `Resource '${value}' is a known ${knownNames}, not ${this.typeToString(expectedType)}`,
+      node,
+    )
   }
 
   private checkCallExpr(expr: Extract<Expr, { kind: 'call' }>): void {

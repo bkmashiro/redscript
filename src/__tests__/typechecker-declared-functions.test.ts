@@ -112,4 +112,21 @@ fn main(): void { use_fx("minecraft:flame"); }
 `)
     expect(errors).toHaveLength(0)
   })
+
+  it('reports known built-in resource category mismatches in typed contexts', () => {
+    const errors = typeCheck(`
+declare fn use_fx(id: resource<particle>): void;
+fn main(): void { use_fx("minecraft:stone"); }
+`)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].message).toContain("Resource 'minecraft:stone' is a known block/item, not resource<particle>")
+  })
+
+  it('keeps unknown resource string literals open in typed contexts', () => {
+    const errors = typeCheck(`
+declare fn use_fx(id: resource<particle>): void;
+fn main(): void { use_fx("mypack:blue_spark"); }
+`)
+    expect(errors).toHaveLength(0)
+  })
 })

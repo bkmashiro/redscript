@@ -163,7 +163,7 @@ git diff --check
 - [ ] C2. Ensure declaration-only functions cannot require bodies and cannot be lowered/emitted accidentally.
 - [x] C3. Add initial resource type representation: `resource<particle>`, `resource<effect>`, `resource<entity_type>`, `resource<item>`, `resource<block>`, `resource<sound>`.
 - [x] C4. Accept compatible string literals where existing stdlib signatures still use `string`, and add migration tests so current examples keep compiling.
-- [ ] C5. Add typechecker diagnostics for resource category mismatch only in typed contexts.
+- [x] C5. Add typechecker diagnostics for resource category mismatch only in typed contexts.
 
 **Gates:**
 
@@ -324,6 +324,7 @@ Controller must inspect diffs, run gates in the main worktree, update this roadm
 - 2026-07-01: Completed Track B parser representation slices B1-B3. Verified existing `declare fn` / `export declare fn` AST coverage and added `resource <registry> <namespace:path>;` parsing into non-emitting `Program.resourceDeclarations` metadata with a stable empty doc placeholder until doc-comment plumbing exists. Gates: `src/__tests__/parser-coverage.test.ts` (`70` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed Track C1/C3 representation slice. Verified existing declaration-only function call checking and added first-class `resource<registry>` type nodes, parser support, typechecker display/matching by registry, and MIR diagnostic formatting. Gates: parser + typechecker unit subset (`205` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed Track C4 compatibility slice. String and MC-name literals now adopt the expected `resource<registry>` type in typed contexts, preserving string-compatible call surfaces while allowing typed declaration signatures. Gate: focused declared-function resource tests, then parser + typechecker subset, `npm run build`, `git diff --check`.
+- 2026-07-01: Completed Track C5 resource mismatch diagnostics. The typechecker now reuses the shared built-in registry seed to reject known built-in resource literals used in the wrong typed resource context, while keeping unknown datapack/mod IDs open. Gates: typechecker unit subset (`137` tests), LSP unit subset (`133` tests), `npm run build`, `git diff --check`.
 
 ## Stop Conditions
 
