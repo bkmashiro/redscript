@@ -245,7 +245,7 @@ git diff --check
 
 - [x] F1. Add RED parser tests for `namespace:path` only in typed/resource contexts, plus negative tests in ambiguous/general expression positions.
 - [x] F2. Add parser and typechecker support for contextual resource literals.
-- [ ] F3. Add LSP hover/completion integration for literal tokens.
+- [x] F3. Add LSP hover/completion integration for literal tokens.
 - [ ] F4. Add example/docs smoke without rewriting old string examples wholesale.
 
 **Gates:**
@@ -331,6 +331,7 @@ Controller must inspect diffs, run gates in the main worktree, update this roadm
 - 2026-07-01: Completed Track E3 coverage-matrix proof labeling. Added `typed-resource-api-unit` and a language-feature row for typed resource API diagnostics so static/typechecker evidence is visible without being counted as live Paper proof. Gates: coverage matrix (`10` tests), typechecker + compile-all subset (`126` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed Track E4 public docs examples. `docs/LANGUAGE_REFERENCE.md` now shows existing string-compatible resource command calls beside typed declaration/package API signatures and explicitly labels typed resource checks as compile/typechecker diagnostics, not live Paper proof. Gates: resource docs + coverage matrix (`11` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed Track F1-F2 contextual unquoted resource literals. The parser now recognizes `namespace:path` expressions as resource-literal `mc_name` nodes; the typechecker accepts them in typed `resource<...>` contexts and reports a clear error in general/ambiguous expression positions. Gates: parser/resource typechecker RED slice (`86` tests), parser + typechecker subset (`233` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
+- 2026-07-01: Completed Track F3 LSP support for contextual unquoted resource literals. LSP resource completions now work for `namespace:` prefixes in typed built-in resource arguments, and hover shows `resource<...>` metadata for known and open datapack/mod IDs. Gates: focused LSP slice (`70` tests), full LSP subset (`232` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 
 ## Stop Conditions
 

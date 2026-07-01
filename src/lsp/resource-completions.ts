@@ -19,6 +19,13 @@ export interface ResourceDiagnosticHint {
   message: string
 }
 
+export interface ResourceHoverInfo {
+  category: BuiltinResourceCategory
+  value: string
+  known: boolean
+  markdown: string
+}
+
 const STRING_COMPLETION_CONTEXTS: Record<BuiltinName, { category: BuiltinResourceCategory; argIndex: number }> = {
   particle: { category: 'particles', argIndex: 0 },
   effect: { category: 'effects', argIndex: 1 },
@@ -173,6 +180,64 @@ function findCallOpenParen(beforeCursor: string, cursor: number): number {
   return -1
 }
 
+function findCallOpenParenOutsideString(beforeCursor: string): number {
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let i = beforeCursor.length - 1; i >= 0; i--) {
+    const ch = beforeCursor[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (ch === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (ch === '"') {
+      inString = !inString
+      continue
+    }
+
+    if (inString) continue
+
+    if (ch === '(') {
+      if (depth === 0) return i
+      depth--
+      continue
+    }
+
+    if (ch === ')') {
+      depth++
+      continue
+    }
+  }
+
+  return -1
+}
+
+function resourceCallContextAt(lineText: string, cursor: number): { category: BuiltinResourceCategory; argIndex: number } | null {
+  if (isInsideString(lineText, cursor)) return null
+
+  const before = lineText.slice(0, cursor)
+  const openParen = findCallOpenParenOutsideString(before)
+  if (openParen < 0) return null
+
+  const prefix = before.slice(0, openParen)
+  const fnMatch = /([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(prefix)
+  if (!fnMatch) return null
+
+  const context = STRING_COMPLETION_CONTEXTS[fnMatch[1] as BuiltinName]
+  if (!context) return null
+
+  const argIdx = argumentIndex(before.slice(openParen + 1))
+  return argIdx === context.argIndex ? context : null
+}
+
 function resourcesForCategory(
   category: BuiltinResourceCategory,
   extension: ResourceCatalogExtension = {},
@@ -238,6 +303,22 @@ export function getResourceCompletionsForSelectorContext(
   return resourceItemsForCategory('entities', extension)
 }
 
+/**
+ * Returns resource completions for unquoted namespace:path literals at typed
+ * built-in resource argument positions, e.g. particle(minecraft:...).
+ */
+export function getResourceCompletionsForUnquotedContext(
+  lineText: string,
+  cursor: number,
+  extension: ResourceCatalogExtension = {},
+): CompletionItem[] {
+  const before = lineText.slice(0, cursor)
+  if (!/[A-Za-z_][A-Za-z0-9_.-]*:[A-Za-z0-9_./-]*$/.test(before)) return []
+  const context = resourceCallContextAt(lineText, cursor)
+  if (!context) return []
+  return resourceItemsForCategory(context.category, extension)
+}
+
 export function getResourceCompletions(
   lineText: string,
   cursor: number,
@@ -246,7 +327,43 @@ export function getResourceCompletions(
   return [
     ...getResourceCompletionsForStringContext(lineText, cursor, extension),
     ...getResourceCompletionsForSelectorContext(lineText, cursor, extension),
+    ...getResourceCompletionsForUnquotedContext(lineText, cursor, extension),
   ]
+}
+
+function resourceTokenAt(lineText: string, cursor: number): { value: string; start: number; end: number } | null {
+  if (isInsideString(lineText, cursor)) return null
+
+  const tokenRe = /[A-Za-z_][A-Za-z0-9_.-]*:[A-Za-z0-9_./-]*/g
+  let match: RegExpExecArray | null
+  while ((match = tokenRe.exec(lineText)) !== null) {
+    const start = match.index
+    const end = start + match[0].length
+    if (cursor >= start && cursor <= end) {
+      return { value: match[0], start, end }
+    }
+  }
+  return null
+}
+
+export function getResourceHover(lineText: string, cursor: number): ResourceHoverInfo | null {
+  const token = resourceTokenAt(lineText, cursor)
+  if (!token) return null
+
+  const context = resourceCallContextAt(lineText, token.start)
+  if (!context) return null
+
+  const known = (BUILTIN_RESOURCE_REGISTRY[context.category] as readonly string[]).includes(token.value)
+  const kind = RESOURCE_CATEGORY_NAME[context.category]
+  const status = known
+    ? 'Known built-in catalog entry.'
+    : 'Open resource ID; may be provided by a datapack, mod, plugin, or newer Minecraft version.'
+  return {
+    category: context.category,
+    value: token.value,
+    known,
+    markdown: `\`\`\`redscript\n${token.value}: resource<${kind}>\n\`\`\`\n${status}`,
+  }
 }
 
 function diagnosticFor(

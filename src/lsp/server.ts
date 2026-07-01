@@ -58,7 +58,7 @@ import {
   shouldImportStructsAndTypes,
 } from './import-resolver'
 import { buildRenameWorkspaceEdit } from './rename'
-import { getResourceCompletions, getResourceDiagnosticHints } from './resource-completions'
+import { getResourceCompletions, getResourceDiagnosticHints, getResourceHover } from './resource-completions'
 
 // ---------------------------------------------------------------------------
 // Connection and document manager
@@ -622,6 +622,16 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   const lineText = lines[params.position.line] ?? ''
   const ch = params.position.character
   // Find all @xxx on this line and check if cursor is inside one
+  const resourceHover = getResourceHover(lineText, ch)
+  if (resourceHover) {
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: resourceHover.markdown,
+      } as MarkupContent,
+    }
+  }
+
   const decorRe = /@([a-zA-Z_][a-zA-Z0-9_]*)/g
   let dm: RegExpExecArray | null
   while ((dm = decorRe.exec(lineText)) !== null) {

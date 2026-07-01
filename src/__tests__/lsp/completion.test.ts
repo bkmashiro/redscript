@@ -17,6 +17,7 @@ import { BUILTIN_METADATA } from '../../builtins/metadata'
 import {
   getResourceCompletions,
   getResourceDiagnosticHints,
+  getResourceHover,
   BUILTIN_RESOURCE_REGISTRY,
 } from '../../lsp/resource-completions'
 import { getImportedFunctions, getImportedPrograms } from '../../lsp/import-resolver'
@@ -741,6 +742,41 @@ describe('LSP completion — resource strings', () => {
     const cursor = line.indexOf('speed') + 1
     const labels = labelsFor(line, cursor)
     expect(labels).toHaveLength(0)
+  })
+
+  it('completes unquoted resource literals in typed builtin resource positions', () => {
+    const line = 'particle(minecraft:'
+    const cursor = line.length
+    const labels = labelsFor(line, cursor)
+    expect(labels).toEqual(BUILTIN_RESOURCE_REGISTRY.particles)
+  })
+
+  it('does not complete unquoted resource literals in non-resource positions', () => {
+    const line = 'say(minecraft:'
+    const cursor = line.length
+    expect(labelsFor(line, cursor)).toHaveLength(0)
+  })
+
+  it('returns hover metadata for unquoted known resource literals', () => {
+    const line = 'particle(minecraft:flame, 0, 64, 0)'
+    const hover = getResourceHover(line, line.indexOf('flame'))
+    expect(hover).toMatchObject({
+      category: 'particles',
+      value: 'minecraft:flame',
+      known: true,
+    })
+    expect(hover!.markdown).toContain('resource<particle>')
+  })
+
+  it('returns hover metadata for unquoted open datapack resource literals', () => {
+    const line = 'particle(mypack:blue_spark, 0, 64, 0)'
+    const hover = getResourceHover(line, line.indexOf('blue_spark'))
+    expect(hover).toMatchObject({
+      category: 'particles',
+      value: 'mypack:blue_spark',
+      known: false,
+    })
+    expect(hover!.markdown).toContain('datapack')
   })
 
   it('reports advisory hints for unknown string resource IDs', () => {
