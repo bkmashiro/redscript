@@ -142,10 +142,10 @@ Primary files:
 
 Tasks:
 
-- [ ] E1. Tests for typed-resource builtin signature labels (`particle`, `effect`).
-- [ ] E2. Tests for scoreboard objective parameter help.
-- [ ] E3. Tests for user-defined and `declare fn` signature help.
-- [ ] E4. Fix active parameter calculation if needed.
+- [x] E1. Tests for typed-resource builtin signature labels (`particle`, `effect`).
+- [x] E2. Tests for scoreboard objective parameter help.
+- [x] E3. Tests for user-defined and `declare fn` signature help.
+- [x] E4. Fix active parameter calculation if needed.
 
 ## Track F — TextMate grammar refinement
 
@@ -252,3 +252,4 @@ git diff --check
 - 2026-07-01: Slice D3 completed as a Spark implementation slice with controller review. Resource literal hover markdown now labels known and open resource IDs as `resource<...> (static/editor catalog)`, distinguishes static/editor catalog metadata from live validation, and preserves the open-registry caveat for datapack/mod/plugin/newer-version IDs. Controller gate: `src/__tests__/lsp/completion.test.ts` passed 70/70; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed; generated `editors/vscode/out/*` artifacts were reverted.
 - 2026-07-01: Slice D4 completed as a Spark implementation slice with controller correction. Spark added parser-free `#objective` hover and focused tests, but duplicated helper logic inside tests; controller extracted the production helper into `src/lsp/objective-hover.ts` so tests exercise the same code path wired into `server.ts`. Hover explains `#name` scoreboard objective semantics and marks it as static/editor documentation, not live Paper/server validation. Controller gate: `src/__tests__/lsp/completion.test.ts` passed 74/74; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed; generated `editors/vscode/out/*` artifacts were reverted.
 - 2026-07-01: Slice D1/D2/D5 completed as controller-owned salvage after a Spark implementation tranche hit the iteration limit with unverified partial helpers. Added dedicated hover helpers for builtins, decorators, and selectors; wired `server.ts` to use metadata-derived builtin hover, lifecycle/runtime decorator hover, selector token hover, and `@e[type=...]` entity-resource argument hover. Focused tests cover `say`/`actionbar` builtin metadata, `@tick`/`@retry`/`@throttle` decorator docs, `@s`/`@e` selector docs, `minecraft:zombie` selector type resource hover, and ordinary string/comment negatives. Controller gate: `src/__tests__/lsp/completion.test.ts` passed 80/80; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed. Claims remain static/editor-only, not live Paper proof; generated `editors/vscode/out/*` artifacts were reverted.
+- 2026-07-01: Slice E1-E4 completed as controller-owned salvage after a Spark implementation tranche (`gpt-5.3-codex-spark`) hit the iteration limit with unverified tests. Extracted `src/lsp/signature-help.ts` and wired `server.ts` to delegate signature help through a pure helper. Signature labels now show typed resource parameters for `particle`/`effect`, `#objective` scoreboard objective parameter labels for scoreboard builtins, same-file user and `declare fn` signatures, and robust active-parameter counting across nested calls, selector commas, and string commas. Controller fixed the RED failures for cursor positions inside string arguments and verified: new `signature-help.test.ts` passed 9/9; combined `completion.test.ts` + `signature-help.test.ts` passed 89/89; `npm run build`, `cd editors/vscode && npm run build`, and `git diff --check` passed. Evidence remains static/editor/LSP-only, not live Paper proof.

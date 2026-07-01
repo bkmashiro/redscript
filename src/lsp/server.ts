@@ -66,6 +66,7 @@ import {
   getSelectorTypeResourceHover,
 } from './selector-hover'
 import { getResourceCompletions, getResourceDiagnosticHints, getResourceHover } from './resource-completions'
+import { getSignatureHelp } from './signature-help'
 
 // ---------------------------------------------------------------------------
 // Connection and document manager
@@ -1190,69 +1191,14 @@ connection.onSignatureHelp((params: SignatureHelpParams): SignatureHelp | null =
   if (!doc) return null
 
   const parsed = parsedDocs.get(params.textDocument.uri)
-  if (!parsed?.program) return null
-
-  const text = doc.getText()
   const offset = doc.offsetAt(params.position)
 
-  // Walk backwards to find the opening '(' and count active parameter
-  let depth = 0
-  let i = offset - 1
-  let activeParam = 0
-
-  while (i >= 0) {
-    const ch = text[i]
-    if (ch === ')') depth++
-    else if (ch === '(') {
-      if (depth === 0) break
-      depth--
-    } else if (ch === ',' && depth === 0) activeParam++
-    i--
-  }
-
-  if (i < 0) return null
-
-  // Extract function name before '('
-  let nameEnd = i - 1
-  while (nameEnd >= 0 && /\s/.test(text[nameEnd])) nameEnd--
-  let nameStart = nameEnd
-  while (nameStart > 0 && /[a-zA-Z0-9_]/.test(text[nameStart - 1])) nameStart--
-  const fnName = text.slice(nameStart, nameEnd + 1)
-
-  if (!fnName) return null
-
-  // Find function declaration in parsed program
-  const fn = parsed.program.declarations.find(s => s.name === fnName)
-
-  // Also check builtins (BUILTIN_METADATA is a Record<string, BuiltinDef>)
-  const builtin = ALL_BUILTINS[fnName]
-
-  if (!fn && !builtin) return null
-
-  let label: string
-  let paramsList: string[]
-
-  if (fn) {
-    paramsList = fn.params.map(p => `${p.name}: ${typeToString(p.type)}`)
-    label = `fn ${fn.name}(${paramsList.join(', ')}): ${typeToString(fn.returnType)}`
-  } else {
-    paramsList = builtin.params?.map(p => `${p.name}: ${p.type}`) ?? []
-    label = `${builtin.name}(${paramsList.join(', ')}): ${builtin.returns ?? 'void'}`
-  }
-
-  const paramInfos: ParameterInformation[] = paramsList.map(p => ({ label: p }))
-
-  return {
-    signatures: [
-      {
-        label,
-        parameters: paramInfos,
-        activeParameter: Math.min(activeParam, Math.max(0, paramInfos.length - 1)),
-      } as SignatureInformation,
-    ],
-    activeSignature: 0,
-    activeParameter: Math.min(activeParam, Math.max(0, paramInfos.length - 1)),
-  }
+  return getSignatureHelp({
+    source: doc.getText(),
+    program: parsed?.program ?? null,
+    builtins: ALL_BUILTINS,
+    offset,
+  })
 })
 
 // ---------------------------------------------------------------------------
