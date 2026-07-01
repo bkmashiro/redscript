@@ -106,15 +106,21 @@ Return:
 4. Blockers/uncertainties
 ```
 
-### I — CI/release integration — NEXT
+### I — CI/release integration — completed 2026-07-01
 
 Goal: editor-DX regressions fail cheaply and release automation remains stable.
 
 Tasks:
 
-- [ ] I1. Inspect existing Actions coverage for VSCode build/package.
-- [ ] I2. Add a cheap editor-DX gate only if missing and low-risk.
-- [ ] I3. After each push, perform one-shot `gh run list --commit <HEAD>` and report current HEAD status.
+- [x] I1. Inspect existing Actions coverage for VSCode build/package.
+- [x] I2. Add a cheap editor-DX gate only if missing and low-risk.
+- [x] I3. After each push, perform one-shot `gh run list --commit <HEAD>` and report current HEAD status.
+
+Evidence:
+
+- I1: `CI` already ran compiler build/unit/static gates but did **not** run VSCode package steps before I2; publish workflows only caught VSIX packaging later.
+- I2: Added a low-risk CI gate in `ci.yml` under the `compiler` job: `working-directory: editors/vscode` `npm ci`, then root `npm run smoke:vscode-vsix` to verify packaged extension contents before publish.
+- I3: Controller finalization for this slice performs `gh run list --commit <HEAD>` after push and reports current-head CI/publish status in the handoff.
 
 ## Gates
 

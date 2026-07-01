@@ -30,3 +30,10 @@ jobs:
         run: npm run validate-mc
       - name: Evidence-only experimental LIR local-copy no-regression gate
         run: npm run gate:lir-local-copy
+
+      - name: Install VSCode extension dependencies
+        working-directory: editors/vscode
+        run: npm ci
+
+      - name: VSIX package-content smoke for VSCode editor-DX
+        run: npm run smoke:vscode-vsix
