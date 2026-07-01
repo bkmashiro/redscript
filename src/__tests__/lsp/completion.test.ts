@@ -14,7 +14,11 @@ import * as os from 'os'
 import * as path from 'path'
 import { pathToFileURL } from 'url'
 import { BUILTIN_METADATA } from '../../builtins/metadata'
-import { getResourceCompletions, BUILTIN_RESOURCE_REGISTRY } from '../../lsp/resource-completions'
+import {
+  getResourceCompletions,
+  getResourceDiagnosticHints,
+  BUILTIN_RESOURCE_REGISTRY,
+} from '../../lsp/resource-completions'
 import { getImportedFunctions, getImportedPrograms } from '../../lsp/import-resolver'
 import type { Program, FnDecl, TypeNode, Block } from '../../ast/types'
 import {
@@ -737,6 +741,48 @@ describe('LSP completion — resource strings', () => {
     const cursor = line.indexOf('speed') + 1
     const labels = labelsFor(line, cursor)
     expect(labels).toHaveLength(0)
+  })
+
+  it('reports advisory hints for unknown string resource IDs', () => {
+    const source = 'fn main(): void { particle("minecraft:not_a_particle", @s.pos); }'
+    const hints = getResourceDiagnosticHints(source)
+
+    expect(hints).toHaveLength(1)
+    expect(hints[0]).toMatchObject({
+      category: 'particles',
+      value: 'minecraft:not_a_particle',
+      message: expect.stringContaining('Unknown Minecraft particle'),
+    })
+  })
+
+  it('does not report advisory hints for known string resource IDs', () => {
+    const source = 'fn main(): void { particle("minecraft:flame", @s.pos); }'
+    expect(getResourceDiagnosticHints(source)).toHaveLength(0)
+  })
+
+  it('reports advisory hints for unknown selector type IDs', () => {
+    const source = 'fn main(): void { let mobs = @e[type=minecraft:not_a_mob]; }'
+    const hints = getResourceDiagnosticHints(source)
+
+    expect(hints).toHaveLength(1)
+    expect(hints[0]).toMatchObject({
+      category: 'entities',
+      value: 'minecraft:not_a_mob',
+      message: expect.stringContaining('Unknown Minecraft entity'),
+    })
+  })
+
+  it('allows user or package catalog extensions without changing the built-in catalog', () => {
+    const line = 'particle("m'
+    const cursor = line.indexOf('"') + 1
+    const items = getResourceCompletions(line, cursor, {
+      particles: ['mypack:blue_spark'],
+    })
+    const labels = items.map(item => item.label as string)
+
+    expect(labels).toContain('minecraft:flame')
+    expect(labels).toContain('mypack:blue_spark')
+    expect(BUILTIN_RESOURCE_REGISTRY.particles).not.toContain('mypack:blue_spark')
   })
 })
 

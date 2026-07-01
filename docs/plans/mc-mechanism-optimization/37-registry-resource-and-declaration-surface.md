@@ -103,10 +103,10 @@ Defer slices that require:
 
 **Executable slices:**
 
-- [ ] A1. Add a small built-in registry catalog module with versioned metadata for a minimal seed set: particles, effects, entity types, items, blocks, sounds.
-- [ ] A2. Add LSP completion in known string positions: `particle("...")`, `effect(..., "...")`, `give(..., "...")`, and selector `type=` fragments.
-- [ ] A3. Add hover/diagnostic hints for unknown built-in IDs as advisory only; do not reject compilation.
-- [ ] A4. Add package/user extension hook shape for catalogs, but keep loading inert until Track C/D needs it.
+- [x] A1. Add a small built-in registry catalog module with versioned metadata for a minimal seed set: particles, effects, entity types, items, blocks, sounds.
+- [x] A2. Add LSP completion in known string positions: `particle("...")`, `effect(..., "...")`, `give(..., "...")`, and selector `type=` fragments.
+- [x] A3. Add hover/diagnostic hints for unknown built-in IDs as advisory only; do not reject compilation.
+- [x] A4. Add package/user extension hook shape for catalogs, but keep loading inert until Track C/D needs it.
 
 **Gates:**
 
@@ -320,6 +320,7 @@ Controller must inspect diffs, run gates in the main worktree, update this roadm
 ## Completion Log
 
 - 2026-07-01: Created as the active registry-resource / `.d.mcrs` declaration-surface roadmap during the product-DX mega-goal reset. It supersedes the archived `12-d-mcrs-declaration-surface.md` note as the implementation source of truth. No code behavior changed in this docs-only reset.
+- 2026-07-01: Completed Track A. Verified the existing built-in registry catalog/completion coverage for particles, effects, items, blocks, sounds, entity types, builtin string argument positions, and selector `type=` fragments. Added advisory-only LSP resource diagnostics for unknown built-in IDs plus an inert catalog-extension hook shape for future package/user catalogs. Gates: LSP unit suite (`133` tests), `npm run build`, `git diff --check`.
 
 ## Stop Conditions
 

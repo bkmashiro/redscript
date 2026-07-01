@@ -58,7 +58,7 @@ import {
   shouldImportStructsAndTypes,
 } from './import-resolver'
 import { buildRenameWorkspaceEdit } from './rename'
-import { getResourceCompletions } from './resource-completions'
+import { getResourceCompletions, getResourceDiagnosticHints } from './resource-completions'
 
 // ---------------------------------------------------------------------------
 // Connection and document manager
@@ -582,6 +582,20 @@ function validateAndPublish(doc: TextDocument): void {
     const lintWarnings = lintString(source, filePath)
     diagnostics.push(...lintWarnings.map(lintWarningToDiagnostic))
   } catch { /* lint is best-effort; don't block diagnostics */ }
+
+  // Registry resource checks are advisory only. They help catch typos in known
+  // vanilla IDs but must not reject datapack/mod/plugin/new-version resources.
+  for (const hint of getResourceDiagnosticHints(source)) {
+    diagnostics.push({
+      severity: DiagnosticSeverity.Hint,
+      range: {
+        start: { line: hint.line, character: hint.startCol },
+        end: { line: hint.line, character: hint.endCol },
+      },
+      message: hint.message,
+      source: 'redscript-resource-catalog',
+    })
+  }
 
   connection.sendDiagnostics({ uri: doc.uri, diagnostics })
 }

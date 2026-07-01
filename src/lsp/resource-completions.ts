@@ -11,6 +11,16 @@ export const BUILTIN_RESOURCE_REGISTRY = {
 
 type BuiltinName = 'particle' | 'effect' | 'effect_clear' | 'give' | 'clear' | 'playsound' | 'setblock' | 'fill' | 'summon'
 type BuiltinResourceCategory = keyof typeof BUILTIN_RESOURCE_REGISTRY
+export type ResourceCatalogExtension = Partial<Record<BuiltinResourceCategory, readonly string[]>>
+
+export interface ResourceDiagnosticHint {
+  line: number
+  startCol: number
+  endCol: number
+  category: BuiltinResourceCategory
+  value: string
+  message: string
+}
 
 const STRING_COMPLETION_CONTEXTS: Record<BuiltinName, { category: BuiltinResourceCategory; argIndex: number }> = {
   particle: { category: 'particles', argIndex: 0 },
@@ -52,6 +62,15 @@ const RESOURCE_CATEGORY_META: Record<
     detail: 'Minecraft block',
     documentation: 'Block ID (namespaced): e.g. minecraft:stone',
   },
+}
+
+const RESOURCE_CATEGORY_NAME: Record<BuiltinResourceCategory, string> = {
+  particles: 'particle',
+  effects: 'effect',
+  entities: 'entity',
+  items: 'item',
+  sounds: 'sound',
+  blocks: 'block',
 }
 
 function isInsideString(line: string, cursor: number): boolean {
@@ -166,9 +185,22 @@ function findCallOpenParen(beforeCursor: string, cursor: number): number {
   return -1
 }
 
-function resourceItemsForCategory(category: BuiltinResourceCategory): CompletionItem[] {
+function resourcesForCategory(
+  category: BuiltinResourceCategory,
+  extension: ResourceCatalogExtension = {},
+): string[] {
+  return Array.from(new Set([
+    ...BUILTIN_RESOURCE_REGISTRY[category],
+    ...(extension[category] ?? []),
+  ]))
+}
+
+function resourceItemsForCategory(
+  category: BuiltinResourceCategory,
+  extension: ResourceCatalogExtension = {},
+): CompletionItem[] {
   const info = RESOURCE_CATEGORY_META[category]
-  return BUILTIN_RESOURCE_REGISTRY[category].map(resource => ({
+  return resourcesForCategory(category, extension).map(resource => ({
     label: resource,
     kind: CompletionItemKind.Value,
     detail: info.detail,
@@ -182,6 +214,7 @@ function resourceItemsForCategory(category: BuiltinResourceCategory): Completion
 export function getResourceCompletionsForStringContext(
   lineText: string,
   cursor: number,
+  extension: ResourceCatalogExtension = {},
 ): CompletionItem[] {
   if (!isInsideString(lineText, cursor)) return []
 
@@ -202,7 +235,7 @@ export function getResourceCompletionsForStringContext(
 
   if (argIdx !== context.argIndex) return []
 
-  return resourceItemsForCategory(context.category)
+  return resourceItemsForCategory(context.category, extension)
 }
 
 /**
@@ -211,17 +244,96 @@ export function getResourceCompletionsForStringContext(
 export function getResourceCompletionsForSelectorContext(
   lineText: string,
   cursor: number,
+  extension: ResourceCatalogExtension = {},
 ): CompletionItem[] {
   if (!isSelectorTypeContext(lineText, cursor)) return []
-  return resourceItemsForCategory('entities')
+  return resourceItemsForCategory('entities', extension)
 }
 
 export function getResourceCompletions(
   lineText: string,
   cursor: number,
+  extension: ResourceCatalogExtension = {},
 ): CompletionItem[] {
   return [
-    ...getResourceCompletionsForStringContext(lineText, cursor),
-    ...getResourceCompletionsForSelectorContext(lineText, cursor),
+    ...getResourceCompletionsForStringContext(lineText, cursor, extension),
+    ...getResourceCompletionsForSelectorContext(lineText, cursor, extension),
   ]
+}
+
+function diagnosticFor(
+  line: number,
+  startCol: number,
+  endCol: number,
+  category: BuiltinResourceCategory,
+  value: string,
+): ResourceDiagnosticHint | null {
+  if (!value || !value.includes(':')) return null
+  if ((BUILTIN_RESOURCE_REGISTRY[category] as readonly string[]).includes(value)) return null
+
+  const kind = RESOURCE_CATEGORY_NAME[category]
+  return {
+    line,
+    startCol,
+    endCol,
+    category,
+    value,
+    message: `Unknown Minecraft ${kind} resource '${value}' in built-in catalog; this is advisory only and may be provided by a datapack, mod, or newer Minecraft version.`,
+  }
+}
+
+function collectStringResourceHints(lineText: string, line: number): ResourceDiagnosticHint[] {
+  const hints: ResourceDiagnosticHint[] = []
+  const stringRe = /"([^"\\]*(?:\\.[^"\\]*)*)"/g
+  let match: RegExpExecArray | null
+
+  while ((match = stringRe.exec(lineText)) !== null) {
+    const literalStart = match.index + 1
+    const literalEnd = literalStart + match[1].length
+    const completions = getResourceCompletionsForStringContext(lineText, literalStart)
+    if (completions.length === 0) continue
+
+    const category = (Object.keys(BUILTIN_RESOURCE_REGISTRY) as BuiltinResourceCategory[])
+      .find(candidate => completions.some(item =>
+        (BUILTIN_RESOURCE_REGISTRY[candidate] as readonly string[]).includes(item.label as string),
+      ))
+    if (!category) continue
+
+    const hint = diagnosticFor(line, literalStart, literalEnd, category, match[1])
+    if (hint) hints.push(hint)
+  }
+
+  return hints
+}
+
+function collectSelectorResourceHints(lineText: string, line: number): ResourceDiagnosticHint[] {
+  const hints: ResourceDiagnosticHint[] = []
+  const selectorRe = /@e\[[^\]]*\btype\s*=\s*([^,\]\s]+)[^\]]*\]/g
+  let match: RegExpExecArray | null
+
+  while ((match = selectorRe.exec(lineText)) !== null) {
+    const value = match[1]
+    const startCol = match.index + match[0].indexOf(value)
+    const hint = diagnosticFor(line, startCol, startCol + value.length, 'entities', value)
+    if (hint) hints.push(hint)
+  }
+
+  return hints
+}
+
+/**
+ * Returns advisory LSP diagnostics for resource-looking strings that are not in
+ * the built-in catalog. These are hints, not compiler errors: datapacks, mods,
+ * plugins, or newer Minecraft versions may legitimately provide extra IDs.
+ */
+export function getResourceDiagnosticHints(source: string): ResourceDiagnosticHint[] {
+  const hints: ResourceDiagnosticHint[] = []
+  const lines = source.split('\n')
+
+  lines.forEach((lineText, index) => {
+    hints.push(...collectStringResourceHints(lineText, index))
+    hints.push(...collectSelectorResourceHints(lineText, index))
+  })
+
+  return hints
 }
