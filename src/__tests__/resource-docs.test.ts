@@ -12,6 +12,8 @@ describe('typed resource docs', () => {
     expect(reference).toContain('resource<effect>')
     expect(reference).toContain('declare fn burst(id: resource<particle>): void;')
     expect(reference).toContain('particle("minecraft:flame", 0, 64, 0);')
+    expect(reference).toContain('particle(minecraft:flame, 0, 64, 0);')
+    expect(reference).toContain('Unquoted `namespace:path` literals are accepted only in typed resource contexts.')
     expect(reference).toContain('Typed resource checks are compile/typechecker diagnostics, not live Paper proof.')
   })
 })

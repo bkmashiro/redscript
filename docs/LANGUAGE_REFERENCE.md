@@ -972,12 +972,15 @@ The compiler recognises these builtins and lowers them to Minecraft commands or 
 
 ## Resource IDs
 
-Minecraft registry IDs used by command builtins are still accepted as ordinary `string` arguments. RedScript also uses typed resource contexts such as `resource<particle>` and `resource<effect>` for compile-time category diagnostics and package/declaration surfaces.
+Minecraft registry IDs used by command builtins are still accepted as ordinary `string` arguments. RedScript also uses typed resource contexts such as `resource<particle>` and `resource<effect>` for compile-time category diagnostics and package/declaration surfaces. Unquoted `namespace:path` literals are accepted only in typed resource contexts.
 
 ```rs
 // Existing string-compatible command calls keep working.
 particle("minecraft:flame", 0, 64, 0);
 effect(@s, "minecraft:speed", 30, 1);
+
+// Unquoted namespace:path literals are accepted only in typed resource contexts.
+particle(minecraft:flame, 0, 64, 0);
 
 // Declaration/package APIs can ask for a typed registry context.
 declare fn burst(id: resource<particle>): void;
