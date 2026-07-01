@@ -124,6 +124,20 @@ export class ParserBase {
     return this.check('ident') && this.peek().value === value
   }
 
+  protected consumeDocComment(): string | undefined {
+    if (!this.check('doc_comment')) return undefined
+    const comments: string[] = []
+    while (this.check('doc_comment')) {
+      comments.push(this.advance().value)
+    }
+    return comments.join('\n')
+  }
+
+  protected attachDoc<T extends { doc?: string }>(node: T, doc?: string): T {
+    if (doc) node.doc = doc
+    return node
+  }
+
   // -------------------------------------------------------------------------
   // Error Recovery
   // -------------------------------------------------------------------------

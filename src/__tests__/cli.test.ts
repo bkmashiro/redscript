@@ -152,9 +152,12 @@ describe('CLI API', () => {
       const filePath = path.join(tempDir, 'api.mcrs')
       const outPath = path.join(tempDir, 'api.d.mcrs')
       const source = [
+        '/** Adds one to a scoreboard value. */',
         'export fn add_one(x: int): int { return x + 1; }',
         'fn internal(): void { say("hidden"); }',
+        '/** External particle bridge. */',
         'export declare fn external_fx(id: resource<particle>): void;',
+        '/** Custom blue spark particle. */',
         'resource particle mypack:blue_spark;',
         '',
       ].join('\n')
@@ -172,8 +175,11 @@ describe('CLI API', () => {
       expect(result.status).toBe(0)
       expect(fs.readFileSync(filePath, 'utf-8')).toBe(source)
       const generated = fs.readFileSync(outPath, 'utf-8')
+      expect(generated).toContain('/** Adds one to a scoreboard value. */')
       expect(generated).toContain('declare fn add_one(x: int): int;')
+      expect(generated).toContain('/** External particle bridge. */')
       expect(generated).toContain('declare fn external_fx(id: resource<particle>): void;')
+      expect(generated).toContain('/** Custom blue spark particle. */')
       expect(generated).toContain('resource particle mypack:blue_spark;')
       expect(generated).not.toContain('internal')
 

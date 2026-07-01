@@ -50,6 +50,7 @@ export type TokenKind =
   // Special
   | 'ident'         // Variable/function names
   | 'mc_name'       // #objective, #tag, #team — unquoted MC identifier
+  | 'doc_comment'   // /** ... */ documentation comments retained for declaration surfaces
   | 'raw_cmd'       // raw("...") content
   | 'eof'
 
@@ -183,6 +184,16 @@ export class Lexer {
 
     // Comments
     if (char === '/' && this.peek() === '/') {
+      const isDocComment = this.peek(1) === '/'
+      if (isDocComment) {
+        let value = '//'
+        this.advance() // consume second '/'
+        while (!this.isAtEnd() && this.peek() !== '\n') {
+          value += this.advance()
+        }
+        this.addToken('doc_comment', value, startLine, startCol)
+        return
+      }
       // Skip to end of line
       while (!this.isAtEnd() && this.peek() !== '\n') {
         this.advance()
@@ -192,14 +203,19 @@ export class Lexer {
 
     // Block comments: /* ... */ and /** ... */
     if (char === '/' && this.peek() === '*') {
+      const isDocComment = this.peek(1) === '*'
+      let value = '/*'
       this.advance() // consume '*'
       while (!this.isAtEnd()) {
         if (this.peek() === '*' && this.peek(1) === '/') {
-          this.advance() // consume '*'
-          this.advance() // consume '/'
+          value += this.advance() // consume '*'
+          value += this.advance() // consume '/'
           break
         }
-        this.advance()
+        value += this.advance()
+      }
+      if (isDocComment) {
+        this.addToken('doc_comment', value, startLine, startCol)
       }
       return
     }

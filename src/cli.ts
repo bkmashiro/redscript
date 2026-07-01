@@ -822,6 +822,13 @@ function declarationFnSignature(fn: FnDecl): string {
   return `declare fn ${fn.name}${typeParams}(${params}): ${declarationTypeToString(fn.returnType)};`
 }
 
+function declarationLinesForFn(fn: FnDecl): string[] {
+  const lines: string[] = []
+  if (fn.doc) lines.push(fn.doc)
+  lines.push(declarationFnSignature(fn))
+  return lines
+}
+
 function generateDeclarationSurface(file: string, namespace?: string): string {
   const source = fs.readFileSync(file, 'utf-8')
   const effectiveNamespace = namespace ?? deriveNamespace(file)
@@ -841,9 +848,10 @@ function generateDeclarationSurface(file: string, namespace?: string): string {
     ...(program.declaredFunctions ?? []).filter(fn => fn.isExported),
   ]
   for (const fn of publicFns) {
-    lines.push(declarationFnSignature(fn))
+    lines.push(...declarationLinesForFn(fn))
   }
   for (const resource of program.resourceDeclarations ?? []) {
+    if (resource.doc) lines.push(resource.doc)
     lines.push(`resource ${resource.registry} ${resource.id};`)
   }
 

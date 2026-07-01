@@ -334,6 +334,8 @@ export interface FnDecl {
   body: Block
   span?: Span
   sourceFile?: string
+  /** Documentation comment immediately preceding the declaration, if present. */
+  doc?: string
 }
 
 // ---------------------------------------------------------------------------

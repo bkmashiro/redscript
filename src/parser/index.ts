@@ -59,6 +59,8 @@ export class Parser extends DeclParser {
     }
 
     while (!this.check('eof')) {
+      const doc = this.consumeDocComment()
+      if (this.check('eof')) break
       try {
         if (this.check('decorator') && this.peek().value.startsWith('@config')) {
           const decorToken = this.advance()
@@ -91,11 +93,11 @@ export class Parser extends DeclParser {
         } else if (this.check('const')) {
           consts.push(this.parseConstDecl())
         } else if (this.check('declare')) {
-          declaredFunctions.push(this.parseDeclareStub())
+          declaredFunctions.push(this.attachDoc(this.parseDeclareStub(), doc))
         } else if (this.checkIdent('resource')) {
-          resourceDeclarations.push(this.parseResourceDecl())
+          resourceDeclarations.push(this.attachDoc(this.parseResourceDecl(), doc))
         } else if (this.check('export')) {
-          const exportedFnDecl = this.parseExportedFnDecl()
+          const exportedFnDecl = this.attachDoc(this.parseExportedFnDecl(), doc)
           if (exportedFnDecl.isDeclareOnly) {
             declaredFunctions.push(exportedFnDecl)
           } else {
@@ -121,7 +123,7 @@ export class Parser extends DeclParser {
             imports.push(this.withLoc({ moduleName: modName, symbol: undefined }, importToken))
           }
         } else {
-          declarations.push(this.parseFnDecl())
+          declarations.push(this.attachDoc(this.parseFnDecl(), doc))
         }
       } catch (err) {
         if (err instanceof DiagnosticError) {
