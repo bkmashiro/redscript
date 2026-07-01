@@ -201,10 +201,10 @@ git status -sb
 
 **Executable slices:**
 
-- [ ] B1. Add built-in registry catalog seed module.
-- [ ] B2. Complete known resource IDs in string positions for particles/effects/items/entity types.
-- [ ] B3. Add selector `type=` completion support.
-- [ ] B4. Add advisory hover/diagnostic hints without compiler rejection.
+- [x] B1. Add built-in registry catalog seed module.
+- [x] B2. Complete known resource IDs in string positions for particles/effects/items/entity types.
+- [x] B3. Add selector `type=` completion support.
+- [x] B4. Add advisory hover/diagnostic hints without compiler rejection.
 
 **Do not:** change parser syntax in this track.
 
@@ -214,9 +214,9 @@ git status -sb
 
 **Executable slices:**
 
-- [ ] C1. AST/parser support for declaration-only functions.
-- [ ] C2. Parser tests for mixed `export declare fn`, normal `export fn`, and declaration-only files.
-- [ ] C3. Parser support for `resource` declarations.
+- [x] C1. AST/parser support for declaration-only functions.
+- [x] C2. Parser tests for mixed `export declare fn`, normal `export fn`, and declaration-only files.
+- [x] C3. Parser support for `resource` declarations.
 - [ ] C4. Preserve doc/export metadata needed by later LSP/generation slices.
 
 **Do not:** emit declaration-only functions.
@@ -227,10 +227,10 @@ git status -sb
 
 **Executable slices:**
 
-- [ ] D1. Signature-only function symbol collection.
+- [x] D1. Signature-only function symbol collection.
 - [ ] D2. Call-checking against declaration-only signatures.
-- [ ] D3. Initial resource type representation and category mismatch diagnostics.
-- [ ] D4. String-literal compatibility migration tests.
+- [x] D3. Initial resource type representation and category mismatch diagnostics.
+- [x] D4. String-literal compatibility migration tests.
 
 **Do not:** broadly rewrite stdlib signatures before compatibility is pinned.
 
@@ -374,6 +374,7 @@ If blocked, report:
 ## Completion Log
 
 - 2026-07-01: Created product-DX mega-goal reset from live repository state. Baseline: clean `main` at `e6fe697`, latest main CI green, release evidence helper reports `redscript-mc@3.0.4` and live baseline `26/26`, compile-all has zero `known-language-gap`, optimizer diagnostic roadmap `36` is complete and local-copy/RMW remains manual experimental opt-in. Created active roadmap `37` for registry resources and `.d.mcrs` declaration surface. Docs-only reset; no code behavior changed.
+- 2026-07-01: Reconciled mega-goal progress after the first product-DX run. Completed LSP registry catalog/completion/advisory diagnostics, parser declaration/resource representation through roadmap 37 Track B1-B3, resource type representation, and string/resource typed-context compatibility. Latest relevant commits include `b554403`, `d2cfe29`, `c14c685`, and `a0436ba`; CI for the latest pushed implementation commit passed. Remaining immediate work starts at roadmap 37 C2/C5 and Track D declaration-mode/non-emitting compile behavior.
 
 ## Reporting Format When Finally Stopping
 
