@@ -632,7 +632,7 @@ npm test -- --runInBand
 
 ## Phase 15 — Registry resource literals and package declaration surface
 
-Status: Planned. This is a language/package-DX track to pick up during parser/typechecker/package refactors, not part of the numeric helper work. The goal is to treat Minecraft and mod/datapack `namespace:path` values as typed registry resources with LSP support, and to make `.d.mcrs` useful as a package boundary similar to TypeScript declaration files.
+Status: Active through roadmap [`37-registry-resource-and-declaration-surface.md`](mc-mechanism-optimization/37-registry-resource-and-declaration-surface.md). This is a language/package-DX track to pick up during parser/typechecker/package refactors, not part of the numeric helper work. The goal is to treat Minecraft and mod/datapack `namespace:path` values as typed registry resources with LSP support, and to make `.d.mcrs` useful as a package boundary similar to TypeScript declaration files.
 
 Design boundary:
 
@@ -685,7 +685,7 @@ Planned implementation order:
 - [ ] Add contextual unquoted resource literals (`minecraft:flame`) only after the registry/typechecker path is pinned with RED parser/typechecker/LSP tests.
 - [ ] Extend `.d.mcrs` with `export` and declaration-only external function/package surfaces; add tests that a consumer package can typecheck against declarations without implementation files.
 - [ ] Add `.d.mcrs` generation from package exports, including JSDoc and registry resource declarations.
-- [ ] Track concrete implementation order and first Spark slice in `docs/plans/mc-mechanism-optimization/12-d-mcrs-declaration-surface.md`.
+- [x] Track concrete implementation order and first Spark slice in active roadmap [`docs/plans/mc-mechanism-optimization/37-registry-resource-and-declaration-surface.md`](mc-mechanism-optimization/37-registry-resource-and-declaration-surface.md).
 
 Verification for Phase 15 slices:
 

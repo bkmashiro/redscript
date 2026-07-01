@@ -4,9 +4,11 @@
 
 ## Active roadmap
 
-- [36 - Typed Boundary and Diagnostic Optimizer Roadmap](./36-typed-boundary-and-diagnostic-roadmap.md)
+- [37 - Registry Resource and `.d.mcrs` Declaration Surface Roadmap](./37-registry-resource-and-declaration-surface.md)
 
 The backend contract-hardening and post-contract optimizer foundations are complete:
+
+- [36 - Typed Boundary and Diagnostic Optimizer Roadmap](./36-typed-boundary-and-diagnostic-roadmap.md)
 
 - [30 - Backend Contract Hardening Roadmap](./30-backend-contract-hardening-roadmap.md)
 - [31 - Post-Contract Optimizer Roadmap](./31-post-contract-optimizer-roadmap.md)
@@ -17,16 +19,16 @@ The backend contract-hardening and post-contract optimizer foundations are compl
 
 ## Current phase
 
-Roadmap `36` continues from the P14-P16 conclusions:
+Roadmap `37` is the active product-DX lane after release-readiness and backend diagnostic hardening:
 
-1. derive typed boundary sidecar metadata without storing it on mutable LIR instructions;
-2. use sidecar metadata in diagnostics/gate JSON only;
-3. pin call/return ABI with compile-golden fixture families before cleanup;
-4. validate or type the raw branch-return shape before relying on it;
-5. expand storage/NBT boundary fixtures while keeping raw/macro opaque;
-6. revisit local-copy/RMW evidence after diagnostics improve, still experimental by default;
-7. optionally run Paper/TestHarness semantic smoke only when a live server is confirmed;
-8. close with an explicit next decision index.
+1. add a registry catalog and LSP completions for existing string positions;
+2. represent declaration-only functions and registry resources in parser/AST;
+3. typecheck `.d.mcrs` declaration contracts and typed resource categories;
+4. add declaration import/non-emitting compile behavior;
+5. gradually migrate stdlib resource APIs while preserving string compatibility;
+6. add contextual unquoted `namespace:path` literals only after typed contexts are pinned;
+7. generate `.d.mcrs` package declaration surfaces from exports;
+8. keep release/docs evidence honest about compile/static/golden/live proof.
 
 ## Archived plan sets
 

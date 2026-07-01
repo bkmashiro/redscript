@@ -1,6 +1,8 @@
 # RedScript Autonomous Mega-Goal
 
-> **For Hermes:** This is the long-running `/goal` handoff. Read this file fully, then execute it without stopping after one slice. The user is explicitly allocating a long budget (up to 20 rounds × 150 iterations/round) and permits Spark/Codex-Spark for bounded implementation workers, but low-return/high-risk work is intentionally excluded.
+> **Status:** Historical / superseded as of 2026-07-01. This roadmap's active queue was consumed during the release-readiness hardening pass. For new long-running work, use `docs/plans/2026-07-01-redscript-product-dx-autonomous-megagoal.md` and `docs/plans/mc-mechanism-optimization/37-registry-resource-and-declaration-surface.md` as the active source of truth. Keep this file for completion-log evidence only; do not restart it unless a fresh regression explicitly reopens an archived slice.
+
+> **For Hermes:** This was the long-running `/goal` handoff for the 2026-06-30 release-readiness/compiler-hardening pass. The user explicitly allocated a long budget (up to 20 rounds × 150 iterations/round) and permitted Spark/Codex-Spark for bounded implementation workers, but low-return/high-risk work was intentionally excluded.
 
 **Goal:** Turn RedScript from a well-tested experimental compiler/toolchain into a more product-ready compiler by closing visible language/example gaps, making stdlib coverage auditable, expanding high-value live MC oracle coverage, and continuing only safe typed optimizer work.
 
