@@ -877,6 +877,9 @@ export class TypeChecker {
       case 'str_lit':
       case 'mc_name':
         this.checkResourceLiteralAgainstExpected(expr.value, expectedType, expr)
+        if (expr.kind === 'mc_name' && expr.value.includes(':') && expectedType?.kind !== 'resource') {
+          this.report(`Unquoted resource literal '${expr.value}' is only allowed in typed resource contexts`, expr)
+        }
         break
       case 'type_cast':
         this.checkExpr(expr.expr)

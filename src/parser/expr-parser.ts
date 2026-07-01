@@ -357,6 +357,13 @@ export class ExprParser extends TypeParser {
       return this.withLoc({ kind: 'mc_name', value: token.value.slice(1) }, token)
     }
 
+    if (token.kind === 'ident' && this.peek(1).kind === ':' && this.peek(2).kind === 'ident') {
+      const namespace = this.advance()
+      this.expect(':')
+      const path = this.expect('ident')
+      return this.withLoc({ kind: 'mc_name', value: `${namespace.value}:${path.value}` }, namespace)
+    }
+
     if (token.kind === 'true') {
       this.advance()
       return this.withLoc({ kind: 'bool_lit', value: true }, token)

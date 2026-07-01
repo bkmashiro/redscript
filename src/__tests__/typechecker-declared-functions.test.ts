@@ -148,4 +148,20 @@ fn main(): void {
 `)
     expect(errors).toHaveLength(0)
   })
+
+  it('accepts unquoted namespace:path resource literals in typed resource contexts', () => {
+    const errors = typeCheck(`
+declare fn use_fx(id: resource<particle>): void;
+fn main(): void { use_fx(minecraft:flame); }
+`)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('rejects unquoted namespace:path resource literals outside typed contexts', () => {
+    const errors = typeCheck(`
+fn main(): void { let id = minecraft:flame; }
+`)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].message).toContain('Unquoted resource literal')
+  })
 })

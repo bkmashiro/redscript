@@ -632,4 +632,17 @@ fn main(): int { return ext(1); }
     expect(prog.declaredFunctions?.map(fn => fn.name)).toEqual(['ext'])
     expect(prog.declarations.map(fn => fn.name)).toEqual(['main'])
   })
+
+  test('namespace:path expressions parse as contextual resource literals', () => {
+    const prog = parse(`
+declare fn use_fx(id: resource<particle>): void;
+fn main(): void { use_fx(minecraft:flame); }
+`)
+    const main = prog.declarations[0]
+    const stmt = main.body[0]
+    expect(stmt.kind).toBe('expr')
+    const call = (stmt as any).expr
+    expect(call.kind).toBe('call')
+    expect(call.args[0]).toMatchObject({ kind: 'mc_name', value: 'minecraft:flame' })
+  })
 })
