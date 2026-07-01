@@ -72,4 +72,15 @@ describe('compile-all skip manifest failure evidence', () => {
       }
     }
   })
+
+  it('keeps declaration-only skips tied to dedicated declaration-mode smoke instead of language gaps', () => {
+    const declarationSkips = COMPILE_ALL_SKIP_MANIFEST.filter(entry => entry.category === 'declaration-only')
+    expect(declarationSkips.length).toBeGreaterThan(0)
+
+    for (const entry of declarationSkips) {
+      expect(entry.expectedFailureSubstrings).toBeUndefined()
+      expect(entry.reason).toContain('not valid executable')
+      expect(entry.nextAction).toContain('dedicated declaration-mode smoke')
+    }
+  })
 })

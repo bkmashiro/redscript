@@ -243,7 +243,7 @@ git status -sb
 - [x] E1. Declaration-mode parse/typecheck for `.d.mcrs`.
 - [x] E2. Import/preprocess or compile-stage handling for declaration-only dependencies.
 - [x] E3. Non-emitting compile tests and stage snapshots if useful.
-- [ ] E4. Replace or refine compile-all skip reasons for declaration files only after a dedicated declaration smoke exists.
+- [x] E4. Replace or refine compile-all skip reasons for declaration files only after a dedicated declaration smoke exists.
 
 ### Track F — Typed stdlib resource API migration
 
@@ -377,6 +377,7 @@ If blocked, report:
 - 2026-07-01: Reconciled mega-goal progress after the first product-DX run. Completed LSP registry catalog/completion/advisory diagnostics, parser declaration/resource representation through roadmap 37 Track B1-B3, resource type representation, and string/resource typed-context compatibility. Latest relevant commits include `b554403`, `d2cfe29`, `c14c685`, and `a0436ba`; CI for the latest pushed implementation commit passed. Remaining immediate work starts at roadmap 37 C2/C5 and Track D declaration-mode/non-emitting compile behavior.
 - 2026-07-01: Completed roadmap 37 C5 resource mismatch diagnostics. Built-in resource catalog data is now shared between LSP and typechecker; known built-in IDs used in the wrong typed `resource<...>` context report category-specific errors, while unknown datapack/mod IDs remain open. Gates: typechecker unit subset (`137` tests), LSP unit subset (`133` tests), `npm run build`, `git diff --check`.
 - 2026-07-01: Completed roadmap 37 D1-D3 declaration-mode/non-emitting compile behavior. Direct `.d.mcrs` compilation now typechecks and returns zero runtime files; declaration imports still inline type signatures for executable consumers without emitting declaration bodies. Gates: compile declaration/preprocess/compile-all subset (`159` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
+- 2026-07-01: Completed roadmap 37 D5 / mega-goal E4 skip-manifest reconciliation. Declaration-only compile-all skips now point to the dedicated declaration-mode smoke and stay out of executable compile-all rather than representing known language gaps. Gates: compile-all skip manifest + declaration compile + compile-all subset (`134` tests), `npm run build`, `git diff --check`.
 
 ## Reporting Format When Finally Stopping
 

@@ -41,13 +41,13 @@ export const COMPILE_ALL_SKIP_MANIFEST: CompileAllSkipEntry[] = [
     pattern: 'builtins.d.mcrs',
     category: 'declaration-only',
     reason: 'Declaration-only file is not valid executable RedScript source.',
-    nextAction: 'Keep excluded unless declaration compile mode is added.',
+    nextAction: 'Keep excluded from executable compile-all; dedicated declaration-mode smoke covers .d.mcrs parse/typecheck and zero runtime emission.',
   },
   {
     pattern: 'editors/',
     category: 'declaration-only',
-    reason: 'Editor extension tree contains a copy of builtins.d.mcrs.',
-    nextAction: 'Keep excluded unless editor fixtures become source samples.',
+    reason: 'Editor extension tree contains a declaration-only builtins.d.mcrs copy that is not valid executable RedScript source.',
+    nextAction: 'Keep excluded from executable compile-all; dedicated declaration-mode smoke covers .d.mcrs parse/typecheck and zero runtime emission.',
   },
   {
     pattern: 'heap-sort-mc-test.mcrs',
