@@ -75,7 +75,7 @@ npm install -g redscript-mc
 ```
 
 ```bash
-redscript build hello.mcrs -o ./my-datapack
+redscript compile hello.mcrs -o ./my-datapack
 ```
 
 Drop `my-datapack/` into your world's `datapacks/` folder and run `/reload`.
@@ -172,7 +172,8 @@ fn clear_nearby_zombies() {
 ### Tooling
 
 - **Compiler pipeline** — parser, type checker, HIR/MIR/LIR lowering, optimizers, and datapack emitter.
-- **Minecraft-aware validation** — static command checks plus optional Paper/TestHarness integration tests.
+- **Minecraft-aware validation** — static command checks plus optional Paper/TestHarness integration tests; static diagnostics, not live Paper proof.
+- **Typed resource/package DX** — typed `resource<particle>` / `resource<effect>` checks, contextual `namespace:path` literals, and generated `.d.mcrs` declaration surfaces.
 - **LSP + VSCode extension** — hover docs, go-to-definition, completion, diagnostics, snippets, and syntax highlighting.
 - **Formatter / linter / test runner** — project tooling for maintaining larger datapacks.
 - **Stdlib** — math, vectors, particles, inventory, scheduling, data structures, ECS-style helpers, and more.
@@ -183,10 +184,10 @@ fn clear_nearby_zombies() {
 ## CLI Commands
 
 ```bash
-redscript build <file>     # Compile with optimizations
-redscript compile <file>   # Compile without optimizations
+redscript compile <file>   # Compile to a datapack
 redscript check <file>     # Type check only
 redscript fmt <file>       # Format code
+redscript declarations <file> --out <file.d.mcrs>  # Generate package declaration surface
 redscript lint <file>      # Static analysis
 redscript test <file>      # Run @test functions
 redscript watch <dir>      # Watch mode with hot reload

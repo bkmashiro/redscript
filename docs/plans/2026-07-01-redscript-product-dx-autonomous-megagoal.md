@@ -286,9 +286,9 @@ git status -sb
 
 **Executable slices:**
 
-- [ ] I1. Audit README/docs claims for static vs live proof language.
-- [ ] I2. Ensure README quick-start source compiles if touched.
-- [ ] I3. Keep `report:release-evidence` output aligned with new declaration/resource proof labels if they become release-relevant.
+- [x] I1. Audit README/docs claims for static vs live proof language.
+- [x] I2. Ensure README quick-start source compiles if touched.
+- [x] I3. Keep `report:release-evidence` output aligned with new declaration/resource proof labels if they become release-relevant.
 - [ ] I4. Run package/browser IDE smoke before release-facing commits.
 
 ### Track J — Optional arithmetic/optimizer exploration only after DX stabilizes
@@ -385,6 +385,7 @@ If blocked, report:
 - 2026-07-01: Completed roadmap 37 F3 / mega-goal G3 LSP integration for contextual unquoted resource literals. Completion now offers catalog IDs after `namespace:` in typed built-in resource argument positions, and hover reports `resource<...>` metadata for known and open datapack/mod IDs. Gates: focused LSP slice (`70` tests), full LSP subset (`232` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 - 2026-07-01: Completed roadmap 37 F4 / mega-goal G4 docs/examples smoke. The language reference now documents `particle(minecraft:flame, ...)` alongside string-compatible calls and states that unquoted `namespace:path` literals are accepted only in typed resource contexts. Gates: resource docs + LSP completion slice (`66` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
 - 2026-07-01: Completed roadmap 37 G1-G4 / mega-goal H1-H4 declaration generation CLI surface. Added `redscript declarations <file> --out <file.d.mcrs>` and `--out` alias parsing; generated surfaces include exported functions, exported declare stubs, resource declarations, and immediately preceding `/** ... */` / `/// ...` docs without mutating source. CLI tests assert output and typecheck the generated `.d.mcrs`. Gates: CLI + lexer/parser + declaration compile tests (`157` tests), `npm run build`, `npm run validate-mc`, `git diff --check`.
+- 2026-07-01: Completed mega-goal I1-I3 release/docs proof-language audit. README now lists `redscript declarations <file> --out <file.d.mcrs>`, marks typed resource checks as static diagnostics rather than live Paper proof, and replaces the stale `redscript build` quick-start/CLI wording with the implemented `redscript compile` command. Verified the README quick-start source compiles and emits a datapack via `node dist/src/cli.js compile`; `report:release-evidence -- --pretty` still reports the canonical four evidence labels and live baseline `26/26` without promoting declaration/resource static proof to live evidence. Gates: resource docs + coverage matrix (`12` tests), `npm run build`, quick-start compile smoke, `npm --silent run report:release-evidence -- --pretty`, `git diff --check`.
 
 ## Reporting Format When Finally Stopping
 
