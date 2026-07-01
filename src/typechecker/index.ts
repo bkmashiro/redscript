@@ -1228,6 +1228,7 @@ export class TypeChecker {
         return { kind: 'named', name: 'bool' }
       case 'str_lit':
       case 'mc_name':
+        if (expectedType?.kind === 'resource') return expectedType
         return { kind: 'named', name: 'string' }
       case 'str_interp':
         for (const part of expr.parts) {
