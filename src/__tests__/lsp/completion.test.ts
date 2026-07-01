@@ -735,17 +735,51 @@ describe('LSP completion — resource strings', () => {
     expect(labels).toHaveLength(0)
   })
 
-  it('returns resource completion metadata for particle IDs', () => {
+  it('returns category-aware static/editor metadata for particle completion items', () => {
     const line = 'particle("f'
     const cursor = line.indexOf('"') + 1
     const items = getResourceCompletions(line, cursor)
     const label = BUILTIN_RESOURCE_REGISTRY.particles[0]
-    const flame = items.find(item => item.label === label)
+    const item = items.find(item => item.label === label)
 
-    expect(flame).toBeDefined()
-    expect(flame!.detail).toBe('Minecraft particle')
-    expect(typeof flame!.documentation).toBe('string')
-    expect((flame!.documentation as string)).toContain('Particle ID')
+    expect(item).toBeDefined()
+    expect(item!.detail).toBe('resource<particle> (editor suggestion)')
+    const documentation = item!.documentation as string
+    expect(documentation).toContain('Static catalog suggestion')
+    expect(documentation).toContain('resource<particle>')
+    expect(documentation).toContain('Open registry')
+    expect(documentation).not.toContain('Paper')
+    expect(documentation).not.toContain('live')
+  })
+
+  it('returns category-aware static/editor metadata for effect completion items', () => {
+    const line = 'effect(@s, "s'
+    const cursor = line.indexOf('"') + 1
+    const items = getResourceCompletions(line, cursor)
+    const label = BUILTIN_RESOURCE_REGISTRY.effects[0]
+    const item = items.find(item => item.label === label)
+
+    expect(item).toBeDefined()
+    expect(item!.detail).toBe('resource<effect> (editor suggestion)')
+    const documentation = item!.documentation as string
+    expect(documentation).toContain('Static catalog suggestion')
+    expect(documentation).toContain('resource<effect>')
+    expect(documentation).toContain('Open registry')
+  })
+
+  it('returns category-aware static/editor metadata for entity completion items', () => {
+    const line = 'summon("m'
+    const cursor = line.indexOf('"') + 1
+    const items = getResourceCompletions(line, cursor)
+    const label = BUILTIN_RESOURCE_REGISTRY.entities[0]
+    const item = items.find(item => item.label === label)
+
+    expect(item).toBeDefined()
+    expect(item!.detail).toBe('resource<entity> (editor suggestion)')
+    const documentation = item!.documentation as string
+    expect(documentation).toContain('Static catalog suggestion')
+    expect(documentation).toContain('resource<entity>')
+    expect(documentation).toContain('Open registry')
   })
 
   it('does not offer resource completion for the wrong argument position', () => {

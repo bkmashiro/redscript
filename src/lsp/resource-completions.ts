@@ -43,31 +43,42 @@ const RESOURCE_CATEGORY_META: Record<
   { detail: string; documentation: string }
 > = {
   particles: {
-    detail: 'Minecraft particle',
-    documentation: 'Particle ID (namespaced): e.g. minecraft:flame',
+    detail: 'resource<particle> (editor suggestion)',
+    documentation:
+      'Static catalog suggestion (editor-provided): this ID is a particle resource from the built-in registry. '
+      + 'Category: resource<particle>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions.',
   },
   effects: {
-    detail: 'Minecraft effect',
-    documentation: 'Effect ID (namespaced): e.g. minecraft:speed',
+    detail: 'resource<effect> (editor suggestion)',
+    documentation:
+      'Static catalog suggestion (editor-provided): this ID is an effect resource from the built-in registry. '
+      + 'Category: resource<effect>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions.',
   },
   entities: {
-    detail: 'Minecraft entity',
-    documentation: 'Entity type ID (namespaced): e.g. minecraft:zombie',
+    detail: 'resource<entity> (editor suggestion)',
+    documentation:
+      'Static catalog suggestion (editor-provided): this ID is an entity resource from the built-in registry. '
+      + 'Category: resource<entity>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions.',
   },
   items: {
-    detail: 'Minecraft item',
-    documentation: 'Item ID (namespaced): e.g. minecraft:diamond',
+    detail: 'resource<item> (editor suggestion)',
+    documentation:
+      'Static catalog suggestion (editor-provided): this ID is an item resource from the built-in registry. '
+      + 'Category: resource<item>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions.',
   },
   sounds: {
-    detail: 'Minecraft sound',
-    documentation: 'Sound event ID (namespaced): e.g. minecraft:entity.experience_orb.pickup',
+    detail: 'resource<sound> (editor suggestion)',
+    documentation:
+      'Static catalog suggestion (editor-provided): this ID is a sound resource from the built-in registry. '
+      + 'Category: resource<sound>. Open registry means additional IDs may exist from datapacks, plugins, and newer versions.',
   },
   blocks: {
-    detail: 'Minecraft block',
-    documentation: 'Block ID (namespaced): e.g. minecraft:stone',
+    detail: 'resource<block> (editor suggestion)',
+    documentation:
+      'Static catalog suggestion (editor-provided): this ID is a block resource from the built-in registry. '
+      + 'Category: resource<block>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions.',
   },
 }
-
 function isInsideString(line: string, cursor: number): boolean {
   let inString = false
   let escaped = false
