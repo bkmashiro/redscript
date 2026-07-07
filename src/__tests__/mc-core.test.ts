@@ -87,3 +87,21 @@ test('compile supports core constructs used by descriptor suite', () => {
   expect(() => compile(source, { namespace: CORE_ORACLE_NAMESPACE, filePath: CORE_ORACLE_SOURCE_PATH }))
     .not.toThrow()
 }, 30000)
+
+test('generated array macro oracle case is compiler-generated, not a raw command smoke', () => {
+  const source = fs.readFileSync(CORE_ORACLE_SOURCE_PATH, 'utf-8')
+  const result = compile(source, { namespace: CORE_ORACLE_NAMESPACE, filePath: CORE_ORACLE_SOURCE_PATH })
+  const files = result.files ?? []
+  const body = files.find(file => file.path.endsWith('/test_generated_array_macro_nested_loop.mcfunction'))?.content
+  const loopBody = files.find(file => file.path.endsWith('/test_generated_array_macro_nested_loop__loop_body_1.mcfunction'))?.content
+  const helper = files.find(file => file.path.includes('__dyn_idx_') && file.content.includes('nums[$(arr_idx)]'))
+
+  expect(body).toBeDefined()
+  expect(loopBody).toBeDefined()
+  expect(helper).toBeDefined()
+  expect(body).toContain('test_generated_array_macro_nested_loop')
+  expect(loopBody).toContain('with storage rs:macro_args')
+  expect(loopBody).toContain('function core_oracle_mc:__dyn_idx_core_oracle_mc_arrays_nums')
+  expect(helper!.content).toContain('$return run data get')
+  expect(helper!.content).toContain('nums[$(arr_idx)]')
+}, 30000)

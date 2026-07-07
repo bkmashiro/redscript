@@ -176,6 +176,17 @@ export const CORE_ORACLE_CASES: McCoreCaseDescriptor[] = [
     ],
   },
   {
+    name: 'generated array macro nested loop',
+    namespace: CORE_ORACLE_NAMESPACE,
+    sourcePath: CORE_ORACLE_SOURCE_PATH,
+    setupCommands: ['scoreboard players set #generated_macro_nested_sum core_oracle 0'],
+    entrypoints: [{ kind: 'function', target: 'test_generated_array_macro_nested_loop' }],
+    waitTicks: 8,
+    scoreboardAssertions: [
+      { player: '#generated_macro_nested_sum', obj: CORE_ORACLE_OBJECTIVE, value: 16 },
+    ],
+  },
+  {
     name: 'storage read-write loop',
     namespace: CORE_ORACLE_NAMESPACE,
     sourcePath: CORE_ORACLE_SOURCE_PATH,
