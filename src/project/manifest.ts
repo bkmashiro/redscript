@@ -42,6 +42,7 @@ const COMPILER_KEYS = ['optimization', 'include-dirs', 'no-dce']
 const OUTPUT_KEYS = ['dir']
 const ASSET_KEYS = ['roots', 'include']
 const TARGET_KEYS = ['kind', 'entry', 'out', 'default', 'namespace', 'mc-version']
+const DEPENDENCY_KEYS = ['path']
 
 function isTable(value: unknown): value is Table {
   return value != null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)
@@ -215,6 +216,70 @@ function resolveInsideRoot(
   return resolved
 }
 
+function isCanonicalModulePath(modulePath: string): boolean {
+  const segments = modulePath.split('/')
+  return !(
+    modulePath.includes('\\')
+    || modulePath.startsWith('/')
+    || modulePath.endsWith('/')
+    || segments.some(segment =>
+      segment === ''
+      || segment === '.'
+      || segment === '..'
+      || !/^[A-Za-z0-9][A-Za-z0-9._~-]*$/.test(segment),
+    )
+    || /\s/.test(modulePath)
+  )
+}
+
+function parseLocalDependencies(
+  root: Table,
+  rootDir: string,
+  manifestPath: string,
+  source: string,
+): ReadonlyMap<string, { modulePath: string; rootDir: string; manifestPath: string }> {
+  if (root.dependencies == null) return new Map()
+  const table = tableAt(root.dependencies, 'dependencies', manifestPath, source)
+  const dependencies = new Map<string, { modulePath: string; rootDir: string; manifestPath: string }>()
+
+  for (const [modulePath, rawDependency] of Object.entries(table).sort(([left], [right]) => left.localeCompare(right))) {
+    const section = `dependencies.${modulePath}`
+    if (!isCanonicalModulePath(modulePath)) {
+      fail(manifestPath, source, section, `Dependency key '${modulePath}' must be a canonical module path`)
+    }
+    const dependency = tableAt(rawDependency, section, manifestPath, source)
+    checkKnownKeys(dependency, section, DEPENDENCY_KEYS, manifestPath, source)
+    const localPath = optionalString(dependency, 'path', section, manifestPath, source)
+    if (!localPath) {
+      fail(manifestPath, source, `${section}.path`, `'${section}.path' is required`)
+    }
+    const resolvedRoot = path.resolve(rootDir, localPath)
+    if (!fs.existsSync(resolvedRoot)) {
+      fail(manifestPath, source, `${section}.path`, `'${section}.path' does not exist: ${localPath}`)
+    }
+    if (!fs.statSync(resolvedRoot).isDirectory()) {
+      fail(manifestPath, source, `${section}.path`, `'${section}.path' must point to a directory`)
+    }
+    const canonicalRoot = fs.realpathSync(resolvedRoot)
+    const dependencyManifest = path.join(canonicalRoot, 'redscript.toml')
+    if (!fs.existsSync(dependencyManifest) || !fs.statSync(dependencyManifest).isFile()) {
+      fail(
+        manifestPath,
+        source,
+        `${section}.path`,
+        `'${section}.path' must point to a project containing redscript.toml`,
+      )
+    }
+    dependencies.set(modulePath, Object.freeze({
+      modulePath,
+      rootDir: canonicalRoot,
+      manifestPath: fs.realpathSync(dependencyManifest),
+    }))
+  }
+
+  return dependencies
+}
+
 function normalizedLocalModule(name: string): string {
   const normalized = name
     .trim()
@@ -372,13 +437,7 @@ export function parseProjectManifest(manifestPath: string): LoadedProject {
     )
   }
   const modulePath = declaredModulePath ?? normalizedLocalModule(name)
-  if (
-    modulePath.includes('\\')
-    || modulePath.startsWith('/')
-    || modulePath.endsWith('/')
-    || modulePath.split('/').some(segment => segment === '' || segment === '.' || segment === '..')
-    || /\s/.test(modulePath)
-  ) {
+  if (!isCanonicalModulePath(modulePath)) {
     fail(
       absoluteManifestPath,
       source,
@@ -429,9 +488,7 @@ export function parseProjectManifest(manifestPath: string): LoadedProject {
     optionalStringArray(assets, 'roots', 'assets', absoluteManifestPath, source)
     optionalStringArray(assets, 'include', 'assets', absoluteManifestPath, source)
   }
-  if (root.dependencies != null) {
-    tableAt(root.dependencies, 'dependencies', absoluteManifestPath, source)
-  }
+  const dependencies = parseLocalDependencies(root, rootDir, absoluteManifestPath, source)
 
   const { targets, defaultTarget } = parseTargets(
     root,
@@ -456,6 +513,7 @@ export function parseProjectManifest(manifestPath: string): LoadedProject {
       },
     },
     sourceRoots,
+    dependencies,
     compiler: {
       optimization: optimization as number | undefined,
       includeDirs: includeDirsRaw.map(value => path.resolve(rootDir, value)),

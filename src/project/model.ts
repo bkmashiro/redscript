@@ -29,11 +29,20 @@ export interface ProjectManifest {
   project: ProjectIdentity
 }
 
+export interface LocalDependency {
+  /** Expected canonical module identity from the dependency table key. */
+  readonly modulePath: string
+  /** Canonical dependency root selected by the explicit local path. */
+  readonly rootDir: string
+  readonly manifestPath: string
+}
+
 export interface LoadedProject {
   rootDir: string
   manifestPath: string
   manifest: ProjectManifest
   sourceRoots: string[]
+  dependencies: ReadonlyMap<string, LocalDependency>
   compiler: CompilerSettings
   targets: Record<string, BuildTarget>
   defaultTarget?: string

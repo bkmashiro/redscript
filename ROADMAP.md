@@ -9,11 +9,12 @@ The next product architecture track is [Project, Package, and Multi-Target Compi
 
 1. ✅ strict `redscript.toml` project identity and named targets;
 2. ✅ Go-like directory packages and deterministic import graphs;
-3. 🔄 target capability validation;
-4. a finite command-sequence backend;
-5. complete datapack JSON/NBT/resource artifacts.
+3. ✅ explicit local module dependencies, identity validation, and dependency hashing;
+4. 🔄 target capability validation;
+5. a finite command-sequence backend;
+6. complete datapack JSON/NBT/resource artifacts.
 
-The tables below describe the existing language/tooling inventory. The strict project/package contract is implemented through P2; dependency modules, capability validation, and additional targets remain staged work.
+The tables below describe the existing language/tooling inventory. The strict project/package/local-dependency contract is implemented through P3; capability validation and additional targets remain staged work.
 
 ## Legend
 - ✅ Done

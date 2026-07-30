@@ -1,5 +1,6 @@
 import type { Program, Span } from '../ast/types'
 import type { SourceFileId } from '../compiler/source-manager'
+import type { ProjectModuleGraph } from './module-graph'
 
 export interface PackageId {
   /** Owning manifest module identity. */
@@ -18,6 +19,8 @@ export interface PackageSourceFile {
 
 export interface PackageImport {
   readonly path: string
+  /** Owning module chosen by canonical longest-prefix resolution. */
+  readonly modulePath: string
   readonly alias: string
   readonly sourceFile: SourceFileId
   readonly span?: Span
@@ -34,6 +37,9 @@ export interface LoadedPackage {
 
 export interface PackageGraph {
   readonly modulePath: string
+  readonly moduleGraph: ProjectModuleGraph
+  /** Aggregate dependency content hash for project-level incremental keys. */
+  readonly dependencyHash: string
   readonly rootPackages: readonly PackageId[]
   readonly packages: ReadonlyMap<string, LoadedPackage>
   /** Dependencies precede importers; unrelated packages are path-sorted. */

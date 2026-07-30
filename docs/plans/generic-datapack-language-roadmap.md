@@ -177,7 +177,7 @@ roots = ["assets"]
 include = ["**/*.json", "**/*.nbt"]
 
 [dependencies]
-# P2: local dependencies first; remote/versioned dependencies arrive in P6.
+# P3: local dependencies first; remote/versioned dependencies arrive in P6.
 common = { path = "../common" }
 
 [compiler]
@@ -675,25 +675,34 @@ git diff --check
 
 **Objective:** Resolve explicitly declared local modules without ambient include paths.
 
+**Status (2026-07-30): completed.** Strict manifests parse explicit `{ path = "..." }` dependencies whose table keys are the expected canonical module identities. A single recursive module graph validates identities, source-root containment, deterministic dependency order, complete module cycles, and location-independent source hashes before the package loader reads any dependency source. Package imports resolve against the current module first and then the longest matching direct dependency; transitive or ambient sibling imports remain unavailable unless declared.
+
 **Files:**
 
 - Modify: `src/project/model.ts`
 - Modify: `src/project/manifest.ts`
+- Create: `src/project/module-graph.ts`
 - Modify: `src/project/package-graph.ts`
+- Modify: `src/project/package-loader.ts`
+- Modify: `src/compiler/package-backend.ts`
+- Modify: `src/cli.ts` project inspection
+- Test: `src/__tests__/project/module-graph.test.ts`
 - Test: `src/__tests__/project/local-dependencies.test.ts`
 
 **Slices:**
 
-1. parse `{ path = "..." }` dependency entries;
-2. load and validate dependency module identity;
-3. longest-prefix import resolution;
-4. reject undeclared cross-module imports;
-5. reject mismatched declared module path;
-6. detect cycles across local modules;
-7. prevent source/output path escape and symlink traversal;
-8. include dependency source hashes in incremental cache keys.
+1. ✅ parse `{ path = "..." }` dependency entries;
+2. ✅ load and validate dependency module identity;
+3. ✅ longest-prefix import resolution after current-module ownership;
+4. ✅ reject undeclared and transitive-only cross-module imports;
+5. ✅ reject mismatched declared module paths;
+6. ✅ detect cycles across local modules with a complete deterministic path;
+7. ✅ preserve per-module source/output containment and ignore symlink source traversal;
+8. ✅ expose the aggregate dependency source hash in `PackageGraph` and `redscript project` as the required project-cache-key component. Strict project `--incremental` remains fail-closed until an atomic package-artifact cache consumes this graph, so the legacy file cache cannot accidentally omit dependency content.
 
 **Acceptance:** a project imports one local shared module reproducibly from any cwd; undeclared sibling imports fail.
+
+**Gate:** focused manifest/module/package/backend/CLI tests, build, static Minecraft validation, and `git diff --check`.
 
 ### P4 — target model and capability validation
 

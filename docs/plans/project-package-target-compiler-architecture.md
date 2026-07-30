@@ -4,7 +4,7 @@
 > Date: 2026-07-30
 > Parent roadmap: [`generic-datapack-language-roadmap.md`](generic-datapack-language-roadmap.md)
 
-> Implementation checkpoint (2026-07-30): M1–M4 are landed. `SourceManager` and `CompilerSession` own build context; strict manifests feed an immutable directory `PackageGraph`; exported references resolve to canonical package symbol IDs; and a single isolated adapter clones linked package ASTs into the existing datapack backend. Source ASTs are never concatenated or mutated, and canonical symbol identity remains distinct from physical Minecraft function layout.
+> Implementation checkpoint (2026-07-30): M1–M4 plus local dependency loading are landed. `SourceManager` and `CompilerSession` own build context; strict manifests feed one deterministic local `ProjectModuleGraph` and directory `PackageGraph`; exported references resolve to canonical package symbol IDs; and a single isolated adapter clones linked package ASTs into the existing datapack backend. Local dependency identities, cycles, source containment, and dependency content hashes are validated before package linking. Source ASTs are never concatenated or mutated, and canonical symbol identity remains distinct from physical Minecraft function layout.
 
 ## Decision
 

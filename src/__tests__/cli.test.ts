@@ -86,6 +86,13 @@ default = true
             minecraftVersion: '26.2',
           },
           sourceRoots: [sourceDir],
+          dependencies: [],
+          modules: [{
+            modulePath: 'example.com/castle',
+            rootDir: root,
+            contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+          }],
+          dependencyHash: expect.stringMatching(/^[a-f0-9]{64}$/),
           defaultTarget: 'pack',
           targets: [{
             name: 'pack',

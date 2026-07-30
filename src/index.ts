@@ -27,6 +27,21 @@ export type { CompilerSessionOptions, CompilePipeline } from './compiler/session
 export { DuplicateSourceError, SourceManager } from './compiler/source-manager'
 export type { SourceFileId, SourceUnit } from './compiler/source-manager'
 export { loadProject, ProjectManifestError, resolveBuildTarget } from './project/manifest'
+export { loadProjectModuleGraph } from './project/module-graph'
+export type {
+  LoadedProjectModule,
+  ModuleSourceFile,
+  ProjectModuleGraph,
+} from './project/module-graph'
+export type {
+  BuildTarget,
+  BuildTargetKind,
+  CompilerSettings,
+  LoadedProject,
+  LocalDependency,
+  ProjectIdentity,
+  ProjectManifest,
+} from './project/model'
 export { loadPackageGraph } from './project/package-loader'
 export type {
   LoadedPackage,

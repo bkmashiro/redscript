@@ -27,6 +27,7 @@ import { execSync } from 'child_process'
 import archiver from 'archiver'
 import { loadProjectConfig, buildTomlTemplate } from './config/project-config'
 import { loadProject, ProjectManifestError, resolveBuildTarget } from './project/manifest'
+import { loadProjectModuleGraph, type ProjectModuleGraph } from './project/module-graph'
 import type { BuildTarget, LoadedProject } from './project/model'
 import { docsCommand } from './docs'
 import { applyCheckFixes } from './check-fix'
@@ -984,12 +985,24 @@ function loadCliProjectTarget(startPath: string, targetName?: string): {
   return { project, target: resolveBuildTarget(project, targetName) }
 }
 
-function projectJson(project: LoadedProject): object {
+function projectJson(project: LoadedProject, moduleGraph: ProjectModuleGraph): object {
   return {
     rootDir: project.rootDir,
     manifestPath: project.manifestPath,
     project: project.manifest.project,
     sourceRoots: project.sourceRoots,
+    dependencies: [...project.dependencies.values()].sort((left, right) =>
+      left.modulePath.localeCompare(right.modulePath),
+    ),
+    modules: moduleGraph.topologicalOrder.map(modulePath => {
+      const loaded = moduleGraph.modules.get(modulePath)!
+      return {
+        modulePath,
+        rootDir: loaded.project.rootDir,
+        contentHash: loaded.contentHash,
+      }
+    }),
+    dependencyHash: moduleGraph.dependencyHash,
     defaultTarget: project.defaultTarget,
     targets: Object.values(project.targets).sort((left, right) => left.name.localeCompare(right.name)),
   }
@@ -1002,9 +1015,10 @@ function projectCommand(startPath: string, format: 'human' | 'json'): void {
       console.error(`Error: No redscript.toml found from ${path.resolve(startPath)}`)
       process.exit(2)
     }
+    const moduleGraph = loadProjectModuleGraph(project)
 
     if (format === 'json') {
-      console.log(JSON.stringify(projectJson(project), null, 2))
+      console.log(JSON.stringify(projectJson(project, moduleGraph), null, 2))
       return
     }
 
@@ -1012,6 +1026,12 @@ function projectCommand(startPath: string, format: 'human' | 'json'): void {
     console.log(`  Root: ${project.rootDir}`)
     console.log(`  Module: ${project.manifest.project.modulePath}`)
     console.log(`  Namespace: ${project.manifest.project.namespace}`)
+    console.log(`  Dependency hash: ${moduleGraph.dependencyHash}`)
+    console.log(`  Modules:`)
+    for (const modulePath of moduleGraph.topologicalOrder) {
+      const loaded = moduleGraph.modules.get(modulePath)!
+      console.log(`    ${modulePath}: ${loaded.project.rootDir}`)
+    }
     console.log(`  Targets:`)
     for (const target of Object.values(project.targets).sort((left, right) => left.name.localeCompare(right.name))) {
       const marker = target.name === project.defaultTarget ? ' (default)' : ''

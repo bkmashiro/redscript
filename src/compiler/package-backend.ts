@@ -14,8 +14,9 @@ import {
 } from '../resolver/package-symbols'
 import type { SourceManager } from './source-manager'
 
-function backendPackagePath(loaded: LoadedPackage): string {
-  return loaded.id.packagePath || '_root'
+function backendPackagePath(loaded: LoadedPackage, rootModulePath: string): string {
+  if (loaded.id.modulePath === rootModulePath) return loaded.id.packagePath || '_root'
+  return `_deps/${loaded.id.modulePath}/${loaded.id.packagePath || '_root'}`
 }
 
 function packageObjective(packagePath: string): string {
@@ -207,7 +208,7 @@ export function compileProjectPackages(
   const backendObjectives = new Map<string, string>()
   for (const packagePath of reachable) {
     const loaded = graph.packages.get(packagePath)!
-    const physicalPath = backendPackagePath(loaded)
+    const physicalPath = backendPackagePath(loaded, graph.modulePath)
     if (!/^[a-z0-9._/-]+$/.test(physicalPath)) {
       throw new DiagnosticError(
         'LoweringError',

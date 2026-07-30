@@ -96,6 +96,10 @@ namespace = "${ns}"
 mc-version = "1.21.4"
 source-roots = ["src"]
 
+# Local module dependencies are explicit and resolved relative to this manifest.
+# [dependencies]
+# "example.com/shared" = { path = "../shared" }
+
 [compiler]
 optimization = 2
 include-dirs = []

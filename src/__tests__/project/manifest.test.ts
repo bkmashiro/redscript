@@ -198,6 +198,25 @@ kind = "datapack"
     }
   })
 
+  test('rejects module identities with reserved symbol/path characters', () => {
+    const root = makeProject(`
+[project]
+name = "castle"
+module = "example.com:443/castle"
+namespace = "castle"
+
+[target.pack]
+kind = "datapack"
+entry = "example.com:443/castle::main"
+`)
+
+    try {
+      expect(() => loadProject(root)).toThrow(/project\.module.*canonical slash-separated module path/i)
+    } finally {
+      removeProject(root)
+    }
+  })
+
   test('rejects an existing symlink that escapes the project root', () => {
     const root = makeProject(`
 [project]
