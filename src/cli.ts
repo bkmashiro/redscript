@@ -33,6 +33,7 @@ import { docsCommand } from './docs'
 import { applyCheckFixes } from './check-fix'
 import { deriveNamespace, parseArgs, sanitizeProjectName } from './cli/args'
 import { runTunerCli } from './tuner/cli'
+import { analyzeProjectTarget } from './compiler/project-target-analysis'
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -49,6 +50,7 @@ Usage:
   redscript check <file> [--fix]
   redscript lint <file> [--max-function-lines <n>]
   redscript project [path] [--format human|json]
+  redscript graph [path] --capabilities [--target <name>] [--format human|json]
   redscript init [project-name]
   redscript fmt <file.mcrs> [file2.mcrs ...]
   redscript declarations <file> [-o <file.d.mcrs>]
@@ -66,6 +68,7 @@ Commands:
   check         Check a RedScript file for errors without generating output
   lint          Statically analyze a RedScript file for potential issues (warnings)
   project       Inspect the nearest redscript.toml and resolved build targets
+  graph         Inspect target reachability and required capabilities
   init          Scaffold a new RedScript datapack project
   fmt           Auto-format RedScript source files
   declarations  Generate a .d.mcrs declaration surface from exported APIs
@@ -93,6 +96,7 @@ Options:
   --mc-version <ver>     Target Minecraft version (default: 1.21). Affects codegen features.
                          e.g. --mc-version 26.2, --mc-version 1.21.4
   --target <name>        Select a named build target from redscript.toml
+  --capabilities         (graph) Include target capability requirements and diagnostics
   --lenient              Treat type errors as warnings instead of blocking compilation
   --include <dir>        Add a directory to the import search path (repeatable)
   --incremental          Enable file-level incremental compilation cache
@@ -479,6 +483,7 @@ function compileCommand(
 interface CliDiagnostic {
   severity: 'warning' | 'error'
   kind: string
+  code?: string
   message: string
   file?: string
   line?: number
@@ -520,6 +525,7 @@ function errorToDiagnostic(error: DiagnosticError): CliDiagnostic {
   return {
     severity: 'error',
     kind: error.kind,
+    code: error.code,
     message: error.message,
     file: error.location.file,
     line: error.location.line,
@@ -627,8 +633,15 @@ function checkProjectCommand(
   let warnings: CliDiagnostic[] = []
   let errors: DiagnosticError[] = []
   try {
-    const result = createCompilerSession({ project, target }).compileProject({ namespace: namespaceOverride })
-    warnings = result.warnings.map(warning => warningToDiagnostic(warning))
+    const session = createCompilerSession({ project, target })
+    if (target.kind === 'commands') {
+      const analysis = session.analyzeProject({ namespace: namespaceOverride })
+      warnings = analysis.typecheck.warnings.map(warning => warningToDiagnostic(warning))
+      errors = [...analysis.diagnostics]
+    } else {
+      const result = session.compileProject({ namespace: namespaceOverride })
+      warnings = result.warnings.map(warning => warningToDiagnostic(warning))
+    }
   } catch (error) {
     if (error instanceof DiagnosticError) {
       errors = [error]
@@ -1043,6 +1056,87 @@ function projectCommand(startPath: string, format: 'human' | 'json'): void {
   }
 }
 
+function graphCapabilitiesJson(project: LoadedProject, target: BuildTarget): object {
+  const analysis = analyzeProjectTarget(project, target)
+  const { plan } = analysis
+  return {
+    project: project.manifest.project.modulePath,
+    dependencyHash: analysis.graph.dependencyHash,
+    target: {
+      name: target.name,
+      kind: target.kind,
+      entry: target.entry,
+    },
+    profile: {
+      capabilities: plan.profile.capabilities,
+    },
+    compatible: analysis.diagnostics.length === 0,
+    roots: plan.roots,
+    reachableSymbols: plan.reachableSymbols,
+    callGraph: plan.reachableSymbols.map(symbolId => ({
+      symbolId,
+      calls: plan.callGraph.get(symbolId) ?? [],
+    })),
+    requirements: plan.requirements.map(requirement => ({
+      capability: requirement.capability,
+      origin: requirement.origin,
+      symbolId: requirement.symbolId,
+      callChain: requirement.callChain,
+      location: requirement.span && {
+        file: requirement.span.file,
+        line: requirement.span.line,
+        col: requirement.span.col,
+      },
+    })),
+    diagnostics: analysis.diagnostics.map(errorToDiagnostic),
+  }
+}
+
+function graphCommand(
+  startPath: string,
+  targetName: string | undefined,
+  format: 'human' | 'json',
+): void {
+  try {
+    const selected = loadCliProjectTarget(startPath, targetName)
+    if (!selected) {
+      console.error(`Error: No redscript.toml found from ${path.resolve(startPath)}`)
+      process.exit(2)
+    }
+    const payload = graphCapabilitiesJson(selected.project, selected.target) as {
+      target: { name: string; kind: string; entry?: string }
+      compatible: boolean
+      roots: readonly string[]
+      reachableSymbols: readonly string[]
+      requirements: readonly { capability: string; origin: string; callChain: readonly string[] }[]
+      diagnostics: readonly CliDiagnostic[]
+    }
+    if (format === 'json') {
+      console.log(JSON.stringify(payload, null, 2))
+      return
+    }
+
+    console.log(`Target: ${payload.target.name} (${payload.target.kind})`)
+    console.log(`  Entry: ${payload.target.entry}`)
+    console.log(`  Compatible: ${payload.compatible ? 'yes' : 'no'}`)
+    console.log(`  Roots: ${payload.roots.join(', ')}`)
+    console.log(`  Reachable symbols (${payload.reachableSymbols.length}):`)
+    for (const symbol of payload.reachableSymbols) console.log(`    ${symbol}`)
+    console.log(`  Requirements (${payload.requirements.length}):`)
+    for (const requirement of payload.requirements) {
+      const chain = requirement.callChain.length > 0 ? ` via ${requirement.callChain.join(' -> ')}` : ''
+      console.log(`    ${requirement.capability}: ${requirement.origin}${chain}`)
+    }
+    for (const diagnostic of payload.diagnostics) {
+      console.log(`  ${diagnostic.code ?? diagnostic.kind}: ${diagnostic.message}`)
+    }
+  } catch (error) {
+    if (error instanceof DiagnosticError) console.error(formatError(error))
+    else console.error(`Error: ${(error as Error).message}`)
+    process.exit(error instanceof ProjectManifestError ? 2 : 1)
+  }
+}
+
 // Main
 const parsed = parseArgs(args)
 
@@ -1070,10 +1164,6 @@ async function main(): Promise<void> {
         try {
           const fileDir = path.dirname(path.resolve(parsed.file))
           const selected = loadCliProjectTarget(fileDir, parsed.target)
-          if (selected?.target.kind === 'commands') {
-            console.error(`Error: target '${selected.target.name}' uses unavailable backend 'commands'`)
-            process.exit(2)
-          }
 
           const namespace = parsed.namespace
             ?? selected?.target.namespace
@@ -1295,6 +1385,14 @@ async function main(): Promise<void> {
 
     case 'project':
       projectCommand(parsed.file ?? process.cwd(), parsed.format ?? 'human')
+      break
+
+    case 'graph':
+      if (!parsed.capabilities) {
+        console.error('Error: graph currently requires --capabilities')
+        process.exit(2)
+      }
+      graphCommand(parsed.file ?? process.cwd(), parsed.target, parsed.format ?? 'human')
       break
 
     case 'init':

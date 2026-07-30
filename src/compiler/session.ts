@@ -4,6 +4,7 @@ import type { CompileOptions, CompileResult } from '../emit/compile'
 import type { CompileModulesResult } from '../emit/modules'
 import type { BuildTarget, LoadedProject } from '../project/model'
 import { compileProjectPackages } from './package-backend'
+import { analyzeProjectTarget, type ProjectTargetAnalysis } from './project-target-analysis'
 import { SourceFileId, SourceManager, SourceManagerOptions } from './source-manager'
 
 export type CompilePipeline = (source: string, options?: CompileOptions) => CompileResult
@@ -11,6 +12,11 @@ export type CompilePipeline = (source: string, options?: CompileOptions) => Comp
 export interface CompilerSessionOptions extends SourceManagerOptions {
   project?: LoadedProject
   target?: BuildTarget
+}
+
+export interface ProjectTargetOverrides {
+  namespace?: string
+  minecraftVersion?: string
 }
 
 export class UnknownSourceError extends Error {
@@ -73,9 +79,12 @@ export class CompilerSession {
     return this.compile(source.id, options)
   }
 
-  compileProject(overrides: { namespace?: string; minecraftVersion?: string } = {}): CompileModulesResult {
+  private resolveProjectTarget(overrides: ProjectTargetOverrides): {
+    project: LoadedProject
+    target: BuildTarget
+  } {
     if (!this.project || !this.target) {
-      throw new Error('compileProject() requires a CompilerSession with a resolved project and target')
+      throw new Error('Project analysis requires a CompilerSession with a resolved project and target')
     }
     const target = overrides.namespace || overrides.minecraftVersion
       ? {
@@ -84,6 +93,16 @@ export class CompilerSession {
           minecraftVersion: overrides.minecraftVersion ?? this.target.minecraftVersion,
         }
       : this.target
-    return compileProjectPackages(this.project, target, this.sources)
+    return { project: this.project, target }
+  }
+
+  analyzeProject(overrides: ProjectTargetOverrides = {}): ProjectTargetAnalysis {
+    const { project, target } = this.resolveProjectTarget(overrides)
+    return analyzeProjectTarget(project, target, { sourceManager: this.sources })
+  }
+
+  compileProject(overrides: ProjectTargetOverrides = {}): CompileModulesResult {
+    const { project, target } = this.resolveProjectTarget(overrides)
+    return compileProjectPackages(project, target, this.sources)
   }
 }

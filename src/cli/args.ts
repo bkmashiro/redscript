@@ -24,6 +24,7 @@ export interface ParsedArgs {
   snapshotOutput?: string
   experimentalLirLocalCopyRewrite?: boolean
   target?: string
+  capabilities?: boolean
 }
 
 export function parseArgs(args: string[]): ParsedArgs {
@@ -53,6 +54,9 @@ export function parseArgs(args: string[]): ParsedArgs {
       i++
     } else if (arg === '--target') {
       result.target = args[++i]
+      i++
+    } else if (arg === '--capabilities') {
+      result.capabilities = true
       i++
     } else if (arg === '--lenient') {
       result.lenient = true

@@ -339,13 +339,8 @@ export function compileModules(
         }
         continue
       }
-      // Merge load.json tag values
-      if (file.path === 'data/minecraft/tags/function/load.json') {
-        mergeTagFile(allFiles, file)
-        continue
-      }
-      // Merge tick.json tag values
-      if (file.path === 'data/minecraft/tags/function/tick.json') {
+      // Merge all function tags contributed by independent package modules.
+      if (/^data\/[^/]+\/tags\/function\/.+\.json$/.test(file.path)) {
         mergeTagFile(allFiles, file)
         continue
       }
@@ -472,6 +467,7 @@ function compileSingleModule(
     const watchFunctions: Array<{ name: string; objective: string }> = []
     const coroutineInfos: CoroutineInfo[] = []
     const scheduleFunctions: Array<{ name: string; ticks: number }> = []
+    const functionTags = new Map<string, string[]>()
     for (const fn of hir.functions) {
       for (const dec of fn.decorators) {
         if (dec.name === 'tick') tickFunctions.push(fn.name)
@@ -484,6 +480,12 @@ function compileSingleModule(
         }
         if (dec.name === 'schedule') {
           scheduleFunctions.push({ name: fn.name, ticks: dec.args?.ticks ?? 1 })
+        }
+        if (dec.name === 'function_tag' && dec.args?.functionTag) {
+          const tagId = dec.args.functionTag
+          const handlers = functionTags.get(tagId) ?? []
+          handlers.push(`${namespace}:${fn.name}`)
+          functionTags.set(tagId, handlers)
         }
       }
     }
@@ -501,7 +503,15 @@ function compileSingleModule(
     lir.objective = objective
     const lirOpt = lirOptimizeModule(lir, lirOptimizeOptions)
 
-    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions, mcVersion })
+    const files = emit(lirOpt, {
+      namespace,
+      tickFunctions,
+      loadFunctions,
+      watchFunctions,
+      scheduleFunctions,
+      functionTags,
+      mcVersion,
+    })
 
     // For named modules: rename the load.mcfunction to avoid path collision.
     // Rename `data/${ns}/function/load.mcfunction` → `data/${ns}/function/${modName}/_load.mcfunction`
@@ -536,7 +546,7 @@ function compileSingleModule(
   }
 }
 
-/** Merge a tag file (load.json / tick.json) values into existing files array. */
+/** Merge one generated function-tag file into the aggregate datapack. */
 function mergeTagFile(files: DatapackFile[], newFile: DatapackFile): void {
   const existing = files.find(f => f.path === newFile.path)
   if (!existing) {

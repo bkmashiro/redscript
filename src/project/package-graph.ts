@@ -54,3 +54,17 @@ export function packageId(modulePath: string, relativePath: string): PackageId {
     path: normalizedRelativePath ? `${modulePath}/${normalizedRelativePath}` : modulePath,
   })
 }
+
+/** Packages rooted by the selected target entry package(s), plus their explicit import closure. */
+export function reachablePackagePaths(graph: PackageGraph): ReadonlySet<string> {
+  const reachable = new Set<string>()
+  const visit = (packagePath: string): void => {
+    if (reachable.has(packagePath)) return
+    reachable.add(packagePath)
+    for (const dependency of graph.packages.get(packagePath)?.imports ?? []) {
+      visit(dependency.path)
+    }
+  }
+  for (const root of graph.rootPackages) visit(root.path)
+  return reachable
+}

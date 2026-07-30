@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 export type DiagnosticKind = 'LexError' | 'ParseError' | 'LoweringError' | 'TypeError'
+export type DiagnosticCode = `RST${number}`
 
 export interface DiagnosticLocation {
   file?: string
@@ -30,6 +31,7 @@ function formatSourcePointer(sourceLines: string[], line: number, col: number): 
 
 export class DiagnosticError extends Error {
   readonly kind: DiagnosticKind
+  readonly code?: DiagnosticCode
   readonly location: DiagnosticLocation
   readonly sourceLines?: string[]
 
@@ -37,11 +39,13 @@ export class DiagnosticError extends Error {
     kind: DiagnosticKind,
     message: string,
     location: DiagnosticLocation,
-    sourceLines?: string[]
+    sourceLines?: string[],
+    code?: DiagnosticCode,
   ) {
     super(message)
     this.name = 'DiagnosticError'
     this.kind = kind
+    this.code = code
     this.location = location
     this.sourceLines = sourceLines
   }
@@ -55,9 +59,10 @@ export class DiagnosticError extends Error {
    * ```
    */
   format(): string {
-    const { kind, message, location, sourceLines } = this
+    const { kind, code, message, location, sourceLines } = this
     const filePart = location.file ? `${location.file}:` : ''
-    const header = `Error: [${kind}] ${filePart}line ${location.line}, col ${location.col}: ${message}`
+    const diagnosticLabel = code ? `${kind} ${code}` : kind
+    const header = `Error: [${diagnosticLabel}] ${filePart}line ${location.line}, col ${location.col}: ${message}`
 
     if (!sourceLines || sourceLines.length === 0) {
       return header
@@ -189,7 +194,8 @@ export function formatError(error: Error | DiagnosticError, source?: string, fil
     const sourceLines = source?.split('\n') ?? error.sourceLines ?? []
     const { file, line, col } = error.location
     const fileStr = file ?? filePath ?? '<input>'
-    const header = `${fileStr}:${line}:${col}: error: ${error.message}`
+    const code = error.code ? `[${error.code}]` : ''
+    const header = `${fileStr}:${line}:${col}: error${code}: ${error.message}`
     const pointerLines = formatSourcePointer(sourceLines, line, col)
     if (pointerLines.length === 0) {
       return header

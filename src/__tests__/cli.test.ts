@@ -42,9 +42,131 @@ describe('CLI API', () => {
       expect(parsed.file).toBe('file.mcrs')
       expect(parsed.target).toBe('pack')
     })
+
+    it('parses capability graph inspection', () => {
+      const parsed = parseArgs(['graph', '.', '--capabilities', '--target', 'shell', '--format', 'json'])
+
+      expect(parsed.command).toBe('graph')
+      expect(parsed.file).toBe('.')
+      expect(parsed.capabilities).toBe(true)
+      expect(parsed.target).toBe('shell')
+      expect(parsed.format).toBe('json')
+    })
   })
 
   describe('project CLI', () => {
+    it('prints deterministic target reachability, requirements, and diagnostics', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-target-graph-cli-'))
+      const sourceDir = path.join(root, 'src', 'cmd')
+      const sourceFile = path.join(sourceDir, 'main.mcrs')
+      fs.mkdirSync(sourceDir, { recursive: true })
+      fs.writeFileSync(sourceFile, `
+package cmd;
+export fn main(): void { later(); }
+fn later(): void { setTimeout(1, () => { raw("say later"); }); }
+`)
+      fs.writeFileSync(path.join(root, 'redscript.toml'), `
+[project]
+name = "shell"
+module = "example.com/shell"
+namespace = "shell"
+source-roots = ["src"]
+
+[target.shell]
+kind = "commands"
+entry = "example.com/shell/cmd::main"
+out = "build/shell.commands.json"
+`)
+
+      try {
+        const result = spawnSync(
+          process.execPath,
+          ['-r', ...cliRunner, cliPath, 'graph', root, '--capabilities', '--target', 'shell', '--format', 'json'],
+          {
+            encoding: 'utf-8',
+            env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+          },
+        )
+
+        expect(result.status).toBe(0)
+        const payload = JSON.parse(result.stdout)
+        expect(payload.project).toBe('example.com/shell')
+        expect(payload.target).toEqual({
+          name: 'shell',
+          kind: 'commands',
+          entry: 'example.com/shell/cmd::main',
+        })
+        expect(payload.compatible).toBe(false)
+        expect(payload.roots).toEqual(['example.com/shell/cmd::main'])
+        expect(payload.reachableSymbols).toEqual([
+          'example.com/shell/cmd::later',
+          'example.com/shell/cmd::main',
+        ])
+        expect(payload.callGraph).toContainEqual({
+          symbolId: 'example.com/shell/cmd::main',
+          calls: ['example.com/shell/cmd::later'],
+        })
+        expect(payload.requirements).toContainEqual(expect.objectContaining({
+          capability: 'scheduled-execution',
+          symbolId: 'example.com/shell/cmd::later',
+          callChain: [
+            'example.com/shell/cmd::main',
+            'example.com/shell/cmd::later',
+          ],
+        }))
+        expect(payload.diagnostics).toEqual([
+          expect.objectContaining({ code: 'RST2002', kind: 'TypeError' }),
+        ])
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true })
+      }
+    })
+
+    it('reports target capability diagnostics before the unavailable commands backend', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-target-gate-cli-'))
+      const sourceDir = path.join(root, 'src', 'cmd')
+      const sourceFile = path.join(sourceDir, 'main.mcrs')
+      const outputPath = path.join(root, 'build', 'shell.commands.json')
+      fs.mkdirSync(sourceDir, { recursive: true })
+      fs.writeFileSync(sourceFile, `
+package cmd;
+export fn main(): void {}
+@tick
+fn heartbeat(): void { raw("say tick"); }
+`)
+      fs.writeFileSync(path.join(root, 'redscript.toml'), `
+[project]
+name = "shell"
+module = "example.com/shell"
+namespace = "shell"
+source-roots = ["src"]
+
+[target.shell]
+kind = "commands"
+entry = "example.com/shell/cmd::main"
+out = "build/shell.commands.json"
+`)
+
+      try {
+        const result = spawnSync(
+          process.execPath,
+          ['-r', ...cliRunner, cliPath, 'compile', sourceFile, '--target', 'shell'],
+          {
+            encoding: 'utf-8',
+            env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+          },
+        )
+
+        expect(result.status).toBe(1)
+        expect(result.stderr).toContain('error[RST2001]')
+        expect(result.stderr).toContain("does not support 'lifecycle-hooks'")
+        expect(result.stderr).not.toContain('unavailable backend')
+        expect(fs.existsSync(outputPath)).toBe(false)
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true })
+      }
+    })
+
     it('prints a deterministic JSON description of the nearest project', () => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-project-cli-'))
       const sourceDir = path.join(root, 'src')
@@ -178,18 +300,20 @@ out = "build/admin.commands.json"
 
     it('rejects an unavailable backend before writing output', () => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-target-cli-'))
-      const sourceFile = path.join(root, 'main.mcrs')
+      const sourceFile = path.join(root, 'src', 'main.mcrs')
       const outputPath = path.join(root, 'build', 'admin.commands.json')
-      fs.writeFileSync(sourceFile, 'fn main() { say("hi"); }\n')
+      fs.mkdirSync(path.dirname(sourceFile), { recursive: true })
+      fs.writeFileSync(sourceFile, 'package castle; export fn main(): void { say("hi"); }\n')
       fs.writeFileSync(path.join(root, 'redscript.toml'), `
 [project]
 name = "castle"
 module = "example.com/castle"
 namespace = "castle"
+source-roots = ["src"]
 
 [target.admin]
 kind = "commands"
-entry = "local/castle::main"
+entry = "example.com/castle::main"
 out = "build/admin.commands.json"
 `)
 
@@ -203,9 +327,23 @@ out = "build/admin.commands.json"
           },
         )
 
-        expect(result.status).toBe(2)
-        expect(result.stderr).toContain("target 'admin' uses unavailable backend 'commands'")
+        expect(result.status).toBe(1)
+        expect(result.stderr).toContain(
+          "Target 'admin' (commands) passed capability validation, but its backend is not implemented yet",
+        )
         expect(fs.existsSync(outputPath)).toBe(false)
+
+        const checkResult = spawnSync(
+          process.execPath,
+          ['-r', ...cliRunner, cliPath, 'check', sourceFile, '--target', 'admin'],
+          {
+            encoding: 'utf-8',
+            env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+          },
+        )
+        expect(checkResult.status).toBe(0)
+        expect(checkResult.stdout).toContain('No issues found')
+        expect(checkResult.stderr).not.toContain('backend is not implemented')
       } finally {
         fs.rmSync(root, { recursive: true, force: true })
       }

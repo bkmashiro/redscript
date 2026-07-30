@@ -4,14 +4,13 @@ import type { Expr, ImportDecl, Program } from '../ast/types'
 import { compileModules, type CompileModulesResult, type ModuleInput } from '../emit/modules'
 import { parseMcVersion } from '../types/mc-version'
 import type { BuildTarget, LoadedProject } from '../project/model'
-import { loadPackageGraph } from '../project/package-loader'
-import type { LoadedPackage, PackageGraph } from '../project/package-graph'
+import { reachablePackagePaths, type LoadedPackage } from '../project/package-graph'
 import {
   makePackageSymbolId,
-  resolvePackageSymbols,
   type PackageSymbolId,
   type ResolvedPackageProgram,
 } from '../resolver/package-symbols'
+import { analyzeProjectTarget } from './project-target-analysis'
 import type { SourceManager } from './source-manager'
 
 function backendPackagePath(loaded: LoadedPackage, rootModulePath: string): string {
@@ -39,18 +38,6 @@ function targetEntry(target: BuildTarget): { packagePath: string; symbol: string
   return { packagePath, symbol, id: makePackageSymbolId(packagePath, symbol) }
 }
 
-function reachablePackages(graph: PackageGraph): Set<string> {
-  const reachable = new Set<string>()
-  const visit = (packagePath: string): void => {
-    if (reachable.has(packagePath)) return
-    reachable.add(packagePath)
-    const loaded = graph.packages.get(packagePath)
-    if (!loaded) return
-    for (const dependency of loaded.imports) visit(dependency.path)
-  }
-  for (const root of graph.rootPackages) visit(root.path)
-  return reachable
-}
 
 function cloneForBackend<T>(
   value: T,
@@ -175,35 +162,21 @@ export function compileProjectPackages(
   target: BuildTarget,
   sourceManager: SourceManager,
 ): CompileModulesResult {
+  const analysis = analyzeProjectTarget(project, target, { sourceManager })
+  const { graph, linked } = analysis
+  if (analysis.diagnostics.length > 0) throw analysis.diagnostics[0]
+
   if (target.kind !== 'datapack') {
     throw new DiagnosticError(
       'LoweringError',
-      `Target '${target.name}' (${target.kind}) is not supported by the datapack package adapter`,
+      `Target '${target.name}' (${target.kind}) passed capability validation, but its backend is not implemented yet`,
       { file: project.manifestPath, line: 1, col: 1 },
     )
   }
 
-  const graphTarget = project.targets[target.name]
-  if (!graphTarget) {
-    throw new DiagnosticError(
-      'LoweringError',
-      `Target '${target.name}' does not belong to project '${project.manifest.project.modulePath}'`,
-      { file: project.manifestPath, line: 1, col: 1 },
-    )
-  }
-  const graph = loadPackageGraph(project, graphTarget, { sourceManager })
-  const linked = resolvePackageSymbols(graph)
   const entry = targetEntry(target)
-  const entrySymbol = linked.symbols.get(entry.id)
-  if (!entrySymbol || !entrySymbol.exported) {
-    throw new DiagnosticError(
-      'TypeError',
-      `Target '${target.name}' entry '${target.entry}' must resolve to an exported function`,
-      { file: project.manifestPath, line: 1, col: 1 },
-    )
-  }
 
-  const reachable = reachablePackages(graph)
+  const reachable = reachablePackagePaths(graph)
   const backendPaths = new Map<string, string>()
   const backendObjectives = new Map<string, string>()
   for (const packagePath of reachable) {

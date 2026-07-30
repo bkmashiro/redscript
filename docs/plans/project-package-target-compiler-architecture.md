@@ -4,7 +4,7 @@
 > Date: 2026-07-30
 > Parent roadmap: [`generic-datapack-language-roadmap.md`](generic-datapack-language-roadmap.md)
 
-> Implementation checkpoint (2026-07-30): M1–M4 plus local dependency loading are landed. `SourceManager` and `CompilerSession` own build context; strict manifests feed one deterministic local `ProjectModuleGraph` and directory `PackageGraph`; exported references resolve to canonical package symbol IDs; and a single isolated adapter clones linked package ASTs into the existing datapack backend. Local dependency identities, cycles, source containment, and dependency content hashes are validated before package linking. Source ASTs are never concatenated or mutated, and canonical symbol identity remains distinct from physical Minecraft function layout.
+> Implementation checkpoint (2026-07-30): P1–P4 are landed. `SourceManager` and `CompilerSession` own build context; strict manifests feed deterministic local module/package graphs; exported references resolve to canonical package symbol IDs; and local dependency identity, containment, cycles, and content hashes are validated before linking. P4 adds immutable linked-package preflight typechecking, a `SemanticTargetPlan` with deterministic reachability and requirement provenance, explicit target profiles, stable `RST2xxx` diagnostics, `CompilerSession.analyzeProject()`, and `redscript graph --capabilities`. Capability validation runs before target-specific lowering or artifact mutation. Source ASTs are never concatenated or mutated, and canonical symbol identity remains distinct from physical Minecraft function layout.
 
 ## Decision
 
@@ -301,6 +301,32 @@ interface SemanticBuildPlan {
 ```
 
 This is the boundary between “valid typed RedScript program” and “legal for this output target”.
+
+#### P4 implementation boundary
+
+The project compiler now materializes this boundary as `SemanticTargetPlan`. The order is strict:
+
+```text
+load package closure
+  → resolve exported canonical symbols
+  → typecheck immutable linked package projections
+  → compute function reachability and target-owned roots
+  → infer requirements with source/call-chain provenance
+  → validate target profile
+  → target-specific lowering
+```
+
+The current `TypeChecker` validates but does not return a typed tree. Therefore P4 conservatively extracts requirements from the already-checked immutable AST plus the resolved package symbol graph. This is a transitional implementation detail, not a second semantic authority: emitters do not rescan or downgrade requirements, and the extractor must migrate onto canonical typed HIR/MIR effects as Foundation C/D advances.
+
+Current project-target distinctions are explicit:
+
+- declaration-surface registry references such as `resource item minecraft:diamond;` are target-neutral metadata, not emitted artifacts;
+- `resource-artifacts` remains a separate capability for P7 `from`/generated JSON and NBT contributions;
+- project datapacks support lifecycle, scheduling, function artifacts/tags, recursion/helpers, state, opaque commands, and dynamic dispatch;
+- commands currently support only typed registry references, state planning, and opaque command sequencing; P5 must legalize and widen this profile deliberately;
+- event-runtime decorators, runtime wrappers, and load-dependency decorators that the package adapter does not yet lower fail closed with `RST2009`–`RST2011`, even when the legacy one-file adapter has broader behavior.
+
+`CompilerSession.analyzeProject()` and `redscript graph --capabilities --target <name>` expose the same plan. Compilation throws the same diagnostics before any emitter or filesystem write.
 
 ### 4.6 Target legalization
 

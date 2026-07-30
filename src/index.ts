@@ -23,7 +23,11 @@ export {
 export { compileModules } from './emit/modules'
 export type { ModuleInput, CompileModulesOptions, CompileModulesResult } from './emit/modules'
 export { CompilerSession, UnknownSourceError } from './compiler/session'
-export type { CompilerSessionOptions, CompilePipeline } from './compiler/session'
+export type { CompilerSessionOptions, CompilePipeline, ProjectTargetOverrides } from './compiler/session'
+export { typecheckResolvedPackageProgram } from './compiler/package-typecheck'
+export type { LinkedPackageTypecheckResult } from './compiler/package-typecheck'
+export { analyzeProjectTarget } from './compiler/project-target-analysis'
+export type { ProjectTargetAnalysis } from './compiler/project-target-analysis'
 export { DuplicateSourceError, SourceManager } from './compiler/source-manager'
 export type { SourceFileId, SourceUnit } from './compiler/source-manager'
 export { loadProject, ProjectManifestError, resolveBuildTarget } from './project/manifest'
@@ -43,6 +47,7 @@ export type {
   ProjectManifest,
 } from './project/model'
 export { loadPackageGraph } from './project/package-loader'
+export { reachablePackagePaths } from './project/package-graph'
 export type {
   LoadedPackage,
   PackageGraph,
@@ -58,6 +63,16 @@ export type {
   PackageSymbolId,
   ResolvedPackageProgram,
 } from './resolver/package-symbols'
+export { buildSemanticTargetPlan, resolveTargetEntry } from './targets/capabilities'
+export { getTargetProfile, targetSupports } from './targets/model'
+export { assertTargetCompatible, validateTargetPlan } from './targets/validate'
+export type {
+  CapabilityRequirement,
+  SemanticTargetPlan,
+  TargetCapability,
+  TargetProfile,
+} from './targets/model'
+export type { TargetValidationOptions } from './targets/validate'
 export { McVersion, parseMcVersion, compareMcVersion, DEFAULT_MC_VERSION } from './types/mc-version'
 export type { DatapackFile } from './emit/index'
 

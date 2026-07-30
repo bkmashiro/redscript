@@ -710,29 +710,37 @@ git diff --check
 
 **Files:**
 
-- Create: `src/targets/model.ts`
-- Create: `src/targets/capabilities.ts`
-- Create: `src/targets/reachability.ts`
-- Create: `src/targets/validate.ts`
-- Modify: decorators/intrinsics/resource semantic metadata at their canonical registries
-- Modify: `src/diagnostics.ts` for stable `RST2xxx` target codes
-- Test: `src/__tests__/targets/capability-inference.test.ts`
-- Test: `src/__tests__/targets/validation.test.ts`
+- ✅ Create: `src/targets/model.ts`
+- ✅ Create: `src/targets/capabilities.ts`
+- ✅ Create: `src/targets/reachability.ts`
+- ✅ Create: `src/targets/validate.ts`
+- ✅ Create: `src/compiler/package-typecheck.ts`
+- ✅ Create: `src/compiler/project-target-analysis.ts`
+- ✅ Modify: `src/compiler/session.ts`, package backend, diagnostics, CLI, and public exports
+- ✅ Test: `src/__tests__/targets/capability-inference.test.ts`
+- ✅ Test: `src/__tests__/targets/validation.test.ts`
+- ✅ Test: `src/__tests__/compiler/package-typecheck.test.ts`
 
 **RED/GREEN slices:**
 
-1. define `datapack` and `commands` profiles;
-2. compute reachable function graph from target entry;
-3. infer direct decorator and resource requirements;
-4. propagate requirements transitively through calls;
-5. infer helper-function/schedule/state requirements from semantic IR;
-6. allow unreachable target-incompatible helpers;
-7. reject reachable target-incompatible helpers with shortest call chain;
-8. reject resource/lifecycle use for commands target;
-9. prove `--lenient` remains fail-closed;
-10. add `redscript graph --capabilities --target <name>`.
+1. ✅ define immutable `datapack` and `commands` profiles;
+2. ✅ typecheck the immutable linked package closure before target validation, including cross-package exported signatures;
+3. ✅ compute deterministic reachable function graphs from the selected entry and target-owned decorator roots;
+4. ✅ infer decorator, typed registry-reference, schedule, state, opaque-command, external-function, helper, dynamic-dispatch, and recursion requirements;
+5. ✅ propagate requirement provenance through deterministic shortest call chains;
+6. ✅ allow unreachable helpers and unimported local dependency packages to remain outside the target closure;
+7. ✅ reject reachable target-incompatible requirements with stable `RST2xxx` diagnostics;
+8. ✅ distinguish declaration-surface `resource item namespace:path;` references (target-neutral) from future emitting resource artifacts (`resource-artifacts`, `RST2003`);
+9. ✅ prove lenient mode cannot downgrade target legality;
+10. ✅ add `redscript graph --capabilities --target <name>` with deterministic JSON/human inspection;
+11. ✅ expose the same read-only analysis through `CompilerSession.analyzeProject()` and public APIs;
+12. ✅ run capability validation before target-specific lowering or artifact mutation;
+13. ✅ emit and deterministically merge project-package `@function_tag` contributions for datapacks while rejecting them for commands (`RST2008`);
+14. ✅ fail closed for package-backend decorators whose runtime lowering is not yet wired (`RST2009` event runtime, `RST2010` runtime wrappers, `RST2011` load dependencies) instead of silently omitting semantics.
 
-**Acceptance:** the same project passes a datapack target and fails a commands target at `@tick`, before emit, with stable diagnostics.
+**Acceptance:** one manifest can compile a datapack target and fail a commands target at a lifecycle/function-tag contribution before emit; reachable failures include stable source and shortest call-chain provenance. A target-compatible commands program proceeds through semantic validation and then stops explicitly at the still-unimplemented P5 backend.
+
+**Gate:** focused frontend/package/target/CLI tests, legacy decorator/tag parity tests, TypeScript build, static Minecraft validation, and `git diff --check`.
 
 ### P5 — commands backend
 
