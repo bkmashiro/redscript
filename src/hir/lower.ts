@@ -93,6 +93,7 @@ function lowerGlobal(g: Program['globals'][0]): HIRGlobal {
 function lowerFunction(fn: FnDecl): HIRFunction {
   return {
     name: fn.name,
+    ...(fn.symbolId ? { symbolId: fn.symbolId } : {}),
     typeParams: fn.typeParams,
     params: fn.params.map(lowerParam),
     returnType: fn.returnType,
@@ -694,7 +695,14 @@ function lowerExpr(expr: Expr): HIRExpr {
       }
 
     case 'call':
-      return { kind: 'call', fn: expr.fn, args: expr.args.map(lowerExpr), typeArgs: expr.typeArgs, span: expr.span }
+      return {
+        kind: 'call',
+        fn: expr.fn,
+        ...(expr.symbolId ? { symbolId: expr.symbolId } : {}),
+        args: expr.args.map(lowerExpr),
+        typeArgs: expr.typeArgs,
+        span: expr.span,
+      }
 
     case 'invoke':
       return { kind: 'invoke', callee: lowerExpr(expr.callee), args: expr.args.map(lowerExpr), span: expr.span }

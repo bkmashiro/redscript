@@ -126,12 +126,13 @@ export class DiagnosticCollector {
     this.filePath = filePath
   }
 
-  error(kind: DiagnosticKind, message: string, line: number, col: number): void {
+  error(kind: DiagnosticKind, message: string, line: number, col: number, filePath = this.filePath): void {
+    const sourceLines = !filePath || filePath === this.filePath ? this.sourceLines : []
     const diagnostic = new DiagnosticError(
       kind,
       message,
-      { file: this.filePath, line, col },
-      this.sourceLines
+      { file: filePath, line, col },
+      sourceLines
     )
     this.diagnostics.push(diagnostic)
   }

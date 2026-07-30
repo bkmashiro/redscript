@@ -6,6 +6,8 @@
  */
 
 import { compileModules } from '../emit/modules'
+import { Lexer } from '../lexer'
+import { Parser } from '../parser'
 
 function getFile(files: { path: string; content: string }[], substr: string): string | undefined {
   return files.find(f => f.path.includes(substr))?.content
@@ -362,4 +364,15 @@ describe('namespace isolation', () => {
     expect(tag.values).toContain('ns:a/_load')
     expect(tag.values).toContain('ns:b/_load')
   })
+})
+
+test('pre-parsed module inputs are cloned before legacy backend rewrites', () => {
+  const source = 'module math; export fn add(a: int): int { return a; }'
+  const parser = new Parser(new Lexer(source, '/tmp/math.mcrs').tokenize(), source, '/tmp/math.mcrs')
+  const program = parser.parse('clone_test')
+
+  compileModules([{ name: 'math', source: '', program }], { namespace: 'clone_test' })
+
+  expect(program.declarations[0].name).toBe('add')
+  expect(program.declarations[0].span?.file).toBe('/tmp/math.mcrs')
 })

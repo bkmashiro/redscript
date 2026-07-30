@@ -1,7 +1,9 @@
 import * as path from 'path'
 
 import type { CompileOptions, CompileResult } from '../emit/compile'
+import type { CompileModulesResult } from '../emit/modules'
 import type { BuildTarget, LoadedProject } from '../project/model'
+import { compileProjectPackages } from './package-backend'
 import { SourceFileId, SourceManager, SourceManagerOptions } from './source-manager'
 
 export type CompilePipeline = (source: string, options?: CompileOptions) => CompileResult
@@ -21,9 +23,9 @@ export class UnknownSourceError extends Error {
 /**
  * Build-scoped owner for source identity and compiler pipeline invocation.
  *
- * This is intentionally behavior-preserving today. PackageGraph and target
- * planning will attach to this session rather than adding more global state to
- * the legacy compile function.
+ * Legacy single-file compilation remains behavior-preserving, while strict
+ * project sessions own package loading, symbol linking, and target projection
+ * without adding global state to the compatibility compile function.
  */
 export class CompilerSession {
   readonly sources: SourceManager
@@ -69,5 +71,19 @@ export class CompilerSession {
       ? this.sources.addSource({ filePath: options.filePath, text: sourceText })
       : this.sources.addVirtualSource({ text: sourceText, displayName: '<input>' })
     return this.compile(source.id, options)
+  }
+
+  compileProject(overrides: { namespace?: string; minecraftVersion?: string } = {}): CompileModulesResult {
+    if (!this.project || !this.target) {
+      throw new Error('compileProject() requires a CompilerSession with a resolved project and target')
+    }
+    const target = overrides.namespace || overrides.minecraftVersion
+      ? {
+          ...this.target,
+          namespace: overrides.namespace ?? this.target.namespace,
+          minecraftVersion: overrides.minecraftVersion ?? this.target.minecraftVersion,
+        }
+      : this.target
+    return compileProjectPackages(this.project, target, this.sources)
   }
 }

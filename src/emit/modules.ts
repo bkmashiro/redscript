@@ -26,12 +26,26 @@ import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import type { HIRModule, HIRFunction, HIRExpr, HIRStmt, HIRBlock } from '../hir/types'
 import type { Program, FnDecl, Expr, Stmt, Block } from '../ast/types'
 import { TypeChecker } from '../typechecker'
+import type { McVersion } from '../types/mc-version'
 
 type ExportKind = 'function' | 'declaration'
 
 interface ImportedSymbolInfo {
   kind: ExportKind
   sourceFn: FnDecl
+}
+
+function cloneAstValue<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(item => cloneAstValue(item)) as T
+  if (value === null || typeof value !== 'object') return value
+
+  const clone = Object.create(Object.getPrototypeOf(value)) as object
+  for (const key of Reflect.ownKeys(value as object)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value as object, key)!
+    if ('value' in descriptor) descriptor.value = cloneAstValue(descriptor.value)
+    Object.defineProperty(clone, key, descriptor)
+  }
+  return clone as T
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +57,10 @@ export interface ModuleInput {
   name: string
   source: string
   filePath?: string
+  /** Pre-parsed compatibility input. The compiler clones it before legacy rewrites. */
+  program?: Program
+  /** Explicit physical scoreboard objective selected by the target layout adapter. */
+  objective?: string
 }
 
 export interface CompileModulesOptions {
@@ -50,6 +68,9 @@ export interface CompileModulesOptions {
   namespace?: string
   /** Experimental opt-in LIR local-copy/RMW rewrites. Defaults off. */
   experimentalLirLocalCopyRewrite?: boolean
+  mcVersion?: McVersion
+  /** Qualified backend entry functions that must not be considered removable library exports. */
+  entryFunctions?: string[]
 }
 
 export interface CompileModulesResult {
@@ -79,12 +100,15 @@ export function compileModules(
   const parsedModuleSources = new Map<string, string>() // moduleName → original source
 
   for (const mod of modules) {
-    const lexer = new Lexer(mod.source, mod.filePath)
-    const tokens = lexer.tokenize()
-    const parser = new Parser(tokens, mod.source, mod.filePath)
-    const ast = parser.parse(namespace)
-    if (parser.parseErrors.length > 0) {
-      throw parser.parseErrors[0]
+    let ast: Program
+    if (mod.program) {
+      ast = cloneAstValue(mod.program)
+    } else {
+      const lexer = new Lexer(mod.source, mod.filePath)
+      const tokens = lexer.tokenize()
+      const parser = new Parser(tokens, mod.source, mod.filePath)
+      ast = parser.parse(namespace)
+      if (parser.parseErrors.length > 0) throw parser.parseErrors[0]
     }
 
     // Verify declared module name matches provided name
@@ -175,9 +199,10 @@ export function compileModules(
         for (const [sym, info] of sourceExports) {
           const qualified = `${imp.moduleName}/${sym}`
           resolved.set(sym, qualified)
-          if (info.kind === 'declaration') {
-            getDeclaredImportMap().set(qualified, cloneDeclaredFunctionForModuleImport(info.sourceFn, qualified))
-          }
+          getDeclaredImportMap().set(
+            qualified,
+            cloneDeclaredFunctionForModuleImport(info.sourceFn, qualified),
+          )
         }
       } else {
         const sourceSymbol = sourceExports.get(imp.symbol)
@@ -190,9 +215,10 @@ export function compileModules(
         }
         const qualified = `${imp.moduleName}/${imp.symbol}`
         resolved.set(imp.symbol, qualified)
-        if (sourceSymbol.kind === 'declaration') {
-          getDeclaredImportMap().set(qualified, cloneDeclaredFunctionForModuleImport(sourceSymbol.sourceFn, qualified))
-        }
+        getDeclaredImportMap().set(
+          qualified,
+          cloneDeclaredFunctionForModuleImport(sourceSymbol.sourceFn, qualified),
+        )
       }
     }
     importMap.set(modName, resolved)
@@ -263,15 +289,16 @@ export function compileModules(
     // so they emit to `${namespace}:${moduleName}/${fnName}.mcfunction`
     // Track which exported functions are not imported anywhere (for cross-module DCE)
     const unusedExportedFns = new Set<string>()
+    const entryFunctions = new Set(options.entryFunctions ?? [])
     if (isNamed) {
       const used = usedExports.get(mod.name) ?? new Set()
       for (const fn of ast.declarations) {
+        const baseName = fn.name
         // Prefix function name
         fn.name = `${mod.name}/${fn.name}`
 
         // Functions not imported by anyone are library-eligible (DCE)
-        const baseName = fn.name.split('/').pop()!
-        if (fn.isExported && !used.has(baseName)) {
+        if (fn.isExported && !used.has(baseName) && !entryFunctions.has(fn.name)) {
           unusedExportedFns.add(fn.name)
         }
       }
@@ -279,7 +306,7 @@ export function compileModules(
 
     // Determine scoreboard objective
     // Named module: `__${namespace}_${moduleName}`, anonymous: `__${namespace}`
-    const objective = isNamed ? `__${namespace}_${mod.name}` : `__${namespace}`
+    const objective = mod.objective ?? (isNamed ? `__${namespace}_${mod.name}` : `__${namespace}`)
 
     // Run the pipeline
     const modSource = parsedModuleSources.get(mod.name) ?? mod.filePath ?? ''
@@ -291,6 +318,7 @@ export function compileModules(
       mod.filePath,
       modSource,
       lirOptimizeOptions,
+      options.mcVersion,
     )
     warnings.push(...modFiles.warnings)
 
@@ -421,6 +449,7 @@ function compileSingleModule(
   filePath: string | undefined,
   source: string,
   lirOptimizeOptions: LIROptimizeOptions,
+  mcVersion?: McVersion,
 ): SingleModuleResult {
   const warnings: string[] = []
 
@@ -472,7 +501,7 @@ function compileSingleModule(
     lir.objective = objective
     const lirOpt = lirOptimizeModule(lir, lirOptimizeOptions)
 
-    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions })
+    const files = emit(lirOpt, { namespace, tickFunctions, loadFunctions, watchFunctions, scheduleFunctions, mcVersion })
 
     // For named modules: rename the load.mcfunction to avoid path collision.
     // Rename `data/${ns}/function/load.mcfunction` → `data/${ns}/function/${modName}/_load.mcfunction`

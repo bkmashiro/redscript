@@ -19,6 +19,8 @@ export type CmpOp = '==' | '!=' | '<' | '<=' | '>' | '>='
 // ---------------------------------------------------------------------------
 
 export interface Span {
+  /** Absolute/canonical source path when parsed from a source unit. */
+  file?: string
   line: number      // 1-indexed
   col: number       // 1-indexed
   endLine?: number
@@ -168,7 +170,7 @@ export type Expr =
   | { kind: 'is_check';   expr: Expr; entityType: EntityTypeName; span?: Span }
   | { kind: 'unary';      op: '!' | '-'; operand: Expr; span?: Span }
   | { kind: 'assign';     target: string; op: AssignOp; value: Expr; span?: Span }
-  | { kind: 'call';       fn: string; args: Expr[]; typeArgs?: TypeNode[]; span?: Span }
+  | { kind: 'call';       fn: string; symbolId?: string; args: Expr[]; typeArgs?: TypeNode[]; span?: Span }
   | { kind: 'invoke';     callee: Expr; args: Expr[]; span?: Span }
   | { kind: 'member';     obj: Expr; field: string; span?: Span }
   | { kind: 'struct_lit'; fields: { name: string; value: Expr }[]; span?: Span }
@@ -315,6 +317,8 @@ export interface Param {
 }
 
 export interface FnDecl {
+  /** Canonical package symbol identity assigned by project linking. */
+  symbolId?: string
   /** Set when this function was parsed from a `module library;` source.
    *  Library functions are NOT MC entry points — DCE only keeps them if they
    *  are reachable from a non-library (user) entry point. */
@@ -431,6 +435,10 @@ export interface GlobalDecl {
 export interface ImportDecl {
   /** The module being imported from, e.g. "math" in `import math::sin` */
   moduleName: string
+  /** Canonical project-package path for `import "module/path" [as alias]`. */
+  packagePath?: string
+  /** Local qualifier for a canonical package import. Defaults to the package name. */
+  alias?: string
   /** The symbol being imported, or '*' for wildcard.
    *  Undefined when this is a whole-module file import (`import player_utils`). */
   symbol?: string   // '*' | identifier | undefined (whole-module import)
@@ -459,6 +467,8 @@ export interface Program {
   namespace: string    // Inferred from filename or `namespace mypack;`
   /** Module name declared with `module <name>;` (undefined if no module decl) */
   moduleName?: string
+  /** Directory package declared with `package <name>;` in strict project mode. */
+  packageName?: string
   globals: GlobalDecl[]
   declarations: FnDecl[]
   declaredFunctions?: FnDecl[]

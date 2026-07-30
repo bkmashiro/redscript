@@ -109,13 +109,22 @@ default = true
       const sourceFile = path.join(sourceDir, 'main.mcrs')
       const outputDir = path.join(root, 'build', 'pack')
       fs.mkdirSync(sourceDir)
-      fs.writeFileSync(sourceFile, 'fn main() { say("hi"); }\n')
+      fs.mkdirSync(path.join(sourceDir, 'combat'))
+      fs.writeFileSync(sourceFile, `package castle;
+import "example.com/castle/combat" as combat;
+export fn main(): void { combat::start(); }
+`)
+      fs.writeFileSync(
+        path.join(sourceDir, 'combat', 'combat.mcrs'),
+        'package combat; export fn start(): void { say("hi"); }\n',
+      )
       fs.writeFileSync(path.join(root, 'redscript.toml'), `
 [project]
 name = "castle"
 module = "example.com/castle"
 namespace = "base"
 mc-version = "1.21.4"
+source-roots = ["src"]
 
 [target.pack]
 kind = "datapack"
@@ -141,9 +150,20 @@ out = "build/admin.commands.json"
         )
 
         expect(result.status).toBe(0)
-        expect(fs.existsSync(path.join(outputDir, 'data', 'target_ns', 'function', 'main.mcfunction'))).toBe(true)
+        expect(fs.existsSync(path.join(outputDir, 'data', 'target_ns', 'function', '_root', 'main.mcfunction'))).toBe(true)
         const metadata = JSON.parse(fs.readFileSync(path.join(outputDir, 'pack.mcmeta'), 'utf8'))
         expect(metadata.pack.pack_format).toBe(107.1)
+
+        const checkResult = spawnSync(
+          process.execPath,
+          ['-r', ...cliRunner, cliPath, 'check', sourceFile, '--target', 'pack'],
+          {
+            encoding: 'utf-8',
+            env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+          },
+        )
+        expect(checkResult.status).toBe(0)
+        expect(checkResult.stdout).toContain('No issues found')
       } finally {
         fs.rmSync(root, { recursive: true, force: true })
       }

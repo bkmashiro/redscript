@@ -1,4 +1,3 @@
-import { compile } from '../index'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
@@ -70,22 +69,23 @@ describe('init CLI', () => {
 
     expect(result.status).toBe(0)
 
-    const config = JSON.parse(
-      fs.readFileSync(path.join(projectDir, 'redscript.config.json'), 'utf-8')
+    const entryPath = path.join(projectDir, 'src', 'main.mcrs')
+    const compileResult = spawnSync(
+      process.execPath,
+      ['-r', ...cliRunner, cliPath, 'compile', entryPath],
+      {
+        encoding: 'utf-8',
+        env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+      },
     )
-    const entryPath = path.join(projectDir, config.entry)
-    const source = fs.readFileSync(entryPath, 'utf-8')
-    const compiled = compile(source, {
-      namespace: config.namespace,
-      filePath: entryPath,
-    })
-    const loadTag = compiled.files.find(file => file.path.includes('load.json'))
-    const tickTag = compiled.files.find(file => file.path.includes('tick.json'))
+    expect(compileResult.status).toBe(0)
 
-    expect(compiled.files.some(file => file.path === 'pack.mcmeta')).toBe(true)
-    expect(loadTag).toBeDefined()
-    expect(tickTag).toBeDefined()
-    expect(JSON.parse(loadTag!.content).values).toContain(`${config.namespace}:setup`)
-    expect(JSON.parse(tickTag!.content).values).toContain(`${config.namespace}:heartbeat`)
+    const outputDir = path.join(projectDir, 'dist')
+    const loadTag = JSON.parse(fs.readFileSync(path.join(outputDir, 'data', 'minecraft', 'tags', 'function', 'load.json'), 'utf-8'))
+    const tickTag = JSON.parse(fs.readFileSync(path.join(outputDir, 'data', 'minecraft', 'tags', 'function', 'tick.json'), 'utf-8'))
+
+    expect(fs.existsSync(path.join(outputDir, 'pack.mcmeta'))).toBe(true)
+    expect(loadTag.values).toContain('demo_pack:_root/setup')
+    expect(tickTag.values).toContain('demo_pack:_root/heartbeat')
   })
 })

@@ -4,6 +4,8 @@
 > Date: 2026-07-30
 > Parent roadmap: [`generic-datapack-language-roadmap.md`](generic-datapack-language-roadmap.md)
 
+> Implementation checkpoint (2026-07-30): M1–M4 are landed. `SourceManager` and `CompilerSession` own build context; strict manifests feed an immutable directory `PackageGraph`; exported references resolve to canonical package symbol IDs; and a single isolated adapter clones linked package ASTs into the existing datapack backend. Source ASTs are never concatenated or mutated, and canonical symbol identity remains distinct from physical Minecraft function layout.
+
 ## Decision
 
 RedScript does **not** need a compiler rewrite, LLVM migration, or replacement of the hand-written parser/compiler.

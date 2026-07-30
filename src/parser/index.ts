@@ -38,11 +38,18 @@ export class Parser extends DeclParser {
     const interfaces: InterfaceDecl[] = []
     let isLibrary = false
     let moduleName: string | undefined
+    let packageName: string | undefined
 
     if (this.check('namespace')) {
       this.advance()
       const name = this.expect('ident')
       namespace = name.value
+      this.match(';')
+    }
+
+    if (this.check('package')) {
+      this.advance()
+      packageName = this.expect('ident').value
       this.match(';')
     }
 
@@ -106,6 +113,20 @@ export class Parser extends DeclParser {
         } else if (this.check('import') || (this.check('ident') && this.peek().value === 'import')) {
           this.advance()
           const importToken = this.peek()
+          if (this.check('string_lit')) {
+            const packagePath = this.advance().value
+            let alias: string | undefined
+            if (this.match('as')) alias = this.expect('ident').value
+            this.match(';')
+            const importedPackageName = packagePath.split('/').filter(Boolean).pop() ?? packagePath
+            imports.push(this.withLoc({
+              moduleName: alias ?? importedPackageName,
+              packagePath,
+              alias,
+              symbol: undefined,
+            }, importToken))
+            continue
+          }
           const modName = this.expect('ident').value
           if (this.check('::')) {
             this.advance()
@@ -138,6 +159,7 @@ export class Parser extends DeclParser {
     return {
       namespace,
       moduleName,
+      packageName,
       globals,
       declarations,
       declaredFunctions,

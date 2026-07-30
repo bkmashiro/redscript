@@ -7,13 +7,13 @@
 
 The next product architecture track is [Project, Package, and Multi-Target Compilation](docs/plans/generic-datapack-language-roadmap.md), backed by a separate [compiler architecture/refactor contract](docs/plans/project-package-target-compiler-architecture.md). Its implementation order is:
 
-1. strict `redscript.toml` project identity and named targets;
-2. Go-like directory packages and deterministic import graphs;
-3. target capability validation;
+1. ✅ strict `redscript.toml` project identity and named targets;
+2. ✅ Go-like directory packages and deterministic import graphs;
+3. 🔄 target capability validation;
 4. a finite command-sequence backend;
 5. complete datapack JSON/NBT/resource artifacts.
 
-The tables below describe the existing language/tooling inventory. A checked module/import feature does **not** mean the new project/package contract is already implemented.
+The tables below describe the existing language/tooling inventory. The strict project/package contract is implemented through P2; dependency modules, capability validation, and additional targets remain staged work.
 
 ## Legend
 - ✅ Done

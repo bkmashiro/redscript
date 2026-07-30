@@ -114,22 +114,24 @@ export class TypeChecker {
     this.filePath = filePath
   }
 
-  private getNodeLocation(node: unknown): { line: number; col: number } {
-    const span = (node as { span?: { line: number; col: number } } | undefined)?.span
+  private getNodeLocation(node: unknown): { file?: string; line: number; col: number } {
+    const span = (node as { span?: { file?: string; line: number; col: number } } | undefined)?.span
     return {
+      file: span?.file,
       line: span?.line ?? 1,
       col: span?.col ?? 1,
     }
   }
 
   private report(message: string, node?: unknown): void {
-    const { line, col } = this.getNodeLocation(node)
-    this.collector.error('TypeError', message, line, col)
+    const { file, line, col } = this.getNodeLocation(node)
+    this.collector.error('TypeError', message, line, col, file)
   }
 
   private warnLint(message: string, node?: unknown): void {
-    const { line, col } = this.getNodeLocation(node)
-    const filePart = this.filePath ? `${this.filePath}:` : ''
+    const { file, line, col } = this.getNodeLocation(node)
+    const diagnosticFile = file ?? this.filePath
+    const filePart = diagnosticFile ? `${diagnosticFile}:` : ''
     this.lintWarnings.push(
       `${filePart}line ${line}, col ${col}: ${message}`
     )

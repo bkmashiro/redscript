@@ -15,7 +15,7 @@ import { DiagnosticError } from '../diagnostics'
 export type TokenKind =
   // Keywords
   | 'fn' | 'let' | 'const' | 'if' | 'else' | 'while' | 'for' | 'foreach' | 'match' | 'do' | 'repeat'
-  | 'return' | 'break' | 'continue' | 'as' | 'at' | 'in' | 'is' | 'struct' | 'extends' | 'impl' | 'enum' | 'trigger' | 'namespace' | 'module' | 'interface'
+  | 'return' | 'break' | 'continue' | 'as' | 'at' | 'in' | 'is' | 'struct' | 'extends' | 'impl' | 'enum' | 'trigger' | 'namespace' | 'module' | 'package' | 'interface'
   | 'execute' | 'run' | 'unless' | 'declare' | 'export' | 'import'
   // Types
   | 'int' | 'bool' | 'float' | 'fixed' | 'string' | 'void'
@@ -91,6 +91,7 @@ const KEYWORDS: Record<string, TokenKind> = {
   trigger: 'trigger',
   namespace: 'namespace',
   module: 'module',
+  package: 'package',
   execute: 'execute',
   run: 'run',
   unless: 'unless',

@@ -102,7 +102,7 @@ export class ParserBase {
   }
 
   withLoc<T extends object>(node: T, token: Token): T {
-    const span: Span = { line: token.line, col: token.col }
+    const span: Span = { file: this.filePath, line: token.line, col: token.col }
     Object.defineProperty(node, 'span', {
       value: span,
       enumerable: false,
@@ -144,7 +144,7 @@ export class ParserBase {
 
   syncToNextDecl(): void {
     const TOP_LEVEL_KEYWORDS = new Set([
-      'fn', 'struct', 'impl', 'enum', 'const', 'let', 'export', 'declare', 'import', 'namespace', 'module'
+      'fn', 'struct', 'impl', 'enum', 'const', 'let', 'export', 'declare', 'import', 'namespace', 'module', 'package'
     ])
     while (!this.check('eof')) {
       const kind = this.peek().kind

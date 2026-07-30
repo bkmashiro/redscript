@@ -1,0 +1,50 @@
+import type { Program, Span } from '../ast/types'
+import type { SourceFileId } from '../compiler/source-manager'
+
+export interface PackageId {
+  /** Owning manifest module identity. */
+  readonly modulePath: string
+  /** Path relative to a source root, empty for the module root package. */
+  readonly packagePath: string
+  /** Canonical semantic package path. */
+  readonly path: string
+}
+
+export interface PackageSourceFile {
+  readonly id: SourceFileId
+  readonly absolutePath: string
+  readonly text: string
+}
+
+export interface PackageImport {
+  readonly path: string
+  readonly alias: string
+  readonly sourceFile: SourceFileId
+  readonly span?: Span
+}
+
+export interface LoadedPackage {
+  readonly id: PackageId
+  readonly name: string
+  readonly dir: string
+  readonly sourceFiles: readonly PackageSourceFile[]
+  readonly programs: readonly Program[]
+  readonly imports: readonly PackageImport[]
+}
+
+export interface PackageGraph {
+  readonly modulePath: string
+  readonly rootPackages: readonly PackageId[]
+  readonly packages: ReadonlyMap<string, LoadedPackage>
+  /** Dependencies precede importers; unrelated packages are path-sorted. */
+  readonly topologicalOrder: readonly PackageId[]
+}
+
+export function packageId(modulePath: string, relativePath: string): PackageId {
+  const normalizedRelativePath = relativePath.split('\\').join('/').replace(/^\/+|\/+$/g, '')
+  return Object.freeze({
+    modulePath,
+    packagePath: normalizedRelativePath,
+    path: normalizedRelativePath ? `${modulePath}/${normalizedRelativePath}` : modulePath,
+  })
+}

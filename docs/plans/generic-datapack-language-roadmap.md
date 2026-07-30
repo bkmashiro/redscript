@@ -636,32 +636,36 @@ git diff --check
 
 **Objective:** Compile directory packages without file concatenation or globally keyed module names.
 
+**Status (2026-07-30): completed.** Strict project compilation now parses every source independently, builds an immutable canonical package graph, resolves exported `PackageSymbolId`s, and only then projects a cloned linked program into the legacy datapack backend. The projection boundary preserves canonical symbol IDs in HIR while keeping physical function paths backend-specific.
+
 **Files:**
 
 - Modify: `src/ast/types.ts` for package declaration/qualified identity
-- Modify: `src/parser/decl-parser.ts`
+- Modify: `src/parser/index.ts`
 - Create: `src/project/package-loader.ts`
 - Create: `src/project/package-graph.ts`
 - Create: `src/resolver/package-symbols.ts`
 - Modify: `src/hir/types.ts` and `src/hir/lower.ts` to carry package-aware IDs
+- Create: `src/compiler/package-backend.ts` as the isolated legacy-backend projection
+- Modify: `src/compiler/session.ts` and `src/emit/modules.ts` for project compilation
 - Test: `src/__tests__/project/package-loader.test.ts`
 - Test: `src/__tests__/project/package-resolution.test.ts`
 - Test: `src/__tests__/project/package-cycle.test.ts`
 
 **RED/GREEN slices:**
 
-1. parse `package <name>;` in project mode;
-2. group multiple source files into one package scope;
-3. reject mixed package names in one directory;
-4. derive canonical package path from module path + directory;
-5. parse canonical qualified package import and optional alias;
-6. resolve exported qualified symbols;
-7. allow equal package names under different module paths;
-8. reject package cycles with complete cycle diagnostics;
-9. topologically order packages deterministically;
-10. preserve original file/span diagnostics;
-11. adapt one project package graph into the current backend;
-12. keep legacy `module` and file imports green outside strict project mode.
+1. ✅ parse `package <name>;` in project mode;
+2. ✅ group multiple source files into one package scope;
+3. ✅ reject mixed package names in one directory;
+4. ✅ derive canonical package path from module path + directory;
+5. ✅ parse canonical qualified package import and optional alias;
+6. ✅ resolve exported qualified symbols;
+7. ✅ allow equal package names at distinct canonical package paths;
+8. ✅ reject package cycles with complete cycle diagnostics;
+9. ✅ topologically order packages deterministically;
+10. ✅ preserve original file/span diagnostics, including multi-file type errors;
+11. ✅ adapt one project package graph into the current backend without mutating source ASTs;
+12. ✅ keep legacy `module` and file imports green outside strict project mode.
 
 **Acceptance:** `cmd/pack` imports `combat`, where two files jointly define package `combat`, and the emitted datapack contains stable package-qualified function paths without source concatenation.
 

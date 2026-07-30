@@ -10,7 +10,7 @@
  *   redscript version
  */
 
-import { compile, checkDetailed, Lexer, Parser, type CompileStageName, type CompileStageSnapshot } from './index'
+import { compile, createCompilerSession, checkDetailed, Lexer, Parser, type CompileStageName, type CompileStageSnapshot } from './index'
 import type { FnDecl, TypeNode } from './ast/types'
 import { DiagnosticError, formatError } from './diagnostics'
 import { parseMcVersion, DEFAULT_MC_VERSION, McVersion, mcVersionToPackFormat } from './types/mc-version'
@@ -197,7 +197,11 @@ function upgradeCommand(): void {
 
 function buildInitFiles(namespace: string): Record<string, string> {
   return {
-    'src/main.mcrs': `@load
+    'src/main.mcrs': `package ${namespace};
+
+export fn main(): void {}
+
+@load
 fn setup(): void {
   say("Loaded ${namespace}");
 }
@@ -322,6 +326,7 @@ function compileCommand(
   experimentalLirLocalCopyRewrite = false,
   snapshotStageSpec?: string,
   snapshotOutput?: string,
+  projectSelection?: { project: LoadedProject; target: BuildTarget },
 ): void {
   // Read source file
   if (!fs.existsSync(file)) {
@@ -345,6 +350,22 @@ function compileCommand(
   } catch (e) {
     console.error(`Error: ${(e as Error).message}`)
     process.exit(1)
+  }
+
+  const strictPackageProject = projectSelection?.target.compatibility === 'explicit'
+  if (strictPackageProject) {
+    const unsupported = [
+      incremental && '--incremental',
+      sourceMap && '--source-map',
+      lenient && '--lenient',
+      experimentalLirLocalCopyRewrite && '--experimental-lir-local-copy-rewrite',
+      (snapshotStages || snapshotOutput) && '--snapshot-stages/--snapshot-output',
+      includeDirs && includeDirs.length > 0 && '--include',
+    ].filter(Boolean)
+    if (unsupported.length > 0) {
+      console.error(`Error: strict project package compilation does not yet support ${unsupported.join(', ')}`)
+      process.exit(2)
+    }
   }
 
   if (incremental && (snapshotStages || snapshotOutput)) {
@@ -402,17 +423,25 @@ function compileCommand(
 
   try {
     const stageSnapshots: CompileStageSnapshot[] = []
-    const result = compile(source, {
-      namespace,
-      filePath: file,
-      generateSourceMap: sourceMap,
-      mcVersion,
-      lenient,
-      includeDirs,
-      experimentalLirLocalCopyRewrite,
-      snapshotStages,
-      stageSnapshots: snapshotStages ? stageSnapshots : undefined,
-    })
+    const result = strictPackageProject && projectSelection
+      ? createCompilerSession({
+          project: projectSelection.project,
+          target: projectSelection.target,
+        }).compileProject({
+          namespace,
+          minecraftVersion: mcVersionStr,
+        })
+      : compile(source, {
+          namespace,
+          filePath: file,
+          generateSourceMap: sourceMap,
+          mcVersion,
+          lenient,
+          includeDirs,
+          experimentalLirLocalCopyRewrite,
+          snapshotStages,
+          stageSnapshots: snapshotStages ? stageSnapshots : undefined,
+        })
 
     if (snapshotOutput) {
       writeStageSnapshots(snapshotOutput, { file, namespace, stages: stageSnapshots })
@@ -437,7 +466,11 @@ function compileCommand(
     console.log(`  Namespace: ${namespace}`)
     console.log(`  Files: ${result.files.length}`)
   } catch (err) {
-    console.error(formatError(err as Error, source, file))
+    console.error(formatError(
+      err as Error,
+      strictPackageProject ? undefined : source,
+      strictPackageProject ? undefined : file,
+    ))
     process.exit(1)
   }
 }
@@ -574,6 +607,55 @@ function checkCommand(file: string, namespace?: string, outputFormat: 'human' | 
     }
   }
 
+  process.exit(exitCode)
+}
+
+function checkProjectCommand(
+  file: string,
+  project: LoadedProject,
+  target: BuildTarget,
+  namespaceOverride: string | undefined,
+  outputFormat: 'human' | 'json',
+  fix: boolean,
+): void {
+  if (fix) {
+    console.error('Error: --fix is not supported for strict multi-file project packages')
+    process.exit(2)
+  }
+
+  let warnings: CliDiagnostic[] = []
+  let errors: DiagnosticError[] = []
+  try {
+    const result = createCompilerSession({ project, target }).compileProject({ namespace: namespaceOverride })
+    warnings = result.warnings.map(warning => warningToDiagnostic(warning))
+  } catch (error) {
+    if (error instanceof DiagnosticError) {
+      errors = [error]
+    } else {
+      const collected = (error as { diagnostics?: unknown }).diagnostics
+      if (Array.isArray(collected) && collected.every(item => item instanceof DiagnosticError)) {
+        errors = collected as DiagnosticError[]
+      } else {
+        console.error(`Error: ${(error as Error).message}`)
+        process.exit(2)
+      }
+    }
+  }
+
+  const diagnostics = [...warnings, ...errors.map(errorToDiagnostic)]
+  const exitCode = errors.length > 0 ? 2 : warnings.length > 0 ? 1 : 0
+  if (outputFormat === 'json') {
+    console.log(JSON.stringify({
+      file,
+      namespace: namespaceOverride ?? target.namespace,
+      diagnostics,
+      summary: { warnings: warnings.length, errors: errors.length },
+    }, null, 2))
+  } else {
+    for (const warning of warnings) console.error(formatWarningHuman(warning))
+    for (const error of errors) console.error(formatError(error))
+    if (exitCode === 0) console.log('✓ No issues found')
+  }
   process.exit(exitCode)
 }
 
@@ -995,6 +1077,7 @@ async function main(): Promise<void> {
             parsed.experimentalLirLocalCopyRewrite,
             parsed.snapshotStages,
             parsed.snapshotOutput,
+            selected ?? undefined,
           )
         } catch (error) {
           console.error(`Error: ${(error as Error).message}`)
@@ -1092,6 +1175,16 @@ async function main(): Promise<void> {
         try {
           const fileDir = path.dirname(path.resolve(parsed.file))
           const selected = loadCliProjectTarget(fileDir, parsed.target)
+          if (selected?.target.compatibility === 'explicit') {
+            checkProjectCommand(
+              parsed.file,
+              selected.project,
+              selected.target,
+              parsed.namespace,
+              parsed.format ?? 'human',
+              parsed.fix ?? false,
+            )
+          }
           const namespace = parsed.namespace ?? selected?.target.namespace
           checkCommand(parsed.file, namespace, parsed.format ?? 'human', parsed.fix ?? false)
         } catch (error) {

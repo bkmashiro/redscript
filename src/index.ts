@@ -26,6 +26,23 @@ export { CompilerSession, UnknownSourceError } from './compiler/session'
 export type { CompilerSessionOptions, CompilePipeline } from './compiler/session'
 export { DuplicateSourceError, SourceManager } from './compiler/source-manager'
 export type { SourceFileId, SourceUnit } from './compiler/source-manager'
+export { loadProject, ProjectManifestError, resolveBuildTarget } from './project/manifest'
+export { loadPackageGraph } from './project/package-loader'
+export type {
+  LoadedPackage,
+  PackageGraph,
+  PackageId,
+  PackageImport,
+  PackageSourceFile,
+} from './project/package-graph'
+export { makePackageSymbolId, resolvePackageSymbols } from './resolver/package-symbols'
+export type {
+  ResolvedPackage,
+  PackageReference,
+  PackageSymbol,
+  PackageSymbolId,
+  ResolvedPackageProgram,
+} from './resolver/package-symbols'
 export { McVersion, parseMcVersion, compareMcVersion, DEFAULT_MC_VERSION } from './types/mc-version'
 export type { DatapackFile } from './emit/index'
 
