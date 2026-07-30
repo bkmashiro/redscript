@@ -27,6 +27,13 @@ describe('CLI API', () => {
       expect(parsed.file).toBe('api.mcrs')
       expect(parsed.output).toBe('dist/api.d.mcrs')
     })
+
+    it('preserves a year-based Minecraft target for version parsing', () => {
+      const parsed = parseArgs(['compile', 'file.mcrs', '--mc-version', '26.2'])
+
+      expect(parsed.command).toBe('compile')
+      expect(parsed.mcVersionStr).toBe('26.2')
+    })
   })
 
   describe('imports', () => {

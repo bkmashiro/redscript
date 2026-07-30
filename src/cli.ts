@@ -86,7 +86,7 @@ Options:
   --samples <N>          (tune) Evenly spaced sample count for --range
   --manifest-out <path>  (tune) Write machine-readable tune manifest JSON
   --mc-version <ver>     Target Minecraft version (default: 1.21). Affects codegen features.
-                         e.g. --mc-version 1.20.2, --mc-version 1.19
+                         e.g. --mc-version 26.2, --mc-version 1.21.4
   --lenient              Treat type errors as warnings instead of blocking compilation
   --include <dir>        Add a directory to the import search path (repeatable)
   --incremental          Enable file-level incremental compilation cache

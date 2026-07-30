@@ -9,7 +9,13 @@
  */
 
 import { compile } from '../index'
-import { McVersion, parseMcVersion, compareMcVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
+import {
+  McVersion,
+  parseMcVersion,
+  compareMcVersion,
+  DEFAULT_MC_VERSION,
+  mcVersionToPackFormat,
+} from '../types/mc-version'
 
 // ---------------------------------------------------------------------------
 // parseMcVersion
@@ -34,6 +40,12 @@ describe('parseMcVersion', () => {
 
   it('parses "1.21.4" correctly', () => {
     expect(parseMcVersion('1.21.4')).toBe(McVersion.v1_21_4)
+  })
+
+  it('parses year-based releases and folds patch releases to their feature target', () => {
+    expect(parseMcVersion('26.1')).toBe(McVersion.v26_1)
+    expect(parseMcVersion('26.1.2')).toBe(McVersion.v26_1)
+    expect(parseMcVersion('26.2')).toBe(McVersion.v26_2)
   })
 
   it('throws on invalid format', () => {
@@ -62,11 +74,36 @@ describe('compareMcVersion', () => {
   it('returns positive when a > b', () => {
     expect(compareMcVersion(McVersion.v1_21, McVersion.v1_20)).toBeGreaterThan(0)
     expect(compareMcVersion(McVersion.v1_21_4, McVersion.v1_21)).toBeGreaterThan(0)
+    expect(compareMcVersion(McVersion.v26_1, McVersion.v1_21_4)).toBeGreaterThan(0)
+    expect(compareMcVersion(McVersion.v26_2, McVersion.v26_1)).toBeGreaterThan(0)
   })
 
   it('1.20.2 >= 1.20.2 boundary', () => {
     expect(McVersion.v1_20_2 >= McVersion.v1_20_2).toBe(true)
     expect(McVersion.v1_20 >= McVersion.v1_20_2).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Data pack version mapping
+// ---------------------------------------------------------------------------
+
+describe('mcVersionToPackFormat', () => {
+  it('maps maintained stable targets to their exact data pack versions', () => {
+    expect(mcVersionToPackFormat(McVersion.v1_21_4)).toBe(61)
+    expect(mcVersionToPackFormat(McVersion.v26_1)).toBe(101.1)
+    expect(mcVersionToPackFormat(McVersion.v26_2)).toBe(107.1)
+  })
+
+  it('emits the 26.2 data pack version through the full compile path', () => {
+    const result = compile('fn noop() {}', {
+      namespace: 'target_26_2',
+      mcVersion: parseMcVersion('26.2'),
+    })
+    const metadata = result.files.find(file => file.path === 'pack.mcmeta')
+
+    expect(metadata).toBeDefined()
+    expect(JSON.parse(metadata!.content).pack.pack_format).toBe(107.1)
   })
 })
 
