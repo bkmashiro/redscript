@@ -14,6 +14,7 @@ import { CheckFailedError, DiagnosticError, parseErrorMessage } from './diagnost
 // Re-export v2 compile API
 export {
   compile,
+  createCompilerSession,
   CompileOptions,
   CompileResult,
   CompileStageName,
@@ -21,6 +22,10 @@ export {
 } from './emit/compile'
 export { compileModules } from './emit/modules'
 export type { ModuleInput, CompileModulesOptions, CompileModulesResult } from './emit/modules'
+export { CompilerSession, UnknownSourceError } from './compiler/session'
+export type { CompilerSessionOptions, CompilePipeline } from './compiler/session'
+export { DuplicateSourceError, SourceManager } from './compiler/source-manager'
+export type { SourceFileId, SourceUnit } from './compiler/source-manager'
 export { McVersion, parseMcVersion, compareMcVersion, DEFAULT_MC_VERSION } from './types/mc-version'
 export type { DatapackFile } from './emit/index'
 

@@ -34,6 +34,179 @@ describe('CLI API', () => {
       expect(parsed.command).toBe('compile')
       expect(parsed.mcVersionStr).toBe('26.2')
     })
+
+    it('parses an explicit project build target', () => {
+      const parsed = parseArgs(['compile', 'file.mcrs', '--target', 'pack'])
+
+      expect(parsed.command).toBe('compile')
+      expect(parsed.file).toBe('file.mcrs')
+      expect(parsed.target).toBe('pack')
+    })
+  })
+
+  describe('project CLI', () => {
+    it('prints a deterministic JSON description of the nearest project', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-project-cli-'))
+      const sourceDir = path.join(root, 'src')
+      fs.mkdirSync(sourceDir)
+      fs.writeFileSync(path.join(root, 'redscript.toml'), `
+[project]
+name = "castle"
+module = "example.com/castle"
+namespace = "castle"
+mc-version = "26.2"
+source-roots = ["src"]
+
+[target.pack]
+kind = "datapack"
+entry = "example.com/castle::main"
+out = "dist/castle"
+default = true
+`)
+
+      try {
+        const result = spawnSync(
+          process.execPath,
+          ['-r', ...cliRunner, cliPath, 'project', sourceDir, '--format', 'json'],
+          {
+            encoding: 'utf-8',
+            env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+          },
+        )
+
+        expect(result.status).toBe(0)
+        const payload = JSON.parse(result.stdout)
+        expect(payload).toEqual({
+          rootDir: root,
+          manifestPath: path.join(root, 'redscript.toml'),
+          project: {
+            name: 'castle',
+            modulePath: 'example.com/castle',
+            namespace: 'castle',
+            minecraftVersion: '26.2',
+          },
+          sourceRoots: [sourceDir],
+          defaultTarget: 'pack',
+          targets: [{
+            name: 'pack',
+            kind: 'datapack',
+            entry: 'example.com/castle::main',
+            namespace: 'castle',
+            minecraftVersion: '26.2',
+            outputPath: path.join(root, 'dist', 'castle'),
+            isDefault: true,
+            compatibility: 'explicit',
+          }],
+        })
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true })
+      }
+    })
+
+    it('uses a selected datapack target for compile defaults', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-target-cli-'))
+      const sourceDir = path.join(root, 'src')
+      const sourceFile = path.join(sourceDir, 'main.mcrs')
+      const outputDir = path.join(root, 'build', 'pack')
+      fs.mkdirSync(sourceDir)
+      fs.writeFileSync(sourceFile, 'fn main() { say("hi"); }\n')
+      fs.writeFileSync(path.join(root, 'redscript.toml'), `
+[project]
+name = "castle"
+module = "example.com/castle"
+namespace = "base"
+mc-version = "1.21.4"
+
+[target.pack]
+kind = "datapack"
+entry = "example.com/castle::main"
+namespace = "target_ns"
+mc-version = "26.2"
+out = "build/pack"
+
+[target.admin]
+kind = "commands"
+entry = "example.com/castle::admin"
+out = "build/admin.commands.json"
+`)
+
+      try {
+        const result = spawnSync(
+          process.execPath,
+          ['-r', ...cliRunner, cliPath, 'compile', sourceFile, '--target', 'pack'],
+          {
+            encoding: 'utf-8',
+            env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+          },
+        )
+
+        expect(result.status).toBe(0)
+        expect(fs.existsSync(path.join(outputDir, 'data', 'target_ns', 'function', 'main.mcfunction'))).toBe(true)
+        const metadata = JSON.parse(fs.readFileSync(path.join(outputDir, 'pack.mcmeta'), 'utf8'))
+        expect(metadata.pack.pack_format).toBe(107.1)
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects an unavailable backend before writing output', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-target-cli-'))
+      const sourceFile = path.join(root, 'main.mcrs')
+      const outputPath = path.join(root, 'build', 'admin.commands.json')
+      fs.writeFileSync(sourceFile, 'fn main() { say("hi"); }\n')
+      fs.writeFileSync(path.join(root, 'redscript.toml'), `
+[project]
+name = "castle"
+module = "example.com/castle"
+namespace = "castle"
+
+[target.admin]
+kind = "commands"
+entry = "local/castle::main"
+out = "build/admin.commands.json"
+`)
+
+      try {
+        const result = spawnSync(
+          process.execPath,
+          ['-r', ...cliRunner, cliPath, 'compile', sourceFile, '--target', 'admin'],
+          {
+            encoding: 'utf-8',
+            env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+          },
+        )
+
+        expect(result.status).toBe(2)
+        expect(result.stderr).toContain("target 'admin' uses unavailable backend 'commands'")
+        expect(fs.existsSync(outputPath)).toBe(false)
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true })
+      }
+    })
+
+    it('requires a project manifest when --target is used', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-target-no-project-'))
+      const sourceFile = path.join(root, 'main.mcrs')
+      const outputPath = path.join(root, 'out')
+      fs.writeFileSync(sourceFile, 'fn main() { say("hi"); }\n')
+
+      try {
+        const result = spawnSync(
+          process.execPath,
+          ['-r', ...cliRunner, cliPath, 'compile', sourceFile, '--target', 'pack', '-o', outputPath],
+          {
+            encoding: 'utf-8',
+            env: { ...process.env, REDSCRIPT_NO_UPDATE_CHECK: '1' },
+          },
+        )
+
+        expect(result.status).toBe(2)
+        expect(result.stderr).toMatch(/--target.*requires.*redscript\.toml/i)
+        expect(fs.existsSync(outputPath)).toBe(false)
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true })
+      }
+    })
   })
 
   describe('imports', () => {

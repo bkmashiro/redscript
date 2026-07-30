@@ -23,6 +23,7 @@ export interface ParsedArgs {
   snapshotStages?: string
   snapshotOutput?: string
   experimentalLirLocalCopyRewrite?: boolean
+  target?: string
 }
 
 export function parseArgs(args: string[]): ParsedArgs {
@@ -49,6 +50,9 @@ export function parseArgs(args: string[]): ParsedArgs {
       i++
     } else if (arg === '--mc-version') {
       result.mcVersionStr = args[++i]
+      i++
+    } else if (arg === '--target') {
+      result.target = args[++i]
       i++
     } else if (arg === '--lenient') {
       result.lenient = true

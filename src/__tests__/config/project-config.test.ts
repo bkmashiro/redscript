@@ -1,7 +1,8 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { loadProjectConfig, buildTomlTemplate, ProjectConfig } from '../../config/project-config'
+import { buildTomlTemplate, loadProjectConfig } from '../../config/project-config'
+import { loadProject, resolveBuildTarget } from '../../project/manifest'
 
 // Helper: create a temp directory tree and write files
 function makeTmpDir(): string {
@@ -200,17 +201,36 @@ test('returns null without warning when no redscript.toml exists anywhere', () =
 // ──────────────────────────────────────────────────────────────────────────────
 // Test 10: buildTomlTemplate generates valid parseable content
 // ──────────────────────────────────────────────────────────────────────────────
-test('buildTomlTemplate generates a parseable template', () => {
+test('buildTomlTemplate generates a modern explicit project manifest', () => {
   const dir = makeTmpDir()
   const template = buildTomlTemplate('test_pack')
-  fs.writeFileSync(path.join(dir, 'redscript.toml'), template, 'utf-8')
+  fs.writeFileSync(path.join(dir, 'redscript.toml'), template)
 
   const config = loadProjectConfig(dir)
+  const project = loadProject(dir)
   expect(config).not.toBeNull()
-  expect(config!.project?.name).toBe('test_pack')
   expect(config!.project?.namespace).toBe('test_pack')
-  expect(config!.project?.['mc-version']).toBe('1.21.4')
-  expect(config!.output?.dir).toBe('dist/')
+  expect(config!.compiler?.optimization).toBe(2)
+  expect(config!.output?.dir).toBeUndefined()
+  expect(project).not.toBeNull()
+  expect(project!.manifest.project.modulePath).toBe('local/test_pack')
+  expect(resolveBuildTarget(project!).compatibility).toBe('explicit')
+  expect(resolveBuildTarget(project!).entry).toBe('local/test_pack::main')
+
+  fs.rmSync(dir, { recursive: true })
+})
+
+test('uses TOML string rules instead of treating a hash inside a string as a comment', () => {
+  const dir = makeTmpDir()
+  writeToml(dir, `
+[project]
+name = "quoted"
+namespace = "quoted"
+description = "Datapack #1"
+`)
+
+  const config = loadProjectConfig(dir)
+  expect(config?.project?.description).toBe('Datapack #1')
 
   fs.rmSync(dir, { recursive: true })
 })

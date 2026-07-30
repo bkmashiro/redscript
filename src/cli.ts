@@ -26,6 +26,8 @@ import * as https from 'https'
 import { execSync } from 'child_process'
 import archiver from 'archiver'
 import { loadProjectConfig, buildTomlTemplate } from './config/project-config'
+import { loadProject, ProjectManifestError, resolveBuildTarget } from './project/manifest'
+import type { BuildTarget, LoadedProject } from './project/model'
 import { docsCommand } from './docs'
 import { applyCheckFixes } from './check-fix'
 import { deriveNamespace, parseArgs, sanitizeProjectName } from './cli/args'
@@ -45,6 +47,7 @@ Usage:
   redscript test <file> [--dry-run] [--mc-url <url>]
   redscript check <file> [--fix]
   redscript lint <file> [--max-function-lines <n>]
+  redscript project [path] [--format human|json]
   redscript init [project-name]
   redscript fmt <file.mcrs> [file2.mcrs ...]
   redscript declarations <file> [-o <file.d.mcrs>]
@@ -61,6 +64,7 @@ Commands:
   test          Compile and run @test-annotated functions as tests
   check         Check a RedScript file for errors without generating output
   lint          Statically analyze a RedScript file for potential issues (warnings)
+  project       Inspect the nearest redscript.toml and resolved build targets
   init          Scaffold a new RedScript datapack project
   fmt           Auto-format RedScript source files
   declarations  Generate a .d.mcrs declaration surface from exported APIs
@@ -87,6 +91,7 @@ Options:
   --manifest-out <path>  (tune) Write machine-readable tune manifest JSON
   --mc-version <ver>     Target Minecraft version (default: 1.21). Affects codegen features.
                          e.g. --mc-version 26.2, --mc-version 1.21.4
+  --target <name>        Select a named build target from redscript.toml
   --lenient              Treat type errors as warnings instead of blocking compilation
   --include <dir>        Add a directory to the import search path (repeatable)
   --incremental          Enable file-level incremental compilation cache
@@ -880,6 +885,62 @@ function declarationsCommand(file: string, output?: string, namespace?: string):
   }
 }
 
+function loadCliProjectTarget(startPath: string, targetName?: string): {
+  project: LoadedProject
+  target: BuildTarget
+} | null {
+  const project = loadProject(startPath)
+  if (!project) {
+    if (targetName) {
+      throw new ProjectManifestError(
+        path.join(path.resolve(startPath), 'redscript.toml'),
+        `--target '${targetName}' requires a redscript.toml project manifest`,
+      )
+    }
+    return null
+  }
+  return { project, target: resolveBuildTarget(project, targetName) }
+}
+
+function projectJson(project: LoadedProject): object {
+  return {
+    rootDir: project.rootDir,
+    manifestPath: project.manifestPath,
+    project: project.manifest.project,
+    sourceRoots: project.sourceRoots,
+    defaultTarget: project.defaultTarget,
+    targets: Object.values(project.targets).sort((left, right) => left.name.localeCompare(right.name)),
+  }
+}
+
+function projectCommand(startPath: string, format: 'human' | 'json'): void {
+  try {
+    const project = loadProject(startPath)
+    if (!project) {
+      console.error(`Error: No redscript.toml found from ${path.resolve(startPath)}`)
+      process.exit(2)
+    }
+
+    if (format === 'json') {
+      console.log(JSON.stringify(projectJson(project), null, 2))
+      return
+    }
+
+    console.log(`Project: ${project.manifest.project.name}`)
+    console.log(`  Root: ${project.rootDir}`)
+    console.log(`  Module: ${project.manifest.project.modulePath}`)
+    console.log(`  Namespace: ${project.manifest.project.namespace}`)
+    console.log(`  Targets:`)
+    for (const target of Object.values(project.targets).sort((left, right) => left.name.localeCompare(right.name))) {
+      const marker = target.name === project.defaultTarget ? ' (default)' : ''
+      console.log(`    ${target.name}: ${target.kind}${marker} -> ${target.outputPath}`)
+    }
+  } catch (error) {
+    console.error(`Error: ${(error as Error).message}`)
+    process.exit(error instanceof ProjectManifestError ? 2 : 1)
+  }
+}
+
 // Main
 const parsed = parseArgs(args)
 
@@ -904,33 +965,41 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       {
-        // Load redscript.toml (walk up from file's directory); CLI args take priority
-        const fileDir = path.dirname(path.resolve(parsed.file))
-        const tomlConfig = loadProjectConfig(fileDir)
+        try {
+          const fileDir = path.dirname(path.resolve(parsed.file))
+          const selected = loadCliProjectTarget(fileDir, parsed.target)
+          if (selected?.target.kind === 'commands') {
+            console.error(`Error: target '${selected.target.name}' uses unavailable backend 'commands'`)
+            process.exit(2)
+          }
 
-        const namespace = parsed.namespace
-          ?? tomlConfig?.project?.namespace
-          ?? deriveNamespace(parsed.file)
-        const output = parsed.output
-          ?? tomlConfig?.output?.dir
-          ?? './dist'
-        const mcVersionStr = parsed.mcVersionStr ?? tomlConfig?.project?.['mc-version']
-        const includeDirs = parsed.includeDirs
-          ?? tomlConfig?.compiler?.['include-dirs']
+          const namespace = parsed.namespace
+            ?? selected?.target.namespace
+            ?? deriveNamespace(parsed.file)
+          const output = parsed.output
+            ?? selected?.target.outputPath
+            ?? './dist'
+          const mcVersionStr = parsed.mcVersionStr ?? selected?.target.minecraftVersion
+          const includeDirs = parsed.includeDirs
+            ?? selected?.project.compiler.includeDirs
 
-        compileCommand(
-          parsed.file,
-          output,
-          namespace,
-          parsed.sourceMap,
-          mcVersionStr,
-          parsed.lenient,
-          includeDirs,
-          parsed.incremental,
-          parsed.experimentalLirLocalCopyRewrite,
-          parsed.snapshotStages,
-          parsed.snapshotOutput,
-        )
+          compileCommand(
+            parsed.file,
+            output,
+            namespace,
+            parsed.sourceMap,
+            mcVersionStr,
+            parsed.lenient,
+            includeDirs,
+            parsed.incremental,
+            parsed.experimentalLirLocalCopyRewrite,
+            parsed.snapshotStages,
+            parsed.snapshotOutput,
+          )
+        } catch (error) {
+          console.error(`Error: ${(error as Error).message}`)
+          process.exit(error instanceof ProjectManifestError ? 2 : 1)
+        }
       }
       break
 
@@ -1020,10 +1089,15 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       {
-        const fileDir = path.dirname(path.resolve(parsed.file))
-        const tomlConfig = loadProjectConfig(fileDir)
-        const namespace = parsed.namespace ?? tomlConfig?.project?.namespace
-        checkCommand(parsed.file, namespace, parsed.format ?? 'human', parsed.fix ?? false)
+        try {
+          const fileDir = path.dirname(path.resolve(parsed.file))
+          const selected = loadCliProjectTarget(fileDir, parsed.target)
+          const namespace = parsed.namespace ?? selected?.target.namespace
+          checkCommand(parsed.file, namespace, parsed.format ?? 'human', parsed.fix ?? false)
+        } catch (error) {
+          console.error(`Error: ${(error as Error).message}`)
+          process.exit(error instanceof ProjectManifestError ? 2 : 1)
+        }
       }
       break
 
@@ -1105,6 +1179,10 @@ async function main(): Promise<void> {
       console.log(`Generated ${output}`)
       break
     }
+
+    case 'project':
+      projectCommand(parsed.file ?? process.cwd(), parsed.format ?? 'human')
+      break
 
     case 'init':
       initCommand(parsed.file)

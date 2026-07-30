@@ -1,12 +1,15 @@
 /**
- * redscript.toml project configuration file support.
+ * Compatibility adapter for the pre-project redscript.toml API.
  *
- * Provides ProjectConfig interface and loadProjectConfig() which walks up the
- * directory tree to find the nearest redscript.toml file.
+ * New compiler code should use src/project/manifest.ts. This module keeps the
+ * old return shape for existing callers while sharing the TOML 1.0 parser and
+ * nearest-root discovery semantics.
  */
 
 import * as fs from 'fs'
-import * as path from 'path'
+import { parse } from 'smol-toml'
+
+import { discoverProjectManifest } from '../project/discovery'
 
 export interface ProjectConfig {
   project?: {
@@ -25,153 +28,83 @@ export interface ProjectConfig {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Minimal TOML parser
-// Supports:
-//   - [section] headers
-//   - key = value  (string, number, boolean)
-//   - key = ["a", "b"]  (array of strings)
-//   - # comments
-// ---------------------------------------------------------------------------
-
-type TomlValue = string | number | boolean | string[]
-
-function parseTomlValue(raw: string): TomlValue {
-  const trimmed = raw.trim()
-
-  // Array
-  if (trimmed.startsWith('[')) {
-    const inner = trimmed.slice(1, trimmed.lastIndexOf(']'))
-    if (inner.trim() === '') return []
-    return inner
-      .split(',')
-      .map(s => s.trim().replace(/^["']|["']$/g, ''))
-      .filter(s => s.length > 0)
-  }
-
-  // Boolean
-  if (trimmed === 'true') return true
-  if (trimmed === 'false') return false
-
-  // Number (integer)
-  const num = Number(trimmed)
-  if (!isNaN(num) && trimmed !== '') return num
-
-  // String (quoted)
-  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-      (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-    return trimmed.slice(1, -1)
-  }
-
-  // Bare string
-  return trimmed
+interface Table {
+  [key: string]: unknown
 }
 
-function parseToml(content: string): Record<string, Record<string, TomlValue>> {
-  const result: Record<string, Record<string, TomlValue>> = {}
-  let currentSection = '__root__'
-
-  for (const rawLine of content.split('\n')) {
-    // Strip comments and trim
-    const commentIdx = rawLine.indexOf('#')
-    const line = (commentIdx >= 0 ? rawLine.slice(0, commentIdx) : rawLine).trim()
-
-    if (line === '') continue
-
-    // Section header
-    if (line.startsWith('[') && line.endsWith(']')) {
-      currentSection = line.slice(1, -1).trim()
-      if (!result[currentSection]) result[currentSection] = {}
-      continue
-    }
-
-    // Key = value
-    const eqIdx = line.indexOf('=')
-    if (eqIdx < 0) continue
-    const key = line.slice(0, eqIdx).trim()
-    const valueRaw = line.slice(eqIdx + 1).trim()
-
-    if (!result[currentSection]) result[currentSection] = {}
-    result[currentSection][key] = parseTomlValue(valueRaw)
-  }
-
-  return result
+function isTable(value: unknown): value is Table {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
 }
 
-/** Convert raw parsed TOML sections into a typed ProjectConfig. */
-function tomlToConfig(raw: Record<string, Record<string, TomlValue>>): ProjectConfig {
+function strings(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every(item => typeof item === 'string')
+    ? value as string[]
+    : undefined
+}
+
+function toCompatibilityConfig(raw: Table): ProjectConfig {
   const config: ProjectConfig = {}
-
-  const project = raw['project']
-  if (project) {
+  if (isTable(raw.project)) {
     config.project = {}
-    if (typeof project['name'] === 'string') config.project.name = project['name']
-    if (typeof project['namespace'] === 'string') config.project.namespace = project['namespace']
-    if (typeof project['mc-version'] === 'string') config.project['mc-version'] = project['mc-version']
-    if (typeof project['description'] === 'string') config.project.description = project['description']
+    if (typeof raw.project.name === 'string') config.project.name = raw.project.name
+    if (typeof raw.project.namespace === 'string') config.project.namespace = raw.project.namespace
+    if (typeof raw.project['mc-version'] === 'string') config.project['mc-version'] = raw.project['mc-version']
+    if (typeof raw.project.description === 'string') config.project.description = raw.project.description
   }
-
-  const compiler = raw['compiler']
-  if (compiler) {
+  if (isTable(raw.compiler)) {
     config.compiler = {}
-    if (typeof compiler['optimization'] === 'number') config.compiler.optimization = compiler['optimization']
-    if (Array.isArray(compiler['include-dirs'])) config.compiler['include-dirs'] = compiler['include-dirs'] as string[]
-    if (typeof compiler['no-dce'] === 'boolean') config.compiler['no-dce'] = compiler['no-dce']
+    if (typeof raw.compiler.optimization === 'number') config.compiler.optimization = raw.compiler.optimization
+    const includeDirs = strings(raw.compiler['include-dirs'])
+    if (includeDirs) config.compiler['include-dirs'] = includeDirs
+    if (typeof raw.compiler['no-dce'] === 'boolean') config.compiler['no-dce'] = raw.compiler['no-dce']
   }
-
-  const output = raw['output']
-  if (output) {
+  if (isTable(raw.output)) {
     config.output = {}
-    if (typeof output['dir'] === 'string') config.output.dir = output['dir']
+    if (typeof raw.output.dir === 'string') config.output.dir = raw.output.dir
   }
-
   return config
 }
 
 /**
- * Walk up the directory tree starting at `startDir` to find the nearest
- * `redscript.toml`.  Returns a parsed ProjectConfig or null if not found.
+ * Load the nearest manifest using the legacy shape.
+ *
+ * Parse/read failures remain warnings for compatibility. The strict project
+ * loader instead raises ProjectManifestError and should be used by new paths.
  */
-export function loadProjectConfig(startDir: string): ProjectConfig | null {
-  let dir = path.resolve(startDir)
+export function loadProjectConfig(startPath: string): ProjectConfig | null {
+  const discovered = discoverProjectManifest(startPath)
+  if (!discovered) return null
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const candidate = path.join(dir, 'redscript.toml')
-    if (fs.existsSync(candidate)) {
-      try {
-        const content = fs.readFileSync(candidate, 'utf-8')
-        const raw = parseToml(content)
-        return tomlToConfig(raw)
-      } catch (err) {
-        console.warn(`Warning: failed to parse ${candidate}: ${(err as Error).message}`)
-        return null
-      }
-    }
-
-    const parent = path.dirname(dir)
-    if (parent === dir) {
-      // Reached filesystem root
-      return null
-    }
-    dir = parent
+  try {
+    const source = fs.readFileSync(discovered.manifestPath, 'utf8')
+    const raw = parse(source)
+    return toCompatibilityConfig(raw as Table)
+  } catch (error) {
+    console.warn(`Warning: failed to parse ${discovered.manifestPath}: ${(error as Error).message}`)
+    return null
   }
 }
-
 /** Default template content for a new redscript.toml file. */
 export function buildTomlTemplate(namespace: string): string {
-  return `[project]
-name = "${namespace}"
-namespace = "${namespace}"
+  const ns = namespace.trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, '_') || 'redscript_pack'
+  return `# RedScript project configuration
+
+[project]
+name = "${ns}"
+module = "local/${ns}"
+namespace = "${ns}"
 mc-version = "1.21.4"
-description = "${namespace} datapack"
+source-roots = ["src"]
 
 [compiler]
-# optimization = 2
-# include-dirs = ["src/shared"]
-# no-dce = false
+optimization = 2
+include-dirs = []
+no-dce = false
 
-[output]
-dir = "dist/"
+[target.pack]
+kind = "datapack"
+entry = "local/${ns}::main"
+out = "dist"
+default = true
 `
 }

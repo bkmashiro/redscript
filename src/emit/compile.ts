@@ -29,6 +29,7 @@ import { isEventTypeName } from '../events/types'
 import type { FnDecl, Program } from '../ast/types'
 import type { HIRModule, HIRStruct, HIRFunction, HIRStmt, HIRExpr } from '../hir/types'
 import { EVENT_RUNTIME_MANIFESTS, getAllEventRuntimeAssets, type EventRuntimeManifest } from '../events/manifest'
+import { CompilerSession, type CompilerSessionOptions } from '../compiler/session'
 
 function extractErrorMessage(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err)
@@ -1342,7 +1343,7 @@ function isDeclarationFilePath(filePath: string | undefined): boolean {
   return filePath?.endsWith('.d.mcrs') === true
 }
 
-export function compile(source: string, options: CompileOptions = {}): CompileResult {
+export function compilePipeline(source: string, options: CompileOptions = {}): CompileResult {
   const {
     namespace = 'redscript',
     filePath,
@@ -1626,6 +1627,21 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     const sourceLines = processedSource.split('\n')
     throw parseErrorMessage('LoweringError', extractErrorMessage(err), sourceLines, filePath)
   }
+}
+
+/** Create a build-scoped session around the behavior-preserving compiler pipeline. */
+export function createCompilerSession(options: CompilerSessionOptions = {}): CompilerSession {
+  return new CompilerSession(compilePipeline, options)
+}
+
+/**
+ * Backward-compatible single-source API.
+ *
+ * Every call is an ephemeral project session; future project/package entry
+ * points reuse CompilerSession without changing this public contract.
+ */
+export function compile(source: string, options: CompileOptions = {}): CompileResult {
+  return createCompilerSession().compileText(source, options)
 }
 
 /**

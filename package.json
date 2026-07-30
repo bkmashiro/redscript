@@ -71,6 +71,7 @@
   "author": "bkmashiro",
   "dependencies": {
     "archiver": "^7.0.1",
+    "smol-toml": "^1.7.1",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"
   }
