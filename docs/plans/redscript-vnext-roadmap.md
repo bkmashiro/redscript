@@ -2,6 +2,8 @@
 
 > Source of truth for work after the 2026-06 release-readiness hardening pass. Keep implementation slices bounded, test-backed, and based on `main`.
 
+> Architecture continuation: project identity, directory packages, multi-target capability checking, command-sequence output, and general datapack resources are now designed in [`generic-datapack-language-roadmap.md`](generic-datapack-language-roadmap.md). That document is the source of truth for this new product track; this file remains the release/compiler-hardening baseline.
+
 ## Current baseline
 
 Verified on 2026-06-30:

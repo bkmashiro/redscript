@@ -1,262 +1,883 @@
-# RedScript as a General Datapack Language
+# RedScript Project, Package, and Multi-Target Implementation Plan
 
-> Status: active design and maintenance roadmap
-> Researched: 2026-07-30
-> Stable target baseline: Minecraft Java Edition 26.2 / Data Pack version 107.1
-> Preview watch target: 26.3 Snapshot 5 / Data Pack version 112.0
+> **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
 
-## Decision
+**Goal:** Evolve RedScript from a single-file-oriented datapack compiler into a Go-like project/package language with explicit build targets, static target-capability diagnostics, a useful command-sequence target, and a complete datapack artifact model.
 
-**Yes: RedScript can and should grow from an `.mcfunction` compiler into a general datapack development language.**
+**Architecture:** `redscript.toml` defines one module and one or more named build targets. Directories under the module form packages; package resolution produces one deterministic dependency graph shared by the CLI, compiler, and LSP. Source is checked once into target-neutral semantic IR plus resource artifacts, then a capability pass validates the reachable program against the selected target before target-specific lowering and emission.
 
-The correct extension is not to turn every JSON field into runtime language syntax. It is to make the compiler own a **versioned datapack artifact graph** that contains executable functions, JSON registry entries, tags, structure NBT, metadata, and copied assets. RedScript source can then provide progressively typed authoring surfaces over that graph.
+**Tech Stack:** TypeScript, Jest, RedScript AST/HIR/MIR/LIR pipeline, TOML project manifests, Minecraft Java datapack artifacts.
 
-This is a natural continuation of existing work:
+---
 
-- `ResourceDecl` and `Program.resourceDeclarations` already represent non-emitting registry IDs.
-- `resource<registry>` types, contextual `namespace:path` literals, declaration files, and LSP catalog hooks already exist.
-- the emitter already returns path/content `DatapackFile` artifacts and rejects conflicting generated paths;
-- `validateDatapackArtifact` already checks paths, pack metadata, function tags, and local function references.
+> Status: active source-of-truth roadmap
+> Designed: 2026-07-30
+> Stable game baseline: Minecraft Java Edition 26.2 / Data Pack version 107.1
+> Compatibility rule: existing single-file `redscript compile file.mcrs` remains supported
 
-The missing boundary is **resource definition + validation + emission**. Today `resource item create:glue;` declares an ID for tooling; it cannot define `data/<namespace>/<registry>/<path>.json`.
+## 1. Product decision
 
-## What a modern datapack contains
+RedScript needs a real project and package system **before** adding a large number of datapack resource syntaxes.
 
-Functions are only one resource kind. In the current stable game, datapacks can contain:
+The intended product is:
 
-- executable and binary assets: `function/*.mcfunction`, `structure/*.nbt`;
-- tags for functions and arbitrary registries;
-- reloadable JSON resources: advancements, recipes, loot tables, item modifiers, predicates;
-- data-driven gameplay registries: enchantments/providers, dialogs, damage types, instruments, jukebox songs, paintings, armor trims, trial spawners, mob/sound variants, world clocks/timelines, villager trades/trade sets, and the 26.2 sulfur cube archetype;
-- world/dimension registries: dimensions, dimension types, biomes, configured/placed features, carvers, density functions, noises, processors, structures, structure sets, template pools, and world presets.
-
-Some dynamic registries require reopening the world or restarting the server rather than `/reload`; the compiler must expose that lifecycle difference instead of treating every artifact as hot-reloadable.
-
-### Important recent changes
-
-#### 26.1 — Data Pack 101.1
-
-- introduced year-based game versions, which broke RedScript's old `1.x`-only version parser;
-- added data-driven world clocks and timeline clock/time-marker behavior;
-- made villager and wandering-trader trades data-driven (`villager_trade`, `trade_set`);
-- added data-driven sound variants for cats, pigs, cows, and chickens;
-- expanded environment attributes and tags.
-
-#### 26.2 — Data Pack 107.1 (latest stable at research time)
-
-- added `sulfur_cube_archetype` registry;
-- changed entity predicates to namespaced, component-like sub-predicates and now rejects unknown fields;
-- expanded world-generation codecs (new feature types, density function and placement behavior);
-- continued moving gameplay behavior from hard-coded logic into registries/components.
-
-#### 26.3 snapshots — Data Pack 108.0–112.0 (preview, not a stable target)
-
-The direction becomes even clearer:
-
-- pottery patterns become data-driven;
-- reusable `slot_source` resources are used by `/item` and `/execute`;
-- reusable `number_provider` resources are introduced;
-- material rules and material conditions become named worldgen registries;
-- in Snapshot 4, advancement/item-modifier/loot-table/number-provider/predicate/recipe/slot-source fields gain uniform inline-or-reference/tag composition;
-- Snapshot 5 allows mixing inline values and named references in element lists.
-
-This is effectively a **composable data DSL inside JSON**. RedScript can add substantial value through typed references, reusable declarations, schema/version diagnostics, navigation, and generated artifacts.
-
-## Product shape
-
-A RedScript project should support three authoring levels.
-
-### Level 1 — universal asset inclusion (complete coverage)
-
-```toml
-[assets]
-include = ["data/**", "structures/**"]
+```text
+RedScript module
+├── packages of executable and compile-time code
+├── typed references to Minecraft resources
+├── JSON/NBT/static resource inputs
+└── named build targets
+    ├── datapack       complete pack directory/zip
+    ├── function-set   embeddable function/resource fragment (later)
+    └── commands       finite ordered command sequence for command blocks/tools
 ```
 
-- copy JSON, NBT, and pack metadata overlays into the artifact graph;
-- normalize destinations under `data/<namespace>/...`;
-- detect collisions with generated functions/resources;
-- validate JSON syntax, namespace/path safety, target-version availability, and references where schemas are known.
+A target does not merely choose an output file extension. It defines which semantic capabilities exist. A source program may therefore be valid RedScript but invalid for a selected target.
 
-This level makes RedScript usable for every datapack kind without waiting for bespoke language syntax.
+Examples:
 
-### Level 2 — generic compile-time resources (recommended first language surface)
+- `resource recipe ...` is valid for `datapack`, unavailable for `commands`;
+- `@load` and `@tick` require datapack lifecycle tags;
+- runtime recursion and dynamic loops require generated helper functions or scheduling and cannot be promised by a finite command sequence;
+- imports, constants, structs, compile-time evaluation, and inlinable helpers are compile-time features and can be shared by all targets;
+- a dynamic `if` may still compile to commands when every reachable branch lowers to a finite command sequence;
+- unsupported semantics must fail during target validation with source locations and reasons. Emitters must never silently skip them.
 
-Extend the existing declaration without inventing a second concept:
+## 2. Terminology and ownership
 
-```mcrs
-resource recipe mypack:blue_torch from "assets/blue_torch.json";
-resource structure mypack:arena from "assets/arena.nbt";
-resource tags/item mypack:magic_materials from "assets/magic_materials.json";
+Do not reuse one word for three different identities.
+
+| Concept | Example | Owner | Purpose |
+| --- | --- | --- | --- |
+| **Module path** | `github.com/bkmashiro/castle` | `redscript.toml` | Project/dependency identity and import prefix |
+| **Package path** | `github.com/bkmashiro/castle/combat` | source directory | Code visibility, imports, compilation unit |
+| **Package name** | `combat` | `package combat;` | Local qualifier in source |
+| **Minecraft namespace** | `castle` | project/target config | Generated resource IDs and datapack paths |
+| **Build target** | `pack`, `admin_commands` | `redscript.toml` | Entry point, capability profile, output kind |
+| **Minecraft target version** | `26.2` | project default or target override | Command/resource schema and pack version |
+
+### 2.1 Module
+
+A module is the versioned project/dependency unit rooted at the nearest `redscript.toml`.
+
+V1 invariants:
+
+1. one manifest owns one module path;
+2. every package in that module has an import path derived from module path + relative directory;
+3. the module has one default Minecraft namespace, but a target may explicitly override it;
+4. module path and Minecraft namespace are never inferred from each other;
+5. nested `redscript.toml` files form separate modules and stop parent package discovery;
+6. source outside the module root cannot be imported except through a declared dependency;
+7. one module can build multiple targets without recompiling unrelated target roots.
+
+### 2.2 Package
+
+A package is a directory-level compilation unit, similar to Go.
+
+V1 invariants:
+
+1. all non-test `.mcrs` files in one directory declare the same `package <name>;`;
+2. package name defaults are not inferred in strict project mode;
+3. symbols in all files of a package share one package scope;
+4. `export` remains the visibility marker—RedScript will **not** copy Go's capitalization rule;
+5. imported packages are qualified by default; wildcard imports remain legacy-only and produce a migration warning in project mode;
+6. package import cycles are rejected with the full cycle path;
+7. package initialization has no implicit side effects;
+8. lifecycle participation remains explicit through target roots and decorators such as `@load`/`@tick`;
+9. files are parsed separately and retain source provenance; they are never concatenated into a synthetic source file;
+10. resources declared by a package belong to that package's artifact contribution, not to a global mutable catalog.
+
+Keeping explicit `export` preserves current RedScript syntax and avoids a source-breaking capitalization convention.
+
+### 2.3 Project versus workspace
+
+V1 implements one module/project. A later `redscript.work` may join multiple local modules for development, but it is not required to ship the package compiler.
+
+A workspace must never change published module identity or dependency resolution. It only replaces selected module paths with local roots.
+
+## 3. Proposed project layout
+
+```text
+castle/
+├── redscript.toml
+├── redscript.lock                 # introduced with remote dependencies
+├── cmd/
+│   ├── pack/
+│   │   └── main.mcrs              # package pack; exported target entry
+│   └── admin/
+│       └── main.mcrs              # package admin; command-sequence entry
+├── combat/
+│   ├── combat.mcrs                # package combat
+│   └── damage.mcrs                # package combat
+├── world/
+│   └── generation.mcrs            # package world
+├── assets/
+│   ├── recipes/
+│   └── structures/
+└── tests/
 ```
 
-Semantics:
+`cmd/` is a recommended convention, not a compiler special case. Target entries are explicit in the manifest.
 
-- `resource <kind> <id>;` remains declaration-only and emits nothing;
-- adding `from "..."` defines an artifact;
-- JSON/NBT is compile-time input, never lowered through HIR/MIR/LIR;
-- resource references become available to typecheck/LSP;
-- the destination is derived from a versioned registry descriptor, not string concatenation spread across emitters.
-
-A later inline form can be added only after the artifact graph is stable:
+Example source:
 
 ```mcrs
-resource recipe mypack:blue_torch = json {
-  "type": "minecraft:crafting_shaped",
-  "pattern": [" T ", " S "],
-  "key": { "T": "minecraft:soul_torch", "S": "minecraft:stick" },
-  "result": { "id": "minecraft:torch", "count": 4 }
-};
-```
+// combat/combat.mcrs
+package combat;
 
-Start with strict JSON rather than a custom object grammar. Editor schema support gives most of the value without coupling runtime expressions to data codecs.
-
-### Level 3 — typed builders and sugar (selective)
-
-Only high-frequency resources deserve dedicated syntax/builders:
-
-```mcrs
-recipe shaped mypack:blue_torch {
-  pattern [" T ", " S "]
-  key T = minecraft:soul_torch
-  key S = minecraft:stick
-  result minecraft:torch * 4
+export fn start_round(): void {
+  say("Fight!");
 }
 ```
 
-Initial candidates: tags, recipes, advancements, predicates, loot tables, item modifiers. Worldgen should stay on Level 1/2 until schemas and cross-registry references are robust; it changes quickly and has restart/experimental boundaries.
+```mcrs
+// cmd/pack/main.mcrs
+package pack;
 
-## Architecture
+import "github.com/bkmashiro/castle/combat" as combat;
 
-```text
-.mcrs functions ───────────────→ HIR → MIR → LIR → function artifacts
-resource ... from ... ─────────→ resource loader ─→ JSON/NBT artifacts
-project asset includes ────────→ asset loader ─────→ copied artifacts
-                                                    │
-all producers ──────────────────────────────────────┤
-                                                    ▼
-                                   DatapackArtifactGraph
-                                   - path / kind / id
-                                   - content / provenance
-                                   - target-version range
-                                   - reload lifecycle
-                                   - typed references
-                                                    │
-                         ┌──────────────────────────┼──────────────────────┐
-                         ▼                          ▼                      ▼
-                  collision merge            validators             zip/directory emit
-                  tag merge policy       syntax/schema/ref/version
+@load
+export fn main(): void {
+  combat::start_round();
+}
 ```
 
-### Required invariants
+The precise package-import parser syntax is a P2 RED-test decision. The semantic contract is fixed now: canonical module/package path, explicit optional alias, qualified access, and no filesystem-relative imports in public package APIs.
 
-1. One canonical path resolver for every registry and target version.
-2. Duplicate path + different content is an error; identical content may deduplicate.
-3. Tags use explicit merge/replace semantics, not last-writer accidents.
-4. Source provenance survives into diagnostics: declaration/file/JSON pointer.
-5. Schemas are target-versioned. Unknown open registry IDs remain allowed; unknown fields in codecs that reject them are errors.
-6. Stable and snapshot schemas are separate channels. Do not silently compile 26.3 syntax for a 26.2 target.
-7. JSON resources bypass runtime IR. HIR/MIR/LIR remain for executable behavior.
-8. Resource references and declaration-only IDs share the existing `resource<registry>` type/catalog model.
+## 4. Manifest contract
 
-## Current gaps found in the repository
+The existing `redscript.toml` loader is only a minimal hand-written subset. It silently ignores unknown sections and cannot safely represent target tables or structured dependencies. Before extending the schema, replace it with a real TOML 1.0 parser and strict typed validation.
 
-| Area | Current state | Gap |
-| --- | --- | --- |
-| MC target versions | enum ends at `1.21.4`; parser rejected non-`1.x` | 26.1/26.2 support and exact data pack versions needed |
-| Pack format | `1.21.4` incorrectly mapped to `48` | should be `61`; 26.1=`101.1`, 26.2=`107.1` |
-| Registry declarations | typed, documented, LSP-aware, non-emitting | cannot carry a definition/source artifact |
-| Registry catalog | six tiny hard-coded ID lists | needs generated/versioned catalogs plus package extension loading |
-| Artifact model | flat `{path, content}` files | lacks kind/id/provenance/version/lifecycle/reference metadata |
-| Artifact validator | paths, `pack.mcmeta`, function refs/tags | no general JSON parse/schema/reference/collision report |
-| Project config | source/compiler/output only | no asset roots/includes, schema channel, or overlay policy |
-| Testing | strong function/static/live layers | needs generated resource-tree goldens and a real `/reload`/restart oracle split |
+Proposed manifest:
 
-## Delivery roadmap
+```toml
+[project]
+name = "castle"
+module = "github.com/bkmashiro/castle"
+namespace = "castle"
+mc-version = "26.2"
+description = "Castle gameplay datapack"
+source-roots = ["."]
 
-### P0 — current-version maintenance
+[target.pack]
+kind = "datapack"
+entry = "github.com/bkmashiro/castle/cmd/pack::main"
+out = "dist/castle"
+default = true
 
-- [x] accept year-based `26.1`, `26.1.2`, and `26.2` target strings;
-- [x] map `1.21.4` to Data Pack 61, `26.1` to 101.1, and `26.2` to 107.1;
-- [x] add CLI argument + full compile smoke proving target `26.2` emits `pack_format: 107.1`;
-- [ ] audit generated commands against 26.2 command changes before making 26.2 the default;
-- [ ] keep default target unchanged until static and real-server validation pass.
+[target.admin]
+kind = "commands"
+entry = "github.com/bkmashiro/castle/cmd/admin::main"
+out = "dist/admin.commands.json"
 
-### P1 — artifact graph and external assets
+[assets]
+roots = ["assets"]
+include = ["**/*.json", "**/*.nbt"]
 
-- introduce `DatapackArtifact` metadata while preserving `DatapackFile` compatibility at the public boundary;
-- centralize registry-to-path descriptors;
-- add configured asset roots/includes and safe path resolution;
-- merge function/tag/resource/copied outputs through one collision gate;
-- golden-test JSON, NBT, tag, duplicate, traversal, and deterministic zip cases.
+[dependencies]
+# P2: local dependencies first; remote/versioned dependencies arrive in P6.
+common = { path = "../common" }
 
-Acceptance: a mixed project with `.mcrs`, recipe JSON, item tag JSON, and structure NBT builds one deterministic datapack and reports source paths on collisions.
+[compiler]
+optimization = 2
+no-dce = false
+```
 
-### P2 — `resource ... from ...`
+### 4.1 Strictness
 
-- extend `ResourceDecl` with optional source/format/definition metadata;
-- parse declaration-only and defining forms without changing existing syntax;
-- resolve source paths relative to the declaring file/project root;
-- emit through the artifact graph;
-- add completion/go-to-definition between resource IDs and source files.
+Manifest loading must:
 
-Acceptance: declaration-only resources emit nothing; defining resources emit exactly one correctly located artifact; package declarations remain non-emitting.
+- report malformed TOML with file/line/column;
+- reject unknown keys by default and offer nearest-key suggestions;
+- resolve all paths relative to the manifest root, never process cwd;
+- normalize and contain-check source, dependency, asset, and output paths;
+- reject duplicate target names and multiple defaults;
+- reject target entry paths outside the project/dependency graph;
+- validate Minecraft version before source compilation;
+- return a `LoadedProject` containing `manifestPath` and `rootDir`, not just detached values;
+- allow CLI flags to override only documented target settings, with the final resolved config inspectable through `redscript project` or `redscript build --explain`.
 
-### P3 — schema and reference validation
+### 4.2 Compatibility mode
 
-- maintain stable schema bundles by Data Pack version, generated where possible from Mojang reports/community machine-readable schemas and pinned in-repo with provenance;
-- validate JSON with file + JSON-pointer diagnostics;
-- extract typed references into the artifact graph;
-- report missing local refs, target-version-only fields, and restart-required registries;
-- allow unknown external/modded IDs unless a closed codec field is being validated.
+`redscript compile path/file.mcrs` without a manifest remains valid. The CLI creates an in-memory ephemeral project:
 
-Acceptance: malformed recipe/predicate/loot resources fail before packaging; valid cross-resource references support rename/navigation.
+```text
+module path       = local/<derived-name>
+package           = legacy
+namespace         = --namespace or filename
+selected target   = implicit datapack
+entry              = supplied file
+```
 
-### P4 — high-value typed builders
+Legacy file-string imports and `module library;` continue through an adapter. New project builds must not use source concatenation.
 
-Order: tags → recipes → advancements → predicates → loot tables/item modifiers. Keep strict JSON/from-file as the escape hatch. Do not start with worldgen sugar.
+## 5. Package and dependency resolution
 
-### P5 — stable Minecraft oracle
+Resolution is deterministic and shared by CLI, compiler API, tests, and LSP.
 
-- install mixed datapacks into a real 26.2 server;
-- distinguish `/reload` resources from restart-only dynamic registries;
-- assert load success and one deterministic recipe/tag/advancement/loot behavior each;
-- keep 26.3 snapshot probes informational and isolated from release gates.
+### 5.1 Resolution order
 
-## Non-goals
+For import path `github.com/bkmashiro/castle/combat`:
 
-- no compiler rewrite;
-- no attempt to represent arbitrary JSON as runtime RedScript values;
-- no closed enum of all Minecraft/modded registries;
-- no bespoke syntax for every registry;
-- no claim that static schema validation equals successful Minecraft load;
-- no default switch to 26.2 before generated command and real-server gates exist;
-- no resource-pack language in this tranche (shared artifact ideas may be reused later).
+1. if it equals the current module path or has that prefix, resolve inside the current module root;
+2. otherwise resolve the longest matching declared dependency module path;
+3. resolve RedScript stdlib through an explicit reserved module identity, not an ambient include directory;
+4. reject undeclared absolute package paths;
+5. relative file imports are compatibility-only and never cross module roots.
 
-## Recommended next implementation slice
+There is no `NODE_PATH`-style ambient global search in project mode.
 
-Implement **P1's minimal artifact graph + external JSON/NBT inclusion**, then P2's `resource ... from ...`. This closes a real end-to-end loop and immediately makes RedScript a general datapack project tool, while preserving the existing command language and leaving schema sophistication incremental.
+### 5.2 Package graph
 
-## Sources
+The loader produces:
 
-Primary release notes:
+```ts
+interface PackageId {
+  modulePath: string
+  packagePath: string
+}
 
-- Minecraft Java Edition 26.1: <https://www.minecraft.net/en-us/article/minecraft-java-edition-26-1>
-- Minecraft Java Edition 26.2: <https://www.minecraft.net/en-us/article/minecraft-java-edition-26-2>
-- Minecraft 26.3 Snapshot 1: <https://www.minecraft.net/en-us/article/minecraft-26-3-snapshot-1>
-- Minecraft 26.3 Snapshot 4: <https://www.minecraft.net/en-us/article/minecraft-26-3-snapshot-4>
-- Minecraft 26.3 Snapshot 5: <https://www.minecraft.net/en-us/article/minecraft-26-3-snapshot-5>
+interface LoadedPackage {
+  id: PackageId
+  name: string
+  dir: string
+  sourceFiles: SourceFile[]
+  imports: PackageId[]
+}
 
-Structural/reference sources:
+interface PackageGraph {
+  rootPackages: PackageId[]
+  packages: Map<string, LoadedPackage>
+  topologicalOrder: PackageId[]
+}
+```
 
-- Data pack contents and folder structure: <https://minecraft.wiki/w/Data_pack>
-- Data/resource pack version table: <https://minecraft.wiki/w/Pack_format>
+The graph key is canonical package path, not package name. Two dependencies may both contain a package named `util` without collision.
 
-Repository evidence:
+### 5.3 Visibility and symbol identity
 
-- `src/ast/types.ts` (`ResourceDecl`, `Program.resourceDeclarations`)
-- `src/parser/decl-parser.ts` (`parseResourceDecl`)
-- `src/resources/catalog.ts`
-- `src/emit/index.ts` (`DatapackFile`, duplicate path check)
-- `src/testing/datapack-artifact-validator.ts`
-- `docs/plans/mc-mechanism-optimization/37-registry-resource-and-declaration-surface.md`
+Resolved symbols use stable semantic IDs:
+
+```text
+<module-path>/<package-relative-path>::<symbol>
+```
+
+Minecraft function paths are derived later by the selected target; compiler symbol identity must not be a Minecraft resource path.
+
+This fixes a current architectural leak in `compileModules()`, where module names are directly prefixed onto emitted function names and scoreboard objectives.
+
+### 5.4 Dependency phases
+
+- **P2:** packages inside one module;
+- **P3:** local path dependencies with root containment and module identity checks;
+- **P6:** immutable remote dependencies, semantic versions, content hashes, and `redscript.lock`;
+- no central registry is required for the first usable project/package release.
+
+## 6. Build target model
+
+A build target consists of:
+
+```ts
+type TargetKind = 'datapack' | 'commands' | 'function-set'
+
+interface BuildTarget {
+  name: string
+  kind: TargetKind
+  entry: SymbolId
+  minecraftVersion: McVersion
+  namespace: string
+  output: string
+  profile: TargetProfile
+}
+```
+
+Only `datapack` and `commands` are required for the first release. `function-set` remains designed but disabled until embedding semantics are proven.
+
+### 6.1 Datapack target
+
+Outputs a complete pack directory or zip:
+
+- `pack.mcmeta`;
+- generated `.mcfunction` files;
+- load/tick/function tags;
+- generated and copied JSON resources;
+- structure NBT;
+- optional overlays and metadata supported by the selected MC version.
+
+It supports helper functions, scheduling, macros, persistent scoreboards/storage, lifecycle decorators, and arbitrary datapack resources subject to Minecraft-version validation.
+
+### 6.2 Commands target
+
+Outputs a finite, ordered command program intended for command blocks, server consoles, installers, or other tools.
+
+Initial output contract:
+
+```json
+{
+  "schema": 1,
+  "minecraftVersion": "26.2",
+  "entry": "...::main",
+  "setup": ["scoreboard objectives add ..."],
+  "commands": [
+    { "command": "...", "phase": "invoke", "source": { "file": "...", "line": 12 } }
+  ],
+  "cleanup": ["scoreboard objectives remove ..."]
+}
+```
+
+A sibling `.mccommands` text projection may be generated for copy/paste, but JSON is canonical because command-block tooling needs ordering, source provenance, and setup/cleanup separation.
+
+V1 `commands` constraints:
+
+- output must be finite at compile time;
+- no generated `.mcfunction` calls may remain;
+- no datapack tags, JSON resources, NBT files, or `pack.mcmeta`;
+- helper calls must be safely inlined;
+- recursive call graphs are rejected;
+- constant-bounded loops may unroll within a configured command budget;
+- runtime loops, timers, scheduling, coroutines, and lifecycle decorators are rejected;
+- scoreboard/storage operations may be used only when their setup and cleanup requirements are representable in the manifest;
+- a target command budget defaults to a conservative finite limit and reports expansion provenance when exceeded;
+- command ordering is semantic and cannot be changed by optimizers unless dependency/effect analysis proves it safe.
+
+This target does **not** initially promise to generate a physical command-block structure, falling-block contraption, or “one command” installer. Those are possible future output adapters over the canonical command manifest, not compiler semantics.
+
+### 6.3 Future strict single-command profile
+
+A future `single-command` profile can require exactly one emitted Minecraft command and zero setup/cleanup. It should reuse the same capability checker rather than introduce syntax-specific special cases.
+
+## 7. Capability system
+
+Target compatibility must not be implemented as a growing list of AST-node checks inside each emitter.
+
+### 7.1 Capability vocabulary
+
+Start with a small semantic vocabulary:
+
+```ts
+type Capability =
+  | 'artifact.pack-metadata'
+  | 'artifact.function-files'
+  | 'artifact.json-resources'
+  | 'artifact.nbt-resources'
+  | 'lifecycle.load'
+  | 'lifecycle.tick'
+  | 'execution.multiple-commands'
+  | 'execution.helper-functions'
+  | 'execution.recursion'
+  | 'execution.schedule'
+  | 'execution.macros'
+  | 'state.scoreboard'
+  | 'state.storage'
+```
+
+Do not encode every language syntax as a capability. Capabilities describe required runtime/artifact mechanisms.
+
+### 7.2 Requirements and reachability
+
+Every target-relevant semantic item contributes requirements:
+
+```ts
+interface CapabilityRequirement {
+  capability: Capability
+  reason: string
+  source: SourceSpan
+  owner: SymbolId | ResourceId
+}
+```
+
+Requirements are inferred from:
+
+- decorators and lifecycle registrations;
+- HIR/MIR operations and stdlib intrinsics;
+- runtime call graph, including transitive calls;
+- resource definitions and copied assets;
+- lowering decisions such as non-inlined helper functions;
+- Minecraft version gates.
+
+Validation applies to the selected target's reachable closure, not every unused function in every dependency. Parse/type errors still apply to all loaded source files in the package, while target capability errors apply only to target-reachable executable symbols and explicitly selected resources.
+
+### 7.3 Capability profiles
+
+| Capability | `datapack` | `commands` V1 | Notes |
+| --- | :---: | :---: | --- |
+| pack metadata | ✓ | ✗ | command output is not a pack |
+| function files/helper calls | ✓ | ✗ | commands target must inline |
+| JSON/NBT resources | ✓ | ✗ | no datapack filesystem |
+| load/tick lifecycle | ✓ | ✗ | no function tags |
+| finite multiple commands | ✓ | ✓ | commands output is ordered |
+| recursion | ✓* | ✗ | datapack still subject to MC limits |
+| schedule/timers/coroutines | ✓ | ✗ | requires persistent function entrypoints |
+| macros | ✓ | only if fully expanded | no residual function macro calls |
+| scoreboard | ✓ | ✓ with setup contract | setup appears separately |
+| storage | ✓ | ✓ with setup/cleanup contract | only finite direct operations |
+
+### 7.4 Language compatibility examples
+
+| Feature | Datapack | Commands | Rule |
+| --- | :---: | :---: | --- |
+| package/import/export | ✓ | ✓ | compile-time only |
+| structs/enums/const evaluation | ✓ | ✓ | if lowering remains finite |
+| raw Minecraft command | ✓ | ✓ | version validator still applies |
+| ordinary helper function | ✓ | conditional | inline entire reachable body |
+| dynamic `if`/`match` | ✓ | conditional | each branch must lower to finite commands |
+| constant-bounded loop | ✓ | conditional | unroll under budget |
+| runtime `while` or recursive loop | ✓ | ✗ | requires re-entry/helper function |
+| `@load`, `@tick`, `@on` | ✓ | ✗ | lifecycle unavailable |
+| `@watch`, `@retry`, `@memoize` | ✓ | usually ✗ | persistent runtime/helper requirements |
+| timers, scheduler, coroutine | ✓ | ✗ | schedule/helper entrypoints required |
+| resource definition | ✓ | ✗ | requires datapack artifact |
+| declaration-only resource ID | ✓ | ✓ | compile-time typing only |
+
+“Conditional” must be decided from semantic requirements after optimization/inlining analysis—not from surface syntax alone.
+
+### 7.5 Diagnostics
+
+Example:
+
+```text
+error[RST2003]: target 'admin' (commands) cannot provide lifecycle.tick
+  --> cmd/admin/main.mcrs:8:1
+   |
+ 8 | @tick(rate=20)
+   | ^^^^^^^^^^^^^^ requires a datapack tick function tag
+   |
+   = required by: admin::heartbeat
+   = target allows: finite ordered commands, scoreboard setup, storage setup
+   = fix: build target 'pack', or expose heartbeat as an explicitly invoked function
+```
+
+Diagnostics must include:
+
+- target name and kind;
+- missing capability;
+- original source span;
+- shortest requirement/call chain from entry;
+- whether the issue came from syntax, imported code, stdlib intrinsic, resource, or backend lowering;
+- actionable alternatives when known.
+
+`--lenient` must never turn target incompatibility into emitted partial output.
+
+## 8. Compiler architecture
+
+```text
+redscript.toml
+      │
+      ▼
+Project discovery + strict manifest validation
+      │
+      ▼
+Package loader ──→ canonical package graph ──→ symbol resolver
+      │                                         │
+      ├── source files ─→ AST/package scopes ─→ HIR/MIR
+      └── assets/resources ───────────────────→ Artifact Graph
+                                                │
+entry + reachability ─→ Capability Requirements │
+                    └─→ Target Validator ────────┤
+                                                │
+                    ┌───────────────────────────┴────────────────────┐
+                    ▼                                                ▼
+          Datapack backend                                Commands backend
+   LIR + resource artifact merge                    inline/flatten + effect order
+                    │                                                │
+       directory/zip + manifest                       commands JSON/text manifest
+```
+
+### 8.1 Required boundaries
+
+Create project-owned types rather than expanding `CompileOptions` indefinitely:
+
+- `src/project/model.ts` — loaded project/module/package/target identities;
+- `src/project/manifest.ts` — TOML parsing and typed validation;
+- `src/project/discovery.ts` — nearest-root and nested-module boundaries;
+- `src/project/package-loader.ts` — directory package compilation units;
+- `src/project/package-graph.ts` — import resolution/cycle diagnostics;
+- `src/project/build.ts` — build orchestration;
+- `src/targets/model.ts` — target kinds and profiles;
+- `src/targets/capabilities.ts` — capability vocabulary and inference;
+- `src/targets/validate.ts` — reachable requirement checking;
+- `src/targets/datapack.ts` — adapter over current backend;
+- `src/targets/commands.ts` — finite command backend;
+- `src/artifacts/model.ts` — typed artifact graph and provenance.
+
+Existing boundaries remain as compatibility adapters:
+
+- `compile(source, options)` builds an ephemeral one-file project;
+- `compileModules()` is deprecated only after package-graph parity tests pass;
+- `DatapackFile[]` remains a public projection of typed artifacts during migration;
+- the current file import preprocessor remains legacy-only and must not be reused by package builds.
+
+### 8.2 No premature shared IR rewrite
+
+Do not replace HIR/MIR/LIR merely to add targets. First add:
+
+1. package-aware semantic identity;
+2. capability/effect summaries;
+3. a target-specific lowering boundary;
+4. commands backend spike over the existing reachable HIR/MIR subset.
+
+If flattening LIR loses information needed for safe command sequencing, the commands backend may branch from MIR. That decision requires a bounded spike and golden evidence; it is not assumed in advance.
+
+## 9. CLI contract
+
+```text
+redscript init <name>                   create project manifest and package
+redscript project                       print resolved root/module/packages/targets
+redscript check [./...]                 parse/typecheck all selected packages
+redscript check --target admin          include target-capability validation
+redscript build                         build default target
+redscript build --target pack           build one named target
+redscript build --all-targets            build all targets independently
+redscript graph --packages              print package dependency graph
+redscript graph --capabilities --target admin
+redscript compile file.mcrs             legacy ephemeral-project flow
+```
+
+Rules:
+
+- `build` is project/target-oriented;
+- `compile` remains the direct file compatibility command;
+- target selection is explicit when no default exists;
+- building all targets returns independent diagnostics and never allows one target's artifacts to leak into another;
+- `check --target` runs the same target validator as `build` without emission;
+- `project`/`graph` output supports machine-readable JSON for LSP and CI.
+
+## 10. Delivery roadmap
+
+### P0 — architecture contract and executable fixtures
+
+**Objective:** Freeze project/package/target semantics before changing parser or compiler behavior.
+
+**Files:**
+
+- Modify: `docs/plans/generic-datapack-language-roadmap.md`
+- Create: `src/__tests__/fixtures/projects/` fixture tree
+- Create: `src/__tests__/project/roadmap-contract.test.ts`
+
+**Slices:**
+
+- [x] define module/package/namespace/target terminology;
+- [x] define manifest schema and backward-compatibility behavior;
+- [x] define `datapack` and `commands` semantics;
+- [x] define initial capability vocabulary and matrix;
+- [x] define phased implementation order and gates;
+- [ ] encode fixture layouts for one valid project, package cycle, package-name mismatch, and dual-target project;
+- [ ] add contract tests that pin paths and expected diagnostic codes before implementation.
+
+**Gate:** document readback, `git diff --check`; fixture tests intentionally RED only when P1 begins.
+
+### P1 — strict project model and manifest loader
+
+**Objective:** Make `redscript.toml` a trustworthy project root and target source of truth.
+
+**Files:**
+
+- Create: `src/project/model.ts`
+- Create: `src/project/manifest.ts`
+- Create: `src/project/discovery.ts`
+- Modify: `src/config/project-config.ts` into a compatibility adapter
+- Modify: `src/cli.ts`
+- Test: `src/__tests__/project/manifest.test.ts`
+- Test: `src/__tests__/project/discovery.test.ts`
+
+**RED/GREEN slices:**
+
+1. discover nearest manifest and return root/manifest paths;
+2. stop discovery at nested module roots;
+3. parse a valid project and named target;
+4. reject malformed and unknown manifest keys with locations;
+5. resolve paths relative to project root;
+6. reject output/source path escape;
+7. resolve default target and CLI override precedence;
+8. expose `redscript project --format json`;
+9. preserve old `loadProjectConfig()` behavior through an adapter.
+
+**Acceptance:** a manifest can define two targets and `redscript project` reports the same resolved model regardless of cwd.
+
+**Gate:**
+
+```bash
+npm test -- --selectProjects unit --runTestsByPath \
+  src/__tests__/project/manifest.test.ts \
+  src/__tests__/project/discovery.test.ts \
+  src/__tests__/config/project-config.test.ts --runInBand
+npm run build
+git diff --check
+```
+
+### P2 — first-class packages inside one module
+
+**Objective:** Compile directory packages without file concatenation or globally keyed module names.
+
+**Files:**
+
+- Modify: `src/ast/types.ts` for package declaration/qualified identity
+- Modify: `src/parser/decl-parser.ts`
+- Create: `src/project/package-loader.ts`
+- Create: `src/project/package-graph.ts`
+- Create: `src/resolver/package-symbols.ts`
+- Modify: `src/hir/types.ts` and `src/hir/lower.ts` to carry package-aware IDs
+- Test: `src/__tests__/project/package-loader.test.ts`
+- Test: `src/__tests__/project/package-resolution.test.ts`
+- Test: `src/__tests__/project/package-cycle.test.ts`
+
+**RED/GREEN slices:**
+
+1. parse `package <name>;` in project mode;
+2. group multiple source files into one package scope;
+3. reject mixed package names in one directory;
+4. derive canonical package path from module path + directory;
+5. parse canonical qualified package import and optional alias;
+6. resolve exported qualified symbols;
+7. allow equal package names under different module paths;
+8. reject package cycles with complete cycle diagnostics;
+9. topologically order packages deterministically;
+10. preserve original file/span diagnostics;
+11. adapt one project package graph into the current backend;
+12. keep legacy `module` and file imports green outside strict project mode.
+
+**Acceptance:** `cmd/pack` imports `combat`, where two files jointly define package `combat`, and the emitted datapack contains stable package-qualified function paths without source concatenation.
+
+**Gate:** focused project/package tests, existing module/import tests, build, and static Minecraft validation.
+
+### P3 — local module dependencies
+
+**Objective:** Resolve explicitly declared local modules without ambient include paths.
+
+**Files:**
+
+- Modify: `src/project/model.ts`
+- Modify: `src/project/manifest.ts`
+- Modify: `src/project/package-graph.ts`
+- Test: `src/__tests__/project/local-dependencies.test.ts`
+
+**Slices:**
+
+1. parse `{ path = "..." }` dependency entries;
+2. load and validate dependency module identity;
+3. longest-prefix import resolution;
+4. reject undeclared cross-module imports;
+5. reject mismatched declared module path;
+6. detect cycles across local modules;
+7. prevent source/output path escape and symlink traversal;
+8. include dependency source hashes in incremental cache keys.
+
+**Acceptance:** a project imports one local shared module reproducibly from any cwd; undeclared sibling imports fail.
+
+### P4 — target model and capability validation
+
+**Objective:** Make target incompatibility a first-class semantic diagnostic before adding a second emitter.
+
+**Files:**
+
+- Create: `src/targets/model.ts`
+- Create: `src/targets/capabilities.ts`
+- Create: `src/targets/reachability.ts`
+- Create: `src/targets/validate.ts`
+- Modify: decorators/intrinsics/resource semantic metadata at their canonical registries
+- Modify: `src/diagnostics.ts` for stable `RST2xxx` target codes
+- Test: `src/__tests__/targets/capability-inference.test.ts`
+- Test: `src/__tests__/targets/validation.test.ts`
+
+**RED/GREEN slices:**
+
+1. define `datapack` and `commands` profiles;
+2. compute reachable function graph from target entry;
+3. infer direct decorator and resource requirements;
+4. propagate requirements transitively through calls;
+5. infer helper-function/schedule/state requirements from semantic IR;
+6. allow unreachable target-incompatible helpers;
+7. reject reachable target-incompatible helpers with shortest call chain;
+8. reject resource/lifecycle use for commands target;
+9. prove `--lenient` remains fail-closed;
+10. add `redscript graph --capabilities --target <name>`.
+
+**Acceptance:** the same project passes a datapack target and fails a commands target at `@tick`, before emit, with stable diagnostics.
+
+### P5 — commands backend
+
+**Objective:** Emit a finite canonical command manifest for the target-compatible subset.
+
+**Files:**
+
+- Create: `src/targets/commands.ts`
+- Create: `src/artifacts/command-manifest.ts`
+- Modify: optimizer pass manager to expose commands-safe profile
+- Modify: `src/project/build.ts`
+- Test: `src/__tests__/targets/commands-emit.test.ts`
+- Test: `src/__tests__/e2e/project-multi-target.test.ts`
+
+**RED/GREEN slices:**
+
+1. emit one raw command with source provenance;
+2. emit ordered finite command sequence;
+3. separate setup/invoke/cleanup phases;
+4. inline acyclic helper calls;
+5. lower finite dynamic branch commands without helper files;
+6. unroll constant loops under budget;
+7. reject recursion and residual function calls;
+8. preserve effect ordering across optimization;
+9. enforce command-count budget with expansion trace;
+10. emit canonical JSON plus text projection;
+11. compile one source project independently to datapack and commands outputs;
+12. static-validate every generated command against selected MC version.
+
+**Acceptance:** an admin utility project builds a datapack target and a no-datapack finite command sequence; the latter contains no `function <namespace>:...` calls and no pack artifacts.
+
+**Gate:** focused commands tests, project E2E, build, `npm run validate-mc`, artifact readback.
+
+### P6 — versioned remote dependencies and lockfile
+
+**Objective:** Make package reuse reproducible without hiding network or mutable-version behavior.
+
+- define immutable module source/version identities;
+- resolve semantic version constraints explicitly;
+- write `redscript.lock` with source URL, resolved revision/version, and content hash;
+- build offline from a warm cache;
+- require opt-in network resolution and bounded downloads;
+- reject changed content for a locked identity;
+- expose dependency licenses/provenance;
+- keep local workspace replacement in future `redscript.work`, not in lockfile identity.
+
+A central package registry is out of scope until Git/source dependencies and lockfile semantics are proven.
+
+### P7 — typed datapack artifact graph and universal resources
+
+**Objective:** After projects and targets exist, extend the datapack target beyond commands.
+
+- introduce typed `DatapackArtifact` while preserving `DatapackFile` projection;
+- load configured JSON/NBT assets through package/project provenance;
+- centralize versioned registry-to-path descriptors;
+- extend `resource <kind> <id> from "...";`;
+- validate path collisions, JSON syntax, known schemas, references, and lifecycle;
+- support deterministic directory and zip outputs;
+- reject all emitting resources under commands targets through P4 capabilities.
+
+Acceptance: a mixed project builds `.mcfunction`, recipe JSON, item tag JSON, and structure NBT into one deterministic 26.2 datapack.
+
+### P8 — selective typed resource builders
+
+Order:
+
+1. tags;
+2. recipes;
+3. advancements;
+4. predicates;
+5. loot tables/item modifiers;
+6. worldgen only after schema/reference and live-server gates are mature.
+
+Strict JSON/from-file remains the permanent escape hatch for new Minecraft/modded registries.
+
+### P9 — real Minecraft and release gates
+
+- test datapack target reload/load behavior on a real compatible Paper/vanilla oracle;
+- distinguish `/reload` resources from restart/world-reopen registries;
+- test commands output by executing the canonical sequence in a controlled server fixture;
+- never describe static command validation as live Minecraft proof;
+- retain stable and snapshot schema channels separately;
+- switch the default MC version only after command audit and live gates pass.
+
+## 11. Cross-phase gates
+
+Every implementation slice must preserve:
+
+```bash
+npm run build
+npm test -- --selectProjects unit --runInBand
+npm run validate-mc
+git diff --check
+```
+
+Use focused tests while iterating; run the broad unit/static gate at coherent tranche boundaries, not after each tiny edit.
+
+Additional package/target invariants:
+
+- same source + manifest + lockfile produces byte-identical artifacts;
+- cwd does not affect project resolution or output;
+- target A cannot leak files/config into target B;
+- package cycle/order diagnostics are deterministic;
+- target validation happens before output directory mutation;
+- a failed build leaves no partial output (stage then atomic replace);
+- source spans survive package resolution, inlining, and target diagnostics;
+- single-file legacy compile stays covered until a separately announced major-version migration.
+
+## 12. Migration strategy
+
+### Existing single-file users
+
+No immediate source changes. `compile()` and `redscript compile file.mcrs` retain behavior through an ephemeral project adapter.
+
+### Existing `module` users
+
+Provide a migration diagnostic and formatter-assisted rewrite:
+
+```mcrs
+module combat;
+```
+
+becomes a directory package:
+
+```mcrs
+package combat;
+```
+
+Existing `compileModules()` remains API-compatible until package-build parity exists. It is not extended with new target semantics.
+
+### Existing file imports
+
+Private relative file imports continue in compatibility mode. Project mode recommends package imports and warns on imports that expose filesystem layout as public API.
+
+### Existing project config
+
+Old `[project] namespace/mc-version`, `[compiler]`, and `[output]` values map into one implicit `datapack` target. `redscript project --explain` shows this conversion. A future formatter can write the explicit target table.
+
+## 13. Explicit non-goals
+
+- no compiler rewrite solely to add packages;
+- no Go capitalization-based visibility;
+- no implicit package initialization;
+- no ambient global include search in project mode;
+- no command-block physical-layout generator in the first commands backend;
+- no claim that every language feature can compile to every target;
+- no silent target downgrade, resource omission, helper omission, or partial output;
+- no custom syntax for every Minecraft JSON schema;
+- no central package registry before lockfile/source dependency semantics;
+- no snapshot Minecraft feature accepted by a stable target;
+- no default switch to 26.2 before generated command and real-server validation.
+
+## 14. Immediate next implementation slice
+
+Begin with **P1 strict project model**, not resource emission and not the commands backend.
+
+The first coherent slice is:
+
+1. introduce `LoadedProject`, `ProjectManifest`, and `BuildTarget` types;
+2. replace detached config discovery with root-aware project discovery;
+3. parse one explicit `[target.pack]` while mapping old config to an implicit target;
+4. add `redscript project --format json` readback;
+5. keep current compile/build behavior unchanged;
+6. run focused config/project tests, build, and diff check;
+7. commit and push as one signed compatibility-preserving slice.
+
+Only after P1 is green should parser work for `package` begin.
+
+## 15. Repository evidence behind this plan
+
+Current seams inspected:
+
+- `src/config/project-config.ts` — nearest-manifest discovery exists but returns no root/path and parses only a minimal TOML subset;
+- `src/compile.ts` — file imports are currently preprocessed through recursive source concatenation, with a special `module library;` path;
+- `src/emit/modules.ts` — `compileModules()` keys modules globally by short name, rewrites AST calls, prefixes emitted function paths, and manages cross-module DCE;
+- `src/emit/compile.ts` — current primary Source → AST → HIR → MIR → LIR → datapack pipeline;
+- `src/ast/types.ts` and `src/parser/decl-parser.ts` — existing module/import/resource declaration syntax;
+- `src/testing/datapack-artifact-validator.ts` — existing offline datapack artifact checks;
+- `docs/plans/mc-mechanism-optimization/37-registry-resource-and-declaration-surface.md` — existing registry declaration foundation;
+- `docs/plans/redscript-vnext-roadmap.md` — previous release and compiler-hardening roadmap.
+
+Minecraft research baseline and sources:
+
+- Java Edition 26.1: <https://www.minecraft.net/en-us/article/minecraft-java-edition-26-1>
+- Java Edition 26.2: <https://www.minecraft.net/en-us/article/minecraft-java-edition-26-2>
+- 26.3 snapshot notes: <https://www.minecraft.net/en-us/article/minecraft-26-3-snapshot-5>
+- datapack structure: <https://minecraft.wiki/w/Data_pack>
+- pack/data version table: <https://minecraft.wiki/w/Pack_format>

@@ -1,7 +1,19 @@
 # RedScript ROADMAP
 
-> Last updated: 2026-03-23
-> Current version: 3.0.0
+> Last updated: 2026-07-30
+> Current published line: 3.x
+
+## Active architecture roadmap
+
+The next product architecture track is [Project, Package, and Multi-Target Compilation](docs/plans/generic-datapack-language-roadmap.md). Its implementation order is:
+
+1. strict `redscript.toml` project identity and named targets;
+2. Go-like directory packages and deterministic import graphs;
+3. target capability validation;
+4. a finite command-sequence backend;
+5. complete datapack JSON/NBT/resource artifacts.
+
+The tables below describe the existing language/tooling inventory. A checked module/import feature does **not** mean the new project/package contract is already implemented.
 
 ## Legend
 - ✅ Done
