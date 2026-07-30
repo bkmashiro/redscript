@@ -15,6 +15,8 @@
 > Stable game baseline: Minecraft Java Edition 26.2 / Data Pack version 107.1
 > Compatibility rule: existing single-file `redscript compile file.mcrs` remains supported
 
+Compiler architecture and bounded refactor contract: [`project-package-target-compiler-architecture.md`](project-package-target-compiler-architecture.md).
+
 ## 1. Product decision
 
 RedScript needs a real project and package system **before** adding a large number of datapack resource syntaxes.
@@ -604,6 +606,31 @@ npm test -- --selectProjects unit --runTestsByPath \
 npm run build
 git diff --check
 ```
+
+### P1.5 — compiler session and source-unit spine
+
+**Objective:** Introduce stable stage ownership before package linking changes compiler semantics.
+
+**Files:**
+
+- Create: `src/compiler/session.ts`
+- Create: `src/compiler/source-manager.ts`
+- Create: `src/compiler/stages.ts`
+- Modify: `src/emit/compile.ts` into a compatibility adapter/orchestrator
+- Test: `src/__tests__/compiler/session-parity.test.ts`
+
+**RED/GREEN slices:**
+
+1. freeze a representative legacy compile corpus and sorted artifact/diagnostic snapshots;
+2. introduce root-aware immutable source units without changing import behavior;
+3. wrap existing stage functions in `CompilerSession` with typed inputs/outputs;
+4. route public `compile()` through an ephemeral-project session;
+5. prove byte-identical datapack artifacts and equal diagnostics;
+6. keep package graph, `SymbolId`, and target behavior out of this tranche.
+
+**Acceptance:** the new compiler spine owns source/stage context while every frozen single-file compile result remains byte-identical.
+
+**Gate:** focused session parity tests, existing compile/import tests, build, static Minecraft validation, and `git diff --check`.
 
 ### P2 — first-class packages inside one module
 

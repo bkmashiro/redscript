@@ -5,7 +5,7 @@
 
 ## Active architecture roadmap
 
-The next product architecture track is [Project, Package, and Multi-Target Compilation](docs/plans/generic-datapack-language-roadmap.md). Its implementation order is:
+The next product architecture track is [Project, Package, and Multi-Target Compilation](docs/plans/generic-datapack-language-roadmap.md), backed by a separate [compiler architecture/refactor contract](docs/plans/project-package-target-compiler-architecture.md). Its implementation order is:
 
 1. strict `redscript.toml` project identity and named targets;
 2. Go-like directory packages and deterministic import graphs;
