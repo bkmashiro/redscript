@@ -34,6 +34,7 @@ import { applyCheckFixes } from './check-fix'
 import { deriveNamespace, parseArgs, sanitizeProjectName } from './cli/args'
 import { runTunerCli } from './tuner/cli'
 import { analyzeProjectTarget } from './compiler/project-target-analysis'
+import { resolveProjectDependencies } from './project/dependency-resolver'
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -50,6 +51,7 @@ Usage:
   redscript check <file> [--fix]
   redscript lint <file> [--max-function-lines <n>]
   redscript project [path] [--format human|json]
+  redscript resolve [path] [--format human|json]
   redscript graph [path] --capabilities [--target <name>] [--format human|json]
   redscript init [project-name]
   redscript fmt <file.mcrs> [file2.mcrs ...]
@@ -68,6 +70,7 @@ Commands:
   check         Check a RedScript file for errors without generating output
   lint          Statically analyze a RedScript file for potential issues (warnings)
   project       Inspect the nearest redscript.toml and resolved build targets
+  resolve       Resolve Git dependencies into redscript.lock and the immutable cache
   graph         Inspect target reachability and required capabilities
   init          Scaffold a new RedScript datapack project
   fmt           Auto-format RedScript source files
@@ -1075,6 +1078,13 @@ function projectJson(project: LoadedProject, moduleGraph: ProjectModuleGraph): o
       }
     }),
     dependencyHash: moduleGraph.dependencyHash,
+    lockfile: project.dependencyContext?.lock
+      ? {
+          path: fs.realpathSync(project.dependencyContext.lockfilePath),
+          schemaVersion: project.dependencyContext.lock.schemaVersion,
+          dependencies: project.dependencyContext.lock.dependencies,
+        }
+      : undefined,
     defaultTarget: project.defaultTarget,
     targets: Object.values(project.targets).sort((left, right) => left.name.localeCompare(right.name)),
   }
@@ -1108,6 +1118,38 @@ function projectCommand(startPath: string, format: 'human' | 'json'): void {
     for (const target of Object.values(project.targets).sort((left, right) => left.name.localeCompare(right.name))) {
       const marker = target.name === project.defaultTarget ? ' (default)' : ''
       console.log(`    ${target.name}: ${target.kind}${marker} -> ${target.outputPath}`)
+    }
+  } catch (error) {
+    console.error(`Error: ${(error as Error).message}`)
+    process.exit(error instanceof ProjectManifestError ? 2 : 1)
+  }
+}
+
+async function resolveCommand(startPath: string, format: 'human' | 'json'): Promise<void> {
+  try {
+    const result = await resolveProjectDependencies(startPath)
+    const output = {
+      projectRoot: fs.realpathSync(result.project.rootDir),
+      lockfilePath: fs.realpathSync(result.lockfilePath),
+      schemaVersion: result.lock.schemaVersion,
+      cacheDir: fs.existsSync(result.cacheDir)
+        ? fs.realpathSync(result.cacheDir)
+        : path.resolve(result.cacheDir),
+      dependencies: result.lock.dependencies,
+    }
+    if (format === 'json') {
+      console.log(JSON.stringify(output, null, 2))
+      return
+    }
+    console.log(
+      `Resolved ${output.dependencies.length} remote dependenc${output.dependencies.length === 1 ? 'y' : 'ies'}`,
+    )
+    console.log(`  Lock: ${output.lockfilePath}`)
+    console.log(`  Cache: ${output.cacheDir}`)
+    for (const dependency of output.dependencies) {
+      console.log(
+        `  ${dependency.modulePath}@${dependency.version} ${dependency.revision.slice(0, 12)} license=${dependency.license.declared ?? '<none>'}`,
+      )
     }
   } catch (error) {
     console.error(`Error: ${(error as Error).message}`)
@@ -1207,7 +1249,7 @@ async function main(): Promise<void> {
 
   // Background update check — non-blocking, only shows notice if newer version exists
   // Skip for repl/upgrade/version to avoid double-printing
-  const noCheckCmds = new Set(['upgrade', 'update', 'version', 'repl', 'docs', 'tune'])
+  const noCheckCmds = new Set(['upgrade', 'update', 'version', 'repl', 'docs', 'tune', 'resolve'])
   if (!process.env.REDSCRIPT_NO_UPDATE_CHECK && !noCheckCmds.has(parsed.command ?? '')) {
     checkForUpdates().catch(() => { /* ignore */ })
   }
@@ -1444,6 +1486,10 @@ async function main(): Promise<void> {
 
     case 'project':
       projectCommand(parsed.file ?? process.cwd(), parsed.format ?? 'human')
+      break
+
+    case 'resolve':
+      await resolveCommand(parsed.file ?? process.cwd(), parsed.format ?? 'human')
       break
 
     case 'graph':

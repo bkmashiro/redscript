@@ -1,10 +1,10 @@
 # RedScript Project/Package/Multi-Target Compiler Architecture
 
 > Status: architecture decision and refactor boundary
-> Date: 2026-07-30
+> Date: 2026-07-31
 > Parent roadmap: [`generic-datapack-language-roadmap.md`](generic-datapack-language-roadmap.md)
 
-> Implementation checkpoint (2026-07-30): P1–P4 are landed. `SourceManager` and `CompilerSession` own build context; strict manifests feed deterministic local module/package graphs; exported references resolve to canonical package symbol IDs; and local dependency identity, containment, cycles, and content hashes are validated before linking. P4 adds immutable linked-package preflight typechecking, a `SemanticTargetPlan` with deterministic reachability and requirement provenance, explicit target profiles, stable `RST2xxx` diagnostics, `CompilerSession.analyzeProject()`, and `redscript graph --capabilities`. Capability validation runs before target-specific lowering or artifact mutation. Source ASTs are never concatenated or mutated, and canonical symbol identity remains distinct from physical Minecraft function layout.
+> Implementation checkpoint (2026-07-31): P1–P6 are landed. `SourceManager` and `CompilerSession` own build context; strict manifests feed deterministic module/package graphs; exported references resolve to canonical package symbol IDs; target capability validation runs before target-specific lowering or artifact mutation; and the finite commands backend emits verified canonical JSON/text programs from immutable optimized LIR. P6 adds explicit Git/SemVer resolution, a schema-versioned root `redscript.lock`, exact peeled commit and source-tree hashes, declared-license provenance, a content-addressed immutable cache, and offline-only ordinary builds. Source ASTs are never concatenated or mutated, canonical symbol identity remains distinct from physical Minecraft function layout, and no ordinary compiler path receives network authority.
 
 ## Decision
 
@@ -212,6 +212,35 @@ Rules:
 - parser, resolver, checker, and lowerings receive source IDs/text, not filesystem lookup authority;
 - diagnostics resolve IDs through `SourceManager`;
 - compiler stages never use process cwd for semantic resolution.
+
+### 4.1a Remote dependency authority
+
+Remote package loading is split into two explicit authorities:
+
+```text
+redscript resolve
+  manifest Git URL + SemVer constraints
+  → bounded git ls-remote/fetch
+  → exact tag version + peeled commit
+  → clean checkout + canonical source-tree hash
+  → transitive constraint closure
+  → atomic redscript.lock + immutable cache entry
+
+ordinary project/check/compile
+  manifest declaration + root redscript.lock + warm cache
+  → source/version/revision/content/license/identity validation
+  → package graph
+```
+
+Rules:
+
+- only `redscript resolve` may invoke Git or consult a source URL;
+- the root lock owns the complete reachable remote graph, including dependencies declared by local workspace modules and remote modules;
+- cache identity is the canonical source URL plus exact commit; source contents are re-hashed before package parsing;
+- remote repositories cannot declare local path dependencies, symlinks, or submodules;
+- a locked version must satisfy every declaring manifest constraint and all declarations for one module must use one source;
+- unused lock entries, cache tampering, license mismatch, and module identity mismatch fail closed;
+- local workspace paths remain outside remote lock identity and no central registry is implied.
 
 ### 4.2 Stable semantic identities
 

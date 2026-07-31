@@ -793,16 +793,17 @@ git diff --check
 
 **Objective:** Make package reuse reproducible without hiding network or mutable-version behavior.
 
-- define immutable module source/version identities;
-- resolve semantic version constraints explicitly;
-- write `redscript.lock` with source URL, resolved revision/version, and content hash;
-- build offline from a warm cache;
-- require opt-in network resolution and bounded downloads;
-- reject changed content for a locked identity;
-- expose dependency licenses/provenance;
-- keep local workspace replacement in future `redscript.work`, not in lockfile identity.
+- ✅ define canonical HTTPS/file Git source identities and exact peeled commit identities;
+- ✅ resolve Git semantic-version tags and transitive constraint closure only through explicit `redscript resolve`;
+- ✅ write schema-versioned canonical `redscript.lock` with source URL, canonical constraint set, exact version, revision, tree content hash, and declared-license provenance;
+- ✅ build ordinary `project`/`check`/`compile` flows offline from lock plus a warm content-addressed cache;
+- ✅ bound Git command time, process output, downloaded bytes, source bytes, file count, dependency count, and resolver iterations;
+- ✅ reject missing cache entries, changed content, source/version/license/module identity mismatch, stale lock entries or constraint sets, module dependency cycles, ambient Git source rewrites, symlinked cache entries, source-tree symlinks, submodules, and local path escapes inside remote repositories;
+- ✅ keep local workspace paths outside lock identity; a future `redscript.work` replacement layer remains separate.
 
 A central package registry is out of scope until Git/source dependencies and lockfile semantics are proven.
+
+**P6 checkpoint acceptance:** `redscript resolve [path]` is the sole network-capable dependency operation. It selects deterministic SemVer tags, peels annotated tags to commits, materializes clean immutable checkouts under `~/.cache/redscript/dependencies` (or absolute `REDSCRIPT_DEPENDENCY_CACHE`), and atomically replaces the root lock only after the complete transitive graph stabilizes. Deleting the Git origin after resolution does not affect an ordinary warm-cache build. `redscript project --format json` exposes locked source/version/hash/license provenance. Ordinary builds never invoke Git and fail before package parsing on lock/cache content mismatch.
 
 ### P7 — typed datapack artifact graph and universal resources
 
@@ -910,17 +911,17 @@ Old `[project] namespace/mc-version`, `[compiler]`, and `[output]` values map in
 
 ## 14. Immediate next implementation slice
 
-P1–P5 are complete. Begin **P6 versioned remote dependencies and lockfile** without changing local-dependency identity semantics or introducing a central registry.
+P1–P6 are complete. Begin **P7 typed datapack artifact graph and universal resources** without weakening the target capability boundary or changing the legacy `DatapackFile` projection.
 
 The next coherent slice is:
 
-1. define immutable remote source and resolved-revision identities;
-2. specify canonical `redscript.lock` ordering, source URL, revision/version, content hash, and license provenance;
-3. implement explicit opt-in resolution with bounded download size/time and no network access during ordinary locked builds;
-4. cache by immutable identity and support offline warm-cache builds;
-5. reject lock/content identity mismatch before package loading;
-6. keep local workspace replacement outside lockfile identity;
-7. run focused dependency/security tests, build, static gates, signed commit, and push.
+1. define canonical typed artifact identity, provenance, lifecycle, media type, and deterministic projection;
+2. route existing function/tag artifacts through that graph without byte/output-path changes;
+3. load configured JSON/NBT assets with realpath containment and package/project provenance;
+4. centralize Minecraft-version registry-to-path descriptors;
+5. add strict `resource <kind> <id> from "...";` contributions;
+6. reject collisions, invalid JSON/NBT/schema/reference/lifecycle combinations before output mutation;
+7. prove commands targets reject emitting resources and datapack directory/zip projections remain deterministic.
 
 ## 15. Repository evidence behind this plan
 

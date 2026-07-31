@@ -53,7 +53,7 @@ describe('local project module graph', () => {
     })
   })
 
-  test('rejects malformed dependency entries, unknown fields, and missing roots', () => {
+  test('rejects malformed dependency entries, remote-only fields on local paths, and missing roots', () => {
     const malformed = path.join(workspace, 'malformed')
     const unknown = path.join(workspace, 'unknown')
     const missing = path.join(workspace, 'missing')
@@ -72,7 +72,7 @@ shared = { path = "../does-not-exist" }
 `)
 
     expect(() => loadProject(malformed)).toThrow(/dependencies\.shared.*TOML table/i)
-    expect(() => loadProject(unknown)).toThrow(/Unknown key 'dependencies\.shared\.version'/)
+    expect(() => loadProject(unknown)).toThrow(/dependencies\.shared\.version.*only valid for Git/i)
     expect(() => loadProject(missing)).toThrow(/dependencies\.shared\.path.*does not exist/i)
   })
 

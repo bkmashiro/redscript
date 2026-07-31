@@ -2,7 +2,7 @@ import { createHash } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
 
-import { parseProjectManifest, ProjectManifestError } from './manifest'
+import { parseProjectDependencyManifest, ProjectManifestError } from './manifest'
 import type { LoadedProject } from './model'
 
 export interface ModuleSourceFile {
@@ -148,6 +148,8 @@ export function loadProjectModuleGraph(rootProject: LoadedProject): ProjectModul
   const states = new Map<string, 'visiting' | 'visited'>()
   const stack: string[] = []
   const moduleRoots = new Map<string, string>()
+  const usedLockedModules = new Set<string>()
+  const usedLockedConstraints = new Map<string, Set<string>>()
 
   const visit = (project: LoadedProject): void => {
     const modulePath = project.manifest.project.modulePath
@@ -179,15 +181,34 @@ export function loadProjectModuleGraph(rootProject: LoadedProject): ProjectModul
     )) {
       let loaded = projectsByManifest.get(dependency.manifestPath)
       if (!loaded) {
-        loaded = parseProjectManifest(dependency.manifestPath)
+        const isRemote = 'remote' in dependency
+        loaded = parseProjectDependencyManifest(
+          dependency.manifestPath,
+          rootProject,
+          !isRemote,
+        )
         projectsByManifest.set(dependency.manifestPath, loaded)
       }
       const actualModulePath = loaded.manifest.project.modulePath
       if (actualModulePath !== dependency.modulePath) {
         throw new ProjectManifestError(
           project.manifestPath,
-          `Dependency '${dependency.modulePath}' at '${dependency.rootDir}' declares module '${actualModulePath}', expected '${dependency.modulePath}'`,
+          `Dependency identity mismatch: '${dependency.modulePath}' at '${dependency.rootDir}' declares module '${actualModulePath}', expected '${dependency.modulePath}'`,
         )
+      }
+      if ('remote' in dependency) {
+        usedLockedModules.add(dependency.modulePath)
+        const constraints = usedLockedConstraints.get(dependency.modulePath) ?? new Set<string>()
+        constraints.add(dependency.remote.constraint)
+        usedLockedConstraints.set(dependency.modulePath, constraints)
+        const declaredLicense = loaded.manifest.project.license ?? null
+        const lockedLicense = dependency.remote.license.declared
+        if (declaredLicense !== lockedLicense) {
+          throw new ProjectManifestError(
+            project.manifestPath,
+            `Remote dependency license provenance mismatch for '${dependency.modulePath}': manifest declares '${declaredLicense ?? '<none>'}', lock records '${lockedLicense ?? '<none>'}'`,
+          )
+        }
       }
       visit(loaded)
     }
@@ -204,6 +225,28 @@ export function loadProjectModuleGraph(rootProject: LoadedProject): ProjectModul
   }
 
   visit(rootProject)
+  const unusedLockedModules = (rootProject.dependencyContext?.lock?.dependencies ?? [])
+    .map(dependency => dependency.modulePath)
+    .filter(modulePath => !usedLockedModules.has(modulePath))
+    .sort()
+  if (unusedLockedModules.length > 0) {
+    throw new ProjectManifestError(
+      rootProject.manifestPath,
+      `redscript.lock contains dependencies not reachable from the project graph: ${unusedLockedModules.join(', ')}; run 'redscript resolve'`,
+    )
+  }
+  for (const locked of rootProject.dependencyContext?.lock?.dependencies ?? []) {
+    const used = [...(usedLockedConstraints.get(locked.modulePath) ?? [])].sort()
+    if (
+      used.length !== locked.constraints.length
+      || used.some((constraint, index) => constraint !== locked.constraints[index])
+    ) {
+      throw new ProjectManifestError(
+        rootProject.manifestPath,
+        `Locked constraints for '${locked.modulePath}' do not match the reachable manifest declarations; run 'redscript resolve'`,
+      )
+    }
+  }
   const order = stableTopologicalOrder(modules)
   const dependencyHash = createHash('sha256')
   for (const modulePath of [...modules.keys()].filter(path => path !== rootProject.manifest.project.modulePath).sort()) {

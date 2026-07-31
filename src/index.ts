@@ -41,7 +41,44 @@ export type {
 } from './compiler/package-backend'
 export { DuplicateSourceError, SourceManager } from './compiler/source-manager'
 export type { SourceFileId, SourceUnit } from './compiler/source-manager'
-export { loadProject, ProjectManifestError, resolveBuildTarget } from './project/manifest'
+export {
+  loadProject,
+  parseProjectManifest,
+  ProjectManifestError,
+  resolveBuildTarget,
+} from './project/manifest'
+export type { ParseProjectManifestOptions } from './project/manifest'
+export {
+  resolveProjectDependencies,
+  DependencyResolutionError,
+} from './project/dependency-resolver'
+export type {
+  DependencyResolutionResult,
+  DependencyResolverOptions,
+  ResolvedRemoteDependency,
+} from './project/dependency-resolver'
+export {
+  PROJECT_LOCK_SCHEMA_VERSION,
+  parseProjectLock,
+  readProjectLock,
+  serializeProjectLock,
+  ProjectLockError,
+} from './project/lockfile'
+export type {
+  LockedLicenseProvenance,
+  LockedRemoteDependency,
+  ProjectLock,
+} from './project/lockfile'
+export {
+  defaultDependencyCacheDir,
+  dependencyCacheEntryPath,
+  hashDependencyTree,
+  verifyCachedDependency,
+} from './project/dependency-cache'
+export type {
+  DependencyTreeHash,
+  DependencyTreeLimits,
+} from './project/dependency-cache'
 export { loadProjectModuleGraph } from './project/module-graph'
 export type {
   LoadedProjectModule,
@@ -52,10 +89,16 @@ export type {
   BuildTarget,
   BuildTargetKind,
   CompilerSettings,
+  CachedRemoteDependency,
+  DependencySpec,
   LoadedProject,
   LocalDependency,
+  LocalDependencySpec,
+  ProjectDependencyContext,
   ProjectIdentity,
   ProjectManifest,
+  RemoteDependencySpec,
+  ResolvedDependency,
 } from './project/model'
 export { loadPackageGraph } from './project/package-loader'
 export { reachablePackagePaths } from './project/package-graph'

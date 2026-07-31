@@ -1,13 +1,21 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import { satisfies } from 'semver'
 import { parse, TomlError } from 'smol-toml'
 
+import { defaultDependencyCacheDir, verifyCachedDependency } from './dependency-cache'
 import { discoverProjectManifest } from './discovery'
+import { isCanonicalModulePath } from './identity'
 import {
   BuildTarget,
   BuildTargetKind,
+  DependencySpec,
   LoadedProject,
+  LocalDependency,
+  ProjectDependencyContext,
 } from './model'
+import { normalizeGitSourceUrl, normalizeSemverConstraint } from './dependency-source'
+import { readProjectLock } from './lockfile'
 
 interface Table {
   [key: string]: unknown
@@ -37,12 +45,12 @@ export class ProjectManifestError extends Error {
 }
 
 const TOP_LEVEL_KEYS = ['project', 'compiler', 'output', 'assets', 'dependencies', 'target']
-const PROJECT_KEYS = ['name', 'module', 'namespace', 'mc-version', 'description', 'source-roots']
+const PROJECT_KEYS = ['name', 'module', 'namespace', 'mc-version', 'description', 'license', 'source-roots']
 const COMPILER_KEYS = ['optimization', 'include-dirs', 'no-dce']
 const OUTPUT_KEYS = ['dir']
 const ASSET_KEYS = ['roots', 'include']
 const TARGET_KEYS = ['kind', 'entry', 'out', 'default', 'namespace', 'mc-version', 'max-commands']
-const DEPENDENCY_KEYS = ['path']
+const DEPENDENCY_KEYS = ['path', 'git', 'version']
 
 function isTable(value: unknown): value is Table {
   return value != null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)
@@ -231,31 +239,20 @@ function resolveInsideRoot(
   return resolved
 }
 
-function isCanonicalModulePath(modulePath: string): boolean {
-  const segments = modulePath.split('/')
-  return !(
-    modulePath.includes('\\')
-    || modulePath.startsWith('/')
-    || modulePath.endsWith('/')
-    || segments.some(segment =>
-      segment === ''
-      || segment === '.'
-      || segment === '..'
-      || !/^[A-Za-z0-9][A-Za-z0-9._~-]*$/.test(segment),
-    )
-    || /\s/.test(modulePath)
-  )
-}
-
-function parseLocalDependencies(
+function parseDependencyDeclarations(
   root: Table,
   rootDir: string,
   manifestPath: string,
   source: string,
-): ReadonlyMap<string, { modulePath: string; rootDir: string; manifestPath: string }> {
-  if (root.dependencies == null) return new Map()
+  allowLocalDependencies: boolean,
+): {
+  dependencies: ReadonlyMap<string, LocalDependency>
+  specs: ReadonlyMap<string, DependencySpec>
+} {
+  if (root.dependencies == null) return { dependencies: new Map(), specs: new Map() }
   const table = tableAt(root.dependencies, 'dependencies', manifestPath, source)
-  const dependencies = new Map<string, { modulePath: string; rootDir: string; manifestPath: string }>()
+  const dependencies = new Map<string, LocalDependency>()
+  const specs = new Map<string, DependencySpec>()
 
   for (const [modulePath, rawDependency] of Object.entries(table).sort(([left], [right]) => left.localeCompare(right))) {
     const section = `dependencies.${modulePath}`
@@ -265,10 +262,50 @@ function parseLocalDependencies(
     const dependency = tableAt(rawDependency, section, manifestPath, source)
     checkKnownKeys(dependency, section, DEPENDENCY_KEYS, manifestPath, source)
     const localPath = optionalString(dependency, 'path', section, manifestPath, source)
-    if (!localPath) {
-      fail(manifestPath, source, `${section}.path`, `'${section}.path' is required`)
+    const gitSource = optionalString(dependency, 'git', section, manifestPath, source)
+    if (Boolean(localPath) === Boolean(gitSource)) {
+      fail(
+        manifestPath,
+        source,
+        section,
+        `'${section}' must declare exactly one of 'path' or 'git'`,
+      )
     }
-    const resolvedRoot = path.resolve(rootDir, localPath)
+
+    if (gitSource) {
+      const constraint = optionalString(dependency, 'version', section, manifestPath, source)
+      if (!constraint) {
+        fail(manifestPath, source, `${section}.version`, `'${section}.version' is required for Git dependencies`)
+      }
+      let url: string
+      let normalizedConstraint: string
+      try {
+        url = normalizeGitSourceUrl(gitSource)
+        normalizedConstraint = normalizeSemverConstraint(constraint)
+      } catch (error) {
+        fail(manifestPath, source, section, (error as Error).message)
+      }
+      specs.set(modulePath, Object.freeze({
+        kind: 'remote',
+        modulePath,
+        source: Object.freeze({ kind: 'git', url }),
+        constraint: normalizedConstraint,
+      }))
+      continue
+    }
+
+    if (!allowLocalDependencies) {
+      fail(
+        manifestPath,
+        source,
+        section,
+        `'${section}.path' is not allowed inside an immutable remote dependency`,
+      )
+    }
+    if (dependency.version != null) {
+      fail(manifestPath, source, `${section}.version`, `'${section}.version' is only valid for Git dependencies`)
+    }
+    const resolvedRoot = path.resolve(rootDir, localPath!)
     if (!fs.existsSync(resolvedRoot)) {
       fail(manifestPath, source, `${section}.path`, `'${section}.path' does not exist: ${localPath}`)
     }
@@ -285,14 +322,24 @@ function parseLocalDependencies(
         `'${section}.path' must point to a project containing redscript.toml`,
       )
     }
-    dependencies.set(modulePath, Object.freeze({
+    const resolved = Object.freeze({
       modulePath,
       rootDir: canonicalRoot,
       manifestPath: fs.realpathSync(dependencyManifest),
-    }))
+    })
+    dependencies.set(modulePath, resolved)
+    specs.set(modulePath, Object.freeze({ kind: 'local' as const, ...resolved }))
   }
 
-  return dependencies
+  return { dependencies, specs }
+}
+
+export interface ParseProjectManifestOptions {
+  /** declarations skips lock/cache materialization and never performs network access. */
+  dependencyMode?: 'locked' | 'declarations'
+  dependencyCacheDir?: string
+  /** Resolver boundary: immutable remote repositories cannot escape through path dependencies. */
+  allowLocalDependencies?: boolean
 }
 
 function normalizedLocalModule(name: string): string {
@@ -409,7 +456,11 @@ function parseTargets(
   return { targets, defaultTarget: defaults[0] ?? onlyTarget }
 }
 
-export function parseProjectManifest(manifestPath: string): LoadedProject {
+function parseProjectManifestInternal(
+  manifestPath: string,
+  options: ParseProjectManifestOptions = {},
+  inheritedContext?: ProjectDependencyContext,
+): LoadedProject {
   const absoluteManifestPath = path.resolve(manifestPath)
   const rootDir = path.dirname(absoluteManifestPath)
   let source: string
@@ -513,7 +564,125 @@ export function parseProjectManifest(manifestPath: string): LoadedProject {
     optionalStringArray(assets, 'roots', 'assets', absoluteManifestPath, source)
     optionalStringArray(assets, 'include', 'assets', absoluteManifestPath, source)
   }
-  const dependencies = parseLocalDependencies(root, rootDir, absoluteManifestPath, source)
+  const dependencyDeclarations = parseDependencyDeclarations(
+    root,
+    rootDir,
+    absoluteManifestPath,
+    source,
+    options.allowLocalDependencies ?? true,
+  )
+  const remoteDependencies = [...dependencyDeclarations.specs.values()].filter(
+    spec => spec.kind === 'remote',
+  )
+  const dependencies = new Map(dependencyDeclarations.dependencies)
+  const dependencyMode = options.dependencyMode ?? 'locked'
+  let dependencyContext: ProjectDependencyContext | undefined
+  if (dependencyMode === 'locked') {
+    if (inheritedContext) {
+      dependencyContext = inheritedContext
+    } else {
+      const cacheDir = options.dependencyCacheDir ?? defaultDependencyCacheDir()
+      if (!path.isAbsolute(cacheDir)) {
+        fail(
+          absoluteManifestPath,
+          source,
+          'dependencies',
+          `Dependency cache path must be absolute: ${cacheDir}`,
+        )
+      }
+      const lockfilePath = path.join(rootDir, 'redscript.lock')
+      let lock: ReturnType<typeof readProjectLock> | undefined
+      if (fs.existsSync(lockfilePath)) {
+        try {
+          lock = readProjectLock(lockfilePath)
+        } catch (error) {
+          fail(absoluteManifestPath, source, 'dependencies', (error as Error).message)
+        }
+      }
+      dependencyContext = Object.freeze({
+        lockfilePath,
+        cacheDir: path.resolve(cacheDir),
+        lock,
+      })
+    }
+
+    const lockedByModule = new Map(
+      dependencyContext.lock?.dependencies.map(dependency => [dependency.modulePath, dependency]),
+    )
+    for (const spec of remoteDependencies) {
+      const locked = lockedByModule.get(spec.modulePath)
+      if (!locked) {
+        fail(
+          absoluteManifestPath,
+          source,
+          'dependencies',
+          `Remote dependency '${spec.modulePath}' is missing from ${dependencyContext.lockfilePath}; run 'redscript resolve'`,
+        )
+      }
+      if (locked.source.kind !== spec.source.kind || locked.source.url !== spec.source.url) {
+        fail(
+          absoluteManifestPath,
+          source,
+          `dependencies.${spec.modulePath}`,
+          `Locked source '${locked.source.url}' does not match manifest source '${spec.source.url}' for '${spec.modulePath}'`,
+        )
+      }
+      if (!satisfies(locked.version, spec.constraint)) {
+        fail(
+          absoluteManifestPath,
+          source,
+          `dependencies.${spec.modulePath}`,
+          `Locked version '${locked.version}' does not satisfy manifest constraint '${spec.constraint}' for '${spec.modulePath}'`,
+        )
+      }
+      if (!locked.constraints.includes(spec.constraint)) {
+        fail(
+          absoluteManifestPath,
+          source,
+          `dependencies.${spec.modulePath}`,
+          `Locked constraints for '${spec.modulePath}' do not record manifest constraint '${spec.constraint}'; run 'redscript resolve'`,
+        )
+      }
+      let dependencyRoot: string
+      try {
+        dependencyRoot = verifyCachedDependency(
+          dependencyContext.cacheDir,
+          locked.source,
+          locked.revision,
+          locked.contentHash,
+        )
+      } catch (error) {
+        fail(
+          absoluteManifestPath,
+          source,
+          `dependencies.${spec.modulePath}`,
+          (error as Error).message,
+        )
+      }
+      const dependencyManifest = path.join(dependencyRoot, 'redscript.toml')
+      if (!fs.existsSync(dependencyManifest)) {
+        fail(
+          absoluteManifestPath,
+          source,
+          `dependencies.${spec.modulePath}`,
+          `Locked dependency '${spec.modulePath}' cache does not contain redscript.toml`,
+        )
+      }
+      dependencies.set(spec.modulePath, Object.freeze({
+        modulePath: spec.modulePath,
+        rootDir: fs.realpathSync(dependencyRoot),
+        manifestPath: fs.realpathSync(dependencyManifest),
+        remote: Object.freeze({
+          source: locked.source,
+          constraint: spec.constraint,
+          version: locked.version,
+          revision: locked.revision,
+          contentHash: locked.contentHash,
+          license: locked.license,
+        }),
+      }))
+    }
+  }
 
   const { targets, defaultTarget } = parseTargets(
     root,
@@ -535,10 +704,13 @@ export function parseProjectManifest(manifestPath: string): LoadedProject {
         namespace,
         minecraftVersion,
         description: optionalString(project, 'description', 'project', absoluteManifestPath, source),
+        license: optionalString(project, 'license', 'project', absoluteManifestPath, source),
       },
     },
     sourceRoots,
     dependencies,
+    dependencySpecs: dependencyDeclarations.specs,
+    dependencyContext,
     compiler: {
       optimization: optimization as number | undefined,
       includeDirs: includeDirsRaw.map(value => path.resolve(rootDir, value)),
@@ -549,9 +721,42 @@ export function parseProjectManifest(manifestPath: string): LoadedProject {
   }
 }
 
-export function loadProject(startPath: string): LoadedProject | null {
+export function parseProjectManifest(
+  manifestPath: string,
+  options: ParseProjectManifestOptions = {},
+): LoadedProject {
+  return parseProjectManifestInternal(manifestPath, options)
+}
+
+/** Reuses the root lock/cache authority while traversing transitive module manifests. */
+export function parseProjectDependencyManifest(
+  manifestPath: string,
+  rootProject: LoadedProject,
+  allowLocalDependencies: boolean,
+): LoadedProject {
+  if (!rootProject.dependencyContext) {
+    throw new ProjectManifestError(
+      manifestPath,
+      'Root project has no locked dependency context',
+    )
+  }
+  return parseProjectManifestInternal(
+    manifestPath,
+    {
+      dependencyMode: 'locked',
+      dependencyCacheDir: rootProject.dependencyContext.cacheDir,
+      allowLocalDependencies,
+    },
+    rootProject.dependencyContext,
+  )
+}
+
+export function loadProject(
+  startPath: string,
+  options: ParseProjectManifestOptions = {},
+): LoadedProject | null {
   const discovered = discoverProjectManifest(startPath)
-  return discovered ? parseProjectManifest(discovered.manifestPath) : null
+  return discovered ? parseProjectManifest(discovered.manifestPath, options) : null
 }
 
 export function resolveBuildTarget(project: LoadedProject, targetName?: string): BuildTarget {
