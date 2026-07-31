@@ -319,6 +319,59 @@ function writeStageSnapshots(
   fs.writeFileSync(outputPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8')
 }
 
+interface AtomicOutputFile {
+  path: string
+  content: string
+}
+
+function writeOutputFilesAtomically(outputs: readonly AtomicOutputFile[]): void {
+  const token = `.redscript-${process.pid}-${Date.now()}`
+  const staged = outputs.map((output, index) => ({
+    ...output,
+    tempPath: `${output.path}${token}-${index}.tmp`,
+    backupPath: `${output.path}${token}-${index}.bak`,
+  }))
+  const committed: typeof staged = []
+  const backedUp: typeof staged = []
+
+  try {
+    for (const output of staged) {
+      fs.mkdirSync(path.dirname(output.path), { recursive: true })
+      fs.writeFileSync(output.tempPath, output.content, { flag: 'wx' })
+    }
+    for (const output of staged) {
+      if (!fs.existsSync(output.path)) continue
+      fs.renameSync(output.path, output.backupPath)
+      backedUp.push(output)
+    }
+    for (const output of staged) {
+      fs.renameSync(output.tempPath, output.path)
+      committed.push(output)
+    }
+  } catch (error) {
+    for (const output of committed) fs.rmSync(output.path, { recursive: true, force: true })
+    for (const output of backedUp.reverse()) {
+      if (fs.existsSync(output.backupPath)) fs.renameSync(output.backupPath, output.path)
+    }
+    for (const output of staged) fs.rmSync(output.tempPath, { force: true })
+    throw error
+  }
+
+  // Once every destination rename succeeds, the new pair is committed. Failure
+  // to clean a backup must not delete the newly committed artifacts.
+  for (const output of backedUp) {
+    try {
+      fs.rmSync(output.backupPath, { recursive: true, force: true })
+    } catch {
+      // Best-effort cleanup; a stale hidden backup is safer than data loss.
+    }
+  }
+}
+
+function commandTextOutputPath(output: string): string {
+  return output.endsWith('.json') ? `${output.slice(0, -'.json'.length)}.txt` : `${output}.txt`
+}
+
 function compileCommand(
   file: string,
   output: string,
@@ -454,6 +507,19 @@ function compileCommand(
 
     for (const w of result.warnings) {
       console.error(`Warning: ${w}`)
+    }
+
+    if ('kind' in result && result.kind === 'commands') {
+      const textOutput = commandTextOutputPath(output)
+      writeOutputFilesAtomically([
+        { path: output, content: result.manifestJson },
+        { path: textOutput, content: result.textProjection },
+      ])
+      console.log(`✓ Compiled ${file} to ${output}`)
+      console.log(`  Namespace: ${namespace}`)
+      console.log(`  Command count: ${result.commandProgram.commandCount}`)
+      console.log(`  Text projection: ${textOutput}`)
+      return
     }
 
     // Create output directory
@@ -633,15 +699,8 @@ function checkProjectCommand(
   let warnings: CliDiagnostic[] = []
   let errors: DiagnosticError[] = []
   try {
-    const session = createCompilerSession({ project, target })
-    if (target.kind === 'commands') {
-      const analysis = session.analyzeProject({ namespace: namespaceOverride })
-      warnings = analysis.typecheck.warnings.map(warning => warningToDiagnostic(warning))
-      errors = [...analysis.diagnostics]
-    } else {
-      const result = session.compileProject({ namespace: namespaceOverride })
-      warnings = result.warnings.map(warning => warningToDiagnostic(warning))
-    }
+    const result = createCompilerSession({ project, target }).compileProject({ namespace: namespaceOverride })
+    warnings = result.warnings.map(warning => warningToDiagnostic(warning))
   } catch (error) {
     if (error instanceof DiagnosticError) {
       errors = [error]

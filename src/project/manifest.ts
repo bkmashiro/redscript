@@ -41,7 +41,7 @@ const PROJECT_KEYS = ['name', 'module', 'namespace', 'mc-version', 'description'
 const COMPILER_KEYS = ['optimization', 'include-dirs', 'no-dce']
 const OUTPUT_KEYS = ['dir']
 const ASSET_KEYS = ['roots', 'include']
-const TARGET_KEYS = ['kind', 'entry', 'out', 'default', 'namespace', 'mc-version']
+const TARGET_KEYS = ['kind', 'entry', 'out', 'default', 'namespace', 'mc-version', 'max-commands']
 const DEPENDENCY_KEYS = ['path']
 
 function isTable(value: unknown): value is Table {
@@ -159,6 +159,21 @@ function optionalBoolean(
   if (value == null) return undefined
   if (typeof value !== 'boolean') {
     fail(manifestPath, source, `${section}.${key}`, `'${section}.${key}' must be a boolean`)
+  }
+  return value
+}
+
+function optionalPositiveInteger(
+  table: Table,
+  key: string,
+  section: string,
+  manifestPath: string,
+  source: string,
+): number | undefined {
+  const value = table[key]
+  if (value == null) return undefined
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+    fail(manifestPath, source, `${section}.${key}`, `'${section}.${key}' must be a positive integer`)
   }
   return value
 }
@@ -350,6 +365,15 @@ function parseTargets(
     const target = tableAt(rawTarget, section, manifestPath, source)
     checkKnownKeys(target, section, TARGET_KEYS, manifestPath, source)
     const kind = parseKind(target.kind, section, manifestPath, source)
+    const maxCommands = optionalPositiveInteger(target, 'max-commands', section, manifestPath, source)
+    if (maxCommands != null && kind !== 'commands') {
+      fail(
+        manifestPath,
+        source,
+        `${section}.max-commands`,
+        `'${section}.max-commands' is only valid for commands targets`,
+      )
+    }
     const entry = optionalString(target, 'entry', section, manifestPath, source)
     if (!entry) {
       fail(manifestPath, source, `${section}.entry`, `'${section}.entry' is required for explicit targets`)
@@ -366,6 +390,7 @@ function parseTargets(
       entry,
       namespace: optionalString(target, 'namespace', section, manifestPath, source) ?? namespace,
       minecraftVersion: optionalString(target, 'mc-version', section, manifestPath, source) ?? minecraftVersion,
+      maxCommands,
       outputPath,
       isDefault: optionalBoolean(target, 'default', section, manifestPath, source) ?? false,
       compatibility: 'explicit',

@@ -72,6 +72,10 @@ fn heartbeat(): void { raw("say tick"); }
     expect(() => analyzeProjectTarget(project, { ...target, entry: 'example.com/app/cmd::other' })).toThrow(
       "does not match its manifest declaration",
     )
+    target.maxCommands = 2
+    expect(() => analyzeProjectTarget(project, { ...target, maxCommands: 200 })).toThrow(
+      "does not match its manifest declaration",
+    )
   })
 
   test('rejects lifecycle hooks for commands with stable RST2001 provenance', () => {

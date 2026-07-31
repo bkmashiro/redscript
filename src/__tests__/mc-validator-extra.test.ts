@@ -17,7 +17,7 @@ import * as fs from 'fs'
 import { MCCommandValidator } from '../mc-validator'
 import { DiagnosticError } from '../diagnostics'
 
-const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'mc-commands-1.21.4.json')
+const FIXTURE_PATH = path.join(__dirname, '..', 'mc-validator', 'commands-1.21.4.json')
 
 describe('MCCommandValidator — extended coverage', () => {
   const v = new MCCommandValidator(FIXTURE_PATH)

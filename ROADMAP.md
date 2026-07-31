@@ -1,6 +1,6 @@
 # RedScript ROADMAP
 
-> Last updated: 2026-07-30
+> Last updated: 2026-07-31
 > Current published line: 3.x
 
 ## Active architecture roadmap
@@ -11,10 +11,11 @@ The next product architecture track is [Project, Package, and Multi-Target Compi
 2. ✅ Go-like directory packages and deterministic import graphs;
 3. ✅ explicit local module dependencies, identity validation, and dependency hashing;
 4. ✅ target capability validation, reachability, and stable `RST2xxx` diagnostics;
-5. 🔄 a finite command-sequence backend;
-6. complete datapack JSON/NBT/resource artifacts.
+5. ✅ a finite command-sequence backend with canonical manifests, budgets, and static validation;
+6. 🔄 versioned remote dependencies and a reproducible lockfile;
+7. 📋 complete datapack JSON/NBT/resource artifacts.
 
-The tables below describe the existing language/tooling inventory. The strict project/package/local-dependency contract and target capability validation are implemented through P4; finite commands lowering and typed emitting resources remain staged work.
+The tables below describe the existing language/tooling inventory. The strict project/package/local-dependency contract, target capability validation, and finite commands backend are implemented through P5. Remote lockfile resolution and typed emitting resources remain staged work.
 
 ## Legend
 - ✅ Done

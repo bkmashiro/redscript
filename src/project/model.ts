@@ -20,6 +20,8 @@ export interface BuildTarget {
   entry?: string
   namespace: string
   minecraftVersion?: string
+  /** Maximum total setup/invoke/cleanup commands for a commands artifact. */
+  maxCommands?: number
   outputPath: string
   isDefault: boolean
   compatibility: 'explicit' | 'legacy-implicit'

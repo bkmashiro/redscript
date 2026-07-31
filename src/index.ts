@@ -20,14 +20,25 @@ export {
   CompileStageName,
   CompileStageSnapshot,
 } from './emit/compile'
-export { compileModules } from './emit/modules'
-export type { ModuleInput, CompileModulesOptions, CompileModulesResult } from './emit/modules'
+export { compileModules, compileModulesWithLIR } from './emit/modules'
+export type {
+  ModuleInput,
+  CompileModulesOptions,
+  CompileModulesLIROptions,
+  CompileModulesResult,
+  CompileModulesLIRResult,
+} from './emit/modules'
 export { CompilerSession, UnknownSourceError } from './compiler/session'
 export type { CompilerSessionOptions, CompilePipeline, ProjectTargetOverrides } from './compiler/session'
 export { typecheckResolvedPackageProgram } from './compiler/package-typecheck'
 export type { LinkedPackageTypecheckResult } from './compiler/package-typecheck'
 export { analyzeProjectTarget } from './compiler/project-target-analysis'
 export type { ProjectTargetAnalysis } from './compiler/project-target-analysis'
+export type {
+  CommandsProjectCompileResult,
+  DatapackProjectCompileResult,
+  ProjectCompileResult,
+} from './compiler/package-backend'
 export { DuplicateSourceError, SourceManager } from './compiler/source-manager'
 export type { SourceFileId, SourceUnit } from './compiler/source-manager'
 export { loadProject, ProjectManifestError, resolveBuildTarget } from './project/manifest'
@@ -66,6 +77,22 @@ export type {
 export { buildSemanticTargetPlan, resolveTargetEntry } from './targets/capabilities'
 export { getTargetProfile, targetSupports } from './targets/model'
 export { assertTargetCompatible, validateTargetPlan } from './targets/validate'
+export {
+  COMMAND_STATIC_VALIDATION_PROFILE,
+  DEFAULT_COMMAND_BUDGET,
+  legalizeCommandProgram,
+  renderCommandProgramText,
+  serializeCommandManifest,
+} from './targets/commands'
+export type { CommandLegalizationOptions } from './targets/commands'
+export type {
+  CommandEffect,
+  CommandPhase,
+  CommandProgram,
+  CommandProgramTarget,
+  CommandSource,
+  CommandStep,
+} from './targets/command-program'
 export type {
   CapabilityRequirement,
   SemanticTargetPlan,

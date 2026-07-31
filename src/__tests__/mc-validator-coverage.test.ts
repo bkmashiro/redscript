@@ -14,7 +14,7 @@
 import * as path from 'path'
 import { MCCommandValidator } from '../mc-validator'
 
-const COMMANDS_PATH = path.join(__dirname, 'fixtures', 'mc-commands-1.21.4.json')
+const COMMANDS_PATH = path.join(__dirname, '..', 'mc-validator', 'commands-1.21.4.json')
 
 let validator: MCCommandValidator
 

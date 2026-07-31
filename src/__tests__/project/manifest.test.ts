@@ -38,6 +38,7 @@ default = true
 kind = "commands"
 entry = "github.com/bkmashiro/castle/cmd/admin::main"
 out = "dist/admin.commands.json"
+max-commands = 256
 `)
 
     try {
@@ -61,6 +62,7 @@ out = "dist/admin.commands.json"
       expect(resolveBuildTarget(project!, 'admin')).toMatchObject({
         name: 'admin',
         kind: 'commands',
+        maxCommands: 256,
         outputPath: path.join(root, 'dist', 'admin.commands.json'),
       })
     } finally {
@@ -111,6 +113,29 @@ namespase = "castle"
     try {
       expect(() => loadProject(root)).toThrow(ProjectManifestError)
       expect(() => loadProject(root)).toThrow(/Unknown key 'project\.namespase'.*namespace/)
+    } finally {
+      removeProject(root)
+    }
+  })
+
+  test.each([
+    ['datapack target', 'kind = "datapack"\nmax-commands = 10', /only valid for commands targets/],
+    ['zero budget', 'kind = "commands"\nmax-commands = 0', /must be a positive integer/],
+    ['fractional budget', 'kind = "commands"\nmax-commands = 1.5', /must be a positive integer/],
+  ])('rejects invalid max-commands on %s', (_label, targetConfig, expected) => {
+    const root = makeProject(`
+[project]
+name = "castle"
+module = "example.com/castle"
+namespace = "castle"
+
+[target.main]
+${targetConfig}
+entry = "example.com/castle::main"
+`)
+
+    try {
+      expect(() => loadProject(root)).toThrow(expected)
     } finally {
       removeProject(root)
     }

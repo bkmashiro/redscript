@@ -122,11 +122,12 @@ out = "build/shell.commands.json"
       }
     })
 
-    it('reports target capability diagnostics before the unavailable commands backend', () => {
+    it('preserves prior command artifacts when capability validation fails', () => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-target-gate-cli-'))
       const sourceDir = path.join(root, 'src', 'cmd')
       const sourceFile = path.join(sourceDir, 'main.mcrs')
       const outputPath = path.join(root, 'build', 'shell.commands.json')
+      const textPath = path.join(root, 'build', 'shell.commands.txt')
       fs.mkdirSync(sourceDir, { recursive: true })
       fs.writeFileSync(sourceFile, `
 package cmd;
@@ -146,6 +147,9 @@ kind = "commands"
 entry = "example.com/shell/cmd::main"
 out = "build/shell.commands.json"
 `)
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+      fs.writeFileSync(outputPath, '{"previous":true}\n')
+      fs.writeFileSync(textPath, 'previous text\n')
 
       try {
         const result = spawnSync(
@@ -161,7 +165,8 @@ out = "build/shell.commands.json"
         expect(result.stderr).toContain('error[RST2001]')
         expect(result.stderr).toContain("does not support 'lifecycle-hooks'")
         expect(result.stderr).not.toContain('unavailable backend')
-        expect(fs.existsSync(outputPath)).toBe(false)
+        expect(fs.readFileSync(outputPath, 'utf8')).toBe('{"previous":true}\n')
+        expect(fs.readFileSync(textPath, 'utf8')).toBe('previous text\n')
       } finally {
         fs.rmSync(root, { recursive: true, force: true })
       }
@@ -298,10 +303,11 @@ out = "build/admin.commands.json"
       }
     })
 
-    it('rejects an unavailable backend before writing output', () => {
+    it('writes commands JSON and text artifacts to the selected target path', () => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-target-cli-'))
       const sourceFile = path.join(root, 'src', 'main.mcrs')
       const outputPath = path.join(root, 'build', 'admin.commands.json')
+      const textPath = outputPath.replace(/\.json$/, '.txt')
       fs.mkdirSync(path.dirname(sourceFile), { recursive: true })
       fs.writeFileSync(sourceFile, 'package castle; export fn main(): void { say("hi"); }\n')
       fs.writeFileSync(path.join(root, 'redscript.toml'), `
@@ -316,6 +322,9 @@ kind = "commands"
 entry = "example.com/castle::main"
 out = "build/admin.commands.json"
 `)
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+      fs.writeFileSync(outputPath, '{"old":true}\n')
+      fs.writeFileSync(textPath, 'old text\n')
 
       try {
         const result = spawnSync(
@@ -327,11 +336,22 @@ out = "build/admin.commands.json"
           },
         )
 
-        expect(result.status).toBe(1)
-        expect(result.stderr).toContain(
-          "Target 'admin' (commands) passed capability validation, but its backend is not implemented yet",
-        )
-        expect(fs.existsSync(outputPath)).toBe(false)
+        expect(result.status).toBe(0)
+        expect(result.stdout).toContain('Command count:')
+        expect(fs.statSync(outputPath).isFile()).toBe(true)
+        expect(fs.statSync(textPath).isFile()).toBe(true)
+        const manifest = JSON.parse(fs.readFileSync(outputPath, 'utf8'))
+        expect(manifest.target).toMatchObject({
+          name: 'admin',
+          kind: 'commands',
+          entry: 'example.com/castle::main',
+        })
+        expect(manifest.phases.invoke.every((step: { command: string }) => !/\bfunction\s/.test(step.command))).toBe(true)
+        expect(fs.readFileSync(textPath, 'utf8')).toContain('# phase: invoke')
+        expect(fs.readdirSync(path.dirname(outputPath)).sort()).toEqual([
+          'admin.commands.json',
+          'admin.commands.txt',
+        ])
 
         const checkResult = spawnSync(
           process.execPath,
@@ -343,7 +363,7 @@ out = "build/admin.commands.json"
         )
         expect(checkResult.status).toBe(0)
         expect(checkResult.stdout).toContain('No issues found')
-        expect(checkResult.stderr).not.toContain('backend is not implemented')
+        expect(checkResult.stderr).toBe('')
       } finally {
         fs.rmSync(root, { recursive: true, force: true })
       }

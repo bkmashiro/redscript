@@ -1,9 +1,8 @@
 /**
- * Unit tests for the minimal TOML parser embedded in project-config.ts.
+ * Black-box tests for the standards-compliant TOML compatibility loader.
  *
- * The parser functions (parseTomlValue, parseToml) are not exported, so we
- * exercise them through the public loadProjectConfig() API using temp files.
- * This keeps tests black-box and avoids coupling to internal implementation.
+ * The loader is exercised through the public loadProjectConfig() API using
+ * temp files. This keeps tests black-box and locks strict failure semantics.
  */
 
 import * as fs from 'fs'
@@ -44,15 +43,14 @@ describe('basic key=value parsing', () => {
     expect(config?.project?.name).toBe('spaced')
   })
 
-  test('ignores lines without =', () => {
-    // A line without '=' is silently skipped; the rest of the section parses fine
+  test('rejects lines without =', () => {
     const config = parseToml(`[project]\nthis line has no equals\nname = "valid"`)
-    expect(config?.project?.name).toBe('valid')
+    expect(config).toBeNull()
   })
 
-  test('last write wins when a key is defined twice', () => {
+  test('rejects duplicate keys', () => {
     const config = parseToml(`[project]\nname = "first"\nname = "second"`)
-    expect(config?.project?.name).toBe('second')
+    expect(config).toBeNull()
   })
 })
 
@@ -72,10 +70,9 @@ describe('string values', () => {
     expect(config?.project?.name).toBe('single-quoted')
   })
 
-  test('returns bare string when unquoted', () => {
-    // Bare (unquoted) values are returned as-is
+  test('rejects unquoted bare strings', () => {
     const config = parseToml(`[output]\ndir = dist/`)
-    expect(config?.output?.dir).toBe('dist/')
+    expect(config).toBeNull()
   })
 
   test('preserves internal spaces in quoted string', () => {
@@ -134,12 +131,9 @@ describe('boolean values', () => {
     expect(config?.compiler?.['no-dce']).toBe(false)
   })
 
-  test('TRUE (uppercase) is not treated as boolean — returned as bare string', () => {
-    // The parser only recognises lowercase 'true'/'false'; uppercase falls
-    // through to bare-string handling and is then ignored by tomlToConfig
-    // because it expects typeof === 'boolean'.
+  test('rejects uppercase booleans', () => {
     const config = parseToml(`[compiler]\nno-dce = TRUE`)
-    expect(config?.compiler?.['no-dce']).toBeUndefined()
+    expect(config).toBeNull()
   })
 })
 
@@ -186,13 +180,9 @@ describe('array values', () => {
     expect(config?.compiler?.['include-dirs']).toEqual(['a', 'b'])
   })
 
-  test('malformed array (missing closing bracket) — lastIndexOf returns -1, slice wraps around', () => {
-    // lastIndexOf(']') returns -1 when ']' is absent.
-    // slice(1, -1) on '["unclosed"' gives '"unclosed"' (drops first and last char).
-    // That element is then split/trimmed/unquoted, so we get ["unclosed"].
-    // The parser does not reject this — it silently produces a one-element array.
+  test('rejects an array missing its closing bracket', () => {
     const config = parseToml(`[compiler]\ninclude-dirs = ["unclosed"`)
-    expect(config?.compiler?.['include-dirs']).toEqual(['unclosed'])
+    expect(config).toBeNull()
   })
 })
 
@@ -251,14 +241,9 @@ describe('comment stripping', () => {
     expect(config?.project?.name).toBe('after')
   })
 
-  test('# inside a quoted value is NOT preserved — known parser limitation', () => {
-    // The parser strips everything from the first '#' regardless of quoting.
-    // "no#hash" gets truncated to '"no', which has an unmatched leading quote.
-    // The unmatched quote is not stripped, so the bare value '"no' is returned.
-    // tomlToConfig requires typeof === 'string'; '"no' passes that check.
+  test('# inside a quoted value is preserved', () => {
     const config = parseToml(`[project]\nname = "no#hash"`)
-    // value is '"no' — leading quote is NOT stripped (unmatched quote pair)
-    expect(config?.project?.name).toBe('"no')
+    expect(config?.project?.name).toBe('no#hash')
   })
 })
 

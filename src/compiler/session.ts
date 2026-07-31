@@ -1,9 +1,8 @@
 import * as path from 'path'
 
 import type { CompileOptions, CompileResult } from '../emit/compile'
-import type { CompileModulesResult } from '../emit/modules'
 import type { BuildTarget, LoadedProject } from '../project/model'
-import { compileProjectPackages } from './package-backend'
+import { compileProjectPackages, type ProjectCompileResult } from './package-backend'
 import { analyzeProjectTarget, type ProjectTargetAnalysis } from './project-target-analysis'
 import { SourceFileId, SourceManager, SourceManagerOptions } from './source-manager'
 
@@ -101,7 +100,7 @@ export class CompilerSession {
     return analyzeProjectTarget(project, target, { sourceManager: this.sources })
   }
 
-  compileProject(overrides: ProjectTargetOverrides = {}): CompileModulesResult {
+  compileProject(overrides: ProjectTargetOverrides = {}): ProjectCompileResult {
     const { project, target } = this.resolveProjectTarget(overrides)
     return compileProjectPackages(project, target, this.sources)
   }

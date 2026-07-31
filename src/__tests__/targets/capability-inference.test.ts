@@ -140,6 +140,34 @@ fn recurse_b(): void {
       .toMatch(/recurse_a.*recurse_b.*recurse_a/)
   })
 
+  test('distinguishes optimizer-bounded for loops from helper-backed loops', () => {
+    const bounded = makeProject({
+      'src/cmd/main.mcrs': `
+package cmd;
+export fn main(): void {
+  for (let i: int = 0; i < 3; i = i + 1) { raw("say loop"); }
+}
+`,
+    }, 'commands')
+    const dynamic = makeProject({
+      'src/cmd/main.mcrs': `
+package cmd;
+export fn main(): void {
+  let limit: int = 3;
+  for (let i: int = 0; i < limit; i = i + 1) { raw("say loop"); }
+}
+`,
+    }, 'commands')
+    roots.push(bounded, dynamic)
+
+    expect(planFor(bounded).requirements.some(
+      requirement => requirement.capability === 'generated-helper-functions',
+    )).toBe(false)
+    expect(planFor(dynamic).requirements.some(
+      requirement => requirement.capability === 'generated-helper-functions',
+    )).toBe(true)
+  })
+
   test('does not treat an unimported local dependency lifecycle hook as a target root', () => {
     const workspace = mkdtempSync(path.join(tmpdir(), 'redscript-capability-unused-dependency-'))
     roots.push(workspace)

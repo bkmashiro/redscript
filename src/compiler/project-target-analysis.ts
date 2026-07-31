@@ -34,7 +34,11 @@ export function analyzeProjectTarget(
       { file: project.manifestPath, line: 1, col: 1 },
     )
   }
-  if (graphTarget.kind !== target.kind || graphTarget.entry !== target.entry) {
+  if (
+    graphTarget.kind !== target.kind
+    || graphTarget.entry !== target.entry
+    || graphTarget.maxCommands !== target.maxCommands
+  ) {
     throw new DiagnosticError(
       'LoweringError',
       `Target '${target.name}' does not match its manifest declaration`,

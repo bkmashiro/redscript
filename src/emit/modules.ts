@@ -20,8 +20,10 @@ import { monomorphize } from '../hir/monomorphize'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
 import { lowerToLIR } from '../lir/lower'
+import type { LIRModule } from '../lir/types'
 import { lirOptimizeModule, type LIROptimizeOptions } from '../optimizer/lir/pipeline'
 import { emit, type DatapackFile } from './index'
+import { qualifiedFunctionRef } from './paths'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import type { HIRModule, HIRFunction, HIRExpr, HIRStmt, HIRBlock } from '../hir/types'
 import type { Program, FnDecl, Expr, Stmt, Block } from '../ast/types'
@@ -73,15 +75,33 @@ export interface CompileModulesOptions {
   entryFunctions?: string[]
 }
 
+export interface CompileModulesLIROptions extends CompileModulesOptions {
+  /** Internal target adapter hook: lower to LIR without constructing datapack artifacts. */
+  emitArtifacts?: boolean
+}
+
 export interface CompileModulesResult {
   files: DatapackFile[]
   warnings: string[]
+}
+
+export interface CompileModulesLIRResult extends CompileModulesResult {
+  /** Deeply frozen snapshot after the normal MIR/LIR optimization pipeline. */
+  lirModules: readonly LIRModule[]
 }
 
 export function compileModules(
   modules: ModuleInput[],
   options: CompileModulesOptions = {},
 ): CompileModulesResult {
+  const { files, warnings } = compileModulesWithLIR(modules, { ...options, emitArtifacts: true })
+  return { files, warnings }
+}
+
+export function compileModulesWithLIR(
+  modules: ModuleInput[],
+  options: CompileModulesLIROptions = {},
+): CompileModulesLIRResult {
   const namespace = options.namespace ?? 'redscript'
   const lirOptimizeOptions: LIROptimizeOptions = {
     experimentalLocalCopyRewrite: options.experimentalLirLocalCopyRewrite === true,
@@ -253,6 +273,7 @@ export function compileModules(
   // -------------------------------------------------------------------------
 
   const allFiles: DatapackFile[] = []
+  const lirModules: LIRModule[] = []
   // Track library-eligible file paths for cross-module DCE
   const libraryFilePaths = new Set<string>()
   let packMetaEmitted = false
@@ -292,6 +313,10 @@ export function compileModules(
     const entryFunctions = new Set(options.entryFunctions ?? [])
     if (isNamed) {
       const used = usedExports.get(mod.name) ?? new Set()
+      const localSymbols = new Map(
+        ast.declarations.map(fn => [fn.name, `${mod.name}/${fn.name}`]),
+      )
+      rewriteCallsInProgram(ast, localSymbols)
       for (const fn of ast.declarations) {
         const baseName = fn.name
         // Prefix function name
@@ -319,8 +344,10 @@ export function compileModules(
       modSource,
       lirOptimizeOptions,
       options.mcVersion,
+      options.emitArtifacts !== false,
     )
     warnings.push(...modFiles.warnings)
+    lirModules.push(modFiles.lirModule)
 
     // Record library-eligible file paths (only if there are multiple modules — single module = library author)
     if (modules.length > 1) {
@@ -353,16 +380,60 @@ export function compileModules(
   // -------------------------------------------------------------------------
   const finalFiles = crossModuleDCE(allFiles, libraryFilePaths, namespace)
 
-  return { files: finalFiles, warnings }
+  return {
+    files: finalFiles,
+    warnings,
+    lirModules: deepFreeze(lirModules),
+  }
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value
+  for (const key of Reflect.ownKeys(value as object)) {
+    deepFreeze((value as Record<PropertyKey, unknown>)[key])
+  }
+  return Object.freeze(value)
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+function scopeNamedLIRFunctions(lir: LIRModule, moduleName: string, namespace: string): void {
+  const qualifiedRefs = new Map<string, string>()
+  const rawRefs = new Map<string, string>()
+
+  for (const fn of lir.functions) {
+    if (fn.name.startsWith(`${moduleName}/`)) continue
+    const originalName = fn.name
+    const scopedName = `${moduleName}/${originalName}`
+    qualifiedRefs.set(
+      qualifiedFunctionRef(originalName, namespace),
+      qualifiedFunctionRef(scopedName, namespace),
+    )
+    rawRefs.set(originalName, scopedName)
+    fn.name = scopedName
+  }
+
+  if (qualifiedRefs.size === 0) return
+  for (const fn of lir.functions) {
+    for (const instr of fn.instructions) {
+      if ('fn' in instr && typeof instr.fn === 'string') {
+        instr.fn = qualifiedRefs.get(instr.fn) ?? rawRefs.get(instr.fn) ?? instr.fn
+      }
+      if ('cmd' in instr && typeof instr.cmd === 'string') {
+        for (const [original, scoped] of qualifiedRefs) {
+          instr.cmd = instr.cmd.split(original).join(scoped)
+        }
+      }
+    }
+  }
+}
+
 interface SingleModuleResult {
   files: DatapackFile[]
   warnings: string[]
+  lirModule: LIRModule
 }
 
 /**
@@ -445,6 +516,7 @@ function compileSingleModule(
   source: string,
   lirOptimizeOptions: LIROptimizeOptions,
   mcVersion?: McVersion,
+  emitArtifacts = true,
 ): SingleModuleResult {
   const warnings: string[] = []
 
@@ -500,23 +572,26 @@ function compileSingleModule(
     tickFunctions.push(...coroResult.generatedTickFunctions)
 
     const lir = lowerToLIR(mirFinal)
+    if (moduleName) scopeNamedLIRFunctions(lir, moduleName, namespace)
     lir.objective = objective
     const lirOpt = lirOptimizeModule(lir, lirOptimizeOptions)
 
-    const files = emit(lirOpt, {
-      namespace,
-      tickFunctions,
-      loadFunctions,
-      watchFunctions,
-      scheduleFunctions,
-      functionTags,
-      mcVersion,
-    })
+    const files = emitArtifacts
+      ? emit(lirOpt, {
+          namespace,
+          tickFunctions,
+          loadFunctions,
+          watchFunctions,
+          scheduleFunctions,
+          functionTags,
+          mcVersion,
+        })
+      : []
 
     // For named modules: rename the load.mcfunction to avoid path collision.
     // Rename `data/${ns}/function/load.mcfunction` → `data/${ns}/function/${modName}/_load.mcfunction`
     // and update the load tag reference accordingly.
-    if (moduleName) {
+    if (moduleName && emitArtifacts) {
       const loadPath = `data/${namespace}/function/load.mcfunction`
       const newLoadPath = `data/${namespace}/function/${moduleName}/_load.mcfunction`
       const loadTagPath = 'data/minecraft/tags/function/load.json'
@@ -539,7 +614,7 @@ function compileSingleModule(
       }
     }
 
-    return { files, warnings }
+    return { files, warnings, lirModule: lirOpt }
   } catch (err) {
     if (err instanceof DiagnosticError) throw err
     throw err

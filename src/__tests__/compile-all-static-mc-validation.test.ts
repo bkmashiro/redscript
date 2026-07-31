@@ -15,7 +15,7 @@ import { MCCommandValidator } from '../mc-validator'
 
 const REPO_ROOT = path.resolve(__dirname, '../../')
 const CLI = path.join(REPO_ROOT, 'dist', 'src', 'cli.js')
-const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'mc-commands-1.21.4.json')
+const FIXTURE_PATH = path.join(__dirname, '..', 'mc-validator', 'commands-1.21.4.json')
 const TMP_OUT = path.join(os.tmpdir(), 'redscript-compile-all-static-mc')
 
 if (!fs.existsSync(CLI)) {

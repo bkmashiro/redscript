@@ -403,26 +403,42 @@ It is target-specific. It does not need to serve commands output unchanged.
 
 ### Command Program IR
 
-Owns a finite command sequence:
+Owns one schema-versioned finite command artifact with explicit target identity and budget:
 
 ```ts
 interface CommandProgram {
-  setup: CommandStep[]
-  invoke: CommandStep[]
-  cleanup: CommandStep[]
+  schemaVersion: 1
+  target: {
+    name: string
+    kind: 'commands'
+    namespace: string
+    entry: PackageSymbolId
+    minecraftVersion: string
+    commandBudget: number
+    validationProfile: string
+  }
+  commandCount: number
+  phases: {
+    setup: CommandStep[]
+    invoke: CommandStep[]
+    cleanup: CommandStep[]
+  }
 }
 
 interface CommandStep {
-  command: TypedMinecraftCommand | OpaqueCommand
-  effects: EffectSummary
-  source: SourceSpan
-  expansionTrace: SymbolId[]
+  command: string
+  effect: EffectSummary
+  source?: SourceSpan
+  expansionTrace: PhysicalFunctionId[]
+  generated?: boolean
 }
 ```
 
-Commands legalization starts from reachable MIR/typed semantics, fully inlines legal helpers, flattens legal control flow, checks command budget, and rejects residual loops/calls/lifecycle/artifacts.
+Commands legalization fully inlines legal acyclic helpers, flattens compiler-generated finite branch CFGs, preserves command order, checks the total phase budget, statically validates final commands, and rejects residual loops/calls/lifecycle/artifacts. Temporary branch guards are reset in `cleanup`; persistent language state and objectives remain owned by the target. Canonical JSON is the machine artifact; a deterministic text projection is emitted beside it.
 
-Do not force the existing function-oriented LIR to be both datapack LIR and command-sequence IR. Share typed command rendering and effect utilities where semantics match.
+P5 uses one explicit migration adapter: `compileModulesWithLIR(..., { emitArtifacts: false })` returns a deeply frozen optimized LIR snapshot. Named package functions, impl methods, and specialized clones are normalized through the same physical-ID projection as the emitter before the snapshot is frozen. The commands backend immediately converts that snapshot into `CommandProgram`; it never invokes the datapack emitter or exposes helper-function files. This does not make datapack LIR the commands artifact contract. Future typed-ID MIR work can replace this adapter without changing `CommandProgram` or its manifest schema.
+
+Do not force the existing function-oriented LIR to be both datapack LIR and command-sequence IR. Share typed command rendering, selected-version gates, and effect utilities only where semantics match.
 
 ## 6. What to refactor and when
 

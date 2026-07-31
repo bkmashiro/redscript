@@ -1,8 +1,14 @@
 import { createHash } from 'crypto'
+import path from 'path'
 import { DiagnosticError } from '../diagnostics'
 import type { Expr, ImportDecl, Program } from '../ast/types'
-import { compileModules, type CompileModulesResult, type ModuleInput } from '../emit/modules'
-import { parseMcVersion } from '../types/mc-version'
+import {
+  compileModules,
+  compileModulesWithLIR,
+  type CompileModulesResult,
+  type ModuleInput,
+} from '../emit/modules'
+import { DEFAULT_MC_VERSION, parseMcVersion } from '../types/mc-version'
 import type { BuildTarget, LoadedProject } from '../project/model'
 import { reachablePackagePaths, type LoadedPackage } from '../project/package-graph'
 import {
@@ -12,6 +18,26 @@ import {
 } from '../resolver/package-symbols'
 import { analyzeProjectTarget } from './project-target-analysis'
 import type { SourceManager } from './source-manager'
+import {
+  legalizeCommandProgram,
+  renderCommandProgramText,
+  serializeCommandManifest,
+} from '../targets/commands'
+import type { CommandProgram } from '../targets/command-program'
+
+export interface DatapackProjectCompileResult extends CompileModulesResult {
+  readonly kind: 'datapack'
+}
+
+export interface CommandsProjectCompileResult extends CompileModulesResult {
+  readonly kind: 'commands'
+  readonly files: []
+  readonly commandProgram: CommandProgram
+  readonly manifestJson: string
+  readonly textProjection: string
+}
+
+export type ProjectCompileResult = DatapackProjectCompileResult | CommandsProjectCompileResult
 
 function backendPackagePath(loaded: LoadedPackage, rootModulePath: string): string {
   if (loaded.id.modulePath === rootModulePath) return loaded.id.packagePath || '_root'
@@ -161,18 +187,10 @@ export function compileProjectPackages(
   project: LoadedProject,
   target: BuildTarget,
   sourceManager: SourceManager,
-): CompileModulesResult {
+): ProjectCompileResult {
   const analysis = analyzeProjectTarget(project, target, { sourceManager })
   const { graph, linked } = analysis
   if (analysis.diagnostics.length > 0) throw analysis.diagnostics[0]
-
-  if (target.kind !== 'datapack') {
-    throw new DiagnosticError(
-      'LoweringError',
-      `Target '${target.name}' (${target.kind}) passed capability validation, but its backend is not implemented yet`,
-      { file: project.manifestPath, line: 1, col: 1 },
-    )
-  }
 
   const entry = targetEntry(target)
 
@@ -223,9 +241,45 @@ export function compileProjectPackages(
     })
 
   const minecraftVersion = target.minecraftVersion ?? project.manifest.project.minecraftVersion
-  return compileModules(modules, {
+  const mcVersion = minecraftVersion ? parseMcVersion(minecraftVersion) : DEFAULT_MC_VERSION
+  const physicalEntry = `${backendPaths.get(entry.packagePath)}/${entry.symbol}`
+  const compileOptions = {
     namespace: target.namespace,
-    mcVersion: minecraftVersion ? parseMcVersion(minecraftVersion) : undefined,
-    entryFunctions: [`${backendPaths.get(entry.packagePath)}/${entry.symbol}`],
+    mcVersion,
+    entryFunctions: [physicalEntry],
+  }
+
+  if (target.kind === 'datapack') {
+    const result = compileModules(modules, compileOptions)
+    return { kind: 'datapack', ...result }
+  }
+
+  const lowered = compileModulesWithLIR(modules, { ...compileOptions, emitArtifacts: false })
+  const sourceLabels = new Map<string, string>()
+  for (const packagePath of reachable) {
+    const loaded = graph.packages.get(packagePath)!
+    for (const source of loaded.sourceFiles) {
+      const label = `${loaded.id.path}/${path.basename(source.absolutePath)}`
+      sourceLabels.set(source.absolutePath, label)
+      sourceLabels.set(String(source.id), label)
+    }
+  }
+  const commandProgram = legalizeCommandProgram(lowered.lirModules, {
+    targetName: target.name,
+    namespace: target.namespace,
+    entryFunction: `${target.namespace}:${physicalEntry}`,
+    manifestEntry: target.entry,
+    minecraftVersion: minecraftVersion ?? '1.21',
+    mcVersion,
+    maxCommands: target.maxCommands,
+    sourceLabels,
   })
+  return {
+    kind: 'commands',
+    files: [],
+    warnings: lowered.warnings,
+    commandProgram,
+    manifestJson: serializeCommandManifest(commandProgram),
+    textProjection: renderCommandProgramText(commandProgram),
+  }
 }

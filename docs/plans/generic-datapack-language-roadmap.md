@@ -738,7 +738,7 @@ git diff --check
 13. ✅ emit and deterministically merge project-package `@function_tag` contributions for datapacks while rejecting them for commands (`RST2008`);
 14. ✅ fail closed for package-backend decorators whose runtime lowering is not yet wired (`RST2009` event runtime, `RST2010` runtime wrappers, `RST2011` load dependencies) instead of silently omitting semantics.
 
-**Acceptance:** one manifest can compile a datapack target and fail a commands target at a lifecycle/function-tag contribution before emit; reachable failures include stable source and shortest call-chain provenance. A target-compatible commands program proceeds through semantic validation and then stops explicitly at the still-unimplemented P5 backend.
+**P4 checkpoint acceptance:** one manifest can compile a datapack target and fail a commands target at a lifecycle/function-tag contribution before emit; reachable failures include stable source and shortest call-chain provenance. At the P4 checkpoint, a target-compatible commands program stopped explicitly at the then-unimplemented P5 backend; P5 below replaces that stop with finite-command legalization.
 
 **Gate:** focused frontend/package/target/CLI tests, legacy decorator/tag parity tests, TypeScript build, static Minecraft validation, and `git diff --check`.
 
@@ -749,11 +749,11 @@ git diff --check
 **Files:**
 
 - Create: `src/targets/commands.ts`
-- Create: `src/artifacts/command-manifest.ts`
-- Modify: optimizer pass manager to expose commands-safe profile
-- Modify: `src/project/build.ts`
-- Test: `src/__tests__/targets/commands-emit.test.ts`
-- Test: `src/__tests__/e2e/project-multi-target.test.ts`
+- Create: `src/targets/command-program.ts`
+- Modify: `src/emit/modules.ts`, `src/compiler/package-backend.ts`, `src/project/manifest.ts`, `src/cli.ts`
+- Test: `src/__tests__/targets/commands.test.ts`
+- Test: `src/__tests__/targets/commands-integration.test.ts`
+- Test: `src/__tests__/emit/modules-lir-adapter.test.ts`, `src/__tests__/cli.test.ts`
 
 **RED/GREEN slices:**
 
@@ -773,6 +773,21 @@ git diff --check
 **Acceptance:** an admin utility project builds a datapack target and a no-datapack finite command sequence; the latter contains no `function <namespace>:...` calls and no pack artifacts.
 
 **Gate:** focused commands tests, project E2E, build, `npm run validate-mc`, artifact readback.
+
+**Implementation checkpoint (2026-07-31): complete.**
+
+- `src/targets/command-program.ts` owns the immutable, schema-versioned `CommandProgram`, canonical JSON serializer, and human-readable text projection.
+- `src/targets/commands.ts` owns helper inlining, compiler-CFG branch flattening, residual-call verification, source/expansion provenance, effect labels, command budgeting, and final static command validation.
+- Commands lowering reads a deeply frozen optimized LIR snapshot through `compileModulesWithLIR(..., { emitArtifacts: false })`; it does not invoke the datapack emitter or construct `pack.mcmeta`/tag artifacts.
+- Named package local calls, impl methods, and specialized method clones now share the emitter's canonical qualified physical identity, closing pre-existing helper mismatches and method-path collision risk.
+- Small canonical `for (let i = 0; i < N; i = i + 1)` loops with `N <= 8` reuse the verified optimizer unroll; dynamic/complex loops retain their generated-helper requirement and fail closed for commands.
+- `[target.<name>] max-commands = <positive integer>` overrides the default budget of 1024. It is commands-only, participates in manifest authority validation, and reports `RST2102` with the active expansion trace.
+- `RST2101` rejects unknown, recursive, contextual, macro, and residual function calls (qualified or unqualified); function-like text in ordinary command arguments is not misclassified. `RST2103` rejects malformed or statically invalid final commands.
+- Every final command passes the production 1.21.4 Brigadier baseline validator after selected-version rendering. The manifest records `minecraft-1.21.4-baseline+selected-renderer`; this is static evidence, not a 26.2 live-server claim.
+- `CompilerSession.compileProject()` returns an explicit `datapack | commands` result. Commands results contain no datapack files and expose the frozen program, canonical JSON, and text projection.
+- Dynamic branch guards are initialized in `invoke` and reset in `cleanup`; user-visible objectives and persistent state are not removed.
+- CLI commands output writes `<target>.json` plus `<target>.txt` through staged replacement with rollback. Capability/legalization failures leave prior artifacts untouched, and `check --target` runs the same backend verifier without writing.
+- Multi-target E2E compiles one project independently to datapack and commands, verifies helper/branch/constant-loop lowering, confirms no residual `function` command, validates every generated command, and checks deterministic readback.
 
 ### P6 — versioned remote dependencies and lockfile
 
@@ -895,19 +910,17 @@ Old `[project] namespace/mc-version`, `[compiler]`, and `[output]` values map in
 
 ## 14. Immediate next implementation slice
 
-Begin with **P1 strict project model**, not resource emission and not the commands backend.
+P1–P5 are complete. Begin **P6 versioned remote dependencies and lockfile** without changing local-dependency identity semantics or introducing a central registry.
 
-The first coherent slice is:
+The next coherent slice is:
 
-1. introduce `LoadedProject`, `ProjectManifest`, and `BuildTarget` types;
-2. replace detached config discovery with root-aware project discovery;
-3. parse one explicit `[target.pack]` while mapping old config to an implicit target;
-4. add `redscript project --format json` readback;
-5. keep current compile/build behavior unchanged;
-6. run focused config/project tests, build, and diff check;
-7. commit and push as one signed compatibility-preserving slice.
-
-Only after P1 is green should parser work for `package` begin.
+1. define immutable remote source and resolved-revision identities;
+2. specify canonical `redscript.lock` ordering, source URL, revision/version, content hash, and license provenance;
+3. implement explicit opt-in resolution with bounded download size/time and no network access during ordinary locked builds;
+4. cache by immutable identity and support offline warm-cache builds;
+5. reject lock/content identity mismatch before package loading;
+6. keep local workspace replacement outside lockfile identity;
+7. run focused dependency/security tests, build, static gates, signed commit, and push.
 
 ## 15. Repository evidence behind this plan
 

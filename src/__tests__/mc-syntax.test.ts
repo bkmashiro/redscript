@@ -4,7 +4,7 @@ import * as path from 'path'
 import { compile } from '../compile'
 import { MCCommandValidator } from '../mc-validator'
 
-const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'mc-commands-1.21.4.json')
+const FIXTURE_PATH = path.join(__dirname, '..', 'mc-validator', 'commands-1.21.4.json')
 const EXAMPLES = ['shop', 'quiz', 'turret']
 
 function getCommands(source: string, namespace = 'test'): string[] {

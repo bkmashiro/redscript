@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import { DiagnosticError } from '../diagnostics'
 
-interface BrigadierFile {
+export interface BrigadierFile {
   root: BrigadierNode
 }
 
@@ -46,7 +46,14 @@ export class MCCommandValidator {
   private readonly root: BrigadierNode
   private readonly rootChildren: BrigadierNode[]
 
-  constructor(commandsPath: string) {
+  constructor(commands: string | BrigadierFile) {
+    if (typeof commands !== 'string') {
+      this.root = commands.root
+      this.rootChildren = commands.root.children ?? []
+      return
+    }
+
+    const commandsPath = commands
     let raw: string
     try {
       raw = fs.readFileSync(commandsPath, 'utf-8')

@@ -80,13 +80,56 @@ const HELPER_DECORATORS: ReadonlySet<DecoratorName> = new Set([
 const HELPER_CONTROL_FLOW = new Set([
   'while',
   'do_while',
-  'for',
   'foreach',
   'for_range',
   'for_in_array',
   'for_each',
   'labeled_loop',
 ])
+
+/** Match the exact small-loop shape consumed by optimizer/unroll.ts. */
+function isStaticallyUnrollableFor(record: Record<string, unknown>): boolean {
+  if (record.kind !== 'for') return false
+  const init = record.init as Record<string, unknown> | undefined
+  const cond = record.cond as Record<string, unknown> | undefined
+  const step = record.step as Record<string, unknown> | undefined
+  const initValue = init?.init as Record<string, unknown> | undefined
+  const left = cond?.left as Record<string, unknown> | undefined
+  const right = cond?.right as Record<string, unknown> | undefined
+  const stepValue = step?.value as Record<string, unknown> | undefined
+  const stepLeft = stepValue?.left as Record<string, unknown> | undefined
+  const stepRight = stepValue?.right as Record<string, unknown> | undefined
+  const body = record.body as readonly Record<string, unknown>[] | undefined
+
+  return init?.kind === 'let'
+    && typeof init.name === 'string'
+    && initValue?.kind === 'int_lit'
+    && initValue.value === 0
+    && cond?.kind === 'binary'
+    && cond.op === '<'
+    && left?.kind === 'ident'
+    && left.name === init.name
+    && right?.kind === 'int_lit'
+    && typeof right.value === 'number'
+    && right.value >= 0
+    && right.value <= 8
+    && step?.kind === 'assign'
+    && step.target === init.name
+    && step.op === '='
+    && stepValue?.kind === 'binary'
+    && stepValue.op === '+'
+    && stepLeft?.kind === 'ident'
+    && stepLeft.name === init.name
+    && stepRight?.kind === 'int_lit'
+    && stepRight.value === 1
+    && Array.isArray(body)
+    && body.every(stmt => !HELPER_CONTROL_FLOW.has(String(stmt.kind)) && stmt.kind !== 'for' && stmt.kind !== 'if')
+}
+
+function requiresGeneratedHelper(record: Record<string, unknown>): boolean {
+  if (record.kind === 'for') return !isStaticallyUnrollableFor(record)
+  return HELPER_CONTROL_FLOW.has(String(record.kind))
+}
 
 function projectManifestPath(linked: ResolvedPackageProgram): string | undefined {
   return linked.graph.moduleGraph.modules.get(linked.graph.modulePath)?.project.manifestPath
@@ -255,7 +298,7 @@ function inferFunctionRequirements(
         }
       }
     }
-    if (HELPER_CONTROL_FLOW.has(record.kind as string)) {
+    if (requiresGeneratedHelper(record)) {
       addRequirement(
         requirements,
         reachability,
