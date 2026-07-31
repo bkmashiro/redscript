@@ -213,6 +213,10 @@ default = true
             minecraftVersion: '26.2',
           },
           sourceRoots: [sourceDir],
+          assets: {
+            roots: [],
+            include: ['**/*.json', '**/*.nbt'],
+          },
           dependencies: [],
           modules: [{
             modulePath: 'example.com/castle',

@@ -994,6 +994,45 @@ burst("mypack:blue_spark");     // OK: datapack/mod IDs stay open
 
 Typed resource checks are compile/typechecker diagnostics, not live Paper proof. They do not model registries as closed enums; built-in catalogs are advisory seeds, and datapacks/mods can still provide additional IDs.
 
+### Datapack resource contributions
+
+Explicit project targets can copy validated JSON and structure NBT into the same typed artifact graph as generated functions. Asset paths are resolved against the owning module's `[assets].roots`, never against the process working directory:
+
+```toml
+[project]
+name = "bakery"
+module = "example.com/bakery"
+namespace = "bakery"
+mc-version = "26.2"
+source-roots = ["src"]
+
+[assets]
+roots = ["assets"]
+include = ["**/*.json", "**/*.nbt"]
+
+[target.pack]
+kind = "datapack"
+entry = "example.com/bakery/cmd/pack::main"
+out = "dist"
+default = true
+```
+
+```rs
+package pack;
+
+resource recipe bakery:toast from "recipes/toast.json";
+resource item_tag bakery:foods/snacks from "tags/foods.json";
+resource structure bakery:hut from "structures/hut.nbt";
+
+export fn main(): void {}
+```
+
+The currently mapped contribution kinds are `recipe`, `advancement`, `predicate`, `loot_table`, `item_modifier`, `structure`, `function_tag`, `item_tag`, `block_tag`, `entity_type_tag`, `fluid_tag`, and `game_event_tag`. Registry directories are selected from the target Minecraft version—for example, `recipe` maps to `recipes/` before 1.21 and `recipe/` for 1.21 and later.
+
+`from` paths must be canonical forward-slash relative paths. Asset roots and source files must remain inside the owning module, asset-tree symlinks are rejected, include patterns are enforced, and duplicate output paths fail before output mutation. Configured asset paths and bytes are part of the module content hash. JSON is parsed, schema-checked for known kinds, and serialized canonically; structure NBT accepts raw or gzip payloads and is structurally validated. Local typed references such as `#bakery:other_tag` must resolve in the artifact graph.
+
+Strict project `compile` atomically replaces the target directory, while `publish --target <name>` writes a deterministic zip from the same graph. Binary NBT remains available through `DatapackProjectCompileResult.artifacts`; the compatibility `files` projection remains text-only. A `commands` target rejects every emitting `resource ... from ...` declaration with `RST2003` before writing command outputs. Reference-only declarations such as `resource item bakery:wand;` remain target-neutral.
+
 ### General builtins
 
 | Builtin | Returns | Notes |

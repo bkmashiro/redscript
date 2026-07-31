@@ -97,9 +97,11 @@ export type {
   ProjectDependencyContext,
   ProjectIdentity,
   ProjectManifest,
+  ProjectAssetSettings,
   RemoteDependencySpec,
   ResolvedDependency,
 } from './project/model'
+export * from './artifacts'
 export { loadPackageGraph } from './project/package-loader'
 export { reachablePackagePaths } from './project/package-graph'
 export type {

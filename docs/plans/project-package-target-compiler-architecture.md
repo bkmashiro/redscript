@@ -629,7 +629,7 @@ M6  Canonical MIR effects + capability summaries
 M7  Current emitter wrapped as DatapackBackend, byte-identical
 M8  Commands legalization spike from MIR
 M9  Commands backend production subset
-M10 Typed artifact graph/resources
+M10 Typed artifact graph/resources (complete)
 M11 Retire internal AST-merge path after compatibility evidence
 ```
 

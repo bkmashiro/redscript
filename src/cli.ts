@@ -24,7 +24,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as https from 'https'
 import { execSync } from 'child_process'
-import archiver from 'archiver'
 import { loadProjectConfig, buildTomlTemplate } from './config/project-config'
 import { loadProject, ProjectManifestError, resolveBuildTarget } from './project/manifest'
 import { loadProjectModuleGraph, type ProjectModuleGraph } from './project/module-graph'
@@ -35,6 +34,13 @@ import { deriveNamespace, parseArgs, sanitizeProjectName } from './cli/args'
 import { runTunerCli } from './tuner/cli'
 import { analyzeProjectTarget } from './compiler/project-target-analysis'
 import { resolveProjectDependencies } from './project/dependency-resolver'
+import {
+  createDatapackArtifactGraph,
+  generatedDatapackArtifacts,
+  withPackDescription,
+  writeArtifactDirectoryAtomically,
+  writeArtifactZipAtomically,
+} from './artifacts'
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -45,7 +51,7 @@ RedScript Compiler v2
 
 Usage:
   redscript compile <file> [-o <out>] [--namespace <ns>] [--incremental]
-  redscript publish <file> [-o <out.zip>] [--namespace <ns>] [--mc-version <ver>]
+  redscript publish <file> [-o <out.zip>] [--target <name>] [--namespace <ns>] [--mc-version <ver>]
   redscript watch <dir> [-o <outdir>] [--namespace <ns>] [--hot-reload <url>]
   redscript test <file> [--dry-run] [--mc-url <url>]
   redscript check <file> [--fix]
@@ -525,10 +531,16 @@ function compileCommand(
       return
     }
 
-    // Create output directory
-    fs.mkdirSync(output, { recursive: true })
+    if ('kind' in result && result.kind === 'datapack') {
+      writeArtifactDirectoryAtomically(result.artifactGraph, output)
+      console.log(`✓ Compiled ${file} to ${output}/`)
+      console.log(`  Namespace: ${namespace}`)
+      console.log(`  Artifacts: ${result.artifacts.length}`)
+      return
+    }
 
-    // Write all files
+    // Legacy single-file adapter preserves its historical projection behavior.
+    fs.mkdirSync(output, { recursive: true })
     for (const dataFile of result.files) {
       const filePath = path.join(output, dataFile.path)
       const dir = path.dirname(filePath)
@@ -878,6 +890,7 @@ async function publishCommand(
   lenient = false,
   includeDirs?: string[],
   experimentalLirLocalCopyRewrite = false,
+  projectSelection?: { project: LoadedProject; target: BuildTarget },
 ): Promise<void> {
   if (!fs.existsSync(file)) {
     console.error(`Error: File not found: ${file}`)
@@ -895,65 +908,65 @@ async function publishCommand(
   }
 
   const source = fs.readFileSync(file, 'utf-8')
+  const strictPackageProject = projectSelection?.target.compatibility === 'explicit'
+  if (strictPackageProject) {
+    const unsupported = [
+      lenient && '--lenient',
+      includeDirs && includeDirs.length > 0 && '--include',
+      experimentalLirLocalCopyRewrite && '--experimental-lir-local-copy-rewrite',
+    ].filter(Boolean)
+    if (unsupported.length > 0) {
+      console.error(`Error: strict project package publishing does not support ${unsupported.join(', ')}`)
+      process.exit(2)
+    }
+  }
 
-  let compileResult
   try {
-    compileResult = compile(source, {
-      namespace,
-      filePath: file,
-      generateSourceMap: false,
-      mcVersion,
-      lenient,
-      includeDirs,
-      experimentalLirLocalCopyRewrite,
-    })
+    let graph
+    let warnings: readonly string[]
+    if (strictPackageProject && projectSelection) {
+      const result = createCompilerSession({
+        project: projectSelection.project,
+        target: projectSelection.target,
+      }).compileProject({ namespace, minecraftVersion: mcVersionStr })
+      if (result.kind !== 'datapack') {
+        throw new Error(`Target '${projectSelection.target.name}' is '${result.kind}' and cannot be published as a datapack zip`)
+      }
+      graph = result.artifactGraph
+      warnings = result.warnings
+    } else {
+      const result = compile(source, {
+        namespace,
+        filePath: file,
+        generateSourceMap: false,
+        mcVersion,
+        lenient,
+        includeDirs,
+        experimentalLirLocalCopyRewrite,
+      })
+      graph = createDatapackArtifactGraph(
+        generatedDatapackArtifacts(result.files, mcVersion),
+        { minecraftVersion: mcVersion, localNamespaces: [namespace] },
+      )
+      warnings = result.warnings
+    }
+
+    for (const warning of warnings) console.error(`Warning: ${warning}`)
+    graph = withPackDescription(graph, description)
+    await writeArtifactZipAtomically(graph, outputZip)
+
+    console.log(`✓ Published ${file} → ${outputZip}`)
+    console.log(`  Namespace:   ${namespace}`)
+    console.log(`  pack_format: ${mcVersionToPackFormat(mcVersion)}`)
+    console.log(`  Artifacts:   ${graph.artifacts.length}`)
   } catch (err) {
-    console.error(formatError(err as Error, source, file))
+    console.error(formatError(
+      err as Error,
+      strictPackageProject ? undefined : source,
+      strictPackageProject ? undefined : file,
+    ))
     process.exit(1)
   }
-
-  for (const w of compileResult.warnings) {
-    console.error(`Warning: ${w}`)
-  }
-
-  const packFormat = mcVersionToPackFormat(mcVersion)
-  const mcmeta = JSON.stringify({
-    pack: {
-      pack_format: packFormat,
-      description,
-    }
-  }, null, 2)
-
-  // Ensure output directory exists
-  fs.mkdirSync(path.dirname(path.resolve(outputZip)), { recursive: true })
-
-  await new Promise<void>((resolve, reject) => {
-    const output = fs.createWriteStream(outputZip)
-    const archive = archiver('zip', { zlib: { level: 9 } })
-
-    output.on('close', resolve)
-    archive.on('error', reject)
-    archive.pipe(output)
-
-    // Add pack.mcmeta at root
-    archive.append(mcmeta, { name: 'pack.mcmeta' })
-
-    // Add compiled files — skip pack.mcmeta from compile result (we generate our own)
-    // The compile result already produces correct datapack paths, e.g.:
-    //   data/<namespace>/function/setup.mcfunction
-    //   data/minecraft/tags/function/load.json
-    for (const dataFile of compileResult.files) {
-      if (dataFile.path === 'pack.mcmeta') continue
-      archive.append(dataFile.content, { name: dataFile.path })
-    }
-
-    void archive.finalize()
-  })
-
-  console.log(`✓ Published ${file} → ${outputZip}`)
-  console.log(`  Namespace:   ${namespace}`)
-  console.log(`  pack_format: ${packFormat}`)
-  console.log(`  Files:       ${compileResult.files.length}`)
 }
 
 function declarationTypeToString(type: TypeNode): string {
@@ -1066,6 +1079,7 @@ function projectJson(project: LoadedProject, moduleGraph: ProjectModuleGraph): o
     manifestPath: project.manifestPath,
     project: project.manifest.project,
     sourceRoots: project.sourceRoots,
+    assets: project.assets,
     dependencies: [...project.dependencies.values()].sort((left, right) =>
       left.modulePath.localeCompare(right.modulePath),
     ),
@@ -1304,41 +1318,49 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       {
-        // Determine project directory
-        const fileDir = path.dirname(path.resolve(parsed.file))
-        // Load redscript.toml first, fall back to legacy redscript.config.json
-        const tomlConfig = loadProjectConfig(fileDir)
-        const legacyConfig = readConfig(fileDir)
+        try {
+          const fileDir = path.dirname(path.resolve(parsed.file))
+          const selected = loadCliProjectTarget(fileDir, parsed.target)
+          const tomlConfig = loadProjectConfig(fileDir)
+          const legacyConfig = readConfig(fileDir)
 
-        const namespace = parsed.namespace
-          ?? tomlConfig?.project?.namespace
-          ?? legacyConfig.namespace
-          ?? deriveNamespace(parsed.file)
-        const description = parsed.description
-          ?? tomlConfig?.project?.description
-          ?? legacyConfig.description
-          ?? `${namespace} datapack`
-        const mcVersionStr = parsed.mcVersionStr
-          ?? tomlConfig?.project?.['mc-version']
-          ?? legacyConfig.mcVersion
-        const includeDirs = parsed.includeDirs
-          ?? tomlConfig?.compiler?.['include-dirs']
+          const namespace = parsed.namespace
+            ?? selected?.target.namespace
+            ?? tomlConfig?.project?.namespace
+            ?? legacyConfig.namespace
+            ?? deriveNamespace(parsed.file)
+          const description = parsed.description
+            ?? selected?.project.manifest.project.description
+            ?? tomlConfig?.project?.description
+            ?? legacyConfig.description
+            ?? `${namespace} datapack`
+          const mcVersionStr = parsed.mcVersionStr
+            ?? selected?.target.minecraftVersion
+            ?? tomlConfig?.project?.['mc-version']
+            ?? legacyConfig.mcVersion
+          const includeDirs = parsed.includeDirs
+            ?? selected?.project.compiler.includeDirs
+            ?? tomlConfig?.compiler?.['include-dirs']
 
-        // Default output: <namespace>.zip in cwd
-        const defaultZip = path.join(process.cwd(), `${namespace}.zip`)
-        const outputZip = parsed.output
-          ?? (tomlConfig?.output?.dir ? path.join(tomlConfig.output.dir, `${namespace}.zip`) : defaultZip)
+          const defaultZip = path.join(process.cwd(), `${namespace}.zip`)
+          const outputZip = parsed.output
+            ?? (tomlConfig?.output?.dir ? path.join(tomlConfig.output.dir, `${namespace}.zip`) : defaultZip)
 
-        await publishCommand(
-          parsed.file,
-          outputZip,
-          namespace,
-          description,
-          mcVersionStr,
-          parsed.lenient,
-          includeDirs,
-          parsed.experimentalLirLocalCopyRewrite,
-        )
+          await publishCommand(
+            parsed.file,
+            outputZip,
+            namespace,
+            description,
+            mcVersionStr,
+            parsed.lenient,
+            includeDirs,
+            parsed.experimentalLirLocalCopyRewrite,
+            selected ?? undefined,
+          )
+        } catch (error) {
+          console.error(`Error: ${(error as Error).message}`)
+          process.exit(error instanceof ProjectManifestError ? 2 : 1)
+        }
       }
       break
     }

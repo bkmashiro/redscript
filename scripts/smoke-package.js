@@ -124,8 +124,36 @@ function main() {
     }
 
     hasRequiredFiles(files)
+
+    const requiredArtifactExports = [
+      'createDatapackArtifactGraph',
+      'generatedDatapackArtifacts',
+      'projectLegacyDatapackFiles',
+      'resolveResourceDescriptor',
+      'writeArtifactDirectoryAtomically',
+      'writeArtifactZipAtomically',
+    ]
+    for (const exportName of requiredArtifactExports) {
+      if (typeof compilerPackage[exportName] !== 'function') {
+        throw new Error(`Installed package did not expose ${exportName}`)
+      }
+    }
+    const artifactGraph = compilerPackage.createDatapackArtifactGraph(
+      compilerPackage.generatedDatapackArtifacts(files, compilerPackage.DEFAULT_MC_VERSION),
+      {
+        minecraftVersion: compilerPackage.DEFAULT_MC_VERSION,
+        localNamespaces: [NAMESPACE],
+      },
+    )
+    if (artifactGraph.artifacts.length !== files.length) {
+      throw new Error('installed artifact API did not preserve legacy file count')
+    }
+    if (compilerPackage.resolveResourceDescriptor('recipe', compilerPackage.McVersion.v1_21).directory !== 'recipe') {
+      throw new Error('installed registry descriptor API returned the wrong modern recipe path')
+    }
+
     console.log(
-      `release package smoke OK v${packageJson.version} files=${files.length}`,
+      `release package smoke OK v${packageJson.version} files=${files.length} artifacts=${artifactGraph.artifacts.length}`,
     )
 
   } catch (error) {

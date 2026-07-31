@@ -376,11 +376,14 @@ export function buildSemanticTargetPlan(
     if (!loaded) continue
     for (const program of loaded.programs) {
       for (const resource of program.resourceDeclarations ?? []) {
+        const capability = resource.sourcePath ? 'resource-artifacts' : 'resource-references'
         addRequirement(
           requirements,
           reachability,
-          'resource-references',
-          `resource ${resource.registry} ${resource.id}`,
+          capability,
+          resource.sourcePath
+            ? `resource ${resource.registry} ${resource.id} from '${resource.sourcePath}'`
+            : `resource ${resource.registry} ${resource.id}`,
           undefined,
           resource.span,
         )

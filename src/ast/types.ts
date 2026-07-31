@@ -454,6 +454,8 @@ export interface ResourceDecl {
   id: string
   namespace: string
   path: string
+  /** Canonical path relative to one configured [assets].roots entry. */
+  sourcePath?: string
   /** Placeholder for future doc-comment capture; lexer currently drops comments. */
   doc?: string
   span?: Span

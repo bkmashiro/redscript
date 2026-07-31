@@ -45,7 +45,6 @@
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
-    "@types/archiver": "^7.0.0",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
     "@types/semver": "^7.7.1",
@@ -71,7 +70,6 @@
   },
   "author": "bkmashiro",
   "dependencies": {
-    "archiver": "^7.0.1",
     "semver": "^7.7.4",
     "smol-toml": "^1.7.1",
     "vscode-languageserver": "^9.0.1",

@@ -558,11 +558,57 @@ function parseProjectManifestInternal(
   checkKnownKeys(output, 'output', OUTPUT_KEYS, absoluteManifestPath, source)
   const legacyOutput = optionalString(output, 'dir', 'output', absoluteManifestPath, source)
 
+  let assetRoots: string[] = []
+  let assetInclude: string[] = ['**/*.json', '**/*.nbt']
   if (root.assets != null) {
     const assets = tableAt(root.assets, 'assets', absoluteManifestPath, source)
     checkKnownKeys(assets, 'assets', ASSET_KEYS, absoluteManifestPath, source)
-    optionalStringArray(assets, 'roots', 'assets', absoluteManifestPath, source)
-    optionalStringArray(assets, 'include', 'assets', absoluteManifestPath, source)
+    const rootsRaw = optionalStringArray(assets, 'roots', 'assets', absoluteManifestPath, source) ?? []
+    assetInclude = optionalStringArray(assets, 'include', 'assets', absoluteManifestPath, source) ?? assetInclude
+    if (rootsRaw.length === 0 && assets.include != null) {
+      fail(
+        absoluteManifestPath,
+        source,
+        'assets.roots',
+        "'[assets].roots' must declare at least one directory when include patterns are configured",
+      )
+    }
+    for (const pattern of assetInclude) {
+      if (
+        !pattern ||
+        pattern.startsWith('/') ||
+        /^[A-Za-z]:[\\/]/.test(pattern) ||
+        pattern.includes('\\') ||
+        pattern.split('/').some(segment => segment === '.' || segment === '..') ||
+        (!pattern.endsWith('.json') && !pattern.endsWith('.nbt'))
+      ) {
+        fail(
+          absoluteManifestPath,
+          source,
+          'assets.include',
+          `Asset include '${pattern}' must be a canonical relative JSON/NBT glob`,
+        )
+      }
+    }
+    assetRoots = rootsRaw.map(value => {
+      const resolved = resolveInsideRoot(rootDir, value, 'assets.roots', absoluteManifestPath, source)
+      if (!fs.existsSync(resolved)) {
+        fail(absoluteManifestPath, source, 'assets.roots', `Asset root does not exist: ${resolved}`)
+      }
+      const stat = fs.lstatSync(resolved)
+      if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        fail(absoluteManifestPath, source, 'assets.roots', `Asset root must be a real directory, not a symbolic link: ${resolved}`)
+      }
+      const canonical = fs.realpathSync(resolved)
+      const canonicalProject = fs.realpathSync(rootDir)
+      if (path.relative(canonicalProject, canonical).startsWith(`..${path.sep}`)) {
+        fail(absoluteManifestPath, source, 'assets.roots', `Asset root escapes the project root: ${resolved}`)
+      }
+      return canonical
+    })
+    if (new Set(assetRoots).size !== assetRoots.length) {
+      fail(absoluteManifestPath, source, 'assets.roots', "'[assets].roots' must not contain duplicate directories")
+    }
   }
   const dependencyDeclarations = parseDependencyDeclarations(
     root,
@@ -716,6 +762,10 @@ function parseProjectManifestInternal(
       includeDirs: includeDirsRaw.map(value => path.resolve(rootDir, value)),
       noDce: optionalBoolean(compiler, 'no-dce', 'compiler', absoluteManifestPath, source),
     },
+    assets: Object.freeze({
+      roots: Object.freeze(assetRoots),
+      include: Object.freeze(assetInclude),
+    }),
     targets,
     defaultTarget,
   }

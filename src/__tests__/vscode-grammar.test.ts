@@ -131,6 +131,13 @@ describe('vscode TextMate grammar smoke', () => {
     expect(hasDeclareFnPattern).toBe(true)
   })
 
+  it('highlights project and resource contribution declaration keywords', () => {
+    const keywordMatches = collectPatternStrings(grammar.repository?.keywords)
+    for (const keyword of ['package', 'export', 'resource', 'from']) {
+      expect(keywordMatches.some(rule => regexFromTmRule(rule).test(keyword))).toBe(true)
+    }
+  })
+
   it('contains redscript grammar contribution in package.json', () => {
     const grammars = packageJson?.contributes?.grammars ?? []
     const redscriptGrammar = grammars.find(

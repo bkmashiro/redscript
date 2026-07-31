@@ -284,6 +284,7 @@ export class DeclParser extends StmtParser {
     )
   }
 
+  /** Parse `resource <registry> <namespace>:<path> [from "<asset-path>"];`. */
   parseResourceDecl(): ResourceDecl {
     const resourceToken = this.expect('ident')
     if (resourceToken.value !== 'resource') {
@@ -291,16 +292,54 @@ export class DeclParser extends StmtParser {
     }
 
     const registry = this.expect('ident').value
-    const namespace = this.expect('ident').value
+    const namespaceToken = this.expect('ident')
+    const namespace = namespaceToken.value
     this.expect(':')
-    const path = this.expect('ident').value
+
+    const pathTokens: string[] = []
+    while (!this.check(';') && !this.check('eof')) {
+      const previousPathToken = pathTokens[pathTokens.length - 1]
+      const startsFromClause = pathTokens.length > 0
+        && previousPathToken !== '/'
+        && previousPathToken !== '-'
+        && previousPathToken !== '.'
+        && this.check('ident')
+        && this.peek().value === 'from'
+      if (startsFromClause) break
+      const token = this.advance()
+      if (!['ident', 'int_lit', '/', '-', '.'].includes(token.kind)) {
+        this.error(`Invalid resource path token '${token.value}'`)
+      }
+      pathTokens.push(token.value)
+    }
+    const resourcePath = pathTokens.join('')
+    if (!/^[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)*$/.test(resourcePath)) {
+      this.error(`Invalid resource path '${resourcePath}'`)
+    }
+
+    let sourcePath: string | undefined
+    if (this.check('ident') && this.peek().value === 'from') {
+      this.advance()
+      const source = this.expect('string_lit')
+      sourcePath = source.value
+      if (
+        !sourcePath ||
+        sourcePath.startsWith('/') ||
+        /^[A-Za-z]:[\\/]/.test(sourcePath) ||
+        sourcePath.includes('\\') ||
+        sourcePath.split('/').some(segment => !segment || segment === '.' || segment === '..')
+      ) {
+        this.error(`Resource source must be a canonical relative asset path, got '${sourcePath}'`)
+      }
+    }
     this.match(';')
 
     return this.withLoc({
       registry,
-      id: `${namespace}:${path}`,
+      id: `${namespace}:${resourcePath}`,
       namespace,
-      path,
+      path: resourcePath,
+      sourcePath,
       doc: '',
     }, resourceToken)
   }

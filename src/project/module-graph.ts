@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 import { parseProjectDependencyManifest, ProjectManifestError } from './manifest'
+import { discoverProjectAssets } from './assets'
 import type { LoadedProject } from './model'
 
 export interface ModuleSourceFile {
@@ -105,6 +106,11 @@ function hashModule(project: LoadedProject, sourceFiles: readonly ModuleSourceFi
   for (const source of sourceFiles) {
     hash.update(`source\0${source.projectRelativePath}\0`)
     hash.update(fs.readFileSync(source.absolutePath))
+    hash.update('\0')
+  }
+  for (const asset of discoverProjectAssets(project)) {
+    hash.update(`asset\0${asset.projectRelativePath}\0`)
+    hash.update(fs.readFileSync(asset.absolutePath))
     hash.update('\0')
   }
   return hash.digest('hex')

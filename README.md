@@ -173,7 +173,7 @@ fn clear_nearby_zombies() {
 
 - **Compiler pipeline** — parser, type checker, HIR/MIR/LIR lowering, optimizers, and datapack emitter.
 - **Minecraft-aware validation** — static command checks plus optional Paper/TestHarness integration tests; static diagnostics, not live Paper proof.
-- **Typed resource/package DX** — typed `resource<particle>` / `resource<effect>` checks, contextual `namespace:path` literals, and generated `.d.mcrs` declaration surfaces.
+- **Typed resource/package DX** — typed `resource<particle>` / `resource<effect>` checks, contextual `namespace:path` literals, generated `.d.mcrs` declaration surfaces, and project-owned JSON/NBT contributions through a validated artifact graph.
 - **LSP + VSCode extension** — hover docs, go-to-definition, completion, diagnostics, snippets, and syntax highlighting.
 - **Formatter / linter / test runner** — project tooling for maintaining larger datapacks.
 - **Stdlib** — math, vectors, particles, inventory, scheduling, data structures, ECS-style helpers, and more.

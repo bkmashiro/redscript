@@ -809,15 +809,17 @@ A central package registry is out of scope until Git/source dependencies and loc
 
 **Objective:** After projects and targets exist, extend the datapack target beyond commands.
 
-- introduce typed `DatapackArtifact` while preserving `DatapackFile` projection;
-- load configured JSON/NBT assets through package/project provenance;
-- centralize versioned registry-to-path descriptors;
-- extend `resource <kind> <id> from "...";`;
-- validate path collisions, JSON syntax, known schemas, references, and lifecycle;
-- support deterministic directory and zip outputs;
-- reject all emitting resources under commands targets through P4 capabilities.
+- ✅ introduce typed `DatapackArtifact` while preserving `DatapackFile` projection;
+- ✅ load configured JSON/NBT assets through package/project provenance;
+- ✅ centralize versioned registry-to-path descriptors;
+- ✅ extend `resource <kind> <id> from "...";`;
+- ✅ validate path collisions, JSON syntax, known schemas, references, and lifecycle;
+- ✅ support deterministic directory and zip outputs;
+- ✅ reject all emitting resources under commands targets through P4 capabilities.
 
 Acceptance: a mixed project builds `.mcfunction`, recipe JSON, item tag JSON, and structure NBT into one deterministic 26.2 datapack.
+
+**P7 checkpoint acceptance:** strict project compilation now wraps generated functions/tags and source-owned JSON/NBT contributions in one sorted typed graph. Asset discovery is include-filtered, symlink-free, realpath-contained, size-bounded, package-provenanced, and covered by module content hashes. Registry descriptors choose pre-1.21 plural or modern singular paths. Known JSON schemas, local references, NBT structure, lifecycle/media combinations, identity/path collisions, atomic directory replacement, and byte-identical STORE zip projection are validated before output mutation. Commands targets reject emitting declarations with `RST2003`; legacy single-file compile remains on its compatibility adapter.
 
 ### P8 — selective typed resource builders
 
@@ -911,17 +913,15 @@ Old `[project] namespace/mc-version`, `[compiler]`, and `[output]` values map in
 
 ## 14. Immediate next implementation slice
 
-P1–P6 are complete. Begin **P7 typed datapack artifact graph and universal resources** without weakening the target capability boundary or changing the legacy `DatapackFile` projection.
+P1–P7 are complete. Begin **P8 selective typed resource builders** without removing the strict JSON/NBT `from` escape hatch.
 
 The next coherent slice is:
 
-1. define canonical typed artifact identity, provenance, lifecycle, media type, and deterministic projection;
-2. route existing function/tag artifacts through that graph without byte/output-path changes;
-3. load configured JSON/NBT assets with realpath containment and package/project provenance;
-4. centralize Minecraft-version registry-to-path descriptors;
-5. add strict `resource <kind> <id> from "...";` contributions;
-6. reject collisions, invalid JSON/NBT/schema/reference/lifecycle combinations before output mutation;
-7. prove commands targets reject emitting resources and datapack directory/zip projections remain deterministic.
+1. add a typed tag builder over the P7 artifact registry rather than a second output path;
+2. model tag values, optional entries, nested-tag references, and replace/merge policy;
+3. validate generated tag references and collisions through the existing graph;
+4. prove byte identity between equivalent typed and strict-JSON tag contributions;
+5. keep recipes and later resource builders out until the tag builder contract is stable.
 
 ## 15. Repository evidence behind this plan
 

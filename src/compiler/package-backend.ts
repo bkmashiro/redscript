@@ -24,9 +24,14 @@ import {
   serializeCommandManifest,
 } from '../targets/commands'
 import type { CommandProgram } from '../targets/command-program'
+import { buildProjectDatapackArtifactGraph } from '../artifacts/project-resources'
+import { projectLegacyDatapackFiles } from '../artifacts/graph'
+import type { DatapackArtifactGraph } from '../artifacts/model'
 
 export interface DatapackProjectCompileResult extends CompileModulesResult {
   readonly kind: 'datapack'
+  readonly artifactGraph: DatapackArtifactGraph
+  readonly artifacts: DatapackArtifactGraph['artifacts']
 }
 
 export interface CommandsProjectCompileResult extends CompileModulesResult {
@@ -251,7 +256,20 @@ export function compileProjectPackages(
 
   if (target.kind === 'datapack') {
     const result = compileModules(modules, compileOptions)
-    return { kind: 'datapack', ...result }
+    const artifactGraph = buildProjectDatapackArtifactGraph(
+      result.files,
+      project,
+      target,
+      graph,
+      mcVersion,
+    )
+    return {
+      kind: 'datapack',
+      ...result,
+      files: projectLegacyDatapackFiles(artifactGraph),
+      artifactGraph,
+      artifacts: artifactGraph.artifacts,
+    }
   }
 
   const lowered = compileModulesWithLIR(modules, { ...compileOptions, emitArtifacts: false })

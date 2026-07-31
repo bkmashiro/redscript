@@ -13,9 +13,10 @@ The next product architecture track is [Project, Package, and Multi-Target Compi
 4. ✅ target capability validation, reachability, and stable `RST2xxx` diagnostics;
 5. ✅ a finite command-sequence backend with canonical manifests, budgets, and static validation;
 6. ✅ versioned remote dependencies and a reproducible lockfile;
-7. 📋 complete datapack JSON/NBT/resource artifacts.
+7. ✅ typed datapack artifact graph, JSON/NBT resources, and deterministic projections;
+8. 📋 selective typed resource builders, beginning with tags.
 
-The tables below describe the existing language/tooling inventory. The strict project/package dependency contract, target capability validation, finite commands backend, explicit Git/SemVer resolution, canonical lockfile, and offline immutable cache are implemented through P6. Typed emitting resources remain staged work.
+The tables below describe the existing language/tooling inventory. The strict project/package dependency contract, target capability validation, finite commands backend, reproducible remote dependencies, and typed JSON/NBT artifact graph are implemented through P7. P8 typed builders and P9 live Minecraft gates remain staged work.
 
 ## Legend
 - ✅ Done

@@ -18,6 +18,13 @@ export interface CompilerSettings {
   noDce?: boolean
 }
 
+export interface ProjectAssetSettings {
+  /** Canonical, existing directories owned by this module. */
+  readonly roots: readonly string[]
+  /** Canonical forward-slash globs matched against source paths in each root. */
+  readonly include: readonly string[]
+}
+
 export interface BuildTarget {
   name: string
   kind: BuildTargetKind
@@ -92,6 +99,8 @@ export interface LoadedProject {
   /** Root-project lock authority reused while loading every transitive module. */
   dependencyContext?: ProjectDependencyContext
   compiler: CompilerSettings
+  /** Present for parsed manifests; optional only for legacy in-memory adapter fixtures. */
+  assets?: ProjectAssetSettings
   targets: Record<string, BuildTarget>
   defaultTarget?: string
 }
