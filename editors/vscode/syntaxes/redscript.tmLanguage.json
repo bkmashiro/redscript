@@ -7,6 +7,7 @@
     "root": {
       "patterns": [
         { "include": "#comments" },
+        { "include": "#resource-tag-builder" },
         { "include": "#decorators" },
         { "include": "#fstring" },
         { "include": "#strings" },
@@ -137,6 +138,31 @@
             { "name": "constant.character.escape.redscript", "match": "\\\\." }
           ]
         }
+      ]
+    },
+
+    "resource-tag-builder": {
+      "comment": "Typed tag resource contribution block",
+      "begin": "\\b(resource)\\s+(function_tag|item_tag|block_tag|entity_type_tag|fluid_tag|game_event_tag)\\s+([a-z0-9_.-]+):([a-z0-9_./-]+)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.declaration.redscript" },
+        "2": { "name": "support.type.resource.redscript" },
+        "3": { "name": "entity.name.namespace.redscript" },
+        "4": { "name": "entity.name.type.resource.redscript" },
+        "5": { "name": "punctuation.section.block.begin.redscript" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.redscript" }
+      },
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "name": "keyword.declaration.resource-builder.redscript",
+          "match": "\\b(policy|merge|replace|value|optional|tag)\\b"
+        },
+        { "include": "#mc-resource" },
+        { "include": "#punctuation" }
       ]
     },
 

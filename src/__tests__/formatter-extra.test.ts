@@ -119,6 +119,15 @@ describe('formatter — deeply nested code', () => {
   })
 })
 
+describe('formatter — typed tag resources', () => {
+  it('indents tag builder entries without changing resource ids', () => {
+    const input = 'resource item_tag demo:foods {\npolicy replace;\noptional tag demo:seasonal;\nvalue minecraft:apple;\n}'
+    expect(format(input)).toBe(
+      'resource item_tag demo:foods {\n  policy replace;\n  optional tag demo:seasonal;\n  value minecraft:apple;\n}\n',
+    )
+  })
+})
+
 describe('formatter — edge cases', () => {
   it('handles single line code', () => {
     const result = format('let x: int = 1;')

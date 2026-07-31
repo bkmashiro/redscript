@@ -823,16 +823,20 @@ Acceptance: a mixed project builds `.mcfunction`, recipe JSON, item tag JSON, an
 
 ### P8 — selective typed resource builders
 
+**Status (2026-07-31): completed for the planned non-worldgen families.**
+
 Order:
 
-1. tags;
-2. recipes;
-3. advancements;
-4. predicates;
-5. loot tables/item modifiers;
-6. worldgen only after schema/reference and live-server gates are mature.
+1. ✅ tags — source-level builder with merge/replace, direct/nested, required/optional entries;
+2. ✅ recipes — version-aware typed package API for shaped, shapeless, cooking, stonecutting, and smithing transform;
+3. ✅ advancements — typed criteria, requirements, parent/display, and rewards;
+4. ✅ predicates — typed leaves, references, and boolean composition;
+5. ✅ loot tables/item modifiers — typed pools, selected entries, conditions, and function sequences;
+6. 📋 worldgen only after schema/reference and live-server gates are mature.
 
-Strict JSON/from-file remains the permanent escape hatch for new Minecraft/modded registries.
+All builders lower through the P7 registry and artifact graph. Required local references and same-kind cycles fail deterministically; typed/strict-JSON output collisions share one identity/path boundary. Recipe paths and payload shapes are selected from the target version profile. Strict JSON/from-file remains the permanent escape hatch for new Minecraft/modded registries.
+
+**P8 checkpoint acceptance:** equivalent typed and strict-JSON tags and recipes have byte-identical canonical payloads; source-level typed tags compile through project/package provenance and fail with `RST2003` on commands targets before emission; package-installed smoke constructs every public builder family. No builder creates a parallel output map or narrows `resource <kind> <id> from "...";`.
 
 ### P9 — real Minecraft and release gates
 
@@ -913,15 +917,15 @@ Old `[project] namespace/mc-version`, `[compiler]`, and `[output]` values map in
 
 ## 14. Immediate next implementation slice
 
-P1–P7 are complete. Begin **P8 selective typed resource builders** without removing the strict JSON/NBT `from` escape hatch.
+P1–P8 are complete. Begin **P9 real Minecraft and release gates** without weakening the existing static validator.
 
 The next coherent slice is:
 
-1. add a typed tag builder over the P7 artifact registry rather than a second output path;
-2. model tag values, optional entries, nested-tag references, and replace/merge policy;
-3. validate generated tag references and collisions through the existing graph;
-4. prove byte identity between equivalent typed and strict-JSON tag contributions;
-5. keep recipes and later resource builders out until the tag builder contract is stable.
+1. provision or attach one compatible vanilla/Paper oracle outside login nodes;
+2. load a P8 mixed artifact graph and separate `/reload` resources from restart/world-reopen registries;
+3. execute the canonical commands-target sequence in the controlled fixture;
+4. record exact server/version evidence and never relabel static validation as live proof;
+5. keep worldgen builders staged until those lifecycle/reference gates are mature.
 
 ## 15. Repository evidence behind this plan
 

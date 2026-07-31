@@ -138,6 +138,17 @@ describe('vscode TextMate grammar smoke', () => {
     }
   })
 
+  it('highlights typed tag builders only through their resource-block scope', () => {
+    const rootPatterns = (grammar.repository?.root?.patterns ?? []).map((pattern: unknown) =>
+      (pattern as { include?: string }).include,
+    )
+    expect(rootPatterns).toContain('#resource-tag-builder')
+    const builderRules = collectPatternStrings(grammar.repository?.['resource-tag-builder'])
+    for (const token of ['policy', 'merge', 'replace', 'value', 'optional', 'tag']) {
+      expect(builderRules.some(rule => regexFromTmRule(rule).test(token))).toBe(true)
+    }
+  })
+
   it('contains redscript grammar contribution in package.json', () => {
     const grammars = packageJson?.contributes?.grammars ?? []
     const redscriptGrammar = grammars.find(

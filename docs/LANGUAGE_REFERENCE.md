@@ -1027,11 +1027,44 @@ resource structure bakery:hut from "structures/hut.nbt";
 export fn main(): void {}
 ```
 
+For tag resources, P8 also provides a source-level typed builder; no asset file is required:
+
+```rs
+resource item_tag bakery:base_foods {
+  value minecraft:bread;
+}
+
+resource item_tag bakery:foods {
+  policy replace;
+  tag bakery:base_foods;
+  optional tag bakery:seasonal_foods;
+  optional value minecraft:golden_apple;
+}
+```
+
+Supported typed kinds are `function_tag`, `item_tag`, `block_tag`, `entity_type_tag`, `fluid_tag`, and `game_event_tag`. `policy merge` is the default and emits `"replace": false`; `policy replace` emits `"replace": true`. `value` adds a direct registry entry, while `tag` adds a nested `#namespace:path` entry. Prefix either with `optional` to emit `{ "id": ..., "required": false }`. Empty tags are valid. IDs remain open to datapacks and mods but must use canonical lowercase `namespace:path` syntax.
+
+Typed tags lower into the same P7 artifact graph as strict JSON. Required local nested tags must exist, optional missing tags are accepted, local tag-reference cycles fail deterministically, and typed/JSON contributions to the same output collide before writes. Direct values remain open registry IDs; only `function_tag` direct values are artifact references and therefore validate required local functions. The programmatic API exports `createTagResourceArtifact` for package consumers.
+
+The package API completes the selective P8 builder order without inventing a source DSL for every JSON schema:
+
+| Family | Public builder | Selected typed surface |
+|:--|:--|:--|
+| recipes | `createRecipeResourceArtifact` | shaped, shapeless, cooking, stonecutting, smithing transform |
+| advancements | `createAdvancementResourceArtifact` | criteria, requirements, parent, display, rewards |
+| predicates | `createPredicateResourceArtifact` | leaf conditions, references, `all_of`, `any_of`, `inverted` |
+| loot tables | `createLootTableResourceArtifact` | pools, item/tag/nested/compound entries, conditions, functions |
+| item modifiers | `createItemModifierResourceArtifact` | one or an ordered list of loot functions |
+
+All builders require an explicit Minecraft version and provenance, emit canonical JSON through `createResourceArtifact`, and reuse registry paths, identity/path collision checks, local-reference validation, cycle detection, lifecycle/media validation, and deterministic projections. Recipe payloads are version-profiled as well as their paths: pre-1.21 result IDs use legacy fields, while the represented `v1_21_4`+ profile uses the ingredient string/`#tag` syntax introduced upstream in 1.21.2. Recipe categories and smithing transform fail closed on represented profiles that predate them. Extension `fields` accept only bounded, acyclic JSON and cannot overwrite builder-owned discriminator fields.
+
+The typed builder is selective, not a replacement for the universal escape hatch: `resource <kind> <id> from "<asset-path>";` remains available for every mapped JSON/NBT kind, including modded payload schemas.
+
 The currently mapped contribution kinds are `recipe`, `advancement`, `predicate`, `loot_table`, `item_modifier`, `structure`, `function_tag`, `item_tag`, `block_tag`, `entity_type_tag`, `fluid_tag`, and `game_event_tag`. Registry directories are selected from the target Minecraft version—for example, `recipe` maps to `recipes/` before 1.21 and `recipe/` for 1.21 and later.
 
 `from` paths must be canonical forward-slash relative paths. Asset roots and source files must remain inside the owning module, asset-tree symlinks are rejected, include patterns are enforced, and duplicate output paths fail before output mutation. Configured asset paths and bytes are part of the module content hash. JSON is parsed, schema-checked for known kinds, and serialized canonically; structure NBT accepts raw or gzip payloads and is structurally validated. Local typed references such as `#bakery:other_tag` must resolve in the artifact graph.
 
-Strict project `compile` atomically replaces the target directory, while `publish --target <name>` writes a deterministic zip from the same graph. Binary NBT remains available through `DatapackProjectCompileResult.artifacts`; the compatibility `files` projection remains text-only. A `commands` target rejects every emitting `resource ... from ...` declaration with `RST2003` before writing command outputs. Reference-only declarations such as `resource item bakery:wand;` remain target-neutral.
+Strict project `compile` atomically replaces the target directory, while `publish --target <name>` writes a deterministic zip from the same graph. Binary NBT remains available through `DatapackProjectCompileResult.artifacts`; the compatibility `files` projection remains text-only. A `commands` target rejects every emitting `resource ... from ...` or typed tag contribution with `RST2003` before writing command outputs. Reference-only declarations such as `resource item bakery:wand;` remain target-neutral.
 
 ### General builtins
 

@@ -52,6 +52,8 @@ export type DatapackArtifactProvenance = GeneratedArtifactProvenance | SourceArt
 export interface DatapackArtifactReference {
   readonly kind: DatapackArtifactKind
   readonly id: string
+  /** False for Minecraft tag entries declared with `required: false`; defaults to true. */
+  readonly required?: boolean
 }
 
 export interface DatapackArtifact {

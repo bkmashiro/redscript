@@ -629,7 +629,7 @@ M6  Canonical MIR effects + capability summaries
 M7  Current emitter wrapped as DatapackBackend, byte-identical
 M8  Commands legalization spike from MIR
 M9  Commands backend production subset
-M10 Typed artifact graph/resources (complete)
+M10 Typed artifact graph/resources + selective builders (complete)
 M11 Retire internal AST-merge path after compatibility evidence
 ```
 
@@ -650,12 +650,12 @@ In those cases, perform a narrow spike and ADR. Do not patch around the failed b
 
 ## 12. Immediate recommendation
 
-Implement project discovery/manifest P1 first because it does not require compiler behavior changes. Before package syntax P2, insert the compiler foundation slice:
+M0–M10 are implemented. Preserve their boundaries while beginning P9 live Minecraft evidence:
 
-1. `SourceManager` and `CompilerSession` interfaces;
-2. ephemeral-project adapter for current `compile()`;
-3. frozen byte-identical parity corpus;
-4. explicit stage result types;
-5. no import or IR semantic changes yet.
+1. exercise a mixed typed/from-file artifact graph against a compatible controlled server;
+2. record `/reload`, restart, and world-reopen lifecycle behavior separately;
+3. execute the canonical commands backend sequence against the same version oracle;
+4. retain static validation as an independent gate rather than presenting it as live proof;
+5. keep M11 legacy-path retirement and worldgen builders blocked on compatibility/runtime evidence.
 
-Then implement package graph and linker against that spine. This costs one bounded compatibility tranche now and avoids reworking package resolution again when the commands backend arrives.
+Do not move selective builders into a parallel emitter: source-level tags and package-level recipe/advancement/predicate/loot builders must continue to lower through the M10 registry, graph, target capability boundary, and deterministic projection contracts.

@@ -11,6 +11,23 @@ export type ResourceArtifactKind = Exclude<
   'pack_meta' | 'function' | 'opaque'
 >
 
+export const TAG_RESOURCE_ARTIFACT_KINDS = Object.freeze([
+  'function_tag',
+  'item_tag',
+  'block_tag',
+  'entity_type_tag',
+  'fluid_tag',
+  'game_event_tag',
+] as const satisfies readonly ResourceArtifactKind[])
+
+export type TagResourceArtifactKind = typeof TAG_RESOURCE_ARTIFACT_KINDS[number]
+
+const TAG_RESOURCE_ARTIFACT_KIND_SET = new Set<string>(TAG_RESOURCE_ARTIFACT_KINDS)
+
+export function isTagResourceArtifactKind(kind: string): kind is TagResourceArtifactKind {
+  return TAG_RESOURCE_ARTIFACT_KIND_SET.has(kind)
+}
+
 export interface ResourceDescriptor {
   readonly kind: ResourceArtifactKind
   readonly directory: string

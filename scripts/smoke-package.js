@@ -130,6 +130,12 @@ function main() {
       'generatedDatapackArtifacts',
       'projectLegacyDatapackFiles',
       'resolveResourceDescriptor',
+      'createTagResourceArtifact',
+      'createRecipeResourceArtifact',
+      'createAdvancementResourceArtifact',
+      'createPredicateResourceArtifact',
+      'createLootTableResourceArtifact',
+      'createItemModifierResourceArtifact',
       'writeArtifactDirectoryAtomically',
       'writeArtifactZipAtomically',
     ]
@@ -150,6 +156,54 @@ function main() {
     }
     if (compilerPackage.resolveResourceDescriptor('recipe', compilerPackage.McVersion.v1_21).directory !== 'recipe') {
       throw new Error('installed registry descriptor API returned the wrong modern recipe path')
+    }
+    const tagArtifact = compilerPackage.createTagResourceArtifact({
+      kind: 'item_tag',
+      id: 'release_smoke:foods',
+      policy: 'merge',
+      values: [{ kind: 'value', id: 'minecraft:apple' }],
+      provenance: { kind: 'generated', stage: 'package-smoke' },
+      minecraftVersion: compilerPackage.McVersion.v1_21,
+    })
+    if (tagArtifact.outputPath !== 'data/release_smoke/tags/item/foods.json') {
+      throw new Error('installed typed tag builder returned the wrong resource path')
+    }
+    if (JSON.parse(tagArtifact.content.toString('utf8')).values[0] !== 'minecraft:apple') {
+      throw new Error('installed typed tag builder returned the wrong canonical content')
+    }
+    const builderCommon = {
+      provenance: { kind: 'generated', stage: 'package-smoke' },
+      minecraftVersion: compilerPackage.McVersion.v1_21_4,
+    }
+    const typedArtifacts = [
+      compilerPackage.createRecipeResourceArtifact({
+        ...builderCommon,
+        id: 'release_smoke:toast',
+        recipe: { kind: 'shapeless', ingredients: [{ item: 'minecraft:bread' }], result: { id: 'minecraft:bread' } },
+      }),
+      compilerPackage.createAdvancementResourceArtifact({
+        ...builderCommon,
+        id: 'release_smoke:root',
+        advancement: { criteria: { tick: { trigger: 'minecraft:tick' } } },
+      }),
+      compilerPackage.createPredicateResourceArtifact({
+        ...builderCommon,
+        id: 'release_smoke:always',
+        predicate: { kind: 'leaf', condition: 'minecraft:random_chance', fields: { chance: 1 } },
+      }),
+      compilerPackage.createLootTableResourceArtifact({
+        ...builderCommon,
+        id: 'release_smoke:empty',
+        lootTable: { pools: [] },
+      }),
+      compilerPackage.createItemModifierResourceArtifact({
+        ...builderCommon,
+        id: 'release_smoke:count',
+        modifier: { function: 'minecraft:set_count', fields: { count: 1 } },
+      }),
+    ]
+    if (typedArtifacts.some(artifact => artifact.mediaType !== 'application/json' || artifact.content.length === 0)) {
+      throw new Error('installed selective typed resource builders returned invalid artifacts')
     }
 
     console.log(

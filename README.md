@@ -179,6 +179,20 @@ fn clear_nearby_zombies() {
 - **Stdlib** — math, vectors, particles, inventory, scheduling, data structures, ECS-style helpers, and more.
 - **Numeric tuner** — helper-level `.mcrs` overlay generation with reviewable manifests.
 
+Typed tag resources can be authored directly while strict JSON/NBT remains available as an escape hatch:
+
+```rs
+resource item_tag bakery:foods {
+  policy merge;
+  value minecraft:bread;
+  optional tag bakery:seasonal_foods;
+}
+
+resource recipe bakery:toast from "recipes/toast.json";
+```
+
+Typed and from-file contributions share the same versioned artifact registry, collision checks, deterministic directory/ZIP projection, and target capability boundary. The package API also exports selective, runtime-validated builders for common recipes, advancements, predicates, loot tables, and item modifiers; unknown or modded schemas stay on the `from` route.
+
 ---
 
 ## CLI Commands

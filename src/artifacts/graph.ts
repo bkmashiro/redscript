@@ -57,29 +57,149 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value)
 }
 
-function reference(kind: DatapackArtifactKind, id: unknown): DatapackArtifactReference | null {
+function reference(
+  kind: DatapackArtifactKind,
+  id: unknown,
+  required?: boolean,
+): DatapackArtifactReference | null {
   if (typeof id !== 'string') return null
   const normalized = id.startsWith('#') ? id.slice(1) : id
-  return RESOURCE_ID_RE.test(normalized) ? Object.freeze({ kind, id: normalized }) : null
+  if (!RESOURCE_ID_RE.test(normalized)) return null
+  return Object.freeze(required == null ? { kind, id: normalized } : { kind, id: normalized, required })
 }
 
 function tagReferences(kind: ResourceArtifactKind, value: unknown): DatapackArtifactReference[] {
   if (!isRecord(value) || !Array.isArray(value.values)) {
     throw new ArtifactGraphError(`Invalid JSON schema for ${kind}: expected an object with a values array`)
   }
+  if ('replace' in value && typeof value.replace !== 'boolean') {
+    throw new ArtifactGraphError(`Invalid JSON schema for ${kind}: replace must be a boolean`)
+  }
   const refs: DatapackArtifactReference[] = []
   for (const entry of value.values) {
-    const id = typeof entry === 'string' ? entry : isRecord(entry) ? entry.id : undefined
+    const record = isRecord(entry) ? entry : undefined
+    const id = typeof entry === 'string' ? entry : record?.id
     if (typeof id !== 'string') {
       throw new ArtifactGraphError(`Invalid JSON schema for ${kind}: tag values must be strings or { id } objects`)
     }
+    if (record && 'required' in record && typeof record.required !== 'boolean') {
+      throw new ArtifactGraphError(`Invalid JSON schema for ${kind}: tag value required must be a boolean`)
+    }
+    const required = record?.required !== false
     if (id.startsWith('#')) {
-      const parsed = reference(kind, id)
+      const parsed = reference(kind, id, required)
       if (!parsed) throw new ArtifactGraphError(`Invalid JSON schema for ${kind}: invalid tag reference '${id}'`)
+      refs.push(parsed)
+    } else if (kind === 'function_tag') {
+      const parsed = reference('function', id, required)
+      if (!parsed) throw new ArtifactGraphError(`Invalid JSON schema for ${kind}: invalid function reference '${id}'`)
       refs.push(parsed)
     }
   }
   return refs
+}
+
+function uniqueReferences(references: readonly DatapackArtifactReference[]): DatapackArtifactReference[] {
+  const seen = new Set<string>()
+  return references.filter(item => {
+    const key = `${item.kind}\0${item.id}\0${item.required !== false}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function recipeReferences(value: Record<string, unknown>): DatapackArtifactReference[] {
+  const refs: DatapackArtifactReference[] = []
+  const visitIngredient = (ingredient: unknown): void => {
+    if (typeof ingredient === 'string') {
+      if (ingredient.startsWith('#')) {
+        const parsed = reference('item_tag', ingredient)
+        if (parsed) refs.push(parsed)
+      }
+      return
+    }
+    if (Array.isArray(ingredient)) {
+      ingredient.forEach(visitIngredient)
+      return
+    }
+    if (!isRecord(ingredient)) return
+    if (typeof ingredient.tag === 'string') {
+      const parsed = reference('item_tag', ingredient.tag)
+      if (parsed) refs.push(parsed)
+    }
+    Object.values(ingredient).forEach(visitIngredient)
+  }
+  for (const key of ['ingredient', 'ingredients', 'key', 'template', 'base', 'addition']) {
+    if (key in value) visitIngredient(value[key])
+  }
+  return uniqueReferences(refs)
+}
+
+function predicateReferences(value: unknown): DatapackArtifactReference[] {
+  const refs: DatapackArtifactReference[] = []
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(visit)
+      return
+    }
+    if (!isRecord(node)) return
+    if (node.condition === 'minecraft:reference') {
+      const parsed = reference('predicate', node.name)
+      if (parsed) refs.push(parsed)
+    }
+    if ('term' in node) visit(node.term)
+    if ('terms' in node) visit(node.terms)
+  }
+  visit(value)
+  return uniqueReferences(refs)
+}
+
+function itemModifierReferences(value: unknown): DatapackArtifactReference[] {
+  const refs: DatapackArtifactReference[] = []
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(visit)
+      return
+    }
+    if (!isRecord(node)) return
+    if (node.function === 'minecraft:reference') {
+      const parsed = reference('item_modifier', node.name)
+      if (parsed) refs.push(parsed)
+    }
+    refs.push(...predicateReferences(node.conditions))
+    if ('functions' in node) visit(node.functions)
+  }
+  visit(value)
+  return uniqueReferences(refs)
+}
+
+function lootTableReferences(value: Record<string, unknown>): DatapackArtifactReference[] {
+  const entryRefs: DatapackArtifactReference[] = []
+  const predicateRefs: DatapackArtifactReference[] = []
+  const modifierRefs: DatapackArtifactReference[] = []
+  const visitEntry = (entry: unknown): void => {
+    if (!isRecord(entry)) return
+    if (entry.type === 'minecraft:tag') {
+      const parsed = reference('item_tag', entry.name)
+      if (parsed) entryRefs.push(parsed)
+    } else if (entry.type === 'minecraft:loot_table') {
+      const parsed = reference('loot_table', entry.name)
+      if (parsed) entryRefs.push(parsed)
+    }
+    predicateRefs.push(...predicateReferences(entry.conditions))
+    modifierRefs.push(...itemModifierReferences(entry.functions))
+    if (Array.isArray(entry.children)) entry.children.forEach(visitEntry)
+  }
+  if (Array.isArray(value.pools)) {
+    for (const pool of value.pools) {
+      if (!isRecord(pool)) continue
+      if (Array.isArray(pool.entries)) pool.entries.forEach(visitEntry)
+      predicateRefs.push(...predicateReferences(pool.conditions))
+      modifierRefs.push(...itemModifierReferences(pool.functions))
+    }
+  }
+  return uniqueReferences([...entryRefs, ...predicateRefs, ...modifierRefs])
 }
 
 function validateJsonResource(kind: ResourceArtifactKind, value: unknown): DatapackArtifactReference[] {
@@ -91,20 +211,34 @@ function validateJsonResource(kind: ResourceArtifactKind, value: unknown): Datap
     if (RECIPE_TYPES_WITH_STATIC_RESULT.has(value.type) && !('result' in value)) {
       throw new ArtifactGraphError(`Invalid JSON schema for recipe type '${value.type}': expected a result field`)
     }
-    return []
+    return recipeReferences(value)
   }
   if (kind === 'advancement') {
     if (!isRecord(value)) throw new ArtifactGraphError('Invalid JSON schema for advancement: expected an object')
-    return [
+    const rewards = isRecord(value.rewards) ? value.rewards : undefined
+    const refs: Array<DatapackArtifactReference | null> = [
       reference('advancement', value.parent),
-      reference('function', isRecord(value.rewards) ? value.rewards.function : undefined),
-    ].filter((item): item is DatapackArtifactReference => item != null)
+      reference('function', rewards?.function),
+    ]
+    if (Array.isArray(rewards?.loot)) refs.push(...rewards.loot.map(id => reference('loot_table', id)))
+    if (Array.isArray(rewards?.recipes)) refs.push(...rewards.recipes.map(id => reference('recipe', id)))
+    return uniqueReferences(refs.filter((item): item is DatapackArtifactReference => item != null))
   }
   if (kind === 'predicate') {
     if (!isRecord(value) && !Array.isArray(value)) {
       throw new ArtifactGraphError('Invalid JSON schema for predicate: expected an object or array')
     }
-    return []
+    return predicateReferences(value)
+  }
+  if (kind === 'loot_table') {
+    if (!isRecord(value)) throw new ArtifactGraphError('Invalid JSON schema for loot_table: expected an object')
+    return lootTableReferences(value)
+  }
+  if (kind === 'item_modifier') {
+    if (!isRecord(value) && !Array.isArray(value)) {
+      throw new ArtifactGraphError('Invalid JSON schema for item_modifier: expected an object or array')
+    }
+    return itemModifierReferences(value)
   }
   if (!isRecord(value) && !Array.isArray(value)) {
     throw new ArtifactGraphError(`Invalid JSON schema for ${kind}: expected an object or array`)
@@ -194,7 +328,8 @@ export function generatedDatapackArtifacts(
 export interface CreateResourceArtifactInput {
   readonly kind: string
   readonly id: string
-  readonly sourcePath: string
+  /** Present for P7 from-file contributions; omitted by typed builders. */
+  readonly sourcePath?: string
   readonly content: string | Buffer
   readonly provenance: DatapackArtifactProvenance
   readonly minecraftVersion: McVersion | number
@@ -203,16 +338,17 @@ export interface CreateResourceArtifactInput {
 export function createResourceArtifact(input: CreateResourceArtifactInput): DatapackArtifact {
   const mapped = resourceOutputPath(input.kind, input.id, input.minecraftVersion)
   const descriptor = mapped.descriptor
-  if (!input.sourcePath.endsWith(descriptor.extension)) {
+  if (input.sourcePath && !input.sourcePath.endsWith(descriptor.extension)) {
     throw new ArtifactGraphError(
       `Resource ${input.kind} ${input.id} requires a ${descriptor.extension} source, found '${input.sourcePath}'`,
     )
   }
+  const contentLabel = input.sourcePath ?? `typed ${input.kind} ${input.id}`
 
   let content: Buffer
   let references: readonly DatapackArtifactReference[] = []
   if (descriptor.mediaType === 'application/json') {
-    const canonical = canonicalJson(input.content, input.sourcePath)
+    const canonical = canonicalJson(input.content, contentLabel)
     content = canonical.bytes
     references = Object.freeze(validateJsonResource(descriptor.kind, canonical.value))
   } else {
@@ -234,6 +370,52 @@ export function createResourceArtifact(input: CreateResourceArtifactInput): Data
     sourcePath: input.sourcePath,
     references,
   })
+}
+
+function participatesInReferenceCycles(kind: DatapackArtifactKind): boolean {
+  return kind === 'function_tag' || kind.endsWith('_tag') || [
+    'advancement',
+    'predicate',
+    'loot_table',
+    'item_modifier',
+  ].includes(kind)
+}
+
+function validateResourceReferenceCycles(byIdentity: ReadonlyMap<string, DatapackArtifact>): void {
+  const state = new Map<string, 'visiting' | 'visited'>()
+  const stack: string[] = []
+
+  const visit = (key: string): void => {
+    state.set(key, 'visiting')
+    stack.push(key)
+    const artifact = byIdentity.get(key)!
+    const edges = artifact.references
+      .filter(ref => ref.kind === artifact.identity.kind && byIdentity.has(identityKey(ref)))
+      .map(ref => identityKey(ref))
+      .sort()
+    for (const edge of edges) {
+      if (state.get(edge) === 'visiting') {
+        const start = stack.indexOf(edge)
+        const cycle = [...stack.slice(start), edge]
+          .map(cycleKey => byIdentity.get(cycleKey)!.identity.id)
+        const cycleKind = artifact.identity.kind.endsWith('_tag') || artifact.identity.kind === 'function_tag'
+          ? 'tag'
+          : artifact.identity.kind
+        throw new ArtifactGraphError(`Datapack ${cycleKind} reference cycle: ${cycle.join(' -> ')}`)
+      }
+      if (!state.has(edge)) visit(edge)
+    }
+    stack.pop()
+    state.set(key, 'visited')
+  }
+
+  const cycleKeys = [...byIdentity.entries()]
+    .filter(([, artifact]) => participatesInReferenceCycles(artifact.identity.kind))
+    .map(([key]) => key)
+    .sort()
+  for (const key of cycleKeys) {
+    if (!state.has(key)) visit(key)
+  }
 }
 
 export interface CreateArtifactGraphOptions {
@@ -299,6 +481,7 @@ export function createDatapackArtifactGraph(
 
   for (const artifact of byPath.values()) {
     for (const ref of artifact.references) {
+      if (ref.required === false) continue
       const namespace = RESOURCE_ID_RE.exec(ref.id)?.[1]
       if (!namespace || !localNamespaces.has(namespace)) continue
       if (!byIdentity.has(identityKey({ kind: ref.kind, id: ref.id }))) {
@@ -308,6 +491,7 @@ export function createDatapackArtifactGraph(
       }
     }
   }
+  validateResourceReferenceCycles(byIdentity)
 
   const artifacts = Object.freeze([...byPath.values()].sort((left, right) =>
     left.outputPath.localeCompare(right.outputPath),

@@ -449,6 +449,25 @@ export interface ImportDecl {
 // Registry Resource Declarations
 // ---------------------------------------------------------------------------
 
+export type TagResourcePolicy = 'merge' | 'replace'
+
+export interface TagResourceValue {
+  /** `value` emits a registry value; `tag` emits a nested `#namespace:path` reference. */
+  kind: 'value' | 'tag'
+  id: string
+  required: boolean
+  span?: Span
+}
+
+export interface TagResourceBuilder {
+  kind: 'tag'
+  /** Minecraft's `replace` flag modelled positively instead of leaking a boolean. */
+  policy: TagResourcePolicy
+  values: TagResourceValue[]
+}
+
+export type ResourceBuilder = TagResourceBuilder
+
 export interface ResourceDecl {
   registry: string
   id: string
@@ -456,6 +475,8 @@ export interface ResourceDecl {
   path: string
   /** Canonical path relative to one configured [assets].roots entry. */
   sourcePath?: string
+  /** Selective high-level contribution lowered through the P7 artifact graph. */
+  builder?: ResourceBuilder
   /** Placeholder for future doc-comment capture; lexer currently drops comments. */
   doc?: string
   span?: Span

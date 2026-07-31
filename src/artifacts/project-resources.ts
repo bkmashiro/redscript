@@ -9,6 +9,8 @@ import {
   createResourceArtifact,
   generatedDatapackArtifacts,
 } from './graph'
+import { createTagResourceArtifact } from './tag-builder'
+import { isTagResourceArtifactKind } from './registry'
 import {
   ArtifactGraphError,
   type DatapackArtifact,
@@ -34,23 +36,40 @@ export function collectProjectResourceArtifacts(
     }
     for (const program of loaded.programs) {
       for (const declaration of program.resourceDeclarations ?? []) {
-        if (!declaration.sourcePath) continue
-        const sourcePath = resolveProjectAsset(moduleProject, declaration.sourcePath).absolutePath
-        artifacts.push(createResourceArtifact({
-          kind: declaration.registry,
-          id: declaration.id,
-          sourcePath,
-          content: fs.readFileSync(sourcePath),
-          provenance: {
-            kind: 'source',
-            modulePath: loaded.id.modulePath,
-            packagePath: loaded.id.path,
-            sourceFile: declaration.span?.file ?? loaded.sourceFiles[0]?.absolutePath ?? moduleProject.manifestPath,
-            line: declaration.span?.line ?? 1,
-            col: declaration.span?.col ?? 1,
-          },
-          minecraftVersion,
-        }))
+        if (declaration.sourcePath && declaration.builder) {
+          throw new ArtifactGraphError(`Resource '${declaration.registry} ${declaration.id}' cannot use both from-file and typed builder contributions`)
+        }
+        const provenance = {
+          kind: 'source' as const,
+          modulePath: loaded.id.modulePath,
+          packagePath: loaded.id.path,
+          sourceFile: declaration.span?.file ?? loaded.sourceFiles[0]?.absolutePath ?? moduleProject.manifestPath,
+          line: declaration.span?.line ?? 1,
+          col: declaration.span?.col ?? 1,
+        }
+        if (declaration.sourcePath) {
+          const sourcePath = resolveProjectAsset(moduleProject, declaration.sourcePath).absolutePath
+          artifacts.push(createResourceArtifact({
+            kind: declaration.registry,
+            id: declaration.id,
+            sourcePath,
+            content: fs.readFileSync(sourcePath),
+            provenance,
+            minecraftVersion,
+          }))
+        } else if (declaration.builder?.kind === 'tag') {
+          if (!isTagResourceArtifactKind(declaration.registry)) {
+            throw new ArtifactGraphError(`Resource kind '${declaration.registry}' is not a tag resource kind`)
+          }
+          artifacts.push(createTagResourceArtifact({
+            kind: declaration.registry,
+            id: declaration.id,
+            policy: declaration.builder.policy,
+            values: declaration.builder.values,
+            provenance,
+            minecraftVersion,
+          }))
+        }
       }
     }
   }

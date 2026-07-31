@@ -6,9 +6,12 @@
 import type {
   FnDecl, StructDecl, StructField, EnumDecl, EnumVariant, ImplBlock,
   InterfaceDecl, InterfaceMethod, ConstDecl, GlobalDecl, Decorator,
-  TypeNode, Expr, ResourceDecl,
+  TypeNode, Expr, ResourceDecl, TagResourceBuilder, TagResourceValue,
 } from '../ast/types'
+import { isTagResourceArtifactKind } from '../artifacts/registry'
 import { StmtParser } from './stmt-parser'
+
+const RESOURCE_LOCATION_RE = /^[a-z0-9_.-]+:[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)*$/
 
 export class DeclParser extends StmtParser {
   // -------------------------------------------------------------------------
@@ -284,7 +287,66 @@ export class DeclParser extends StmtParser {
     )
   }
 
-  /** Parse `resource <registry> <namespace>:<path> [from "<asset-path>"];`. */
+  private parseTagResourceLocation(): string {
+    const namespace = this.expect('ident').value
+    this.expect(':')
+    const pathTokens: string[] = []
+    while (!this.check(';') && !this.check('eof')) {
+      const token = this.advance()
+      if (!['ident', 'int_lit', '/', '-', '.'].includes(token.kind)) {
+        this.error(`Invalid tag resource id token '${token.value}'`)
+      }
+      pathTokens.push(token.value)
+    }
+    const id = `${namespace}:${pathTokens.join('')}`
+    if (!RESOURCE_LOCATION_RE.test(id)) {
+      this.error(`Invalid tag resource id '${id}'`)
+    }
+    return id
+  }
+
+  private parseTagResourceBuilder(registry: string): TagResourceBuilder {
+    if (!isTagResourceArtifactKind(registry)) {
+      this.error(`A typed tag builder requires a tag resource kind, got '${registry}'`)
+    }
+    this.expect('{')
+    let policy: TagResourceBuilder['policy'] = 'merge'
+    let hasPolicy = false
+    const values: TagResourceValue[] = []
+
+    while (!this.check('}') && !this.check('eof')) {
+      const entryToken = this.peek()
+      if (this.checkIdent('policy')) {
+        this.advance()
+        if (hasPolicy) this.error('A typed tag policy may not be declared more than once')
+        const policyToken = this.expect('ident')
+        if (policyToken.value !== 'merge' && policyToken.value !== 'replace') {
+          this.error(`Expected tag policy 'merge' or 'replace', got '${policyToken.value}'`)
+        }
+        policy = policyToken.value
+        hasPolicy = true
+        this.expect(';')
+        continue
+      }
+
+      let required = true
+      if (this.checkIdent('optional')) {
+        this.advance()
+        required = false
+      }
+      const kindToken = this.expect('ident')
+      if (kindToken.value !== 'value' && kindToken.value !== 'tag') {
+        this.error("Expected typed tag entry 'policy', 'value', or 'tag'")
+      }
+      const id = this.parseTagResourceLocation()
+      this.expect(';')
+      values.push(this.withLoc({ kind: kindToken.value, id, required }, entryToken))
+    }
+    this.expect('}')
+    return { kind: 'tag', policy, values }
+  }
+
+  /** Parse `resource <registry> <namespace>:<path> [from "<asset-path>" | { <typed tag body> }];`. */
   parseResourceDecl(): ResourceDecl {
     const resourceToken = this.expect('ident')
     if (resourceToken.value !== 'resource') {
@@ -297,7 +359,7 @@ export class DeclParser extends StmtParser {
     this.expect(':')
 
     const pathTokens: string[] = []
-    while (!this.check(';') && !this.check('eof')) {
+    while (!this.check(';') && !this.check('{') && !this.check('eof')) {
       const previousPathToken = pathTokens[pathTokens.length - 1]
       const startsFromClause = pathTokens.length > 0
         && previousPathToken !== '/'
@@ -332,6 +394,13 @@ export class DeclParser extends StmtParser {
         this.error(`Resource source must be a canonical relative asset path, got '${sourcePath}'`)
       }
     }
+    let builder: TagResourceBuilder | undefined
+    if (this.check('{')) {
+      if (sourcePath) {
+        this.error('A resource contribution cannot combine from-file and typed builder forms')
+      }
+      builder = this.parseTagResourceBuilder(registry)
+    }
     this.match(';')
 
     return this.withLoc({
@@ -340,6 +409,7 @@ export class DeclParser extends StmtParser {
       namespace,
       path: resourcePath,
       sourcePath,
+      builder,
       doc: '',
     }, resourceToken)
   }
