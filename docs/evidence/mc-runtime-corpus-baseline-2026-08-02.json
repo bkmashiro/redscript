@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "diagnostic-only",
+  "canonicalRuntimeProof": false,
+  "observedLocalDate": "2026-08-02",
+  "versionChannel": "stable-1.21.4",
+  "environment": {
+    "redscriptCommit": "c7a6709aca579722a4ecbdb15f96009717da85a2",
+    "redscriptWorktreeAtRun": "clean",
+    "minecraftVersion": "1.21.4",
+    "paperBuild": "1.21.4-232-12d8fe0",
+    "paperJarSha256": "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc",
+    "testHarnessVersion": "1.2.0",
+    "testHarnessJarSha256": "b85f11fbcfcc8e341b82159be753e35f04992e0e59420e56fcfa9049a2678b2d",
+    "java": "OpenJDK 25.0.2",
+    "templateRootUsedDirectly": false,
+    "disposableRoot": "/tmp/redscript-corpus-stable-baseline",
+    "disposableRootRemoved": true,
+    "serverStoppedGracefully": true,
+    "serverExitCode": 0,
+    "testBotAvailable": false
+  },
+  "command": "MC_SERVER_DIR=/tmp/redscript-corpus-stable-baseline MC_HOST=127.0.0.1 MC_PORT=25561 npm test -- --selectProjects mc-integration --runInBand --testTimeout=120000",
+  "durationSeconds": 353.161,
+  "summary": {
+    "testSuitesTotal": 15,
+    "testSuitesPassed": 10,
+    "testSuitesFailed": 2,
+    "testSuitesSkipped": 3,
+    "testsTotal": 483,
+    "testsPassed": 401,
+    "testsFailed": 66,
+    "testsSkipped": 16
+  },
+  "failedSuites": [
+    {
+      "path": "src/__tests__/mc-integration.test.ts",
+      "failedTests": 64,
+      "classification": "deployment/entrypoint-unproven",
+      "reason": "The shared datapack and entrypoint load/execution phases were not independently receipted; zero or mismatched scoreboard values cannot yet be attributed to compiler semantics."
+    },
+    {
+      "path": "src/__tests__/mc-integration/syntax-coverage.test.ts",
+      "failedTests": 2,
+      "classification": "deployment/entrypoint-unproven",
+      "reason": "Array-parameter observables were zero, but the current harness does not independently prove the generated entrypoints loaded and executed."
+    }
+  ],
+  "failureClasses": [
+    {
+      "classification": "deployment/entrypoint-unproven",
+      "count": 66,
+      "compilerBugClaimed": false
+    },
+    {
+      "classification": "player-prerequisite",
+      "count": 16,
+      "status": "skipped",
+      "executed": false
+    }
+  ],
+  "limitations": [
+    "The mc-integration project was offline-skippable and did not run with fail-closed server or bot prerequisites.",
+    "Suites shared a mutable world/datapacks/redscript-test directory and merged or cleared function tags.",
+    "A passing Jest callback could have returned before exercising Paper behavior.",
+    "No per-case datapack load receipt, entrypoint receipt, source-function marker, or TestBot receipt was recorded.",
+    "This report is a diagnostic baseline and must not be used as release or runtime semantic evidence."
+  ]
+}
