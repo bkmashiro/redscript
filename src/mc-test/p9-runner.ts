@@ -1,4 +1,3 @@
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'child_process'
 import { createHash } from 'crypto'
 import * as fs from 'fs'
 import * as os from 'os'
@@ -16,14 +15,33 @@ import { createCompilerSession } from '../emit/compile'
 import { loadProject } from '../project/manifest'
 import type { CommandProgram, CommandStep } from '../targets/command-program'
 import { McVersion } from '../types/mc-version'
-import { MCTestClient, type ServerStatus } from './client'
+import { MCTestClient } from './client'
+import {
+  DEFAULT_HARNESS_HOST,
+  DEFAULT_HARNESS_PORT,
+  DEFAULT_SERVER_PORT,
+  ManagedPaperPrerequisiteError as P9SkipError,
+  ManagedPaperServer,
+  createDeterministicServerProperties,
+  findHarnessPlugin,
+  findJava,
+  prepareServerRoot,
+} from './managed-paper'
 import { findMinecraftLifecycleFailures, partitionArtifactsByLifecycle } from './p9-lifecycle'
 
-const HARNESS_HOST = '127.0.0.1'
-const HARNESS_PORT = 25561
-const SERVER_PORT = 25566
+const HARNESS_HOST = DEFAULT_HARNESS_HOST
+const HARNESS_PORT = DEFAULT_HARNESS_PORT
+const SERVER_PORT = DEFAULT_SERVER_PORT
 const PACK_NAME = 'redscript-p9-lifecycle'
 const OBJECTIVE = 'p9_probe'
+
+export {
+  ManagedPaperServer,
+  createDeterministicServerProperties,
+  findHarnessPlugin,
+  findJava,
+  prepareServerRoot,
+} from './managed-paper'
 
 export type P9VersionChannelId = 'stable-1.21.4' | 'paper-26.2'
 
@@ -104,13 +122,6 @@ export interface P9LifecycleReport {
   }
   checks: P9EvidenceCheck[]
   error?: string
-}
-
-class P9SkipError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'P9SkipError'
-  }
 }
 
 function sha256File(filePath: string): string {
@@ -336,174 +347,6 @@ function compileCommandProgram(projectRoot: string): CommandProgram {
   return result.commandProgram
 }
 
-function findHarnessPlugin(templateDir: string): string {
-  const pluginsDir = path.join(templateDir, 'plugins')
-  if (!fs.existsSync(pluginsDir)) throw new P9SkipError(`missing Paper plugin directory '${pluginsDir}'`)
-  const candidates = fs.readdirSync(pluginsDir)
-    .filter(name => /^redscript-testharness(?:-[0-9].*)?\.jar$/.test(name))
-    .sort()
-  if (candidates.length !== 1) {
-    throw new P9SkipError(`expected exactly one RedScript TestHarness jar in '${pluginsDir}', found ${candidates.length}`)
-  }
-  return path.join(pluginsDir, candidates[0])
-}
-
-function findJava(): { executable: string; version: string } {
-  const candidates = [
-    process.env.MC_JAVA_BIN,
-    process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, 'bin', 'java') : undefined,
-    '/opt/homebrew/opt/openjdk/bin/java',
-    'java',
-  ].filter((candidate): candidate is string => candidate != null && candidate !== '')
-  for (const executable of candidates) {
-    const result = spawnSync(executable, ['-version'], { encoding: 'utf8' })
-    if (result.status === 0) {
-      const version = `${result.stdout}${result.stderr}`.split(/\r?\n/)[0].trim()
-      return { executable, version }
-    }
-  }
-  throw new P9SkipError('no runnable Java executable found (set MC_JAVA_BIN)')
-}
-
-export function createDeterministicServerProperties(serverPort: number): string {
-  return `server-ip=127.0.0.1
-server-port=${serverPort}
-online-mode=false
-enforce-secure-profile=false
-level-name=world
-level-type=minecraft:flat
-level-seed=0
-generator-settings={"biome":"minecraft:the_void","layers":[{"block":"minecraft:air","height":1}],"structures":{"structures":{}}}
-generate-structures=false
-spawn-animals=false
-spawn-monsters=false
-spawn-npcs=false
-allow-nether=false
-spawn-protection=0
-gamemode=creative
-difficulty=peaceful
-view-distance=2
-simulation-distance=2
-max-players=1
-pause-when-empty-seconds=-1
-enable-status=false
-sync-chunk-writes=true
-`
-}
-
-function prepareServerRoot(templateDir: string, harnessPlugin: string): string {
-  const paperJar = path.join(templateDir, 'paper.jar')
-  const libraries = path.join(templateDir, 'libraries')
-  const versions = path.join(templateDir, 'versions')
-  for (const required of [paperJar, libraries, versions]) {
-    if (!fs.existsSync(required)) throw new P9SkipError(`missing offline Paper prerequisite '${required}'`)
-  }
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-p9-paper-'))
-  fs.symlinkSync(paperJar, path.join(root, 'paper.jar'))
-  fs.symlinkSync(libraries, path.join(root, 'libraries'))
-  fs.symlinkSync(versions, path.join(root, 'versions'))
-  write(root, 'plugins/redscript-testharness.jar', fs.readFileSync(harnessPlugin))
-  write(root, 'eula.txt', 'eula=true\n')
-  write(root, 'server.properties', createDeterministicServerProperties(SERVER_PORT))
-  return root
-}
-
-class ManagedPaperServer {
-  private child?: ChildProcessWithoutNullStreams
-  private output = ''
-
-  constructor(
-    readonly rootDir: string,
-    private readonly java: string,
-    readonly client: MCTestClient,
-  ) {}
-
-  currentOutput(): string {
-    return this.output
-  }
-
-  readLatestLog(): string {
-    const latest = path.join(this.rootDir, 'logs', 'latest.log')
-    return fs.existsSync(latest) ? fs.readFileSync(latest, 'utf8') : ''
-  }
-
-  async start(): Promise<{ pid: number; status: ServerStatus }> {
-    if (this.child) throw new Error('Managed Paper server is already running')
-    this.output = ''
-    const child = spawn(this.java, ['-Xms512M', '-Xmx1G', '-jar', 'paper.jar', '--nogui'], {
-      cwd: this.rootDir,
-      env: { ...process.env },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    let spawnError: Error | undefined
-    child.once('error', error => {
-      spawnError = error
-    })
-    this.child = child
-    child.stdout.on('data', chunk => { this.output += chunk.toString() })
-    child.stderr.on('data', chunk => { this.output += chunk.toString() })
-
-    const deadline = Date.now() + 90_000
-    while (Date.now() < deadline) {
-      if (spawnError) {
-        this.child = undefined
-        throw new Error(`Paper failed to spawn: ${spawnError.message}`)
-      }
-      if (child.exitCode !== null || child.signalCode !== null) {
-        this.child = undefined
-        throw new Error(`Paper exited during startup with ${child.exitCode ?? child.signalCode}:\n${this.output.slice(-4000)}`)
-      }
-      try {
-        const status = await this.client.status()
-        if (status.online) return { pid: child.pid!, status }
-      } catch {
-        // Server is still starting.
-      }
-      await new Promise(resolve => setTimeout(resolve, 500))
-    }
-    throw new Error(`Paper/TestHarness did not become ready within 90 seconds:\n${this.output.slice(-4000)}`)
-  }
-
-  async stop(): Promise<void> {
-    const child = this.child
-    if (!child) return
-    if (child.exitCode !== null || child.signalCode !== null) {
-      this.child = undefined
-      if (child.exitCode != null && child.exitCode !== 0) {
-        throw new Error(`Paper exited with status ${child.exitCode}`)
-      }
-      return
-    }
-    const exited = new Promise<number | null>(resolve => child.once('exit', code => resolve(code)))
-    child.stdin.write('stop\n')
-    const result = await Promise.race([
-      exited.then(code => ({ kind: 'exit' as const, code })),
-      new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 60_000)),
-    ])
-    if (result.kind === 'timeout') {
-      child.kill('SIGTERM')
-      const terminated = await Promise.race([
-        exited.then(code => ({ kind: 'exit' as const, code })),
-        new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 10_000)),
-      ])
-      if (terminated.kind === 'timeout') {
-        child.kill('SIGKILL')
-        const killed = await Promise.race([
-          exited.then(code => ({ kind: 'exit' as const, code })),
-          new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 10_000)),
-        ])
-        if (killed.kind === 'timeout') {
-          throw new Error('Paper did not terminate after SIGTERM and SIGKILL')
-        }
-      }
-      this.child = undefined
-      throw new Error('Paper did not stop gracefully within 60 seconds')
-    }
-    this.child = undefined
-    if (result.code !== 0) throw new Error(`Paper exited with status ${String(result.code)}`)
-  }
-}
-
 async function command(mc: MCTestClient, value: string): Promise<void> {
   const response = await mc.command(value)
   if (!response.ok) throw new Error(`Harness rejected command '${value}'`)
@@ -650,7 +493,7 @@ export async function runP9LifecycleGate(options: {
     const paperJar = path.join(templateDir, 'paper.jar')
     const harnessPlugin = findHarnessPlugin(templateDir)
     const java = findJava()
-    serverRoot = prepareServerRoot(templateDir, harnessPlugin)
+    serverRoot = prepareServerRoot(templateDir, harnessPlugin, { serverPort: SERVER_PORT })
     projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-p9-project-'))
 
     const phase1 = compilePackGraph(projectRoot, 1, channel)
@@ -660,7 +503,7 @@ export async function runP9LifecycleGate(options: {
     const program = compileCommandProgram(projectRoot)
 
     const mc = new MCTestClient(HARNESS_HOST, HARNESS_PORT)
-    managed = new ManagedPaperServer(serverRoot, java.executable, mc)
+    managed = new ManagedPaperServer(serverRoot, java.executable, mc, { sourceTemplateDir: templateDir })
     const first = await managed.start()
     await recordCheck(report, 'startup', 'deterministic-world-fixture', 'air-only void + fixed rules + y=63 smooth-stone floor', async () => {
       await mc.deterministicReset({
@@ -758,12 +601,10 @@ export async function runP9LifecycleGate(options: {
     }
   } finally {
     const cleanupErrors: string[] = []
-    try {
-      await managed?.stop()
-    } catch (error) {
-      cleanupErrors.push(`stop: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    if (serverRoot && !keepServer) {
+    if (managed) {
+      const cleanup = await managed.cleanup({ removeRoot: !keepServer })
+      for (const failure of cleanup.failures) cleanupErrors.push(`${failure.stage}: ${failure.message}`)
+    } else if (serverRoot && !keepServer) {
       try {
         fs.rmSync(serverRoot, { recursive: true, force: true })
       } catch (error) {
