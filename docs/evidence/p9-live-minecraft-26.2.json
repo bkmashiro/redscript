@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "status": "passed",
-  "startedAt": "2026-08-02T09:43:37.440Z",
-  "versionChannel": "stable-1.21.4",
-  "minecraftVersion": "1.21.4",
+  "startedAt": "2026-08-02T09:42:04.631Z",
+  "versionChannel": "paper-26.2",
+  "minecraftVersion": "26.2",
   "checks": [
     {
       "phase": "startup",
@@ -15,7 +15,7 @@
       "phase": "startup",
       "name": "exact-version",
       "status": "passed",
-      "detail": "1.21.4-232-12d8fe0 (MC: 1.21.4)"
+      "detail": "26.2-87-a95ae8d (MC: 26.2)"
     },
     {
       "phase": "startup",
@@ -57,7 +57,7 @@
       "phase": "restart",
       "name": "new-server-process",
       "status": "passed",
-      "detail": "pid 70022 -> 70088"
+      "detail": "pid 69727 -> 69788"
     },
     {
       "phase": "restart",
@@ -132,15 +132,15 @@
     "setup": 1,
     "invoke": 2,
     "cleanup": 0,
-    "sha256": "516b06dfe716e04062e9d26f69b2d621e8884beed6f07db509ccb3ec81cf37e8"
+    "sha256": "f6920dce2b17d78349782ea10f5bde34ab5fbfcf621e94212aa90b19c4cc34b9"
   },
   "server": {
-    "version": "1.21.4-232-12d8fe0 (MC: 1.21.4)",
-    "paperSha256": "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc",
+    "version": "26.2-87-a95ae8d (MC: 26.2)",
+    "paperSha256": "3ab7536642d04c504a06fe43174b8a94f8c5f25d5847d4672212413f6e54b906",
     "harnessSha256": "b85f11fbcfcc8e341b82159be753e35f04992e0e59420e56fcfa9049a2678b2d",
     "java": "openjdk version \"25.0.2\" 2026-01-20",
-    "firstPid": 70022,
-    "restartPid": 70088
+    "firstPid": 69727,
+    "restartPid": 69788
   },
-  "completedAt": "2026-08-02T09:44:02.237Z"
+  "completedAt": "2026-08-02T09:42:23.910Z"
 }

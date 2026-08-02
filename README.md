@@ -265,9 +265,12 @@ npm run build
 npm run test:unit       # pure TS/unit tests, parallel
 npm run test:integration # mc-integration project, serial
 npm run test:mc-lifecycle # managed Paper gate; explicit [SKIP] when unavailable
-MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live # strict live proof
+MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live # strict stable proof
+MC_P9_VERSION_CHANNEL=paper-26.2 MC_P9_TEMPLATE_DIR=~/mc-test-server-26.2 npm run test:mc-lifecycle:live # strict 26.2 proof
 npm run gate:full       # heavyweight release-style gate
 ```
+
+The managed lifecycle gate creates a disposable air-only `minecraft:the_void` world, applies version-correct deterministic rules through TestHarness, and restores/verifies a smooth-stone floor at `y=63`. The template world is never reused or modified.
 
 See [AGENTS.md](./AGENTS.md) and [compiler hardening roadmap](./docs/plans/compiler-mc-hardening-roadmap.md) for current architecture and verification notes.
 

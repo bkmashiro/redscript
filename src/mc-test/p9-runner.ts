@@ -22,9 +22,48 @@ import { findMinecraftLifecycleFailures, partitionArtifactsByLifecycle } from '.
 const HARNESS_HOST = '127.0.0.1'
 const HARNESS_PORT = 25561
 const SERVER_PORT = 25566
-const MINECRAFT_VERSION = '1.21.4'
 const PACK_NAME = 'redscript-p9-lifecycle'
 const OBJECTIVE = 'p9_probe'
+
+export type P9VersionChannelId = 'stable-1.21.4' | 'paper-26.2'
+
+export interface P9VersionChannel {
+  readonly id: P9VersionChannelId
+  readonly minecraftVersion: '1.21.4' | '26.2'
+  readonly mcVersion: McVersion
+  readonly structureDataVersion: number
+  readonly defaultTemplateName: 'mc-test-server' | 'mc-test-server-26.2'
+}
+
+const P9_VERSION_CHANNELS: Readonly<Record<P9VersionChannelId, P9VersionChannel>> = Object.freeze({
+  'stable-1.21.4': Object.freeze({
+    id: 'stable-1.21.4',
+    minecraftVersion: '1.21.4',
+    mcVersion: McVersion.v1_21_4,
+    structureDataVersion: 4189,
+    defaultTemplateName: 'mc-test-server',
+  }),
+  'paper-26.2': Object.freeze({
+    id: 'paper-26.2',
+    minecraftVersion: '26.2',
+    mcVersion: McVersion.v26_2,
+    structureDataVersion: 4903,
+    defaultTemplateName: 'mc-test-server-26.2',
+  }),
+})
+
+export function resolveP9VersionChannel(value = 'stable-1.21.4'): P9VersionChannel {
+  const aliases = new Map<string, P9VersionChannelId>([
+    ['stable', 'stable-1.21.4'],
+    ['1.21.4', 'stable-1.21.4'],
+    ['stable-1.21.4', 'stable-1.21.4'],
+    ['26.2', 'paper-26.2'],
+    ['paper-26.2', 'paper-26.2'],
+  ])
+  const id = aliases.get(value)
+  if (!id) throw new Error(`unsupported P9 version channel '${value}'`)
+  return P9_VERSION_CHANNELS[id]
+}
 
 export type P9EvidencePhase = 'startup' | 'reload' | 'commands' | 'restart' | 'world_reopen'
 export type P9EvidenceStatus = 'passed' | 'failed' | 'skipped'
@@ -41,6 +80,7 @@ export interface P9LifecycleReport {
   status: P9EvidenceStatus
   startedAt: string
   completedAt?: string
+  versionChannel: string
   minecraftVersion: string
   server?: {
     version: string
@@ -124,13 +164,14 @@ function nbtCompoundList(name: string, values: readonly Buffer[]): Buffer {
   return Buffer.concat([Buffer.from([9]), nbtName(name), Buffer.from([10]), length, ...values])
 }
 
-/** Create a deterministic one-block Java structure template accepted by Paper 1.21.4. */
-export function createP9StructureNbt(block: string): Buffer {
+/** Create a deterministic one-block Java structure template for the selected runtime channel. */
+export function createP9StructureNbt(block: string, dataVersion = 4189): Buffer {
   if (!/^minecraft:[a-z0-9_]+$/.test(block)) throw new Error(`Invalid P9 structure block '${block}'`)
+  if (!Number.isInteger(dataVersion) || dataVersion <= 0) throw new Error(`Invalid P9 structure DataVersion '${dataVersion}'`)
   const paletteEntry = Buffer.concat([nbtString('Name', block), Buffer.from([0])])
   const blockEntry = Buffer.concat([nbtInt('state', 0), nbtIntList('pos', [0, 0, 0]), Buffer.from([0])])
   const root = Buffer.concat([
-    nbtInt('DataVersion', 4189),
+    nbtInt('DataVersion', dataVersion),
     nbtIntList('size', [1, 1, 1]),
     nbtCompoundList('palette', [paletteEntry]),
     nbtCompoundList('blocks', [blockEntry]),
@@ -154,14 +195,14 @@ function dimensionJson(): string {
   }, null, 2)}\n`
 }
 
-function projectManifest(): string {
+function projectManifest(channel: P9VersionChannel): string {
   return `
 [project]
 name = "p9-lifecycle"
 module = "example.com/p9"
 namespace = "p9"
 source-roots = ["src"]
-mc-version = "${MINECRAFT_VERSION}"
+mc-version = "${channel.minecraftVersion}"
 
 [assets]
 roots = ["assets"]
@@ -212,8 +253,8 @@ export fn main(): void {
 `
 }
 
-function writeProjectPhase(root: string, phase: 1 | 2): void {
-  write(root, 'redscript.toml', projectManifest())
+function writeProjectPhase(root: string, phase: 1 | 2, channel: P9VersionChannel): void {
+  write(root, 'redscript.toml', projectManifest(channel))
   write(root, 'src/pack/main.mcrs', packSource(phase))
   write(root, 'src/commands/main.mcrs', commandsSource())
   write(root, 'assets/predicate/from_file_probe.json', `${JSON.stringify({
@@ -222,16 +263,17 @@ function writeProjectPhase(root: string, phase: 1 | 2): void {
   }, null, 2)}\n`)
   write(root, 'assets/structure/probe.nbt', createP9StructureNbt(
     phase === 1 ? 'minecraft:gold_block' : 'minecraft:diamond_block',
+    channel.structureDataVersion,
   ))
   if (phase === 2) write(root, 'assets/dimension/after_restart.json', dimensionJson())
 }
 
-function typedArtifacts(): ReturnType<typeof createRecipeResourceArtifact>[] {
+function typedArtifacts(channel: P9VersionChannel): ReturnType<typeof createRecipeResourceArtifact>[] {
   const provenance: DatapackArtifactProvenance = Object.freeze({
     kind: 'generated',
     stage: 'p9-live-typed-builders',
   })
-  const common = { provenance, minecraftVersion: McVersion.v1_21_4 }
+  const common = { provenance, minecraftVersion: channel.mcVersion }
   return [
     createRecipeResourceArtifact({
       ...common,
@@ -272,15 +314,15 @@ function typedArtifacts(): ReturnType<typeof createRecipeResourceArtifact>[] {
   ]
 }
 
-function compilePackGraph(projectRoot: string, phase: 1 | 2): DatapackArtifactGraph {
-  writeProjectPhase(projectRoot, phase)
+function compilePackGraph(projectRoot: string, phase: 1 | 2, channel: P9VersionChannel): DatapackArtifactGraph {
+  writeProjectPhase(projectRoot, phase, channel)
   const project = loadProject(projectRoot)
   if (!project) throw new Error(`P9 project did not load from '${projectRoot}'`)
   const target = project.targets.pack
   const result = createCompilerSession({ project, target }).compileProject()
   if (result.kind !== 'datapack') throw new Error('P9 pack target did not produce a datapack graph')
-  return createDatapackArtifactGraph([...result.artifacts, ...typedArtifacts()], {
-    minecraftVersion: McVersion.v1_21_4,
+  return createDatapackArtifactGraph([...result.artifacts, ...typedArtifacts(channel)], {
+    minecraftVersion: channel.mcVersion,
     localNamespaces: ['p9'],
   })
 }
@@ -323,6 +365,32 @@ function findJava(): { executable: string; version: string } {
   throw new P9SkipError('no runnable Java executable found (set MC_JAVA_BIN)')
 }
 
+export function createDeterministicServerProperties(serverPort: number): string {
+  return `server-ip=127.0.0.1
+server-port=${serverPort}
+online-mode=false
+enforce-secure-profile=false
+level-name=world
+level-type=minecraft:flat
+level-seed=0
+generator-settings={"biome":"minecraft:the_void","layers":[{"block":"minecraft:air","height":1}],"structures":{"structures":{}}}
+generate-structures=false
+spawn-animals=false
+spawn-monsters=false
+spawn-npcs=false
+allow-nether=false
+spawn-protection=0
+gamemode=creative
+difficulty=peaceful
+view-distance=2
+simulation-distance=2
+max-players=1
+pause-when-empty-seconds=-1
+enable-status=false
+sync-chunk-writes=true
+`
+}
+
 function prepareServerRoot(templateDir: string, harnessPlugin: string): string {
   const paperJar = path.join(templateDir, 'paper.jar')
   const libraries = path.join(templateDir, 'libraries')
@@ -336,22 +404,7 @@ function prepareServerRoot(templateDir: string, harnessPlugin: string): string {
   fs.symlinkSync(versions, path.join(root, 'versions'))
   write(root, 'plugins/redscript-testharness.jar', fs.readFileSync(harnessPlugin))
   write(root, 'eula.txt', 'eula=true\n')
-  write(root, 'server.properties', `server-port=${SERVER_PORT}
-online-mode=false
-enforce-secure-profile=false
-level-name=world
-level-type=flat
-level-seed=0
-generator-settings={"biome":"minecraft:plains","layers":[{"block":"minecraft:stone","height":1}],"structures":{"structures":{}}}
-spawn-protection=0
-gamemode=creative
-difficulty=peaceful
-view-distance=2
-simulation-distance=2
-max-players=1
-pause-when-empty-seconds=-1
-enable-status=false
-`)
+  write(root, 'server.properties', createDeterministicServerProperties(SERVER_PORT))
   return root
 }
 
@@ -382,15 +435,23 @@ class ManagedPaperServer {
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
+    let spawnError: Error | undefined
+    child.once('error', error => {
+      spawnError = error
+    })
     this.child = child
     child.stdout.on('data', chunk => { this.output += chunk.toString() })
     child.stderr.on('data', chunk => { this.output += chunk.toString() })
 
     const deadline = Date.now() + 90_000
     while (Date.now() < deadline) {
-      if (child.exitCode != null) {
+      if (spawnError) {
         this.child = undefined
-        throw new Error(`Paper exited during startup with ${child.exitCode}:\n${this.output.slice(-4000)}`)
+        throw new Error(`Paper failed to spawn: ${spawnError.message}`)
+      }
+      if (child.exitCode !== null || child.signalCode !== null) {
+        this.child = undefined
+        throw new Error(`Paper exited during startup with ${child.exitCode ?? child.signalCode}:\n${this.output.slice(-4000)}`)
       }
       try {
         const status = await this.client.status()
@@ -406,6 +467,13 @@ class ManagedPaperServer {
   async stop(): Promise<void> {
     const child = this.child
     if (!child) return
+    if (child.exitCode !== null || child.signalCode !== null) {
+      this.child = undefined
+      if (child.exitCode != null && child.exitCode !== 0) {
+        throw new Error(`Paper exited with status ${child.exitCode}`)
+      }
+      return
+    }
     const exited = new Promise<number | null>(resolve => child.once('exit', code => resolve(code)))
     child.stdin.write('stop\n')
     const result = await Promise.race([
@@ -521,16 +589,52 @@ export async function runP9LifecycleGate(options: {
   outputPath?: string
   requireOnline?: boolean
   keepServer?: boolean
+  versionChannel?: string
 } = {}): Promise<P9LifecycleReport> {
-  const templateDir = path.resolve(options.templateDir ?? process.env.MC_P9_TEMPLATE_DIR ?? process.env.MC_SERVER_DIR ?? path.join(os.homedir(), 'mc-test-server'))
-  const outputPath = path.resolve(options.outputPath ?? process.env.MC_P9_REPORT ?? path.join(process.cwd(), 'build', 'p9-live-report.json'))
+  const requestedVersionChannel = options.versionChannel ?? process.env.MC_P9_VERSION_CHANNEL ?? 'stable-1.21.4'
+  let channel: P9VersionChannel
+  try {
+    channel = resolveP9VersionChannel(requestedVersionChannel)
+  } catch (error) {
+    const outputPath = path.resolve(
+      process.cwd(),
+      'build',
+      'p9-live-report-invalid-channel.json',
+    )
+    const message = error instanceof Error ? error.message : String(error)
+    const now = new Date().toISOString()
+    const failedReport: P9LifecycleReport = {
+      schemaVersion: 1,
+      status: 'failed',
+      startedAt: now,
+      completedAt: now,
+      versionChannel: requestedVersionChannel,
+      minecraftVersion: 'unknown',
+      checks: [{ phase: 'startup', name: 'configuration', status: 'failed', detail: message }],
+      error: message,
+    }
+    writeReport(outputPath, failedReport)
+    return failedReport
+  }
+  const templateDir = path.resolve(
+    options.templateDir
+      ?? process.env.MC_P9_TEMPLATE_DIR
+      ?? process.env.MC_SERVER_DIR
+      ?? path.join(os.homedir(), channel.defaultTemplateName),
+  )
+  const outputPath = path.resolve(options.outputPath ?? process.env.MC_P9_REPORT ?? path.join(
+    process.cwd(),
+    'build',
+    channel.id === 'stable-1.21.4' ? 'p9-live-report.json' : 'p9-live-report-26.2.json',
+  ))
   const requireOnline = options.requireOnline ?? process.env.MC_P9_REQUIRE_ONLINE === 'true'
   const keepServer = options.keepServer ?? process.env.MC_P9_KEEP_SERVER === 'true'
   const report: P9LifecycleReport = {
     schemaVersion: 1,
     status: 'failed',
     startedAt: new Date().toISOString(),
-    minecraftVersion: MINECRAFT_VERSION,
+    versionChannel: channel.id,
+    minecraftVersion: channel.minecraftVersion,
     checks: [],
   }
 
@@ -549,7 +653,7 @@ export async function runP9LifecycleGate(options: {
     serverRoot = prepareServerRoot(templateDir, harnessPlugin)
     projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-p9-project-'))
 
-    const phase1 = compilePackGraph(projectRoot, 1)
+    const phase1 = compilePackGraph(projectRoot, 1, channel)
     const phase1Partition = partitionArtifactsByLifecycle(phase1.artifacts)
     const packDir = path.join(serverRoot, 'world', 'datapacks', PACK_NAME)
     writeArtifactDirectoryAtomically(phase1, packDir)
@@ -558,11 +662,20 @@ export async function runP9LifecycleGate(options: {
     const mc = new MCTestClient(HARNESS_HOST, HARNESS_PORT)
     managed = new ManagedPaperServer(serverRoot, java.executable, mc)
     const first = await managed.start()
+    await recordCheck(report, 'startup', 'deterministic-world-fixture', 'air-only void + fixed rules + y=63 smooth-stone floor', async () => {
+      await mc.deterministicReset({
+        x1: -16, y1: 0, z1: -16, x2: 16, y2: 100, z2: 16,
+        minecraftVersion: channel.minecraftVersion,
+      })
+      await mc.assertBlock(0, 0, 0, 'minecraft:air')
+      await mc.assertBlock(0, 63, 0, 'minecraft:smooth_stone')
+      await mc.assertBlock(0, 64, 0, 'minecraft:air')
+    })
     await command(mc, `scoreboard objectives add ${OBJECTIVE} dummy`)
 
     await recordCheck(report, 'startup', 'exact-version', first.status.version, () => {
-      if (!first.status.version.includes(MINECRAFT_VERSION)) {
-        throw new Error(`expected Minecraft ${MINECRAFT_VERSION}, got '${first.status.version}'`)
+      if (!first.status.version.includes(channel.minecraftVersion)) {
+        throw new Error(`expected Minecraft ${channel.minecraftVersion}, got '${first.status.version}'`)
       }
     })
     await recordCheck(report, 'startup', 'clean-pack-load', 'no ERROR/FATAL datapack load entries', () => {
@@ -570,7 +683,7 @@ export async function runP9LifecycleGate(options: {
     })
     await recordCheck(report, 'startup', 'mixed-artifact-runtime', 'source typed tag + from-file predicate/NBT + five package builders', () => assertRuntimePhase(mc, 1))
 
-    const phase2 = compilePackGraph(projectRoot, 2)
+    const phase2 = compilePackGraph(projectRoot, 2, channel)
     const phase2Partition = partitionArtifactsByLifecycle(phase2.artifacts)
     const reloadBaseline = managed.readLatestLog().length
     writeArtifactDirectoryAtomically(phase2, packDir)
@@ -639,18 +752,37 @@ export async function runP9LifecycleGate(options: {
       report.error = message
       if (error instanceof P9SkipError) {
         report.checks.push({ phase: 'startup', name: 'environment', status: 'failed', detail: message })
+      } else {
+        report.checks.push({ phase: 'startup', name: 'lifecycle-gate', status: 'failed', detail: message })
       }
     }
   } finally {
+    const cleanupErrors: string[] = []
     try {
       await managed?.stop()
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      report.status = 'failed'
-      report.error = report.error ? `${report.error}; cleanup: ${message}` : `cleanup: ${message}`
+      cleanupErrors.push(`stop: ${error instanceof Error ? error.message : String(error)}`)
     }
-    if (serverRoot && !keepServer) fs.rmSync(serverRoot, { recursive: true, force: true })
-    if (projectRoot) fs.rmSync(projectRoot, { recursive: true, force: true })
+    if (serverRoot && !keepServer) {
+      try {
+        fs.rmSync(serverRoot, { recursive: true, force: true })
+      } catch (error) {
+        cleanupErrors.push(`server root: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    if (projectRoot) {
+      try {
+        fs.rmSync(projectRoot, { recursive: true, force: true })
+      } catch (error) {
+        cleanupErrors.push(`project root: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const detail = cleanupErrors.join('; ')
+      report.status = 'failed'
+      report.error = report.error ? `${report.error}; cleanup: ${detail}` : `cleanup: ${detail}`
+      report.checks.push({ phase: 'restart', name: 'cleanup', status: 'failed', detail })
+    }
     report.completedAt = new Date().toISOString()
     writeReport(outputPath, report)
   }
@@ -660,7 +792,7 @@ export async function runP9LifecycleGate(options: {
 async function main(): Promise<void> {
   const report = await runP9LifecycleGate()
   const label = report.status === 'passed' ? 'PASS' : report.status === 'skipped' ? 'SKIP' : 'FAIL'
-  console.log(`[${label}] P9 live Minecraft lifecycle gate: ${report.checks.filter(check => check.status === 'passed').length} passed, ${report.checks.filter(check => check.status === 'failed').length} failed, ${report.checks.filter(check => check.status === 'skipped').length} skipped`)
+  console.log(`[${label}] P9 live Minecraft lifecycle gate (${report.versionChannel}): ${report.checks.filter(check => check.status === 'passed').length} passed, ${report.checks.filter(check => check.status === 'failed').length} failed, ${report.checks.filter(check => check.status === 'skipped').length} skipped`)
   if (report.error) console.error(report.error)
   if (report.status === 'failed') process.exitCode = 1
 }

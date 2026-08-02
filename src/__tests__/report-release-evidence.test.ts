@@ -80,7 +80,8 @@ describe('report-release-evidence', () => {
     expect(data.liveCommands).toEqual([
       'curl -fsS --max-time 5 "http://${MC_HOST:-localhost}:${MC_PORT:-25561}/status"',
       'MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live',
-      'MC_P9_TEMPLATE_DIR="${MC_P9_TEMPLATE_DIR:-$HOME/mc-test-server}" npm run test:mc-lifecycle:live'
+      'MC_P9_TEMPLATE_DIR="${MC_P9_TEMPLATE_DIR:-$HOME/mc-test-server}" npm run test:mc-lifecycle:live',
+      'MC_P9_VERSION_CHANNEL=paper-26.2 MC_P9_TEMPLATE_DIR="${MC_P9_26_2_TEMPLATE_DIR:-$HOME/mc-test-server-26.2}" npm run test:mc-lifecycle:live'
     ])
     expect(data.liveBaseline).toBe('26/26')
   })

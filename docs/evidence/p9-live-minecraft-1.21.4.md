@@ -8,15 +8,17 @@ This record is **live Paper evidence**, not static command validation. The compl
 
 | Component | Evidence |
 |:--|:--|
+| Version channel | `stable-1.21.4` |
 | Minecraft/Paper | `1.21.4-232-12d8fe0 (MC: 1.21.4)` |
 | Paper SHA-256 | `5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc` |
-| TestHarness SHA-256 | `e94171d60f3f36cf679f1a557a4b7187616c745486de9f42aaf6d72f736334de` |
-| Evidence JSON SHA-256 | `bf1f9243e6a16c1d2cc4ca4ca9a26982e92ed5c0e7a8077cfc9c548ed11e04fe` |
+| TestHarness | `1.2.0` |
+| TestHarness SHA-256 | `b85f11fbcfcc8e341b82159be753e35f04992e0e59420e56fcfa9049a2678b2d` |
+| Evidence JSON SHA-256 | `ed14dca9f48399cd28abeb2fc665d09b4cbd639528936d6eb0c3c99467994b6d` |
 | Java | `openjdk version "25.0.2" 2026-01-20` |
 | Runner | `npm run test:mc-lifecycle:live` |
-| Result | **12 passed, 0 failed, 0 skipped** |
+| Result | **13 passed, 0 failed, 0 skipped** |
 
-The runner created a disposable server root, reused the pinned local Paper libraries and TestHarness plugin, created a fresh world, performed a graceful stop/start, and removed the temporary server afterward. It did not alter `~/mc-test-server/world`.
+The runner created a disposable server root, reused the pinned local Paper libraries and TestHarness plugin, created a fresh air-only `minecraft:the_void` world, applied version-correct deterministic rules, cleared the bounded test volume, restored and verified a smooth-stone floor at `y=63`, performed a graceful stop/start without resetting persisted state, and removed the temporary server afterward. It did not alter `~/mc-test-server/world`.
 
 ## Artifact graph exercised
 
@@ -39,7 +41,7 @@ All builders and from-file resources were merged through the canonical artifact 
 
 | Phase | Live assertion | Result |
 |:--|:--|:--|
-| startup | exact 1.21.4 server; clean pack load; mixed graph executable | PASS |
+| startup | exact 1.21.4 server; verified air-only void fixture and `y=63` floor; clean pack load; mixed graph executable | PASS |
 | `/reload` | function changed 10→20; typed tag gold→diamond; predicate false→true; structure gold→diamond | PASS |
 | `/reload` boundary | new `p9:after_restart` dimension remained unavailable | PASS |
 | commands | canonical program executed `setup → invoke → cleanup`; final score `42` | PASS |
@@ -50,19 +52,24 @@ The structure experiment corrected an earlier descriptor assumption: Java struct
 
 ## Stable versus snapshot channels
 
-- **Stable live channel:** Minecraft/Paper 1.21.4, proven by this run.
-- **26.2 snapshot/schema channel:** remains static-only and is not relabeled as live proof.
-- `DEFAULT_MC_VERSION` remains unchanged. A future default switch still requires a compatible 26.2 command audit and live oracle.
+- **Stable regression channel:** Minecraft/Paper 1.21.4, independently proven by this run.
+- **Current runtime channel:** Paper 26.2 build 87, independently proven by the [Markdown](./p9-live-minecraft-26.2.md) and [JSON](./p9-live-minecraft-26.2.json) evidence with the same 13 lifecycle checks.
+- `DEFAULT_MC_VERSION` remains unchanged; selecting Paper 26.2 for the runtime oracle does not silently switch the compiler default.
 - Typed worldgen builders remain deferred; P9 adds only strict JSON `dimension` / `dimension_type` descriptors needed to exercise the lifecycle boundary.
 
 ## Reproduction and skip semantics
 
 ```bash
-# Strict live proof; exits non-zero if prerequisites are unavailable.
+# Stable 1.21.4 regression proof.
 MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live
+
+# Current Paper 26.2 proof.
+MC_P9_VERSION_CHANNEL=paper-26.2 \
+MC_P9_TEMPLATE_DIR=~/mc-test-server-26.2 \
+npm run test:mc-lifecycle:live
 
 # Offline-safe evidence probe; writes [SKIP] and exits zero if unavailable.
 MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle
 ```
 
-The template must contain `paper.jar`, offline `libraries/`, `versions/`, and exactly one `plugins/redscript-testharness*.jar`. TestHarness port `25561` must be free because the runner owns server startup and restart. The JSON report defaults to `build/p9-live-report.json` and can be retained by CI as an evidence artifact.
+Each template must contain `paper.jar`, offline `libraries/`, `versions/`, and exactly one `plugins/redscript-testharness*.jar`. TestHarness port `25561` must be free because the runner owns server startup and restart. Stable output defaults to `build/p9-live-report.json`; the 26.2 channel defaults to `build/p9-live-report-26.2.json`. CI may retain either as an evidence artifact.

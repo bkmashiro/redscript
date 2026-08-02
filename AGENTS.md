@@ -120,6 +120,9 @@ real integration: Paper server + TestHarnessPlugin oracle
 
 - Existing Paper integration uses `MCTestClient` and can skip if the server is unavailable.
 - The harness should be treated as a server oracle only when it returns structured reload/command/assertion results.
+- Managed lifecycle worlds must be created from the runner-owned air-only `minecraft:the_void` properties, then initialized once with `MCTestClient.deterministicReset()` to apply version-correct rules, clear entities, and restore/verify the bounded `y=63` floor. Do not reset during the restart phase because persisted-world state is the assertion target.
+- Keep stable 1.21.4 and Paper 26.2 evidence independent. Select 26.2 only through `MC_P9_VERSION_CHANNEL=paper-26.2`; derive manifest version, typed-artifact version, structure DataVersion, exact runtime assertion, and reset rule IDs from that channel.
+- Keep world-generator policy in the managed runner/server properties; the TestHarness plugin owns only the opt-in, idempotent reset/bootstrap boundary.
 - Avoid flaky wall-clock assumptions. Prefer tick stepping, isolated namespaces/objectives, reset endpoints, and deterministic scoreboard/storage/block/entity assertions.
 - A future test descriptor format should let Node compile/install/reload/run/assert without the plugin invoking the compiler.
 

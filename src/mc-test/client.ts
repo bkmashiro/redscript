@@ -57,6 +57,22 @@ export interface GameEvent {
   cause?: string
 }
 
+export interface DeterministicResetResult {
+  ok: boolean
+  deterministicWorld: boolean
+  steps: string[]
+  failedCommands: string[]
+}
+
+export interface DeterministicResetOptions {
+  x1?: number; y1?: number; z1?: number
+  x2?: number; y2?: number; z2?: number
+  floorY?: number
+  floorBlock?: string
+  resetScoreboards?: boolean
+  minecraftVersion?: string
+}
+
 export interface ServerStatus {
   online: boolean
   tps_1m: number
@@ -203,6 +219,27 @@ export class MCTestClient {
   /** Clear chat and event logs */
   async reset(): Promise<void> {
     await this.post('/reset')
+  }
+
+  /**
+   * Restore the deterministic void-world fixture and verify its floor, air,
+   * time, weather, and entity state through TestHarness.
+   */
+  async deterministicReset(options: DeterministicResetOptions = {}): Promise<DeterministicResetResult> {
+    const result = await this.post<DeterministicResetResult>('/reset', {
+      deterministicWorld: true,
+      resetScoreboards: options.resetScoreboards ?? true,
+      x1: options.x1 ?? -16, y1: options.y1 ?? 0, z1: options.z1 ?? -16,
+      x2: options.x2 ?? 16, y2: options.y2 ?? 100, z2: options.z2 ?? 16,
+      floorY: options.floorY ?? 63,
+      floorBlock: options.floorBlock ?? 'minecraft:smooth_stone',
+      minecraftVersion: options.minecraftVersion,
+    })
+    const failedCommands = Array.isArray(result.failedCommands) ? result.failedCommands : []
+    if (!result.ok || result.deterministicWorld !== true || !Array.isArray(result.failedCommands) || failedCommands.length > 0) {
+      throw new Error(`deterministic reset failed: ${failedCommands.join('; ') || 'invalid harness response'}`)
+    }
+    return result
   }
 
   /**

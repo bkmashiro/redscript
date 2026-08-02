@@ -124,13 +124,15 @@ fn my_helper(target: selector) {
 
 For the managed reload/restart/world-reopen gate:
 
-1. Prepare a Paper 1.21.4 template with `paper.jar`, offline `libraries/`, `versions/`, and exactly one [TestHarness plugin](https://github.com/bkmashiro/redscript-testharness) jar.
-2. Ensure TestHarness port `25561` is free; the gate owns server startup and restart.
-3. Run `MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live`.
+1. Prepare either a Paper 1.21.4 stable template at `~/mc-test-server` or a Paper 26.2 template at `~/mc-test-server-26.2`. Each needs `paper.jar`, offline `libraries/`, `versions/`, and exactly one [TestHarness plugin](https://github.com/bkmashiro/redscript-testharness) jar.
+2. Do not place a reusable world in either template. The gate creates a disposable air-only void world, bootstraps deterministic rules, and verifies its `y=63` floor.
+3. Ensure TestHarness port `25561` is free; the gate owns server startup and restart.
+4. Run the stable gate with `MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live`.
+5. Run the 26.2 gate with `MC_P9_VERSION_CHANNEL=paper-26.2 MC_P9_TEMPLATE_DIR=~/mc-test-server-26.2 npm run test:mc-lifecycle:live`.
 
 `npm run test:mc-lifecycle` is the offline-safe form: unavailable prerequisites produce an explicit `[SKIP]` report rather than live-proof claims. Static `npm run validate-mc` remains a separate evidence label.
 
-See [Testing Guide](https://redscript-docs.pages.dev/en/guide/testing) and the [P9 evidence record](docs/evidence/p9-live-minecraft-1.21.4.md) for details.
+See [Testing Guide](https://redscript-docs.pages.dev/en/guide/testing), the [Paper 1.21.4 evidence](docs/evidence/p9-live-minecraft-1.21.4.md), and the [Paper 26.2 evidence](docs/evidence/p9-live-minecraft-26.2.md) for details.
 
 ## Need Help?
 

@@ -147,8 +147,11 @@ resource dimension bakery:moon from "dimensions/moon.json";
 
 ```bash
 npm run test:mc-lifecycle # 环境缺失时明确输出 [SKIP]
-MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live # 严格 live proof
+MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live # 严格 1.21.4 回归证据
+MC_P9_VERSION_CHANNEL=paper-26.2 MC_P9_TEMPLATE_DIR=~/mc-test-server-26.2 npm run test:mc-lifecycle:live # 严格 26.2 证据
 ```
+
+managed lifecycle gate 会创建一次性、仅含空气的 `minecraft:the_void` 世界，通过 TestHarness 应用对应版本的确定性规则，并在 `y=63` 恢复和验证 smooth-stone 地板；不会复用或修改 template 中的世界。
 
 ---
 

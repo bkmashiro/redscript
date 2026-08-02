@@ -8,7 +8,11 @@ on:
         type: boolean
         default: false
       require_lifecycle:
-        description: 'Fail instead of skip when the managed P9 Paper template is unavailable'
+        description: 'Fail instead of skip when the managed P9 Paper 1.21.4 template is unavailable'
+        type: boolean
+        default: false
+      require_lifecycle_26_2:
+        description: 'Fail instead of skip when the managed P9 Paper 26.2 template is unavailable'
         type: boolean
         default: false
   schedule:
@@ -24,8 +28,10 @@ jobs:
       MC_PORT: ${{ vars.MC_PORT || '25561' }}
       MC_SERVER_DIR: ${{ vars.MC_SERVER_DIR }}
       MC_P9_TEMPLATE_DIR: ${{ vars.MC_P9_TEMPLATE_DIR || vars.MC_SERVER_DIR }}
+      MC_P9_26_2_TEMPLATE_DIR: ${{ vars.MC_P9_26_2_TEMPLATE_DIR }}
       REQUIRE_ONLINE_INPUT: ${{ inputs.require_online || false }}
       REQUIRE_LIFECYCLE_INPUT: ${{ inputs.require_lifecycle || false }}
+      REQUIRE_LIFECYCLE_26_2_INPUT: ${{ inputs.require_lifecycle_26_2 || false }}
     steps:
       - uses: actions/checkout@v6
 
@@ -33,6 +39,11 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
 
       - run: npm ci
       - run: npm run build
@@ -43,6 +54,7 @@ jobs:
         run: |
           core_configured=false
           lifecycle_configured=false
+          lifecycle_26_2_configured=false
           local_harness_busy=false
 
           if curl -fsS --max-time 2 "http://127.0.0.1:25561/status" >/dev/null; then
@@ -66,11 +78,24 @@ jobs:
             lifecycle_configured=true
             echo "Managed P9 Paper template is available at ${MC_P9_TEMPLATE_DIR}"
           else
-            echo "Managed P9 Paper template is unavailable; lifecycle oracle will be skipped."
+            echo "Managed P9 Paper 1.21.4 template is unavailable; stable lifecycle oracle will be skipped."
+          fi
+
+          if [ "${local_harness_busy}" != "true" ] \
+            && [ -n "${MC_P9_26_2_TEMPLATE_DIR}" ] \
+            && [ -f "${MC_P9_26_2_TEMPLATE_DIR}/paper.jar" ] \
+            && [ -d "${MC_P9_26_2_TEMPLATE_DIR}/libraries" ] \
+            && [ -d "${MC_P9_26_2_TEMPLATE_DIR}/versions" ] \
+            && compgen -G "${MC_P9_26_2_TEMPLATE_DIR}/plugins/redscript-testharness*.jar" >/dev/null; then
+            lifecycle_26_2_configured=true
+            echo "Managed P9 Paper 26.2 template is available at ${MC_P9_26_2_TEMPLATE_DIR}"
+          else
+            echo "Managed P9 Paper 26.2 template is unavailable; 26.2 lifecycle oracle will be skipped."
           fi
 
           echo "core_configured=${core_configured}" >> "$GITHUB_OUTPUT"
           echo "lifecycle_configured=${lifecycle_configured}" >> "$GITHUB_OUTPUT"
+          echo "lifecycle_26_2_configured=${lifecycle_26_2_configured}" >> "$GITHUB_OUTPUT"
 
       - name: Fail if explicit core proof was requested but unavailable
         if: steps.live-env.outputs.core_configured != 'true' && env.REQUIRE_ONLINE_INPUT == 'true'
@@ -84,20 +109,41 @@ jobs:
           echo "P9 lifecycle proof was explicitly required, but its managed Paper template is unavailable."
           exit 1
 
+      - name: Fail if explicit 26.2 lifecycle proof was requested but unavailable
+        if: steps.live-env.outputs.lifecycle_26_2_configured != 'true' && env.REQUIRE_LIFECYCLE_26_2_INPUT == 'true'
+        run: |
+          echo "P9 Paper 26.2 lifecycle proof was explicitly required, but its managed template is unavailable."
+          exit 1
+
       - name: Run live MC core oracle
         if: steps.live-env.outputs.core_configured == 'true'
         run: npm run test:mc-core:live
         env:
           MC_CORE_REQUIRE_ONLINE: 'true'
 
-      - name: Run managed P9 reload/restart/world-reopen oracle
-        if: steps.live-env.outputs.lifecycle_configured == 'true'
+      - name: Run managed P9 Paper 1.21.4 reload/restart/world-reopen oracle
+        if: ${{ always() && steps.live-env.outputs.lifecycle_configured == 'true' }}
         run: npm run test:mc-lifecycle:live
 
-      - name: Upload P9 lifecycle evidence
+      - name: Run managed P9 Paper 26.2 reload/restart/world-reopen oracle
+        if: ${{ always() && steps.live-env.outputs.lifecycle_26_2_configured == 'true' }}
+        run: npm run test:mc-lifecycle:live
+        env:
+          MC_P9_VERSION_CHANNEL: paper-26.2
+          MC_P9_TEMPLATE_DIR: ${{ env.MC_P9_26_2_TEMPLATE_DIR }}
+
+      - name: Upload P9 Paper 1.21.4 lifecycle evidence
         if: always() && steps.live-env.outputs.lifecycle_configured == 'true'
         uses: actions/upload-artifact@v6
         with:
-          name: p9-live-minecraft-evidence
+          name: p9-live-minecraft-1.21.4-evidence
           path: build/p9-live-report.json
+          if-no-files-found: error
+
+      - name: Upload P9 Paper 26.2 lifecycle evidence
+        if: always() && steps.live-env.outputs.lifecycle_26_2_configured == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: p9-live-minecraft-26.2-evidence
+          path: build/p9-live-report-26.2.json
           if-no-files-found: error

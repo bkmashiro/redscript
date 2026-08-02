@@ -39,6 +39,7 @@ Run the core oracle only when an existing Paper/TestHarness server and `MC_SERVE
 curl -fsS --max-time 5 "http://${MC_HOST:-localhost}:${MC_PORT:-25561}/status"
 MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live
 MC_P9_TEMPLATE_DIR="${MC_P9_TEMPLATE_DIR:-$HOME/mc-test-server}" npm run test:mc-lifecycle:live
+MC_P9_VERSION_CHANNEL=paper-26.2 MC_P9_TEMPLATE_DIR="${MC_P9_26_2_TEMPLATE_DIR:-$HOME/mc-test-server-26.2}" npm run test:mc-lifecycle:live
 ```
 
 Meaning:
@@ -52,9 +53,9 @@ GitHub workflow and release evidence artifact:
 - `.github/workflows/live-mc-core.yml` must exist and document that it is manual/nightly.
 - Use workflow-scope variables for the existing core host/port/server directory and the managed `MC_P9_TEMPLATE_DIR`.
 - Each oracle must skip clearly when its own environment is unavailable; explicit workflow inputs may make either absence fatal.
-- Upload `build/p9-live-report.json` when the managed lifecycle lane runs.
+- Upload `build/p9-live-report.json` and `build/p9-live-report-26.2.json` when their managed lifecycle lanes run.
 - Current core local baseline from 2026-06-30 is `26/26` live-cases (`test:mc-core:live`), descriptor-driven and covering the timer countdown plus first P1 world/inventory/random/spawn/particle/visual-UI smokes.
-- Current lifecycle baseline from 2026-07-31 is `12/12` checks on Paper 1.21.4; exact hashes and phase evidence are committed under `docs/evidence/p9-live-minecraft-1.21.4.{md,json}`.
+- Current lifecycle baselines from 2026-08-02 are independently `13/13` on Paper 1.21.4 and Paper 26.2, both including the verified air-only void fixture and `y=63` floor; exact hashes and phase evidence are committed under `docs/evidence/p9-live-minecraft-{1.21.4,26.2}.{md,json}`.
 - Visual/UI boundary tranche (`visual command boundary smoke`) is included in the local live proof baseline for title/playsound/bossbar command execution.
 
 Smoke suite availability:

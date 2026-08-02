@@ -120,3 +120,32 @@ describe('MCTestClient.dumpScoresByObj', () => {
     await expect(mc.dumpScoresByObj('my_obj')).rejects.toThrow('obj="my_obj"')
   })
 })
+
+describe('MCTestClient.deterministicReset', () => {
+  it('uses the bounded deterministic fixture defaults', async () => {
+    mockFetch({ ok: true, deterministicWorld: true, steps: [], failedCommands: [] })
+    const mc = new MCTestClient('localhost', 25561)
+
+    await mc.deterministicReset()
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0]
+    expect(JSON.parse(init.body)).toMatchObject({
+      deterministicWorld: true,
+      x1: -16, y1: 0, z1: -16,
+      x2: 16, y2: 100, z2: 16,
+      floorY: 63,
+      floorBlock: 'minecraft:smooth_stone',
+    })
+    expect(JSON.parse(init.body)).not.toHaveProperty('minecraftVersion')
+  })
+
+  it('forwards an explicit runtime version to the harness', async () => {
+    mockFetch({ ok: true, deterministicWorld: true, steps: [], failedCommands: [] })
+    const mc = new MCTestClient('localhost', 25561)
+
+    await mc.deterministicReset({ minecraftVersion: '26.2' })
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0]
+    expect(JSON.parse(init.body).minecraftVersion).toBe('26.2')
+  })
+})
