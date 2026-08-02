@@ -127,6 +127,7 @@ function main() {
 
     const requiredArtifactExports = [
       'createDatapackArtifactGraph',
+      'createResourceArtifact',
       'generatedDatapackArtifacts',
       'projectLegacyDatapackFiles',
       'resolveResourceDescriptor',
@@ -156,6 +157,17 @@ function main() {
     }
     if (compilerPackage.resolveResourceDescriptor('recipe', compilerPackage.McVersion.v1_21).directory !== 'recipe') {
       throw new Error('installed registry descriptor API returned the wrong modern recipe path')
+    }
+    const dimensionArtifact = compilerPackage.createResourceArtifact({
+      kind: 'dimension',
+      id: 'release_smoke:moon',
+      content: JSON.stringify({ type: 'minecraft:overworld', generator: {} }),
+      provenance: { kind: 'generated', stage: 'package-smoke' },
+      minecraftVersion: compilerPackage.McVersion.v1_21_4,
+    })
+    if (dimensionArtifact.outputPath !== 'data/release_smoke/dimension/moon.json'
+      || dimensionArtifact.lifecycle !== 'world_reopen') {
+      throw new Error('installed dimension descriptor returned the wrong path or lifecycle')
     }
     const tagArtifact = compilerPackage.createTagResourceArtifact({
       kind: 'item_tag',

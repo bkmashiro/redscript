@@ -14,9 +14,10 @@ The next product architecture track is [Project, Package, and Multi-Target Compi
 5. ✅ a finite command-sequence backend with canonical manifests, budgets, and static validation;
 6. ✅ versioned remote dependencies and a reproducible lockfile;
 7. ✅ typed datapack artifact graph, JSON/NBT resources, and deterministic projections;
-8. ✅ selective typed resource builders: source-level tags plus version-aware package APIs for common recipes, advancements, predicates, loot tables, and item modifiers.
+8. ✅ selective typed resource builders: source-level tags plus version-aware package APIs for common recipes, advancements, predicates, loot tables, and item modifiers;
+9. ✅ P9 managed Paper 1.21.4 lifecycle gate: mixed graph load, `/reload`, canonical commands execution, graceful restart, and world-reopen registry evidence.
 
-The tables below describe the existing language/tooling inventory. The strict project/package dependency contract, target capability validation, finite commands backend, reproducible remote dependencies, typed JSON/NBT artifact graph, and selective P8 builders are implemented. P9 live Minecraft gates remain staged work.
+The tables below describe the existing language/tooling inventory. The strict project/package dependency contract, target capability validation, finite commands backend, reproducible remote dependencies, typed JSON/NBT artifact graph, selective P8 builders, and stable-channel P9 lifecycle gate are implemented. The 26.2 schema channel remains static-only; the default target and typed worldgen builders stay blocked on compatible live evidence.
 
 ## Legend
 - ✅ Done

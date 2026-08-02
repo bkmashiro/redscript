@@ -41,6 +41,8 @@ package pack;
 resource recipe demo:toast from "recipes/toast.json";
 resource item_tag demo:foods from "tags/foods.json";
 resource structure demo:hut from "structures/hut.nbt";
+resource dimension demo:moon from "dimensions/moon.json";
+resource dimension_type demo:moon from "dimensions/moon_type.json";
 export fn main(): void {}
 `
 }
@@ -59,6 +61,8 @@ describe('project resource artifact integration', () => {
     }))
     write(root, 'assets/tags/foods.json', JSON.stringify({ values: ['minecraft:apple'] }))
     write(root, 'assets/structures/hut.nbt', gzipSync(Buffer.from([10, 0, 0, 0])))
+    write(root, 'assets/dimensions/moon.json', JSON.stringify({ type: 'minecraft:overworld', generator: {} }))
+    write(root, 'assets/dimensions/moon_type.json', JSON.stringify({ natural: false }))
   })
 
   afterEach(() => {
@@ -85,10 +89,16 @@ describe('project resource artifact integration', () => {
       'data/demo/recipe/toast.json',
       'data/demo/tags/item/foods.json',
       'data/demo/structure/hut.nbt',
+      'data/demo/dimension/moon.json',
+      'data/demo/dimension_type/moon.json',
       'pack.mcmeta',
     ]))
     expect(result.files.map(file => file.path)).toContain('data/demo/recipe/toast.json')
     expect(result.files.map(file => file.path)).not.toContain('data/demo/structure/hut.nbt')
+    expect(result.artifacts.filter(artifact => artifact.lifecycle === 'world_reopen').map(artifact => artifact.outputPath)).toEqual([
+      'data/demo/dimension/moon.json',
+      'data/demo/dimension_type/moon.json',
+    ])
     expect(result.artifacts.find(artifact => artifact.identity.kind === 'structure')?.provenance).toMatchObject({
       kind: 'source',
       modulePath: 'example.com/demo',

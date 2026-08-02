@@ -9,7 +9,8 @@
     "mc-integration-offline-skippable": "Module appears in MC integration tests; offline skip is not live Paper proof.",
     "compile-all-static-smoke": "Module is not in the compile-all skip manifest.",
     "compile-all-known-skip": "Module is intentionally skipped by compile-all with a manifest reason.",
-    "typed-resource-api-unit": "Unit tests prove typed resource context/category diagnostics and string-compatible resource argument behavior; this is not live Paper proof."
+    "typed-resource-api-unit": "Unit tests prove typed resource context/category diagnostics and string-compatible resource argument behavior; this is not live Paper proof.",
+    "live-paper-lifecycle": "A managed Paper/TestHarness run proves datapack load, reload, restart, and world-reopen lifecycle boundaries."
   },
   "stdlibModules": [
     {
@@ -1154,6 +1155,21 @@
         "src/__tests__/compile-all.test.ts"
       ],
       "notes": "Resource IDs are open; built-in catalog/category checks are typed-context diagnostics and compile/static evidence only, not runtime Paper proof."
+    },
+    {
+      "feature": "datapack artifact lifecycle",
+      "proofLevels": [
+        "artifact-graph-unit",
+        "live-paper-lifecycle",
+        "stable-1.21.4"
+      ],
+      "evidenceFiles": [
+        "src/__tests__/mc-p9-lifecycle.test.ts",
+        "src/mc-test/p9-runner.ts",
+        "docs/evidence/p9-live-minecraft-1.21.4.md",
+        "docs/evidence/p9-live-minecraft-1.21.4.json"
+      ],
+      "notes": "Paper 1.21.4 proves mixed typed/from-file load, reloadable structure mutation, canonical commands execution, graceful restart, and dimension visibility only after world reopen. The 26.2 channel remains static-only."
     },
     {
       "feature": "string comparison",

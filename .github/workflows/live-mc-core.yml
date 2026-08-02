@@ -1,25 +1,31 @@
-name: Live MC Core Oracle
+name: Live MC Oracles
 
 on:
   workflow_dispatch:
     inputs:
       require_online:
-        description: 'Fail instead of skip when no live Paper/TestHarness config is available'
+        description: 'Fail instead of skip when the existing live core oracle is unavailable'
+        type: boolean
+        default: false
+      require_lifecycle:
+        description: 'Fail instead of skip when the managed P9 Paper template is unavailable'
         type: boolean
         default: false
   schedule:
     - cron: '17 3 * * *'
 
 jobs:
-  live-mc-core:
-    name: Manual/nightly Paper TestHarness oracle
+  live-mc:
+    name: Manual/nightly Paper TestHarness oracles
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       MC_HOST: ${{ vars.MC_HOST || 'localhost' }}
       MC_PORT: ${{ vars.MC_PORT || '25561' }}
       MC_SERVER_DIR: ${{ vars.MC_SERVER_DIR }}
+      MC_P9_TEMPLATE_DIR: ${{ vars.MC_P9_TEMPLATE_DIR || vars.MC_SERVER_DIR }}
       REQUIRE_ONLINE_INPUT: ${{ inputs.require_online || false }}
+      REQUIRE_LIFECYCLE_INPUT: ${{ inputs.require_lifecycle || false }}
     steps:
       - uses: actions/checkout@v6
 
@@ -31,31 +37,67 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: Check live oracle environment
+      - name: Check live oracle environments
         id: live-env
         shell: bash
         run: |
-          if [ -z "${MC_SERVER_DIR}" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "No MC_SERVER_DIR repository variable is configured; live Paper oracle will be skipped."
-            exit 0
-          fi
-          if curl -fsS --max-time 5 "http://${MC_HOST}:${MC_PORT}/status" >/tmp/redscript-mc-status.json; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo "Harness online at http://${MC_HOST}:${MC_PORT}"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Harness is not reachable at http://${MC_HOST}:${MC_PORT}."
+          core_configured=false
+          lifecycle_configured=false
+          local_harness_busy=false
+
+          if curl -fsS --max-time 2 "http://127.0.0.1:25561/status" >/dev/null; then
+            local_harness_busy=true
+            echo "Local TestHarness port 25561 is already in use; managed lifecycle oracle cannot own it in this run."
           fi
 
-      - name: Fail if explicit online proof was requested but unavailable
-        if: steps.live-env.outputs.configured != 'true' && env.REQUIRE_ONLINE_INPUT == 'true'
+          if [ -n "${MC_SERVER_DIR}" ] && curl -fsS --max-time 5 "http://${MC_HOST}:${MC_PORT}/status" >/tmp/redscript-mc-status.json; then
+            core_configured=true
+            echo "Existing TestHarness online at http://${MC_HOST}:${MC_PORT}"
+          else
+            echo "Existing TestHarness is not configured/reachable; core oracle will be skipped."
+          fi
+
+          if [ "${local_harness_busy}" != "true" ] \
+            && [ -n "${MC_P9_TEMPLATE_DIR}" ] \
+            && [ -f "${MC_P9_TEMPLATE_DIR}/paper.jar" ] \
+            && [ -d "${MC_P9_TEMPLATE_DIR}/libraries" ] \
+            && [ -d "${MC_P9_TEMPLATE_DIR}/versions" ] \
+            && compgen -G "${MC_P9_TEMPLATE_DIR}/plugins/redscript-testharness*.jar" >/dev/null; then
+            lifecycle_configured=true
+            echo "Managed P9 Paper template is available at ${MC_P9_TEMPLATE_DIR}"
+          else
+            echo "Managed P9 Paper template is unavailable; lifecycle oracle will be skipped."
+          fi
+
+          echo "core_configured=${core_configured}" >> "$GITHUB_OUTPUT"
+          echo "lifecycle_configured=${lifecycle_configured}" >> "$GITHUB_OUTPUT"
+
+      - name: Fail if explicit core proof was requested but unavailable
+        if: steps.live-env.outputs.core_configured != 'true' && env.REQUIRE_ONLINE_INPUT == 'true'
         run: |
-          echo "MC live oracle was explicitly required, but the harness/server directory is unavailable."
+          echo "MC live core oracle was explicitly required, but its harness/server directory is unavailable."
+          exit 1
+
+      - name: Fail if explicit lifecycle proof was requested but unavailable
+        if: steps.live-env.outputs.lifecycle_configured != 'true' && env.REQUIRE_LIFECYCLE_INPUT == 'true'
+        run: |
+          echo "P9 lifecycle proof was explicitly required, but its managed Paper template is unavailable."
           exit 1
 
       - name: Run live MC core oracle
-        if: steps.live-env.outputs.configured == 'true'
+        if: steps.live-env.outputs.core_configured == 'true'
         run: npm run test:mc-core:live
         env:
           MC_CORE_REQUIRE_ONLINE: 'true'
+
+      - name: Run managed P9 reload/restart/world-reopen oracle
+        if: steps.live-env.outputs.lifecycle_configured == 'true'
+        run: npm run test:mc-lifecycle:live
+
+      - name: Upload P9 lifecycle evidence
+        if: always() && steps.live-env.outputs.lifecycle_configured == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: p9-live-minecraft-evidence
+          path: build/p9-live-report.json
+          if-no-files-found: error

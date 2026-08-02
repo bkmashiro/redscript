@@ -129,6 +129,27 @@ describe('RedScript coverage matrix manifest', () => {
     expect(md).toContain('not live Paper proof')
   })
 
+  it('records managed datapack lifecycle proof separately from typed resource diagnostics', () => {
+    const matrix = readMatrix()
+    const lifecycleFeature = matrix.languageFeatures
+      .find((entry: any) => entry.feature === 'datapack artifact lifecycle')
+    const md = fs.readFileSync(MATRIX_MD, 'utf-8')
+
+    expect(matrix.proofLevelLegend['live-paper-lifecycle']).toContain('reload')
+    expect(lifecycleFeature).toBeDefined()
+    expect(lifecycleFeature.proofLevels).toEqual(expect.arrayContaining([
+      'artifact-graph-unit',
+      'live-paper-lifecycle',
+      'stable-1.21.4',
+    ]))
+    expect(lifecycleFeature.evidenceFiles).toEqual(expect.arrayContaining([
+      'src/mc-test/p9-runner.ts',
+      'docs/evidence/p9-live-minecraft-1.21.4.json',
+    ]))
+    expect(md).toContain('datapack artifact lifecycle')
+    expect(md).toContain('`live-paper-lifecycle`')
+  })
+
   it('does not claim compile-all skip blockers in language-feature coverage when manifest has none', () => {
     const matrix = readMatrix()
     const matrixLanguageFeatureStatuses = matrix.languageFeatures

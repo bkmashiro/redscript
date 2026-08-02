@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "startedAt": "2026-08-02T05:57:56.177Z",
+  "minecraftVersion": "1.21.4",
+  "checks": [
+    {
+      "phase": "startup",
+      "name": "exact-version",
+      "status": "passed",
+      "detail": "1.21.4-232-12d8fe0 (MC: 1.21.4)"
+    },
+    {
+      "phase": "startup",
+      "name": "clean-pack-load",
+      "status": "passed",
+      "detail": "no ERROR/FATAL datapack load entries"
+    },
+    {
+      "phase": "startup",
+      "name": "mixed-artifact-runtime",
+      "status": "passed",
+      "detail": "source typed tag + from-file predicate/NBT + five package builders"
+    },
+    {
+      "phase": "reload",
+      "name": "clean-reload",
+      "status": "passed",
+      "detail": "phase-2 graph loaded without resource errors"
+    },
+    {
+      "phase": "reload",
+      "name": "mixed-artifact-mutation",
+      "status": "passed",
+      "detail": "function/tag/predicate/structure changed without restart"
+    },
+    {
+      "phase": "reload",
+      "name": "world-reopen-registry-not-visible",
+      "status": "passed",
+      "detail": "new dimension must not become visible through /reload"
+    },
+    {
+      "phase": "commands",
+      "name": "canonical-sequence",
+      "status": "passed",
+      "detail": "execute setup, invoke, cleanup in manifest order"
+    },
+    {
+      "phase": "restart",
+      "name": "new-server-process",
+      "status": "passed",
+      "detail": "pid 23529 -> 23592"
+    },
+    {
+      "phase": "restart",
+      "name": "clean-restart-load",
+      "status": "passed",
+      "detail": "same world and phase-2 pack load without errors"
+    },
+    {
+      "phase": "restart",
+      "name": "world-state-persistence",
+      "status": "passed",
+      "detail": "scoreboard state survived graceful stop/start"
+    },
+    {
+      "phase": "restart",
+      "name": "phase-2-runtime",
+      "status": "passed",
+      "detail": "phase-2 functions/resources remain executable after restart"
+    },
+    {
+      "phase": "world_reopen",
+      "name": "dimension-registry-visible",
+      "status": "passed",
+      "detail": "phase-2 dimension becomes executable only after world reopen"
+    }
+  ],
+  "graph": {
+    "phase1ArtifactCount": 12,
+    "phase2ArtifactCount": 13,
+    "phase1": {
+      "build": [],
+      "reload": [
+        "data/minecraft/tags/function/load.json",
+        "data/p9/advancement/typed_advancement.json",
+        "data/p9/function/pack/_load.mcfunction",
+        "data/p9/function/pack/main.mcfunction",
+        "data/p9/item_modifier/typed_modifier.json",
+        "data/p9/loot_table/typed_loot.json",
+        "data/p9/predicate/from_file_probe.json",
+        "data/p9/predicate/typed_predicate.json",
+        "data/p9/recipe/typed_recipe.json",
+        "data/p9/structure/probe.nbt",
+        "data/p9/tags/block/probe_blocks.json",
+        "pack.mcmeta"
+      ],
+      "restart": [],
+      "worldReopen": []
+    },
+    "phase2": {
+      "build": [],
+      "reload": [
+        "data/minecraft/tags/function/load.json",
+        "data/p9/advancement/typed_advancement.json",
+        "data/p9/function/pack/_load.mcfunction",
+        "data/p9/function/pack/main.mcfunction",
+        "data/p9/item_modifier/typed_modifier.json",
+        "data/p9/loot_table/typed_loot.json",
+        "data/p9/predicate/from_file_probe.json",
+        "data/p9/predicate/typed_predicate.json",
+        "data/p9/recipe/typed_recipe.json",
+        "data/p9/structure/probe.nbt",
+        "data/p9/tags/block/probe_blocks.json",
+        "pack.mcmeta"
+      ],
+      "restart": [],
+      "worldReopen": [
+        "data/p9/dimension/after_restart.json"
+      ]
+    }
+  },
+  "commands": {
+    "setup": 1,
+    "invoke": 2,
+    "cleanup": 0,
+    "sha256": "516b06dfe716e04062e9d26f69b2d621e8884beed6f07db509ccb3ec81cf37e8"
+  },
+  "server": {
+    "version": "1.21.4-232-12d8fe0 (MC: 1.21.4)",
+    "paperSha256": "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc",
+    "harnessSha256": "e94171d60f3f36cf679f1a557a4b7187616c745486de9f42aaf6d72f736334de",
+    "java": "openjdk version \"25.0.2\" 2026-01-20",
+    "firstPid": 23529,
+    "restartPid": 23592
+  },
+  "completedAt": "2026-08-02T05:58:26.615Z"
+}

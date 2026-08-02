@@ -122,12 +122,15 @@ fn my_helper(target: selector) {
 
 ## Testing on Real Server
 
-For integration testing with a real Minecraft server:
+For the managed reload/restart/world-reopen gate:
 
-1. Set up Paper 1.21.4 server with [testharness plugin](https://github.com/bkmashiro/redscript-testharness)
-2. Run: `npm run test:mc`
+1. Prepare a Paper 1.21.4 template with `paper.jar`, offline `libraries/`, `versions/`, and exactly one [TestHarness plugin](https://github.com/bkmashiro/redscript-testharness) jar.
+2. Ensure TestHarness port `25561` is free; the gate owns server startup and restart.
+3. Run `MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live`.
 
-See [Testing Guide](https://redscript-docs.pages.dev/en/guide/testing) for details.
+`npm run test:mc-lifecycle` is the offline-safe form: unavailable prerequisites produce an explicit `[SKIP]` report rather than live-proof claims. Static `npm run validate-mc` remains a separate evidence label.
+
+See [Testing Guide](https://redscript-docs.pages.dev/en/guide/testing) and the [P9 evidence record](docs/evidence/p9-live-minecraft-1.21.4.md) for details.
 
 ## Need Help?
 

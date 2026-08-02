@@ -55,6 +55,16 @@ describe('typed datapack artifact graph', () => {
     expect(resolveResourceDescriptor('structure', McVersion.v26_2)).toMatchObject({
       directory: 'structure',
       mediaType: 'application/nbt',
+      lifecycle: 'reload',
+    })
+    expect(resolveResourceDescriptor('dimension', McVersion.v1_21_4)).toMatchObject({
+      directory: 'dimension',
+      mediaType: 'application/json',
+      lifecycle: 'world_reopen',
+    })
+    expect(resolveResourceDescriptor('dimension_type', McVersion.v1_21_4)).toMatchObject({
+      directory: 'dimension_type',
+      mediaType: 'application/json',
       lifecycle: 'world_reopen',
     })
   })

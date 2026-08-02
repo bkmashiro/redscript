@@ -16,6 +16,8 @@ export type DatapackArtifactKind =
   | 'loot_table'
   | 'item_modifier'
   | 'structure'
+  | 'dimension'
+  | 'dimension_type'
   | 'item_tag'
   | 'block_tag'
   | 'entity_type_tag'

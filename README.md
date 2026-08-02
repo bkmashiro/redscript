@@ -189,9 +189,10 @@ resource item_tag bakery:foods {
 }
 
 resource recipe bakery:toast from "recipes/toast.json";
+resource dimension bakery:moon from "dimensions/moon.json";
 ```
 
-Typed and from-file contributions share the same versioned artifact registry, collision checks, deterministic directory/ZIP projection, and target capability boundary. The package API also exports selective, runtime-validated builders for common recipes, advancements, predicates, loot tables, and item modifiers; unknown or modded schemas stay on the `from` route.
+Typed and from-file contributions share the same versioned artifact registry, collision checks, deterministic directory/ZIP projection, and target capability boundary. The package API also exports selective, runtime-validated builders for common recipes, advancements, predicates, loot tables, and item modifiers; unknown or modded schemas stay on the `from` route. Paper 1.21.4 lifecycle evidence classifies normal resources and structure NBT as reloadable, while `dimension` / `dimension_type` require a world reopen.
 
 ---
 
@@ -263,6 +264,8 @@ npm install
 npm run build
 npm run test:unit       # pure TS/unit tests, parallel
 npm run test:integration # mc-integration project, serial
+npm run test:mc-lifecycle # managed Paper gate; explicit [SKIP] when unavailable
+MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live # strict live proof
 npm run gate:full       # heavyweight release-style gate
 ```
 

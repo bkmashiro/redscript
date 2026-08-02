@@ -1,0 +1,673 @@
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'child_process'
+import { createHash } from 'crypto'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
+import { gzipSync } from 'zlib'
+
+import { createAdvancementResourceArtifact } from '../artifacts/advancement-builder'
+import { createDatapackArtifactGraph } from '../artifacts/graph'
+import { createItemModifierResourceArtifact, createLootTableResourceArtifact } from '../artifacts/loot-builder'
+import type { DatapackArtifactGraph, DatapackArtifactProvenance } from '../artifacts/model'
+import { createPredicateResourceArtifact } from '../artifacts/predicate-builder'
+import { writeArtifactDirectoryAtomically } from '../artifacts/projection'
+import { createRecipeResourceArtifact } from '../artifacts/recipe-builder'
+import { createCompilerSession } from '../emit/compile'
+import { loadProject } from '../project/manifest'
+import type { CommandProgram, CommandStep } from '../targets/command-program'
+import { McVersion } from '../types/mc-version'
+import { MCTestClient, type ServerStatus } from './client'
+import { findMinecraftLifecycleFailures, partitionArtifactsByLifecycle } from './p9-lifecycle'
+
+const HARNESS_HOST = '127.0.0.1'
+const HARNESS_PORT = 25561
+const SERVER_PORT = 25566
+const MINECRAFT_VERSION = '1.21.4'
+const PACK_NAME = 'redscript-p9-lifecycle'
+const OBJECTIVE = 'p9_probe'
+
+export type P9EvidencePhase = 'startup' | 'reload' | 'commands' | 'restart' | 'world_reopen'
+export type P9EvidenceStatus = 'passed' | 'failed' | 'skipped'
+
+export interface P9EvidenceCheck {
+  readonly phase: P9EvidencePhase
+  readonly name: string
+  readonly status: P9EvidenceStatus
+  readonly detail: string
+}
+
+export interface P9LifecycleReport {
+  readonly schemaVersion: 1
+  status: P9EvidenceStatus
+  startedAt: string
+  completedAt?: string
+  minecraftVersion: string
+  server?: {
+    version: string
+    paperSha256: string
+    harnessSha256: string
+    java: string
+    firstPid: number
+    restartPid: number
+  }
+  graph?: {
+    phase1ArtifactCount: number
+    phase2ArtifactCount: number
+    phase1: ReturnType<typeof partitionArtifactsByLifecycle>
+    phase2: ReturnType<typeof partitionArtifactsByLifecycle>
+  }
+  commands?: {
+    setup: number
+    invoke: number
+    cleanup: number
+    sha256: string
+  }
+  checks: P9EvidenceCheck[]
+  error?: string
+}
+
+class P9SkipError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'P9SkipError'
+  }
+}
+
+function sha256File(filePath: string): string {
+  return createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
+}
+
+function sha256Text(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function write(root: string, relativePath: string, content: string | Buffer): void {
+  const target = path.join(root, relativePath)
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.writeFileSync(target, content)
+}
+
+function nbtName(value: string): Buffer {
+  const encoded = Buffer.from(value, 'utf8')
+  const length = Buffer.alloc(2)
+  length.writeUInt16BE(encoded.length)
+  return Buffer.concat([length, encoded])
+}
+
+function nbtInt(name: string, value: number): Buffer {
+  const encoded = Buffer.alloc(4)
+  encoded.writeInt32BE(value)
+  return Buffer.concat([Buffer.from([3]), nbtName(name), encoded])
+}
+
+function nbtString(name: string, value: string): Buffer {
+  const encoded = Buffer.from(value, 'utf8')
+  const length = Buffer.alloc(2)
+  length.writeUInt16BE(encoded.length)
+  return Buffer.concat([Buffer.from([8]), nbtName(name), length, encoded])
+}
+
+function nbtIntList(name: string, values: readonly number[]): Buffer {
+  const length = Buffer.alloc(4)
+  length.writeInt32BE(values.length)
+  const encoded = values.map(value => {
+    const item = Buffer.alloc(4)
+    item.writeInt32BE(value)
+    return item
+  })
+  return Buffer.concat([Buffer.from([9]), nbtName(name), Buffer.from([3]), length, ...encoded])
+}
+
+function nbtCompoundList(name: string, values: readonly Buffer[]): Buffer {
+  const length = Buffer.alloc(4)
+  length.writeInt32BE(values.length)
+  return Buffer.concat([Buffer.from([9]), nbtName(name), Buffer.from([10]), length, ...values])
+}
+
+/** Create a deterministic one-block Java structure template accepted by Paper 1.21.4. */
+export function createP9StructureNbt(block: string): Buffer {
+  if (!/^minecraft:[a-z0-9_]+$/.test(block)) throw new Error(`Invalid P9 structure block '${block}'`)
+  const paletteEntry = Buffer.concat([nbtString('Name', block), Buffer.from([0])])
+  const blockEntry = Buffer.concat([nbtInt('state', 0), nbtIntList('pos', [0, 0, 0]), Buffer.from([0])])
+  const root = Buffer.concat([
+    nbtInt('DataVersion', 4189),
+    nbtIntList('size', [1, 1, 1]),
+    nbtCompoundList('palette', [paletteEntry]),
+    nbtCompoundList('blocks', [blockEntry]),
+    nbtCompoundList('entities', []),
+    Buffer.from([0]),
+  ])
+  return gzipSync(Buffer.concat([Buffer.from([10, 0, 0]), root]), { level: 9 })
+}
+
+function dimensionJson(): string {
+  return `${JSON.stringify({
+    type: 'minecraft:overworld',
+    generator: {
+      type: 'minecraft:noise',
+      biome_source: {
+        type: 'minecraft:multi_noise',
+        preset: 'minecraft:overworld',
+      },
+      settings: 'minecraft:overworld',
+    },
+  }, null, 2)}\n`
+}
+
+function projectManifest(): string {
+  return `
+[project]
+name = "p9-lifecycle"
+module = "example.com/p9"
+namespace = "p9"
+source-roots = ["src"]
+mc-version = "${MINECRAFT_VERSION}"
+
+[assets]
+roots = ["assets"]
+include = ["**/*.json", "**/*.nbt"]
+
+[target.pack]
+kind = "datapack"
+entry = "example.com/p9/pack::main"
+out = "build/pack"
+default = true
+
+[target.commands]
+kind = "commands"
+entry = "example.com/p9/commands::main"
+out = "build/p9.commands.json"
+max-commands = 128
+`
+}
+
+function packSource(phase: 1 | 2): string {
+  const block = phase === 1 ? 'minecraft:gold_block' : 'minecraft:diamond_block'
+  const dimension = phase === 2
+    ? 'resource dimension p9:after_restart from "dimension/after_restart.json";\n'
+    : ''
+  return `
+package pack;
+
+resource block_tag p9:probe_blocks {
+  value ${block};
+}
+resource predicate p9:from_file_probe from "predicate/from_file_probe.json";
+resource structure p9:probe from "structure/probe.nbt";
+${dimension}
+export fn main(): void {
+  raw("scoreboard players set #datapack ${OBJECTIVE} ${phase * 10}");
+}
+`
+}
+
+function commandsSource(): string {
+  return `
+package commands;
+
+export fn main(): void {
+  raw("scoreboard players set #canonical ${OBJECTIVE} 40");
+  raw("scoreboard players add #canonical ${OBJECTIVE} 2");
+}
+`
+}
+
+function writeProjectPhase(root: string, phase: 1 | 2): void {
+  write(root, 'redscript.toml', projectManifest())
+  write(root, 'src/pack/main.mcrs', packSource(phase))
+  write(root, 'src/commands/main.mcrs', commandsSource())
+  write(root, 'assets/predicate/from_file_probe.json', `${JSON.stringify({
+    condition: 'minecraft:random_chance',
+    chance: phase === 1 ? 0 : 1,
+  }, null, 2)}\n`)
+  write(root, 'assets/structure/probe.nbt', createP9StructureNbt(
+    phase === 1 ? 'minecraft:gold_block' : 'minecraft:diamond_block',
+  ))
+  if (phase === 2) write(root, 'assets/dimension/after_restart.json', dimensionJson())
+}
+
+function typedArtifacts(): ReturnType<typeof createRecipeResourceArtifact>[] {
+  const provenance: DatapackArtifactProvenance = Object.freeze({
+    kind: 'generated',
+    stage: 'p9-live-typed-builders',
+  })
+  const common = { provenance, minecraftVersion: McVersion.v1_21_4 }
+  return [
+    createRecipeResourceArtifact({
+      ...common,
+      id: 'p9:typed_recipe',
+      recipe: {
+        kind: 'shapeless',
+        ingredients: [{ item: 'minecraft:stone' }],
+        result: { id: 'minecraft:stone_button' },
+      },
+    }),
+    createAdvancementResourceArtifact({
+      ...common,
+      id: 'p9:typed_advancement',
+      advancement: { criteria: { tick: { trigger: 'minecraft:tick' } } },
+    }),
+    createPredicateResourceArtifact({
+      ...common,
+      id: 'p9:typed_predicate',
+      predicate: {
+        kind: 'leaf',
+        condition: 'minecraft:random_chance',
+        fields: { chance: 1 },
+      },
+    }),
+    createLootTableResourceArtifact({
+      ...common,
+      id: 'p9:typed_loot',
+      lootTable: {
+        type: 'minecraft:chest',
+        pools: [{ rolls: 1, entries: [{ kind: 'item', name: 'minecraft:apple' }] }],
+      },
+    }),
+    createItemModifierResourceArtifact({
+      ...common,
+      id: 'p9:typed_modifier',
+      modifier: { function: 'minecraft:set_count', fields: { count: 2 } },
+    }),
+  ]
+}
+
+function compilePackGraph(projectRoot: string, phase: 1 | 2): DatapackArtifactGraph {
+  writeProjectPhase(projectRoot, phase)
+  const project = loadProject(projectRoot)
+  if (!project) throw new Error(`P9 project did not load from '${projectRoot}'`)
+  const target = project.targets.pack
+  const result = createCompilerSession({ project, target }).compileProject()
+  if (result.kind !== 'datapack') throw new Error('P9 pack target did not produce a datapack graph')
+  return createDatapackArtifactGraph([...result.artifacts, ...typedArtifacts()], {
+    minecraftVersion: McVersion.v1_21_4,
+    localNamespaces: ['p9'],
+  })
+}
+
+function compileCommandProgram(projectRoot: string): CommandProgram {
+  const project = loadProject(projectRoot)
+  if (!project) throw new Error(`P9 project did not load from '${projectRoot}'`)
+  const target = project.targets.commands
+  const result = createCompilerSession({ project, target }).compileProject()
+  if (result.kind !== 'commands') throw new Error('P9 commands target did not produce a command program')
+  return result.commandProgram
+}
+
+function findHarnessPlugin(templateDir: string): string {
+  const pluginsDir = path.join(templateDir, 'plugins')
+  if (!fs.existsSync(pluginsDir)) throw new P9SkipError(`missing Paper plugin directory '${pluginsDir}'`)
+  const candidates = fs.readdirSync(pluginsDir)
+    .filter(name => /^redscript-testharness(?:-[0-9].*)?\.jar$/.test(name))
+    .sort()
+  if (candidates.length !== 1) {
+    throw new P9SkipError(`expected exactly one RedScript TestHarness jar in '${pluginsDir}', found ${candidates.length}`)
+  }
+  return path.join(pluginsDir, candidates[0])
+}
+
+function findJava(): { executable: string; version: string } {
+  const candidates = [
+    process.env.MC_JAVA_BIN,
+    process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, 'bin', 'java') : undefined,
+    '/opt/homebrew/opt/openjdk/bin/java',
+    'java',
+  ].filter((candidate): candidate is string => candidate != null && candidate !== '')
+  for (const executable of candidates) {
+    const result = spawnSync(executable, ['-version'], { encoding: 'utf8' })
+    if (result.status === 0) {
+      const version = `${result.stdout}${result.stderr}`.split(/\r?\n/)[0].trim()
+      return { executable, version }
+    }
+  }
+  throw new P9SkipError('no runnable Java executable found (set MC_JAVA_BIN)')
+}
+
+function prepareServerRoot(templateDir: string, harnessPlugin: string): string {
+  const paperJar = path.join(templateDir, 'paper.jar')
+  const libraries = path.join(templateDir, 'libraries')
+  const versions = path.join(templateDir, 'versions')
+  for (const required of [paperJar, libraries, versions]) {
+    if (!fs.existsSync(required)) throw new P9SkipError(`missing offline Paper prerequisite '${required}'`)
+  }
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-p9-paper-'))
+  fs.symlinkSync(paperJar, path.join(root, 'paper.jar'))
+  fs.symlinkSync(libraries, path.join(root, 'libraries'))
+  fs.symlinkSync(versions, path.join(root, 'versions'))
+  write(root, 'plugins/redscript-testharness.jar', fs.readFileSync(harnessPlugin))
+  write(root, 'eula.txt', 'eula=true\n')
+  write(root, 'server.properties', `server-port=${SERVER_PORT}
+online-mode=false
+enforce-secure-profile=false
+level-name=world
+level-type=flat
+level-seed=0
+generator-settings={"biome":"minecraft:plains","layers":[{"block":"minecraft:stone","height":1}],"structures":{"structures":{}}}
+spawn-protection=0
+gamemode=creative
+difficulty=peaceful
+view-distance=2
+simulation-distance=2
+max-players=1
+pause-when-empty-seconds=-1
+enable-status=false
+`)
+  return root
+}
+
+class ManagedPaperServer {
+  private child?: ChildProcessWithoutNullStreams
+  private output = ''
+
+  constructor(
+    readonly rootDir: string,
+    private readonly java: string,
+    readonly client: MCTestClient,
+  ) {}
+
+  currentOutput(): string {
+    return this.output
+  }
+
+  readLatestLog(): string {
+    const latest = path.join(this.rootDir, 'logs', 'latest.log')
+    return fs.existsSync(latest) ? fs.readFileSync(latest, 'utf8') : ''
+  }
+
+  async start(): Promise<{ pid: number; status: ServerStatus }> {
+    if (this.child) throw new Error('Managed Paper server is already running')
+    this.output = ''
+    const child = spawn(this.java, ['-Xms512M', '-Xmx1G', '-jar', 'paper.jar', '--nogui'], {
+      cwd: this.rootDir,
+      env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    this.child = child
+    child.stdout.on('data', chunk => { this.output += chunk.toString() })
+    child.stderr.on('data', chunk => { this.output += chunk.toString() })
+
+    const deadline = Date.now() + 90_000
+    while (Date.now() < deadline) {
+      if (child.exitCode != null) {
+        this.child = undefined
+        throw new Error(`Paper exited during startup with ${child.exitCode}:\n${this.output.slice(-4000)}`)
+      }
+      try {
+        const status = await this.client.status()
+        if (status.online) return { pid: child.pid!, status }
+      } catch {
+        // Server is still starting.
+      }
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    throw new Error(`Paper/TestHarness did not become ready within 90 seconds:\n${this.output.slice(-4000)}`)
+  }
+
+  async stop(): Promise<void> {
+    const child = this.child
+    if (!child) return
+    const exited = new Promise<number | null>(resolve => child.once('exit', code => resolve(code)))
+    child.stdin.write('stop\n')
+    const result = await Promise.race([
+      exited.then(code => ({ kind: 'exit' as const, code })),
+      new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 60_000)),
+    ])
+    if (result.kind === 'timeout') {
+      child.kill('SIGTERM')
+      const terminated = await Promise.race([
+        exited.then(code => ({ kind: 'exit' as const, code })),
+        new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 10_000)),
+      ])
+      if (terminated.kind === 'timeout') {
+        child.kill('SIGKILL')
+        const killed = await Promise.race([
+          exited.then(code => ({ kind: 'exit' as const, code })),
+          new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 10_000)),
+        ])
+        if (killed.kind === 'timeout') {
+          throw new Error('Paper did not terminate after SIGTERM and SIGKILL')
+        }
+      }
+      this.child = undefined
+      throw new Error('Paper did not stop gracefully within 60 seconds')
+    }
+    this.child = undefined
+    if (result.code !== 0) throw new Error(`Paper exited with status ${String(result.code)}`)
+  }
+}
+
+async function command(mc: MCTestClient, value: string): Promise<void> {
+  const response = await mc.command(value)
+  if (!response.ok) throw new Error(`Harness rejected command '${value}'`)
+}
+
+async function setScore(mc: MCTestClient, player: string, value: number): Promise<void> {
+  await command(mc, `scoreboard players set ${player} ${OBJECTIVE} ${value}`)
+}
+
+async function expectScore(mc: MCTestClient, player: string, expected: number): Promise<void> {
+  const actual = await mc.scoreboard(player, OBJECTIVE)
+  if (actual !== expected) throw new Error(`${player}/${OBJECTIVE}: expected ${expected}, got ${actual}`)
+}
+
+async function assertRuntimePhase(mc: MCTestClient, phase: 1 | 2): Promise<void> {
+  const block = phase === 1 ? 'minecraft:gold_block' : 'minecraft:diamond_block'
+  await command(mc, `function p9:pack/main`)
+  await expectScore(mc, '#datapack', phase * 10)
+
+  await setScore(mc, '#typed_predicate', 0)
+  await command(mc, `execute if predicate p9:typed_predicate run scoreboard players set #typed_predicate ${OBJECTIVE} 1`)
+  await expectScore(mc, '#typed_predicate', 1)
+
+  await setScore(mc, '#from_file_predicate', 0)
+  await command(mc, `execute if predicate p9:from_file_probe run scoreboard players set #from_file_predicate ${OBJECTIVE} 1`)
+  await expectScore(mc, '#from_file_predicate', phase === 1 ? 0 : 1)
+
+  await command(mc, `setblock 0 64 0 ${block}`)
+  await setScore(mc, '#typed_tag', 0)
+  await command(mc, `execute if block 0 64 0 #p9:probe_blocks run scoreboard players set #typed_tag ${OBJECTIVE} 1`)
+  await expectScore(mc, '#typed_tag', 1)
+
+  await command(mc, 'setblock 1 64 0 minecraft:air')
+  await command(mc, 'place template p9:probe 1 64 0')
+  await mc.assertBlock(1, 64, 0, block)
+
+  await command(mc, 'setblock 4 64 0 minecraft:chest')
+  await setScore(mc, '#loot', 0)
+  await command(mc, `execute store success score #loot ${OBJECTIVE} run loot insert 4 64 0 loot p9:typed_loot`)
+  await expectScore(mc, '#loot', 1)
+  await setScore(mc, '#modifier', 0)
+  await command(mc, `execute store success score #modifier ${OBJECTIVE} run item modify block 4 64 0 container.0 p9:typed_modifier`)
+  await expectScore(mc, '#modifier', 1)
+}
+
+function commandSteps(program: CommandProgram): CommandStep[] {
+  return [...program.phases.setup, ...program.phases.invoke, ...program.phases.cleanup]
+}
+
+async function executeCommandProgram(mc: MCTestClient, program: CommandProgram): Promise<void> {
+  for (const step of commandSteps(program)) await command(mc, step.command)
+}
+
+async function recordCheck(
+  report: P9LifecycleReport,
+  phase: P9EvidencePhase,
+  name: string,
+  detail: string,
+  action: () => Promise<void> | void,
+): Promise<void> {
+  try {
+    await action()
+    report.checks.push({ phase, name, status: 'passed', detail })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    report.checks.push({ phase, name, status: 'failed', detail: `${detail}: ${message}` })
+    throw error
+  }
+}
+
+function assertCleanLog(log: string, fromOffset = 0): void {
+  const failures = findMinecraftLifecycleFailures(log, fromOffset)
+  if (failures.length > 0) throw new Error(`Minecraft log contains load failures:\n${failures.join('\n')}`)
+}
+
+function writeReport(outputPath: string, report: P9LifecycleReport): void {
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+  fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o644 })
+}
+
+export async function runP9LifecycleGate(options: {
+  templateDir?: string
+  outputPath?: string
+  requireOnline?: boolean
+  keepServer?: boolean
+} = {}): Promise<P9LifecycleReport> {
+  const templateDir = path.resolve(options.templateDir ?? process.env.MC_P9_TEMPLATE_DIR ?? process.env.MC_SERVER_DIR ?? path.join(os.homedir(), 'mc-test-server'))
+  const outputPath = path.resolve(options.outputPath ?? process.env.MC_P9_REPORT ?? path.join(process.cwd(), 'build', 'p9-live-report.json'))
+  const requireOnline = options.requireOnline ?? process.env.MC_P9_REQUIRE_ONLINE === 'true'
+  const keepServer = options.keepServer ?? process.env.MC_P9_KEEP_SERVER === 'true'
+  const report: P9LifecycleReport = {
+    schemaVersion: 1,
+    status: 'failed',
+    startedAt: new Date().toISOString(),
+    minecraftVersion: MINECRAFT_VERSION,
+    checks: [],
+  }
+
+  let managed: ManagedPaperServer | undefined
+  let serverRoot: string | undefined
+  let projectRoot: string | undefined
+  try {
+    if (!fs.existsSync(templateDir)) throw new P9SkipError(`Paper template directory '${templateDir}' does not exist`)
+    const busyClient = new MCTestClient(HARNESS_HOST, HARNESS_PORT)
+    if (await busyClient.isOnline()) {
+      throw new P9SkipError(`TestHarness port ${HARNESS_PORT} is already serving another process`)
+    }
+    const paperJar = path.join(templateDir, 'paper.jar')
+    const harnessPlugin = findHarnessPlugin(templateDir)
+    const java = findJava()
+    serverRoot = prepareServerRoot(templateDir, harnessPlugin)
+    projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-p9-project-'))
+
+    const phase1 = compilePackGraph(projectRoot, 1)
+    const phase1Partition = partitionArtifactsByLifecycle(phase1.artifacts)
+    const packDir = path.join(serverRoot, 'world', 'datapacks', PACK_NAME)
+    writeArtifactDirectoryAtomically(phase1, packDir)
+    const program = compileCommandProgram(projectRoot)
+
+    const mc = new MCTestClient(HARNESS_HOST, HARNESS_PORT)
+    managed = new ManagedPaperServer(serverRoot, java.executable, mc)
+    const first = await managed.start()
+    await command(mc, `scoreboard objectives add ${OBJECTIVE} dummy`)
+
+    await recordCheck(report, 'startup', 'exact-version', first.status.version, () => {
+      if (!first.status.version.includes(MINECRAFT_VERSION)) {
+        throw new Error(`expected Minecraft ${MINECRAFT_VERSION}, got '${first.status.version}'`)
+      }
+    })
+    await recordCheck(report, 'startup', 'clean-pack-load', 'no ERROR/FATAL datapack load entries', () => {
+      assertCleanLog(managed!.readLatestLog())
+    })
+    await recordCheck(report, 'startup', 'mixed-artifact-runtime', 'source typed tag + from-file predicate/NBT + five package builders', () => assertRuntimePhase(mc, 1))
+
+    const phase2 = compilePackGraph(projectRoot, 2)
+    const phase2Partition = partitionArtifactsByLifecycle(phase2.artifacts)
+    const reloadBaseline = managed.readLatestLog().length
+    writeArtifactDirectoryAtomically(phase2, packDir)
+    await mc.reload()
+    await recordCheck(report, 'reload', 'clean-reload', 'phase-2 graph loaded without resource errors', () => {
+      assertCleanLog(managed!.readLatestLog(), reloadBaseline)
+    })
+    await recordCheck(report, 'reload', 'mixed-artifact-mutation', 'function/tag/predicate/structure changed without restart', () => assertRuntimePhase(mc, 2))
+    await recordCheck(report, 'reload', 'world-reopen-registry-not-visible', 'new dimension must not become visible through /reload', async () => {
+      await setScore(mc, '#dimension', 0)
+      await command(mc, `execute in p9:after_restart run scoreboard players set #dimension ${OBJECTIVE} 1`)
+      await expectScore(mc, '#dimension', 0)
+    })
+
+    await recordCheck(report, 'commands', 'canonical-sequence', 'execute setup, invoke, cleanup in manifest order', async () => {
+      await executeCommandProgram(mc, program)
+      await expectScore(mc, '#canonical', 42)
+    })
+
+    await setScore(mc, '#persistent', 31)
+    await managed.stop()
+    const restart = await managed.start()
+    await recordCheck(report, 'restart', 'new-server-process', `pid ${first.pid} -> ${restart.pid}`, () => {
+      if (first.pid === restart.pid) throw new Error('Paper restart reused the same process id')
+    })
+    await recordCheck(report, 'restart', 'clean-restart-load', 'same world and phase-2 pack load without errors', () => {
+      assertCleanLog(managed!.readLatestLog())
+    })
+    await recordCheck(report, 'restart', 'world-state-persistence', 'scoreboard state survived graceful stop/start', () => expectScore(mc, '#persistent', 31))
+    await recordCheck(report, 'restart', 'phase-2-runtime', 'phase-2 functions/resources remain executable after restart', () => assertRuntimePhase(mc, 2))
+    await recordCheck(report, 'world_reopen', 'dimension-registry-visible', 'phase-2 dimension becomes executable only after world reopen', async () => {
+      await setScore(mc, '#dimension', 0)
+      await command(mc, `execute in p9:after_restart run scoreboard players set #dimension ${OBJECTIVE} 1`)
+      await expectScore(mc, '#dimension', 1)
+    })
+
+    const serializedCommands = JSON.stringify(program)
+    report.graph = {
+      phase1ArtifactCount: phase1.artifacts.length,
+      phase2ArtifactCount: phase2.artifacts.length,
+      phase1: phase1Partition,
+      phase2: phase2Partition,
+    }
+    report.commands = {
+      setup: program.phases.setup.length,
+      invoke: program.phases.invoke.length,
+      cleanup: program.phases.cleanup.length,
+      sha256: sha256Text(serializedCommands),
+    }
+    report.server = {
+      version: restart.status.version,
+      paperSha256: sha256File(paperJar),
+      harnessSha256: sha256File(harnessPlugin),
+      java: java.version,
+      firstPid: first.pid,
+      restartPid: restart.pid,
+    }
+    report.status = 'passed'
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (error instanceof P9SkipError && !requireOnline) {
+      report.status = 'skipped'
+      report.checks.push({ phase: 'startup', name: 'environment', status: 'skipped', detail: message })
+    } else {
+      report.status = 'failed'
+      report.error = message
+      if (error instanceof P9SkipError) {
+        report.checks.push({ phase: 'startup', name: 'environment', status: 'failed', detail: message })
+      }
+    }
+  } finally {
+    try {
+      await managed?.stop()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      report.status = 'failed'
+      report.error = report.error ? `${report.error}; cleanup: ${message}` : `cleanup: ${message}`
+    }
+    if (serverRoot && !keepServer) fs.rmSync(serverRoot, { recursive: true, force: true })
+    if (projectRoot) fs.rmSync(projectRoot, { recursive: true, force: true })
+    report.completedAt = new Date().toISOString()
+    writeReport(outputPath, report)
+  }
+  return report
+}
+
+async function main(): Promise<void> {
+  const report = await runP9LifecycleGate()
+  const label = report.status === 'passed' ? 'PASS' : report.status === 'skipped' ? 'SKIP' : 'FAIL'
+  console.log(`[${label}] P9 live Minecraft lifecycle gate: ${report.checks.filter(check => check.status === 'passed').length} passed, ${report.checks.filter(check => check.status === 'failed').length} failed, ${report.checks.filter(check => check.status === 'skipped').length} skipped`)
+  if (report.error) console.error(report.error)
+  if (report.status === 'failed') process.exitCode = 1
+}
+
+if (require.main === module) {
+  main().catch(error => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error))
+    process.exitCode = 1
+  })
+}

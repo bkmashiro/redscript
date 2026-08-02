@@ -33,21 +33,28 @@ Expected meaning:
 
 ## Live Paper evidence
 
-Run only when a Paper/TestHarness server and `MC_SERVER_DIR` are configured:
+Run the core oracle only when an existing Paper/TestHarness server and `MC_SERVER_DIR` are configured. Run the lifecycle oracle from a local Paper template while port `25561` is free:
 
 ```bash
 curl -fsS --max-time 5 "http://${MC_HOST:-localhost}:${MC_PORT:-25561}/status"
 MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live
+MC_P9_TEMPLATE_DIR="${MC_P9_TEMPLATE_DIR:-$HOME/mc-test-server}" npm run test:mc-lifecycle:live
 ```
 
-Meaning: only this produces `live-paper-oracle` proof for core runtime behavior.
+Meaning:
+
+- `test:mc-core:live` produces `live-paper-oracle` proof for individual core runtime behaviors against an already-running harness.
+- `test:mc-lifecycle:live` produces `live-paper-lifecycle` proof from a disposable world across pack load, `/reload`, canonical commands execution, graceful restart, and world reopen.
+- Static validation and offline skips produce neither label.
 
 GitHub workflow and release evidence artifact:
 
 - `.github/workflows/live-mc-core.yml` must exist and document that it is manual/nightly.
-- Use workflow-scope variables for host/port/server directory.
-- The workflow should skip clearly when `MC_SERVER_DIR` is not set.
-- Current local baseline from 2026-06-30 is `26/26` live-cases (`test:mc-core:live`), descriptor-driven and covering the timer countdown plus first P1 world/inventory/random/spawn/particle/visual-UI smokes.
+- Use workflow-scope variables for the existing core host/port/server directory and the managed `MC_P9_TEMPLATE_DIR`.
+- Each oracle must skip clearly when its own environment is unavailable; explicit workflow inputs may make either absence fatal.
+- Upload `build/p9-live-report.json` when the managed lifecycle lane runs.
+- Current core local baseline from 2026-06-30 is `26/26` live-cases (`test:mc-core:live`), descriptor-driven and covering the timer countdown plus first P1 world/inventory/random/spawn/particle/visual-UI smokes.
+- Current lifecycle baseline from 2026-07-31 is `12/12` checks on Paper 1.21.4; exact hashes and phase evidence are committed under `docs/evidence/p9-live-minecraft-1.21.4.{md,json}`.
 - Visual/UI boundary tranche (`visual command boundary smoke`) is included in the local live proof baseline for title/playsound/bossbar command execution.
 
 Smoke suite availability:

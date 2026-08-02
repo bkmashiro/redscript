@@ -19,7 +19,8 @@ const fallbackLocalCommands = [
 
 const fallbackLiveCommands = [
   'curl -fsS --max-time 5 "http://${MC_HOST:-localhost}:${MC_PORT:-25561}/status"',
-  'MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live'
+  'MC_CORE_REQUIRE_ONLINE=true npm run test:mc-core:live',
+  'MC_P9_TEMPLATE_DIR="${MC_P9_TEMPLATE_DIR:-$HOME/mc-test-server}" npm run test:mc-lifecycle:live'
 ]
 
 const evidenceLabels = [
@@ -38,6 +39,10 @@ const evidenceLabels = [
   {
     label: 'live-paper-oracle',
     meaning: 'a running Paper/TestHarness returns structured runtime assertion results.'
+  },
+  {
+    label: 'live-paper-lifecycle',
+    meaning: 'a managed Paper/TestHarness proves reload, restart, and world-reopen boundaries.'
   }
 ]
 
@@ -104,7 +109,7 @@ function parseCommandsFromChecklist() {
     extractBashBlock(content, 'live paper evidence')
   ) || fallbackLiveCommands.slice()
 
-  const baselineMatch = content.match(/Current local baseline[^`]*`([^`]+)`/)
+  const baselineMatch = content.match(/Current (?:core )?local baseline[^`]*`([^`]+)`/)
   const liveBaseline = baselineMatch?.[1] ? baselineMatch[1] : null
 
   return { localStaticCommands, liveCommands, liveBaseline }

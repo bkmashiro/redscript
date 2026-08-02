@@ -1023,6 +1023,8 @@ package pack;
 resource recipe bakery:toast from "recipes/toast.json";
 resource item_tag bakery:foods/snacks from "tags/foods.json";
 resource structure bakery:hut from "structures/hut.nbt";
+resource dimension bakery:moon from "dimensions/moon.json";
+resource dimension_type bakery:moon_type from "dimensions/moon_type.json";
 
 export fn main(): void {}
 ```
@@ -1060,7 +1062,9 @@ All builders require an explicit Minecraft version and provenance, emit canonica
 
 The typed builder is selective, not a replacement for the universal escape hatch: `resource <kind> <id> from "<asset-path>";` remains available for every mapped JSON/NBT kind, including modded payload schemas.
 
-The currently mapped contribution kinds are `recipe`, `advancement`, `predicate`, `loot_table`, `item_modifier`, `structure`, `function_tag`, `item_tag`, `block_tag`, `entity_type_tag`, `fluid_tag`, and `game_event_tag`. Registry directories are selected from the target Minecraft version—for example, `recipe` maps to `recipes/` before 1.21 and `recipe/` for 1.21 and later.
+The currently mapped contribution kinds are `recipe`, `advancement`, `predicate`, `loot_table`, `item_modifier`, `structure`, `dimension`, `dimension_type`, `function_tag`, `item_tag`, `block_tag`, `entity_type_tag`, `fluid_tag`, and `game_event_tag`. Registry directories are selected from the target Minecraft version—for example, `recipe` maps to `recipes/` before 1.21 and `recipe/` for 1.21 and later.
+
+Lifecycle is explicit in the artifact graph. Generated functions, tags, JSON gameplay resources, `pack.mcmeta`, and structure NBT are `reload` artifacts. P9's Paper 1.21.4 oracle proves that changed structure NBT is visible immediately after `/reload`. `dimension` and `dimension_type` are `world_reopen` artifacts: `/reload` may validate their files but cannot install new registry entries into an already-open world. The managed lifecycle gate requires a graceful server restart and then verifies the new dimension through `execute in`.
 
 `from` paths must be canonical forward-slash relative paths. Asset roots and source files must remain inside the owning module, asset-tree symlinks are rejected, include patterns are enforced, and duplicate output paths fail before output mutation. Configured asset paths and bytes are part of the module content hash. JSON is parsed, schema-checked for known kinds, and serialized canonically; structure NBT accepts raw or gzip payloads and is structurally validated. Local typed references such as `#bakery:other_tag` must resolve in the artifact graph.
 

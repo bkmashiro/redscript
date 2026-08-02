@@ -131,6 +131,25 @@ fn process_all() {
 - **VSCode 扩展** — 完整语法高亮和代码片段
 - **50 个标准库模块** — 数学、向量、寻路、粒子等
 
+### 数据包资源与生命周期
+
+```rs
+resource item_tag bakery:foods {
+  value minecraft:bread;
+  optional tag bakery:seasonal_foods;
+}
+
+resource recipe bakery:toast from "recipes/toast.json";
+resource dimension bakery:moon from "dimensions/moon.json";
+```
+
+类型化 builder 与 `from` JSON/NBT 共用同一 artifact graph、冲突检测和确定性投影。Paper 1.21.4 实测确认普通资源与 structure NBT 可通过 `/reload` 更新；`dimension` / `dimension_type` 必须重开世界。真实生命周期 gate：
+
+```bash
+npm run test:mc-lifecycle # 环境缺失时明确输出 [SKIP]
+MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live # 严格 live proof
+```
+
 ---
 
 ## CLI 命令

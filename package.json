@@ -18,6 +18,8 @@
     "test:integration": "jest --selectProjects mc-integration --runInBand --testTimeout=120000",
     "test:mc-core": "jest src/__tests__/mc-core.test.ts --runInBand --testTimeout=120000",
     "test:mc-core:live": "MC_CORE_REQUIRE_ONLINE=true jest src/__tests__/mc-core.test.ts --runInBand --testTimeout=120000",
+    "test:mc-lifecycle": "npm run build --silent && node dist/src/mc-test/p9-runner.js",
+    "test:mc-lifecycle:live": "MC_P9_REQUIRE_ONLINE=true npm run test:mc-lifecycle",
     "test:optimizer": "jest --selectProjects unit --testPathPattern=src/__tests__/optimizer --runInBand",
     "test:lir": "jest --selectProjects unit --testPathPattern=src/__tests__/optimizer/lir --runInBand",
     "test:vir": "jest --selectProjects unit --testPathPattern=src/__tests__/vir --runInBand --passWithNoTests",

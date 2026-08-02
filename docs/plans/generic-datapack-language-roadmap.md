@@ -840,12 +840,18 @@ All builders lower through the P7 registry and artifact graph. Required local re
 
 ### P9 — real Minecraft and release gates
 
-- test datapack target reload/load behavior on a real compatible Paper/vanilla oracle;
-- distinguish `/reload` resources from restart/world-reopen registries;
-- test commands output by executing the canonical sequence in a controlled server fixture;
-- never describe static command validation as live Minecraft proof;
-- retain stable and snapshot schema channels separately;
-- switch the default MC version only after command audit and live gates pass.
+**Status (2026-08-02): completed for the stable Paper 1.21.4 channel.**
+
+- ✅ loaded a mixed source-typed/from-file/package-builder graph on Paper `1.21.4-232`;
+- ✅ proved function, tag, predicate, loot/item-modifier, recipe/advancement load, and structure mutations across `/reload`;
+- ✅ corrected `structure` to `reload` from live evidence;
+- ✅ added strict JSON `dimension` / `dimension_type` descriptors and proved `world_reopen` behavior separately;
+- ✅ executed the commands backend's canonical `setup → invoke → cleanup` sequence against the same oracle;
+- ✅ committed exact Paper/plugin hashes and machine-readable evidence under `docs/evidence/`;
+- ✅ retained static validation as an independent label and kept the 26.2 schema channel static-only;
+- ✅ kept `DEFAULT_MC_VERSION` unchanged because no compatible 26.2 live oracle has passed.
+
+Reproduce with `MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live`. The offline-safe form, `npm run test:mc-lifecycle`, emits `[SKIP]` and a JSON report when the managed Paper prerequisites are unavailable.
 
 ## 11. Cross-phase gates
 
@@ -917,15 +923,15 @@ Old `[project] namespace/mc-version`, `[compiler]`, and `[output]` values map in
 
 ## 14. Immediate next implementation slice
 
-P1–P8 are complete. Begin **P9 real Minecraft and release gates** without weakening the existing static validator.
+P1–P9 are complete for the stable 1.21.4 channel. Preserve the P9 lifecycle runner as a release evidence lane; do not treat it as permission to switch the default target or add broad typed worldgen surfaces.
 
-The next coherent slice is:
+The next coherent compatibility slice is:
 
-1. provision or attach one compatible vanilla/Paper oracle outside login nodes;
-2. load a P8 mixed artifact graph and separate `/reload` resources from restart/world-reopen registries;
-3. execute the canonical commands-target sequence in the controlled fixture;
-4. record exact server/version evidence and never relabel static validation as live proof;
-5. keep worldgen builders staged until those lifecycle/reference gates are mature.
+1. retain the 1.21.4 managed Paper lifecycle gate and its exact evidence labels;
+2. provision a compatible 26.2 oracle before considering a default-version switch;
+3. audit generated commands and resource schemas against that same 26.2 artifact;
+4. keep stable and snapshot evidence separate in CI and release reports;
+5. begin typed worldgen builders only after schema/reference design and a matching world-reopen oracle pass.
 
 ## 15. Repository evidence behind this plan
 

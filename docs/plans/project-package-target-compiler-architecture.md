@@ -650,12 +650,12 @@ In those cases, perform a narrow spike and ADR. Do not patch around the failed b
 
 ## 12. Immediate recommendation
 
-M0–M10 are implemented. Preserve their boundaries while beginning P9 live Minecraft evidence:
+M0–M10 and the stable-channel P9 lifecycle gate are implemented. Preserve those boundaries while keeping compatibility expansion evidence-gated:
 
-1. exercise a mixed typed/from-file artifact graph against a compatible controlled server;
-2. record `/reload`, restart, and world-reopen lifecycle behavior separately;
-3. execute the canonical commands backend sequence against the same version oracle;
-4. retain static validation as an independent gate rather than presenting it as live proof;
-5. keep M11 legacy-path retirement and worldgen builders blocked on compatibility/runtime evidence.
+1. retain the managed Paper 1.21.4 mixed-graph reload/restart/world-reopen oracle;
+2. keep static command validation independent from live proof;
+3. provision a compatible 26.2 oracle before switching the default target;
+4. require the canonical commands sequence and world-reopen registry probe on that same artifact;
+5. keep M11 legacy-path retirement and broad typed worldgen builders blocked until matching compatibility evidence exists.
 
-Do not move selective builders into a parallel emitter: source-level tags and package-level recipe/advancement/predicate/loot builders must continue to lower through the M10 registry, graph, target capability boundary, and deterministic projection contracts.
+The P9 gate confirms that source-level tags and package-level recipe/advancement/predicate/loot builders continue to lower through the M10 registry, graph, target capability boundary, and deterministic projection contracts. It also corrects `structure` to `reload` and uses strict JSON `dimension` as the separate `world_reopen` boundary.

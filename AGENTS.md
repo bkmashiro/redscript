@@ -21,6 +21,8 @@ npm test -- --runInBand           # Full Jest suite; MC integration tests gracef
 npm test -- -t "name"             # Run tests matching a name
 npm test -- path/to/test.ts       # Run one Jest test file
 npm run validate-mc               # Minecraft command syntax validation tests
+npm run test:mc-lifecycle         # managed Paper P9 gate; explicit [SKIP] offline
+MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live  # strict live lifecycle proof
 npm run docs:gen                  # Generate stdlib documentation
 npm run docs:check                # Check generated docs against ~/projects/redscript-docs
 npm run bench                     # Compiler performance benchmarks

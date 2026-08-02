@@ -30,12 +30,16 @@ const RECIPE_TYPES_WITH_STATIC_RESULT = new Set([
   'minecraft:smithing_transform',
 ])
 
+function compareCanonicalText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
 function stableJson(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stableJson)
   if (!value || typeof value !== 'object') return value
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalText(left, right))
       .map(([key, child]) => [key, stableJson(child)]),
   )
 }
@@ -494,7 +498,7 @@ export function createDatapackArtifactGraph(
   validateResourceReferenceCycles(byIdentity)
 
   const artifacts = Object.freeze([...byPath.values()].sort((left, right) =>
-    left.outputPath.localeCompare(right.outputPath),
+    compareCanonicalText(left.outputPath, right.outputPath),
   ))
   return Object.freeze({
     minecraftVersion: options.minecraftVersion,

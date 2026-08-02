@@ -91,8 +91,22 @@ const DESCRIPTORS: Readonly<Record<ResourceArtifactKind, DescriptorShape>> = Obj
     legacyDirectory: 'structures',
     modernDirectory: 'structure',
     mediaType: 'application/nbt',
-    lifecycle: 'world_reopen',
+    lifecycle: 'reload',
     extension: '.nbt',
+  },
+  dimension: {
+    legacyDirectory: 'dimension',
+    modernDirectory: 'dimension',
+    mediaType: 'application/json',
+    lifecycle: 'world_reopen',
+    extension: '.json',
+  },
+  dimension_type: {
+    legacyDirectory: 'dimension_type',
+    modernDirectory: 'dimension_type',
+    mediaType: 'application/json',
+    lifecycle: 'world_reopen',
+    extension: '.json',
   },
   item_tag: {
     legacyDirectory: 'tags/items',
