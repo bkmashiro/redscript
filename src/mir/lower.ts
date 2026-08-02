@@ -3168,7 +3168,9 @@ function lowerExpr(
               if (p.type.kind === 'named' && p.type.name === 'double') {
                 // Caller has a double arg: copy NBT path directly to __dp<doubleSlot>
                 const arg = expr.args[i]
-                if (arg.kind === 'ident' && ctx.doubleVars.has(arg.name)) {
+                if (arg.kind === 'double_lit') {
+                  ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d __dp${doubleSlot} set value ${arg.value}d`, args: [] })
+                } else if (arg.kind === 'ident' && ctx.doubleVars.has(arg.name)) {
                   // Arg is already a double var — copy NBT path directly
                   const srcPath = ctx.doubleVars.get(arg.name)
                   if (!srcPath) throw new Error(`doubleVars has '${arg.name}' but get() returned undefined`)

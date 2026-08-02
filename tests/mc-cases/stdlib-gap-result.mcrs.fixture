@@ -1,0 +1,7 @@
+namespace gap_result_ns
+
+fn test_gap() {
+  let result: Result = result_divide(10, 2)
+  let value: int = result_value(result)
+  scoreboard_set("#result", "gap_result", value)
+}

@@ -13,10 +13,22 @@
  * instead of treating that as a semantic pass.
  */
 
+import { createHash } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
 import { compile } from '../compile'
 import type { DatapackFile } from '../emit/index'
+import {
+  FUNCTION_COVERAGE_OBJECTIVE,
+  instrumentFunctionArtifacts,
+  observeFunctionCoverage,
+  type FunctionCoverageObservation,
+} from './function-coverage-instrumentation'
+import {
+  deployCorpusPack,
+  removeCorpusPack,
+  type DeployedCorpusPack,
+} from './corpus-deployer'
 
 export interface ScoreboardAssertion {
   player: string
@@ -36,13 +48,23 @@ export interface StorageAssertion {
 export interface CaseAction {
   kind: 'function' | 'command'
   target: string
+  /** Optional macro argument storage passed as `with storage <resource>`. */
+  withStorage?: string
+  /** Entity selector used to establish the function's `@s` ABI. */
+  executeAs?: string
 }
 
 export interface McCoreCaseDescriptor {
+  /** Stable machine-readable ID required by the isolated corpus path. */
+  id?: string
   name: string
+  /** Stable semantic feature IDs proven by this case's assertions. */
+  featureIds?: readonly string[]
   namespace: string
   source?: string
   sourcePath?: string
+  /** Canonical stdlib/library sources compiled through the normal compiler path. */
+  librarySourcePaths?: readonly string[]
   setupCommands?: string[]
   entrypoints?: CaseAction[]
   waitTicks?: number
@@ -59,6 +81,24 @@ export interface McCoreCaseResult {
   status: McCoreCaseStatus
   reason?: string
   error?: string
+  entrypointReceipts?: EntrypointReceipt[]
+  functionCoverage?: FunctionCoverageObservation[]
+}
+
+export interface EntrypointReceipt {
+  readonly target: string
+  readonly wrapper: string
+  readonly marker: string
+  readonly observed: number
+  readonly status: 'completed' | 'incomplete'
+}
+
+interface EntrypointReceiptPlan {
+  readonly actionIndex: number
+  readonly target: string
+  readonly wrapper: string
+  readonly marker: string
+  readonly file: DatapackFile
 }
 
 export interface McCoreCaseHarness {
@@ -73,8 +113,18 @@ export interface McCoreCaseHarness {
 
 export interface McCoreCaseRunnerOptions {
   client: McCoreCaseHarness
-  datapackDir: string
-  compileSource?: (source: string, namespace: string, filePath: string) => DatapackFile[]
+  /** Legacy shared-pack path. New strict corpus runs must use serverRoot. */
+  datapackDir?: string
+  /** Disposable Paper root used to derive one owned pack per descriptor. */
+  serverRoot?: string
+  /** Test-only emitted-function probes; never enabled by the production compiler path. */
+  instrumentFunctionCoverage?: boolean
+  compileSource?: (
+    source: string,
+    namespace: string,
+    filePath: string,
+    descriptor: McCoreCaseDescriptor,
+  ) => DatapackFile[]
   installFiles?: (
     files: DatapackFile[],
     namespace: string,
@@ -86,8 +136,11 @@ function defaultCompileSource(
   source: string,
   namespace: string,
   filePath: string,
+  descriptor: McCoreCaseDescriptor,
 ): DatapackFile[] {
-  const result = compile(source, { namespace, filePath })
+  const librarySources = (descriptor.librarySourcePaths ?? []).map(libraryPath =>
+    fs.readFileSync(path.resolve(libraryPath), 'utf8'))
+  const result = compile(source, { namespace, filePath, librarySources })
   return result.files ?? []
 }
 
@@ -117,9 +170,53 @@ function normalizeCommand(command: string): string {
 
 function commandFromCaseAction(namespace: string, action: CaseAction): string {
   if (action.kind === 'function') {
-    return `/function ${namespace}:${action.target}`
+    const withStorage = action.withStorage == null ? '' : ` with storage ${action.withStorage}`
+    const invocation = `function ${namespace}:${action.target}${withStorage}`
+    return action.executeAs == null
+      ? `/${invocation}`
+      : `/execute as ${action.executeAs} at @s run ${invocation}`
   }
   return normalizeCommand(action.target)
+}
+
+const ENTRYPOINT_RECEIPT_OBJECTIVE = '__rs_entry'
+
+function createEntrypointReceiptPlans(
+  descriptor: McCoreCaseDescriptor,
+): EntrypointReceiptPlan[] {
+  if (descriptor.id == null) return []
+  const plans: EntrypointReceiptPlan[] = []
+  for (const [actionIndex, action] of (descriptor.entrypoints ?? []).entries()) {
+    if (action.kind !== 'function') continue
+    const digest = createHash('sha256')
+      .update(`${descriptor.id}\0${actionIndex}\0${descriptor.namespace}:${action.target}`)
+      .digest('hex')
+      .slice(0, 16)
+    const marker = `#entry_${digest}`
+    const wrapperPath = `__redscript_receipt/${digest}`
+    const target = `${descriptor.namespace}:${action.target}`
+    const withStorage = action.withStorage == null ? '' : ` with storage ${action.withStorage}`
+    const functionInvocation = `function ${target}${withStorage}`
+    const invocation = action.executeAs == null
+      ? functionInvocation
+      : `execute as ${action.executeAs} at @s run ${functionInvocation}`
+    plans.push({
+      actionIndex,
+      target,
+      wrapper: `${descriptor.namespace}:${wrapperPath}`,
+      marker,
+      file: {
+        path: `data/${descriptor.namespace}/function/${wrapperPath}.mcfunction`,
+        content: [
+          `scoreboard players set ${marker} ${ENTRYPOINT_RECEIPT_OBJECTIVE} 1`,
+          invocation,
+          `scoreboard players set ${marker} ${ENTRYPOINT_RECEIPT_OBJECTIVE} 2`,
+          '',
+        ].join('\n'),
+      },
+    })
+  }
+  return plans
 }
 
 function buildFailure(name: string, namespace: string, error: Error): McCoreCaseResult {
@@ -219,9 +316,16 @@ export async function runMcCoreCase(
   const {
     client,
     datapackDir,
+    serverRoot,
+    instrumentFunctionCoverage: shouldInstrumentFunctions = false,
     compileSource = defaultCompileSource,
     installFiles = defaultInstallFiles,
   } = options
+
+  let isolatedPack: DeployedCorpusPack | undefined
+  let result: McCoreCaseResult
+  const entrypointReceipts: EntrypointReceipt[] = []
+  let functionCoverage: FunctionCoverageObservation[] | undefined
 
   try {
     const isOnline = await client.isOnline()
@@ -230,25 +334,80 @@ export async function runMcCoreCase(
     }
 
     const source = normalizeSourcePath(descriptor)
-    const files = compileSource(source.text, descriptor.namespace, source.filePath)
-    await installFiles(files, descriptor.namespace, datapackDir)
+    const compiledFiles = compileSource(source.text, descriptor.namespace, source.filePath, descriptor)
+    const instrumentation = shouldInstrumentFunctions
+      ? instrumentFunctionArtifacts(compiledFiles)
+      : undefined
+    if (instrumentation != null) {
+      await client.command(`/scoreboard objectives add ${FUNCTION_COVERAGE_OBJECTIVE} dummy`)
+      for (const probe of instrumentation.probes) {
+        await client.command(`/scoreboard players set ${probe.marker} ${FUNCTION_COVERAGE_OBJECTIVE} 0`)
+      }
+    }
+    const receiptPlans = serverRoot == null ? [] : createEntrypointReceiptPlans(descriptor)
+    const files = [...(instrumentation?.files ?? compiledFiles), ...receiptPlans.map(plan => plan.file)]
+
+    if (serverRoot != null) {
+      if (descriptor.id == null) {
+        throw new Error(`Case "${descriptor.name}" is missing stable id required for isolated deployment`)
+      }
+      if (options.installFiles != null) {
+        throw new Error('isolated deployment does not accept a custom installFiles callback')
+      }
+      isolatedPack = deployCorpusPack(serverRoot, descriptor.id, files)
+    } else {
+      if (datapackDir == null) {
+        throw new Error('case runner requires serverRoot or legacy datapackDir')
+      }
+      await installFiles(files, descriptor.namespace, datapackDir)
+    }
+
     await client.reload()
 
     for (const cmd of descriptor.setupCommands ?? []) {
       await client.command(normalizeCommand(cmd))
     }
 
-    for (const action of descriptor.entrypoints ?? []) {
-      await client.command(commandFromCaseAction(descriptor.namespace, action))
+    if (receiptPlans.length > 0) {
+      await client.command(`/scoreboard objectives add ${ENTRYPOINT_RECEIPT_OBJECTIVE} dummy`)
+      for (const plan of receiptPlans) {
+        await client.command(
+          `/scoreboard players set ${plan.marker} ${ENTRYPOINT_RECEIPT_OBJECTIVE} 0`,
+        )
+      }
+    }
+
+    for (const [actionIndex, action] of (descriptor.entrypoints ?? []).entries()) {
+      const receiptPlan = receiptPlans.find(plan => plan.actionIndex === actionIndex)
+      await client.command(
+        receiptPlan == null
+          ? commandFromCaseAction(descriptor.namespace, action)
+          : `/function ${receiptPlan.wrapper}`,
+      )
+      if (receiptPlan != null) {
+        const observed = await client.scoreboard(
+          receiptPlan.marker,
+          ENTRYPOINT_RECEIPT_OBJECTIVE,
+        )
+        const receipt: EntrypointReceipt = {
+          target: receiptPlan.target,
+          wrapper: receiptPlan.wrapper,
+          marker: receiptPlan.marker,
+          observed,
+          status: observed === 2 ? 'completed' : 'incomplete',
+        }
+        entrypointReceipts.push(receipt)
+        if (observed !== 2) {
+          throw new Error(
+            `entrypoint receipt failed: ${receiptPlan.target} expected 2, got ${observed}`,
+          )
+        }
+      }
     }
 
     if (descriptor.controlledTicks != null && descriptor.controlledTicks > 0) {
       if (!client.withTickControl) {
-        return buildFailure(
-          descriptor.name,
-          descriptor.namespace,
-          new Error('controlled tick assertions are not supported by this harness client'),
-        )
+        throw new Error('controlled tick assertions are not supported by this harness client')
       }
       await client.withTickControl(async step => {
         await step(descriptor.controlledTicks!)
@@ -265,33 +424,59 @@ export async function runMcCoreCase(
 
     if (descriptor.storageAssertions && descriptor.storageAssertions.length > 0) {
       if (!client.dumpStorage) {
-        return buildFailure(
-          descriptor.name,
-          descriptor.namespace,
-          new Error('storage assertions are not supported by this harness client'),
-        )
+        throw new Error('storage assertions are not supported by this harness client')
       }
       for (const assertion of descriptor.storageAssertions) {
         await assertStorageAssertion(client.dumpStorage, assertion)
       }
     }
 
-    return {
+    if (instrumentation != null) {
+      functionCoverage = await observeFunctionCoverage(
+        instrumentation.probes,
+        (player, objective) => client.scoreboard(player, objective),
+      )
+    }
+
+    result = {
       name: descriptor.name,
       namespace: descriptor.namespace,
       status: 'passed',
+      entrypointReceipts,
+      functionCoverage,
     }
   } catch (error) {
-    if (error instanceof Error) {
-      return buildFailure(descriptor.name, descriptor.namespace, error)
-    }
-    return {
-      name: descriptor.name,
-      namespace: descriptor.namespace,
-      status: 'failed',
-      error: String(error),
+    result = error instanceof Error
+      ? buildFailure(descriptor.name, descriptor.namespace, error)
+      : {
+          name: descriptor.name,
+          namespace: descriptor.namespace,
+          status: 'failed',
+          error: String(error),
+        }
+    result.entrypointReceipts = [...entrypointReceipts]
+    result.functionCoverage = functionCoverage
+  }
+
+  if (isolatedPack != null) {
+    try {
+      removeCorpusPack(isolatedPack.root, isolatedPack.caseId)
+      await client.reload()
+    } catch (error) {
+      const cleanupError = error instanceof Error ? error.message : String(error)
+      result = buildFailure(
+        descriptor.name,
+        descriptor.namespace,
+        new Error(
+          result.status === 'failed'
+            ? `${result.error}; isolated pack cleanup failed: ${cleanupError}`
+            : `isolated pack cleanup failed: ${cleanupError}`,
+        ),
+      )
     }
   }
+
+  return result
 }
 
 export async function runMcCoreCaseSuite(

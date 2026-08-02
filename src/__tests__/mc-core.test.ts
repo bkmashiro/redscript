@@ -13,6 +13,7 @@ import { MCTestClient } from '../mc-test/client'
 import { runMcCoreCase } from '../mc-test/case-runner'
 import {
   CORE_ORACLE_CASES,
+  CORE_ORACLE_FEATURE_IDS,
   CORE_ORACLE_NAMESPACE,
   CORE_ORACLE_SOURCE_PATH,
 } from '../../tests/mc-cases/core-oracle-cases'
@@ -20,10 +21,11 @@ import {
 const MC_HOST = process.env.MC_HOST ?? 'localhost'
 const MC_PORT = parseInt(process.env.MC_PORT ?? '25561')
 const MC_SERVER_DIR = process.env.MC_SERVER_DIR ?? path.join(process.env.HOME!, 'mc-test-server')
-const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-core-oracle')
 const REQUIRE_ONLINE = process.env.MC_CORE_REQUIRE_ONLINE === 'true'
+const INSTRUMENT_COVERAGE = process.env.MC_CORE_INSTRUMENT_COVERAGE === 'true'
 
 let mc: MCTestClient
+const executedFunctionPaths = new Set<string>()
 
 async function waitForServer(timeoutMs = 20000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
@@ -34,21 +36,6 @@ async function waitForServer(timeoutMs = 20000): Promise<boolean> {
   return false
 }
 
-async function ensurePackMetaPresent(): Promise<void> {
-  const packMeta = path.join(DATAPACK_DIR, 'pack.mcmeta')
-  if (fs.existsSync(packMeta)) return
-  fs.mkdirSync(DATAPACK_DIR, { recursive: true })
-  fs.writeFileSync(
-    packMeta,
-    JSON.stringify({
-      pack: {
-        pack_format: 48,
-        description: 'RedScript MC core oracle fixtures',
-      },
-    }, null, 2),
-  )
-}
-
 beforeAll(async () => {
   mc = new MCTestClient(MC_HOST, MC_PORT)
   const online = await waitForServer()
@@ -56,7 +43,14 @@ beforeAll(async () => {
     throw new Error('MC core oracle requested with MC_CORE_REQUIRE_ONLINE=true, but the harness is offline')
   }
   if (!online) return
-  await ensurePackMetaPresent()
+  const serverRoot = path.resolve(MC_SERVER_DIR)
+  const frozenTemplates = [
+    path.resolve(process.env.HOME!, 'mc-test-server'),
+    path.resolve(process.env.HOME!, 'mc-test-server-26.2'),
+  ]
+  if (frozenTemplates.includes(serverRoot)) {
+    throw new Error(`MC core oracle refuses frozen template root: ${serverRoot}`)
+  }
   await mc.command('/scoreboard objectives add core_oracle dummy').catch(() => {})
 }, 40000)
 
@@ -65,7 +59,8 @@ describe('MC Core Oracle (descriptor-driven)', () => {
     test(descriptor.name, async () => {
       const result = await runMcCoreCase(descriptor, {
         client: mc,
-        datapackDir: DATAPACK_DIR,
+        serverRoot: MC_SERVER_DIR,
+        instrumentFunctionCoverage: INSTRUMENT_COVERAGE,
       })
 
       if (result.status === 'skipped') {
@@ -78,8 +73,24 @@ describe('MC Core Oracle (descriptor-driven)', () => {
       }
 
       expect(result.status).toBe('passed')
+      if (INSTRUMENT_COVERAGE) {
+        expect(result.functionCoverage).toBeDefined()
+        for (const observation of result.functionCoverage!) {
+          if (observation.executed) executedFunctionPaths.add(observation.artifactPath)
+        }
+        expect(result.functionCoverage!.some(observation => observation.executed)).toBe(true)
+      }
     }, 25000)
   }
+})
+
+afterAll(() => {
+  if (!INSTRUMENT_COVERAGE) return
+  const source = fs.readFileSync(path.resolve(process.cwd(), 'tests', 'mc-cases', 'core-oracle.mcrs'), 'utf8')
+  const sourceFunctions = [...source.matchAll(/^\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gm)]
+    .map(match => `data/core_oracle_mc/function/${match[1]}.mcfunction`)
+  const missing = sourceFunctions.filter(functionPath => !executedFunctionPaths.has(functionPath))
+  expect(missing).toEqual([])
 })
 
 test('compile supports core constructs used by descriptor suite', () => {
@@ -87,6 +98,17 @@ test('compile supports core constructs used by descriptor suite', () => {
   expect(() => compile(source, { namespace: CORE_ORACLE_NAMESPACE, filePath: CORE_ORACLE_SOURCE_PATH }))
     .not.toThrow()
 }, 30000)
+
+test('core oracle feature mappings are complete and drift closed', () => {
+  const caseIds = CORE_ORACLE_CASES.map(descriptor => descriptor.id!).sort()
+  expect(Object.keys(CORE_ORACLE_FEATURE_IDS).sort()).toEqual(caseIds)
+  for (const descriptor of CORE_ORACLE_CASES) {
+    expect(descriptor.featureIds?.length).toBeGreaterThan(0)
+    for (const featureId of descriptor.featureIds!) {
+      expect(featureId).toMatch(/^(language|lowering|backend|decorator|stdlib)\.[a-z0-9.-]+$/)
+    }
+  }
+})
 
 test('generated array macro oracle case is compiler-generated, not a raw command smoke', () => {
   const source = fs.readFileSync(CORE_ORACLE_SOURCE_PATH, 'utf-8')

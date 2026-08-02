@@ -1,0 +1,7 @@
+namespace gap_expr
+
+fn test_gap() {
+  let program: int[] = [20000, -10000, -3, 10000, -1]
+  let value: int = expr_eval(program, 5, 15000)
+  scoreboard_set("#expr", "gap_result", value)
+}

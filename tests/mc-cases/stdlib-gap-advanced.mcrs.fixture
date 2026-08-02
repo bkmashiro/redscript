@@ -1,0 +1,6 @@
+namespace gap_advanced
+
+fn test_gap() {
+  let value: int = fib(10)
+  scoreboard_set("#advanced", "gap_result", value)
+}

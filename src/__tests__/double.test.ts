@@ -252,6 +252,17 @@ describe('double parameter passing', () => {
     // Int arg passed via scoreboard $p0 (first non-double param)
     expect(all).toContain('$p0')
   })
+
+  test('double literal argument writes the ABI slot without an uninitialized scoreboard round-trip', () => {
+    const source = `
+      fn identity(d: double): double { return d; }
+      fn t(): double { return identity(1.5d); }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const caller = result.files.find(file => file.path.endsWith('/t.mcfunction'))?.content ?? ''
+    expect(caller).toContain('data modify storage rs:d __dp0 set value 1.5d')
+    expect(caller).not.toMatch(/__dp0 double 0\.0001 run scoreboard players get/)
+  })
 })
 
 describe('double_add — entity position trick', () => {

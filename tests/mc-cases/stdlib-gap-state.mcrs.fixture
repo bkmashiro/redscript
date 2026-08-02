@@ -1,0 +1,7 @@
+namespace gap_state
+
+fn test_gap() {
+  set_state(@e[tag=gap_state_target,limit=1], 3)
+  let value: int = is_state(@e[tag=gap_state_target,limit=1], 3)
+  scoreboard_set("#state", "gap_result", value)
+}
