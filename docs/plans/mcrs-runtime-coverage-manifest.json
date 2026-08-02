@@ -3,9 +3,9 @@
   "scope": "src/stdlib/*.mcrs",
   "ordering": "bytewise",
   "inventory": {
-    "modules": 51,
-    "totalFunctionsAndMethods": 721,
-    "publicRuntimeRequired": 663,
+    "modules": 50,
+    "totalFunctionsAndMethods": 717,
+    "publicRuntimeRequired": 659,
     "internalFunctionsAndMethods": 58,
     "exportedConstants": 401
   },
@@ -584,10 +584,6 @@
     "stdlib.state.function.is_state",
     "stdlib.state.function.set_state",
     "stdlib.state.function.transition",
-    "stdlib.strings.function.str_concat",
-    "stdlib.strings.function.str_contains",
-    "stdlib.strings.function.str_len",
-    "stdlib.strings.function.str_slice",
     "stdlib.teams.function.add_to_team",
     "stdlib.teams.function.cleanup_teams",
     "stdlib.teams.function.create_blue_team",
@@ -1348,5 +1344,5 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 640
+  "expectedMissingRuntimeCount": 636
 }

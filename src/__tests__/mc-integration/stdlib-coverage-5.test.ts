@@ -125,7 +125,6 @@ beforeAll(async () => {
   const ODE_SRC = readStdlib('ode.mcrs')
   const FFT_SRC = readStdlib('fft.mcrs')
   const ECS_SRC = readStdlib('ecs.mcrs')
-  const STRINGS_SRC = readStdlib('strings.mcrs')
 
   // ─── player module ──────────────────────────────────────────────────────
   writeFixture(`
@@ -565,27 +564,6 @@ beforeAll(async () => {
       scoreboard_set("#ecs_not_reg", #sc5_result, found);
     }
   `, 'stdlib_ecs_test', [ECS_SRC, MATH_SRC])
-
-  // ─── strings module ──────────────────────────────────────────────────────
-  writeFixture(`
-    namespace stdlib_strings_test
-
-    fn test_str_len() {
-      let l: int = str_len("A");
-      scoreboard_set("#str_len_res", #sc5_result, l);
-    }
-
-    fn test_str_contains_returns_zero() {
-      // str_contains is not feasible natively, always returns 0
-      let r: int = str_contains("A", "B");
-      scoreboard_set("#str_contains_res", #sc5_result, r);
-    }
-
-    fn test_str_concat_compiles() {
-      str_concat("A", "B");
-      scoreboard_set("#str_concat_done", #sc5_result, 1);
-    }
-  `, 'stdlib_strings_test', [STRINGS_SRC])
 
   // ─── tags module (constants only — compile check) ─────────────────────────
   writeFixture(`
@@ -1211,39 +1189,6 @@ describe('stdlib coverage 5 — ecs', () => {
     const r = await mc.scoreboard('#ecs_not_reg', 'sc5_result')
     expect(r).toBe(0)
     console.log(`  ecs_is_registered (none) = ${r} ✓`)
-  }, 30_000)
-})
-
-describe('stdlib coverage 5 — strings', () => {
-  test('str_len compiles and returns a value', async () => {
-    if (!serverOnline) return
-    await mc.command('/scoreboard players set #str_len_res sc5_result 0')
-    await mc.command('/function stdlib_strings_test:test_str_len')
-    await mc.ticks(3)
-    const r = await mc.scoreboard('#str_len_res', 'sc5_result')
-    // str_len: MC limitation, just check it ran
-    expect(r).toBeGreaterThanOrEqual(0)
-    console.log(`  str_len = ${r} ✓`)
-  }, 30_000)
-
-  test('str_contains always returns 0 (MC limitation)', async () => {
-    if (!serverOnline) return
-    await mc.command('/scoreboard players set #str_contains_res sc5_result 99')
-    await mc.command('/function stdlib_strings_test:test_str_contains_returns_zero')
-    await mc.ticks(3)
-    const r = await mc.scoreboard('#str_contains_res', 'sc5_result')
-    expect(r).toBe(0)
-    console.log(`  str_contains = ${r} ✓`)
-  }, 30_000)
-
-  test('str_concat compiles and runs without error', async () => {
-    if (!serverOnline) return
-    await mc.command('/scoreboard players set #str_concat_done sc5_result 0')
-    await mc.command('/function stdlib_strings_test:test_str_concat_compiles')
-    await mc.ticks(3)
-    const r = await mc.scoreboard('#str_concat_done', 'sc5_result')
-    expect(r).toBe(1)
-    console.log(`  str_concat result = ${r} ✓`)
   }, 30_000)
 })
 

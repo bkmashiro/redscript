@@ -10,7 +10,8 @@
     "compile-all-static-smoke": "Module is not in the compile-all skip manifest.",
     "compile-all-known-skip": "Module is intentionally skipped by compile-all with a manifest reason.",
     "typed-resource-api-unit": "Unit tests prove typed resource context/category diagnostics and string-compatible resource argument behavior; this is not live Paper proof.",
-    "live-paper-lifecycle": "A managed Paper/TestHarness run proves datapack load, reload, restart, and world-reopen lifecycle boundaries."
+    "live-paper-lifecycle": "A managed Paper/TestHarness run proves datapack load, reload, restart, and world-reopen lifecycle boundaries.",
+    "dual-paper-runtime-semantic": "Isolated managed semantic case passed on stable 1.21.4 and Paper 26.2 with server assertions and source-function markers."
   },
   "stdlibModules": [
     {
@@ -63,20 +64,20 @@
       "category": "pure-or-mostly-arithmetic",
       "proofLevels": [
         "stdlib-source-present",
-        "mc-integration-offline-skippable",
+        "dual-paper-runtime-semantic",
         "compile-all-static-smoke"
       ],
       "evidenceFiles": [
-        "src/__tests__/mc-integration.test.ts",
-        "src/__tests__/mc-integration/stdlib-coverage-3.test.ts",
-        "src/__tests__/mc-integration/stdlib-coverage-8.test.ts",
-        "src/__tests__/stdlib/bits.test.ts"
+        "tests/mc-cases/stdlib-gap-bits.mcrs.fixture",
+        "src/__tests__/mc-stdlib-gap.test.ts",
+        "docs/evidence/mcrs-runtime-stdlib-gap-stable-1.21.4.json",
+        "docs/evidence/mcrs-runtime-stdlib-gap-paper-26.2.json"
       ],
-      "livePaperStatus": "not-selected",
-      "notes": "",
+      "livePaperStatus": "qualified-dual-channel",
+      "notes": "All 11 public bitwise APIs have independent server-side assertions and emitted-function coverage markers.",
       "liveOracleCandidate": {
-        "priority": "none",
-        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+        "priority": "completed",
+        "reason": "Qualified by the isolated stdlib-gap managed corpus on both channels."
       }
     },
     {
@@ -975,27 +976,6 @@
       "evidenceFiles": [
         "src/__tests__/mc-integration/stdlib-coverage-7.test.ts",
         "src/__tests__/stdlib/state.test.ts"
-      ],
-      "livePaperStatus": "not-selected",
-      "notes": "",
-      "liveOracleCandidate": {
-        "priority": "none",
-        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
-      }
-    },
-    {
-      "module": "strings",
-      "path": "src/stdlib/strings.mcrs",
-      "category": "data-structure/algorithm",
-      "proofLevels": [
-        "stdlib-source-present",
-        "mc-integration-offline-skippable",
-        "compile-all-static-smoke"
-      ],
-      "evidenceFiles": [
-        "src/__tests__/mc-integration/stdlib-coverage-5.test.ts",
-        "src/__tests__/stdlib/string.test.ts",
-        "src/__tests__/stdlib/strings.test.ts"
       ],
       "livePaperStatus": "not-selected",
       "notes": "",

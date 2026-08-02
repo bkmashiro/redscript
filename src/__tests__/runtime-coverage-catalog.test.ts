@@ -12,9 +12,9 @@ describe('runtime coverage source catalog', () => {
     const functions = catalog.entries.filter(entry => entry.kind === 'function' || entry.kind === 'method')
     const constants = catalog.entries.filter(entry => entry.kind === 'constant')
 
-    expect(catalog.modules).toHaveLength(51)
-    expect(functions).toHaveLength(721)
-    expect(functions.filter(entry => entry.requiresRuntimeProbe)).toHaveLength(663)
+    expect(catalog.modules).toHaveLength(50)
+    expect(functions).toHaveLength(717)
+    expect(functions.filter(entry => entry.requiresRuntimeProbe)).toHaveLength(659)
     expect(functions.filter(entry => entry.internal)).toHaveLength(58)
     expect(constants).toHaveLength(401)
     expect(catalog.entries.filter(entry => entry.kind === 'enum').map(entry => entry.name)).toContain('Result')

@@ -41,7 +41,11 @@ This is representative module evidence, not qualification of every declaration i
 
 ### Remaining stdlib scope
 
-The checked-in stdlib catalog records 51 modules, 721 total functions/methods, 58 internal functions, 663 public runtime-required probes, and 401 constants. Exactly 23 public APIs have scenario mappings on both channels; 640 remain explicitly unmapped. A representative case does not qualify every declaration in its module, and direct fixture references are not promoted to runtime proof.
+The checked-in stdlib catalog records 50 modules, 717 total functions/methods, 58 internal functions, 659 public runtime-required probes, and 401 constants. Exactly 23 public APIs have scenario mappings on both channels; 636 remain explicitly unmapped. A representative case does not qualify every declaration in its module, and direct fixture references are not promoted to runtime proof.
+
+### Removed invalid stdlib surface
+
+The legacy `strings` module was removed instead of being counted as unqualified coverage. Its four APIs did not implement their advertised contracts: `str_len` returned NBT tag/list size rather than plain-string length, `str_concat` produced a list rather than a string, `str_contains` always returned `0`, and `str_slice` relied on unproven raw placeholder substitution. Compile-only self-tests and documentation that presented those behaviors as working features were removed with the module. This does not remove RedScript language string literals, format strings, or the verified string-return ABI.
 
 ### Managed player lane
 

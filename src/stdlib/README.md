@@ -96,11 +96,6 @@ Runtime set operations (NBT-based).
 - `in_set(set, value)` → int
 - `remove_from_set(set, value)`
 
-### strings.mcrs
-String formatting helpers.
-- `broadcast(msg)` — Announce to all players
-- `whisper(target, msg)` — Private message
-
 ### particles.mcrs
 Particle effect shortcuts.
 - `hearts(target)` — Heart particles above target
