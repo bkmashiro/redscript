@@ -1149,6 +1149,105 @@
         "paper-26.2"
       ]
     },
+    "stdlib.bits.function.bit_and": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.bit_clear": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.bit_get": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.bit_not": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.bit_or": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.bit_set": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.bit_shl": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.bit_shr": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.bit_toggle": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.bit_xor": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bits.function.popcount": {
+      "caseIds": [
+        "stdlib-gap.bits"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.expr.function.expr_eval": {
       "caseIds": [
         "stdlib-gap.expr"
@@ -1249,5 +1348,5 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 651
+  "expectedMissingRuntimeCount": 640
 }
