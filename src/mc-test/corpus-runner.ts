@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -35,6 +35,7 @@ export interface CorpusSuiteReport {
 export interface CorpusRunReport {
   readonly schemaVersion: 1
   readonly evidenceClass: 'managed-runtime-corpus'
+  readonly sourceRevision: string
   readonly channel: string
   readonly startedAt: string
   readonly finishedAt: string
@@ -149,6 +150,14 @@ function writeReport(reportPath: string, report: CorpusRunReport): void {
   fs.chmodSync(reportPath, 0o600)
 }
 
+export function resolveSourceRevision(): string {
+  if (process.env.GITHUB_SHA?.trim()) return process.env.GITHUB_SHA.trim()
+  return execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  }).trim()
+}
+
 export async function runManagedCorpus(options: CorpusRunOptions): Promise<CorpusRunReport> {
   const startedAt = new Date().toISOString()
   const reports: CorpusSuiteReport[] = []
@@ -211,6 +220,7 @@ export async function runManagedCorpus(options: CorpusRunOptions): Promise<Corpu
   const report: CorpusRunReport = {
     schemaVersion: 1,
     evidenceClass: 'managed-runtime-corpus',
+    sourceRevision: resolveSourceRevision(),
     channel: options.channel,
     startedAt,
     finishedAt: new Date().toISOString(),

@@ -1,4 +1,4 @@
-import { parseJestSummary } from '../mc-test/corpus-runner'
+import { parseJestSummary, resolveSourceRevision } from '../mc-test/corpus-runner'
 
 describe('managed corpus report parsing', () => {
   it('extracts Jest suite and test totals without treating startup text as proof', () => {
@@ -8,5 +8,16 @@ describe('managed corpus report parsing', () => {
 
   it('leaves missing totals absent', () => {
     expect(parseJestSummary('Done (8.638s)!')).toEqual({ suites: undefined, tests: undefined })
+  })
+
+  it('binds CI evidence to GITHUB_SHA when present', () => {
+    const previous = process.env.GITHUB_SHA
+    process.env.GITHUB_SHA = '0123456789abcdef'
+    try {
+      expect(resolveSourceRevision()).toBe('0123456789abcdef')
+    } finally {
+      if (previous == null) delete process.env.GITHUB_SHA
+      else process.env.GITHUB_SHA = previous
+    }
   })
 })

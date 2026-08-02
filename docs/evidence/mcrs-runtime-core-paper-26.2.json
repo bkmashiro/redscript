@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "managed-runtime-corpus",
+  "sourceRevision": "663b2c9790922916bbe8b7f87e359b81bab24ed8",
+  "channel": "paper-26.2",
+  "startedAt": "2026-08-02T21:37:35.095Z",
+  "finishedAt": "2026-08-02T21:42:16.612Z",
+  "paperVersion": "26.2-87-a95ae8d (MC: 26.2)",
+  "disposableRootRemoved": true,
+  "suites": [
+    {
+      "suite": "core",
+      "command": "npm run test:mc-core:live",
+      "exitCode": 0,
+      "durationMs": 273262,
+      "outputSha256": "ed207e11bfef9cf62742ebacbaaf60e469e5cd95bfe26505855aed1492a2dc85",
+      "outputTail": "\n> redscript-mc@3.0.4 test:mc-core:live\n> MC_CORE_REQUIRE_ONLINE=true jest src/__tests__/mc-core.test.ts --runInBand --testTimeout=120000\n\nPASS unit src/__tests__/mc-core.test.ts (272.699 s)\n  ✓ compile supports core constructs used by descriptor suite (25 ms)\n  ✓ core oracle feature mappings are complete and drift closed (7 ms)\n  ✓ generated array macro oracle case is compiler-generated, not a raw command smoke (16 ms)\n  MC Core Oracle (descriptor-driven)\n    ✓ scoreboard arithmetic (10081 ms)\n    ✓ branch true path (10061 ms)\n    ✓ branch false path (10085 ms)\n    ✓ execute context helper (10158 ms)\n    ✓ function call chain (10111 ms)\n    ✓ branch loop function return (10101 ms)\n    ✓ loop function return (10001 ms)\n    ✓ nested loop temporary isolation (10046 ms)\n    ✓ if inside loop mutates scoreboard state (10030 ms)\n    ✓ scoreboard objective/player isolation (10220 ms)\n    ✓ macro with storage (9852 ms)\n    ✓ macro with storage in loop (9950 ms)\n    ✓ storage read-after-call (9985 ms)\n    ✓ generated array macro nested loop (10392 ms)\n    ✓ storage read-write loop (10066 ms)\n    ✓ foreach is-check counting (10234 ms)\n    ✓ direct parameter helper entrypoints (10266 ms)\n    ✓ load lifecycle hook (9908 ms)\n    ✓ tick lifecycle hook (9933 ms)\n    ✓ controlled tick lifecycle hook (10137 ms)\n    ✓ controlled timer countdown via tick hook (10217 ms)\n    ✓ world setblock smoke (10094 ms)\n    ✓ visual command boundary smoke (9952 ms)\n    ✓ inventory equipment smoke (10062 ms)\n    ✓ bounded random range smoke (9800 ms)\n    ✓ spawn entity smoke (10036 ms)\n    ✓ particle command smoke (10205 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       30 passed, 30 total\nSnapshots:   0 total\nTime:        272.807 s, estimated 340 s\nRan all test suites matching /src\\/__tests__\\/mc-core.test.ts/i.\n",
+      "summary": {
+        "suites": "1 passed, 1 total",
+        "tests": "30 passed, 30 total"
+      }
+    }
+  ],
+  "passed": true
+}
