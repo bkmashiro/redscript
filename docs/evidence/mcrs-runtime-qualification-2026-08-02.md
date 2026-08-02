@@ -22,15 +22,26 @@ The 30 tests comprise three static/drift checks and 27 isolated runtime descript
 
 This qualifies the mapped core integer/scoreboard/control-flow/storage/lifecycle/command-boundary subset. It is **not** evidence that every RedScript language feature or stdlib API works in Minecraft.
 
+### Stdlib representative semantic subset
+
+Source revision: `d4119822603959edf763981389bfd848c6bc8677`
+
+Six isolated stdlib representative cases passed on both managed Paper channels:
+
+| Channel | Paper build | Result | Cleanup | Evidence |
+|---|---|---:|---:|---|
+| stable | `1.21.4-232-12d8fe0` | 6/6 | disposable root removed | `mcrs-runtime-stdlib-gap-stable-1.21.4.json` |
+| compatibility | `26.2-87-a95ae8d` | 6/6 | disposable root removed | `mcrs-runtime-stdlib-gap-paper-26.2.json` |
+
+The cases cover representative behavior from `advanced`, `expr`, `linalg`, `sets`, `result`, and `state`. The mapped public API scope is exactly `linalg.vec2d_dot` plus `sets.set_new`, `set_add`, `set_contains`, `set_remove`, and `set_clear`. The linalg case asserts both multiplication terms and the final dot product with bounded double-to-fixed conversion tolerance. The sets case asserts unique handles, duplicate-add idempotence, membership, removal, and clear semantics. Both cases also require emitted-function marker readback.
+
+This is representative module evidence, not qualification of every declaration in those modules.
+
 ## Explicitly unqualified scope
 
-### Stdlib representative gap lane
+### Remaining stdlib scope
 
-Stable diagnostic result: **4 passed / 1 failed / 5 total**, with successful disposable cleanup.
-
-The remaining failure is `linalg`: `#linalg/gap_result` expected `110000`, observed `0`. Double literal argument transport was corrected, but the live result still exposes a double-return/temporary ABI gap around `vec2d_dot`. The dynamic `sets` API also remains unqualified because its public source currently lowers through stub-like behavior rather than a demonstrated runtime intrinsic path.
-
-The checked-in stdlib catalog currently records 51 modules, 716 total functions/methods, 53 internal functions, 663 public runtime-required probes, and 401 constants. Missing mappings remain explicit; direct fixture references are not promoted to runtime proof.
+The checked-in stdlib catalog records 51 modules, 721 total functions/methods, 58 internal functions, 663 public runtime-required probes, and 401 constants. Exactly 6 public APIs have scenario mappings on both channels; 657 remain explicitly unmapped. A representative case does not qualify every declaration in its module, and direct fixture references are not promoted to runtime proof.
 
 ### Managed player lane
 
@@ -42,10 +53,10 @@ After suite-pack isolation, the historical server-only suite improved from 66 to
 
 ## Evidence boundaries
 
-Repository validation after the evidence change passed `npm run build` and the complete offline/default Jest matrix: **345 suites / 6160 tests passed**, with 3 live-only suites / 16 player tests explicitly skipped. Those offline passes are regression evidence only, not Paper runtime proof.
+Repository validation before the evidence runs passed `npm run build` and the complete explicit-offline Jest matrix: **345 suites / 6155 tests passed**, with 3 live-only suites / 28 tests explicitly skipped. Those offline passes are regression evidence only, not Paper runtime proof.
 
 - A Paper `Done (...)` line is startup evidence only.
 - Offline Jest passes and compile-only checks are not Paper runtime proof.
 - Stable and Paper 26.2 reports are separate artifacts and must not be relabeled across channels.
 - Player/visual behavior is not inferred from server-only command success.
-- Both canonical reports record `disposableRootRemoved: true`; the frozen template worlds were not used as runtime roots.
+- All four canonical reports record `disposableRootRemoved: true`; the frozen template worlds were not used as runtime roots.

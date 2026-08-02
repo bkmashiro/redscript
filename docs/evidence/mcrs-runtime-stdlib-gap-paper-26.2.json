@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "managed-runtime-corpus",
+  "sourceRevision": "d4119822603959edf763981389bfd848c6bc8677",
+  "channel": "paper-26.2",
+  "startedAt": "2026-08-02T23:10:23.867Z",
+  "finishedAt": "2026-08-02T23:11:08.449Z",
+  "paperVersion": "26.2-87-a95ae8d (MC: 26.2)",
+  "disposableRootRemoved": true,
+  "suites": [
+    {
+      "suite": "stdlib-gap",
+      "command": "npm run test:mc-stdlib-gap:live",
+      "exitCode": 0,
+      "durationMs": 36213,
+      "outputSha256": "b393de8d7f28b29ffac38ef1ecb3463ac8dee75d198747984f15232601f6af38",
+      "outputTail": "\n> redscript-mc@3.0.4 test:mc-stdlib-gap:live\n> MC_STDLIB_GAP_REQUIRE_ONLINE=true jest src/__tests__/mc-stdlib-gap.test.ts --runInBand --testTimeout=120000\n\nPASS unit src/__tests__/mc-stdlib-gap.test.ts (35.493 s)\n  stdlib zero-reference representative semantic oracles\n    ✓ advanced representative semantic oracle (5308 ms)\n    ✓ expr representative semantic oracle (8496 ms)\n    ✓ linalg representative semantic oracle (5213 ms)\n    ✓ sets representative semantic oracle (5242 ms)\n    ✓ result representative semantic oracle (5167 ms)\n    ✓ state representative semantic oracle (5202 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       6 passed, 6 total\nSnapshots:   0 total\nTime:        35.627 s, estimated 36 s\nRan all test suites matching /src\\/__tests__\\/mc-stdlib-gap.test.ts/i.\n",
+      "summary": {
+        "suites": "1 passed, 1 total",
+        "tests": "6 passed, 6 total"
+      }
+    }
+  ],
+  "passed": true
+}

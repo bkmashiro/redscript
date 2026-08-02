@@ -1145,7 +1145,8 @@
         "stdlib-gap.linalg"
       ],
       "channels": [
-        "stable-1.21.4"
+        "stable-1.21.4",
+        "paper-26.2"
       ]
     },
     "stdlib.sets.function.set_add": {
@@ -1153,7 +1154,8 @@
         "stdlib-gap.sets"
       ],
       "channels": [
-        "stable-1.21.4"
+        "stable-1.21.4",
+        "paper-26.2"
       ]
     },
     "stdlib.sets.function.set_clear": {
@@ -1161,7 +1163,8 @@
         "stdlib-gap.sets"
       ],
       "channels": [
-        "stable-1.21.4"
+        "stable-1.21.4",
+        "paper-26.2"
       ]
     },
     "stdlib.sets.function.set_contains": {
@@ -1169,7 +1172,8 @@
         "stdlib-gap.sets"
       ],
       "channels": [
-        "stable-1.21.4"
+        "stable-1.21.4",
+        "paper-26.2"
       ]
     },
     "stdlib.sets.function.set_new": {
@@ -1177,7 +1181,8 @@
         "stdlib-gap.sets"
       ],
       "channels": [
-        "stable-1.21.4"
+        "stable-1.21.4",
+        "paper-26.2"
       ]
     },
     "stdlib.sets.function.set_remove": {
@@ -1185,7 +1190,8 @@
         "stdlib-gap.sets"
       ],
       "channels": [
-        "stable-1.21.4"
+        "stable-1.21.4",
+        "paper-26.2"
       ]
     }
   },
