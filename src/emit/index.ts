@@ -371,19 +371,24 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     }
   }
 
-  assertNoConflictingDatapackPaths(files)
-  return files
+  return canonicalizeDatapackFiles(files)
 }
 
-function assertNoConflictingDatapackPaths(files: DatapackFile[]): void {
+export function canonicalizeDatapackFiles(files: DatapackFile[]): DatapackFile[] {
   const byPath = new Map<string, DatapackFile>()
+  const canonical: DatapackFile[] = []
   for (const file of files) {
     const previous = byPath.get(file.path)
-    if (previous && previous.content !== file.content) {
-      throw new Error(`Duplicate datapack artifact path '${file.path}' generated with different content`)
+    if (previous) {
+      if (previous.content !== file.content) {
+        throw new Error(`Duplicate datapack artifact path '${file.path}' generated with different content`)
+      }
+      continue
     }
     byPath.set(file.path, file)
+    canonical.push(file)
   }
+  return canonical
 }
 
 function uniqueValues(values: string[]): string[] {

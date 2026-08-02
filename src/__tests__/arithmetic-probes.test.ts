@@ -2376,21 +2376,22 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(residualSummary?.trackABResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackAEResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackAFResidualDiagnostics).toBeDefined()
-    expect(residualSummary?.trackABResidualDiagnostics?.totalCount).toBe(157)
-    expect(residualSummary?.trackAEResidualDiagnostics?.totalCount).toBe(157)
+    // Physical artifact canonicalization removes 20 byte-identical duplicate paths.
+    expect(residualSummary?.trackABResidualDiagnostics?.totalCount).toBe(137)
+    expect(residualSummary?.trackAEResidualDiagnostics?.totalCount).toBe(137)
     expect(residualSummary?.trackAFResidualDiagnostics?.totalCount).toBe(
       residualSummary?.trackAEResidualDiagnostics?.byLabel.find(item => item.label === 'insufficient-command-context')?.count ?? 0,
     )
-    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(114)
-    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-wider-same-function-window')?.count).toBe(33)
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(96)
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-wider-same-function-window')?.count).toBe(31)
     expect(residualSummary?.trackAEResidualDiagnostics?.topCaseNames.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAEResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAGResidualDiagnostics).toBeDefined()
-    expect(residualSummary?.trackAGResidualDiagnostics?.totalCount).toBe(114)
+    expect(residualSummary?.trackAGResidualDiagnostics?.totalCount).toBe(96)
     expect(
       residualSummary?.trackAGResidualDiagnostics?.byLabel.reduce((sum, item) => sum + item.count, 0),
-    ).toBe(114)
+    ).toBe(96)
     expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(
       residualSummary?.trackAGResidualDiagnostics?.byLabel.reduce((sum, item) => sum + item.count, 0) ?? 0,
     )

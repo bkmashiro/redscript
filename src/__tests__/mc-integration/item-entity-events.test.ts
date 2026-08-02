@@ -20,11 +20,17 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { compile } from '../../compile'
 import { MCTestClient } from '../../mc-test/client'
+import { ensureCorpusPackWorkspace, removeCorpusPack, resolveCorpusPackPath } from '../../mc-test/corpus-deployer'
+import {
+  assertMcIntegrationConfiguration,
+  assertMcIntegrationPrerequisites,
+} from '../../test-utils/mc-live-prerequisites'
 
 const MC_HOST = process.env.MC_HOST ?? 'localhost'
 const MC_PORT = parseInt(process.env.MC_PORT ?? '25561')
 const MC_SERVER_DIR = process.env.MC_SERVER_DIR ?? path.join(process.env.HOME!, 'mc-test-server')
-const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-test')
+const CORPUS_CASE_ID = 'item-entity-events'
+const DATAPACK_DIR = resolveCorpusPackPath(MC_SERVER_DIR, CORPUS_CASE_ID)
 
 const NS = 'item_entity_ev_test'
 
@@ -36,7 +42,7 @@ let mc: MCTestClient
 // Helper: compile and write a RedScript snippet to the test datapack
 // ---------------------------------------------------------------------------
 function writeFixtureWithLibs(source: string, namespace: string, librarySources: string[]): void {
-  fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+  ensureCorpusPackWorkspace(MC_SERVER_DIR, CORPUS_CASE_ID)
   if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
     fs.writeFileSync(
       path.join(DATAPACK_DIR, 'pack.mcmeta'),
@@ -68,7 +74,8 @@ function writeFixtureWithLibs(source: string, namespace: string, librarySources:
 // ---------------------------------------------------------------------------
 // Bot API helpers (mineflayer proxy on port 25562)
 // ---------------------------------------------------------------------------
-const BOT_URL = 'http://localhost:25562'
+const BOT_URL = (process.env.MC_BOT_URL
+  ?? `http://${process.env.MC_BOT_HOST ?? 'localhost'}:${process.env.MC_BOT_PORT ?? '25562'}`).replace(/\/+$/, '')
 
 async function botPost(endpoint: string, body: object = {}): Promise<any> {
   const res = await fetch(`${BOT_URL}${endpoint}`, {
@@ -89,6 +96,8 @@ async function botGet(endpoint: string): Promise<any> {
 // ---------------------------------------------------------------------------
 
 beforeAll(async () => {
+  assertMcIntegrationConfiguration()
+
   if (process.env.MC_OFFLINE === 'true') {
     return
   }
@@ -107,6 +116,7 @@ beforeAll(async () => {
   }
 
   if (!serverOnline) {
+    assertMcIntegrationPrerequisites({ serverOnline, botConnected: false })
     return
   }
 
@@ -117,6 +127,8 @@ beforeAll(async () => {
   } catch {
     botOnline = false
   }
+
+  assertMcIntegrationPrerequisites({ serverOnline, botConnected: botOnline })
 
   // ── Compile & deploy ──────────────────────────────────────────────────────
   const EVENTS_SRC = fs.readFileSync(
@@ -159,6 +171,12 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+afterAll(async () => {
+  if (!fs.existsSync(DATAPACK_DIR)) return
+  removeCorpusPack(DATAPACK_DIR, CORPUS_CASE_ID)
+  if (serverOnline) await mc.reload()
+}, 30_000)
 
 describe('MC Integration — ItemUse event (@on(ItemUse))', () => {
   test('datapack loads without error', async () => {

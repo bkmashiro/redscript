@@ -13,11 +13,13 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { compile } from '../../compile'
 import { MCTestClient } from '../../mc-test/client'
+import { ensureCorpusPackWorkspace, removeCorpusPack, resolveCorpusPackPath } from '../../mc-test/corpus-deployer'
 
 const MC_HOST = process.env.MC_HOST ?? 'localhost'
 const MC_PORT = parseInt(process.env.MC_PORT ?? '25561')
 const MC_SERVER_DIR = process.env.MC_SERVER_DIR ?? path.join(process.env.HOME!, 'mc-test-server')
-const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-test')
+const CORPUS_CASE_ID = 'say-fstring'
+const DATAPACK_DIR = resolveCorpusPackPath(MC_SERVER_DIR, CORPUS_CASE_ID)
 
 const NS = 'rs_say_fstr'
 
@@ -25,7 +27,7 @@ let serverOnline = false
 let mc: MCTestClient
 
 function writeFixture(source: string, namespace: string): void {
-  fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+  ensureCorpusPackWorkspace(MC_SERVER_DIR, CORPUS_CASE_ID)
   if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
     fs.writeFileSync(
       path.join(DATAPACK_DIR, 'pack.mcmeta'),
@@ -114,6 +116,12 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 // Compile-time tests (no server needed)
 // ---------------------------------------------------------------------------
+
+afterAll(async () => {
+  if (!fs.existsSync(DATAPACK_DIR)) return
+  removeCorpusPack(DATAPACK_DIR, CORPUS_CASE_ID)
+  if (serverOnline) await mc.reload()
+}, 30_000)
 
 describe('say() f-string: compile output', () => {
   test('say(f"plain text") compiles without error', () => {

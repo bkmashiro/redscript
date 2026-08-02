@@ -14,11 +14,13 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { compile } from '../compile'
 import { MCTestClient } from '../mc-test/client'
+import { ensureCorpusPackWorkspace, removeCorpusPack, resolveCorpusPackPath } from '../mc-test/corpus-deployer'
 
 const MC_HOST = process.env.MC_HOST ?? 'localhost'
 const MC_PORT = parseInt(process.env.MC_PORT ?? '25561')
 const MC_SERVER_DIR = process.env.MC_SERVER_DIR ?? path.join(process.env.HOME!, 'mc-test-server')
-const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-test')
+const CORPUS_CASE_ID = 'legacy-core'
+const DATAPACK_DIR = resolveCorpusPackPath(MC_SERVER_DIR, CORPUS_CASE_ID)
 const FIXTURE_DIR = path.join(__dirname, 'fixtures')
 
 let serverOnline = false
@@ -27,7 +29,7 @@ let mc: MCTestClient
 /** Write compiled RedScript source into the shared test datapack directory.
  *  Merges minecraft tag files (tick.json / load.json) instead of overwriting. */
 function writeFixture(source: string, namespace: string): void {
-  fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+  ensureCorpusPackWorkspace(MC_SERVER_DIR, CORPUS_CASE_ID)
   // Write pack.mcmeta once
   if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
     fs.writeFileSync(path.join(DATAPACK_DIR, 'pack.mcmeta'), JSON.stringify({
@@ -344,6 +346,12 @@ beforeAll(async () => {
 
   console.log('  Setup complete.')
 }, 60000)
+
+afterAll(async () => {
+  if (!fs.existsSync(DATAPACK_DIR)) return
+  removeCorpusPack(DATAPACK_DIR, CORPUS_CASE_ID)
+  if (serverOnline) await mc.reload()
+}, 30_000)
 
 describe('MC Integration Tests', () => {
 
@@ -937,7 +945,7 @@ const MATH_SRC = fs.readFileSync(
 
 function writeFixtureWithLibs(fileName: string, namespace: string, librarySources: string[]): void {
   const source = fs.readFileSync(path.join(FIXTURE_DIR, fileName), 'utf-8')
-  fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+  ensureCorpusPackWorkspace(MC_SERVER_DIR, CORPUS_CASE_ID)
   if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
     fs.writeFileSync(path.join(DATAPACK_DIR, 'pack.mcmeta'), JSON.stringify({
       pack: { pack_format: 48, description: 'RedScript integration tests' }
@@ -1719,7 +1727,7 @@ describe('MC Integration - fft.mcrs dft_real', () => {
     `
 
     // Use compile directly with librarySources (writeFixture doesn't support libs)
-    fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+    ensureCorpusPackWorkspace(MC_SERVER_DIR, CORPUS_CASE_ID)
     if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
       fs.writeFileSync(path.join(DATAPACK_DIR, 'pack.mcmeta'), JSON.stringify({
         pack: { pack_format: 48, description: 'RedScript integration tests' }
@@ -1791,7 +1799,7 @@ describe('MC Integration - @on(EventType) event system', () => {
     `
 
     // Compile with events.mcrs as library source
-    fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+    ensureCorpusPackWorkspace(MC_SERVER_DIR, CORPUS_CASE_ID)
     if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
       fs.writeFileSync(path.join(DATAPACK_DIR, 'pack.mcmeta'), JSON.stringify({
         pack: { pack_format: 48, description: 'RedScript integration tests' }

@@ -23,11 +23,13 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { compile } from '../../compile'
 import { MCTestClient } from '../../mc-test/client'
+import { ensureCorpusPackWorkspace, removeCorpusPack, resolveCorpusPackPath } from '../../mc-test/corpus-deployer'
 
 const MC_HOST = process.env.MC_HOST ?? 'localhost'
 const MC_PORT = parseInt(process.env.MC_PORT ?? '25561', 10)
 const MC_SERVER_DIR = process.env.MC_SERVER_DIR ?? path.join(process.env.HOME!, 'mc-test-server')
-const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-test')
+const CORPUS_CASE_ID = 'enchantment-level-alu'
+const DATAPACK_DIR = resolveCorpusPackPath(MC_SERVER_DIR, CORPUS_CASE_ID)
 
 const NS = 'lane4_ench_alu'
 const SCORE_OBJ = 'rs_lane4_ench_alu'
@@ -36,6 +38,12 @@ const BASE_ATTR_VALUE = 0
 const PROBE_SCALE = 1000
 
 const RUN_LIVE_PROBE = process.env.MC_LIVE_PROBES === 'true' && process.env.MC_OFFLINE !== 'true'
+afterAll(async () => {
+  if (!fs.existsSync(DATAPACK_DIR)) return
+  removeCorpusPack(DATAPACK_DIR, CORPUS_CASE_ID)
+  if (serverOnline) await mc.reload()
+}, 30_000)
+
 const describeLive = RUN_LIVE_PROBE ? describe : describe.skip
 
 if (!RUN_LIVE_PROBE) {
@@ -110,7 +118,7 @@ const PROBE_SOURCE = `
 `
 
 function writeFixture(source: string, namespace: string): void {
-  fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+  ensureCorpusPackWorkspace(MC_SERVER_DIR, CORPUS_CASE_ID)
   if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
     fs.writeFileSync(
       path.join(DATAPACK_DIR, 'pack.mcmeta'),

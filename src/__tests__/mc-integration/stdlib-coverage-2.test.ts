@@ -15,11 +15,13 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { compile } from '../../compile'
 import { MCTestClient } from '../../mc-test/client'
+import { ensureCorpusPackWorkspace, removeCorpusPack, resolveCorpusPackPath } from '../../mc-test/corpus-deployer'
 
 const MC_HOST = process.env.MC_HOST ?? 'localhost'
 const MC_PORT = parseInt(process.env.MC_PORT ?? '25561')
 const MC_SERVER_DIR = process.env.MC_SERVER_DIR ?? path.join(process.env.HOME!, 'mc-test-server')
-const DATAPACK_DIR = path.join(MC_SERVER_DIR, 'world', 'datapacks', 'redscript-test')
+const CORPUS_CASE_ID = 'stdlib-coverage-2'
+const DATAPACK_DIR = resolveCorpusPackPath(MC_SERVER_DIR, CORPUS_CASE_ID)
 
 const STDLIB_DIR = path.join(__dirname, '../../stdlib')
 
@@ -30,7 +32,7 @@ let mc: MCTestClient
 // Helper: compile and deploy a RedScript snippet with optional stdlib libs
 // ---------------------------------------------------------------------------
 function writeFixture(source: string, namespace: string, librarySources: string[] = []): void {
-  fs.mkdirSync(DATAPACK_DIR, { recursive: true })
+  ensureCorpusPackWorkspace(MC_SERVER_DIR, CORPUS_CASE_ID)
   if (!fs.existsSync(path.join(DATAPACK_DIR, 'pack.mcmeta'))) {
     fs.writeFileSync(
       path.join(DATAPACK_DIR, 'pack.mcmeta'),
@@ -380,6 +382,12 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 // calculus.mcrs
 // ---------------------------------------------------------------------------
+
+afterAll(async () => {
+  if (!fs.existsSync(DATAPACK_DIR)) return
+  removeCorpusPack(DATAPACK_DIR, CORPUS_CASE_ID)
+  if (serverOnline) await mc.reload()
+}, 30_000)
 
 describe('MC Integration — stdlib: calculus.mcrs', () => {
   test('deriv_forward(20000, 10000, 10000) == 10000 (slope = 1.0 ×10000)', async () => {
