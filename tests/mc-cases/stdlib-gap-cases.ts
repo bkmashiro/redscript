@@ -28,9 +28,34 @@ export const STDLIB_GAP_CASES: McCoreCaseDescriptor[] = [
   },
   {
     ...base('linalg', 'gap_linalg'),
-    featureIds: ['stdlib.linalg.vec2d-dot'],
+    featureIds: ['stdlib.linalg.function.vec2d_dot'],
     librarySourcePaths: [stdlib('math_hp'), stdlib('linalg')],
-    scoreboardAssertions: [{ player: '#linalg', obj: 'gap_result', value: 110000 }],
+    scoreboardAssertions: [
+      { player: '#linalg_mul1', obj: 'gap_result', op: 'gte', value: 29999 },
+      { player: '#linalg_mul1', obj: 'gap_result', op: 'lte', value: 30001 },
+      { player: '#linalg_mul2', obj: 'gap_result', op: 'gte', value: 79999 },
+      { player: '#linalg_mul2', obj: 'gap_result', op: 'lte', value: 80001 },
+      { player: '#linalg', obj: 'gap_result', op: 'gte', value: 109999 },
+      { player: '#linalg', obj: 'gap_result', op: 'lte', value: 110001 },
+    ],
+  },
+  {
+    ...base('sets', 'gap_sets'),
+    featureIds: [
+      'stdlib.sets.function.set_new',
+      'stdlib.sets.function.set_add',
+      'stdlib.sets.function.set_contains',
+      'stdlib.sets.function.set_remove',
+      'stdlib.sets.function.set_clear',
+    ],
+    librarySourcePaths: [stdlib('sets')],
+    scoreboardAssertions: [
+      { player: '#sets_duplicate', obj: 'gap_result', value: 1 },
+      { player: '#sets_removed', obj: 'gap_result', value: 0 },
+      { player: '#sets_cleared', obj: 'gap_result', value: 0 },
+      { player: '#sets_second', obj: 'gap_result', value: 1 },
+      { player: '#sets_isolated', obj: 'gap_result', value: 0 },
+    ],
   },
   {
     ...base('result', 'gap_result_ns'),

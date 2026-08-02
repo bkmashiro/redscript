@@ -4,9 +4,9 @@
   "ordering": "bytewise",
   "inventory": {
     "modules": 51,
-    "totalFunctionsAndMethods": 716,
+    "totalFunctionsAndMethods": 721,
     "publicRuntimeRequired": 663,
-    "internalFunctionsAndMethods": 53,
+    "internalFunctionsAndMethods": 58,
     "exportedConstants": 401
   },
   "runtimeRequired": [
@@ -725,6 +725,11 @@
     "stdlib.set_int.function.__set_int_store_shared_apply",
     "stdlib.set_int.function._set_int_array_add_unique",
     "stdlib.set_int.function._set_int_array_has",
+    "stdlib.sets.function.__set_add_apply",
+    "stdlib.sets.function.__set_clear_apply",
+    "stdlib.sets.function.__set_contains_apply",
+    "stdlib.sets.function.__set_new_apply",
+    "stdlib.sets.function.__set_remove_apply",
     "stdlib.signal.function._cos45",
     "stdlib.signal.function._sin45",
     "stdlib.vec.function._atan_init"
@@ -1134,6 +1139,55 @@
     "stdlib.tags.constant.ITEM_WOOL_CARPETS",
     "stdlib.timer.struct.Timer"
   ],
-  "scenarioMappings": {},
-  "expectedMissingRuntimeCount": 663
+  "scenarioMappings": {
+    "stdlib.linalg.function.vec2d_dot": {
+      "caseIds": [
+        "stdlib-gap.linalg"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.sets.function.set_add": {
+      "caseIds": [
+        "stdlib-gap.sets"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.sets.function.set_clear": {
+      "caseIds": [
+        "stdlib-gap.sets"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.sets.function.set_contains": {
+      "caseIds": [
+        "stdlib-gap.sets"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.sets.function.set_new": {
+      "caseIds": [
+        "stdlib-gap.sets"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.sets.function.set_remove": {
+      "caseIds": [
+        "stdlib-gap.sets"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    }
+  },
+  "expectedMissingRuntimeCount": 657
 }

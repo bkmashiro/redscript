@@ -1,50 +1,75 @@
-// sets.mcrs — Runtime Set implementation using NBT storage.
+// sets.mcrs — Runtime string-set helpers backed by NBT compounds.
 //
-// Sets are stored as NBT arrays with uniqueness enforced on add.
-// The actual implementation lives in the compiler — these are documentation stubs.
+// Each set is stored below `storage rs:sets` as a compound. Values become
+// child keys with value `1b`, so adding the same path-safe value twice is
+// naturally idempotent. Set handles and values must be valid NBT path segments.
 
 module library;
 
-/// Create a new empty set and return its unique set ID (string handle).
+fn __set_new_apply() {
+    raw("$data modify storage rs:strings __sret set value \"set_$(id)\"");
+    raw("$data modify storage rs:sets set_$(id) set value {}");
+}
+
+fn __set_add_apply() {
+    raw("$data modify storage rs:sets $(set).$(value) set value 1b");
+}
+
+fn __set_contains_apply() {
+    raw("$execute store success score $ret __OBJ__ if data storage rs:sets $(set).$(value)");
+}
+
+fn __set_remove_apply() {
+    raw("$data remove storage rs:sets $(set).$(value)");
+}
+
+fn __set_clear_apply() {
+    raw("$data modify storage rs:sets $(set) set value {}");
+}
+
+/// Create a new empty set and return its unique runtime handle.
 /// @since 1.1.0
-/// @returns A unique set ID used by all other set operations
-/// @example
-/// let s: string = set_new();
-/// set_add(s, "apple");
+/// @returns A unique path-safe set ID used by all other set operations
 fn set_new(): string {
-    raw("# compiler builtin — do not call directly");
+    raw("scoreboard players add $set_counter __OBJ__ 1");
+    raw("execute store result storage rs:macro_args id int 1 run scoreboard players get $set_counter __OBJ__");
+    raw("function __NS__:__set_new_apply with storage rs:macro_args");
+    // The macro helper writes the real string return value. Stop before the
+    // fallback return so the compiler-generated literal cannot overwrite it.
+    raw("return 1");
     return "";
 }
 
-/// Add a value to the set if it is not already present (no-op if already contained).
+/// Add a path-safe value to a set. Repeated adds are idempotent.
 /// @since 1.1.0
-/// @param set Set ID returned by `set_new`
-/// @param value Value to add
 fn set_add(set: string, value: string) {
-    raw("# compiler builtin — do not call directly");
+    raw("data modify storage rs:macro_args set set from storage rs:strings __sp0");
+    raw("data modify storage rs:macro_args value set from storage rs:strings __sp1");
+    raw("function __NS__:__set_add_apply with storage rs:macro_args");
 }
 
-/// Test whether a value exists in the set.
+/// Return 1 when a path-safe value exists, otherwise 0.
 /// @since 1.1.0
-/// @param set Set ID returned by `set_new`
-/// @param value Value to look up
-/// @returns 1 if the value is in the set, 0 otherwise
 fn set_contains(set: string, value: string): int {
-    raw("# compiler builtin — do not call directly");
+    raw("scoreboard players set $ret __OBJ__ 0");
+    raw("data modify storage rs:macro_args set set from storage rs:strings __sp0");
+    raw("data modify storage rs:macro_args value set from storage rs:strings __sp1");
+    raw("function __NS__:__set_contains_apply with storage rs:macro_args");
+    raw("return 1");
     return 0;
 }
 
-/// Remove a value from the set (no-op if not present).
+/// Remove a path-safe value. Missing values are a no-op.
 /// @since 1.1.0
-/// @param set Set ID returned by `set_new`
-/// @param value Value to remove
 fn set_remove(set: string, value: string) {
-    raw("# compiler builtin — do not call directly");
+    raw("data modify storage rs:macro_args set set from storage rs:strings __sp0");
+    raw("data modify storage rs:macro_args value set from storage rs:strings __sp1");
+    raw("function __NS__:__set_remove_apply with storage rs:macro_args");
 }
 
-/// Remove all values from the set, leaving it empty.
+/// Remove every value while preserving the set handle.
 /// @since 1.1.0
-/// @param set Set ID returned by `set_new`
 fn set_clear(set: string) {
-    raw("# compiler builtin — do not call directly");
+    raw("data modify storage rs:macro_args set set from storage rs:strings __sp0");
+    raw("function __NS__:__set_clear_apply with storage rs:macro_args");
 }

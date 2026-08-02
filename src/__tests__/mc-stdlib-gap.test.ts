@@ -18,6 +18,13 @@ const expectedFunctions: Record<string, string[]> = {
   // expr_eval is currently inlined; semantic + entry receipt are required, but no artifact marker is claimed.
   'stdlib-gap.expr': [],
   'stdlib-gap.linalg': ['data/gap_linalg/function/vec2d_dot.mcfunction'],
+  'stdlib-gap.sets': [
+    'data/gap_sets/function/set_new.mcfunction',
+    'data/gap_sets/function/set_add.mcfunction',
+    'data/gap_sets/function/set_contains.mcfunction',
+    'data/gap_sets/function/set_remove.mcfunction',
+    'data/gap_sets/function/set_clear.mcfunction',
+  ],
   'stdlib-gap.result': ['data/gap_result_ns/function/result_divide.mcfunction', 'data/gap_result_ns/function/result_value.mcfunction'],
   'stdlib-gap.state': ['data/gap_state/function/is_state.mcfunction'],
 }

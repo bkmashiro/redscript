@@ -1,0 +1,27 @@
+namespace gap_sets
+
+fn test_gap() {
+  let first: string = set_new()
+  let second: string = set_new()
+
+  set_add(first, "apple")
+  set_add(first, "apple")
+  let duplicate_present: int = set_contains(first, "apple")
+
+  set_remove(first, "apple")
+  let removed: int = set_contains(first, "apple")
+
+  set_add(first, "banana")
+  set_clear(first)
+  let cleared: int = set_contains(first, "banana")
+
+  set_add(second, "pear")
+  let second_present: int = set_contains(second, "pear")
+  let handles_isolated: int = set_contains(first, "pear")
+
+  scoreboard_set("#sets_duplicate", "gap_result", duplicate_present)
+  scoreboard_set("#sets_removed", "gap_result", removed)
+  scoreboard_set("#sets_cleared", "gap_result", cleared)
+  scoreboard_set("#sets_second", "gap_result", second_present)
+  scoreboard_set("#sets_isolated", "gap_result", handles_isolated)
+}

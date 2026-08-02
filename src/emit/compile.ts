@@ -302,7 +302,11 @@ function collectHIRFunctionCalls(fn: HIRFunction): Set<string> {
   const visitExpr = (expr: HIRExpr): void => {
     switch (expr.kind) {
       case 'call':
-        calls.add(expr.fn)
+        if (expr.fn === 'raw' && expr.args[0]?.kind === 'str_lit') {
+          collectRawFunctionReferences(expr.args[0].value).forEach(ref => calls.add(ref))
+        } else {
+          calls.add(expr.fn)
+        }
         expr.args.forEach(visitExpr)
         break
       case 'invoke':
@@ -313,10 +317,19 @@ function collectHIRFunctionCalls(fn: HIRFunction): Set<string> {
         calls.add(`${expr.type}::${expr.method}`)
         expr.args.forEach(visitExpr)
         break
-      case 'binary':
+      case 'binary': {
+        const doubleIntrinsicByOperator: Readonly<Record<string, string>> = {
+          '+': 'double_add',
+          '-': 'double_sub',
+          '*': 'double_mul',
+          '/': 'double_div',
+        }
+        const intrinsic = doubleIntrinsicByOperator[expr.op]
+        if (intrinsic) calls.add(intrinsic)
         visitExpr(expr.left)
         visitExpr(expr.right)
         break
+      }
       case 'unary':
         visitExpr(expr.operand)
         break

@@ -111,7 +111,7 @@ describe('double arithmetic intrinsics', () => {
     `
     const result = compile(source, { namespace: 'doubletest' })
     const all = getAllMcContent(result.files)
-    expect(all).toContain('function math_hp:double_add')
+    expect(all).toContain('function doubletest:double_add')
     expect(all).toContain('rs:d __dp0')
     expect(all).toContain('rs:d __dp1')
   })
@@ -126,7 +126,7 @@ describe('double arithmetic intrinsics', () => {
     `
     const result = compile(source, { namespace: 'doubletest' })
     const all = getAllMcContent(result.files)
-    expect(all).toContain('function math_hp:double_div')
+    expect(all).toContain('function doubletest:double_div')
     expect(all).toContain('rs:d __dp0')
     expect(all).toContain('rs:d __dp1')
   })
@@ -141,7 +141,7 @@ describe('double arithmetic intrinsics', () => {
     `
     const result = compile(source, { namespace: 'doubletest' })
     const all = getAllMcContent(result.files)
-    expect(all).toContain('function math_hp:double_sub')
+    expect(all).toContain('function doubletest:double_sub')
   })
 
   test('double * double lowers to math_hp:double_mul call', () => {
@@ -154,7 +154,7 @@ describe('double arithmetic intrinsics', () => {
     `
     const result = compile(source, { namespace: 'doubletest' })
     const all = getAllMcContent(result.files)
-    expect(all).toContain('function math_hp:double_mul')
+    expect(all).toContain('function doubletest:double_mul')
   })
 
   test('double + double result readable as fixed (10000.0 scale back)', () => {
@@ -169,7 +169,7 @@ describe('double arithmetic intrinsics', () => {
     const all = getAllMcContent(result.files)
     expect(all).toContain('10000.0')
     expect(all).toContain('rs:d')
-    expect(all).toContain('function math_hp:double_add')
+    expect(all).toContain('function doubletest:double_add')
   })
 
   test('double + double via literals lowers to math_hp:double_add', () => {
@@ -180,7 +180,7 @@ describe('double arithmetic intrinsics', () => {
     `
     const result = compile(source, { namespace: 'doubletest' })
     const all = getAllMcContent(result.files)
-    expect(all).toContain('function math_hp:double_add')
+    expect(all).toContain('function doubletest:double_add')
   })
 })
 
@@ -214,8 +214,9 @@ describe('double parameter passing', () => {
     const all = getAllMcContent(result.files)
     // Caller must copy NBT path directly — no execute store with 10000 for the arg
     expect(all).toContain('data modify storage rs:d __dp0 set from storage rs:d')
-    // Callee reads __dp0 as double
-    expect(all).toContain('data get storage rs:d __dp0')
+    // Callee snapshots __dp0 before any arithmetic/nested call can reuse it.
+    expect(all).toContain('data modify storage rs:d doubletest_take_double_d_0 set from storage rs:d __dp0')
+    expect(all).toContain('data get storage rs:d doubletest_take_double_d_0')
   })
 
   test('double param returning double uses NBT round-trip', () => {
@@ -262,6 +263,68 @@ describe('double parameter passing', () => {
     const caller = result.files.find(file => file.path.endsWith('/t.mcfunction'))?.content ?? ''
     expect(caller).toContain('data modify storage rs:d __dp0 set value 1.5d')
     expect(caller).not.toMatch(/__dp0 double 0\.0001 run scoreboard players get/)
+  })
+
+  test('double let initialized from a function call stores the scoped call result', () => {
+    const source = `
+      @no-inline fn identity(d: double): double { return d; }
+      fn t() {
+        let value: double = identity(1.5d);
+        let scaled: int = value as int;
+        scoreboard_set("#value", "double_result", scaled);
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const caller = result.files.find(file => file.path.endsWith('/t.mcfunction'))?.content ?? ''
+    expect(caller).toMatch(/function doubletest:identity\nscoreboard players operation (\$t_t\d+) __doubletest = \$ret __doubletest\nexecute store result storage rs:d doubletest_t_value_\d+ double 0\.0001 run scoreboard players get \1 __doubletest/)
+    expect(caller).not.toMatch(/scoreboard players get \$t\d+ __doubletest/)
+  })
+
+  test('double expression arguments use scoped temps when written to ABI storage', () => {
+    const source = `
+      fn identity(d: double): double { return d; }
+      fn t(a: fixed, b: fixed): double { return identity((a + b) as double); }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const caller = result.files.find(file => file.path.endsWith('/t.mcfunction'))?.content ?? ''
+    expect(caller).toMatch(/execute store result storage rs:d __dp0 double 0\.0001 run scoreboard players get \$t_t\d+ __doubletest/)
+    expect(caller).not.toMatch(/scoreboard players get \$t\d+ __doubletest/)
+  })
+
+  test('double callees snapshot ABI slots before arithmetic clobbers scratch storage', () => {
+    const source = `
+      @no-inline
+      fn dot(ax: double, ay: double, bx: double, by: double): double {
+        let x: double = ax * bx;
+        let y: double = ay * by;
+        return x + y;
+      }
+    `
+    const result = compile(source, { namespace: 'doubletest' })
+    const callee = result.files.find(file => file.path.endsWith('/dot.mcfunction'))?.content ?? ''
+    for (const [name, slot] of [['ax', 0], ['ay', 1], ['bx', 2], ['by', 3]] as const) {
+      expect(callee).toContain(`data modify storage rs:d doubletest_dot_${name}_`)
+      expect(callee).toContain(`set from storage rs:d __dp${slot}`)
+    }
+  })
+
+  test('injected math_hp artifacts follow the compile namespace and double-operator DCE edges', () => {
+    const mathHp = fs.readFileSync(path.join(__dirname, '../stdlib/math_hp.mcrs'), 'utf8')
+    const result = compile(`
+      @no-inline
+      fn dot(a: double, b: double): double { let x: double = a * b; let y: double = a; return x + y; }
+      @keep fn entry(): double { return dot(2.0d, 3.0d); }
+    `, { namespace: 'doubletest', librarySources: [mathHp] })
+    const caller = result.files.find(file => file.path.endsWith('/dot.mcfunction'))?.content ?? ''
+    const paths = new Set(result.files.map(file => file.path))
+    expect(caller).toContain('function doubletest:double_mul')
+    expect(caller).toContain('function doubletest:double_add')
+    expect(paths.has('data/doubletest/function/double_mul.mcfunction')).toBe(true)
+    expect(paths.has('data/doubletest/function/double_add.mcfunction')).toBe(true)
+    expect(paths.has('data/doubletest/function/__dmul_apply_scale.mcfunction')).toBe(true)
+    expect(paths.has('data/doubletest/function/__dadd_tp_to.mcfunction')).toBe(true)
+    const loadTag = result.files.find(file => file.path === 'data/minecraft/tags/function/load.json')?.content ?? ''
+    expect(loadTag).toContain('doubletest:init_double_add')
   })
 })
 
@@ -330,8 +393,12 @@ describe('double_add — entity position trick', () => {
     `
     const result = compile(source, { namespace: 'daddtest' })
     const all = getAllMcContent(result.files)
+    const loadTag = result.files.find(file => file.path === 'data/minecraft/tags/function/load.json')?.content ?? ''
     expect(all).toContain('rs_math_hp_marker')
     expect(all).toContain('area_effect_cloud')
+    expect(all).toContain('UUID:[I;-1253107121,-676577278,-1856095190,1006041252]')
+    expect(all).not.toContain('UUID:[I;-1238834609,-698744574,-1879932794,1006600372]')
+    expect(loadTag).toContain('daddtest:init_double_add')
   })
 })
 
@@ -375,10 +442,12 @@ describe('double_mul — macro-scale double path', () => {
     `
     const result = compile(source, { namespace: 'dmultest2' })
     const all = getAllMcContent(result.files)
+    const dmul = result.files.find(file => file.path === 'data/dmultest2/function/double_mul.mcfunction')?.content ?? ''
     // The second double operand crosses only a single ×10000 score boundary to
     // produce a command-parseable macro scale; it must not multiply two scores.
-    expect(all).toContain('execute store result score $dmul_f __rs_math_hp run data get storage rs:d __dp1 10000.0')
-    expect(all).toContain('execute store result storage rs:math_hp __dmul_args.scale double 0.00000001 run scoreboard players get $dmul_f __rs_math_hp')
+    expect(dmul).toContain('execute store result score $dmul_f __dmultest2 run data get storage rs:d __dp1 10000')
+    expect(dmul).toContain('execute store result storage rs:math_hp __dmul_args.scale double 0.00000001 run scoreboard players get $dmul_f __dmultest2')
+    expect(dmul).not.toContain('__rs_math_hp')
     expect(all).toContain('function dmultest2:__dmul_apply_scale with storage rs:math_hp __dmul_args')
     expect(all).toContain('$execute store result storage rs:d __dp0 double $(scale) run data get storage rs:d __dp0 10000')
     expect(all).not.toContain('$dmul_a __rs_math_hp *= $dmul_b __rs_math_hp')

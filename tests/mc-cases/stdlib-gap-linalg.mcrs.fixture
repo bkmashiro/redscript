@@ -1,7 +1,14 @@
 namespace gap_linalg
 
 fn test_gap() {
+  let first: double = vec2d_dot_term(1.0d, 3.0d)
+  let second: double = vec2d_dot_term(2.0d, 4.0d)
   let value: double = vec2d_dot(1.0d, 2.0d, 3.0d, 4.0d)
-  let scaled: int = value as int
-  scoreboard_set("#linalg", "gap_result", scaled)
+  scoreboard_set("#linalg_mul1", "gap_result", first as int)
+  scoreboard_set("#linalg_mul2", "gap_result", second as int)
+  scoreboard_set("#linalg", "gap_result", value as int)
+}
+
+fn vec2d_dot_term(a: double, b: double): double {
+  return a * b
 }

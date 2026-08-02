@@ -862,10 +862,17 @@ function lowerFunction(
       return
     }
     if (p.type.kind === 'named' && p.type.name === 'double') {
-      // double param: passed via NBT storage rs:d __dp<i> instead of scoreboard
-      const path = `__dp${doubleParamSlot++}`
-      ctx.doubleVars.set(p.name, path)
-      // No scoreboard param slot; callee reads from rs:d __dp<i> via doubleVars
+      // Snapshot the global ABI slot at function entry. Double arithmetic and
+      // nested calls reuse __dp0/__dp1 as scratch, so mapping the source
+      // parameter directly to that storage would clobber later reads.
+      const abiPath = `__dp${doubleParamSlot++}`
+      const localPath = ctx.freshDoubleVar(p.name)
+      ctx.emit({
+        kind: 'call',
+        dst: null,
+        fn: `__raw:data modify storage rs:d ${localPath} set from storage rs:d ${abiPath}`,
+        args: [],
+      })
       return
     }
     if (p.type.kind === 'named' && (p.type.name === 'string' || p.type.name === 'format_string')) {
@@ -1247,17 +1254,13 @@ function lowerStmt(
       } else if (stmt.type?.kind === 'named' && stmt.type.name === 'double') {
         // double variable: store in NBT storage rs:d
         const path = ctx.freshDoubleVar(stmt.name)
-        const ns = ctx.getNamespace()
         if (stmt.init.kind === 'double_lit') {
           // Store the double literal directly into NBT
           ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d ${path} set value ${stmt.init.value}d`, args: [] })
         } else {
           // Lower init as fixed (×10000) then convert to double in NBT
           const initOp = lowerExpr(stmt.init, ctx, scope)
-          const initTemp = ctx.freshTemp()
-          ctx.emit({ kind: 'copy', dst: initTemp, src: initOp })
-          // execute store result storage rs:d <path> double 0.0001 run scoreboard players get $<t> __<ns>
-          ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result storage rs:d ${path} double 0.0001 run scoreboard players get $${initTemp} __${ns}`, args: [] })
+          ctx.emit({ kind: 'nbt_write', ns: 'rs:d', path, type: 'double', scale: 0.0001, src: initOp })
         }
         // Store a placeholder temp in scope (value = 0, not used directly for reads)
         const t = ctx.freshTemp()
@@ -1412,6 +1415,24 @@ function lowerStmt(
           const val = lowerExpr(stmt.value.elements[i], ctx, scope)
           ctx.emit({ kind: 'copy', dst: `__rf_${i}`, src: val })
         }
+        ctx.terminate({ kind: 'return', value: null })
+      } else if (stmt.value && (
+        stmt.value.kind === 'str_lit' ||
+        stmt.value.kind === 'assign' ||
+        (stmt.value.kind === 'ident' && ctx.stringVars.has(stmt.value.name)) ||
+        (stmt.value.kind === 'call' && (() => {
+          const returnType = ctx.hirFunctions.get(stmt.value.fn)?.returnType
+          return returnType?.kind === 'named' && (returnType.name === 'string' || returnType.name === 'format_string')
+        })())
+      )) {
+        const stringPath = lowerStringExprToPath(stmt.value, ctx, scope, '__sret_value')
+        if (!stringPath) throw new Error('String return expression did not lower to storage')
+        ctx.emit({
+          kind: 'call',
+          dst: null,
+          fn: `__raw:data modify storage rs:strings __sret set from storage rs:strings ${stringPath}`,
+          args: [],
+        })
         ctx.terminate({ kind: 'return', value: null })
       } else if (stmt.value?.kind === 'ident') {
         // Check if returning an option struct var
@@ -2225,10 +2246,10 @@ function lowerExpr(
 
       // Double arithmetic intrinsics: double op double → call math_hp:double_add/sub/mul/div
       const doubleArithOps: Record<string, string> = {
-        '+': 'math_hp:double_add',
-        '-': 'math_hp:double_sub',
-        '*': 'math_hp:double_mul',
-        '/': 'math_hp:double_div',
+        '+': 'double_add',
+        '-': 'double_sub',
+        '*': 'double_mul',
+        '/': 'double_div',
       }
       if (expr.op in doubleArithOps && isDoubleExpr(expr.left, ctx) && isDoubleExpr(expr.right, ctx)) {
         const ns = ctx.getNamespace()
@@ -2238,7 +2259,7 @@ function lowerExpr(
         ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d __dp0 set from storage rs:d ${leftPath}`, args: [] })
         ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d __dp1 set from storage rs:d ${rightPath}`, args: [] })
         // Call the intrinsic
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:function ${doubleArithOps[expr.op]}`, args: [] })
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:function ${ns}:${doubleArithOps[expr.op]}`, args: [] })
         // Result is in rs:d __dp0 — register as a new double var and read back as ×10000 fixed
         const resultPath = ctx.freshDoubleVar('dres')
         ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage rs:d ${resultPath} set from storage rs:d __dp0`, args: [] })
@@ -3160,7 +3181,6 @@ function lowerExpr(
             p => p.type.kind === 'named' && p.type.name === 'double'
           )
           if (hasDoubleParam) {
-            const ns = ctx.getNamespace()
             const nonDoubleArgs: Operand[] = []
             let doubleSlot = 0
             for (let i = 0; i < targetParams.length && i < expr.args.length; i++) {
@@ -3178,9 +3198,7 @@ function lowerExpr(
                 } else {
                   // Arg is an expression — lower it as fixed (×10000), store as double
                   const argOp = lowerExpr(arg, ctx, scope)
-                  const tmp = ctx.freshTemp()
-                  ctx.emit({ kind: 'copy', dst: tmp, src: argOp })
-                  ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result storage rs:d __dp${doubleSlot} double 0.0001 run scoreboard players get $${tmp} __${ns}`, args: [] })
+                  ctx.emit({ kind: 'nbt_write', ns: 'rs:d', path: `__dp${doubleSlot}`, type: 'double', scale: 0.0001, src: argOp })
                 }
                 doubleSlot++
               } else {
@@ -3456,11 +3474,8 @@ function lowerExpr(
       if (targetName === 'double') {
         // expr as double: evaluate inner as fixed (×10000), store as double in NBT
         const innerOp = lowerExpr(expr.expr, ctx, scope)
-        const innerTemp = ctx.freshTemp()
-        ctx.emit({ kind: 'copy', dst: innerTemp, src: innerOp })
         const path = ctx.freshDoubleVar(`cast`)
-        // execute store result storage rs:d <path> double 0.0001 run scoreboard players get $<t> __<ns>
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result storage rs:d ${path} double 0.0001 run scoreboard players get $${innerTemp} __${ns}`, args: [] })
+        ctx.emit({ kind: 'nbt_write', ns: 'rs:d', path, type: 'double', scale: 0.0001, src: innerOp })
         // Return a fresh temp that reads the stored double back as fixed ×10000 via nbt_read
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'nbt_read', dst: t, ns: 'rs:d', path, scale: 10000.0 })
@@ -3546,11 +3561,8 @@ function lowerDoubleExprToPath(expr: HIRExpr, ctx: FnContext, scope: Map<string,
   }
   // Fallback: lower as fixed (×10000), then convert to double NBT
   const op = lowerExpr(expr, ctx, scope)
-  const tmp = ctx.freshTemp()
-  ctx.emit({ kind: 'copy', dst: tmp, src: op })
-  const ns = ctx.getNamespace()
   const path = ctx.freshDoubleVar('dtmp')
-  ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute store result storage rs:d ${path} double 0.0001 run scoreboard players get $${tmp} __${ns}`, args: [] })
+  ctx.emit({ kind: 'nbt_write', ns: 'rs:d', path, type: 'double', scale: 0.0001, src: op })
   return path
 }
 
@@ -3845,6 +3857,25 @@ function lowerStringExprToPath(
         args: [],
       })
       return dstPath
+    }
+    case 'call': {
+      const calleeReturn = ctx.hirFunctions.get(expr.fn)?.returnType
+      const returnsString = calleeReturn?.kind === 'named' && (
+        calleeReturn.name === 'string' || calleeReturn.name === 'format_string'
+      )
+      if (!returnsString) return null
+      // String-return ABI: the callee writes rs:strings __sret. Reuse the
+      // normal call lowering for parameter transport, then snapshot the global
+      // return slot immediately so a nested call cannot overwrite it.
+      lowerExpr(expr, ctx, scope)
+      const path = ctx.freshStringVar(hint)
+      ctx.emit({
+        kind: 'call',
+        dst: null,
+        fn: `__raw:data modify storage rs:strings ${path} set from storage rs:strings __sret`,
+        args: [],
+      })
+      return path
     }
     default:
       return null
