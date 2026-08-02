@@ -16,13 +16,43 @@ const base = (id: string, namespace: string): Pick<McCoreCaseDescriptor, 'id' | 
 export const STDLIB_GAP_CASES: McCoreCaseDescriptor[] = [
   {
     ...base('advanced', 'gap_advanced'),
-    featureIds: ['stdlib.advanced.fib'],
+    featureIds: ['stdlib.advanced.function.fib'],
     librarySourcePaths: [stdlib('math'), stdlib('advanced')],
     scoreboardAssertions: [{ player: '#advanced', obj: 'gap_result', value: 55 }],
   },
   {
+    ...base('bits', 'gap_bits'),
+    featureIds: [
+      'stdlib.bits.function.bit_and',
+      'stdlib.bits.function.bit_clear',
+      'stdlib.bits.function.bit_get',
+      'stdlib.bits.function.bit_not',
+      'stdlib.bits.function.bit_or',
+      'stdlib.bits.function.bit_set',
+      'stdlib.bits.function.bit_shl',
+      'stdlib.bits.function.bit_shr',
+      'stdlib.bits.function.bit_toggle',
+      'stdlib.bits.function.bit_xor',
+      'stdlib.bits.function.popcount',
+    ],
+    librarySourcePaths: [stdlib('bits')],
+    scoreboardAssertions: [
+      { player: '#bit_and', obj: 'gap_result', value: 8 },
+      { player: '#bit_or', obj: 'gap_result', value: 14 },
+      { player: '#bit_xor', obj: 'gap_result', value: 6 },
+      { player: '#bit_not', obj: 'gap_result', value: 2147483647 },
+      { player: '#bit_shl', obj: 'gap_result', value: 16 },
+      { player: '#bit_shr', obj: 'gap_result', value: 4 },
+      { player: '#bit_get', obj: 'gap_result', value: 1 },
+      { player: '#bit_set', obj: 'gap_result', value: 4 },
+      { player: '#bit_clear', obj: 'gap_result', value: 0 },
+      { player: '#bit_toggle', obj: 'gap_result', value: 7 },
+      { player: '#popcount', obj: 'gap_result', value: 8 },
+    ],
+  },
+  {
     ...base('expr', 'gap_expr'),
-    featureIds: ['stdlib.expr.expr-eval'],
+    featureIds: ['stdlib.expr.function.expr_eval'],
     librarySourcePaths: [stdlib('math'), stdlib('expr')],
     scoreboardAssertions: [{ player: '#expr', obj: 'gap_result', value: 40000 }],
   },
@@ -59,13 +89,19 @@ export const STDLIB_GAP_CASES: McCoreCaseDescriptor[] = [
   },
   {
     ...base('result', 'gap_result_ns'),
-    featureIds: ['stdlib.result.divide-value'],
+    featureIds: [
+      'stdlib.result.function.result_divide',
+      'stdlib.result.function.result_value',
+    ],
     librarySourcePaths: [stdlib('result')],
     scoreboardAssertions: [{ player: '#result', obj: 'gap_result', value: 5 }],
   },
   {
     ...base('state', 'gap_state'),
-    featureIds: ['stdlib.state.set-is-state'],
+    featureIds: [
+      'stdlib.state.function.set_state',
+      'stdlib.state.function.is_state',
+    ],
     librarySourcePaths: [stdlib('state')],
     setupCommands: [
       'kill @e[tag=gap_state_target]',

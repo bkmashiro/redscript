@@ -1140,9 +1140,45 @@
     "stdlib.timer.struct.Timer"
   ],
   "scenarioMappings": {
+    "stdlib.advanced.function.fib": {
+      "caseIds": [
+        "stdlib-gap.advanced"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.expr.function.expr_eval": {
+      "caseIds": [
+        "stdlib-gap.expr"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.linalg.function.vec2d_dot": {
       "caseIds": [
         "stdlib-gap.linalg"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.result.function.result_divide": {
+      "caseIds": [
+        "stdlib-gap.result"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.result.function.result_value": {
+      "caseIds": [
+        "stdlib-gap.result"
       ],
       "channels": [
         "stable-1.21.4",
@@ -1193,7 +1229,25 @@
         "stable-1.21.4",
         "paper-26.2"
       ]
+    },
+    "stdlib.state.function.is_state": {
+      "caseIds": [
+        "stdlib-gap.state"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.state.function.set_state": {
+      "caseIds": [
+        "stdlib-gap.state"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
     }
   },
-  "expectedMissingRuntimeCount": 657
+  "expectedMissingRuntimeCount": 651
 }

@@ -1,0 +1,15 @@
+namespace gap_bits
+
+fn test_gap() {
+  scoreboard_set("#bit_and", "gap_result", bit_and(12, 10))
+  scoreboard_set("#bit_or", "gap_result", bit_or(12, 10))
+  scoreboard_set("#bit_xor", "gap_result", bit_xor(12, 10))
+  scoreboard_set("#bit_not", "gap_result", bit_not(0))
+  scoreboard_set("#bit_shl", "gap_result", bit_shl(1, 4))
+  scoreboard_set("#bit_shr", "gap_result", bit_shr(16, 2))
+  scoreboard_set("#bit_get", "gap_result", bit_get(8, 3))
+  scoreboard_set("#bit_set", "gap_result", bit_set(0, 2))
+  scoreboard_set("#bit_clear", "gap_result", bit_clear(8, 3))
+  scoreboard_set("#bit_toggle", "gap_result", bit_toggle(5, 1))
+  scoreboard_set("#popcount", "gap_result", popcount(255))
+}

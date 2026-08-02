@@ -2,6 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 import { buildStdlibRuntimeCatalog } from '../mc-test/runtime-coverage-catalog'
+import { STDLIB_GAP_CASES } from '../../tests/mc-cases/stdlib-gap-cases'
 
 const STDLIB_DIR = path.resolve(process.cwd(), 'src', 'stdlib')
 
@@ -35,6 +36,17 @@ describe('runtime coverage source catalog', () => {
       expect(entry.requiresRuntimeProbe).toBe(
         (entry.kind === 'function' || entry.kind === 'method') && !entry.name.startsWith('_'),
       )
+    }
+  })
+
+  it('uses canonical catalog ids for every stdlib oracle claim', () => {
+    const runtimeRequired = new Set(
+      buildStdlibRuntimeCatalog(STDLIB_DIR).entries
+        .filter(entry => entry.requiresRuntimeProbe)
+        .map(entry => entry.id),
+    )
+    for (const scenario of STDLIB_GAP_CASES) {
+      for (const featureId of scenario.featureIds ?? []) expect(runtimeRequired.has(featureId)).toBe(true)
     }
   })
 

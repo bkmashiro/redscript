@@ -33,7 +33,7 @@ Six isolated stdlib representative cases passed on both managed Paper channels:
 | stable | `1.21.4-232-12d8fe0` | 6/6 | disposable root removed | `mcrs-runtime-stdlib-gap-stable-1.21.4.json` |
 | compatibility | `26.2-87-a95ae8d` | 6/6 | disposable root removed | `mcrs-runtime-stdlib-gap-paper-26.2.json` |
 
-The cases cover representative behavior from `advanced`, `expr`, `linalg`, `sets`, `result`, and `state`. The mapped public API scope is exactly `linalg.vec2d_dot` plus `sets.set_new`, `set_add`, `set_contains`, `set_remove`, and `set_clear`. The linalg case asserts both multiplication terms and the final dot product with bounded double-to-fixed conversion tolerance. The sets case asserts unique handles, duplicate-add idempotence, membership, removal, and clear semantics. Both cases also require emitted-function marker readback.
+The cases cover representative behavior from `advanced`, `expr`, `linalg`, `sets`, `result`, and `state`. The mapped public API scope is exactly `advanced.fib`, `expr.expr_eval`, `linalg.vec2d_dot`, `result.result_divide`, `result.result_value`, `state.set_state`, `state.is_state`, plus `sets.set_new`, `set_add`, `set_contains`, `set_remove`, and `set_clear`. The linalg case asserts both multiplication terms and the final dot product with bounded double-to-fixed conversion tolerance. The sets case asserts unique handles, duplicate-add idempotence, membership, removal, and clear semantics. Every case requires emitted-function marker readback.
 
 This is representative module evidence, not qualification of every declaration in those modules.
 
@@ -41,7 +41,7 @@ This is representative module evidence, not qualification of every declaration i
 
 ### Remaining stdlib scope
 
-The checked-in stdlib catalog records 51 modules, 721 total functions/methods, 58 internal functions, 663 public runtime-required probes, and 401 constants. Exactly 6 public APIs have scenario mappings on both channels; 657 remain explicitly unmapped. A representative case does not qualify every declaration in its module, and direct fixture references are not promoted to runtime proof.
+The checked-in stdlib catalog records 51 modules, 721 total functions/methods, 58 internal functions, 663 public runtime-required probes, and 401 constants. Exactly 12 public APIs have scenario mappings on both channels; 651 remain explicitly unmapped. A representative case does not qualify every declaration in its module, and direct fixture references are not promoted to runtime proof.
 
 ### Managed player lane
 
