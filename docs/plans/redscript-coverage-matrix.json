@@ -42,7 +42,8 @@
         "stdlib-source-present",
         "mcruntime-e2e",
         "mc-integration-offline-skippable",
-        "compile-all-static-smoke"
+        "compile-all-static-smoke",
+        "dual-paper-semantic"
       ],
       "evidenceFiles": [
         "src/__tests__/e2e/stdlib-e2e.test.ts",
@@ -56,7 +57,11 @@
       "liveOracleCandidate": {
         "priority": "none",
         "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
-      }
+      },
+      "evidence": [
+        "tests/mc-cases/stdlib-gap-bigint-add.mcrs.fixture",
+        "tests/mc-cases/stdlib-gap-bigint-sub.mcrs.fixture"
+      ]
     },
     {
       "module": "bits",

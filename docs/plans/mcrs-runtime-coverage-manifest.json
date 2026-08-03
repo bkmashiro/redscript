@@ -1145,6 +1145,33 @@
         "paper-26.2"
       ]
     },
+    "stdlib.bigint.function.bigint_add": {
+      "caseIds": [
+        "stdlib-gap.bigint-add"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bigint.function.bigint_base": {
+      "caseIds": [
+        "stdlib-gap.bigint-add"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.bigint.function.bigint_sub": {
+      "caseIds": [
+        "stdlib-gap.bigint-sub"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.bits.function.bit_and": {
       "caseIds": [
         "stdlib-gap.bits"
@@ -1839,5 +1866,5 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 581
+  "expectedMissingRuntimeCount": 578
 }
