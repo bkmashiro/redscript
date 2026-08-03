@@ -141,15 +141,6 @@ export const EVENT_RUNTIME_MANIFESTS = [
     executorContext: { kind: 'entity', entityType: 'Player' },
     runtimeAssets: ['src/stdlib/events.mcrs'],
   },
-  {
-    name: 'ItemUse',
-    tag: 'rs.just_used_item',
-    handlerTag: 'rs:on_item_use',
-    params: ['player: Player'],
-    detection: 'scoreboard',
-    executorContext: { kind: 'entity', entityType: 'Player' },
-    runtimeAssets: ['src/stdlib/events.mcrs'],
-  },
 ] as const
 
 export function eventTypeFromManifest(manifest: EventRuntimeManifest): EventRuntimeSpec {

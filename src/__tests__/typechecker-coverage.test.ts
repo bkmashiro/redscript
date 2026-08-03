@@ -573,6 +573,15 @@ fn handle(player: Player) {}
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].message).toContain("Unknown event type 'BlockBreak'")
   })
+
+  it('rejects removed ItemUse event instead of compiling a partial implementation', () => {
+    const errors = typeCheck(`
+@on(ItemUse)
+fn handle(player: Player) {}
+`)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].message).toContain("Unknown event type 'ItemUse'")
+  })
 })
 
 // ---------------------------------------------------------------------------

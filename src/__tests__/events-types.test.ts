@@ -15,11 +15,11 @@ describe('events/types — isEventTypeName', () => {
     expect(isEventTypeName('PlayerDeath')).toBe(true)
     expect(isEventTypeName('PlayerJoin')).toBe(true)
     expect(isEventTypeName('EntityKill')).toBe(true)
-    expect(isEventTypeName('ItemUse')).toBe(true)
   })
 
-  test('returns false for unsupported BlockBreak runtime event', () => {
+  test('returns false for unsupported runtime events', () => {
     expect(isEventTypeName('BlockBreak')).toBe(false)
+    expect(isEventTypeName('ItemUse')).toBe(false)
   })
 
   test('returns false for unknown strings', () => {
@@ -49,11 +49,6 @@ describe('events/types — getEventParamSpecs', () => {
     expect(specs[0].name).toBe('player')
   })
 
-  test('ItemUse returns player param', () => {
-    const specs = getEventParamSpecs('ItemUse')
-    expect(specs).toHaveLength(1)
-    expect(specs[0].name).toBe('player')
-  })
 
   test('all event types have tag, params, detection', () => {
     for (const [name, info] of Object.entries(EVENT_TYPES)) {
@@ -69,7 +64,6 @@ describe('events/types — handler tag registry', () => {
     expect(getEventHandlerTagId('PlayerDeath')).toBe('rs:on_player_death')
     expect(getEventHandlerTagId('PlayerJoin')).toBe('rs:on_player_join')
     expect(getEventHandlerTagId('EntityKill')).toBe('rs:on_entity_kill')
-    expect(getEventHandlerTagId('ItemUse')).toBe('rs:on_item_use')
   })
 })
 

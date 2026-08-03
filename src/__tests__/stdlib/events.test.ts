@@ -20,4 +20,15 @@ describe('stdlib/events.mcrs', () => {
     const hasLoad = r.files.some(f => f.path.includes('load') || f.path.includes('events'))
     expect(hasLoad).toBe(true)
   })
+
+  test('tracks reconnects and does not emit the removed generic ItemUse detector', () => {
+    const r = compile(SRC + '\nfn _noop(): int { return 0; }', { namespace: 'test' })
+    const output = r.files.map(file => file.content).join('\n')
+    expect(output).toContain('minecraft.custom:minecraft.leave_game')
+    expect(output).toContain('scores={rs.left=1..}')
+    expect(output).toContain('execute unless score #last rs.events = #now rs.events')
+    expect(output).toContain('scoreboard players operation #last rs.events = #now rs.events')
+    expect(output).not.toContain('rs.item_use')
+    expect(output).not.toContain('on_item_use')
+  })
 })

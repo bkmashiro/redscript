@@ -13,7 +13,7 @@ import {
   prepareServerRoot,
 } from './managed-paper'
 
-export type CorpusSuite = 'core' | 'stdlib-gap' | 'player' | 'integration'
+export type CorpusSuite = 'core' | 'stdlib-gap' | 'events' | 'player' | 'integration'
 
 export interface CorpusRunOptions {
   readonly channel: string
@@ -122,10 +122,15 @@ async function stopTestBot(bot: ManagedBotProcess | undefined): Promise<void> {
 function suiteArgs(suite: CorpusSuite): string[] {
   if (suite === 'core') return ['run', 'test:mc-core:live']
   if (suite === 'stdlib-gap') return ['run', 'test:mc-stdlib-gap:live']
+  if (suite === 'events') {
+    return [
+      'test', '--', '--selectProjects', 'mc-integration', '--runInBand', '--runTestsByPath',
+      'src/__tests__/mc-integration/event-runtime.test.ts', '--testTimeout=120000',
+    ]
+  }
   if (suite === 'player') {
     return [
       'test', '--', '--selectProjects', 'mc-integration', '--runInBand', '--runTestsByPath',
-      'src/__tests__/mc-integration/item-entity-events.test.ts',
       'src/__tests__/mc-integration/stdlib-coverage-6.test.ts', '--testTimeout=120000',
     ]
   }
@@ -177,7 +182,7 @@ export async function runManagedCorpus(options: CorpusRunOptions): Promise<Corpu
     const started = await paper.start()
     paperVersion = started.status.version
     await client.fullReset()
-    if (options.suites.includes('player')) bot = await startTestBot(options.channel)
+    if (options.suites.includes('player') || options.suites.includes('events')) bot = await startTestBot(options.channel)
     for (const suite of options.suites) {
       const args = suiteArgs(suite)
       const result = await runChild(args, {
@@ -186,7 +191,7 @@ export async function runManagedCorpus(options: CorpusRunOptions): Promise<Corpu
         MC_PORT: String(DEFAULT_HARNESS_PORT),
         MC_SERVER_DIR: root,
         MC_INTEGRATION_REQUIRE_ONLINE: 'true',
-        MC_INTEGRATION_REQUIRE_BOT: suite === 'player' ? 'true' : process.env.MC_INTEGRATION_REQUIRE_BOT,
+        MC_INTEGRATION_REQUIRE_BOT: suite === 'player' || suite === 'events' ? 'true' : process.env.MC_INTEGRATION_REQUIRE_BOT,
         MC_CORE_INSTRUMENT_COVERAGE: suite === 'core' ? 'true' : process.env.MC_CORE_INSTRUMENT_COVERAGE,
         MC_STDLIB_GAP_INSTRUMENT_COVERAGE: suite === 'stdlib-gap' ? 'true' : process.env.MC_STDLIB_GAP_INSTRUMENT_COVERAGE,
       })
@@ -237,8 +242,8 @@ export async function runManagedCorpus(options: CorpusRunOptions): Promise<Corpu
 
 function parseSuites(value: string | undefined): CorpusSuite[] {
   const suites = (value ?? 'core').split(',').filter(Boolean) as CorpusSuite[]
-  if (suites.length === 0 || suites.some(suite => !['core', 'stdlib-gap', 'player', 'integration'].includes(suite))) {
-    throw new Error(`MC_CORPUS_SUITES must contain only core,stdlib-gap,player,integration; got '${value ?? ''}'`)
+  if (suites.length === 0 || suites.some(suite => !['core', 'stdlib-gap', 'events', 'player', 'integration'].includes(suite))) {
+    throw new Error(`MC_CORPUS_SUITES must contain only core,stdlib-gap,events,player,integration; got '${value ?? ''}'`)
   }
   return suites
 }

@@ -14,7 +14,7 @@
 
 `@on(EventType)` currently crosses the compiler/runtime boundary:
 
-- `src/events/types.ts` hardcodes legacy gameplay events such as `PlayerDeath`, `PlayerJoin`, `EntityKill`, and `ItemUse`.
+- `src/events/types.ts` exposes only the runtime-backed legacy gameplay events `PlayerDeath`, `PlayerJoin`, and `EntityKill`.
 - `src/typechecker/index.ts` knows event names and handler parameter signatures.
 - `src/emit/index.ts` knows event-to-tag mappings such as `PlayerDeath -> data/rs/tags/function/on_player_death.json`.
 - `src/emit/compile.ts` collects `@on(...)` handlers as compiler metadata.
@@ -111,6 +111,9 @@ That legacy form remains for compatibility. It now lowers `player` as an alias f
 - Keeps implemented legacy `@on(EventType)` behavior for compatibility.
 - Centralized legacy `@on(EventType)` handler tag ids in the shared event registry (`EVENT_TYPES.*.handlerTag`) so emit no longer carries a separate event-to-tag table.
 - Removed `BlockBreak` from built-in `@on(EventType)` because the runtime dispatcher never implemented block-break detection; users can still compose block-break behavior explicitly with `@function_tag(...)` and their own datapack assets.
+- Removed `ItemUse` from built-in `@on(EventType)` because its generic public name was backed only by a carrot-on-a-stick criterion; item-specific behavior belongs in user-owned scoreboard or advancement assets.
+- Made `PlayerJoin` observe both first appearance and subsequent reconnects through the native `leave_game` statistic.
+- Added a shared game-time guard so multiple compiled RedScript datapacks do not multiply dispatch through the global `rs:on_*` handler tags.
 - Allowed legacy `@on(EventType)` handlers to declare zero parameters so users can write runtime-honest handlers around `@s`; the old single `Player` parameter form remains accepted for compatibility.
 - Added explicit legacy event executor context metadata (`EVENT_TYPES.*.executorContext`) and typechecker injection so `@s` narrows to the runtime dispatcher's executor type inside `@on` handlers, while plain functions do not silently treat generic `@s` as `Player`.
 - Lowered legacy single `Player` event parameters as command aliases for `@s` instead of `$p0` fake parameter slots, preserving compatibility without implying function tags pass event arguments.

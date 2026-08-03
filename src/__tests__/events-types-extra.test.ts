@@ -18,7 +18,7 @@ import {
 
 describe('events/types — isEventTypeName exhaustive', () => {
   test('all event type names return true', () => {
-    const known: string[] = ['PlayerDeath', 'PlayerJoin', 'EntityKill', 'ItemUse']
+    const known: string[] = ['PlayerDeath', 'PlayerJoin', 'EntityKill']
     for (const name of known) {
       expect(isEventTypeName(name)).toBe(true)
     }
@@ -69,10 +69,7 @@ describe('events/types — getEventParamSpecs entity type', () => {
     expect(specs[0].type).toEqual({ kind: 'entity', entityType: 'Player' })
   })
 
-  test('ItemUse param type has entityType Player', () => {
-    const specs = getEventParamSpecs('ItemUse')
-    expect(specs[0].type).toEqual({ kind: 'entity', entityType: 'Player' })
-  })
+
 })
 
 // ── EVENT_TYPES structure ──────────────────────────────────────────────────

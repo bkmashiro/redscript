@@ -9,19 +9,41 @@ const mcPort = Number(process.env.MC_GAME_PORT || 25566)
 const apiHost = process.env.MC_BOT_HOST || '127.0.0.1'
 const apiPort = Number(process.env.MC_BOT_PORT || 25562)
 const username = process.env.MC_BOT_NAME || 'TestBot'
+let bot
 let connected = false
 let lastError
 
-const bot = mineflayer.createBot({
-  host: mcHost,
-  port: mcPort,
-  username,
-  auth: 'offline',
-  version: process.env.MC_BOT_VERSION || false,
-})
-bot.once('spawn', () => { connected = true })
-bot.on('end', reason => { connected = false; lastError = String(reason) })
-bot.on('error', error => { lastError = error.message })
+function createBot() {
+  connected = false
+  const next = mineflayer.createBot({
+    host: mcHost,
+    port: mcPort,
+    username,
+    auth: 'offline',
+    version: process.env.MC_BOT_VERSION || false,
+  })
+  next.once('spawn', () => { connected = true })
+  next.on('end', reason => {
+    if (bot === next) connected = false
+    lastError = String(reason)
+  })
+  next.on('error', error => { lastError = error.message })
+  bot = next
+}
+
+function waitFor(predicate, timeoutMs, description) {
+  const deadline = Date.now() + timeoutMs
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      if (predicate()) return resolve()
+      if (Date.now() >= deadline) return reject(new Error(`timed out waiting for ${description}`))
+      setTimeout(poll, 100)
+    }
+    poll()
+  })
+}
+
+createBot()
 
 function send(response, status, body) {
   response.writeHead(status, { 'content-type': 'application/json' })
@@ -64,6 +86,37 @@ const server = http.createServer(async (request, response) => {
       }
       await bot.waitForTicks(ticks)
       return send(response, 200, { connected: true, ticks })
+    }
+    if (request.method === 'POST' && url.pathname === '/reconnect') {
+      if (!connected) return send(response, 503, { connected: false, error: 'bot is not connected' })
+      const previous = bot
+      previous.quit('event reconnect probe')
+      await waitFor(() => !connected, 10_000, 'bot disconnect')
+      createBot()
+      await waitFor(() => connected, 30_000, 'bot reconnect')
+      return send(response, 200, { connected: true, username: bot.username })
+    }
+    if (request.method === 'POST' && url.pathname === '/attack-nearest') {
+      const body = await readBody(request)
+      const entityName = typeof body.name === 'string' && body.name !== '' ? body.name : 'pig'
+      const maxAttacks = Number(body.maxAttacks || 32)
+      if (!connected) return send(response, 503, { connected: false, error: 'bot is not connected' })
+      if (!Number.isInteger(maxAttacks) || maxAttacks < 1 || maxAttacks > 64) {
+        return send(response, 400, { error: 'maxAttacks must be an integer in [1,64]' })
+      }
+      const selectTarget = () => Object.values(bot.entities)
+        .filter(entity => entity !== bot.entity && entity.name === entityName)
+        .sort((a, b) => bot.entity.position.distanceTo(a.position) - bot.entity.position.distanceTo(b.position))[0]
+      let attacks = 0
+      while (attacks < maxAttacks) {
+        const target = selectTarget()
+        if (!target) return send(response, 200, { connected: true, entityName, attacks, killed: attacks > 0 })
+        await bot.lookAt(target.position.offset(0, target.height || 0.5, 0), true)
+        bot.attack(target)
+        attacks += 1
+        await bot.waitForTicks(12)
+      }
+      return send(response, 409, { connected: true, entityName, attacks, killed: false })
     }
     return send(response, 404, { error: 'not found' })
   } catch (error) {

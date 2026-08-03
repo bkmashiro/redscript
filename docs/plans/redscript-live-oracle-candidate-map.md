@@ -83,12 +83,13 @@ Cross-reference: release-level intent and gating policy are tracked in the [cove
 - Evidence (completed): Added descriptor-driven `visual command boundary smoke` in `tests/mc-cases/core-oracle.mcrs` and `tests/mc-cases/core-oracle-cases.ts` with a player-independent scaffold and pass-flag assertions for `title`, `playsound`, and `bossbar`; included in the 26/26 local live Paper baseline. Bossbar cleanup uses namespace id `core_oracle:visual_smoke` with explicit remove-before/after.
 - Suggested next case shape: keep as one deterministic boundary smoke (single function, isolated objectives/player names under `core_oracle`, deterministic cleanup).
 
-### events — low
+### events — completed on stable; current player oracle blocked
 
 - Category: `minecraft-boundary/high-risk`
-- Current proof levels: stdlib-source-present, mcruntime-e2e, mc-integration-offline-skippable, compile-all-static-smoke
-- Candidate reason: Lifecycle hooks are partly live-covered; more event cases need harness control and should stay selective.
-- Suggested next case shape: only add after a minimized bug or deterministic harness setup exists.
+- Current proof levels: stdlib-source-present, mcruntime-e2e, mc-integration-offline-skippable, compile-all-static-smoke, stable-paper-player-event-semantic
+- Stable evidence: native reconnect, player death, entity kill, and two-runtime deduplication passed in the disposable Paper 1.21.4/TestHarness/Mineflayer corpus.
+- Current boundary: Paper 26.2 completed server startup, but Mineflayer failed the protocol handshake before any event case ran. Do not infer current event semantics from stable.
+- Decision: generic `ItemUse` was removed because its implementation only observed carrot-on-a-stick usage. Do not add more event cases by count; reopen only for a concrete regression or when a 26.2-compatible controlled player client exists.
 
 ## Do not add live cases for now
 

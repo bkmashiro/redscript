@@ -11,6 +11,7 @@
     "compile-all-known-skip": "Module is intentionally skipped by compile-all with a manifest reason.",
     "typed-resource-api-unit": "Unit tests prove typed resource context/category diagnostics and string-compatible resource argument behavior; this is not live Paper proof.",
     "live-paper-lifecycle": "A managed Paper/TestHarness run proves datapack load, reload, restart, and world-reopen lifecycle boundaries.",
+    "stable-paper-player-event-semantic": "A managed stable Paper/TestHarness/Mineflayer run proves native player event behavior; this is not Paper 26.2 proof.",
     "dual-paper-runtime-semantic": "Isolated managed semantic case passed on stable 1.21.4 and Paper 26.2 with server assertions and source-function markers."
   },
   "stdlibModules": [
@@ -284,7 +285,8 @@
         "stdlib-source-present",
         "mcruntime-e2e",
         "mc-integration-offline-skippable",
-        "compile-all-static-smoke"
+        "compile-all-static-smoke",
+        "stable-paper-player-event-semantic"
       ],
       "evidenceFiles": [
         "src/__tests__/cli.test.ts",
@@ -292,14 +294,14 @@
         "src/__tests__/emit/compile.test.ts",
         "src/__tests__/events-manifest.test.ts",
         "src/__tests__/mc-integration.test.ts",
-        "src/__tests__/mc-integration/item-entity-events.test.ts",
+        "src/__tests__/mc-integration/event-runtime.test.ts",
         "src/__tests__/stdlib/events.test.ts"
       ],
-      "livePaperStatus": "candidate-high-value",
-      "notes": "High-value live candidate; do not claim Paper proof until a live harness case runs.",
+      "livePaperStatus": "stable-qualified-current-bot-blocked",
+      "notes": "Stable Paper proves native reconnect, player death, and entity kill dispatch plus multi-runtime deduplication. Paper 26.2 remains unqualified because Mineflayer could not complete the protocol handshake; no event case executed on that channel. Generic ItemUse was removed rather than retaining a carrot-on-a-stick-only implementation.",
       "liveOracleCandidate": {
-        "priority": "low",
-        "reason": "Lifecycle hooks are partly live-covered; more event cases need harness control and should stay selective."
+        "priority": "none",
+        "reason": "Do not expand event coverage by count. Reopen only when a 26.2-compatible controlled player client is available or a concrete event regression appears."
       }
     },
     {

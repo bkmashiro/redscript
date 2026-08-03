@@ -828,12 +828,11 @@ fn on_join(player: Player) {
 
 | Event | Trigger |
 |:--|:--|
-| `PlayerDeath` | Detected via scoreboard kill criterion |
-| `PlayerJoin` | Detected via entity tag on first login |
-| `EntityKill` | Detected via scoreboard kill criterion |
-| `ItemUse` | Detected via scoreboard item use criterion |
+| `PlayerDeath` | Native `deathCount` scoreboard criterion |
+| `PlayerJoin` | First appearance plus subsequent reconnects detected through `minecraft.custom:minecraft.leave_game` |
+| `EntityKill` | Native `totalKillCount` scoreboard criterion |
 
-Each event handler is automatically registered in the matching `rs:*` function tag. Runtime dispatch is provided by the events stdlib. Gameplay events that are not listed here, such as block breaking, can be built explicitly with `@function_tag(...)` plus user-owned datapack assets/scoreboard or advancement logic.
+Each event handler is automatically registered in the matching `rs:*` function tag. Runtime dispatch is provided by the events stdlib, with a shared game-time guard so multiple RedScript datapacks dispatch the global handler tags only once per tick. Gameplay events that are not listed here, including item use and block breaking, must be built explicitly with `@function_tag(...)` plus user-owned, behavior-specific scoreboard or advancement assets. RedScript intentionally does not expose a generic `ItemUse` event because Minecraft's built-in item-use criteria are item-specific rather than wildcard events.
 
 ---
 

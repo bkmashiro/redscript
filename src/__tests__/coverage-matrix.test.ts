@@ -51,7 +51,6 @@ describe('RedScript coverage matrix manifest', () => {
       .map((entry: any) => entry.module)
 
     expect(liveCandidates).toEqual(expect.arrayContaining([
-      'events',
       'timer',
       'scheduler',
       'bossbar',
@@ -75,7 +74,6 @@ describe('RedScript coverage matrix manifest', () => {
 
     expect(liveCandidates.length).toBeGreaterThanOrEqual(3)
     expect(liveCandidates.map((entry: any) => entry.module)).toEqual(expect.arrayContaining([
-      'events',
       'timer',
       'random',
     ]))
@@ -88,6 +86,16 @@ describe('RedScript coverage matrix manifest', () => {
     expect(doc).toContain('events')
     expect(doc).toContain('timer')
     expect(doc).toContain('Do not add live cases for now')
+  })
+
+  it('records event proof as stable-only without claiming current Paper qualification', () => {
+    const matrix = readMatrix()
+    const events = matrix.stdlibModules.find((entry: any) => entry.module === 'events')
+
+    expect(events.livePaperStatus).toBe('stable-qualified-current-bot-blocked')
+    expect(events.proofLevels).toContain('stable-paper-player-event-semantic')
+    expect(events.proofLevels).not.toContain('dual-paper-runtime-semantic')
+    expect(events.liveOracleCandidate.priority).toBe('none')
   })
 
   it('has a human-readable markdown companion that references the JSON source', () => {
