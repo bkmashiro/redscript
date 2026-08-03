@@ -1945,8 +1945,26 @@
         "stable-1.21.4",
         "paper-26.2"
       ]
+    },
+    "stdlib.world.function.barrier_wall": {
+      "caseIds": [
+        "stdlib-gap.world-blocks"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.world.function.clear_area": {
+      "caseIds": [
+        "stdlib-gap.world-blocks"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
     }
   },
-  "expectedMissingRuntimeCount": 569,
-  "expectedMappedRuntimeCount": 90
+  "expectedMissingRuntimeCount": 567,
+  "expectedMappedRuntimeCount": 92
 }

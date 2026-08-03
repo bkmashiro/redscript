@@ -1117,7 +1117,11 @@
       "liveOracleCandidate": {
         "priority": "none",
         "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
-      }
+      },
+      "proofLevel": "dual-paper",
+      "evidence": [
+        "stdlib-gap.world-blocks"
+      ]
     }
   ],
   "languageFeatures": [
