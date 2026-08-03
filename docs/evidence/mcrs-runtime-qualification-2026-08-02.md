@@ -24,16 +24,16 @@ This qualifies the mapped core integer/scoreboard/control-flow/storage/lifecycle
 
 ### Stdlib representative semantic subset
 
-Source revision: `b6f0ca0d6ac39fe84da67eb05996a5606b6e844b`
+Source revision: `70cc6f891013d35e3f13d8844cfe8821598a2af1`
 
-Nine isolated stdlib cases passed on both managed Paper channels:
+Ten isolated stdlib cases passed on both managed Paper channels:
 
 | Channel | Paper build | Result | Cleanup | Evidence |
 |---|---|---:|---:|---|
-| stable | `1.21.4-232-12d8fe0` | 9/9 | disposable root removed | `mcrs-runtime-stdlib-gap-stable-1.21.4.json` |
-| compatibility | `26.2-87-a95ae8d` | 9/9 | disposable root removed | `mcrs-runtime-stdlib-gap-paper-26.2.json` |
+| stable | `1.21.4-232-12d8fe0` | 10/10 | disposable root removed | `mcrs-runtime-stdlib-gap-stable-1.21.4.json` |
+| compatibility | `26.2-87-a95ae8d` | 10/10 | disposable root removed | `mcrs-runtime-stdlib-gap-paper-26.2.json` |
 
-The cases cover representative behavior from `advanced`, `bits`, `calculus`, `expr`, `linalg`, `math`, `sets`, `result`, and `state`. The mapped public API scope is exactly `advanced.fib`, all 11 public `bits` APIs (`bit_and`, `bit_or`, `bit_xor`, `bit_not`, `bit_shl`, `bit_shr`, `bit_get`, `bit_set`, `bit_clear`, `bit_toggle`, `popcount`), all seven mapped `calculus` APIs (`deriv_forward`, `deriv_central`, `integrate_trapezoid`, `integrate_simpson`, `running_mean`, `running_m2`, `variance_from_m2`), `expr.expr_eval`, `linalg.vec2d_dot`, eight `math` APIs (`abs`, `min`, `max`, `clamp`, `lerp`, `isqrt`, `pow_int`, `gcd`), `result.result_divide`, `result.result_value`, `state.set_state`, `state.is_state`, plus `sets.set_new`, `set_add`, `set_contains`, `set_remove`, and `set_clear`. The bits case asserts every API independently and requires all 11 emitted-function markers. The calculus case uses 10 independent numeric assertions and requires the direct/specialized projection artifacts for all seven claimed APIs. The math case uses 16 independent numeric assertions; `clamp`, `gcd`, `isqrt`, and `pow_int` require function markers while auto-inlined `abs`, `min`, `max`, and `lerp` are proved through direct server-observed results. The linalg case asserts both multiplication terms and the final dot product with bounded double-to-fixed conversion tolerance. The sets case asserts unique handles, duplicate-add idempotence, membership, removal, and clear semantics. Every case requires emitted-function marker readback where the claimed function is not inlined.
+The cases cover representative behavior from `advanced`, `bits`, `calculus`, `expr`, `linalg`, `math`, `sets`, `result`, `state`, and `timer`. The mapped public API scope is exactly `advanced.fib`, all 11 public `bits` APIs (`bit_and`, `bit_or`, `bit_xor`, `bit_not`, `bit_shl`, `bit_shr`, `bit_get`, `bit_set`, `bit_clear`, `bit_toggle`, `popcount`), all seven mapped `calculus` APIs (`deriv_forward`, `deriv_central`, `integrate_trapezoid`, `integrate_simpson`, `running_mean`, `running_m2`, `variance_from_m2`), `expr.expr_eval`, `linalg.vec2d_dot`, eight `math` APIs (`abs`, `min`, `max`, `clamp`, `lerp`, `isqrt`, `pow_int`, `gcd`), `result.result_divide`, `result.result_value`, `state.set_state`, `state.is_state`, plus `sets.set_new`, `set_add`, `set_contains`, `set_remove`, and `set_clear`, all six timer conversion functions (`tick_to_seconds`, `tick_to_ms`, `seconds_to_ticks`, `format_time_s`, `format_time_m`, `format_time_h`), and all eight `Timer` methods (`new`, `start`, `pause`, `reset`, `done`, `elapsed`, `remaining`, `tick`). The bits case asserts every API independently and requires all 11 emitted-function markers. The calculus case uses 10 independent numeric assertions and requires the direct/specialized projection artifacts for all seven claimed APIs. The math case uses 16 independent numeric assertions; `clamp`, `gcd`, `isqrt`, and `pow_int` require function markers while auto-inlined `abs`, `min`, `max`, and `lerp` are proved through direct server-observed results. The timer case uses 22 exact server assertions, including two-instance isolation and inactive/pause/resume/cap/reset transitions; its conversion calls are auto-inlined and its methods use the compiler-authoritative Timer intrinsic path. The linalg case asserts both multiplication terms and the final dot product with bounded double-to-fixed conversion tolerance. The sets case asserts unique handles, duplicate-add idempotence, membership, removal, and clear semantics. Every case requires emitted-function marker readback where the claimed function is not inlined.
 
 This is representative module evidence, not qualification of every declaration in those modules.
 
@@ -41,7 +41,7 @@ This is representative module evidence, not qualification of every declaration i
 
 ### Remaining stdlib scope
 
-The checked-in stdlib catalog records 50 modules, 717 total functions/methods, 58 internal functions, 659 public runtime-required probes, and 401 constants. Exactly 38 public APIs have scenario mappings on both channels; 621 remain explicitly unmapped. A representative case does not qualify every declaration in its module, and direct fixture references are not promoted to runtime proof.
+The checked-in stdlib catalog records 50 modules, 717 total functions/methods, 58 internal functions, 659 public runtime-required probes, and 401 constants. Exactly 52 public APIs have scenario mappings on both channels; 607 remain explicitly unmapped. A representative case does not qualify every declaration in its module, and direct fixture references are not promoted to runtime proof.
 
 ### Removed invalid stdlib surface
 

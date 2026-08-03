@@ -1037,8 +1037,7 @@
       "category": "minecraft-boundary/high-risk",
       "proofLevels": [
         "stdlib-source-present",
-        "mc-integration-offline-skippable",
-        "compile-all-static-smoke"
+        "dual-paper-semantic"
       ],
       "evidenceFiles": [
         "src/__tests__/mc-integration/stdlib-coverage-3.test.ts",
@@ -1051,7 +1050,11 @@
       "liveOracleCandidate": {
         "priority": "medium",
         "reason": "Timer intrinsics lower to scoreboard slots and schedules; good candidate for bounded live smoke."
-      }
+      },
+      "evidence": [
+        "src/stdlib/timer.mcrs",
+        "tests/mc-cases/stdlib-gap-timer.mcrs.fixture"
+      ]
     },
     {
       "module": "vec",

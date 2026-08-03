@@ -1477,7 +1477,133 @@
         "stable-1.21.4",
         "paper-26.2"
       ]
+    },
+    "stdlib.timer.function.format_time_h": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.function.format_time_m": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.function.format_time_s": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.function.seconds_to_ticks": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.function.tick_to_ms": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.function.tick_to_seconds": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.method.Timer.done": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.method.Timer.elapsed": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.method.Timer.new": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.method.Timer.pause": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.method.Timer.remaining": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.method.Timer.reset": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.method.Timer.start": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.timer.method.Timer.tick": {
+      "caseIds": [
+        "stdlib-gap.timer"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
     }
   },
-  "expectedMissingRuntimeCount": 621
+  "expectedMissingRuntimeCount": 607
 }
