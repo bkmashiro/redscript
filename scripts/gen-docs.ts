@@ -37,7 +37,6 @@ const TARGET_MODULES = [
   // Core utilities
   'math',
   'vec',
-  'strings',
   'result',
   'bits',
   'random',

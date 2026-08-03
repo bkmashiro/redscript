@@ -30,6 +30,9 @@ fn __set_clear_apply() {
 /// Create a new empty set and return its unique runtime handle.
 /// @since 1.1.0
 /// @returns A unique path-safe set ID used by all other set operations
+/// @example
+/// let s: string = set_new();
+/// set_add(s, "apple");
 fn set_new(): string {
     raw("scoreboard players add $set_counter __OBJ__ 1");
     raw("execute store result storage rs:macro_args id int 1 run scoreboard players get $set_counter __OBJ__");
@@ -42,6 +45,8 @@ fn set_new(): string {
 
 /// Add a path-safe value to a set. Repeated adds are idempotent.
 /// @since 1.1.0
+/// @param set Set ID returned by `set_new`
+/// @param value Path-safe value to add
 fn set_add(set: string, value: string) {
     raw("data modify storage rs:macro_args set set from storage rs:strings __sp0");
     raw("data modify storage rs:macro_args value set from storage rs:strings __sp1");
@@ -50,6 +55,9 @@ fn set_add(set: string, value: string) {
 
 /// Return 1 when a path-safe value exists, otherwise 0.
 /// @since 1.1.0
+/// @param set Set ID returned by `set_new`
+/// @param value Path-safe value to look up
+/// @returns 1 if the value is in the set, 0 otherwise
 fn set_contains(set: string, value: string): int {
     raw("scoreboard players set $ret __OBJ__ 0");
     raw("data modify storage rs:macro_args set set from storage rs:strings __sp0");
@@ -61,6 +69,8 @@ fn set_contains(set: string, value: string): int {
 
 /// Remove a path-safe value. Missing values are a no-op.
 /// @since 1.1.0
+/// @param set Set ID returned by `set_new`
+/// @param value Path-safe value to remove
 fn set_remove(set: string, value: string) {
     raw("data modify storage rs:macro_args set set from storage rs:strings __sp0");
     raw("data modify storage rs:macro_args value set from storage rs:strings __sp1");
@@ -69,6 +79,7 @@ fn set_remove(set: string, value: string) {
 
 /// Remove every value while preserving the set handle.
 /// @since 1.1.0
+/// @param set Set ID returned by `set_new`
 fn set_clear(set: string) {
     raw("data modify storage rs:macro_args set set from storage rs:strings __sp0");
     raw("function __NS__:__set_clear_apply with storage rs:macro_args");
