@@ -28,7 +28,17 @@ const expectedFunctions: Record<string, string[]> = {
     'data/gap_bits/function/bit_xor.mcfunction',
     'data/gap_bits/function/popcount.mcfunction',
   ],
-  // expr_eval is inlined; semantic + entry receipt are required, but no artifact marker is claimed.
+  'stdlib-gap.calculus': [
+    'data/gap_calculus/function/deriv_central.mcfunction',
+    'data/gap_calculus/function/deriv_forward.mcfunction',
+    'data/gap_calculus/function/integrate_simpson__arr_vals__gap_calculus_arrays__linear.mcfunction',
+    'data/gap_calculus/function/integrate_trapezoid__arr_vals__gap_calculus_arrays__constant.mcfunction',
+    'data/gap_calculus/function/integrate_trapezoid__arr_vals__gap_calculus_arrays__linear.mcfunction',
+    'data/gap_calculus/function/running_m2__const_0_20000_30000_40000.mcfunction',
+    'data/gap_calculus/function/running_mean.mcfunction',
+    'data/gap_calculus/function/variance_from_m2.mcfunction',
+  ],
+  // expr_eval is currently inlined; semantic + entry receipt are required, but no artifact marker is claimed.
   'stdlib-gap.expr': [],
   'stdlib-gap.linalg': ['data/gap_linalg/function/vec2d_dot.mcfunction'],
   'stdlib-gap.sets': [
@@ -75,7 +85,8 @@ describe('stdlib zero-reference representative semantic oracles', () => {
         const executed = new Set(result.functionCoverage?.filter(item => item.executed).map(item => item.artifactPath))
         const expectedArtifacts = expectedFunctions[descriptor.id!]
         expect(expectedArtifacts).toBeDefined()
-        for (const expected of expectedArtifacts) expect(executed.has(expected)).toBe(true)
+        const missingArtifacts = expectedArtifacts.filter(expected => !executed.has(expected))
+        expect(missingArtifacts).toEqual([])
       }
     }, 40_000)
   }

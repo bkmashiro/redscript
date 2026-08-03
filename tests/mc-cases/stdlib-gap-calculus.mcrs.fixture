@@ -1,0 +1,18 @@
+namespace gap_calculus
+
+fn test_gap() {
+  scoreboard_set("#deriv_forward", "gap_result", deriv_forward(20000, 10000, 10000))
+  scoreboard_set("#deriv_central", "gap_result", deriv_central(30000, 10000, 10000))
+  scoreboard_set("#deriv_central_linear", "gap_result", deriv_central(12000, 8000, 1000))
+
+  let linear: int[] = [0, 5000, 10000]
+  let constant: int[] = [10000, 10000, 10000]
+  scoreboard_set("#integrate_trapezoid", "gap_result", integrate_trapezoid(linear, 3, 10000))
+  scoreboard_set("#integrate_trapezoid_constant", "gap_result", integrate_trapezoid(constant, 3, 10000))
+  scoreboard_set("#integrate_simpson", "gap_result", integrate_simpson(linear, 3, 10000))
+
+  scoreboard_set("#running_mean_first", "gap_result", running_mean(0, 20000, 1))
+  scoreboard_set("#running_mean_second", "gap_result", running_mean(20000, 40000, 2))
+  scoreboard_set("#running_m2", "gap_result", running_m2(0, 20000, 30000, 40000))
+  scoreboard_set("#variance_from_m2", "gap_result", variance_from_m2(20000, 2))
+}
