@@ -82,6 +82,23 @@ export const STDLIB_GAP_CASES: McCoreCaseDescriptor[] = [
     scoreboardAssertions: [{ player: '#expr', obj: 'gap_result', value: 40000 }],
   },
   {
+    ...base('bigint-add', 'gap_bigint_add'),
+    featureIds: [
+      'stdlib.bigint.function.bigint_add',
+      'stdlib.bigint.function.bigint_base',
+    ],
+    librarySourcePaths: [stdlib('bigint')],
+    scoreboardAssertions: Object.entries({base:10000,carry:1,out0:0,out1:0,out2:1})
+      .map(([player, value]) => ({ player: `#${player}`, obj: 'gap_result', value })),
+  },
+  {
+    ...base('bigint-sub', 'gap_bigint_sub'),
+    featureIds: ['stdlib.bigint.function.bigint_sub'],
+    librarySourcePaths: [stdlib('bigint')],
+    scoreboardAssertions: Object.entries({out0:1,out1:9999,out2:9999})
+      .map(([player, value]) => ({ player: `#${player}`, obj: 'gap_result', value })),
+  },
+  {
     ...base('list-dynamic', 'gap_list_dynamic'),
     featureIds: [
       'stdlib.list.function.list_avg', 'stdlib.list.function.list_contains', 'stdlib.list.function.list_dedup_count',

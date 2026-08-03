@@ -1,0 +1,12 @@
+namespace gap_bigint_add
+
+fn test_gap() {
+  scoreboard_set("#base", "gap_result", bigint_base())
+  let a: int[] = [9999, 9999, 9999]
+  let b: int[] = [0, 0, 2]
+  let out: int[] = [0, 0, 0]
+  scoreboard_set("#carry", "gap_result", bigint_add(a, b, out, 3))
+  scoreboard_set("#out0", "gap_result", out[0])
+  scoreboard_set("#out1", "gap_result", out[1])
+  scoreboard_set("#out2", "gap_result", out[2])
+}

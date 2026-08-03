@@ -15,6 +15,12 @@ const templates = [
 ]
 const expectedFunctions: Record<string, string[]> = {
   'stdlib-gap.advanced': ['data/gap_advanced/function/fib.mcfunction'],
+  'stdlib-gap.bigint-add': [
+    'data/gap_bigint_add/function/bigint_add__arr_a__gap_bigint_add_arrays__a__b__gap_bigint_add_arrays__b__result__gap_bigint_add_arrays__out.mcfunction',
+  ],
+  'stdlib-gap.bigint-sub': [
+    'data/gap_bigint_sub/function/bigint_sub__arr_a__gap_bigint_sub_arrays__a__b__gap_bigint_sub_arrays__b__result__gap_bigint_sub_arrays__out.mcfunction',
+  ],
   'stdlib-gap.bits': [
     'data/gap_bits/function/bit_and.mcfunction',
     'data/gap_bits/function/bit_clear.mcfunction',

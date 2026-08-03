@@ -176,8 +176,9 @@ fn bigint_sub(a: int[], b: int[], result: int[], len: int) {
         if (diff < 0) {
             diff = diff + 10000;
             borrow = 1;
+        } else {
+            borrow = 0;
         }
-        if (diff >= 0) { borrow = 0; }
         result[i] = diff;
         i = i - 1;
     }

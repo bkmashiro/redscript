@@ -1094,6 +1094,14 @@ describe('bigint.mcrs — bigint_mul / bigint_sq', () => {
         return r[5];   // 10000 % 10000 = 0
     }
 
+    fn test_sub_borrow_chain(): int {
+        let a: int[] = [2, 0, 0];
+        let b: int[] = [0, 0, 1];
+        let r: int[] = [0, 0, 0];
+        bigint_sub(a, b, r, 3);
+        return r[0] * 100000000 + r[1] * 10000 + r[2];
+    }
+
     // bigint_mul_result_len
     fn test_result_len(): int { return bigint_mul_result_len(3, 4); }
   `, [MATH_SRC, BIGINT_SRC])
@@ -1106,6 +1114,7 @@ describe('bigint.mcrs — bigint_mul / bigint_sq', () => {
   test('bigint_sq([0,0,3]) lo == 9', () => expect(callAndGetRet(rt, 'test_sq_simple')).toBe(9))
   test('bigint_sq([0,0,100]) chunk[4] == 1 (10000 carry)', () => expect(callAndGetRet(rt, 'test_sq_100_hi')).toBe(1))
   test('bigint_sq([0,0,100]) chunk[5] == 0', () => expect(callAndGetRet(rt, 'test_sq_100_lo')).toBe(0))
+  test('bigint_sub propagates borrow across zero limbs', () => expect(callAndGetRet(rt, 'test_sub_borrow_chain')).toBe(199999999))
   test('bigint_mul_result_len(3, 4) == 7', () => expect(callAndGetRet(rt, 'test_result_len')).toBe(7))
 })
 
