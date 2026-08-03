@@ -1343,6 +1343,51 @@
         "paper-26.2"
       ]
     },
+    "stdlib.list.function.list_avg": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_contains": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_dedup_count": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_index_of": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_max": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.list.function.list_max3": {
       "caseIds": [
         "stdlib-gap.list-fixed"
@@ -1361,6 +1406,15 @@
         "paper-26.2"
       ]
     },
+    "stdlib.list.function.list_min": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.list.function.list_min3": {
       "caseIds": [
         "stdlib-gap.list-fixed"
@@ -1373,6 +1427,42 @@
     "stdlib.list.function.list_min5": {
       "caseIds": [
         "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_shuffle": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_sort_asc": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_sort_desc": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_sum": {
+      "caseIds": [
+        "stdlib-gap.list-dynamic"
       ],
       "channels": [
         "stable-1.21.4",
@@ -1749,5 +1839,5 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 591
+  "expectedMissingRuntimeCount": 581
 }

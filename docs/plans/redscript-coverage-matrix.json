@@ -494,7 +494,8 @@
       },
       "evidence": [
         "src/stdlib/list.mcrs",
-        "tests/mc-cases/stdlib-gap-list-fixed.mcrs.fixture"
+        "tests/mc-cases/stdlib-gap-list-fixed.mcrs.fixture",
+        "tests/mc-cases/stdlib-gap-list-dynamic.mcrs.fixture"
       ]
     },
     {

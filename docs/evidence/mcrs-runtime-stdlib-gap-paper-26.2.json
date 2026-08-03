@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "evidenceClass": "managed-runtime-corpus",
-  "sourceRevision": "d2d064aad07cb5dc47ae8cb3d0902db590c467e2",
+  "sourceRevision": "146b199a34cd66f44a3b700fdd115def9023d081",
   "channel": "paper-26.2",
-  "startedAt": "2026-08-03T09:56:40.278Z",
-  "finishedAt": "2026-08-03T09:58:02.909Z",
+  "startedAt": "2026-08-03T11:05:56.030Z",
+  "finishedAt": "2026-08-03T11:07:27.475Z",
   "paperVersion": "26.2-87-a95ae8d (MC: 26.2)",
   "disposableRootRemoved": true,
   "suites": [
@@ -12,12 +12,12 @@
       "suite": "stdlib-gap",
       "command": "npm run test:mc-stdlib-gap:live",
       "exitCode": 0,
-      "durationMs": 74134,
-      "outputSha256": "3c87d3a6863a2cd3a1232225d1349002361ea12535251cd2721ba948eddf8027",
-      "outputTail": "\n> redscript-mc@3.0.4 test:mc-stdlib-gap:live\n> MC_STDLIB_GAP_REQUIRE_ONLINE=true jest src/__tests__/mc-stdlib-gap.test.ts --runInBand --testTimeout=120000\n\nPASS unit src/__tests__/mc-stdlib-gap.test.ts (73.402 s)\n  stdlib zero-reference representative semantic oracles\n    ✓ advanced representative semantic oracle (5318 ms)\n    ✓ bits representative semantic oracle (8256 ms)\n    ✓ calculus representative semantic oracle (6799 ms)\n    ✓ expr representative semantic oracle (8395 ms)\n    ✓ linalg representative semantic oracle (4994 ms)\n    ✓ list-fixed representative semantic oracle (10254 ms)\n    ✓ math representative semantic oracle (7247 ms)\n    ✓ timer representative semantic oracle (5866 ms)\n    ✓ sets representative semantic oracle (5191 ms)\n    ✓ result representative semantic oracle (5094 ms)\n    ✓ state representative semantic oracle (5146 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       11 passed, 11 total\nSnapshots:   0 total\nTime:        73.547 s, estimated 75 s\nRan all test suites matching /src\\/__tests__\\/mc-stdlib-gap.test.ts/i.\n",
+      "durationMs": 83083,
+      "outputSha256": "2102cf421bf02c1c900fc94e523b8eccdc2c81d07c15743cfc35b1e6610c4fba",
+      "outputTail": "\n> redscript-mc@3.0.4 test:mc-stdlib-gap:live\n> MC_STDLIB_GAP_REQUIRE_ONLINE=true jest src/__tests__/mc-stdlib-gap.test.ts --runInBand --testTimeout=120000\n\nPASS unit src/__tests__/mc-stdlib-gap.test.ts (82.34 s)\n  stdlib zero-reference representative semantic oracles\n    ✓ advanced representative semantic oracle (5391 ms)\n    ✓ bits representative semantic oracle (8250 ms)\n    ✓ calculus representative semantic oracle (6771 ms)\n    ✓ expr representative semantic oracle (8324 ms)\n    ✓ list-dynamic representative semantic oracle (8710 ms)\n    ✓ linalg representative semantic oracle (5048 ms)\n    ✓ list-fixed representative semantic oracle (10240 ms)\n    ✓ math representative semantic oracle (7284 ms)\n    ✓ timer representative semantic oracle (5943 ms)\n    ✓ sets representative semantic oracle (5330 ms)\n    ✓ result representative semantic oracle (5148 ms)\n    ✓ state representative semantic oracle (5102 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       12 passed, 12 total\nSnapshots:   0 total\nTime:        82.48 s, estimated 85 s\nRan all test suites matching /src\\/__tests__\\/mc-stdlib-gap.test.ts/i.\n",
       "summary": {
         "suites": "1 passed, 1 total",
-        "tests": "11 passed, 11 total"
+        "tests": "12 passed, 12 total"
       }
     }
   ],
