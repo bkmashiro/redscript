@@ -81,7 +81,7 @@ After suite-pack isolation, the historical server-only suite improved from 66 to
 
 ## Evidence boundaries
 
-Repository validation before finalization passed `npm run build`, `npm run validate-mc`, and the complete explicit-offline Jest matrix: **344 suites / 6144 tests passed**, with 28 live-only tests explicitly skipped. Those offline passes are regression evidence only, not Paper runtime proof.
+Repository validation before finalization passed `npm run build`, `npm run validate-mc`, and the complete explicit-offline Jest matrix: **344 suites / 6145 tests passed**, with 28 live-only tests explicitly skipped. Those offline passes are regression evidence only, not Paper runtime proof.
 
 - A Paper `Done (...)` line is startup evidence only.
 - Offline Jest passes and compile-only checks are not Paper runtime proof.
