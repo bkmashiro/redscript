@@ -1343,6 +1343,69 @@
         "paper-26.2"
       ]
     },
+    "stdlib.heap.function.heap_new": {
+      "caseIds": [
+        "stdlib-gap.heap"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.heap.function.heap_peek": {
+      "caseIds": [
+        "stdlib-gap.heap"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.heap.function.heap_pop": {
+      "caseIds": [
+        "stdlib-gap.heap"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.heap.function.heap_push": {
+      "caseIds": [
+        "stdlib-gap.heap"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.heap.function.heap_size": {
+      "caseIds": [
+        "stdlib-gap.heap"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.heap.function.max_heap_pop": {
+      "caseIds": [
+        "stdlib-gap.heap"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.heap.function.max_heap_push": {
+      "caseIds": [
+        "stdlib-gap.heap"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.linalg.function.vec2d_dot": {
       "caseIds": [
         "stdlib-gap.linalg"
@@ -1866,5 +1929,5 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 578
+  "expectedMissingRuntimeCount": 571
 }

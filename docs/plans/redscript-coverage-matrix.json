@@ -396,8 +396,7 @@
       "category": "data-structure/algorithm",
       "proofLevels": [
         "stdlib-source-present",
-        "mc-integration-offline-skippable",
-        "compile-all-static-smoke"
+        "dual-paper-semantic"
       ],
       "evidenceFiles": [
         "src/__tests__/compile-all.test.ts",
@@ -410,7 +409,11 @@
       "liveOracleCandidate": {
         "priority": "none",
         "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
-      }
+      },
+      "evidence": [
+        "src/stdlib/heap.mcrs",
+        "tests/mc-cases/stdlib-gap-heap.mcrs.fixture"
+      ]
     },
     {
       "module": "interactions",
