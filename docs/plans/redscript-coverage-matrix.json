@@ -478,9 +478,7 @@
       "category": "data-structure/algorithm",
       "proofLevels": [
         "stdlib-source-present",
-        "mcruntime-e2e",
-        "mc-integration-offline-skippable",
-        "compile-all-static-smoke"
+        "dual-paper-semantic"
       ],
       "evidenceFiles": [
         "src/__tests__/e2e/stdlib-e2e.test.ts",
@@ -493,7 +491,11 @@
       "liveOracleCandidate": {
         "priority": "none",
         "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
-      }
+      },
+      "evidence": [
+        "src/stdlib/list.mcrs",
+        "tests/mc-cases/stdlib-gap-list-fixed.mcrs.fixture"
+      ]
     },
     {
       "module": "map",

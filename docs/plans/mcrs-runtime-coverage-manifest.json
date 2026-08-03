@@ -1325,6 +1325,150 @@
         "paper-26.2"
       ]
     },
+    "stdlib.list.function.avg3": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.avg5": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_max3": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_max5": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_min3": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_min5": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_sum3": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_sum4": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.list_sum5": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.sort2_max": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.sort2_min": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.sort3": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.sort4": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.sort5": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.weighted2": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.list.function.weighted3": {
+      "caseIds": [
+        "stdlib-gap.list-fixed"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.math.function.abs": {
       "caseIds": [
         "stdlib-gap.math"
@@ -1605,5 +1749,5 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 607
+  "expectedMissingRuntimeCount": 591
 }
