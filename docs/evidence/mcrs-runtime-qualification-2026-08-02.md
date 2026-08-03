@@ -24,7 +24,7 @@ This qualifies the mapped core integer/scoreboard/control-flow/storage/lifecycle
 
 ### Stdlib representative semantic subset
 
-Source revision: `3544ab646a85313b82bd54085130e05f963713a5`
+Source revision: `b0dba750bd48c9c4230ddf839e8267b65aa32d2c`
 
 Eight isolated stdlib cases passed on both managed Paper channels:
 
