@@ -95,6 +95,12 @@ export const STDLIB_GAP_CASES: McCoreCaseDescriptor[] = [
     ],
   },
   {
+    ...base('math', 'gap_math'),
+    featureIds: ['stdlib.math.function.abs', 'stdlib.math.function.clamp', 'stdlib.math.function.gcd', 'stdlib.math.function.isqrt', 'stdlib.math.function.lerp', 'stdlib.math.function.max', 'stdlib.math.function.min', 'stdlib.math.function.pow_int'],
+    librarySourcePaths: [stdlib('math')],
+    scoreboardAssertions: Object.entries({abs_pos:42,abs_neg:99,min_ab:3,min_ba:3,max_ab:7,max_ba:7,clamp_low:0,clamp_high:100,clamp_mid:50,lerp_mid:500,lerp_full:200,isqrt_square:5,isqrt_floor:5,pow_ten:1024,pow_zero:1,gcd_pos:4,gcd_neg:4}).map(([player, value]) => ({player:`#${player}`,obj:'gap_result',value})),
+  },
+  {
     ...base('sets', 'gap_sets'),
     featureIds: [
       'stdlib.sets.function.set_new',

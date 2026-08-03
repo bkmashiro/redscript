@@ -1,0 +1,21 @@
+namespace gap_math
+
+fn test_gap() {
+  scoreboard_set("#abs_pos", "gap_result", abs(42))
+  scoreboard_set("#abs_neg", "gap_result", abs(-99))
+  scoreboard_set("#min_ab", "gap_result", min(7, 3))
+  scoreboard_set("#min_ba", "gap_result", min(3, 7))
+  scoreboard_set("#max_ab", "gap_result", max(7, 3))
+  scoreboard_set("#max_ba", "gap_result", max(3, 7))
+  scoreboard_set("#clamp_low", "gap_result", clamp(-5, 0, 100))
+  scoreboard_set("#clamp_high", "gap_result", clamp(150, 0, 100))
+  scoreboard_set("#clamp_mid", "gap_result", clamp(50, 0, 100))
+  scoreboard_set("#lerp_mid", "gap_result", lerp(0, 1000, 500))
+  scoreboard_set("#lerp_full", "gap_result", lerp(100, 200, 1000))
+  scoreboard_set("#isqrt_square", "gap_result", isqrt(25))
+  scoreboard_set("#isqrt_floor", "gap_result", isqrt(26))
+  scoreboard_set("#pow_ten", "gap_result", pow_int(2, 10))
+  scoreboard_set("#pow_zero", "gap_result", pow_int(7, 0))
+  scoreboard_set("#gcd_pos", "gap_result", gcd(12, 8))
+  scoreboard_set("#gcd_neg", "gap_result", gcd(-12, 8))
+}
