@@ -1667,6 +1667,15 @@
         "paper-26.2"
       ]
     },
+    "stdlib.math.function.cos_fixed": {
+      "caseIds": [
+        "stdlib-gap.math-trig-load"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.math.function.gcd": {
       "caseIds": [
         "stdlib-gap.math"
@@ -1715,6 +1724,15 @@
     "stdlib.math.function.pow_int": {
       "caseIds": [
         "stdlib-gap.math"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.math.function.sin_fixed": {
+      "caseIds": [
+        "stdlib-gap.math-trig-load"
       ],
       "channels": [
         "stable-1.21.4",
@@ -1929,5 +1947,6 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 571
+  "expectedMissingRuntimeCount": 569,
+  "expectedMappedRuntimeCount": 90
 }

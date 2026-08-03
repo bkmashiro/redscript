@@ -559,7 +559,12 @@
         "docs/evidence/mcrs-runtime-stdlib-gap-stable-1.21.4.json",
         "docs/evidence/mcrs-runtime-stdlib-gap-paper-26.2.json"
       ],
-      "witnessLevel": "game-runtime-semantic"
+      "witnessLevel": "game-runtime-semantic",
+      "evidence": [
+        "tests/mc-cases/stdlib-gap-math-trig-load.mcrs.fixture",
+        "docs/evidence/mcrs-runtime-stdlib-gap-stable-1.21.4.json",
+        "docs/evidence/mcrs-runtime-stdlib-gap-paper-26.2.json"
+      ]
     },
     {
       "module": "math_hp",
