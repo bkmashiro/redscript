@@ -1325,6 +1325,78 @@
         "paper-26.2"
       ]
     },
+    "stdlib.math.function.abs": {
+      "caseIds": [
+        "stdlib-gap.math"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.math.function.clamp": {
+      "caseIds": [
+        "stdlib-gap.math"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.math.function.gcd": {
+      "caseIds": [
+        "stdlib-gap.math"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.math.function.isqrt": {
+      "caseIds": [
+        "stdlib-gap.math"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.math.function.lerp": {
+      "caseIds": [
+        "stdlib-gap.math"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.math.function.max": {
+      "caseIds": [
+        "stdlib-gap.math"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.math.function.min": {
+      "caseIds": [
+        "stdlib-gap.math"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.math.function.pow_int": {
+      "caseIds": [
+        "stdlib-gap.math"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.result.function.result_divide": {
       "caseIds": [
         "stdlib-gap.result"
@@ -1407,5 +1479,5 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 629
+  "expectedMissingRuntimeCount": 621
 }

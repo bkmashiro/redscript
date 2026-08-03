@@ -521,10 +521,7 @@
       "category": "pure-or-mostly-arithmetic",
       "proofLevels": [
         "stdlib-source-present",
-        "import-resolution-unit",
-        "mcruntime-e2e",
-        "mc-integration-offline-skippable",
-        "compile-all-static-smoke"
+        "dual-paper-semantic"
       ],
       "evidenceFiles": [
         "src/__tests__/array-dynamic.test.ts",
@@ -545,7 +542,13 @@
       "liveOracleCandidate": {
         "priority": "medium",
         "reason": "Arithmetic is broadly covered but fixed/scale-sensitive helpers benefit from live scoreboard proof."
-      }
+      },
+      "primaryEvidence": [
+        "tests/mc-cases/stdlib-gap-math.mcrs.fixture",
+        "docs/evidence/mcrs-runtime-stdlib-gap-stable-1.21.4.json",
+        "docs/evidence/mcrs-runtime-stdlib-gap-paper-26.2.json"
+      ],
+      "witnessLevel": "game-runtime-semantic"
     },
     {
       "module": "math_hp",
