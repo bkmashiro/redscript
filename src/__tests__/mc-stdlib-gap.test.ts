@@ -40,6 +40,9 @@ const expectedFunctions: Record<string, string[]> = {
   ],
   // expr_eval is currently inlined; semantic + entry receipt are required, but no artifact marker is claimed.
   'stdlib-gap.expr': [],
+  'stdlib-gap.list-dynamic': [
+    ...[['list_sum','values'],['list_avg','values'],['list_min','values'],['list_max','values'],['list_contains','values'],['list_index_of','values'],['list_dedup_count','values'],['list_sort_asc','asc'],['list_sort_desc','desc'],['list_shuffle','source']].map(([name, array]) => `data/gap_list_dynamic/function/${name}__arr_arr__gap_list_dynamic_arrays__${array}.mcfunction`),
+  ],
   'stdlib-gap.linalg': ['data/gap_linalg/function/vec2d_dot.mcfunction'],
   'stdlib-gap.list-fixed': [
     ...['list_min3','list_max3','list_min5','list_max5','sort3','sort4','sort5','weighted2','weighted3'].map(name => `data/gap_list_fixed/function/${name}.mcfunction`),

@@ -1306,13 +1306,17 @@ function lowerStmt(
         ctx.arrayVars.set(stmt.name, { ns, pathPrefix })
         // Evaluate the init expression (e.g. heap_new() or some function call)
         lowerExpr(stmt.init, ctx, scope)
-        // After the call, copy the NBT array from the return path into our own path.
-        // By convention array-returning functions write into ns:arrays/<ret> or a __ret path.
-        // Here we use 'data modify ... set from storage ns:arrays __ret_array' pattern,
-        // but since we don't have a unified return convention for arrays, we rely on
-        // monomorphization: the first time heap_push(h, val) is called with h in arrayVars,
-        // it will monomorphize correctly.
-        // Store a length temp so .length() works.
+        // Array-returning functions publish their result through one ephemeral
+        // storage slot. Copy it immediately into caller-owned storage so later
+        // calls cannot alias or clobber the value.
+        ctx.emit({
+          kind: 'call',
+          dst: null,
+          fn: `__raw:data modify storage ${ns} ${pathPrefix} set from storage rs:array_return value`,
+          args: [],
+        })
+        // Store a length temp so .length() remains defined. Precise dynamic
+        // length propagation is separate from the array value ABI.
         const lenTemp = ctx.freshTemp()
         ctx.emit({ kind: 'const', dst: lenTemp, value: 0 })
         scope.set(stmt.name, lenTemp)
@@ -1435,9 +1439,22 @@ function lowerStmt(
         })
         ctx.terminate({ kind: 'return', value: null })
       } else if (stmt.value?.kind === 'ident') {
-        // Check if returning an option struct var
-        const sv = ctx.structVars.get(stmt.value.name)
-        if (sv && sv.typeName === '__option') {
+        // Arrays are NBT-backed and cannot travel through the scalar $ret slot.
+        // Publish the bound value through one ephemeral storage location; an
+        // array-typed caller copies it into caller-owned storage immediately.
+        const arrayValue = ctx.arrayVars.get(stmt.value.name)
+        if (arrayValue) {
+          ctx.emit({
+            kind: 'call',
+            dst: null,
+            fn: `__raw:data modify storage rs:array_return value set from storage ${arrayValue.ns} ${arrayValue.pathPrefix}`,
+            args: [],
+          })
+          ctx.terminate({ kind: 'return', value: null })
+        } else {
+          // Check if returning an option struct var
+          const sv = ctx.structVars.get(stmt.value.name)
+          if (sv && sv.typeName === '__option') {
           const hasT = sv.fields.get('has')
           const valT = sv.fields.get('val')
           if (!hasT) throw new Error(`__option struct var '${stmt.value.name}' is missing 'has' field`)
@@ -1455,9 +1472,10 @@ function lowerStmt(
             ctx.emit({ kind: 'copy', dst: `__rf_${fieldName}`, src: { kind: 'temp', name: fieldTemp } })
           }
           ctx.terminate({ kind: 'return', value: null })
-        } else {
-          const val = lowerExpr(stmt.value, ctx, scope)
-          ctx.terminate({ kind: 'return', value: val })
+          } else {
+            const val = lowerExpr(stmt.value, ctx, scope)
+            ctx.terminate({ kind: 'return', value: val })
+          }
         }
       } else {
         const val = stmt.value ? lowerExpr(stmt.value, ctx, scope) : null

@@ -74,4 +74,19 @@ describe('Array reference parameter passing', () => {
     // Should not call plain 'swap_elems' (only the specialized variant)
     expect(testBody).not.toMatch(/function test:swap_elems\b(?!__arr_)/)
   })
+
+  test('array return copies the bound source into caller-owned storage', () => {
+    const result = compile(`
+      fn identity(arr: int[]): int[] { return arr; }
+      @keep fn copy_array() {
+        let nums: int[] = [1, 2, 3];
+        let copied: int[] = identity(nums);
+        scoreboard_set("#out", "test", copied[1]);
+      }
+    `, { namespace: 'test' })
+    const specialized = result.files.find(f => f.path.includes('identity__arr_') && !f.path.includes('__post_ret'))
+    expect(specialized?.content).toContain('data modify storage rs:array_return value set from storage test:arrays nums')
+    const caller = getFunctionBody(result.files, 'copy_array')
+    expect(caller).toContain('data modify storage test:arrays copied set from storage rs:array_return value')
+  })
 })

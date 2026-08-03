@@ -82,6 +82,17 @@ export const STDLIB_GAP_CASES: McCoreCaseDescriptor[] = [
     scoreboardAssertions: [{ player: '#expr', obj: 'gap_result', value: 40000 }],
   },
   {
+    ...base('list-dynamic', 'gap_list_dynamic'),
+    featureIds: [
+      'stdlib.list.function.list_avg', 'stdlib.list.function.list_contains', 'stdlib.list.function.list_dedup_count',
+      'stdlib.list.function.list_index_of', 'stdlib.list.function.list_max', 'stdlib.list.function.list_min',
+      'stdlib.list.function.list_shuffle', 'stdlib.list.function.list_sort_asc',
+      'stdlib.list.function.list_sort_desc', 'stdlib.list.function.list_sum',
+    ],
+    librarySourcePaths: [stdlib('list')],
+    scoreboardAssertions: Object.entries({shuffle_code:3214,source_code:3214,sum:12,avg:30000,avg_empty:0,min:-2,max:8,contains_yes:1,contains_no:0,index_found:3,index_missing:-1,dedup:3,asc0:-2,asc1:1,asc2:3,asc3:8,desc0:8,desc1:3,desc2:1,desc3:-2,shuffle0:3,shuffle1:2,shuffle2:1,shuffle3:4,source0:3,source1:2,source2:1,source3:4}).map(([player, value]) => ({ player: `#${player}`, obj: 'gap_result', value })),
+  },
+  {
     ...base('linalg', 'gap_linalg'),
     featureIds: ['stdlib.linalg.function.vec2d_dot'],
     librarySourcePaths: [stdlib('math_hp'), stdlib('linalg')],

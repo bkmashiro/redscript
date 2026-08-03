@@ -1,0 +1,39 @@
+namespace gap_list_dynamic
+
+fn test_gap() {
+  let values: int[] = [3, -2, 3, 8]
+  scoreboard_set("#sum", "gap_result", list_sum(values, 4))
+  scoreboard_set("#avg", "gap_result", list_avg(values, 4))
+  scoreboard_set("#avg_empty", "gap_result", list_avg(values, 0))
+  scoreboard_set("#min", "gap_result", list_min(values, 4))
+  scoreboard_set("#max", "gap_result", list_max(values, 4))
+  scoreboard_set("#contains_yes", "gap_result", list_contains(values, 4, 3))
+  scoreboard_set("#contains_no", "gap_result", list_contains(values, 4, 7))
+  scoreboard_set("#index_found", "gap_result", list_index_of(values, 4, 8))
+  scoreboard_set("#index_missing", "gap_result", list_index_of(values, 4, 7))
+  scoreboard_set("#dedup", "gap_result", list_dedup_count(values, 4))
+  let asc: int[] = [3, -2, 8, 1]
+  list_sort_asc(asc, 4)
+  scoreboard_set("#asc0", "gap_result", asc[0])
+  scoreboard_set("#asc1", "gap_result", asc[1])
+  scoreboard_set("#asc2", "gap_result", asc[2])
+  scoreboard_set("#asc3", "gap_result", asc[3])
+  let desc: int[] = [3, -2, 8, 1]
+  list_sort_desc(desc, 4)
+  scoreboard_set("#desc0", "gap_result", desc[0])
+  scoreboard_set("#desc1", "gap_result", desc[1])
+  scoreboard_set("#desc2", "gap_result", desc[2])
+  scoreboard_set("#desc3", "gap_result", desc[3])
+  let source: int[] = [1, 2, 3, 4]
+  let shuffled: int[] = list_shuffle(source, 4, 3)
+  scoreboard_set("#shuffle_code", "gap_result", shuffled[0] * 1000 + shuffled[1] * 100 + shuffled[2] * 10 + shuffled[3])
+  scoreboard_set("#source_code", "gap_result", source[0] * 1000 + source[1] * 100 + source[2] * 10 + source[3])
+  scoreboard_set("#shuffle0", "gap_result", shuffled[0])
+  scoreboard_set("#shuffle1", "gap_result", shuffled[1])
+  scoreboard_set("#shuffle2", "gap_result", shuffled[2])
+  scoreboard_set("#shuffle3", "gap_result", shuffled[3])
+  scoreboard_set("#source0", "gap_result", source[0])
+  scoreboard_set("#source1", "gap_result", source[1])
+  scoreboard_set("#source2", "gap_result", source[2])
+  scoreboard_set("#source3", "gap_result", source[3])
+}
