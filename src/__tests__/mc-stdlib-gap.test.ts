@@ -62,6 +62,10 @@ const expectedFunctions: Record<string, string[]> = {
     ...['list_min3','list_max3','list_min5','list_max5','sort3','sort4','sort5','weighted2','weighted3'].map(name => `data/gap_list_fixed/function/${name}.mcfunction`),
     'data/gap_list_fixed/function/avg5__const_1_2_3_4_5.mcfunction',
   ],
+  'stdlib-gap.math-trig-load': [
+    'data/gap_math_trig/function/_math_init.mcfunction',
+    'data/gap_math_trig/function/sin_fixed.mcfunction',
+  ],
   'stdlib-gap.math': ['data/gap_math/function/clamp_int.mcfunction','data/gap_math/function/gcd.mcfunction','data/gap_math/function/isqrt.mcfunction','data/gap_math/function/pow_int.mcfunction'],
   'stdlib-gap.timer': [],
   'stdlib-gap.sets': [

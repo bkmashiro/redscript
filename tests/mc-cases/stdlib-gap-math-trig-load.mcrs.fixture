@@ -1,0 +1,20 @@
+namespace gap_math_trig
+
+fn test_gap() {
+  scoreboard_set("#sin0", "gap_result", sin_fixed(0))
+  scoreboard_set("#sin30", "gap_result", sin_fixed(30))
+  scoreboard_set("#sin90", "gap_result", sin_fixed(90))
+  scoreboard_set("#sin150", "gap_result", sin_fixed(150))
+  scoreboard_set("#sin210", "gap_result", sin_fixed(210))
+  scoreboard_set("#sin270", "gap_result", sin_fixed(270))
+  scoreboard_set("#sin330", "gap_result", sin_fixed(330))
+  scoreboard_set("#sin_neg30", "gap_result", sin_fixed(-30))
+  scoreboard_set("#sin390", "gap_result", sin_fixed(390))
+
+  scoreboard_set("#cos0", "gap_result", cos_fixed(0))
+  scoreboard_set("#cos60", "gap_result", cos_fixed(60))
+  scoreboard_set("#cos90", "gap_result", cos_fixed(90))
+  scoreboard_set("#cos180", "gap_result", cos_fixed(180))
+  scoreboard_set("#cos270", "gap_result", cos_fixed(270))
+  scoreboard_set("#cos_neg60", "gap_result", cos_fixed(-60))
+}
