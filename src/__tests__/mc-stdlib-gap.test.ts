@@ -49,6 +49,14 @@ const expectedFunctions: Record<string, string[]> = {
   'stdlib-gap.list-dynamic': [
     ...[['list_sum','values'],['list_avg','values'],['list_min','values'],['list_max','values'],['list_contains','values'],['list_index_of','values'],['list_dedup_count','values'],['list_sort_asc','asc'],['list_sort_desc','desc'],['list_shuffle','source']].map(([name, array]) => `data/gap_list_dynamic/function/${name}__arr_arr__gap_list_dynamic_arrays__${array}.mcfunction`),
   ],
+  'stdlib-gap.heap': [
+    'data/gap_heap/function/heap_new.mcfunction',
+    'data/gap_heap/function/heap_push__arr_h__gap_heap_arrays__isolated.mcfunction',
+    'data/gap_heap/function/heap_push__arr_h__gap_heap_arrays__min_h.mcfunction',
+    'data/gap_heap/function/heap_pop__arr_h__gap_heap_arrays__min_h.mcfunction',
+    'data/gap_heap/function/max_heap_push__arr_h__gap_heap_arrays__max_h.mcfunction',
+    'data/gap_heap/function/max_heap_pop__arr_h__gap_heap_arrays__max_h.mcfunction',
+  ],
   'stdlib-gap.linalg': ['data/gap_linalg/function/vec2d_dot.mcfunction'],
   'stdlib-gap.list-fixed': [
     ...['list_min3','list_max3','list_min5','list_max5','sort3','sort4','sort5','weighted2','weighted3'].map(name => `data/gap_list_fixed/function/${name}.mcfunction`),

@@ -1,0 +1,36 @@
+namespace gap_heap
+
+fn test_gap() {
+  let min_h: int[] = heap_new()
+  scoreboard_set("#min_empty_size", "gap_result", heap_size(min_h))
+  min_h = heap_push(min_h, 5)
+  min_h = heap_push(min_h, -2)
+  min_h = heap_push(min_h, 9)
+  min_h = heap_push(min_h, 1)
+  scoreboard_set("#min_size4", "gap_result", heap_size(min_h))
+  scoreboard_set("#min_peek0", "gap_result", heap_peek(min_h))
+  min_h = heap_pop(min_h)
+  scoreboard_set("#min_size3", "gap_result", heap_size(min_h))
+  scoreboard_set("#min_peek1", "gap_result", heap_peek(min_h))
+  min_h = heap_pop(min_h)
+  scoreboard_set("#min_size2", "gap_result", heap_size(min_h))
+  scoreboard_set("#min_peek2", "gap_result", heap_peek(min_h))
+
+  let max_h: int[] = heap_new()
+  max_h = max_heap_push(max_h, 5)
+  max_h = max_heap_push(max_h, -2)
+  max_h = max_heap_push(max_h, 9)
+  max_h = max_heap_push(max_h, 1)
+  scoreboard_set("#max_size4", "gap_result", heap_size(max_h))
+  scoreboard_set("#max_peek0", "gap_result", heap_peek(max_h))
+  max_h = max_heap_pop(max_h)
+  scoreboard_set("#max_size3", "gap_result", heap_size(max_h))
+  scoreboard_set("#max_peek1", "gap_result", heap_peek(max_h))
+
+  let isolated: int[] = heap_new()
+  isolated = heap_push(isolated, 42)
+  scoreboard_set("#isolated_size", "gap_result", heap_size(isolated))
+  scoreboard_set("#isolated_peek", "gap_result", heap_peek(isolated))
+  scoreboard_set("#min_still_size", "gap_result", heap_size(min_h))
+  scoreboard_set("#min_still_peek", "gap_result", heap_peek(min_h))
+}
