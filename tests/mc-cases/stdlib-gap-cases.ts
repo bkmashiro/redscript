@@ -101,6 +101,17 @@ export const STDLIB_GAP_CASES: McCoreCaseDescriptor[] = [
     scoreboardAssertions: Object.entries({abs_pos:42,abs_neg:99,min_ab:3,min_ba:3,max_ab:7,max_ba:7,clamp_low:0,clamp_high:100,clamp_mid:50,lerp_mid:500,lerp_full:200,isqrt_square:5,isqrt_floor:5,pow_ten:1024,pow_zero:1,gcd_pos:4,gcd_neg:4}).map(([player, value]) => ({player:`#${player}`,obj:'gap_result',value})),
   },
   {
+    ...base('timer', 'gap_timer'),
+    featureIds: [
+      'stdlib.timer.function.format_time_h', 'stdlib.timer.function.format_time_m', 'stdlib.timer.function.format_time_s',
+      'stdlib.timer.function.seconds_to_ticks', 'stdlib.timer.function.tick_to_ms', 'stdlib.timer.function.tick_to_seconds',
+      'stdlib.timer.method.Timer.done', 'stdlib.timer.method.Timer.elapsed', 'stdlib.timer.method.Timer.new', 'stdlib.timer.method.Timer.pause',
+      'stdlib.timer.method.Timer.remaining', 'stdlib.timer.method.Timer.reset', 'stdlib.timer.method.Timer.start', 'stdlib.timer.method.Timer.tick',
+    ],
+    scoreboardAssertions: Object.entries({to_seconds:2,to_ms:500,to_ticks:60,fmt_s:15,fmt_m:1,fmt_h:2,a_initial_elapsed:0,a_initial_remaining:3,a_initial_done:0,a_inactive_tick:0,a_elapsed_two:2,a_remaining_one:1,a_done_two:0,a_paused_tick:2,a_capped_elapsed:3,a_done_three:1,a_remaining_zero:0,b_isolated_elapsed:0,b_isolated_remaining:5,a_reset_elapsed:0,a_reset_remaining:3,a_reset_done:0}).map(([player,value])=>({player:`#${player}`,obj:'gap_result',value})),
+    librarySourcePaths: ['src/stdlib/timer.mcrs'],
+  },
+  {
     ...base('sets', 'gap_sets'),
     featureIds: [
       'stdlib.sets.function.set_new',
