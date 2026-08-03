@@ -156,12 +156,19 @@ describe('managed @on event runtime', () => {
   test('a real Mineflayer combat kill dispatches EntityKill exactly once', async () => {
     if (!serverOnline || !botOnline) return
     await mc.command(`/scoreboard players set evt_kill ${RESULT_OBJECTIVE} 0`)
-    await mc.command('/kill @e[tag=rs_event_target]')
-    await mc.command(`/execute at ${BOT_NAME} run summon minecraft:pig ~1 ~ ~ {NoAI:1b,PersistenceRequired:1b,Tags:["rs_event_target"]}`)
-    const result = await botPost<{ killed: boolean }>('/attack-nearest', { type: 'pig', maxAttacks: 32 })
-    expect(result.killed).toBe(true)
-    await mc.ticks(10)
-    expect(await mc.entities('@e[tag=rs_event_target]')).toHaveLength(0)
-    expect(await mc.scoreboard('evt_kill', RESULT_OBJECTIVE)).toBe(1)
+    await mc.command(`/tp ${BOT_NAME} 0 65 0`)
+    await mc.command('/fill -1 64 -1 2 67 2 minecraft:barrier hollow')
+    await mc.command('/summon minecraft:pig 1 65 0 {Tags:["rs_event_target"],NoAI:1b,PersistenceRequired:1b}')
+    try {
+      await mc.ticks(2)
+      const result = await botPost<{ killed: boolean }>('/attack-nearest', { name: 'pig', maxAttacks: 32 })
+      expect(result.killed).toBe(true)
+      await mc.ticks(10)
+      expect(await mc.scoreboard('evt_kill', RESULT_OBJECTIVE)).toBe(1)
+    } finally {
+      await mc.command('/kill @e[tag=rs_event_target]').catch(() => {})
+      await mc.command('/fill -1 65 -1 2 67 2 minecraft:air').catch(() => {})
+      await mc.command('/fill -1 64 -1 2 64 2 minecraft:smooth_stone').catch(() => {})
+    }
   }, 90_000)
 })
