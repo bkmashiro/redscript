@@ -95,6 +95,20 @@ export const STDLIB_GAP_CASES: McCoreCaseDescriptor[] = [
     ],
   },
   {
+    ...base('list-fixed', 'gap_list_fixed'),
+    featureIds: [
+      'stdlib.list.function.avg3', 'stdlib.list.function.avg5',
+      'stdlib.list.function.list_max3', 'stdlib.list.function.list_max5',
+      'stdlib.list.function.list_min3', 'stdlib.list.function.list_min5',
+      'stdlib.list.function.list_sum3', 'stdlib.list.function.list_sum4', 'stdlib.list.function.list_sum5',
+      'stdlib.list.function.sort2_max', 'stdlib.list.function.sort2_min',
+      'stdlib.list.function.sort3', 'stdlib.list.function.sort4', 'stdlib.list.function.sort5',
+      'stdlib.list.function.weighted2', 'stdlib.list.function.weighted3',
+    ],
+    librarySourcePaths: ['src/stdlib/list.mcrs'],
+    scoreboardAssertions: Object.entries({sort2_min:3,sort2_max:7,min3:-2,max3:8,min5:-9,max5:9,sum3:6,sum4:10,sum5:15,avg3:2,avg5:3,sort3_0:1,sort3_1:2,sort3_2:3,sort4_0:1,sort4_1:2,sort4_2:3,sort4_3:4,sort5_0:1,sort5_1:2,sort5_2:3,sort5_3:4,sort5_4:5,weighted2_0:0,weighted2_1:1,weighted3_0:0,weighted3_1:1,weighted3_2:2}).map(([player, value]) => ({ player: `#${player}`, obj: 'gap_result', value })),
+  },
+  {
     ...base('math', 'gap_math'),
     featureIds: ['stdlib.math.function.abs', 'stdlib.math.function.clamp', 'stdlib.math.function.gcd', 'stdlib.math.function.isqrt', 'stdlib.math.function.lerp', 'stdlib.math.function.max', 'stdlib.math.function.min', 'stdlib.math.function.pow_int'],
     librarySourcePaths: [stdlib('math')],
