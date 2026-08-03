@@ -24,16 +24,16 @@ This qualifies the mapped core integer/scoreboard/control-flow/storage/lifecycle
 
 ### Stdlib representative semantic subset
 
-Source revision: `220c08d0f4acfce8dcf5d73956c6fd6724d01a42`
+Source revision: `3544ab646a85313b82bd54085130e05f963713a5`
 
-Seven isolated stdlib cases passed on both managed Paper channels:
+Eight isolated stdlib cases passed on both managed Paper channels:
 
 | Channel | Paper build | Result | Cleanup | Evidence |
 |---|---|---:|---:|---|
-| stable | `1.21.4-232-12d8fe0` | 7/7 | disposable root removed | `mcrs-runtime-stdlib-gap-stable-1.21.4.json` |
-| compatibility | `26.2-87-a95ae8d` | 7/7 | disposable root removed | `mcrs-runtime-stdlib-gap-paper-26.2.json` |
+| stable | `1.21.4-232-12d8fe0` | 8/8 | disposable root removed | `mcrs-runtime-stdlib-gap-stable-1.21.4.json` |
+| compatibility | `26.2-87-a95ae8d` | 8/8 | disposable root removed | `mcrs-runtime-stdlib-gap-paper-26.2.json` |
 
-The cases cover representative behavior from `advanced`, `bits`, `expr`, `linalg`, `sets`, `result`, and `state`. The mapped public API scope is exactly `advanced.fib`, all 11 public `bits` APIs (`bit_and`, `bit_or`, `bit_xor`, `bit_not`, `bit_shl`, `bit_shr`, `bit_get`, `bit_set`, `bit_clear`, `bit_toggle`, `popcount`), `expr.expr_eval`, `linalg.vec2d_dot`, `result.result_divide`, `result.result_value`, `state.set_state`, `state.is_state`, plus `sets.set_new`, `set_add`, `set_contains`, `set_remove`, and `set_clear`. The bits case asserts every API independently and requires all 11 emitted-function markers. The linalg case asserts both multiplication terms and the final dot product with bounded double-to-fixed conversion tolerance. The sets case asserts unique handles, duplicate-add idempotence, membership, removal, and clear semantics. Every case requires emitted-function marker readback where the claimed function is not inlined.
+The cases cover representative behavior from `advanced`, `bits`, `calculus`, `expr`, `linalg`, `sets`, `result`, and `state`. The mapped public API scope is exactly `advanced.fib`, all 11 public `bits` APIs (`bit_and`, `bit_or`, `bit_xor`, `bit_not`, `bit_shl`, `bit_shr`, `bit_get`, `bit_set`, `bit_clear`, `bit_toggle`, `popcount`), all seven mapped `calculus` APIs (`deriv_forward`, `deriv_central`, `integrate_trapezoid`, `integrate_simpson`, `running_mean`, `running_m2`, `variance_from_m2`), `expr.expr_eval`, `linalg.vec2d_dot`, `result.result_divide`, `result.result_value`, `state.set_state`, `state.is_state`, plus `sets.set_new`, `set_add`, `set_contains`, `set_remove`, and `set_clear`. The bits case asserts every API independently and requires all 11 emitted-function markers. The calculus case uses 10 independent numeric assertions and requires the direct/specialized projection artifacts for all seven claimed APIs. The linalg case asserts both multiplication terms and the final dot product with bounded double-to-fixed conversion tolerance. The sets case asserts unique handles, duplicate-add idempotence, membership, removal, and clear semantics. Every case requires emitted-function marker readback where the claimed function is not inlined.
 
 This is representative module evidence, not qualification of every declaration in those modules.
 
@@ -41,7 +41,7 @@ This is representative module evidence, not qualification of every declaration i
 
 ### Remaining stdlib scope
 
-The checked-in stdlib catalog records 50 modules, 717 total functions/methods, 58 internal functions, 659 public runtime-required probes, and 401 constants. Exactly 23 public APIs have scenario mappings on both channels; 636 remain explicitly unmapped. A representative case does not qualify every declaration in its module, and direct fixture references are not promoted to runtime proof.
+The checked-in stdlib catalog records 50 modules, 717 total functions/methods, 58 internal functions, 659 public runtime-required probes, and 401 constants. Exactly 30 public APIs have scenario mappings on both channels; 629 remain explicitly unmapped. A representative case does not qualify every declaration in its module, and direct fixture references are not promoted to runtime proof.
 
 ### Removed invalid stdlib surface
 

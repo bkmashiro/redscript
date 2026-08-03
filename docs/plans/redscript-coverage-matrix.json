@@ -107,17 +107,21 @@
       "proofLevels": [
         "stdlib-source-present",
         "mc-integration-offline-skippable",
-        "compile-all-static-smoke"
+        "compile-all-static-smoke",
+        "dual-paper-runtime-semantic"
       ],
       "evidenceFiles": [
         "src/__tests__/mc-integration/stdlib-coverage-2.test.ts",
-        "src/__tests__/stdlib/calculus.test.ts"
+        "src/__tests__/stdlib/calculus.test.ts",
+        "tests/mc-cases/stdlib-gap-calculus.mcrs.fixture",
+        "docs/evidence/mcrs-runtime-stdlib-gap-stable-1.21.4.json",
+        "docs/evidence/mcrs-runtime-stdlib-gap-paper-26.2.json"
       ],
-      "livePaperStatus": "not-selected",
-      "notes": "",
+      "livePaperStatus": "qualified-subset-both-channels",
+      "notes": "Seven directly claimed public APIs; 10 exact numeric assertions plus direct/specialized function-marker readback.",
       "liveOracleCandidate": {
-        "priority": "none",
-        "reason": "No high-signal bounded live oracle candidate identified yet; keep static/compile evidence unless a real bug motivates more."
+        "priority": "completed",
+        "reason": "Qualified on stable 1.21.4 and Paper 26.2 managed corpus channels."
       }
     },
     {

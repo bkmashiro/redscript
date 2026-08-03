@@ -1244,6 +1244,69 @@
         "paper-26.2"
       ]
     },
+    "stdlib.calculus.function.deriv_central": {
+      "caseIds": [
+        "stdlib-gap.calculus"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.calculus.function.deriv_forward": {
+      "caseIds": [
+        "stdlib-gap.calculus"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.calculus.function.integrate_simpson": {
+      "caseIds": [
+        "stdlib-gap.calculus"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.calculus.function.integrate_trapezoid": {
+      "caseIds": [
+        "stdlib-gap.calculus"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.calculus.function.running_m2": {
+      "caseIds": [
+        "stdlib-gap.calculus"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.calculus.function.running_mean": {
+      "caseIds": [
+        "stdlib-gap.calculus"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
+    "stdlib.calculus.function.variance_from_m2": {
+      "caseIds": [
+        "stdlib-gap.calculus"
+      ],
+      "channels": [
+        "stable-1.21.4",
+        "paper-26.2"
+      ]
+    },
     "stdlib.expr.function.expr_eval": {
       "caseIds": [
         "stdlib-gap.expr"
@@ -1344,5 +1407,5 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 636
+  "expectedMissingRuntimeCount": 629
 }
