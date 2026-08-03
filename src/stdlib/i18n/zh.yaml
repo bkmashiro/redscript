@@ -2836,10 +2836,10 @@ list:
 
 events:
   __events_load:
-    desc: 内部加载函数：注册 rs.deaths/rs.kills/rs.item_use 计分板目标。勿直接调用。
+    desc: 内部加载函数：注册 rs.deaths/rs.kills/rs.left/rs.events 计分板目标。勿直接调用。
     returns: 无返回值
   __events_tick:
-    desc: 内部每刻函数：检测玩家加入/死亡/击杀/物品使用事件并分发到对应函数标签。勿直接调用。
+    desc: 内部每刻函数：检测玩家首次出现或重新加入、死亡、击杀事件，并分发到对应函数标签。勿直接调用。
     returns: 无返回值
 
 sets:
