@@ -75,6 +75,8 @@ async function waitForServer(client: MCTestClient, timeoutMs = 30000): Promise<b
 }
 
 beforeAll(async () => {
+  if (process.env.MC_OFFLINE === 'true') return
+
   mc = new MCTestClient(MC_HOST, MC_PORT)
   serverOnline = await waitForServer(mc)
   if (!serverOnline) {
