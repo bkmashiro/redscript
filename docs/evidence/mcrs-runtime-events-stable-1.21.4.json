@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "managed-runtime-corpus",
+  "sourceRevision": "2413ec0fb1f37003bd2b4c24836a19d45473ea80",
+  "channel": "stable-1.21.4",
+  "startedAt": "2026-08-03T17:06:40.890Z",
+  "finishedAt": "2026-08-03T17:07:13.725Z",
+  "paperVersion": "1.21.4-232-12d8fe0 (MC: 1.21.4)",
+  "disposableRootRemoved": true,
+  "suites": [
+    {
+      "suite": "events",
+      "command": "npm test -- --selectProjects mc-integration --runInBand --runTestsByPath src/__tests__/mc-integration/event-runtime.test.ts --testTimeout=120000",
+      "exitCode": 0,
+      "durationMs": 19575,
+      "outputSha256": "e4807570c2f2feba01e8099d88697c047b6f1527bb94a251a9fda2db4d9beca6",
+      "outputTail": "\n> redscript-mc@3.0.4 test\n> jest --selectProjects mc-integration --runInBand --runTestsByPath src/__tests__/mc-integration/event-runtime.test.ts --testTimeout=120000\n\nRunning one project: mc-integration\nPASS mc-integration src/__tests__/mc-integration/event-runtime.test.ts (18.799 s)\n  managed @on event runtime\n    ✓ compiled handlers and generated function tag are reachable (256 ms)\n    ✓ two embedded runtimes dispatch first-appearance PlayerJoin exactly once (300 ms)\n    ✓ a real disconnect and reconnect dispatches PlayerJoin exactly once (785 ms)\n    ✓ a real player death dispatches PlayerDeath exactly once (1083 ms)\n    ✓ a real Mineflayer combat kill dispatches EntityKill exactly once (8745 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       5 passed, 5 total\nSnapshots:   0 total\nTime:        18.949 s\nRan all test suites within paths \"src/__tests__/mc-integration/event-runtime.test.ts\".\n",
+      "summary": {
+        "suites": "1 passed, 1 total",
+        "tests": "5 passed, 5 total"
+      }
+    }
+  ],
+  "bot": {
+    "connected": true,
+    "outputTail": "TestBot API listening on http://127.0.0.1:25562\n"
+  },
+  "passed": true
+}

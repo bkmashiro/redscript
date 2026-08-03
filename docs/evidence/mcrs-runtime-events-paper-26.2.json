@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "managed-runtime-corpus",
+  "sourceRevision": "2413ec0fb1f37003bd2b4c24836a19d45473ea80",
+  "channel": "paper-26.2",
+  "startedAt": "2026-08-03T17:08:18.583Z",
+  "finishedAt": "2026-08-03T17:09:12.303Z",
+  "paperVersion": "26.2-87-a95ae8d (MC: 26.2)",
+  "disposableRootRemoved": true,
+  "suites": [],
+  "passed": false,
+  "error": "TestBot did not connect within 45 seconds: TestBot API listening on http://127.0.0.1:25562\nError: read ECONNRESET\n    at TCP.onStreamRead (node:internal/stream_base_commons:216:20) {\n  errno: -54,\n  code: 'ECONNRESET',\n  syscall: 'read'\n}\n"
+}

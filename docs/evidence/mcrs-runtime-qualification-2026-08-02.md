@@ -51,7 +51,7 @@ This is representative module evidence, not qualification of every declaration i
 
 Task 9 stops expanding the corpus by raw API count after representative dual-Paper cases cover scalar and fixed-point arithmetic, multi-limb carry/borrow, array return and mutation, multi-instance data structures, load/tick lifecycle, and exact world block mutation/readback. The final tranche found one independent bigint borrow defect; the subsequent heap, trig-load, and world-block cases introduced no new compiler/runtime defect category.
 
-The 401 exported constants retain catalog/type/value drift gates only; they are not individually Paper-qualified. Remaining player, entity/event, visual, interaction, worldgen/dimension, and unmapped stdlib behavior remains outside this qualification claim and must be reopened only for a concrete release risk or regression, not to chase a coverage percentage.
+The 401 exported constants retain catalog/type/value drift gates only; they are not individually Paper-qualified. Remaining player helpers, entity/visual/interaction/worldgen/dimension behavior, unlisted event families, Paper 26.2 player-event semantics, and unmapped stdlib behavior remain outside this qualification claim and must be reopened only for a concrete release risk or regression, not to chase a coverage percentage.
 
 ## Explicitly unqualified scope
 
@@ -63,9 +63,17 @@ The checked-in stdlib catalog records 50 modules, 717 total functions/methods, 5
 
 The legacy `strings` module was removed instead of being counted as unqualified coverage. Its four APIs did not implement their advertised contracts: `str_len` returned NBT tag/list size rather than plain-string length, `str_concat` produced a list rather than a string, `str_contains` always returned `0`, and `str_slice` relied on unproven raw placeholder substitution. Compile-only self-tests and documentation that presented those behaviors as working features were removed with the module. This does not remove RedScript language string literals, format strings, or the verified string-return ABI.
 
-### Managed player lane
+### Managed player event lane
 
-Mineflayer `TestBot` successfully joined the stable disposable server and the strict bot prerequisite ran. Diagnostic result: **29 passed / 9 failed / 38 total**, with successful bot/Paper cleanup. The failed scenarios cover interaction/sneaking/look/spawn behavior and ItemUse/EntityKill event paths. Therefore the player-required lane is not release-qualified.
+Source revision: `2413ec0fb1f37003bd2b4c24836a19d45473ea80`
+
+The old broad player diagnostic (`29 passed / 9 failed / 38 total`) is superseded for event qualification because its `ItemUse` and `EntityKill` cases pre-created native statistic objectives as `dummy` and then manually changed trigger scores. That did not prove Minecraft behavior.
+
+The replacement bounded oracle passed **5/5** on stable Paper `1.21.4-232-12d8fe0`: generated handler-tag reachability, two independently compiled runtimes dispatching once, an actual Mineflayer disconnect/reconnect, an actual player death, and an actual Mineflayer combat kill. The disposable root was removed. Evidence: `mcrs-runtime-events-stable-1.21.4.json` (SHA-256 `781d4903d71c179201eb59d77c86c8e0cddadc73d45363e39db120e9e4a00847`).
+
+Generic `ItemUse` was removed from the public event manifest, compiler typing surface, dispatcher, docs, tests, tracked editor bundles, and packaged runtime assets rather than retaining a carrot-on-a-stick-only implementation. `PlayerJoin`, `PlayerDeath`, and `EntityKill` remain supported on the stable-qualified boundary.
+
+Paper 26.2 is **not event-qualified**. The independent managed server reached Paper `26.2-87-a95ae8d`, but Mineflayer failed its protocol handshake with `ECONNRESET`; the strict bot prerequisite stopped the run before any suite or event case executed. This failure and successful disposable-root cleanup are recorded in `mcrs-runtime-events-paper-26.2.json` (SHA-256 `d0940d6ec576553c1b99a02d26e3e83bf86085f3c5b1a56918a3220ed7baeee4`). Stable results are not projected onto this channel. The remaining broad player interaction/sneaking/look/spawn diagnostics are outside the event claim and are not being expanded by count.
 
 ### Legacy monolithic integration suite
 
@@ -73,10 +81,10 @@ After suite-pack isolation, the historical server-only suite improved from 66 to
 
 ## Evidence boundaries
 
-Repository validation before the evidence runs passed `npm run build` and the complete explicit-offline Jest matrix: **345 suites / 6155 tests passed**, with 3 live-only suites / 28 tests explicitly skipped. Those offline passes are regression evidence only, not Paper runtime proof.
+Repository validation before finalization passed `npm run build`, `npm run validate-mc`, and the complete explicit-offline Jest matrix: **344 suites / 6144 tests passed**, with 28 live-only tests explicitly skipped. Those offline passes are regression evidence only, not Paper runtime proof.
 
 - A Paper `Done (...)` line is startup evidence only.
 - Offline Jest passes and compile-only checks are not Paper runtime proof.
 - Stable and Paper 26.2 reports are separate artifacts and must not be relabeled across channels.
 - Player/visual behavior is not inferred from server-only command success.
-- All four canonical reports record `disposableRootRemoved: true`; the frozen template worlds were not used as runtime roots.
+- All five passing canonical runtime reports record `disposableRootRemoved: true`; the failed Paper 26.2 event-prerequisite report records the same cleanup. The frozen template worlds were not used as runtime roots.

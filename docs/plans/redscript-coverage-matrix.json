@@ -295,7 +295,9 @@
         "src/__tests__/events-manifest.test.ts",
         "src/__tests__/mc-integration.test.ts",
         "src/__tests__/mc-integration/event-runtime.test.ts",
-        "src/__tests__/stdlib/events.test.ts"
+        "src/__tests__/stdlib/events.test.ts",
+        "docs/evidence/mcrs-runtime-events-stable-1.21.4.json",
+        "docs/evidence/mcrs-runtime-events-paper-26.2.json"
       ],
       "livePaperStatus": "stable-qualified-current-bot-blocked",
       "notes": "Stable Paper proves native reconnect, player death, and entity kill dispatch plus multi-runtime deduplication. Paper 26.2 remains unqualified because Mineflayer could not complete the protocol handshake; no event case executed on that channel. Generic ItemUse was removed rather than retaining a carrot-on-a-stick-only implementation.",
