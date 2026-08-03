@@ -16,6 +16,7 @@ All notable changes to RedScript will be documented in this file.
 
 #### Events
 - **`@on(ItemUse)` removed from built-in legacy events** — the runtime only tracked `minecraft.used:minecraft.carrot_on_a_stick`, so the generic name promised behavior it could not provide. Use `@function_tag(...)` with an item-specific scoreboard or advancement asset instead.
+- **VS Code event runtime packaging** — the extension now ships the canonical `events.mcrs` asset beside its fallback compiler, so `@on(...)` no longer depends on a repository checkout or a workspace-relative `src/stdlib` path.
 - **Built-in event dispatch hardened** — `PlayerJoin` now fires after reconnects through the native `leave_game` statistic, and a shared gametime guard prevents multiple RedScript datapacks from dispatching the same global event tags more than once per tick.
 - **`@on(BlockBreak)` removed from built-in legacy events** — there was no implemented runtime dispatcher or live MC coverage for block-break detection. Users can build block-break behavior explicitly with `@function_tag(...)` and their own scoreboard/advancement datapack assets instead of relying on unsupported compiler sugar.
 - **`@on(EventType)` no-parameter handlers** — event handlers may now omit the legacy `player: Player` parameter and use Minecraft's `@s` execution context directly. The existing single-parameter form remains accepted for compatibility.

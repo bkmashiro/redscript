@@ -144,6 +144,9 @@ function resolveRuntimeAssetPathWithCandidateRoots(
 ): string {
   const existsSync = options.existsSync ?? fs.existsSync
   const candidateRoots = options.candidateRoots ?? [
+    // Bundled editor builds ship compiler-owned assets beside out/ under
+    // runtime-assets/. Keep this first so user workspaces cannot shadow them.
+    path.resolve(__dirname, '../runtime-assets'),
     // Prefer the package/repo that owns this compiler before falling back to the
     // caller's cwd; otherwise a user project with a matching src/stdlib path
     // could shadow compiler-owned runtime assets.

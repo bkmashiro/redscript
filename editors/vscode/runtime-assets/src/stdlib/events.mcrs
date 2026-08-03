@@ -1,0 +1,53 @@
+// events.mcrs — RedScript event dispatcher.
+//
+// Detects MC scoreboard-driven events each tick and dispatches them to
+// function tags so multiple handlers can be registered with @on(EventType).
+//
+// Supported events (dispatched via function tags):
+//   #rs:on_player_join  — fired on first appearance and after each reconnect
+//   #rs:on_player_death — fired when a player's rs.deaths score reaches 1+
+//   #rs:on_entity_kill  — fired when a player's rs.kills score reaches 1+
+//
+// Usage:
+//   @on(PlayerJoin) fn greet() { tellraw(@s, "Welcome!"); }
+
+module events
+
+/// Internal load function: registers scoreboard objectives for join, death, and kill tracking.
+/// Do not call directly — invoked automatically at datapack load.
+/// @since 1.2.0
+@load fn __events_load() {
+    raw("scoreboard objectives add rs.deaths deathCount")
+    raw("scoreboard objectives add rs.kills totalKillCount")
+    raw("scoreboard objectives add rs.left minecraft.custom:minecraft.leave_game")
+    raw("scoreboard objectives add rs.events dummy")
+}
+
+/// Internal tick function: polls scoreboard objectives each game tick and dispatches
+/// PlayerJoin / PlayerDeath / EntityKill events to their respective function tags.
+/// Do not call directly — invoked automatically every tick.
+/// @since 1.2.0
+@tick fn __events_tick() {
+    // The runtime asset is embedded by every datapack that uses @on. The
+    // gametime guard ensures the shared rs:* handler tags are dispatched once
+    // globally per tick rather than once per RedScript datapack.
+    raw("execute store result score #now rs.events run time query gametime")
+
+    // PlayerJoin: first appearance, then every reconnect observed through the
+    // persistent leave_game statistic.
+    raw("execute unless score #last rs.events = #now rs.events as @a[tag=!rs.joined] run function #rs:on_player_join")
+    raw("execute unless score #last rs.events = #now rs.events run scoreboard players set @a[tag=!rs.joined] rs.left 0")
+    raw("execute unless score #last rs.events = #now rs.events run tag @a[tag=!rs.joined] add rs.joined")
+    raw("execute unless score #last rs.events = #now rs.events as @a[tag=rs.joined,scores={rs.left=1..}] run function #rs:on_player_join")
+    raw("execute unless score #last rs.events = #now rs.events run scoreboard players set @a[tag=rs.joined,scores={rs.left=1..}] rs.left 0")
+
+    // PlayerDeath
+    raw("execute unless score #last rs.events = #now rs.events as @a[scores={rs.deaths=1..}] run function #rs:on_player_death")
+    raw("execute unless score #last rs.events = #now rs.events run scoreboard players set @a[scores={rs.deaths=1..}] rs.deaths 0")
+
+    // EntityKill
+    raw("execute unless score #last rs.events = #now rs.events as @a[scores={rs.kills=1..}] run function #rs:on_entity_kill")
+    raw("execute unless score #last rs.events = #now rs.events run scoreboard players set @a[scores={rs.kills=1..}] rs.kills 0")
+
+    raw("scoreboard players operation #last rs.events = #now rs.events")
+}

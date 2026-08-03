@@ -1,9 +1,15 @@
 import esbuild from 'esbuild'
+import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const watch = process.argv.includes('--watch')
+
+const canonicalEventRuntime = path.join(__dirname, '../../src/stdlib/events.mcrs')
+const packagedEventRuntime = path.join(__dirname, 'runtime-assets/src/stdlib/events.mcrs')
+fs.mkdirSync(path.dirname(packagedEventRuntime), { recursive: true })
+fs.copyFileSync(canonicalEventRuntime, packagedEventRuntime)
 
 const common = {
   bundle: true,

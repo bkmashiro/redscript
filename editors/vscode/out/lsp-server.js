@@ -1080,8 +1080,8 @@ var require_semaphore = __commonJS({
         this._waiting = [];
       }
       lock(thunk) {
-        return new Promise((resolve2, reject) => {
-          this._waiting.push({ thunk, resolve: resolve2, reject });
+        return new Promise((resolve3, reject) => {
+          this._waiting.push({ thunk, resolve: resolve3, reject });
           this.runNext();
         });
       }
@@ -2571,9 +2571,9 @@ ${JSON.stringify(message, null, 4)}`);
           if (typeof cancellationStrategy.sender.enableCancellation === "function") {
             cancellationStrategy.sender.enableCancellation(requestMessage);
           }
-          return new Promise(async (resolve2, reject) => {
+          return new Promise(async (resolve3, reject) => {
             const resolveWithCleanup = (r) => {
-              resolve2(r);
+              resolve3(r);
               cancellationStrategy.sender.cleanup(id);
               disposable?.dispose();
             };
@@ -2984,10 +2984,10 @@ var require_ril = __commonJS({
         return api_1.Disposable.create(() => this.stream.off("end", listener));
       }
       write(data, encoding) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve3, reject) => {
           const callback = (error) => {
             if (error === void 0 || error === null) {
-              resolve2();
+              resolve3();
             } else {
               reject(error);
             }
@@ -3090,7 +3090,7 @@ var require_main = __commonJS({
     exports2.createMessageConnection = exports2.createServerSocketTransport = exports2.createClientSocketTransport = exports2.createServerPipeTransport = exports2.createClientPipeTransport = exports2.generateRandomPipeName = exports2.StreamMessageWriter = exports2.StreamMessageReader = exports2.SocketMessageWriter = exports2.SocketMessageReader = exports2.PortMessageWriter = exports2.PortMessageReader = exports2.IPCMessageWriter = exports2.IPCMessageReader = void 0;
     var ril_1 = require_ril();
     ril_1.default.install();
-    var path2 = require("path");
+    var path3 = require("path");
     var os = require("os");
     var crypto_1 = require("crypto");
     var net_1 = require("net");
@@ -3226,9 +3226,9 @@ var require_main = __commonJS({
       }
       let result;
       if (XDG_RUNTIME_DIR) {
-        result = path2.join(XDG_RUNTIME_DIR, `vscode-ipc-${randomSuffix}.sock`);
+        result = path3.join(XDG_RUNTIME_DIR, `vscode-ipc-${randomSuffix}.sock`);
       } else {
-        result = path2.join(os.tmpdir(), `vscode-${randomSuffix}.sock`);
+        result = path3.join(os.tmpdir(), `vscode-${randomSuffix}.sock`);
       }
       const limit = safeIpcPathLengths.get(process.platform);
       if (limit !== void 0 && result.length > limit) {
@@ -3239,10 +3239,10 @@ var require_main = __commonJS({
     exports2.generateRandomPipeName = generateRandomPipeName;
     function createClientPipeTransport(pipeName, encoding = "utf-8") {
       let connectResolve;
-      const connected = new Promise((resolve2, _reject) => {
-        connectResolve = resolve2;
+      const connected = new Promise((resolve3, _reject) => {
+        connectResolve = resolve3;
       });
-      return new Promise((resolve2, reject) => {
+      return new Promise((resolve3, reject) => {
         let server = (0, net_1.createServer)((socket) => {
           server.close();
           connectResolve([
@@ -3253,7 +3253,7 @@ var require_main = __commonJS({
         server.on("error", reject);
         server.listen(pipeName, () => {
           server.removeListener("error", reject);
-          resolve2({
+          resolve3({
             onConnected: () => {
               return connected;
             }
@@ -3272,10 +3272,10 @@ var require_main = __commonJS({
     exports2.createServerPipeTransport = createServerPipeTransport;
     function createClientSocketTransport(port, encoding = "utf-8") {
       let connectResolve;
-      const connected = new Promise((resolve2, _reject) => {
-        connectResolve = resolve2;
+      const connected = new Promise((resolve3, _reject) => {
+        connectResolve = resolve3;
       });
-      return new Promise((resolve2, reject) => {
+      return new Promise((resolve3, reject) => {
         const server = (0, net_1.createServer)((socket) => {
           server.close();
           connectResolve([
@@ -3286,7 +3286,7 @@ var require_main = __commonJS({
         server.on("error", reject);
         server.listen(port, "127.0.0.1", () => {
           server.removeListener("error", reject);
-          resolve2({
+          resolve3({
             onConnected: () => {
               return connected;
             }
@@ -4118,34 +4118,34 @@ var require_main2 = __commonJS({
         }
         MarkupContent3.is = is;
       })(MarkupContent2 || (exports3.MarkupContent = MarkupContent2 = {}));
-      var CompletionItemKind2;
-      (function(CompletionItemKind3) {
-        CompletionItemKind3.Text = 1;
-        CompletionItemKind3.Method = 2;
-        CompletionItemKind3.Function = 3;
-        CompletionItemKind3.Constructor = 4;
-        CompletionItemKind3.Field = 5;
-        CompletionItemKind3.Variable = 6;
-        CompletionItemKind3.Class = 7;
-        CompletionItemKind3.Interface = 8;
-        CompletionItemKind3.Module = 9;
-        CompletionItemKind3.Property = 10;
-        CompletionItemKind3.Unit = 11;
-        CompletionItemKind3.Value = 12;
-        CompletionItemKind3.Enum = 13;
-        CompletionItemKind3.Keyword = 14;
-        CompletionItemKind3.Snippet = 15;
-        CompletionItemKind3.Color = 16;
-        CompletionItemKind3.File = 17;
-        CompletionItemKind3.Reference = 18;
-        CompletionItemKind3.Folder = 19;
-        CompletionItemKind3.EnumMember = 20;
-        CompletionItemKind3.Constant = 21;
-        CompletionItemKind3.Struct = 22;
-        CompletionItemKind3.Event = 23;
-        CompletionItemKind3.Operator = 24;
-        CompletionItemKind3.TypeParameter = 25;
-      })(CompletionItemKind2 || (exports3.CompletionItemKind = CompletionItemKind2 = {}));
+      var CompletionItemKind3;
+      (function(CompletionItemKind4) {
+        CompletionItemKind4.Text = 1;
+        CompletionItemKind4.Method = 2;
+        CompletionItemKind4.Function = 3;
+        CompletionItemKind4.Constructor = 4;
+        CompletionItemKind4.Field = 5;
+        CompletionItemKind4.Variable = 6;
+        CompletionItemKind4.Class = 7;
+        CompletionItemKind4.Interface = 8;
+        CompletionItemKind4.Module = 9;
+        CompletionItemKind4.Property = 10;
+        CompletionItemKind4.Unit = 11;
+        CompletionItemKind4.Value = 12;
+        CompletionItemKind4.Enum = 13;
+        CompletionItemKind4.Keyword = 14;
+        CompletionItemKind4.Snippet = 15;
+        CompletionItemKind4.Color = 16;
+        CompletionItemKind4.File = 17;
+        CompletionItemKind4.Reference = 18;
+        CompletionItemKind4.Folder = 19;
+        CompletionItemKind4.EnumMember = 20;
+        CompletionItemKind4.Constant = 21;
+        CompletionItemKind4.Struct = 22;
+        CompletionItemKind4.Event = 23;
+        CompletionItemKind4.Operator = 24;
+        CompletionItemKind4.TypeParameter = 25;
+      })(CompletionItemKind3 || (exports3.CompletionItemKind = CompletionItemKind3 = {}));
       var InsertTextFormat;
       (function(InsertTextFormat2) {
         InsertTextFormat2.PlainText = 1;
@@ -4180,13 +4180,13 @@ var require_main2 = __commonJS({
         }
         CompletionItemLabelDetails2.is = is;
       })(CompletionItemLabelDetails || (exports3.CompletionItemLabelDetails = CompletionItemLabelDetails = {}));
-      var CompletionItem2;
-      (function(CompletionItem3) {
+      var CompletionItem3;
+      (function(CompletionItem4) {
         function create(label) {
           return { label };
         }
-        CompletionItem3.create = create;
-      })(CompletionItem2 || (exports3.CompletionItem = CompletionItem2 = {}));
+        CompletionItem4.create = create;
+      })(CompletionItem3 || (exports3.CompletionItem = CompletionItem3 = {}));
       var CompletionList;
       (function(CompletionList2) {
         function create(items, isIncomplete) {
@@ -8072,8 +8072,8 @@ var require_server = __commonJS({
         if (value instanceof Promise) {
           return value;
         } else if (Is.thenable(value)) {
-          return new Promise((resolve2, reject) => {
-            value.then((resolved) => resolve2(resolved), (error) => reject(error));
+          return new Promise((resolve3, reject) => {
+            value.then((resolved) => resolve3(resolved), (error) => reject(error));
           });
         } else {
           return Promise.resolve(value);
@@ -8318,8 +8318,8 @@ var require_files = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.resolveModulePath = exports2.FileSystem = exports2.resolveGlobalYarnPath = exports2.resolveGlobalNodePath = exports2.resolve = exports2.uriToFilePath = void 0;
     var url = require("url");
-    var path2 = require("path");
-    var fs2 = require("fs");
+    var path3 = require("path");
+    var fs3 = require("fs");
     var child_process_1 = require("child_process");
     function uriToFilePath(uri) {
       let parsed = url.parse(uri);
@@ -8337,13 +8337,13 @@ var require_files = __commonJS({
           segments.shift();
         }
       }
-      return path2.normalize(segments.join("/"));
+      return path3.normalize(segments.join("/"));
     }
     exports2.uriToFilePath = uriToFilePath;
     function isWindows() {
       return process.platform === "win32";
     }
-    function resolve2(moduleName, nodePath, cwd, tracer) {
+    function resolve3(moduleName, nodePath, cwd, tracer) {
       const nodePathKey = "NODE_PATH";
       const app = [
         "var p = process;",
@@ -8362,13 +8362,13 @@ var require_files = __commonJS({
         "}",
         "});"
       ].join("");
-      return new Promise((resolve3, reject) => {
+      return new Promise((resolve4, reject) => {
         let env = process.env;
         let newEnv = /* @__PURE__ */ Object.create(null);
         Object.keys(env).forEach((key) => newEnv[key] = env[key]);
-        if (nodePath && fs2.existsSync(nodePath)) {
+        if (nodePath && fs3.existsSync(nodePath)) {
           if (newEnv[nodePathKey]) {
-            newEnv[nodePathKey] = nodePath + path2.delimiter + newEnv[nodePathKey];
+            newEnv[nodePathKey] = nodePath + path3.delimiter + newEnv[nodePathKey];
           } else {
             newEnv[nodePathKey] = nodePath;
           }
@@ -8394,7 +8394,7 @@ var require_files = __commonJS({
             if (message2.c === "r") {
               cp.send({ c: "e" });
               if (message2.s) {
-                resolve3(message2.r);
+                resolve4(message2.r);
               } else {
                 reject(new Error(`Failed to resolve module: ${moduleName}`));
               }
@@ -8410,7 +8410,7 @@ var require_files = __commonJS({
         }
       });
     }
-    exports2.resolve = resolve2;
+    exports2.resolve = resolve3;
     function resolveGlobalNodePath(tracer) {
       let npmCommand = "npm";
       const env = /* @__PURE__ */ Object.create(null);
@@ -8441,9 +8441,9 @@ var require_files = __commonJS({
         }
         if (prefix.length > 0) {
           if (isWindows()) {
-            return path2.join(prefix, "node_modules");
+            return path3.join(prefix, "node_modules");
           } else {
-            return path2.join(prefix, "lib", "node_modules");
+            return path3.join(prefix, "lib", "node_modules");
           }
         }
         return void 0;
@@ -8483,7 +8483,7 @@ var require_files = __commonJS({
           try {
             let yarn = JSON.parse(line);
             if (yarn.type === "log") {
-              return path2.join(yarn.data, "node_modules");
+              return path3.join(yarn.data, "node_modules");
             }
           } catch (e) {
           }
@@ -8506,36 +8506,36 @@ var require_files = __commonJS({
         if (process.platform === "win32") {
           _isCaseSensitive = false;
         } else {
-          _isCaseSensitive = !fs2.existsSync(__filename.toUpperCase()) || !fs2.existsSync(__filename.toLowerCase());
+          _isCaseSensitive = !fs3.existsSync(__filename.toUpperCase()) || !fs3.existsSync(__filename.toLowerCase());
         }
         return _isCaseSensitive;
       }
       FileSystem2.isCaseSensitive = isCaseSensitive;
       function isParent(parent, child) {
         if (isCaseSensitive()) {
-          return path2.normalize(child).indexOf(path2.normalize(parent)) === 0;
+          return path3.normalize(child).indexOf(path3.normalize(parent)) === 0;
         } else {
-          return path2.normalize(child).toLowerCase().indexOf(path2.normalize(parent).toLowerCase()) === 0;
+          return path3.normalize(child).toLowerCase().indexOf(path3.normalize(parent).toLowerCase()) === 0;
         }
       }
       FileSystem2.isParent = isParent;
     })(FileSystem || (exports2.FileSystem = FileSystem = {}));
     function resolveModulePath(workspaceRoot, moduleName, nodePath, tracer) {
       if (nodePath) {
-        if (!path2.isAbsolute(nodePath)) {
-          nodePath = path2.join(workspaceRoot, nodePath);
+        if (!path3.isAbsolute(nodePath)) {
+          nodePath = path3.join(workspaceRoot, nodePath);
         }
-        return resolve2(moduleName, nodePath, nodePath, tracer).then((value) => {
+        return resolve3(moduleName, nodePath, nodePath, tracer).then((value) => {
           if (FileSystem.isParent(nodePath, value)) {
             return value;
           } else {
             return Promise.reject(new Error(`Failed to load ${moduleName} from node path location.`));
           }
         }).then(void 0, (_error) => {
-          return resolve2(moduleName, resolveGlobalNodePath(tracer), workspaceRoot, tracer);
+          return resolve3(moduleName, resolveGlobalNodePath(tracer), workspaceRoot, tracer);
         });
       } else {
-        return resolve2(moduleName, resolveGlobalNodePath(tracer), workspaceRoot, tracer);
+        return resolve3(moduleName, resolveGlobalNodePath(tracer), workspaceRoot, tracer);
       }
     }
     exports2.resolveModulePath = resolveModulePath;
@@ -8900,10 +8900,11 @@ var init_diagnostics = __esm({
   "../../src/diagnostics/index.ts"() {
     "use strict";
     DiagnosticError = class extends Error {
-      constructor(kind, message, location, sourceLines) {
+      constructor(kind, message, location, sourceLines, code) {
         super(message);
         this.name = "DiagnosticError";
         this.kind = kind;
+        this.code = code;
         this.location = location;
         this.sourceLines = sourceLines;
       }
@@ -8916,9 +8917,10 @@ var init_diagnostics = __esm({
        * ```
        */
       format() {
-        const { kind, message, location, sourceLines } = this;
+        const { kind, code, message, location, sourceLines } = this;
         const filePart = location.file ? `${location.file}:` : "";
-        const header = `Error: [${kind}] ${filePart}line ${location.line}, col ${location.col}: ${message}`;
+        const diagnosticLabel = code ? `${kind} ${code}` : kind;
+        const header = `Error: [${diagnosticLabel}] ${filePart}line ${location.line}, col ${location.col}: ${message}`;
         if (!sourceLines || sourceLines.length === 0) {
           return header;
         }
@@ -8951,12 +8953,13 @@ var init_diagnostics = __esm({
         }
         this.filePath = filePath;
       }
-      error(kind, message, line, col) {
+      error(kind, message, line, col, filePath = this.filePath) {
+        const sourceLines = !filePath || filePath === this.filePath ? this.sourceLines : [];
         const diagnostic = new DiagnosticError(
           kind,
           message,
-          { file: this.filePath, line, col },
-          this.sourceLines
+          { file: filePath, line, col },
+          sourceLines
         );
         this.diagnostics.push(diagnostic);
       }
@@ -9011,6 +9014,7 @@ var init_lexer = __esm({
       trigger: "trigger",
       namespace: "namespace",
       module: "module",
+      package: "package",
       execute: "execute",
       run: "run",
       unless: "unless",
@@ -9081,20 +9085,35 @@ var init_lexer = __esm({
         const char = this.advance();
         if (/\s/.test(char)) return;
         if (char === "/" && this.peek() === "/") {
+          const isDocComment = this.peek(1) === "/";
+          if (isDocComment) {
+            let value = "//";
+            this.advance();
+            while (!this.isAtEnd() && this.peek() !== "\n") {
+              value += this.advance();
+            }
+            this.addToken("doc_comment", value, startLine, startCol);
+            return;
+          }
           while (!this.isAtEnd() && this.peek() !== "\n") {
             this.advance();
           }
           return;
         }
         if (char === "/" && this.peek() === "*") {
+          const isDocComment = this.peek(1) === "*";
+          let value = "/*";
           this.advance();
           while (!this.isAtEnd()) {
             if (this.peek() === "*" && this.peek(1) === "/") {
-              this.advance();
-              this.advance();
+              value += this.advance();
+              value += this.advance();
               break;
             }
-            this.advance();
+            value += this.advance();
+          }
+          if (isDocComment) {
+            this.addToken("doc_comment", value, startLine, startCol);
           }
           return;
         }
@@ -9539,6 +9558,142 @@ var init_lexer = __esm({
   }
 });
 
+// ../../src/types/mc-version.ts
+var init_mc_version = __esm({
+  "../../src/types/mc-version.ts"() {
+    "use strict";
+  }
+});
+
+// ../../src/artifacts/model.ts
+var init_model = __esm({
+  "../../src/artifacts/model.ts"() {
+    "use strict";
+  }
+});
+
+// ../../src/artifacts/registry.ts
+function isTagResourceArtifactKind(kind) {
+  return TAG_RESOURCE_ARTIFACT_KIND_SET.has(kind);
+}
+var TAG_RESOURCE_ARTIFACT_KINDS, TAG_RESOURCE_ARTIFACT_KIND_SET, DESCRIPTORS;
+var init_registry = __esm({
+  "../../src/artifacts/registry.ts"() {
+    "use strict";
+    init_mc_version();
+    init_model();
+    TAG_RESOURCE_ARTIFACT_KINDS = Object.freeze([
+      "function_tag",
+      "item_tag",
+      "block_tag",
+      "entity_type_tag",
+      "fluid_tag",
+      "game_event_tag"
+    ]);
+    TAG_RESOURCE_ARTIFACT_KIND_SET = new Set(TAG_RESOURCE_ARTIFACT_KINDS);
+    DESCRIPTORS = Object.freeze({
+      function_tag: {
+        legacyDirectory: "tags/functions",
+        modernDirectory: "tags/function",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      recipe: {
+        legacyDirectory: "recipes",
+        modernDirectory: "recipe",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      advancement: {
+        legacyDirectory: "advancements",
+        modernDirectory: "advancement",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      predicate: {
+        legacyDirectory: "predicates",
+        modernDirectory: "predicate",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      loot_table: {
+        legacyDirectory: "loot_tables",
+        modernDirectory: "loot_table",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      item_modifier: {
+        legacyDirectory: "item_modifiers",
+        modernDirectory: "item_modifier",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      structure: {
+        legacyDirectory: "structures",
+        modernDirectory: "structure",
+        mediaType: "application/nbt",
+        lifecycle: "reload",
+        extension: ".nbt"
+      },
+      dimension: {
+        legacyDirectory: "dimension",
+        modernDirectory: "dimension",
+        mediaType: "application/json",
+        lifecycle: "world_reopen",
+        extension: ".json"
+      },
+      dimension_type: {
+        legacyDirectory: "dimension_type",
+        modernDirectory: "dimension_type",
+        mediaType: "application/json",
+        lifecycle: "world_reopen",
+        extension: ".json"
+      },
+      item_tag: {
+        legacyDirectory: "tags/items",
+        modernDirectory: "tags/item",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      block_tag: {
+        legacyDirectory: "tags/blocks",
+        modernDirectory: "tags/block",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      entity_type_tag: {
+        legacyDirectory: "tags/entity_types",
+        modernDirectory: "tags/entity_type",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      fluid_tag: {
+        legacyDirectory: "tags/fluids",
+        modernDirectory: "tags/fluid",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      },
+      game_event_tag: {
+        legacyDirectory: "tags/game_events",
+        modernDirectory: "tags/game_event",
+        mediaType: "application/json",
+        lifecycle: "reload",
+        extension: ".json"
+      }
+    });
+  }
+});
+
 // ../../src/parser/utils.ts
 var PRECEDENCE, BINARY_OPS, ParserBase;
 var init_utils = __esm({
@@ -9625,7 +9780,7 @@ var init_utils = __esm({
         );
       }
       withLoc(node, token) {
-        const span = { line: token.line, col: token.col };
+        const span = { file: this.filePath, line: token.line, col: token.col };
         Object.defineProperty(node, "span", {
           value: span,
           enumerable: false,
@@ -9644,6 +9799,18 @@ var init_utils = __esm({
       checkIdent(value) {
         return this.check("ident") && this.peek().value === value;
       }
+      consumeDocComment() {
+        if (!this.check("doc_comment")) return void 0;
+        const comments = [];
+        while (this.check("doc_comment")) {
+          comments.push(this.advance().value);
+        }
+        return comments.join("\n");
+      }
+      attachDoc(node, doc) {
+        if (doc) node.doc = doc;
+        return node;
+      }
       // -------------------------------------------------------------------------
       // Error Recovery
       // -------------------------------------------------------------------------
@@ -9659,7 +9826,8 @@ var init_utils = __esm({
           "declare",
           "import",
           "namespace",
-          "module"
+          "module",
+          "package"
         ]);
         while (!this.check("eof")) {
           const kind = this.peek().kind;
@@ -9670,7 +9838,7 @@ var init_utils = __esm({
           if (TOP_LEVEL_KEYWORDS.has(kind)) {
             return;
           }
-          if (kind === "ident" && this.peek().value === "import") {
+          if (kind === "ident" && (this.peek().value === "import" || this.peek().value === "resource")) {
             return;
           }
           this.advance();
@@ -9741,7 +9909,12 @@ var init_type_parser = __esm({
           type = { kind: "named", name: token.kind };
         } else if (token.kind === "ident") {
           this.advance();
-          if (token.value === "selector" && this.check("<")) {
+          if (token.value === "resource" && this.check("<")) {
+            this.advance();
+            const registry = this.expect("ident").value;
+            this.expect(">");
+            type = { kind: "resource", registry };
+          } else if (token.value === "selector" && this.check("<")) {
             this.advance();
             const entityType = this.expect("ident").value;
             this.expect(">");
@@ -9883,6 +10056,11 @@ var init_type_parser = __esm({
           return 0;
         }
         let length = 1;
+        if (token.kind === "ident" && ["resource", "selector", "Option"].includes(token.value) && this.peek(offset + 1).kind === "<") {
+          const innerLen = this.typeTokenLength(offset + 2);
+          if (innerLen === 0 || this.peek(offset + 2 + innerLen).kind !== ">") return 0;
+          length = 3 + innerLen;
+        }
         while (this.peek(offset + length).kind === "[" && this.peek(offset + length + 1).kind === "]") {
           length += 2;
         }
@@ -10253,6 +10431,12 @@ var init_expr_parser = __esm({
         if (token.kind === "mc_name") {
           this.advance();
           return this.withLoc({ kind: "mc_name", value: token.value.slice(1) }, token);
+        }
+        if (token.kind === "ident" && this.peek(1).kind === ":" && this.peek(2).kind === "ident") {
+          const namespace = this.advance();
+          this.expect(":");
+          const path3 = this.expect("ident");
+          return this.withLoc({ kind: "mc_name", value: `${namespace.value}:${path3.value}` }, namespace);
         }
         if (token.kind === "true") {
           this.advance();
@@ -11229,11 +11413,13 @@ var init_stmt_parser = __esm({
 });
 
 // ../../src/parser/decl-parser.ts
-var DeclParser;
+var RESOURCE_LOCATION_RE, DeclParser;
 var init_decl_parser = __esm({
   "../../src/parser/decl-parser.ts"() {
     "use strict";
+    init_registry();
     init_stmt_parser();
+    RESOURCE_LOCATION_RE = /^[a-z0-9_.-]+:[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)*$/;
     DeclParser = class extends StmtParser {
       // -------------------------------------------------------------------------
       // Struct
@@ -11309,7 +11495,9 @@ var init_decl_parser = __esm({
         this.expect("{");
         const methods = [];
         while (!this.check("}") && !this.check("eof")) {
-          methods.push(this.parseFnDecl(typeName));
+          const doc = this.consumeDocComment();
+          if (this.check("}") || this.check("eof")) break;
+          methods.push(this.attachDoc(this.parseFnDecl(typeName), doc));
         }
         this.expect("}");
         return this.withLoc({ kind: "impl_block", traitName, typeName, methods }, implToken);
@@ -11323,6 +11511,8 @@ var init_decl_parser = __esm({
         this.expect("{");
         const methods = [];
         while (!this.check("}") && !this.check("eof")) {
+          const doc = this.consumeDocComment();
+          if (this.check("}") || this.check("eof")) break;
           const fnToken = this.expect("fn");
           const methodName = this.expect("ident").value;
           this.expect("(");
@@ -11330,7 +11520,7 @@ var init_decl_parser = __esm({
           this.expect(")");
           let returnType;
           if (this.match(":")) returnType = this.parseType();
-          methods.push(this.withLoc({ name: methodName, params, returnType }, fnToken));
+          methods.push(this.attachDoc(this.withLoc({ name: methodName, params, returnType }, fnToken), doc));
         }
         this.expect("}");
         return this.withLoc({ name, methods }, ifaceToken);
@@ -11368,7 +11558,7 @@ var init_decl_parser = __esm({
       // -------------------------------------------------------------------------
       parseExportedFnDecl() {
         this.expect("export");
-        const fn = this.parseFnDecl();
+        const fn = this.check("declare") ? this.parseDeclareStub() : this.parseFnDecl();
         fn.isExported = true;
         return fn;
       }
@@ -11421,19 +11611,158 @@ var init_decl_parser = __esm({
         return fn;
       }
       parseDeclareStub() {
+        const decorators = this.parseDecorators();
+        const watchObjective = decorators.find((decorator) => decorator.name === "watch")?.args?.objective;
+        let isExported;
+        const filteredDecorators = decorators.filter((d) => {
+          if (d.name === "keep") {
+            isExported = true;
+            return false;
+          }
+          return true;
+        });
+        const declareToken = this.expect("declare");
         this.expect("fn");
-        this.expect("ident");
-        this.expect("(");
-        let depth = 1;
-        while (!this.check("eof") && depth > 0) {
-          const t = this.advance();
-          if (t.kind === "(") depth++;
-          else if (t.kind === ")") depth--;
+        const name = this.expect("ident").value;
+        let typeParams;
+        if (this.check("<")) {
+          this.advance();
+          typeParams = [];
+          do {
+            typeParams.push(this.expect("ident").value);
+          } while (this.match(","));
+          this.expect(">");
         }
-        if (this.match(":") || this.match("->")) {
-          this.parseType();
+        this.expect("(");
+        const params = this.parseParams();
+        this.expect(")");
+        let returnType = { kind: "named", name: "void" };
+        if (this.match("->") || this.match(":")) {
+          returnType = this.parseType();
         }
         this.match(";");
+        return this.withLoc(
+          {
+            name,
+            typeParams,
+            params,
+            returnType,
+            decorators: filteredDecorators,
+            body: [],
+            isLibraryFn: this.inLibraryMode || void 0,
+            isExported,
+            watchObjective,
+            isDeclareOnly: true
+          },
+          declareToken
+        );
+      }
+      parseTagResourceLocation() {
+        const namespace = this.expect("ident").value;
+        this.expect(":");
+        const pathTokens = [];
+        while (!this.check(";") && !this.check("eof")) {
+          const token = this.advance();
+          if (!["ident", "int_lit", "/", "-", "."].includes(token.kind)) {
+            this.error(`Invalid tag resource id token '${token.value}'`);
+          }
+          pathTokens.push(token.value);
+        }
+        const id = `${namespace}:${pathTokens.join("")}`;
+        if (!RESOURCE_LOCATION_RE.test(id)) {
+          this.error(`Invalid tag resource id '${id}'`);
+        }
+        return id;
+      }
+      parseTagResourceBuilder(registry) {
+        if (!isTagResourceArtifactKind(registry)) {
+          this.error(`A typed tag builder requires a tag resource kind, got '${registry}'`);
+        }
+        this.expect("{");
+        let policy = "merge";
+        let hasPolicy = false;
+        const values = [];
+        while (!this.check("}") && !this.check("eof")) {
+          const entryToken = this.peek();
+          if (this.checkIdent("policy")) {
+            this.advance();
+            if (hasPolicy) this.error("A typed tag policy may not be declared more than once");
+            const policyToken = this.expect("ident");
+            if (policyToken.value !== "merge" && policyToken.value !== "replace") {
+              this.error(`Expected tag policy 'merge' or 'replace', got '${policyToken.value}'`);
+            }
+            policy = policyToken.value;
+            hasPolicy = true;
+            this.expect(";");
+            continue;
+          }
+          let required = true;
+          if (this.checkIdent("optional")) {
+            this.advance();
+            required = false;
+          }
+          const kindToken = this.expect("ident");
+          if (kindToken.value !== "value" && kindToken.value !== "tag") {
+            this.error("Expected typed tag entry 'policy', 'value', or 'tag'");
+          }
+          const id = this.parseTagResourceLocation();
+          this.expect(";");
+          values.push(this.withLoc({ kind: kindToken.value, id, required }, entryToken));
+        }
+        this.expect("}");
+        return { kind: "tag", policy, values };
+      }
+      /** Parse `resource <registry> <namespace>:<path> [from "<asset-path>" | { <typed tag body> }];`. */
+      parseResourceDecl() {
+        const resourceToken = this.expect("ident");
+        if (resourceToken.value !== "resource") {
+          this.error("Expected 'resource' declaration");
+        }
+        const registry = this.expect("ident").value;
+        const namespaceToken = this.expect("ident");
+        const namespace = namespaceToken.value;
+        this.expect(":");
+        const pathTokens = [];
+        while (!this.check(";") && !this.check("{") && !this.check("eof")) {
+          const previousPathToken = pathTokens[pathTokens.length - 1];
+          const startsFromClause = pathTokens.length > 0 && previousPathToken !== "/" && previousPathToken !== "-" && previousPathToken !== "." && this.check("ident") && this.peek().value === "from";
+          if (startsFromClause) break;
+          const token = this.advance();
+          if (!["ident", "int_lit", "/", "-", "."].includes(token.kind)) {
+            this.error(`Invalid resource path token '${token.value}'`);
+          }
+          pathTokens.push(token.value);
+        }
+        const resourcePath = pathTokens.join("");
+        if (!/^[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)*$/.test(resourcePath)) {
+          this.error(`Invalid resource path '${resourcePath}'`);
+        }
+        let sourcePath;
+        if (this.check("ident") && this.peek().value === "from") {
+          this.advance();
+          const source = this.expect("string_lit");
+          sourcePath = source.value;
+          if (!sourcePath || sourcePath.startsWith("/") || /^[A-Za-z]:[\\/]/.test(sourcePath) || sourcePath.includes("\\") || sourcePath.split("/").some((segment) => !segment || segment === "." || segment === "..")) {
+            this.error(`Resource source must be a canonical relative asset path, got '${sourcePath}'`);
+          }
+        }
+        let builder;
+        if (this.check("{")) {
+          if (sourcePath) {
+            this.error("A resource contribution cannot combine from-file and typed builder forms");
+          }
+          builder = this.parseTagResourceBuilder(registry);
+        }
+        this.match(";");
+        return this.withLoc({
+          registry,
+          id: `${namespace}:${resourcePath}`,
+          namespace,
+          path: resourcePath,
+          sourcePath,
+          builder,
+          doc: ""
+        }, resourceToken);
       }
       // -------------------------------------------------------------------------
       // Decorators
@@ -11465,6 +11794,14 @@ var init_decl_parser = __esm({
             args.eventType = eventTypeMatch[1];
             return { name, args };
           }
+        }
+        if (name === "function_tag") {
+          const strMatch = argsStr.match(/^"([^"]+)"$/);
+          if (strMatch) {
+            args.functionTag = strMatch[1];
+            return { name, args };
+          }
+          this.error('Invalid @function_tag syntax. Expected: @function_tag("namespace:path")');
         }
         if (name === "watch" || name === "on_trigger" || name === "on_advancement" || name === "on_craft" || name === "on_join_team") {
           const strMatch = argsStr.match(/^"([^"]*)"$/);
@@ -11549,18 +11886,26 @@ var init_parser = __esm({
         let namespace = defaultNamespace;
         const globals = [];
         const declarations = [];
+        const declaredFunctions = [];
         const structs = [];
         const implBlocks = [];
         const enums = [];
         const consts = [];
         const imports = [];
+        const resourceDeclarations = [];
         const interfaces = [];
         let isLibrary = false;
         let moduleName;
+        let packageName;
         if (this.check("namespace")) {
           this.advance();
           const name = this.expect("ident");
           namespace = name.value;
+          this.match(";");
+        }
+        if (this.check("package")) {
+          this.advance();
+          packageName = this.expect("ident").value;
           this.match(";");
         }
         if (this.check("module")) {
@@ -11575,6 +11920,8 @@ var init_parser = __esm({
           this.match(";");
         }
         while (!this.check("eof")) {
+          const doc = this.consumeDocComment();
+          if (this.check("eof")) break;
           try {
             if (this.check("decorator") && this.peek().value.startsWith("@config")) {
               const decorToken = this.advance();
@@ -11607,13 +11954,33 @@ var init_parser = __esm({
             } else if (this.check("const")) {
               consts.push(this.parseConstDecl());
             } else if (this.check("declare")) {
-              this.advance();
-              this.parseDeclareStub();
+              declaredFunctions.push(this.attachDoc(this.parseDeclareStub(), doc));
+            } else if (this.checkIdent("resource")) {
+              resourceDeclarations.push(this.attachDoc(this.parseResourceDecl(), doc));
             } else if (this.check("export")) {
-              declarations.push(this.parseExportedFnDecl());
+              const exportedFnDecl = this.attachDoc(this.parseExportedFnDecl(), doc);
+              if (exportedFnDecl.isDeclareOnly) {
+                declaredFunctions.push(exportedFnDecl);
+              } else {
+                declarations.push(exportedFnDecl);
+              }
             } else if (this.check("import") || this.check("ident") && this.peek().value === "import") {
               this.advance();
               const importToken = this.peek();
+              if (this.check("string_lit")) {
+                const packagePath = this.advance().value;
+                let alias;
+                if (this.match("as")) alias = this.expect("ident").value;
+                this.match(";");
+                const importedPackageName = packagePath.split("/").filter(Boolean).pop() ?? packagePath;
+                imports.push(this.withLoc({
+                  moduleName: alias ?? importedPackageName,
+                  packagePath,
+                  alias,
+                  symbol: void 0
+                }, importToken));
+                continue;
+              }
               const modName = this.expect("ident").value;
               if (this.check("::")) {
                 this.advance();
@@ -11631,7 +11998,7 @@ var init_parser = __esm({
                 imports.push(this.withLoc({ moduleName: modName, symbol: void 0 }, importToken));
               }
             } else {
-              declarations.push(this.parseFnDecl());
+              declarations.push(this.attachDoc(this.parseFnDecl(), doc));
             }
           } catch (err) {
             if (err instanceof DiagnosticError) {
@@ -11642,14 +12009,29 @@ var init_parser = __esm({
             }
           }
         }
-        return { namespace, moduleName, globals, declarations, structs, implBlocks, enums, consts, imports, interfaces, isLibrary };
+        return {
+          namespace,
+          moduleName,
+          packageName,
+          globals,
+          declarations,
+          declaredFunctions,
+          structs,
+          implBlocks,
+          enums,
+          consts,
+          imports,
+          resourceDeclarations,
+          interfaces,
+          isLibrary
+        };
       }
     };
   }
 });
 
 // ../../src/lsp/server.ts
-var import_node = __toESM(require_node3());
+var import_node2 = __toESM(require_node3());
 
 // ../../node_modules/vscode-languageserver-textdocument/lib/esm/main.js
 var FullTextDocument = class _FullTextDocument {
@@ -11876,48 +12258,114 @@ function getWellformedEdit(textEdit) {
 }
 
 // ../../src/lsp/server.ts
-var path = __toESM(require("path"));
-var fs = __toESM(require("fs"));
-var import_url = require("url");
+var path2 = __toESM(require("path"));
+var fs2 = __toESM(require("fs"));
+var import_url2 = require("url");
 init_lexer();
 init_parser();
 
 // ../../src/typechecker/index.ts
 init_diagnostics();
 
-// ../../src/events/types.ts
-var EVENT_TYPES = {
-  PlayerDeath: {
-    tag: "rs.just_died",
-    params: ["player: Player"],
-    detection: "scoreboard"
-  },
-  PlayerJoin: {
-    tag: "rs.just_joined",
-    params: ["player: Player"],
-    detection: "tag"
-  },
-  BlockBreak: {
-    tag: "rs.just_broke_block",
-    params: ["player: Player"],
-    detection: "advancement"
-    // Note: block type is NOT available as a runtime parameter — MC has no mechanism
-    // to pass event data to function tags. Use minecraft.mined:<block> scoreboard
-    // stats for per-block detection, or check the block at player's position in handler.
-  },
-  EntityKill: {
-    tag: "rs.just_killed",
-    params: ["player: Player"],
-    detection: "scoreboard"
-  },
-  ItemUse: {
-    tag: "rs.just_used_item",
-    params: ["player: Player"],
-    detection: "scoreboard"
+// ../../src/events/manifest.ts
+var STDLIB_RUNTIME_ASSET_PREFIX = "src/stdlib/";
+function isAbsoluteRuntimeAssetPath(value) {
+  return value.startsWith("/") || /^[A-Za-z]:/i.test(value) || value.startsWith("~/");
+}
+function resolveRuntimeAssetPath(rootPath, normalized) {
+  if (!rootPath) return normalized;
+  const root = rootPath.replace(/\\/g, "/").replace(/\/+$/, "");
+  return `${root}/${normalized}`;
+}
+function validateRuntimeAssetPath(value, options = {}) {
+  if (value.includes("\\")) {
+    throw new Error(`Invalid runtime asset path '${value}': backslashes are not allowed`);
   }
-};
+  if (value === "") {
+    throw new Error("Invalid runtime asset path: empty path is not allowed");
+  }
+  if (isAbsoluteRuntimeAssetPath(value)) {
+    throw new Error(`Invalid runtime asset path '${value}': absolute paths are not allowed`);
+  }
+  const normalized = value;
+  const segments = normalized.split("/");
+  if (segments.includes("..")) {
+    throw new Error(`Invalid runtime asset path '${value}': traversal segment '..' is not allowed`);
+  }
+  if (!segments.every((segment) => segment.length > 0 && segment !== ".")) {
+    throw new Error(`Invalid runtime asset path '${value}': empty or '.' segments are not allowed`);
+  }
+  if (!normalized.startsWith(STDLIB_RUNTIME_ASSET_PREFIX)) {
+    throw new Error(
+      `Invalid runtime asset path '${value}': runtime assets must be under '${STDLIB_RUNTIME_ASSET_PREFIX}'`
+    );
+  }
+  const resolved = resolveRuntimeAssetPath(options.rootPath, normalized);
+  const fileExists = options.fileExists;
+  if (fileExists && !fileExists(resolved)) {
+    throw new Error(`Invalid runtime asset path '${value}': file does not exist at ${resolved}`);
+  }
+  return normalized;
+}
+function getEventRuntimeAssets(manifest, options = {}) {
+  const assets = manifest.runtimeAssets ?? [];
+  const normalized = /* @__PURE__ */ new Set();
+  for (const asset of assets) {
+    normalized.add(validateRuntimeAssetPath(asset, options));
+  }
+  return [...normalized];
+}
+var EVENT_RUNTIME_MANIFESTS = [
+  {
+    name: "PlayerDeath",
+    tag: "rs.just_died",
+    handlerTag: "rs:on_player_death",
+    params: ["player: Player"],
+    detection: "scoreboard",
+    executorContext: { kind: "entity", entityType: "Player" },
+    runtimeAssets: ["src/stdlib/events.mcrs"]
+  },
+  {
+    name: "PlayerJoin",
+    tag: "rs.just_joined",
+    handlerTag: "rs:on_player_join",
+    params: ["player: Player"],
+    detection: "tag",
+    executorContext: { kind: "entity", entityType: "Player" },
+    runtimeAssets: ["src/stdlib/events.mcrs"]
+  },
+  {
+    name: "EntityKill",
+    tag: "rs.just_killed",
+    handlerTag: "rs:on_entity_kill",
+    params: ["player: Player"],
+    detection: "scoreboard",
+    executorContext: { kind: "entity", entityType: "Player" },
+    runtimeAssets: ["src/stdlib/events.mcrs"]
+  }
+];
+function eventTypeFromManifest(manifest) {
+  return {
+    tag: manifest.tag,
+    handlerTag: manifest.handlerTag,
+    params: manifest.params,
+    detection: manifest.detection,
+    executorContext: manifest.executorContext,
+    runtimeAssets: getEventRuntimeAssets(manifest)
+  };
+}
+function eventTypesFromManifests(manifests) {
+  const entries = manifests.map((manifest) => [manifest.name, eventTypeFromManifest(manifest)]);
+  return Object.fromEntries(entries);
+}
+
+// ../../src/events/types.ts
+var EVENT_TYPES = eventTypesFromManifests(EVENT_RUNTIME_MANIFESTS);
 function isEventTypeName(value) {
   return value in EVENT_TYPES;
+}
+function getEventExecutorContext(eventType) {
+  return EVENT_TYPES[eventType].executorContext;
 }
 function getEventParamSpecs(eventType) {
   return EVENT_TYPES[eventType].params.map(parseEventParam);
@@ -11986,88 +12434,271 @@ function expandStructDeclarations(structs, onError) {
   return expanded;
 }
 
-// ../../src/typechecker/index.ts
+// ../../src/typechecker/decorators.ts
+function hasDecoratorArguments(decorator) {
+  return !!(decorator.rawArgs?.length || decorator.args && Object.keys(decorator.args).length > 0);
+}
+function validateFunctionDecorators(fn, context) {
+  const { report, normalizeType, typesMatch, typeToString: typeToString3 } = context;
+  const watchDecorators = fn.decorators.filter((decorator) => decorator.name === "watch");
+  if (watchDecorators.length > 1) {
+    report(`Function '${fn.name}' cannot have multiple @watch decorators`, fn);
+    return;
+  }
+  if (watchDecorators.length === 1) {
+    const objective = watchDecorators[0].args?.objective;
+    if (!objective) {
+      report(`Function '${fn.name}' is missing a scoreboard objective in @watch("...")`, fn);
+      return;
+    }
+    if (fn.params.length > 0) {
+      report(`@watch handler '${fn.name}' cannot declare parameters`, fn);
+    }
+  }
+  const throttleDecorators = fn.decorators.filter((decorator) => decorator.name === "throttle");
+  if (throttleDecorators.length > 1) {
+    report(`Function '${fn.name}' cannot have multiple @throttle decorators`, fn);
+    return;
+  }
+  if (throttleDecorators.length === 1) {
+    const ticks = throttleDecorators[0].args?.ticks;
+    if (ticks === void 0 || ticks <= 0) {
+      report(`@throttle on '${fn.name}' requires ticks=N (positive integer)`, fn);
+    }
+  }
+  const retryDecorators = fn.decorators.filter((decorator) => decorator.name === "retry");
+  if (retryDecorators.length > 1) {
+    report(`Function '${fn.name}' cannot have multiple @retry decorators`, fn);
+    return;
+  }
+  if (retryDecorators.length === 1) {
+    const max = retryDecorators[0].args?.max;
+    if (max === void 0 || max <= 0) {
+      report(`@retry on '${fn.name}' requires max=N (positive integer)`, fn);
+    }
+  }
+  const profileDecorators = fn.decorators.filter((decorator) => decorator.name === "profile");
+  if (profileDecorators.length > 1) {
+    report(`Function '${fn.name}' cannot have multiple @profile decorators`, fn);
+    return;
+  }
+  if (profileDecorators.length === 1 && hasDecoratorArguments(profileDecorators[0])) {
+    report(`@profile decorator on '${fn.name}' does not accept arguments`, fn);
+    return;
+  }
+  const benchmarkDecorators = fn.decorators.filter((decorator) => decorator.name === "benchmark");
+  if (benchmarkDecorators.length > 1) {
+    report(`Function '${fn.name}' cannot have multiple @benchmark decorators`, fn);
+    return;
+  }
+  if (benchmarkDecorators.length === 1 && hasDecoratorArguments(benchmarkDecorators[0])) {
+    report(`@benchmark decorator on '${fn.name}' does not accept arguments`, fn);
+    return;
+  }
+  const memoizeDecorators = fn.decorators.filter((decorator) => decorator.name === "memoize");
+  if (memoizeDecorators.length > 1) {
+    report(`Function '${fn.name}' cannot have multiple @memoize decorators`, fn);
+    return;
+  }
+  if (memoizeDecorators.length === 1) {
+    if (fn.params.length !== 1) {
+      report(`@memoize on '${fn.name}' requires exactly one parameter`, fn);
+    } else {
+      const paramType = fn.params[0].type;
+      const isInt = paramType.kind === "named" && paramType.name === "int";
+      if (!isInt) {
+        report(`@memoize on '${fn.name}' only supports int parameters (got '${paramType.kind === "named" ? paramType.name : paramType.kind}')`, fn);
+      }
+    }
+  }
+  const eventDecorators = fn.decorators.filter((decorator) => decorator.name === "on");
+  if (eventDecorators.length === 0) {
+    return;
+  }
+  if (eventDecorators.length > 1) {
+    report(`Function '${fn.name}' cannot have multiple @on decorators`, fn);
+    return;
+  }
+  const eventType = eventDecorators[0].args?.eventType;
+  if (!eventType) {
+    report(`Function '${fn.name}' is missing an event type in @on(...)`, fn);
+    return;
+  }
+  if (!isEventTypeName(eventType)) {
+    report(`Unknown event type '${eventType}'`, fn);
+    return;
+  }
+  const expectedParams = getEventParamSpecs(eventType);
+  if (fn.params.length !== 0 && fn.params.length !== expectedParams.length) {
+    report(
+      `Event handler '${fn.name}' for ${eventType} must declare either 0 parameter(s) or ${expectedParams.length} parameter(s), got ${fn.params.length}`,
+      fn
+    );
+    return;
+  }
+  for (let i = 0; i < fn.params.length; i++) {
+    const actual = normalizeType(fn.params[i].type);
+    const expected = normalizeType(expectedParams[i].type);
+    if (!typesMatch(expected, actual)) {
+      report(
+        `Event handler '${fn.name}' parameter ${i + 1} must be ${typeToString3(expected)}, got ${typeToString3(actual)}`,
+        fn.params[i]
+      );
+    }
+  }
+}
+
+// ../../src/typechecker/entities.ts
 var ENTITY_HIERARCHY = {
-  "entity": null,
-  "Player": "entity",
-  "Mob": "entity",
-  "HostileMob": "Mob",
-  "PassiveMob": "Mob",
-  "Zombie": "HostileMob",
-  "Skeleton": "HostileMob",
-  "Creeper": "HostileMob",
-  "Spider": "HostileMob",
-  "Enderman": "HostileMob",
-  "Blaze": "HostileMob",
-  "Witch": "HostileMob",
-  "Slime": "HostileMob",
-  "ZombieVillager": "HostileMob",
-  "Husk": "HostileMob",
-  "Drowned": "HostileMob",
-  "Stray": "HostileMob",
-  "WitherSkeleton": "HostileMob",
-  "CaveSpider": "HostileMob",
-  "Pig": "PassiveMob",
-  "Cow": "PassiveMob",
-  "Sheep": "PassiveMob",
-  "Chicken": "PassiveMob",
-  "Villager": "PassiveMob",
-  "WanderingTrader": "PassiveMob",
-  "ArmorStand": "entity",
-  "Item": "entity",
-  "Arrow": "entity"
+  entity: null,
+  Player: "entity",
+  Mob: "entity",
+  HostileMob: "Mob",
+  PassiveMob: "Mob",
+  Zombie: "HostileMob",
+  Skeleton: "HostileMob",
+  Creeper: "HostileMob",
+  Spider: "HostileMob",
+  Enderman: "HostileMob",
+  Blaze: "HostileMob",
+  Witch: "HostileMob",
+  Slime: "HostileMob",
+  ZombieVillager: "HostileMob",
+  Husk: "HostileMob",
+  Drowned: "HostileMob",
+  Stray: "HostileMob",
+  WitherSkeleton: "HostileMob",
+  CaveSpider: "HostileMob",
+  Pig: "PassiveMob",
+  Cow: "PassiveMob",
+  Sheep: "PassiveMob",
+  Chicken: "PassiveMob",
+  Villager: "PassiveMob",
+  WanderingTrader: "PassiveMob",
+  ArmorStand: "entity",
+  Item: "entity",
+  Arrow: "entity"
 };
 var MC_TYPE_TO_ENTITY = {
-  "zombie": "Zombie",
+  zombie: "Zombie",
   "minecraft:zombie": "Zombie",
-  "skeleton": "Skeleton",
+  skeleton: "Skeleton",
   "minecraft:skeleton": "Skeleton",
-  "creeper": "Creeper",
+  creeper: "Creeper",
   "minecraft:creeper": "Creeper",
-  "spider": "Spider",
+  spider: "Spider",
   "minecraft:spider": "Spider",
-  "enderman": "Enderman",
+  enderman: "Enderman",
   "minecraft:enderman": "Enderman",
-  "blaze": "Blaze",
+  blaze: "Blaze",
   "minecraft:blaze": "Blaze",
-  "witch": "Witch",
+  witch: "Witch",
   "minecraft:witch": "Witch",
-  "slime": "Slime",
+  slime: "Slime",
   "minecraft:slime": "Slime",
-  "zombie_villager": "ZombieVillager",
+  zombie_villager: "ZombieVillager",
   "minecraft:zombie_villager": "ZombieVillager",
-  "husk": "Husk",
+  husk: "Husk",
   "minecraft:husk": "Husk",
-  "drowned": "Drowned",
+  drowned: "Drowned",
   "minecraft:drowned": "Drowned",
-  "stray": "Stray",
+  stray: "Stray",
   "minecraft:stray": "Stray",
-  "wither_skeleton": "WitherSkeleton",
+  wither_skeleton: "WitherSkeleton",
   "minecraft:wither_skeleton": "WitherSkeleton",
-  "cave_spider": "CaveSpider",
+  cave_spider: "CaveSpider",
   "minecraft:cave_spider": "CaveSpider",
-  "pig": "Pig",
+  pig: "Pig",
   "minecraft:pig": "Pig",
-  "cow": "Cow",
+  cow: "Cow",
   "minecraft:cow": "Cow",
-  "sheep": "Sheep",
+  sheep: "Sheep",
   "minecraft:sheep": "Sheep",
-  "chicken": "Chicken",
+  chicken: "Chicken",
   "minecraft:chicken": "Chicken",
-  "villager": "Villager",
+  villager: "Villager",
   "minecraft:villager": "Villager",
-  "wandering_trader": "WanderingTrader",
+  wandering_trader: "WanderingTrader",
   "minecraft:wandering_trader": "WanderingTrader",
-  "armor_stand": "ArmorStand",
+  armor_stand: "ArmorStand",
   "minecraft:armor_stand": "ArmorStand",
-  "item": "Item",
+  item: "Item",
   "minecraft:item": "Item",
-  "arrow": "Arrow",
+  arrow: "Arrow",
   "minecraft:arrow": "Arrow"
 };
+function entityTypeFromMinecraftType(mcType) {
+  return MC_TYPE_TO_ENTITY[mcType];
+}
+function inferEntityTypeFromSelector(selector, currentSelfType = "entity") {
+  if (selector.kind === "@s") return currentSelfType;
+  if (selector.kind === "@a" || selector.kind === "@p" || selector.kind === "@r") return "Player";
+  if (selector.filters?.type) {
+    return entityTypeFromMinecraftType(selector.filters.type) ?? "entity";
+  }
+  return "entity";
+}
+function isEntitySubtype(childType, parentType) {
+  if (childType === parentType) return true;
+  let current = childType;
+  while (current !== null) {
+    if (current === parentType) return true;
+    current = ENTITY_HIERARCHY[current];
+  }
+  return false;
+}
+function isKnownEntityType(entityType) {
+  return entityType in ENTITY_HIERARCHY;
+}
+
+// ../../src/resources/catalog.ts
+var BUILTIN_RESOURCE_REGISTRY = {
+  particles: ["minecraft:flame", "minecraft:smoke", "minecraft:dust"],
+  effects: ["minecraft:speed", "minecraft:strength", "minecraft:regeneration", "minecraft:slowness"],
+  entities: ["minecraft:zombie", "minecraft:skeleton", "minecraft:creeper", "minecraft:item"],
+  items: ["minecraft:diamond", "minecraft:apple", "minecraft:stone", "minecraft:stick"],
+  sounds: ["minecraft:entity.experience_orb.pickup", "minecraft:ui.toast.challenge_complete"],
+  blocks: ["minecraft:stone", "minecraft:air", "minecraft:grass_block", "minecraft:bedrock"]
+};
+var RESOURCE_CATEGORY_NAME = {
+  particles: "particle",
+  effects: "effect",
+  entities: "entity",
+  items: "item",
+  sounds: "sound",
+  blocks: "block"
+};
+var TYPE_REGISTRY_TO_CATALOG_CATEGORY = {
+  particle: "particles",
+  effect: "effects",
+  entity: "entities",
+  entity_type: "entities",
+  item: "items",
+  sound: "sounds",
+  block: "blocks"
+};
+function catalogCategoryForResourceType(registry) {
+  return TYPE_REGISTRY_TO_CATALOG_CATEGORY[registry];
+}
+function builtinCategoriesForResourceId(id) {
+  return Object.keys(BUILTIN_RESOURCE_REGISTRY).filter((category) => BUILTIN_RESOURCE_REGISTRY[category].includes(id));
+}
+
+// ../../src/typechecker/index.ts
 var VOID_TYPE = { kind: "named", name: "void" };
 var INT_TYPE = { kind: "named", name: "int" };
 var STRING_TYPE = { kind: "named", name: "string" };
+var BUILTIN_RESOURCE_ARGUMENTS = {
+  particle: { 0: { kind: "resource", registry: "particle" } },
+  effect: { 1: { kind: "resource", registry: "effect" } },
+  effect_clear: { 1: { kind: "resource", registry: "effect" } },
+  give: { 1: { kind: "resource", registry: "item" } },
+  clear: { 1: { kind: "resource", registry: "item" } },
+  playsound: { 0: { kind: "resource", registry: "sound" } },
+  setblock: { 1: { kind: "resource", registry: "block" } },
+  fill: { 2: { kind: "resource", registry: "block" } },
+  summon: { 0: { kind: "resource", registry: "entity_type" } }
+};
 var BUILTIN_SIGNATURES = {
   assert: {
     params: [{ kind: "named", name: "bool" }],
@@ -12130,17 +12761,19 @@ var TypeChecker = class _TypeChecker {
   getNodeLocation(node) {
     const span = node?.span;
     return {
+      file: span?.file,
       line: span?.line ?? 1,
       col: span?.col ?? 1
     };
   }
   report(message, node) {
-    const { line, col } = this.getNodeLocation(node);
-    this.collector.error("TypeError", message, line, col);
+    const { file, line, col } = this.getNodeLocation(node);
+    this.collector.error("TypeError", message, line, col, file);
   }
   warnLint(message, node) {
-    const { line, col } = this.getNodeLocation(node);
-    const filePart = this.filePath ? `${this.filePath}:` : "";
+    const { file, line, col } = this.getNodeLocation(node);
+    const diagnosticFile = file ?? this.filePath;
+    const filePart = diagnosticFile ? `${diagnosticFile}:` : "";
     this.lintWarnings.push(
       `${filePart}line ${line}, col ${col}: ${message}`
     );
@@ -12155,6 +12788,11 @@ var TypeChecker = class _TypeChecker {
   check(program) {
     for (const fn of program.declarations) {
       this.functions.set(fn.name, fn);
+    }
+    for (const fn of program.declaredFunctions ?? []) {
+      if (!this.functions.has(fn.name)) {
+        this.functions.set(fn.name, fn);
+      }
     }
     for (const iface of program.interfaces ?? []) {
       this.interfaces.set(iface.name, iface);
@@ -12270,6 +12908,7 @@ var TypeChecker = class _TypeChecker {
     return this.collector.getErrors();
   }
   checkFunction(fn) {
+    if (fn.isDeclareOnly) return;
     if (fn.typeParams && fn.typeParams.length > 0) return;
     this.currentFn = fn;
     this.currentReturnType = this.normalizeType(fn.returnType);
@@ -12299,117 +12938,35 @@ var TypeChecker = class _TypeChecker {
         this.report(`Parameter '${param.name}' cannot follow a default parameter`, param);
       }
     }
-    this.checkBlock(fn.body);
+    const onDecorator = fn.decorators.find((decorator) => decorator.name === "on");
+    const eventType = onDecorator?.args?.eventType;
+    const hasEventContext = !!(eventType && isEventTypeName(eventType));
+    if (hasEventContext) {
+      const executorContext = getEventExecutorContext(eventType);
+      const shouldPushContext = executorContext.kind === "entity";
+      if (shouldPushContext) {
+        this.pushSelfType(executorContext.entityType);
+        try {
+          this.checkBlock(fn.body);
+        } finally {
+          this.popSelfType();
+        }
+      } else {
+        this.checkBlock(fn.body);
+      }
+    } else {
+      this.checkBlock(fn.body);
+    }
     this.currentFn = null;
     this.currentReturnType = null;
   }
   checkFunctionDecorators(fn) {
-    const watchDecorators = fn.decorators.filter((decorator) => decorator.name === "watch");
-    if (watchDecorators.length > 1) {
-      this.report(`Function '${fn.name}' cannot have multiple @watch decorators`, fn);
-      return;
-    }
-    if (watchDecorators.length === 1) {
-      const objective = watchDecorators[0].args?.objective;
-      if (!objective) {
-        this.report(`Function '${fn.name}' is missing a scoreboard objective in @watch("...")`, fn);
-        return;
-      }
-      if (fn.params.length > 0) {
-        this.report(`@watch handler '${fn.name}' cannot declare parameters`, fn);
-      }
-    }
-    const throttleDecorators = fn.decorators.filter((decorator) => decorator.name === "throttle");
-    if (throttleDecorators.length > 1) {
-      this.report(`Function '${fn.name}' cannot have multiple @throttle decorators`, fn);
-      return;
-    }
-    if (throttleDecorators.length === 1) {
-      const ticks = throttleDecorators[0].args?.ticks;
-      if (ticks === void 0 || ticks <= 0) {
-        this.report(`@throttle on '${fn.name}' requires ticks=N (positive integer)`, fn);
-      }
-    }
-    const retryDecorators = fn.decorators.filter((decorator) => decorator.name === "retry");
-    if (retryDecorators.length > 1) {
-      this.report(`Function '${fn.name}' cannot have multiple @retry decorators`, fn);
-      return;
-    }
-    if (retryDecorators.length === 1) {
-      const max = retryDecorators[0].args?.max;
-      if (max === void 0 || max <= 0) {
-        this.report(`@retry on '${fn.name}' requires max=N (positive integer)`, fn);
-      }
-    }
-    const profileDecorators = fn.decorators.filter((decorator) => decorator.name === "profile");
-    if (profileDecorators.length > 1) {
-      this.report(`Function '${fn.name}' cannot have multiple @profile decorators`, fn);
-      return;
-    }
-    if (profileDecorators.length === 1 && (profileDecorators[0].rawArgs?.length || profileDecorators[0].args && Object.keys(profileDecorators[0].args).length > 0)) {
-      this.report(`@profile decorator on '${fn.name}' does not accept arguments`, fn);
-      return;
-    }
-    const benchmarkDecorators = fn.decorators.filter((decorator) => decorator.name === "benchmark");
-    if (benchmarkDecorators.length > 1) {
-      this.report(`Function '${fn.name}' cannot have multiple @benchmark decorators`, fn);
-      return;
-    }
-    if (benchmarkDecorators.length === 1 && (benchmarkDecorators[0].rawArgs?.length || benchmarkDecorators[0].args && Object.keys(benchmarkDecorators[0].args).length > 0)) {
-      this.report(`@benchmark decorator on '${fn.name}' does not accept arguments`, fn);
-      return;
-    }
-    const memoizeDecorators = fn.decorators.filter((decorator) => decorator.name === "memoize");
-    if (memoizeDecorators.length > 1) {
-      this.report(`Function '${fn.name}' cannot have multiple @memoize decorators`, fn);
-      return;
-    }
-    if (memoizeDecorators.length === 1) {
-      if (fn.params.length !== 1) {
-        this.report(`@memoize on '${fn.name}' requires exactly one parameter`, fn);
-      } else {
-        const paramType = fn.params[0].type;
-        const isInt = paramType.kind === "named" && paramType.name === "int";
-        if (!isInt) {
-          this.report(`@memoize on '${fn.name}' only supports int parameters (got '${paramType.kind === "named" ? paramType.name : paramType.kind}')`, fn);
-        }
-      }
-    }
-    const eventDecorators = fn.decorators.filter((decorator) => decorator.name === "on");
-    if (eventDecorators.length === 0) {
-      return;
-    }
-    if (eventDecorators.length > 1) {
-      this.report(`Function '${fn.name}' cannot have multiple @on decorators`, fn);
-      return;
-    }
-    const eventType = eventDecorators[0].args?.eventType;
-    if (!eventType) {
-      this.report(`Function '${fn.name}' is missing an event type in @on(...)`, fn);
-      return;
-    }
-    if (!isEventTypeName(eventType)) {
-      this.report(`Unknown event type '${eventType}'`, fn);
-      return;
-    }
-    const expectedParams = getEventParamSpecs(eventType);
-    if (fn.params.length !== expectedParams.length) {
-      this.report(
-        `Event handler '${fn.name}' for ${eventType} must declare ${expectedParams.length} parameter(s), got ${fn.params.length}`,
-        fn
-      );
-      return;
-    }
-    for (let i = 0; i < expectedParams.length; i++) {
-      const actual = this.normalizeType(fn.params[i].type);
-      const expected = this.normalizeType(expectedParams[i].type);
-      if (!this.typesMatch(expected, actual)) {
-        this.report(
-          `Event handler '${fn.name}' parameter ${i + 1} must be ${this.typeToString(expected)}, got ${this.typeToString(actual)}`,
-          fn.params[i]
-        );
-      }
-    }
+    validateFunctionDecorators(fn, {
+      report: (message, node) => this.report(message, node),
+      normalizeType: (type) => this.normalizeType(type),
+      typesMatch: (expected, actual) => this.typesMatch(expected, actual),
+      typeToString: (type) => this.typeToString(type)
+    });
   }
   checkBlock(stmts) {
     for (const stmt of stmts) {
@@ -12675,6 +13232,12 @@ var TypeChecker = class _TypeChecker {
               expr
             );
           }
+          if (this.isMixedNumericArithmetic(leftType, rightType)) {
+            this.report(
+              `Mixed numeric arithmetic requires explicit casts: ${this.typeToString(leftType)} ${expr.op} ${this.typeToString(rightType)}`,
+              expr
+            );
+          }
           const leftIsFloat = leftType.kind === "named" && leftType.name === "float";
           const rightIsFloat = rightType.kind === "named" && rightType.name === "float";
           if (leftIsFloat || rightIsFloat) {
@@ -12833,8 +13396,6 @@ var TypeChecker = class _TypeChecker {
       case "int_lit":
       case "float_lit":
       case "bool_lit":
-      case "str_lit":
-      case "mc_name":
       case "range_lit":
       case "selector":
       case "byte_lit":
@@ -12842,10 +13403,29 @@ var TypeChecker = class _TypeChecker {
       case "long_lit":
       case "double_lit":
         break;
+      case "str_lit":
+      case "mc_name":
+        this.checkResourceLiteralAgainstExpected(expr.value, expectedType, expr);
+        if (expr.kind === "mc_name" && expr.value.includes(":") && expectedType?.kind !== "resource") {
+          this.report(`Unquoted resource literal '${expr.value}' is only allowed in typed resource contexts`, expr);
+        }
+        break;
       case "type_cast":
         this.checkExpr(expr.expr);
         break;
     }
+  }
+  checkResourceLiteralAgainstExpected(value, expectedType, node) {
+    if (expectedType?.kind !== "resource") return;
+    const expectedCategory = catalogCategoryForResourceType(expectedType.registry);
+    if (!expectedCategory) return;
+    const knownCategories = builtinCategoriesForResourceId(value);
+    if (knownCategories.length === 0 || knownCategories.includes(expectedCategory)) return;
+    const knownNames = knownCategories.map((category) => RESOURCE_CATEGORY_NAME[category]).sort().join("/");
+    this.report(
+      `Resource '${value}' is a known ${knownNames}, not ${this.typeToString(expectedType)}`,
+      node
+    );
   }
   checkCallExpr(expr) {
     if (expr.fn === "tp" || expr.fn === "tp_to") {
@@ -12854,6 +13434,13 @@ var TypeChecker = class _TypeChecker {
     const richTextBuiltin = this.richTextBuiltins.get(expr.fn);
     if (richTextBuiltin) {
       this.checkRichTextBuiltinCall(expr, richTextBuiltin.messageIndex);
+      return;
+    }
+    const builtinResourceArgs = BUILTIN_RESOURCE_ARGUMENTS[expr.fn];
+    if (builtinResourceArgs) {
+      for (let i = 0; i < expr.args.length; i++) {
+        this.checkExpr(expr.args[i], builtinResourceArgs[i]);
+      }
       return;
     }
     const builtin = BUILTIN_SIGNATURES[expr.fn];
@@ -12867,6 +13454,12 @@ var TypeChecker = class _TypeChecker {
         } else if (this.condDepth > 0) {
           this.report(
             `${expr.fn}() cannot be called inside an if/else body. Declare timers at the top level.`,
+            expr
+          );
+        }
+        if (expr.args[0]?.kind !== "int_lit") {
+          this.report(
+            `${expr.fn}() requires a literal tick duration; dynamic tick values are not supported.`,
             expr
           );
         }
@@ -13149,6 +13742,7 @@ var TypeChecker = class _TypeChecker {
         return { kind: "named", name: "bool" };
       case "str_lit":
       case "mc_name":
+        if (expectedType?.kind === "resource") return expectedType;
         return { kind: "named", name: "string" };
       case "str_interp":
         for (const part of expr.parts) {
@@ -13321,17 +13915,7 @@ var TypeChecker = class _TypeChecker {
   // ---------------------------------------------------------------------------
   /** Infer entity type from a selector */
   inferEntityTypeFromSelector(selector) {
-    if (selector.kind === "@a" || selector.kind === "@p" || selector.kind === "@r") {
-      return "Player";
-    }
-    if (selector.filters?.type) {
-      const mcType = selector.filters.type.toLowerCase();
-      return MC_TYPE_TO_ENTITY[mcType] ?? "entity";
-    }
-    if (selector.kind === "@s") {
-      return this.selfTypeStack[this.selfTypeStack.length - 1];
-    }
-    return "entity";
+    return inferEntityTypeFromSelector(selector, this.getCurrentSelfType());
   }
   static {
     // Reverse map: parser sometimes remaps method names (e.g. add→set_add) for builtins.
@@ -13363,16 +13947,6 @@ var TypeChecker = class _TypeChecker {
       return null;
     }
     return method;
-  }
-  /** Check if childType is a subtype of parentType */
-  isEntitySubtype(childType, parentType) {
-    if (childType === parentType) return true;
-    let current = childType;
-    while (current !== null) {
-      if (current === parentType) return true;
-      current = ENTITY_HIERARCHY[current];
-    }
-    return false;
   }
   /** Push a new self type context */
   pushSelfType(entityType) {
@@ -13408,6 +13982,18 @@ var TypeChecker = class _TypeChecker {
     ];
     return numericPairs.some(([e, a]) => expected.name === e && actual.name === a);
   }
+  numericArithmeticFamily(type) {
+    if (type.kind !== "named") return void 0;
+    if (["byte", "short", "int", "long"].includes(type.name)) return "int";
+    if (type.name === "fixed" || type.name === "float") return "fixed";
+    if (type.name === "double") return "double";
+    return void 0;
+  }
+  isMixedNumericArithmetic(left, right) {
+    const leftFamily = this.numericArithmeticFamily(left);
+    const rightFamily = this.numericArithmeticFamily(right);
+    return !!leftFamily && !!rightFamily && leftFamily !== rightFamily;
+  }
   typesMatch(expected, actual) {
     if (expected.kind === "named" && expected.name === "int" && actual.kind === "enum") {
       return true;
@@ -13416,16 +14002,20 @@ var TypeChecker = class _TypeChecker {
       return true;
     }
     if (expected.kind === "selector" && actual.kind === "entity") {
-      return true;
+      if (!expected.entityType) return true;
+      return isKnownEntityType(expected.entityType) && isEntitySubtype(actual.entityType, expected.entityType);
     }
     if (expected.kind === "entity" && actual.kind === "selector") {
-      return true;
+      if (!actual.entityType || !isKnownEntityType(actual.entityType)) return false;
+      return isEntitySubtype(actual.entityType, expected.entityType);
     }
     if (expected.kind === "entity" && actual.kind === "entity") {
-      return this.isEntitySubtype(actual.entityType, expected.entityType);
+      return isEntitySubtype(actual.entityType, expected.entityType);
     }
     if (expected.kind === "selector" && actual.kind === "selector") {
-      return true;
+      if (!expected.entityType) return true;
+      if (!actual.entityType || !isKnownEntityType(expected.entityType) || !isKnownEntityType(actual.entityType)) return false;
+      return isEntitySubtype(actual.entityType, expected.entityType);
     }
     if (expected.kind === "selector" && actual.kind === "named" && actual.name === "string") {
       return true;
@@ -13449,6 +14039,9 @@ var TypeChecker = class _TypeChecker {
     }
     if (expected.kind === "array" && actual.kind === "array") {
       return this.typesMatch(expected.elem, actual.elem);
+    }
+    if (expected.kind === "resource" && actual.kind === "resource") {
+      return expected.registry === actual.registry;
     }
     if (expected.kind === "struct" && actual.kind === "struct") {
       return expected.name === actual.name;
@@ -13485,7 +14078,9 @@ var TypeChecker = class _TypeChecker {
       case "entity":
         return type.entityType;
       case "selector":
-        return "selector";
+        return type.entityType ? `selector<${type.entityType}>` : "selector";
+      case "resource":
+        return `resource<${type.registry}>`;
       case "tuple":
         return `(${type.elements.map((e) => this.typeToString(e)).join(", ")})`;
       case "option":
@@ -14508,6 +15103,7 @@ function lowerGlobal(g) {
 function lowerFunction(fn) {
   return {
     name: fn.name,
+    ...fn.symbolId ? { symbolId: fn.symbolId } : {},
     typeParams: fn.typeParams,
     params: fn.params.map(lowerParam),
     returnType: fn.returnType,
@@ -14873,8 +15469,8 @@ function lowerStmt(stmt) {
         span: stmt.span
       };
     default: {
-      const _exhaustive = stmt;
-      throw new Error(`Unknown statement kind: ${_exhaustive.kind}`);
+      const _never = stmt;
+      throw new Error(`Unknown statement kind: ${JSON.stringify(_never)}`);
     }
   }
 }
@@ -15022,7 +15618,14 @@ function lowerExpr(expr) {
         span: expr.span
       };
     case "call":
-      return { kind: "call", fn: expr.fn, args: expr.args.map(lowerExpr), typeArgs: expr.typeArgs, span: expr.span };
+      return {
+        kind: "call",
+        fn: expr.fn,
+        ...expr.symbolId ? { symbolId: expr.symbolId } : {},
+        args: expr.args.map(lowerExpr),
+        typeArgs: expr.typeArgs,
+        span: expr.span
+      };
     case "invoke":
       return { kind: "invoke", callee: lowerExpr(expr.callee), args: expr.args.map(lowerExpr), span: expr.span };
     case "static_call":
@@ -15064,8 +15667,8 @@ function lowerExpr(expr) {
       };
     }
     default: {
-      const _exhaustive = expr;
-      throw new Error(`Unknown expression kind: ${_exhaustive.kind}`);
+      const _never = expr;
+      throw new Error(`Unknown expression kind: ${JSON.stringify(_never)}`);
     }
   }
 }
@@ -16428,6 +17031,118 @@ function checkNoMagicNumbersExpr(expr, out, file, allowed) {
   }
 }
 
+// ../../src/lsp/import-resolver.ts
+var import_url = require("url");
+var fs = __toESM(require("fs"));
+var path = __toESM(require("path"));
+init_lexer();
+init_parser();
+var importedCache = /* @__PURE__ */ new Map();
+function resolveImportPath(importStr, fromUri) {
+  try {
+    const fromFile = (0, import_url.fileURLToPath)(fromUri);
+    const fromDir = path.dirname(fromFile);
+    const directCandidate = (candidateBase) => {
+      const base = path.resolve(fromDir, candidateBase);
+      if (fs.existsSync(base)) return base;
+      if (!base.endsWith(".mcrs") && fs.existsSync(base + ".mcrs")) return base + ".mcrs";
+      return null;
+    };
+    if (importStr.startsWith(".")) {
+      const resolved = path.resolve(fromDir, importStr);
+      if (fs.existsSync(resolved)) return resolved;
+      if (!resolved.endsWith(".mcrs") && fs.existsSync(resolved + ".mcrs")) return resolved + ".mcrs";
+    } else {
+      const direct = directCandidate(importStr) || directCandidate(`${importStr}.mcrs`);
+      if (direct) return direct;
+      let dir = fromDir;
+      for (let i = 0; i < 10; i++) {
+        if (fs.existsSync(path.join(dir, "package.json"))) {
+          const candidate = path.join(dir, "src", importStr);
+          if (fs.existsSync(candidate)) return candidate;
+          if (fs.existsSync(candidate + ".mcrs")) return candidate + ".mcrs";
+          const candidate2 = path.join(dir, importStr);
+          if (fs.existsSync(candidate2)) return candidate2;
+          if (fs.existsSync(candidate2 + ".mcrs")) return candidate2 + ".mcrs";
+          const candidate3 = path.join(dir, "src", `${importStr}.mcrs`);
+          if (fs.existsSync(candidate3)) return candidate3;
+          const candidate4 = path.join(dir, `${importStr}.mcrs`);
+          if (fs.existsSync(candidate4)) return candidate4;
+          break;
+        }
+        dir = path.dirname(dir);
+      }
+    }
+  } catch {
+  }
+  return null;
+}
+function parseImportedProgram(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    const cached = importedCache.get(filePath);
+    if (cached && cached.mtimeMs === stat.mtimeMs) return cached;
+    const source = fs.readFileSync(filePath, "utf-8");
+    const tokens = new Lexer(source).tokenize();
+    const prog = new Parser(tokens).parse(path.basename(filePath, ".mcrs"));
+    const parsed = { prog, source, mtimeMs: stat.mtimeMs };
+    importedCache.set(filePath, parsed);
+    return parsed;
+  } catch {
+  }
+  return null;
+}
+function getImportedPrograms(source, fromUri, parsedProgram) {
+  const result = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = (moduleName, filePath, symbol, kind) => {
+    const key = `${kind}:${filePath}:${symbol ?? ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const parsed = parseImportedProgram(filePath);
+    if (!parsed) return;
+    result.push({
+      moduleName,
+      symbol,
+      filePath,
+      kind,
+      prog: parsed.prog,
+      source: parsed.source
+    });
+  };
+  const FILE_IMPORT_RE = /^import\s+"([^"]+)"/gm;
+  let m;
+  while ((m = FILE_IMPORT_RE.exec(source)) !== null) {
+    const resolved = resolveImportPath(m[1], fromUri);
+    if (!resolved || !fs.existsSync(resolved)) continue;
+    add(m[1], resolved, void 0, "path");
+  }
+  for (const imp of parsedProgram?.imports ?? []) {
+    const resolved = resolveImportPath(imp.moduleName, fromUri);
+    if (!resolved || !fs.existsSync(resolved)) continue;
+    add(imp.moduleName, resolved, imp.symbol, "module");
+  }
+  return result;
+}
+function getImportedFunctions(imported) {
+  if (imported.kind === "module" && imported.symbol) {
+    if (imported.symbol === "*") {
+      return imported.prog.declaredFunctions ?? [];
+    }
+    return (imported.prog.declaredFunctions ?? []).filter((fn) => fn.name === imported.symbol);
+  }
+  return [
+    ...imported.prog.declarations,
+    ...imported.prog.declaredFunctions ?? []
+  ];
+}
+function getImportedFunctionByName(imported, name) {
+  return getImportedFunctions(imported).find((fn) => fn.name === name);
+}
+function shouldImportStructsAndTypes(imported) {
+  return imported.kind === "path" || imported.symbol === void 0;
+}
+
 // ../../src/lsp/rename.ts
 init_lexer();
 function keyFor(line, col) {
@@ -16490,14 +17205,25 @@ function findFunctionNameToken(cursor, fn) {
   if (fnIndex === -1) return null;
   return findNextToken(cursor, fnIndex + 1, (token) => token.kind === "ident" && token.value === fn.name);
 }
-function findDeclarationNameToken(cursor, stmt) {
+function findBindingToken(cursor, stmt, bindingName) {
   if (!stmt.span) return null;
   const startIndex = findTokenIndex(cursor, stmt.span.line, stmt.span.col);
   if (startIndex === -1) return null;
   return findNextToken(
     cursor,
     startIndex + 1,
-    (token) => token.kind === "ident" && token.value === stmt.name && token.line === stmt.span.line
+    (token) => token.kind === "ident" && token.value === bindingName && token.line === stmt.span.line
+  );
+}
+function findDeclarationNameToken(cursor, stmt) {
+  if (!stmt.span) return null;
+  const { span } = stmt;
+  const startIndex = findTokenIndex(cursor, span.line, span.col);
+  if (startIndex === -1) return null;
+  return findNextToken(
+    cursor,
+    startIndex + 1,
+    (token) => token.kind === "ident" && token.value === stmt.name && token.line === span.line
   );
 }
 function findFieldDeclarationTokens(cursor, program) {
@@ -16534,12 +17260,13 @@ function findParamToken(cursor, fn, paramName, fromIndex) {
 }
 function findFieldAccessToken(cursor, expr) {
   if (!expr.span) return null;
-  const startIndex = findTokenIndex(cursor, expr.span.line, expr.span.col);
+  const { span } = expr;
+  const startIndex = findTokenIndex(cursor, span.line, span.col);
   if (startIndex === -1) return null;
   return findNextToken(
     cursor,
     startIndex + 1,
-    (token, index) => token.kind === "ident" && token.value === expr.field && cursor.tokens[index - 1]?.kind === "." && token.line === expr.span.line
+    (token, index) => token.kind === "ident" && token.value === expr.field && cursor.tokens[index - 1]?.kind === "." && token.line === span.line
   );
 }
 function findStructLiteralFieldToken(cursor, expr, fieldName, skipCount) {
@@ -16701,7 +17428,7 @@ function buildRenameIndex(source, program) {
         walkExpr(stmt.start, scope, null, currentFn);
         walkExpr(stmt.end, scope, null, currentFn);
         const forScope = makeScope(scope);
-        bindLocal(stmt.varName, { kind: "named", name: "int" }, null, forScope);
+        bindLocal(stmt.varName, { kind: "named", name: "int" }, findBindingToken(cursor, stmt, stmt.varName), forScope);
         walkBlock(stmt.body, forScope, currentFn);
         return;
       }
@@ -16878,20 +17605,929 @@ function buildRenameWorkspaceEdit(doc, program, position, newName) {
   };
 }
 
+// ../../src/lsp/objective-hover.ts
+function isInsideStringOrLineComment(lineText, cursor) {
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < cursor && i < lineText.length; i++) {
+    const ch = lineText[i];
+    const next = lineText[i + 1];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === "/" && next === "/") return true;
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+  }
+  return inString;
+}
+function objectiveHoverMarkdown(token) {
+  return [
+    "```redscript",
+    `${token}: objective`,
+    "```",
+    "",
+    "`#name` denotes a scoreboard objective token in RedScript/Minecraft scoreboard contexts.",
+    "**Static/editor documentation only**: this hover does not confirm objective existence or behavior against a live Paper/server."
+  ].join("\n");
+}
+function getObjectiveHover(lineText, cursor) {
+  if (isInsideStringOrLineComment(lineText, cursor)) return null;
+  const objectiveRe = /#[A-Za-z_][A-Za-z0-9_]*/g;
+  let match;
+  while ((match = objectiveRe.exec(lineText)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (cursor >= start && cursor <= end) {
+      const token = match[0];
+      return { token, markdown: objectiveHoverMarkdown(token) };
+    }
+  }
+  return null;
+}
+
+// ../../src/lsp/builtin-hover.ts
+function formatBuiltinSignature(def) {
+  const paramText = def.params.map((param) => {
+    const optional = param.required ? "" : "?";
+    const defaultText = param.default !== void 0 ? ` = ${param.default}` : "";
+    return `${param.name}: ${param.type}${optional}${defaultText}`;
+  }).join(", ");
+  return `fn ${def.name}(${paramText}): ${def.returns}`;
+}
+function formatBuiltinParams(def) {
+  if (def.params.length === 0) return [];
+  const lines = [];
+  lines.push("");
+  lines.push("**Parameters:**");
+  for (const param of def.params) {
+    const optional = param.required ? "" : " (optional)";
+    const defaultText = param.default !== void 0 ? `, default: ${param.default}` : "";
+    lines.push(`- \`${param.name}: ${param.type}\` \u2014 ${param.doc || "No parameter docs."}${optional}${defaultText}`);
+  }
+  return lines;
+}
+function formatBuiltinExamples(def) {
+  if (def.examples.length === 0) return [];
+  const lines = [];
+  lines.push("");
+  lines.push("**Examples:**");
+  for (const ex of def.examples) {
+    lines.push(`- \`${ex}\``);
+  }
+  return lines;
+}
+var BUILTIN_HOVER_DISCLAIMER = "Static/editor builtin metadata: this text is derived from builtin declarations and does not validate runtime behavior against a live server.";
+function formatBuiltinHover(def) {
+  return [
+    "```redscript",
+    formatBuiltinSignature(def),
+    "```",
+    "",
+    def.doc,
+    ...formatBuiltinParams(def),
+    ...formatBuiltinExamples(def),
+    "",
+    BUILTIN_HOVER_DISCLAIMER
+  ].join("\n");
+}
+function getBuiltinHover(name, builtins) {
+  const builtin = builtins[name];
+  if (!builtin) return null;
+  return {
+    name: builtin.name,
+    markdown: formatBuiltinHover(builtin)
+  };
+}
+
+// ../../src/lsp/decorator-hover.ts
+var DECORATOR_HOVER_DISCLAIMER = "Static/editor decorator metadata: this text is a language/runtime documentation hint and is not a live Paper/server validation.";
+var DECORATOR_DOCS = {
+  tick: [
+    "**@tick**",
+    "",
+    "Runtime decorator that registers the function for periodic execution in the datapack tick loop.",
+    "- `@tick` \u2014 run on every game tick.",
+    "- `@tick(rate=N)` \u2014 run every `N` ticks.",
+    "",
+    "Example:",
+    "- `@tick fn every_tick() {}`",
+    "- `@tick(rate=20) fn every_second() {}`",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  load: [
+    "**@load**",
+    "",
+    "Runtime decorator that runs the function from `/reload`/datapack initialization flow.",
+    "Use for one-time setup such as scoreboard/objective bootstrap or registration.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  keep: [
+    "**@keep**",
+    "",
+    "Prevents dead-code elimination so the function is retained in emitted output even if unused in static references.",
+    "Useful for runtime entry points that are invoked indirectly by generated runtime glue.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  test: [
+    "**@test**",
+    "",
+    "Marks the function as a test case consumed by `redscript test` flow.",
+    'Optional label: `@test("name")`.',
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  coroutine: [
+    "**@coroutine**",
+    "",
+    "Splits long loops across ticks to avoid oversized command bursts.",
+    "- `@coroutine(batch=N)` sets loop iterations per tick.",
+    '- Optional `onDone="fn"` callback runs after completion.',
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  throttle: [
+    "**@throttle**",
+    "",
+    "Rate-limits function execution.",
+    "`@throttle(ticks=N)` limits how often this function runs.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  retry: [
+    "**@retry**",
+    "",
+    "Executes the function with bounded retries for temporary failures.",
+    "`@retry(max=N)` retries up to `N` attempts.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  memoize: [
+    "**@memoize**",
+    "",
+    "Caches function results for pure/deterministic computations to avoid repeated work.",
+    "Use with stable inputs; the cache persists according to generated runtime semantics.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  watch: [
+    "**@watch**",
+    "",
+    "Runs when a scoreboard objective changes value. Use with a required objective name or selector context argument.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  schedule: [
+    "**@schedule**",
+    "",
+    "Schedules the function for delayed execution in ticks.",
+    "`@schedule(ticks=N)` delays invocation by N ticks.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  on: [
+    "**@on**",
+    "",
+    "Legacy runtime event handler decorator form: `@on(EventType)`.",
+    "Prefer more explicit modern event/runtime forms when available.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  on_trigger: [
+    "**@on_trigger**",
+    "",
+    "Runs when a player uses `/trigger` for the configured objective.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  on_advancement: [
+    "**@on_advancement**",
+    "",
+    "Runs when the configured advancement is awarded.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  on_craft: [
+    "**@on_craft**",
+    "",
+    "Runs when the configured item is crafted.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  on_death: [
+    "**@on_death**",
+    "",
+    "Legacy legacy decorator for player death handling. Consider modern event patterns where available.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  on_join_team: [
+    "**@on_join_team**",
+    "",
+    "Runs when a player joins a configured team.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  on_login: [
+    "**@on_login**",
+    "",
+    "Legacy decorator for login-like hooks. Prefer explicit modern runtime event forms when available.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  function_tag: [
+    "**@function_tag**",
+    "",
+    "Attach the function to a named function tag.",
+    'Example: `@function_tag("minecraft:tick") fn ticked() {}`',
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n"),
+  require_on_load: [
+    "**@require_on_load**",
+    "",
+    "Preserve stdlib helpers by forcing load-time dependency behavior.",
+    "",
+    DECORATOR_HOVER_DISCLAIMER
+  ].join("\n")
+};
+function getDecoratorHover(lineText, cursor) {
+  if (isInsideStringOrLineComment(lineText, cursor)) return null;
+  const decoratorRe = /@([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  let match;
+  while ((match = decoratorRe.exec(lineText)) !== null) {
+    const start = match.index;
+    const end = match.index + match[0].length;
+    if (cursor < start || cursor > end) continue;
+    const decoratorName = match[1];
+    const doc = DECORATOR_DOCS[decoratorName];
+    if (!doc) continue;
+    return {
+      name: decoratorName,
+      markdown: doc
+    };
+  }
+  return null;
+}
+
+// ../../src/lsp/selector-hover.ts
+var SELECTOR_DOCS = {
+  "@a": "all online players",
+  "@p": "nearest player to the command source",
+  "@s": "the entity currently executing the command (self)",
+  "@e": "all entities; use `type=...` and other filters inside brackets",
+  "@r": "random online player",
+  "@n": "nearest entity of any type"
+};
+var SELECTOR_DISCLAIMER = "Static/editor selector semantics: these are RedScript/Minecraft selector meanings for authoring, not live runtime/permission validation.";
+function getSelectorTokenHover(lineText, cursor) {
+  if (isInsideStringOrLineComment(lineText, cursor)) return null;
+  const selectorRe = /@([a-zA-Z]+)/g;
+  let match;
+  while ((match = selectorRe.exec(lineText)) !== null) {
+    const sel = match[0];
+    const start = match.index;
+    const end = start + sel.length;
+    if (cursor < start || cursor > end) continue;
+    const description = SELECTOR_DOCS[sel];
+    if (!description) continue;
+    return {
+      token: sel,
+      markdown: `**${sel}** \u2014 ${description}
+
+${SELECTOR_DISCLAIMER}`
+    };
+  }
+  return null;
+}
+function selectorTypeContext(lineText, cursor) {
+  if (isInsideStringOrLineComment(lineText, cursor)) return null;
+  const selectorStart = lineText.lastIndexOf("@e[");
+  if (selectorStart < 0 || selectorStart > cursor) return null;
+  const afterOpen = lineText.slice(selectorStart + 3, cursor);
+  if (afterOpen.includes("]")) return null;
+  const closeAt = lineText.indexOf("]", selectorStart);
+  const selectorEnd = closeAt < 0 ? Number.MAX_SAFE_INTEGER : closeAt;
+  const tail = lineText.slice(selectorStart + 3, selectorEnd);
+  const typeMatch = /(?:^|[,\s])type\s*=\s*[^,\]]*$/.exec(tail);
+  if (!typeMatch) return null;
+  const raw = typeMatch[0];
+  const valueTextStart = selectorStart + 3 + raw.lastIndexOf("=") + 1;
+  const valueStart = Math.min(
+    valueTextStart + raw.slice(raw.lastIndexOf("=") + 1).search(/\S/),
+    selectorEnd
+  );
+  if (!Number.isFinite(valueStart) || valueStart < 0) return null;
+  return { selectorStart, valueStart, selectorEnd };
+}
+function getSelectorTypeResourceHover(lineText, cursor) {
+  const context = selectorTypeContext(lineText, cursor);
+  if (!context) return null;
+  const tokenRe = /(?:['\"])?([A-Za-z_][A-Za-z0-9_.-]*:[A-Za-z0-9_./-]*)(?:['\"])?/g;
+  let match;
+  while ((match = tokenRe.exec(lineText)) !== null) {
+    const value = match[1];
+    const tokenStart = match.index + match[0].indexOf(value);
+    const tokenEnd = tokenStart + value.length;
+    if (cursor < tokenStart || cursor > tokenEnd) continue;
+    if (tokenStart < context.valueStart || tokenStart > context.selectorEnd) continue;
+    const isInTypeContext = tokenStart >= context.valueStart;
+    if (!isInTypeContext) continue;
+    const known = BUILTIN_RESOURCE_REGISTRY.entities.includes(value);
+    return {
+      category: "entities",
+      value,
+      known,
+      markdown: [
+        "```redscript",
+        `${value}: resource<${RESOURCE_CATEGORY_NAME.entities}> (static/editor catalog)`,
+        "```",
+        known ? "Known built-in resource literal from static/editor catalog metadata (static suggestion). This is not a live validation signal from a running server." : "Resource ID not present in the built-in static/editor catalog. Open registry support may exist in datapacks, mods, plugins, or newer Minecraft versions.",
+        "",
+        "Static/editor selector argument hover: this does not claim live runtime/permission behavior."
+      ].join("\n")
+    };
+  }
+  return null;
+}
+
+// ../../src/lsp/resource-completions.ts
+var import_node = __toESM(require_node3());
+var STRING_COMPLETION_CONTEXTS = {
+  particle: { category: "particles", argIndex: 0 },
+  effect: { category: "effects", argIndex: 1 },
+  effect_clear: { category: "effects", argIndex: 1 },
+  give: { category: "items", argIndex: 1 },
+  clear: { category: "items", argIndex: 1 },
+  playsound: { category: "sounds", argIndex: 0 },
+  setblock: { category: "blocks", argIndex: 1 },
+  fill: { category: "blocks", argIndex: 2 },
+  summon: { category: "entities", argIndex: 0 }
+};
+var RESOURCE_CATEGORY_META = {
+  particles: {
+    detail: "resource<particle> (editor suggestion)",
+    documentation: "Static catalog suggestion (editor-provided): this ID is a particle resource from the built-in registry. Category: resource<particle>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions."
+  },
+  effects: {
+    detail: "resource<effect> (editor suggestion)",
+    documentation: "Static catalog suggestion (editor-provided): this ID is an effect resource from the built-in registry. Category: resource<effect>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions."
+  },
+  entities: {
+    detail: "resource<entity> (editor suggestion)",
+    documentation: "Static catalog suggestion (editor-provided): this ID is an entity resource from the built-in registry. Category: resource<entity>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions."
+  },
+  items: {
+    detail: "resource<item> (editor suggestion)",
+    documentation: "Static catalog suggestion (editor-provided): this ID is an item resource from the built-in registry. Category: resource<item>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions."
+  },
+  sounds: {
+    detail: "resource<sound> (editor suggestion)",
+    documentation: "Static catalog suggestion (editor-provided): this ID is a sound resource from the built-in registry. Category: resource<sound>. Open registry means additional IDs may exist from datapacks, plugins, and newer versions."
+  },
+  blocks: {
+    detail: "resource<block> (editor suggestion)",
+    documentation: "Static catalog suggestion (editor-provided): this ID is a block resource from the built-in registry. Category: resource<block>. Open registry means additional IDs may exist from datapacks, mods, plugins, or newer versions."
+  }
+};
+function isInsideString(line, cursor) {
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < cursor; i++) {
+    const ch = line[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+    }
+  }
+  return inString;
+}
+function isSelectorTypeContext(lineText, cursor) {
+  if (isInsideString(lineText, cursor)) return false;
+  const before = lineText.slice(0, cursor);
+  const selectorStart = before.lastIndexOf("@e[");
+  if (selectorStart < 0) return false;
+  const selectorText = before.slice(selectorStart + "@e[".length);
+  if (selectorText.includes("]")) return false;
+  return /(?:^|,)\s*type\s*=\s*[^,\]]*$/.test(selectorText);
+}
+function argumentIndex(argText) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let commas = 0;
+  for (const ch of argText) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === "(") depth++;
+    else if (ch === ")" && depth > 0) depth--;
+    else if (ch === "," && depth === 0) commas++;
+  }
+  return commas;
+}
+function findCallOpenParen(beforeCursor, cursor) {
+  let depth = 0;
+  let inString = true;
+  let escaped = false;
+  for (let i = cursor - 1; i >= 0; i--) {
+    const ch = beforeCursor[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "(") {
+      if (depth === 0) return i;
+      depth--;
+      continue;
+    }
+    if (ch === ")") {
+      depth++;
+      continue;
+    }
+  }
+  return -1;
+}
+function findCallOpenParenOutsideString(beforeCursor) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = beforeCursor.length - 1; i >= 0; i--) {
+    const ch = beforeCursor[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === "(") {
+      if (depth === 0) return i;
+      depth--;
+      continue;
+    }
+    if (ch === ")") {
+      depth++;
+      continue;
+    }
+  }
+  return -1;
+}
+function resourceCallContextAt(lineText, cursor) {
+  if (isInsideString(lineText, cursor)) return null;
+  const before = lineText.slice(0, cursor);
+  const openParen = findCallOpenParenOutsideString(before);
+  if (openParen < 0) return null;
+  const prefix = before.slice(0, openParen);
+  const fnMatch = /([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(prefix);
+  if (!fnMatch) return null;
+  const context = STRING_COMPLETION_CONTEXTS[fnMatch[1]];
+  if (!context) return null;
+  const argIdx = argumentIndex(before.slice(openParen + 1));
+  return argIdx === context.argIndex ? context : null;
+}
+function resourcesForCategory(category, extension = {}) {
+  return Array.from(/* @__PURE__ */ new Set([
+    ...BUILTIN_RESOURCE_REGISTRY[category],
+    ...extension[category] ?? []
+  ]));
+}
+function resourceItemsForCategory(category, extension = {}) {
+  const info = RESOURCE_CATEGORY_META[category];
+  return resourcesForCategory(category, extension).map((resource) => ({
+    label: resource,
+    kind: import_node.CompletionItemKind.Value,
+    detail: info.detail,
+    documentation: info.documentation
+  }));
+}
+function getResourceCompletionsForStringContext(lineText, cursor, extension = {}) {
+  if (!isInsideString(lineText, cursor)) return [];
+  const before = lineText.slice(0, cursor);
+  const openParen = findCallOpenParen(before, cursor);
+  if (openParen < 0) return [];
+  const prefix = before.slice(0, openParen);
+  const fnMatch = /([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(prefix);
+  if (!fnMatch) return [];
+  const fnName = fnMatch[1];
+  const context = STRING_COMPLETION_CONTEXTS[fnName];
+  if (!context) return [];
+  const argText = before.slice(openParen + 1);
+  const argIdx = argumentIndex(argText);
+  if (argIdx !== context.argIndex) return [];
+  return resourceItemsForCategory(context.category, extension);
+}
+function getResourceCompletionsForSelectorContext(lineText, cursor, extension = {}) {
+  if (!isSelectorTypeContext(lineText, cursor)) return [];
+  return resourceItemsForCategory("entities", extension);
+}
+function getResourceCompletionsForUnquotedContext(lineText, cursor, extension = {}) {
+  const before = lineText.slice(0, cursor);
+  if (!/[A-Za-z_][A-Za-z0-9_.-]*:[A-Za-z0-9_./-]*$/.test(before)) return [];
+  const context = resourceCallContextAt(lineText, cursor);
+  if (!context) return [];
+  return resourceItemsForCategory(context.category, extension);
+}
+function getResourceCompletions(lineText, cursor, extension = {}) {
+  return [
+    ...getResourceCompletionsForStringContext(lineText, cursor, extension),
+    ...getResourceCompletionsForSelectorContext(lineText, cursor, extension),
+    ...getResourceCompletionsForUnquotedContext(lineText, cursor, extension)
+  ];
+}
+function resourceTokenAt(lineText, cursor) {
+  if (isInsideString(lineText, cursor)) return null;
+  const tokenRe = /[A-Za-z_][A-Za-z0-9_.-]*:[A-Za-z0-9_./-]*/g;
+  let match;
+  while ((match = tokenRe.exec(lineText)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (cursor >= start && cursor <= end) {
+      return { value: match[0], start, end };
+    }
+  }
+  return null;
+}
+var OPEN_REGISTRY_CAUTION = "Open-registry caveat: this ID is not in the built-in static/editor catalog. Open registries may define additional IDs from datapacks, mods, plugins, or newer Minecraft versions.";
+function getResourceHover(lineText, cursor) {
+  const token = resourceTokenAt(lineText, cursor);
+  if (!token) return null;
+  const context = resourceCallContextAt(lineText, token.start);
+  if (!context) return null;
+  const known = BUILTIN_RESOURCE_REGISTRY[context.category].includes(token.value);
+  const kind = RESOURCE_CATEGORY_NAME[context.category];
+  const status = known ? "Known built-in resource literal from static/editor catalog metadata (static suggestion). This is not a live validation signal from a running server." : `Unknown built-in catalog entry. ${OPEN_REGISTRY_CAUTION}`;
+  return {
+    category: context.category,
+    value: token.value,
+    known,
+    markdown: `\`\`\`redscript
+${token.value}: resource<${kind}> (static/editor catalog)
+\`\`\`
+${status}`
+  };
+}
+function diagnosticFor(line, startCol, endCol, category, value) {
+  if (!value || !value.includes(":")) return null;
+  if (BUILTIN_RESOURCE_REGISTRY[category].includes(value)) return null;
+  const kind = RESOURCE_CATEGORY_NAME[category];
+  return {
+    line,
+    startCol,
+    endCol,
+    category,
+    value,
+    message: `Unknown Minecraft ${kind} resource '${value}' in built-in catalog; this is advisory only and may be provided by a datapack, mod, or newer Minecraft version.`
+  };
+}
+function collectStringResourceHints(lineText, line) {
+  const hints = [];
+  const stringRe = /"([^"\\]*(?:\\.[^"\\]*)*)"/g;
+  let match;
+  while ((match = stringRe.exec(lineText)) !== null) {
+    const literalStart = match.index + 1;
+    const literalEnd = literalStart + match[1].length;
+    const completions = getResourceCompletionsForStringContext(lineText, literalStart);
+    if (completions.length === 0) continue;
+    const category = Object.keys(BUILTIN_RESOURCE_REGISTRY).find((candidate) => completions.some(
+      (item) => BUILTIN_RESOURCE_REGISTRY[candidate].includes(item.label)
+    ));
+    if (!category) continue;
+    const hint = diagnosticFor(line, literalStart, literalEnd, category, match[1]);
+    if (hint) hints.push(hint);
+  }
+  return hints;
+}
+function collectSelectorResourceHints(lineText, line) {
+  const hints = [];
+  const selectorRe = /@e\[[^\]]*\btype\s*=\s*([^,\]\s]+)[^\]]*\]/g;
+  let match;
+  while ((match = selectorRe.exec(lineText)) !== null) {
+    const value = match[1];
+    const startCol = match.index + match[0].indexOf(value);
+    const hint = diagnosticFor(line, startCol, startCol + value.length, "entities", value);
+    if (hint) hints.push(hint);
+  }
+  return hints;
+}
+function getResourceDiagnosticHints(source) {
+  const hints = [];
+  const lines = source.split("\n");
+  lines.forEach((lineText, index) => {
+    hints.push(...collectStringResourceHints(lineText, index));
+    hints.push(...collectSelectorResourceHints(lineText, index));
+  });
+  return hints;
+}
+
+// ../../src/lsp/signature-help.ts
+function typeToString(t) {
+  switch (t.kind) {
+    case "named":
+      return t.name;
+    case "array":
+      return `${typeToString(t.elem)}[]`;
+    case "struct":
+      return t.name;
+    case "enum":
+      return t.name;
+    case "entity":
+      return t.entityType;
+    case "selector":
+      return t.entityType ? `selector<${t.entityType}>` : "selector";
+    case "tuple":
+      return `(${t.elements.map(typeToString).join(", ")})`;
+    case "function_type":
+      return `(${t.params.map(typeToString).join(", ")}) => ${typeToString(t.return)}`;
+    default:
+      return "unknown";
+  }
+}
+function locateOffsetFromLineColumn(source, position) {
+  const lines = source.split("\n");
+  const lineText = lines.slice(0, position.line).join("\n");
+  const linePrefix = lineText.length;
+  return linePrefix + (position.line > 0 ? 1 : 0) + position.character;
+}
+var SIGNATURE_RESOURCE_PARAM_TYPES = {
+  particle: {
+    0: "resource<particle>"
+  },
+  effect: {
+    1: "resource<effect>"
+  },
+  effect_clear: {
+    1: "resource<effect>"
+  }
+};
+var SCOREBOARD_OBJECTIVE_PARAM_INDICES = {
+  scoreboard_get: /* @__PURE__ */ new Set([1]),
+  score: /* @__PURE__ */ new Set([1]),
+  scoreboard_set: /* @__PURE__ */ new Set([1])
+};
+function formatFnSignature(fn) {
+  const generic = fn.typeParams?.length ? `<${fn.typeParams.join(", ")}>` : "";
+  const params = fn.params.map((p) => `${p.name}: ${typeToString(p.type)}`).join(", ");
+  const prefix = fn.isDeclareOnly ? `declare fn ${fn.name}${generic}` : `fn ${fn.name}${generic}`;
+  return `${prefix}(${params}): ${typeToString(fn.returnType)}`;
+}
+function builtinParamTypeLabel(fnName, index, paramName, rawType) {
+  const resourceType = SIGNATURE_RESOURCE_PARAM_TYPES[fnName]?.[index];
+  if (resourceType) return resourceType;
+  if (SCOREBOARD_OBJECTIVE_PARAM_INDICES[fnName]?.has(index) || paramName === "objective") {
+    return "#objective";
+  }
+  return rawType;
+}
+function formatBuiltinSignature2(fn) {
+  const params = (fn.params ?? []).map((p, idx) => `${p.name}: ${builtinParamTypeLabel(fn.name, idx, p.name, p.type)}`);
+  return `${fn.name}(${params.join(", ")}): ${fn.returns ?? "void"}`;
+}
+function isWordChar(ch) {
+  return /[A-Za-z0-9_]/.test(ch);
+}
+function findActiveCallOpenParen(text, cursor) {
+  let inString = false;
+  let escaped = false;
+  let inLineComment = false;
+  const stack = [];
+  for (let i = 0; i < cursor; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (inLineComment) {
+      if (ch === "\n") inLineComment = false;
+      continue;
+    }
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === "/" && next === "/") {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "(") {
+      stack.push(i);
+      continue;
+    }
+    if (ch === ")") {
+      stack.pop();
+    }
+  }
+  return stack[stack.length - 1] ?? -1;
+}
+function scanActiveParameter(text, openParen, cursor) {
+  let inString = false;
+  let escaped = false;
+  let inLineComment = false;
+  let parenDepth = 0;
+  let bracketDepth = 0;
+  let braceDepth = 0;
+  let argIndex = 0;
+  for (let i = openParen + 1; i < cursor; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (inLineComment) {
+      if (ch === "\n") inLineComment = false;
+      continue;
+    }
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "/" && next === "/") {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "(") {
+      parenDepth++;
+      continue;
+    }
+    if (ch === ")") {
+      parenDepth = Math.max(0, parenDepth - 1);
+      continue;
+    }
+    if (ch === "[") {
+      bracketDepth++;
+      continue;
+    }
+    if (ch === "]") {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      continue;
+    }
+    if (ch === "{") {
+      braceDepth++;
+      continue;
+    }
+    if (ch === "}") {
+      braceDepth = Math.max(0, braceDepth - 1);
+      continue;
+    }
+    if (ch === "," && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+      argIndex++;
+    }
+  }
+  return argIndex;
+}
+function extractFunctionName(text, openParen) {
+  let nameEnd = openParen - 1;
+  while (nameEnd >= 0 && /\s/.test(text[nameEnd])) {
+    nameEnd--;
+  }
+  if (nameEnd < 0 || !isWordChar(text[nameEnd])) return null;
+  let nameStart = nameEnd;
+  while (nameStart > 0 && isWordChar(text[nameStart - 1])) {
+    nameStart--;
+  }
+  const fnName = text.slice(nameStart, nameEnd + 1);
+  if (!fnName || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(fnName)) return null;
+  return fnName;
+}
+function resolveUserFunction(program, name) {
+  if (!program) return null;
+  const fn = program.declarations.find((item) => item.name === name);
+  if (fn) return fn;
+  return (program.declaredFunctions ?? []).find((item) => item.name === name) ?? null;
+}
+function safeActiveParameter(active, paramsCount) {
+  if (paramsCount === 0) return 0;
+  if (active < 0) return 0;
+  if (active >= paramsCount) return paramsCount - 1;
+  return active;
+}
+function buildSignatureHelp(label, params, activeParameter) {
+  const safeActive = safeActiveParameter(activeParameter, params.length);
+  return {
+    signatures: [
+      {
+        label,
+        parameters: params.map((p) => ({ label: p })),
+        activeParameter: safeActive
+      }
+    ],
+    activeSignature: 0,
+    activeParameter: safeActive
+  };
+}
+function getOffset(context) {
+  if (typeof context.offset === "number") return context.offset;
+  if (!context.position) return null;
+  return locateOffsetFromLineColumn(context.source, context.position);
+}
+function getSignatureHelp(context) {
+  const offset = getOffset(context);
+  if (!context.program || typeof offset !== "number") return null;
+  const text = context.source;
+  const openParen = findActiveCallOpenParen(text, offset);
+  if (openParen < 0) return null;
+  const fnName = extractFunctionName(text, openParen);
+  if (!fnName) return null;
+  const activeParameter = scanActiveParameter(text, openParen, offset);
+  const userFn = resolveUserFunction(context.program, fnName);
+  if (userFn) {
+    const params2 = userFn.params.map((p) => `${p.name}: ${typeToString(p.type)}`);
+    return buildSignatureHelp(formatFnSignature(userFn), params2, activeParameter);
+  }
+  const builtin = context.builtins[fnName];
+  if (!builtin) return null;
+  const params = (builtin.params ?? []).map((p, idx) => `${p.name}: ${builtinParamTypeLabel(fnName, idx, p.name, p.type)}`);
+  const label = formatBuiltinSignature2(builtin);
+  return buildSignatureHelp(label, params, activeParameter);
+}
+
 // ../../src/lsp/server.ts
-var connection = (0, import_node.createConnection)(import_node.ProposedFeatures.all);
-var documents = new import_node.TextDocuments(TextDocument);
+var connection = (0, import_node2.createConnection)(import_node2.ProposedFeatures.all);
+var documents = new import_node2.TextDocuments(TextDocument);
 function loadBuiltinsFromDeclFile() {
   const extra = {};
   const candidates = [
-    path.resolve(__dirname, "../../builtins.d.mcrs"),
-    path.resolve(__dirname, "../../../builtins.d.mcrs"),
-    path.resolve(__dirname, "../../../../builtins.d.mcrs")
+    path2.resolve(__dirname, "../../builtins.d.mcrs"),
+    path2.resolve(__dirname, "../../../builtins.d.mcrs"),
+    path2.resolve(__dirname, "../../../../builtins.d.mcrs")
   ];
   let src = "";
   for (const p of candidates) {
-    if (fs.existsSync(p)) {
-      src = fs.readFileSync(p, "utf-8");
+    if (fs2.existsSync(p)) {
+      src = fs2.readFileSync(p, "utf-8");
       break;
     }
   }
@@ -16949,12 +18585,12 @@ function loadBuiltinsFromDeclFile() {
 var EXTRA_BUILTINS = loadBuiltinsFromDeclFile();
 var ALL_BUILTINS = { ...EXTRA_BUILTINS, ...BUILTIN_METADATA };
 var parsedDocs = /* @__PURE__ */ new Map();
-function typeToString(t) {
+function typeToString2(t) {
   switch (t.kind) {
     case "named":
       return t.name;
     case "array":
-      return `${typeToString(t.elem)}[]`;
+      return `${typeToString2(t.elem)}[]`;
     case "struct":
       return t.name;
     case "enum":
@@ -16964,9 +18600,9 @@ function typeToString(t) {
     case "selector":
       return t.entityType ? `selector<${t.entityType}>` : "selector";
     case "tuple":
-      return `(${t.elements.map(typeToString).join(", ")})`;
+      return `(${t.elements.map(typeToString2).join(", ")})`;
     case "function_type":
-      return `(${t.params.map(typeToString).join(", ")}) => ${typeToString(t.return)}`;
+      return `(${t.params.map(typeToString2).join(", ")}) => ${typeToString2(t.return)}`;
     default:
       return "unknown";
   }
@@ -17005,7 +18641,7 @@ function toDiagnostic(err) {
   const line = Math.max(0, (err.location?.line ?? 1) - 1);
   const col = Math.max(0, (err.location?.col ?? 1) - 1);
   return {
-    severity: import_node.DiagnosticSeverity.Error,
+    severity: import_node2.DiagnosticSeverity.Error,
     range: {
       start: { line, character: col },
       end: { line, character: col + 80 }
@@ -17015,16 +18651,16 @@ function toDiagnostic(err) {
   };
 }
 var LINT_SEVERITY_MAP = {
-  "unused-variable": import_node.DiagnosticSeverity.Information,
-  "magic-number": import_node.DiagnosticSeverity.Hint,
-  "dead-branch": import_node.DiagnosticSeverity.Warning,
-  "unused-import": import_node.DiagnosticSeverity.Information,
-  "function-too-long": import_node.DiagnosticSeverity.Warning
+  "unused-variable": import_node2.DiagnosticSeverity.Information,
+  "magic-number": import_node2.DiagnosticSeverity.Hint,
+  "dead-branch": import_node2.DiagnosticSeverity.Warning,
+  "unused-import": import_node2.DiagnosticSeverity.Information,
+  "function-too-long": import_node2.DiagnosticSeverity.Warning
 };
 function lintWarningToDiagnostic(w) {
   const line = Math.max(0, (w.line ?? 1) - 1);
   const col = Math.max(0, (w.col ?? 1) - 1);
-  const severity = LINT_SEVERITY_MAP[w.rule] ?? import_node.DiagnosticSeverity.Warning;
+  const severity = LINT_SEVERITY_MAP[w.rule] ?? import_node2.DiagnosticSeverity.Warning;
   return {
     severity,
     range: {
@@ -17036,21 +18672,6 @@ function lintWarningToDiagnostic(w) {
     code: w.rule
   };
 }
-var DECORATOR_DOCS = {
-  tick: "Runs every game tick.\n\n**Optional args:** `rate=N` (every N ticks, e.g. `@tick(rate=20)` = once per second)\n\nExample: `@tick fn every_tick() {}` or `@tick(rate=20) fn every_second() {}`",
-  load: "Runs once on `/reload`. Use for initialization.\n\nExample: `@load fn init() { scoreboard_create(...) }`",
-  watch: 'Runs when a scoreboard objective changes for a player.\n\n**Required arg:** objective name.\n\nExample: `@watch("rs.kills") fn on_kill_change() {}`',
-  coroutine: "Wraps a loop to spread execution across multiple ticks.\n\n**Required arg:** `batch=N` \u2014 iterations per tick.\n\nExample: `@coroutine(batch=10) fn scan_blocks() { for i in 0..1000 { ... } }`",
-  schedule: "Schedules the function to run after a delay.\n\n**Required arg:** `ticks=N`\n\nExample: `@schedule(ticks=100) fn delayed() {}`",
-  on_trigger: 'Runs when a player executes `/trigger <name>`.\n\n**Required arg:** trigger objective name.\n\nExample: `@on_trigger("shop") fn open_shop() {}`',
-  keep: "Prevents dead-code elimination. Use for exported entry points not referenced in the same file.\n\nExample: `@keep fn public_api() {}`",
-  on: 'Generic event handler. Arg: event name.\n\nExample: `@on("custom:event") fn handler() {}`',
-  on_advancement: 'Runs when a player earns an advancement.\n\n**Arg:** advancement id (e.g. `"story/mine_diamond"`).\n\nExample: `@on_advancement("story/mine_diamond") fn reward() {}`',
-  on_craft: 'Runs when a player crafts an item.\n\n**Arg:** item id (e.g. `"minecraft:diamond_sword"`).\n\nExample: `@on_craft("minecraft:diamond_sword") fn on_craft_sword() {}`',
-  on_death: "Runs when a player dies.\n\nExample: `@on_death fn on_player_death() {}`",
-  on_join_team: 'Runs when a player joins a team.\n\n**Arg:** team name.\n\nExample: `@on_join_team("red") fn joined_red() {}`',
-  on_login: 'Runs when a player logs into the server.\n\nExample: `@on_login fn welcome() { tell(@s, f"Welcome back!") }`'
-};
 function wordAt(source, position) {
   const lines = source.split("\n");
   const line = lines[position.line] ?? "";
@@ -17064,17 +18685,20 @@ function wordAt(source, position) {
 function findFunction(program, name) {
   const fn = program.declarations.find((f) => f.name === name);
   if (fn) return fn;
+  const declaredFn = program.declaredFunctions?.find((f) => f.name === name);
+  if (declaredFn) return declaredFn;
   for (const impl of program.implBlocks ?? []) {
     const m = impl.methods.find((f) => f.name === name);
     if (m) return m;
   }
   return void 0;
 }
-function formatFnSignature(fn) {
-  const params = fn.params.map((p) => `${p.name}: ${typeToString(p.type)}`).join(", ");
-  const ret = typeToString(fn.returnType);
+function formatFnSignature2(fn, opts = {}) {
+  const keyword = opts.includeDeclare ? "declare fn " : "fn ";
+  const params = fn.params.map((p) => `${p.name}: ${typeToString2(p.type)}`).join(", ");
+  const ret = typeToString2(fn.returnType);
   const typeParams = fn.typeParams?.length ? `<${fn.typeParams.join(", ")}>` : "";
-  return `fn ${fn.name}${typeParams}(${params}): ${ret}`;
+  return `${keyword}${fn.name}${typeParams}(${params}): ${ret}`;
 }
 function parseDocCommentText(raw) {
   const result = { description: "", params: [], returns: null };
@@ -17133,11 +18757,12 @@ function extractDocComment(source, fn) {
   return null;
 }
 function findEnclosingFn(program, curLine) {
-  const fns = program.declarations.filter((f) => f.span);
+  const fns = program.declarations.filter((f) => f.span != null);
   for (let i = 0; i < fns.length; i++) {
     const fn = fns[i];
     const startLine = fn.span.line;
-    const endLine = fn.span.endLine ?? (fns[i + 1]?.span?.line ? fns[i + 1].span.line - 1 : Infinity);
+    const nextSpanLine = fns[i + 1]?.span.line;
+    const endLine = fn.span.endLine ?? (nextSpanLine != null ? nextSpanLine - 1 : Infinity);
     if (curLine >= startLine && curLine <= endLine) return fn;
   }
   return null;
@@ -17146,6 +18771,9 @@ function buildDefinitionMap(program, source) {
   const map = /* @__PURE__ */ new Map();
   for (const fn of program.declarations) {
     if (fn.span) map.set(fn.name, fn.span);
+  }
+  for (const declaredFn of program.declaredFunctions ?? []) {
+    if (declaredFn.span && !map.has(declaredFn.name)) map.set(declaredFn.name, declaredFn.span);
   }
   for (const impl of program.implBlocks ?? []) {
     for (const m of impl.methods) {
@@ -17191,7 +18819,7 @@ var KEYWORD_COMPLETIONS = [
   "import"
 ].map((kw) => ({
   label: kw,
-  kind: import_node.CompletionItemKind.Keyword
+  kind: import_node2.CompletionItemKind.Keyword
 }));
 var TYPE_COMPLETIONS = [
   "int",
@@ -17217,31 +18845,30 @@ var TYPE_COMPLETIONS = [
   "Enderman"
 ].map((t) => ({
   label: t,
-  kind: import_node.CompletionItemKind.TypeParameter
+  kind: import_node2.CompletionItemKind.TypeParameter
 }));
 var DECORATOR_COMPLETIONS = [
   { label: "@tick", detail: "Run every game tick (~20 Hz)", insertText: "tick" },
-  { label: "@watch", detail: "Run when a scoreboard objective changes", insertText: "watch" },
   { label: "@load", detail: "Run on /reload (initialization)", insertText: "load" },
+  { label: "@watch", detail: "Run when a scoreboard objective changes", insertText: "watch" },
+  { label: "@function_tag", detail: "Attach this function to a function tag", insertText: "function_tag" },
   { label: "@on_trigger", detail: "Run when a player uses /trigger", insertText: "on_trigger" },
   { label: "@schedule", detail: "Schedule function after N ticks", insertText: "schedule" },
   { label: "@coroutine", detail: "Spread loop across ticks (batch=N)", insertText: "coroutine" },
   { label: "@keep", detail: "Prevent dead-code elimination", insertText: "keep" },
-  { label: "@on", detail: "Generic event handler", insertText: "on" },
+  { label: "@on", detail: "Legacy runtime event handler: @on(EventType)", insertText: "on" },
   { label: "@on_advancement", detail: "Run on advancement earned", insertText: "on_advancement" },
   { label: "@on_craft", detail: "Run on item craft", insertText: "on_craft" },
-  { label: "@on_death", detail: "Run on player death", insertText: "on_death" },
   { label: "@on_join_team", detail: "Run on team join", insertText: "on_join_team" },
-  { label: "@on_login", detail: "Run on player login", insertText: "on_login" },
   { label: "@require_on_load", detail: "Ensure a fn runs on load (stdlib)", insertText: "require_on_load" }
-].map((d) => ({ ...d, kind: import_node.CompletionItemKind.Event }));
+].map((d) => ({ ...d, kind: import_node2.CompletionItemKind.Event }));
 var SELECTOR_COMPLETIONS = [
-  { label: "@a", insertText: "a", kind: import_node.CompletionItemKind.Value, detail: "All players", documentation: "Targets all online players." },
-  { label: "@p", insertText: "p", kind: import_node.CompletionItemKind.Value, detail: "Nearest player", documentation: "Targets the nearest player to the command source." },
-  { label: "@s", insertText: "s", kind: import_node.CompletionItemKind.Value, detail: "Executing entity", documentation: "Targets the entity currently executing the command." },
-  { label: "@e", insertText: "e", kind: import_node.CompletionItemKind.Value, detail: "All entities", documentation: "Targets all entities (use [type=...] to filter)." },
-  { label: "@r", insertText: "r", kind: import_node.CompletionItemKind.Value, detail: "Random player", documentation: "Targets a random online player." },
-  { label: "@n", insertText: "n", kind: import_node.CompletionItemKind.Value, detail: "Nearest entity", documentation: "Targets the nearest entity (any type)." }
+  { label: "@a", insertText: "a", kind: import_node2.CompletionItemKind.Value, detail: "All players", documentation: "Targets all online players." },
+  { label: "@p", insertText: "p", kind: import_node2.CompletionItemKind.Value, detail: "Nearest player", documentation: "Targets the nearest player to the command source." },
+  { label: "@s", insertText: "s", kind: import_node2.CompletionItemKind.Value, detail: "Executing entity", documentation: "Targets the entity currently executing the command." },
+  { label: "@e", insertText: "e", kind: import_node2.CompletionItemKind.Value, detail: "All entities", documentation: "Targets all entities (use [type=...] to filter)." },
+  { label: "@r", insertText: "r", kind: import_node2.CompletionItemKind.Value, detail: "Random player", documentation: "Targets a random online player." },
+  { label: "@n", insertText: "n", kind: import_node2.CompletionItemKind.Value, detail: "Nearest entity", documentation: "Targets the nearest entity (any type)." }
 ];
 var BUILTIN_FN_COMPLETIONS = [
   "say",
@@ -17273,16 +18900,16 @@ var BUILTIN_FN_COMPLETIONS = [
   "clearInterval"
 ].map((fn) => ({
   label: fn,
-  kind: import_node.CompletionItemKind.Function
+  kind: import_node2.CompletionItemKind.Function
 }));
 connection.onInitialize((_params) => {
   return {
     capabilities: {
-      textDocumentSync: import_node.TextDocumentSyncKind.Incremental,
+      textDocumentSync: import_node2.TextDocumentSyncKind.Incremental,
       hoverProvider: true,
       definitionProvider: true,
       completionProvider: {
-        triggerCharacters: [".", "@"],
+        triggerCharacters: [".", "@", '"', "="],
         resolveProvider: false
       },
       signatureHelpProvider: {
@@ -17308,7 +18935,7 @@ function validateAndPublish(doc) {
   try {
     const filePath = (() => {
       try {
-        return (0, import_url.fileURLToPath)(doc.uri);
+        return (0, import_url2.fileURLToPath)(doc.uri);
       } catch {
         return doc.uri;
       }
@@ -17316,6 +18943,17 @@ function validateAndPublish(doc) {
     const lintWarnings = lintString(source, filePath);
     diagnostics.push(...lintWarnings.map(lintWarningToDiagnostic));
   } catch {
+  }
+  for (const hint of getResourceDiagnosticHints(source)) {
+    diagnostics.push({
+      severity: import_node2.DiagnosticSeverity.Hint,
+      range: {
+        start: { line: hint.line, character: hint.startCol },
+        end: { line: hint.line, character: hint.endCol }
+      },
+      message: hint.message,
+      source: "redscript-resource-catalog"
+    });
   }
   connection.sendDiagnostics({ uri: doc.uri, diagnostics });
 }
@@ -17332,49 +18970,50 @@ connection.onHover((params) => {
   const lines = source.split("\n");
   const lineText = lines[params.position.line] ?? "";
   const ch = params.position.character;
-  const decorRe = /@([a-zA-Z_][a-zA-Z0-9_]*)/g;
-  let dm;
-  while ((dm = decorRe.exec(lineText)) !== null) {
-    const atIdx = dm.index;
-    const decorEnd = atIdx + dm[0].length;
-    if (ch >= atIdx && ch <= decorEnd) {
-      const decoratorName = dm[1];
-      const decoratorDoc = DECORATOR_DOCS[decoratorName];
-      if (decoratorDoc) {
-        return {
-          contents: {
-            kind: import_node.MarkupKind.Markdown,
-            value: `**@${decoratorName}** \u2014 ${decoratorDoc}`
-          }
-        };
+  const objectiveHover = getObjectiveHover(lineText, ch);
+  if (objectiveHover) {
+    return {
+      contents: {
+        kind: import_node2.MarkupKind.Markdown,
+        value: objectiveHover.markdown
       }
-    }
+    };
   }
-  const SELECTOR_DOCS = {
-    "@a": "All online players",
-    "@p": "Nearest player to the command source",
-    "@s": "The entity currently executing the command (self)",
-    "@e": "All entities (use [type=...] to filter)",
-    "@r": "A random online player",
-    "@n": "The nearest entity of any type"
-  };
-  const selRe = /@([a-zA-Z])/g;
-  let sm;
-  while ((sm = selRe.exec(lineText)) !== null) {
-    const selStart = sm.index;
-    const selEnd = selStart + sm[0].length;
-    if (ch >= selStart && ch <= selEnd) {
-      const selKey = sm[0];
-      const selDoc = SELECTOR_DOCS[selKey];
-      if (selDoc) {
-        return {
-          contents: {
-            kind: import_node.MarkupKind.Markdown,
-            value: `**${selKey}** \u2014 ${selDoc}`
-          }
-        };
+  const selectorTypeHover = getSelectorTypeResourceHover(lineText, ch);
+  if (selectorTypeHover) {
+    return {
+      contents: {
+        kind: import_node2.MarkupKind.Markdown,
+        value: selectorTypeHover.markdown
       }
-    }
+    };
+  }
+  const resourceHover = getResourceHover(lineText, ch);
+  if (resourceHover) {
+    return {
+      contents: {
+        kind: import_node2.MarkupKind.Markdown,
+        value: resourceHover.markdown
+      }
+    };
+  }
+  const decoratorHover = getDecoratorHover(lineText, ch);
+  if (decoratorHover) {
+    return {
+      contents: {
+        kind: import_node2.MarkupKind.Markdown,
+        value: decoratorHover.markdown
+      }
+    };
+  }
+  const selectorHover = getSelectorTokenHover(lineText, ch);
+  if (selectorHover) {
+    return {
+      contents: {
+        kind: import_node2.MarkupKind.Markdown,
+        value: selectorHover.markdown
+      }
+    };
   }
   const cached = parsedDocs.get(params.textDocument.uri);
   const program = cached?.program ?? null;
@@ -17387,22 +19026,17 @@ connection.onHover((params) => {
   let hovWordStart = hovCh;
   while (hovWordStart > 0 && /\w/.test(hovLine[hovWordStart - 1])) hovWordStart--;
   if (hovWordStart > 0 && hovLine[hovWordStart - 1] === "@") return null;
-  const builtin = ALL_BUILTINS[word];
-  if (builtin) {
-    const paramStr = builtin.params.map((p) => `${p.name}: ${p.type}${p.required ? "" : "?"}`).join(", ");
-    const sig = `fn ${builtin.name}(${paramStr}): ${builtin.returns}`;
+  const builtinHover = getBuiltinHover(word, ALL_BUILTINS);
+  if (builtinHover) {
     const content = {
-      kind: import_node.MarkupKind.Markdown,
-      value: `\`\`\`redscript
-${sig}
-\`\`\`
-${builtin.doc}`
+      kind: import_node2.MarkupKind.Markdown,
+      value: builtinHover.markdown
     };
     return { contents: content };
   }
   const fn = findFunction(program, word);
   if (fn) {
-    const sig = formatFnSignature(fn);
+    const sig = formatFnSignature2(fn, { includeDeclare: fn.isDeclareOnly === true });
     const rawDoc = extractDocComment(source, fn);
     let docSection = "";
     if (rawDoc) {
@@ -17413,7 +19047,7 @@ ${builtin.doc}`
 ${md}`;
     }
     const content = {
-      kind: import_node.MarkupKind.Markdown,
+      kind: import_node2.MarkupKind.Markdown,
       value: `\`\`\`redscript
 ${sig}
 \`\`\`${docSection}`
@@ -17422,9 +19056,9 @@ ${sig}
   }
   const struct = program.structs?.find((s) => s.name === word);
   if (struct) {
-    const fields = struct.fields.map((f) => `  ${f.name}: ${typeToString(f.type)}`).join("\n");
+    const fields = struct.fields.map((f) => `  ${f.name}: ${typeToString2(f.type)}`).join("\n");
     const content = {
-      kind: import_node.MarkupKind.Markdown,
+      kind: import_node2.MarkupKind.Markdown,
       value: `\`\`\`redscript
 struct ${struct.name} {
 ${fields}
@@ -17437,7 +19071,7 @@ ${fields}
   if (enumDecl) {
     const variants = enumDecl.variants.map((v) => `  ${v.name}`).join("\n");
     const content = {
-      kind: import_node.MarkupKind.Markdown,
+      kind: import_node2.MarkupKind.Markdown,
       value: `\`\`\`redscript
 enum ${enumDecl.name} {
 ${variants}
@@ -17449,9 +19083,9 @@ ${variants}
   const constDecl = program.consts?.find((c) => c.name === word);
   if (constDecl) {
     const content = {
-      kind: import_node.MarkupKind.Markdown,
+      kind: import_node2.MarkupKind.Markdown,
       value: `\`\`\`redscript
-const ${constDecl.name}: ${typeToString(constDecl.type)}
+const ${constDecl.name}: ${typeToString2(constDecl.type)}
 \`\`\``
     };
     return { contents: content };
@@ -17459,9 +19093,9 @@ const ${constDecl.name}: ${typeToString(constDecl.type)}
   const globalDecl = program.globals?.find((g) => g.name === word);
   if (globalDecl) {
     const content = {
-      kind: import_node.MarkupKind.Markdown,
+      kind: import_node2.MarkupKind.Markdown,
       value: `\`\`\`redscript
-let ${globalDecl.name}: ${typeToString(globalDecl.type)}
+let ${globalDecl.name}: ${typeToString2(globalDecl.type)}
 \`\`\`
 *global variable*`
     };
@@ -17475,9 +19109,9 @@ let ${globalDecl.name}: ${typeToString(globalDecl.type)}
       if (param) {
         return {
           contents: {
-            kind: import_node.MarkupKind.Markdown,
+            kind: import_node2.MarkupKind.Markdown,
             value: `\`\`\`redscript
-(param) ${param.name}: ${typeToString(param.type)}
+(param) ${param.name}: ${typeToString2(param.type)}
 \`\`\``
           }
         };
@@ -17488,9 +19122,9 @@ let ${globalDecl.name}: ${typeToString(globalDecl.type)}
         if (localType) {
           return {
             contents: {
-              kind: import_node.MarkupKind.Markdown,
+              kind: import_node2.MarkupKind.Markdown,
               value: `\`\`\`redscript
-let ${word}: ${typeToString(localType)}
+let ${word}: ${typeToString2(localType)}
 \`\`\``
             }
           };
@@ -17499,37 +19133,39 @@ let ${word}: ${typeToString(localType)}
     }
   }
   try {
-    const importedPrograms = getImportedPrograms(source, params.textDocument.uri);
-    for (const { prog, filePath } of importedPrograms) {
-      const importedFn = findFunction(prog, word);
+    const importedPrograms = getImportedPrograms(source, params.textDocument.uri, program);
+    for (const imported of importedPrograms) {
+      const { prog, source: importedSource, filePath } = imported;
+      const importedFn = getImportedFunctionByName(imported, word);
       if (importedFn) {
-        const sig = formatFnSignature(importedFn);
-        const docComment = extractDocComment(fs.readFileSync(filePath, "utf-8"), importedFn);
+        const sig = formatFnSignature2(importedFn, { includeDeclare: importedFn.isDeclareOnly === true });
+        const docComment = extractDocComment(importedSource, importedFn);
         const docLine = docComment ? `
 
 ${docComment}` : "";
         const content = {
-          kind: import_node.MarkupKind.Markdown,
+          kind: import_node2.MarkupKind.Markdown,
           value: `\`\`\`redscript
 ${sig}
 \`\`\`${docLine}
 
-*from ${path.basename(filePath)}*`
+*from ${path2.basename(filePath)}*`
         };
         return { contents: content };
       }
+      if (!shouldImportStructsAndTypes(imported)) continue;
       const importedStruct = prog.structs?.find((s) => s.name === word);
       if (importedStruct) {
-        const fields = importedStruct.fields.map((f) => `  ${f.name}: ${typeToString(f.type)}`).join("\n");
+        const fields = importedStruct.fields.map((f) => `  ${f.name}: ${typeToString2(f.type)}`).join("\n");
         const content = {
-          kind: import_node.MarkupKind.Markdown,
+          kind: import_node2.MarkupKind.Markdown,
           value: `\`\`\`redscript
 struct ${importedStruct.name} {
 ${fields}
 }
 \`\`\`
 
-*from ${path.basename(filePath)}*`
+*from ${path2.basename(filePath)}*`
         };
         return { contents: content };
       }
@@ -17538,64 +19174,6 @@ ${fields}
   }
   return null;
 });
-function getImportedPrograms(source, fromUri) {
-  const result = [];
-  const FILE_IMPORT_RE = /^import\s+"([^"]+)"/gm;
-  let m;
-  while ((m = FILE_IMPORT_RE.exec(source)) !== null) {
-    const resolved = resolveImportPath(m[1], fromUri);
-    if (!resolved || !fs.existsSync(resolved)) continue;
-    try {
-      const src = fs.readFileSync(resolved, "utf-8");
-      const tokens = new Lexer(src).tokenize();
-      const prog = new Parser(tokens).parse(path.basename(resolved, ".mcrs"));
-      result.push({ prog, filePath: resolved });
-    } catch {
-    }
-  }
-  const MOD_IMPORT_RE = /^import\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*::/gm;
-  while ((m = MOD_IMPORT_RE.exec(source)) !== null) {
-    const modName = m[1];
-    const resolved = resolveImportPath(`stdlib/${modName}.mcrs`, fromUri);
-    if (!resolved || !fs.existsSync(resolved)) continue;
-    if (result.some((r) => r.filePath === resolved)) continue;
-    try {
-      const src = fs.readFileSync(resolved, "utf-8");
-      const tokens = new Lexer(src).tokenize();
-      const prog = new Parser(tokens).parse(modName);
-      result.push({ prog, filePath: resolved });
-    } catch {
-    }
-  }
-  return result;
-}
-function resolveImportPath(importStr, fromUri) {
-  try {
-    const fromFile = (0, import_url.fileURLToPath)(fromUri);
-    const fromDir = path.dirname(fromFile);
-    if (importStr.startsWith(".")) {
-      const resolved = path.resolve(fromDir, importStr);
-      if (fs.existsSync(resolved)) return resolved;
-      if (!resolved.endsWith(".mcrs") && fs.existsSync(resolved + ".mcrs")) return resolved + ".mcrs";
-    } else {
-      let dir = fromDir;
-      for (let i = 0; i < 10; i++) {
-        if (fs.existsSync(path.join(dir, "package.json"))) {
-          const candidate = path.join(dir, "src", importStr);
-          if (fs.existsSync(candidate)) return candidate;
-          if (fs.existsSync(candidate + ".mcrs")) return candidate + ".mcrs";
-          const candidate2 = path.join(dir, importStr);
-          if (fs.existsSync(candidate2)) return candidate2;
-          if (fs.existsSync(candidate2 + ".mcrs")) return candidate2 + ".mcrs";
-          break;
-        }
-        dir = path.dirname(dir);
-      }
-    }
-  } catch {
-  }
-  return null;
-}
 connection.onDefinition((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return null;
@@ -17609,7 +19187,7 @@ connection.onDefinition((params) => {
     const resolved = resolveImportPath(importStr, params.textDocument.uri);
     if (resolved) {
       return {
-        uri: (0, import_url.pathToFileURL)(resolved).toString(),
+        uri: (0, import_url2.pathToFileURL)(resolved).toString(),
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }
       };
     }
@@ -17648,15 +19226,18 @@ connection.onDefinition((params) => {
     if (s.fields.some((f) => f.name === word)) return null;
   }
   try {
-    const importedPrograms = getImportedPrograms(source, params.textDocument.uri);
-    for (const { prog, filePath } of importedPrograms) {
-      const importedDefMap = buildDefinitionMap(prog, fs.readFileSync(filePath, "utf-8"));
+    const importedPrograms = getImportedPrograms(source, params.textDocument.uri, program);
+    for (const imported of importedPrograms) {
+      const { prog, source: importedSource, filePath, symbol } = imported;
+      const importedDefMap = symbol == null ? buildDefinitionMap(prog, importedSource) : new Map(
+        (imported.prog.declaredFunctions ?? []).filter((fn) => symbol === "*" || fn.name === symbol).filter((fn) => fn.span != null).map((fn) => [fn.name, fn.span])
+      );
       const importedSpan = importedDefMap.get(word);
       if (importedSpan) {
         const line = Math.max(0, importedSpan.line - 1);
         const col = Math.max(0, importedSpan.col - 1);
         return {
-          uri: (0, import_url.pathToFileURL)(filePath).toString(),
+          uri: (0, import_url2.pathToFileURL)(filePath).toString(),
           range: {
             start: { line, character: col },
             end: { line, character: col + word.length }
@@ -17671,7 +19252,7 @@ connection.onDefinition((params) => {
     const resolved = resolveImportPath(`stdlib/${importDecl.moduleName}.mcrs`, params.textDocument.uri) ?? resolveImportPath(importDecl.moduleName, params.textDocument.uri) ?? resolveImportPath(importDecl.moduleName + ".mcrs", params.textDocument.uri);
     if (resolved) {
       return {
-        uri: (0, import_url.pathToFileURL)(resolved).toString(),
+        uri: (0, import_url2.pathToFileURL)(resolved).toString(),
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }
       };
     }
@@ -17679,9 +19260,9 @@ connection.onDefinition((params) => {
   return null;
 });
 var ARRAY_METHOD_COMPLETIONS = [
-  { label: "push", kind: import_node.CompletionItemKind.Method, detail: "(value: int): void", documentation: "Append an element to the array." },
-  { label: "pop", kind: import_node.CompletionItemKind.Method, detail: "(): int", documentation: "Remove and return the last element." },
-  { label: "length", kind: import_node.CompletionItemKind.Property, detail: "int", documentation: "Number of elements in the array." }
+  { label: "push", kind: import_node2.CompletionItemKind.Method, detail: "(value: int): void", documentation: "Append an element to the array." },
+  { label: "pop", kind: import_node2.CompletionItemKind.Method, detail: "(): int", documentation: "Remove and return the last element." },
+  { label: "length", kind: import_node2.CompletionItemKind.Property, detail: "int", documentation: "Number of elements in the array." }
 ];
 function collectLocals(body) {
   const map = /* @__PURE__ */ new Map();
@@ -17726,6 +19307,10 @@ connection.onCompletion((params) => {
   const charPos = params.position.character;
   const cached = parsedDocs.get(params.textDocument.uri);
   const program = cached?.program ?? null;
+  const resourceStringItems = getResourceCompletions(lineText, charPos);
+  if (resourceStringItems.length > 0) {
+    return resourceStringItems;
+  }
   const prevChar = lineText[charPos - 1];
   if (prevChar === "@") {
     const before = lineText.slice(0, charPos - 1).trim();
@@ -17753,19 +19338,19 @@ connection.onCompletion((params) => {
             for (const f of structDecl.fields) {
               items2.push({
                 label: f.name,
-                kind: import_node.CompletionItemKind.Field,
-                detail: typeToString(f.type)
+                kind: import_node2.CompletionItemKind.Field,
+                detail: typeToString2(f.type)
               });
             }
           }
           const implBlock = program.implBlocks?.find((ib) => ib.typeName === typeName);
           if (implBlock) {
             for (const m of implBlock.methods) {
-              const params_ = m.params.map((p) => `${p.name}: ${typeToString(p.type)}`).join(", ");
+              const params_ = m.params.map((p) => `${p.name}: ${typeToString2(p.type)}`).join(", ");
               items2.push({
                 label: m.name,
-                kind: import_node.CompletionItemKind.Method,
-                detail: `(${params_}): ${typeToString(m.returnType)}`
+                kind: import_node2.CompletionItemKind.Method,
+                detail: `(${params_}): ${typeToString2(m.returnType)}`
               });
             }
           }
@@ -17773,7 +19358,7 @@ connection.onCompletion((params) => {
       } else {
         for (const ib of program.implBlocks ?? []) {
           for (const m of ib.methods) {
-            items2.push({ label: m.name, kind: import_node.CompletionItemKind.Method });
+            items2.push({ label: m.name, kind: import_node2.CompletionItemKind.Method });
           }
         }
         items2.push(...ARRAY_METHOD_COMPLETIONS);
@@ -17789,19 +19374,28 @@ connection.onCompletion((params) => {
   ];
   if (program) {
     for (const fn of program.declarations) {
-      items.push({ label: fn.name, kind: import_node.CompletionItemKind.Function });
+      items.push({ label: fn.name, kind: import_node2.CompletionItemKind.Function });
+    }
+    const declaredNames = new Set(program.declarations.map((fn) => fn.name));
+    for (const fn of program.declaredFunctions ?? []) {
+      if (declaredNames.has(fn.name)) continue;
+      items.push({
+        label: fn.name,
+        kind: import_node2.CompletionItemKind.Function,
+        detail: formatFnSignature2(fn, { includeDeclare: true })
+      });
     }
     for (const s of program.structs ?? []) {
-      items.push({ label: s.name, kind: import_node.CompletionItemKind.Struct });
+      items.push({ label: s.name, kind: import_node2.CompletionItemKind.Struct });
     }
     for (const e of program.enums ?? []) {
-      items.push({ label: e.name, kind: import_node.CompletionItemKind.Enum });
+      items.push({ label: e.name, kind: import_node2.CompletionItemKind.Enum });
     }
     for (const c of program.consts ?? []) {
-      items.push({ label: c.name, kind: import_node.CompletionItemKind.Constant });
+      items.push({ label: c.name, kind: import_node2.CompletionItemKind.Constant });
     }
     for (const g of program.globals ?? []) {
-      items.push({ label: g.name, kind: import_node.CompletionItemKind.Variable });
+      items.push({ label: g.name, kind: import_node2.CompletionItemKind.Variable });
     }
     const curLine2 = params.position.line + 1;
     const encFn2 = findEnclosingFn(program, curLine2);
@@ -17809,26 +19403,38 @@ connection.onCompletion((params) => {
       for (const [name, typ] of collectLocals(encFn2.body)) {
         items.push({
           label: name,
-          kind: import_node.CompletionItemKind.Variable,
-          detail: typeToString(typ)
+          kind: import_node2.CompletionItemKind.Variable,
+          detail: typeToString2(typ)
         });
       }
     }
   }
   try {
-    const importedPrograms = getImportedPrograms(source, params.textDocument.uri);
-    for (const { prog, filePath } of importedPrograms) {
-      for (const fn of prog.declarations) {
-        const paramList = fn.params.map((p) => `${p.name}: ${typeToString(p.type)}`).join(", ");
+    const importedPrograms = getImportedPrograms(source, params.textDocument.uri, program);
+    const existingFunctionNames = /* @__PURE__ */ new Set();
+    if (program) {
+      for (const fn of program.declarations) existingFunctionNames.add(fn.name);
+      const declaredFunctionNames = new Set(program.declarations.map((fn) => fn.name));
+      for (const fn of program.declaredFunctions ?? []) {
+        if (!declaredFunctionNames.has(fn.name)) existingFunctionNames.add(fn.name);
+      }
+    }
+    for (const imported of importedPrograms) {
+      const { prog, filePath } = imported;
+      for (const fn of getImportedFunctions(imported)) {
+        if (existingFunctionNames.has(fn.name)) continue;
+        existingFunctionNames.add(fn.name);
+        const detail = fn.isDeclareOnly ? formatFnSignature2(fn, { includeDeclare: true }) : `(${fn.params.map((p) => `${p.name}: ${typeToString2(p.type)}`).join(", ")}) \u2192 ${typeToString2(fn.returnType)}`;
         items.push({
           label: fn.name,
-          kind: import_node.CompletionItemKind.Function,
-          detail: `(${paramList}) \u2192 ${typeToString(fn.returnType ?? { kind: "named", name: "void" })}`,
-          documentation: `from ${path.basename(filePath)}`
+          kind: import_node2.CompletionItemKind.Function,
+          detail,
+          documentation: `from ${path2.basename(filePath)}`
         });
       }
+      if (!shouldImportStructsAndTypes(imported)) continue;
       for (const s of prog.structs ?? []) {
-        items.push({ label: s.name, kind: import_node.CompletionItemKind.Struct, documentation: `from ${path.basename(filePath)}` });
+        items.push({ label: s.name, kind: import_node2.CompletionItemKind.Struct, documentation: `from ${path2.basename(filePath)}` });
       }
     }
   } catch {
@@ -17849,52 +19455,13 @@ connection.onSignatureHelp((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return null;
   const parsed = parsedDocs.get(params.textDocument.uri);
-  if (!parsed?.program) return null;
-  const text = doc.getText();
   const offset = doc.offsetAt(params.position);
-  let depth = 0;
-  let i = offset - 1;
-  let activeParam = 0;
-  while (i >= 0) {
-    const ch = text[i];
-    if (ch === ")") depth++;
-    else if (ch === "(") {
-      if (depth === 0) break;
-      depth--;
-    } else if (ch === "," && depth === 0) activeParam++;
-    i--;
-  }
-  if (i < 0) return null;
-  let nameEnd = i - 1;
-  while (nameEnd >= 0 && /\s/.test(text[nameEnd])) nameEnd--;
-  let nameStart = nameEnd;
-  while (nameStart > 0 && /[a-zA-Z0-9_]/.test(text[nameStart - 1])) nameStart--;
-  const fnName = text.slice(nameStart, nameEnd + 1);
-  if (!fnName) return null;
-  const fn = parsed.program.declarations.find((s) => s.name === fnName);
-  const builtin = ALL_BUILTINS[fnName];
-  if (!fn && !builtin) return null;
-  let label;
-  let paramsList;
-  if (fn) {
-    paramsList = fn.params.map((p) => `${p.name}: ${typeToString(p.type)}`);
-    label = `fn ${fn.name}(${paramsList.join(", ")}): ${typeToString(fn.returnType)}`;
-  } else {
-    paramsList = builtin.params?.map((p) => `${p.name}: ${p.type}`) ?? [];
-    label = `${builtin.name}(${paramsList.join(", ")}): ${builtin.returns ?? "void"}`;
-  }
-  const paramInfos = paramsList.map((p) => ({ label: p }));
-  return {
-    signatures: [
-      {
-        label,
-        parameters: paramInfos,
-        activeParameter: Math.min(activeParam, Math.max(0, paramInfos.length - 1))
-      }
-    ],
-    activeSignature: 0,
-    activeParameter: Math.min(activeParam, Math.max(0, paramInfos.length - 1))
-  };
+  return getSignatureHelp({
+    source: doc.getText(),
+    program: parsed?.program ?? null,
+    builtins: ALL_BUILTINS,
+    offset
+  });
 });
 connection.onRequest(
   "textDocument/inlayHint",
@@ -17917,24 +19484,20 @@ connection.onRequest(
           const nameEnd = lineText.indexOf(stmt.name) + stmt.name.length;
           hints.push({
             position: { line, character: nameEnd },
-            label: `: ${typeToString(inferredType)}`,
-            kind: import_node.InlayHintKind.Type,
+            label: `: ${typeToString2(inferredType)}`,
+            kind: import_node2.InlayHintKind.Type,
             paddingLeft: false
           });
         }
-        if (stmt.kind === "if" || stmt.kind === "while" || stmt.kind === "for") {
-          const s = stmt;
-          const then_ = s["then"];
-          if (Array.isArray(then_)) walkBlock(then_);
-          const else_ = s["else_"];
-          if (Array.isArray(else_)) walkBlock(else_);
-          const body = s["body"];
-          if (Array.isArray(body)) walkBlock(body);
-        }
-        if (stmt.kind === "foreach") {
-          const s = stmt;
-          const body = s["body"];
-          if (Array.isArray(body)) walkBlock(body);
+        if (stmt.kind === "if" || stmt.kind === "if_let_some") {
+          walkBlock(stmt.then);
+          if (stmt.else_) walkBlock(stmt.else_);
+        } else if (stmt.kind === "while" || stmt.kind === "do_while" || stmt.kind === "repeat" || stmt.kind === "for" || stmt.kind === "foreach" || stmt.kind === "for_range" || stmt.kind === "for_in_array" || stmt.kind === "for_each" || stmt.kind === "while_let_some" || stmt.kind === "as_block" || stmt.kind === "at_block" || stmt.kind === "as_at" || stmt.kind === "execute") {
+          walkBlock(stmt.body);
+        } else if (stmt.kind === "labeled_loop") {
+          walkBlock([stmt.body]);
+        } else if (stmt.kind === "match") {
+          for (const arm of stmt.arms) walkBlock(arm.body);
         }
       }
     }
