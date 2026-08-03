@@ -67,6 +67,10 @@ const expectedFunctions: Record<string, string[]> = {
     'data/gap_math_trig/function/sin_fixed.mcfunction',
   ],
   'stdlib-gap.math': ['data/gap_math/function/clamp_int.mcfunction','data/gap_math/function/gcd.mcfunction','data/gap_math/function/isqrt.mcfunction','data/gap_math/function/pow_int.mcfunction'],
+  'stdlib-gap.world-blocks': [
+    'data/gap_world_blocks/function/barrier_wall.mcfunction',
+    'data/gap_world_blocks/function/clear_area.mcfunction',
+  ],
   'stdlib-gap.timer': [],
   'stdlib-gap.sets': [
     'data/gap_sets/function/set_new.mcfunction',

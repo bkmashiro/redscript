@@ -45,6 +45,15 @@ export interface StorageAssertion {
   message?: string
 }
 
+export interface BlockAssertion {
+  x: number
+  y: number
+  z: number
+  expected: string
+  world?: string
+  message?: string
+}
+
 export interface CaseAction {
   kind: 'function' | 'command'
   target: string
@@ -71,6 +80,7 @@ export interface McCoreCaseDescriptor {
   controlledTicks?: number
   scoreboardAssertions?: ScoreboardAssertion[]
   storageAssertions?: StorageAssertion[]
+  blockAssertions?: BlockAssertion[]
 }
 
 export type McCoreCaseStatus = 'passed' | 'failed' | 'skipped'
@@ -108,6 +118,7 @@ export interface McCoreCaseHarness {
   ticks(count: number): Promise<void>
   scoreboard(player: string, obj: string): Promise<number>
   dumpStorage?(storage: string): Promise<{ raw: string; ok: boolean }>
+  block?(x: number, y: number, z: number, world?: string): Promise<{ type: string }>
   withTickControl?(callback: (step: (ticks: number) => Promise<void>) => Promise<void>): Promise<void>
 }
 
@@ -306,6 +317,20 @@ function assertStorageAssertion(
   })
 }
 
+function assertBlockAssertion(
+  block: (x: number, y: number, z: number, world?: string) => Promise<{ type: string }>,
+  assertion: BlockAssertion,
+): Promise<void> {
+  return block(assertion.x, assertion.y, assertion.z, assertion.world).then(({ type }) => {
+    if (type !== assertion.expected) {
+      throw new Error(
+        assertion.message ??
+          `block assertion failed: (${assertion.x},${assertion.y},${assertion.z}) expected ${assertion.expected}, got ${type}`,
+      )
+    }
+  })
+}
+
 /**
  * Run one descriptor case end-to-end.
  */
@@ -428,6 +453,18 @@ export async function runMcCoreCase(
       }
       for (const assertion of descriptor.storageAssertions) {
         await assertStorageAssertion(client.dumpStorage, assertion)
+      }
+    }
+
+    if (descriptor.blockAssertions && descriptor.blockAssertions.length > 0) {
+      if (!client.block) {
+        throw new Error('block assertions are not supported by this harness client')
+      }
+      for (const assertion of descriptor.blockAssertions) {
+        await assertBlockAssertion(
+          (x, y, z, world) => client.block!(x, y, z, world),
+          assertion,
+        )
       }
     }
 

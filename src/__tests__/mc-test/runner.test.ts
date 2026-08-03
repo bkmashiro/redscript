@@ -16,6 +16,7 @@ interface FakeHarnessDeps {
   online: boolean
   storageRaw?: string
   receiptValue?: number
+  blockType?: string
 }
 
 class FakeHarness {
@@ -50,6 +51,11 @@ class FakeHarness {
   async dumpStorage(): Promise<{ raw: string; ok: boolean }> {
     this.calls.push('storage:rs:core_oracle')
     return { raw: this.deps.storageRaw ?? '', ok: true }
+  }
+
+  async block(x: number, y: number, z: number, world = 'world'): Promise<{ type: string }> {
+    this.calls.push(`block:${x}:${y}:${z}:${world}`)
+    return { type: this.deps.blockType ?? 'minecraft:air' }
   }
 }
 
@@ -166,6 +172,21 @@ it('returns failed when storage assertions are requested without storage support
 
   expect(result.status).toBe('failed')
   expect(result.error).toContain('storage assertions are not supported')
+})
+
+it('reads exact block state assertions from the live harness', async () => {
+  const fake = new FakeHarness({ online: true, blockType: 'minecraft:barrier' }, { 'core_oracle:#result': 7 })
+  const result = await runMcCoreCase(buildDescriptor({
+    blockAssertions: [{ x: 1, y: 64, z: 1, expected: 'minecraft:barrier' }],
+  }), {
+    client: fake,
+    datapackDir: '/tmp/redscript-mc-core-oracle-block',
+    compileSource: () => [{ path: 'data/core_oracle_mc/function/test_probe.mcfunction', content: '# no-op' }],
+    installFiles: () => { /* no-op */ },
+  })
+
+  expect(result.status).toBe('passed')
+  expect(fake.calls).toContain('block:1:64:1:world')
 })
 
 it('deploys a descriptor into an owned isolated pack and removes it after the case', async () => {
