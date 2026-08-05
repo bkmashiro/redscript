@@ -47,6 +47,9 @@ const defaultPasses: Pass[] = [
   blockMerge,
 ]
 
+/** Maximum number of full-pass iterations before the fixpoint loop is forced to stop.
+ *  Guards against degenerate pass interactions that would otherwise cycle forever.
+ *  In practice, well-behaved programs converge in ≤5 iterations. */
 const MAX_ITERATIONS = 20
 
 export function optimizeFunction(fn: MIRFunction, passes: Pass[] = defaultPasses): MIRFunction {
