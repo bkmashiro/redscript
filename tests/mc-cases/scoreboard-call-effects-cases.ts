@@ -11,6 +11,10 @@ const scenarios: Array<{
   expected: number
   commands?: string[]
 }> = [
+  { name: 'partial identity helper', entry: 'test_partial_identity', input: -7, expected: -7 },
+  { name: 'partial affine helper', entry: 'test_partial_affine', input: 5, expected: 22 },
+  { name: 'partial argument order', entry: 'test_partial_order', input: 5, expected: 22 },
+  { name: 'constant i32 product', entry: 'test_i32_product', expected: 1 },
   { name: 'readonly transitive helper', entry: 'test_readonly', input: 5, expected: 21 },
   { name: 'readonly helper with negative score', entry: 'test_readonly', input: -7, expected: -27 },
   { name: 'readonly helper with missing score', entry: 'test_readonly', expected: 1 },
@@ -22,7 +26,7 @@ const scenarios: Array<{
   },
 ]
 
-export const SCORE_EFFECTS_CASES: McCoreCaseDescriptor[] = scenarios.map(scenario => ({
+export const SCORE_EFFECTS_CASES: McCoreCaseDescriptor[] = scenarios.map<McCoreCaseDescriptor>(scenario => ({
   id: `score-effects-${scenario.name.replace(/ /g, '-')}`,
   name: scenario.name,
   namespace: SCORE_EFFECTS_NAMESPACE,
@@ -39,4 +43,11 @@ export const SCORE_EFFECTS_CASES: McCoreCaseDescriptor[] = scenarios.map(scenari
   ],
   entrypoints: [{ kind: 'function', target: scenario.entry }],
   scoreboardAssertions: [{ player: '#result', obj: 'effect_outputs', value: scenario.expected }],
-}))
+})).concat([{
+  id: 'score-effects-runtime-boundary', name: 'runtime throttle boundary',
+  namespace: 'runtime_boundary_mc',
+  sourcePath: path.resolve(__dirname, 'runtime-boundary.mcrs'),
+  setupCommands: ['scoreboard players set #calls effect_outputs 0'],
+  entrypoints: [{ kind: 'function', target: 'test_runtime_boundary' }],
+  scoreboardAssertions: [{ player: '#result', obj: 'effect_outputs', value: 1 }],
+}])

@@ -50,6 +50,27 @@ describeLive('managed Paper scoreboard call effects', () => {
     expect(fs.existsSync(root)).toBe(false)
   }, 30000)
 
+  const nativeArithmetic: Array<[string, number, string, number, number]> = [
+    ['large product', 2147483647, '*=', 2147483647, 1],
+    ['negative large product', -2147483647, '*=', 2147483647, -1],
+    ['addition wrap', 2147483647, '+=', 1, -2147483648],
+    ['subtraction wrap', -2147483648, '-=', 1, 2147483647],
+    ['division negative numerator', -7, '/=', 3, -3],
+    ['division negative divisor', 7, '/=', -3, -3],
+    ['division both negative', -7, '/=', -3, 2],
+    ['division overflow', -2147483648, '/=', -1, -2147483648],
+    ['modulo negative numerator', -7, '%=', 3, 2],
+    ['modulo negative divisor', 7, '%=', -3, -2],
+    ['modulo both negative', -7, '%=', -3, -1],
+  ]
+  test.each(nativeArithmetic)('native scoreboard semantics: %s', async (_name, left, operator, right, expected) => {
+    await mc.command(`scoreboard players set #left effect_inputs ${left}`)
+    await mc.command(`scoreboard players set #right effect_inputs ${right}`)
+    const operation = await mc.command(`scoreboard players operation #left effect_inputs ${operator} #right effect_inputs`)
+    expect(operation.ok).toBe(true)
+    expect(await mc.scoreboard('#left', 'effect_inputs')).toBe(expected)
+  })
+
   for (const useEffects of [false, true]) {
     describe(useEffects ? 'effect-aware output' : 'conservative output', () => {
       for (const descriptor of SCORE_EFFECTS_CASES) {

@@ -38,6 +38,10 @@ async function waitForServer(timeoutMs = 20000): Promise<boolean> {
 
 beforeAll(async () => {
   mc = new MCTestClient(MC_HOST, MC_PORT)
+  if (process.env.MC_OFFLINE === 'true') {
+    if (REQUIRE_ONLINE) throw new Error('MC_CORE_REQUIRE_ONLINE=true conflicts with MC_OFFLINE=true')
+    return
+  }
   const online = await waitForServer()
   if (REQUIRE_ONLINE && !online) {
     throw new Error('MC core oracle requested with MC_CORE_REQUIRE_ONLINE=true, but the harness is offline')

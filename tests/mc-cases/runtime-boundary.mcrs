@@ -1,0 +1,11 @@
+// A runtime wrapper must survive both inlining and constant specialization.
+@throttle(ticks=5)
+fn limited_set(value: int, unused: int) {
+  scoreboard_set("#calls", "effect_outputs", value)
+}
+
+fn test_runtime_boundary() {
+  limited_set(1, 3)
+  limited_set(2, 3)
+  scoreboard_set("#result", "effect_outputs", scoreboard_get("#calls", "effect_outputs"))
+}
