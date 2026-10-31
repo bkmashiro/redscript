@@ -19,6 +19,7 @@ import { loopUnroll } from './unroll'
 import { licm } from './licm'
 import { nbtBatchRead } from './nbt-batch'
 import { scoreboardBatchRead } from './scoreboard-batch'
+import { findScoreboardPreservingFunctions } from './scoreboard-effects'
 import { interproceduralConstProp } from './interprocedural'
 import { autoInlineSmallFunctions } from './auto-inline'
 import { inlinePass } from './inline'
@@ -64,9 +65,18 @@ export function optimizeFunction(fn: MIRFunction, passes: Pass[] = defaultPasses
 export function optimizeModule(mod: MIRModule, passes?: Pass[]): MIRModule {
   // Module-level pass: inline @inline-marked functions before per-function opts
   const inlined = autoInlineSmallFunctions(inlinePass(mod))
+  const context = {
+    objective: mod.objective,
+    preservingCalls: findScoreboardPreservingFunctions(inlined),
+  }
+  // Custom pass lists retain their original behavior. The default read pass
+  // gains module knowledge without weakening standalone optimizeFunction().
+  const modulePasses = passes ?? defaultPasses.map(pass => pass === scoreboardBatchRead
+    ? (fn: MIRFunction) => scoreboardBatchRead(fn, context)
+    : pass)
   const perFnOptimized = {
     ...inlined,
-    functions: inlined.functions.map(fn => optimizeFunction(fn, passes)),
+    functions: inlined.functions.map(fn => optimizeFunction(fn, modulePasses)),
   }
   // Module-level pass: interprocedural constant propagation
   return interproceduralConstProp(perFnOptimized)

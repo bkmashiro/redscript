@@ -1,0 +1,53 @@
+// Shared correctness/output fixture for scoreboard effects. Helpers stay out of
+// line so read reuse must be justified by effects, not small-function inlining.
+@no-inline
+fn cooldown_cost(ticks: int): int {
+  return ticks * 3 + 1
+}
+
+@no-inline
+fn cooldown_cost_chain(ticks: int): int {
+  return cooldown_cost(ticks)
+}
+
+@no-inline
+fn mutate_cooldown(ticks: int): int {
+  scoreboard_set("#cooldown", "effect_inputs", ticks + 2)
+  return ticks * 3 + 1
+}
+
+@no-inline
+fn raw_mutate_cooldown(ticks: int): int {
+  raw("scoreboard players set #cooldown effect_inputs 9")
+  return ticks * 3 + 1
+}
+
+fn test_readonly() {
+  let before: int = scoreboard_get("#cooldown", "effect_inputs")
+  let cost: int = cooldown_cost_chain(before)
+  let after: int = scoreboard_get("#cooldown", "effect_inputs")
+  scoreboard_set("#result", "effect_outputs", cost + after)
+}
+
+fn test_mutating() {
+  let before: int = scoreboard_get("#cooldown", "effect_inputs")
+  let cost: int = mutate_cooldown(before)
+  let after: int = scoreboard_get("#cooldown", "effect_inputs")
+  scoreboard_set("#result", "effect_outputs", cost + after)
+}
+
+fn test_raw() {
+  let before: int = scoreboard_get("#cooldown", "effect_inputs")
+  let cost: int = raw_mutate_cooldown(before)
+  let after: int = scoreboard_get("#cooldown", "effect_inputs")
+  scoreboard_set("#result", "effect_outputs", cost + after)
+}
+
+fn test_context_write() {
+  let before: int = scoreboard_get("#cooldown", "effect_inputs")
+  foreach (e in @e[type=minecraft:marker,tag=effect_probe]) {
+    scoreboard_set("#cooldown", "effect_inputs", 7)
+  }
+  let after: int = scoreboard_get("#cooldown", "effect_inputs")
+  scoreboard_set("#result", "effect_outputs", before + after)
+}
