@@ -158,8 +158,7 @@ managed lifecycle gate 会创建一次性、仅含空气的 `minecraft:the_void`
 ## CLI 命令
 
 ```bash
-redscript build <file>     # 带优化编译
-redscript compile <file>   # 不带优化编译
+redscript compile <file>   # 编译为数据包，默认应用优化
 redscript check <file>     # 仅类型检查
 redscript fmt <file>       # 格式化代码
 redscript lint <file>      # 静态分析

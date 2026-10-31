@@ -4,6 +4,11 @@ Updated: 2026-11-01. This file owns current priorities and implementation status
 Design contracts and historical validation records are indexed in
 [docs/plans/README.md](docs/plans/README.md).
 
+Execution pointer: A3 bounded partial constant specialization and correctness
+calibration. A2 now reports the production IR and emitted commands. Evaluate existing VIR only
+on a bounded example, without changing the default compiler pipeline. Continue
+through verified slices without requiring confirmation at each checkpoint.
+
 ## Goals and constraints
 
 - Reduce generated Minecraft commands without changing observable game behavior.
@@ -55,10 +60,14 @@ Current path: `src/optimizer/pipeline.ts` and `scoreboard-batch.ts`.
 Keep this first slice narrow. A scoreboard-preserving helper is not necessarily
 pure: the analysis must not be reused as permission for NBT or world transforms.
 
-### A2. Explain optimization decisions — planned
+### A2. Explain optimization decisions — initial report complete
 
-Extend existing stage snapshots and LIR pass reports rather than building a
-second compiler pipeline. Use a small set of game fixtures for cooldowns, area
+Production stage snapshots now include per-function MIR read/instruction counts,
+scoreboard-preservation barriers, existing LIR pass deltas, emitted command counts
+and lexical indicators, plus direct load/tick roots. See
+[the inspection guide](docs/optimization.md). Reporting preserves generated output.
+
+Next expand explanations beyond scoreboard calls and use game fixtures for cooldowns, area
 queries, scoring, waves, collections and particle paths.
 
 Report per-function static command counts, pass deltas and reasons an operation

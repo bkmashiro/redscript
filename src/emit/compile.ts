@@ -17,7 +17,8 @@ import { checkDeprecatedCalls } from '../hir/deprecated'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
 import { lowerToLIR } from '../lir/lower'
-import { lirOptimizeModule, type LIROptimizeOptions } from '../optimizer/lir/pipeline'
+import { lirOptimizeModule, runLIRPassManager, type LIROptimizeOptions } from '../optimizer/lir/pipeline'
+import { summarizeOptimization, summarizeDatapackCommands } from '../optimizer/report'
 import { emit, type DatapackFile, type EmitOptions } from './index'
 import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import { analyzeBudget } from '../lir/budget'
@@ -786,6 +787,7 @@ export interface LowerAndOptimizeStagesOptions {
   noInlineFunctions: ReadonlySet<string>
   coroutineInfos: readonly CoroutineInfo[]
   lirOptimizeOptions?: LIROptimizeOptions
+  collectOptimizationReport?: boolean
 }
 
 export interface LowerAndOptimizeStagesResult {
@@ -794,6 +796,7 @@ export interface LowerAndOptimizeStagesResult {
   libraryFilePaths: Set<string>
   generatedTickFunctions: string[]
   warnings: string[]
+  optimization?: ReturnType<typeof summarizeOptimization>
 }
 
 export function lowerAndOptimizeStages(
@@ -848,7 +851,8 @@ export function lowerAndOptimizeStages(
   const allowedExternalRefFunctions = allowExternalRefsInLibraryFunctions ? collectLibraryFunctionNames(hir) : new Set<string>()
   const lir = lowerToLIR(mirFinal)
   throwOnVerifyLIRFailure(lir, filePath, 'after-lower-to-lir', allowedFunctionRefs, true, allowedExternalRefFunctions)
-  const lirOpt = lirOptimizeModule(lir, lirOptimizeOptions)
+  const passReport = options.collectOptimizationReport ? runLIRPassManager(lir, lirOptimizeOptions) : undefined
+  const lirOpt = passReport?.module ?? lirOptimizeModule(lir, lirOptimizeOptions)
   throwOnVerifyLIRFailure(lirOpt, filePath, 'after-lir-optimize', allowedFunctionRefs, true, allowedExternalRefFunctions)
   addDerivedLibraryFunctionPaths(lirOpt, namespace, libraryFilePaths, userRootNames)
 
@@ -858,6 +862,7 @@ export function lowerAndOptimizeStages(
     libraryFilePaths,
     generatedTickFunctions: [...coroResult.generatedTickFunctions],
     warnings,
+    ...(passReport ? { optimization: summarizeOptimization(mir, mirOpt, passReport.passes) } : {}),
   }
 }
 
@@ -1271,6 +1276,7 @@ function summarizeLowerAndOptimizeStages(stage: LowerAndOptimizeStagesResult): R
     libraryFilePaths: [...stage.libraryFilePaths].sort(),
     generatedTickFunctions: stage.generatedTickFunctions,
     warnings: stage.warnings.length,
+    ...(stage.optimization ? { optimization: stage.optimization } : {}),
   }
 }
 
@@ -1287,6 +1293,7 @@ function summarizeEmitDatapackStage(stage: EmitDatapackStageResult): Record<stri
   return {
     files: stage.files.length,
     paths: stage.files.map(file => file.path).sort(),
+    commandReport: summarizeDatapackCommands(stage.files),
   }
 }
 
@@ -1572,6 +1579,8 @@ export function compilePipeline(source: string, options: CompileOptions = {}): C
       inlineFunctions,
       noInlineFunctions,
       coroutineInfos,
+      collectOptimizationReport: !!options.stageSnapshots &&
+        (!options.snapshotStages || options.snapshotStages.includes('lowerAndOptimize')),
       lirOptimizeOptions: {
         experimentalLocalCopyRewrite: options.experimentalLirLocalCopyRewrite === true,
       },
