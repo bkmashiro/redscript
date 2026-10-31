@@ -272,7 +272,7 @@ npm run gate:full       # heavyweight release-style gate
 
 The managed lifecycle gate creates a disposable air-only `minecraft:the_void` world, applies version-correct deterministic rules through TestHarness, and restores/verifies a smooth-stone floor at `y=63`. The template world is never reused or modified.
 
-See [AGENTS.md](./AGENTS.md) and [compiler hardening roadmap](./docs/plans/compiler-mc-hardening-roadmap.md) for current architecture and verification notes.
+See the [current roadmap](./ROADMAP.md), [design/evidence index](./docs/plans/README.md), and [AGENTS.md](./AGENTS.md) for implementation priorities and verification guidance.
 
 ---
 

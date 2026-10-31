@@ -1,175 +1,179 @@
-# RedScript ROADMAP
+# RedScript roadmap
 
-> Last updated: 2026-07-31
-> Current published line: 3.x
+Updated: 2026-11-01. This file owns current priorities and implementation status.
+Design contracts and historical validation records are indexed in
+[docs/plans/README.md](docs/plans/README.md).
 
-## Active architecture roadmap
+## Goals and constraints
 
-The next product architecture track is [Project, Package, and Multi-Target Compilation](docs/plans/generic-datapack-language-roadmap.md), backed by a separate [compiler architecture/refactor contract](docs/plans/project-package-target-compiler-architecture.md). Its implementation order is:
+- Reduce generated Minecraft commands without changing observable game behavior.
+- Make common game logic comfortable to express through the language and stdlib.
+- Shorten the path from an inefficient output or bug to a verified regression test.
+- Prepare a documented 4.0.0 release across npm, GitHub and the documentation site.
 
-1. ✅ strict `redscript.toml` project identity and named targets;
-2. ✅ Go-like directory packages and deterministic import graphs;
-3. ✅ explicit local module dependencies, identity validation, and dependency hashing;
-4. ✅ target capability validation, reachability, and stable `RST2xxx` diagnostics;
-5. ✅ a finite command-sequence backend with canonical manifests, budgets, and static validation;
-6. ✅ versioned remote dependencies and a reproducible lockfile;
-7. ✅ typed datapack artifact graph, JSON/NBT resources, and deterministic projections;
-8. ✅ selective typed resource builders: source-level tags plus version-aware package APIs for common recipes, advancements, predicates, loot tables, and item modifiers;
-9. ✅ P9 managed Paper 1.21.4 lifecycle gate: mixed graph load, `/reload`, canonical commands execution, graceful restart, and world-reopen registry evidence.
+Work stays incremental on `main`. Preserve existing user files and server worlds.
+Do not add dependencies or rewrite the compiler to introduce an optimization.
+Compiler wall-clock speed is not the current bottleneck. Do not run performance
+benchmarks or load tests in this workstream. Static command counts and bounded
+correctness tests are allowed; report their scope separately from runtime speed.
 
-The tables below describe the existing language/tooling inventory. The strict project/package dependency contract, target capability validation, finite commands backend, reproducible remote dependencies, typed JSON/NBT artifact graph, selective P8 builders, and stable-channel P9 lifecycle gate are implemented. The 26.2 schema channel remains static-only; the default target and typed worldgen builders stay blocked on compatible live evidence.
+## Current baseline
 
-## Legend
-- ✅ Done
-- 🔄 In Progress
-- 📋 Planned
-- 💡 Idea
+- The source manifest and npm latest are 3.0.4. The latest GitHub release is
+  v3.0.0. Release metadata must be rechecked before publication.
+- Project manifests, directory packages, local/locked remote dependencies,
+  target capability checks, finite command output and typed artifacts exist.
+  `watch`, user-facing `test` and LSP still have legacy single-file paths.
+- The optimizer includes MIR passes, typed LIR analysis/rewrite facilities and
+  an experimental VIR path. Reuse these before adding another framework.
+- Local-copy/RMW rewriting remains opt-in. The earlier
+  [opportunity report](docs/plans/redscript-typed-optimizer-opportunity-report.md)
+  records static reductions, not permission to enable it by default.
+- On 2026-11-01, core tests passed on disposable Paper 1.21.4 build 232:
+  27 live descriptors and 3 compiler/mapping checks, no skips. The server was
+  stopped and its temporary world removed. This core baseline precedes A1.
+  It is not a new full-suite or Paper 26.2 qualification.
 
----
+## A. Command quality and optimization workflow
 
-## Compiler Optimizations
+### A1. Scoreboard effects across helper calls — complete
 
-| Pass | Status | Description |
-|------|--------|-------------|
-| Dead Code Elimination (DCE) | ✅ | Remove unreachable code |
-| Constant Folding | ✅ | Evaluate constant expressions at compile time |
-| Copy Propagation | ✅ | Replace variable copies with original |
-| Loop Invariant Code Motion (LICM) | ✅ | Hoist invariants out of loops |
-| Loop Unrolling | ✅ | Unroll small loops |
-| NBT Batch Read | ✅ | Merge consecutive NBT reads |
-| Function Inlining (`@inline`) | ✅ | Manual inline annotation |
-| Partial Evaluation | ✅ | Fold dead branches with constant conditions |
-| Tail Call Optimization (TCO) | ✅ | Convert tail recursion to loops (MC depth limit ~512) |
-| Common Subexpression Elimination (CSE) | ✅ | Cache repeated expressions |
-| Auto-Inline Small Functions | ✅ | Auto-inline functions < 5 statements |
-| Execute Chain Optimization | ✅ | Merge `execute if A run execute if B` → `execute if A if B` |
-| Strength Reduction | ✅ | `x * 2` → `x + x`, cheaper operations |
-| Scoreboard Read Batching | ✅ | Merge multiple reads of same scoreboard var in one tick |
-| NBT Write Coalescing | ✅ | Merge consecutive writes to same NBT path |
+Current path: `src/optimizer/pipeline.ts` and `scoreboard-batch.ts`.
 
----
+- [x] Pin read reuse and invalidation with focused regression tests.
+- [x] Infer which acyclic, ordinary module-local helpers preserve external
+      scoreboard state, including transitive calls.
+- [x] Reuse repeated reads across those calls. Keep unknown/raw calls, macros,
+      context calls, recursive call graphs and compiler-owned slots conservative.
+- [x] Preserve source locations and invalidate cached values when their MIR
+      destination is overwritten. Test selector/write alias boundaries.
+- [x] Show a reduction on a cooldown/score helper fixture through the production
+      pipeline, plus counterexamples where reuse must not happen.
+- [x] Verify the affected behavior on disposable Paper before declaring live
+      equivalence. Offline checks alone do not establish Minecraft semantics.
 
-## Language Features
+Keep this first slice narrow. A scoreboard-preserving helper is not necessarily
+pure: the analysis must not be reused as permission for NBT or world transforms.
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| Basic types (int, bool, string) | ✅ | |
-| Structs | ✅ | |
-| Struct extends | ✅ | Compile-time field inheritance |
-| Enums with payload | ✅ | Tag + NBT payload |
-| Arrays (static + dynamic) | ✅ | |
-| Tuples | ✅ | Scoreboard-backed |
-| match expression | ✅ | Pattern matching incl. string |
-| Option<T> | ✅ | Algebraic option type |
-| Result<T, E> | ✅ | Error handling |
-| Interfaces / Traits | ✅ | Compile-time impl check |
-| Module import | ✅ | Three import forms |
-| Format strings (f-string) | ✅ | |
-| Multi-line strings | ✅ | |
-| `while let Some(x)` | ✅ | |
-| `for item in array` | ✅ | |
-| Labeled break/continue | ✅ | Nested loop control |
-| Generics | 💡 | Low ROI for MC target |
-| Closures / lambdas | 💡 | MC has no closures natively |
+### A2. Explain optimization decisions — planned
 
----
+Extend existing stage snapshots and LIR pass reports rather than building a
+second compiler pipeline. Use a small set of game fixtures for cooldowns, area
+queries, scoring, waves, collections and particle paths.
 
-## Decorators
+Report per-function static command counts, pass deltas and reasons an operation
+could not be optimized. Separate load and tick work. Dynamic execution estimates
+must state loop bounds/entity-count assumptions and retain an unknown result.
+Do not label static line reductions as measured runtime improvements.
 
-| Decorator | Status | Description |
-|-----------|--------|-------------|
-| `@on(EventType)` | ✅ | Event handler |
-| `@tick` | ✅ | Run every game tick |
-| `@load` | ✅ | Run on datapack load |
-| `@inline` | ✅ | Force function inlining |
-| `@deprecated` | ✅ | Compile-time warning |
-| `@singleton` | ✅ | Global state singleton |
-| `@watch` | ✅ | Scoreboard change listener |
-| `@config` | ✅ | Compile-time config injection |
-| `@profile` | ✅ | Performance profiling |
-| `@throttle(ticks)` | ✅ | Rate limit execution |
-| `@retry(max)` | ✅ | Auto-retry on failure |
-| `@memoize` | ✅ | Cache function results |
-| `@benchmark` | ✅ | Tick-level benchmarking |
-| `@test` | ✅ | Mark test functions |
+### A3. Stronger call and value optimization — planned
 
----
+Use A1/A2 evidence to choose among partial-constant specialization, a cleanup
+round after specialization, call-site-aware inlining, copy/return-slot removal
+and direct condition lowering. Bound code growth. Reuse LIR/VIR allocation and
+rewrite work where it already covers the case. No default experimental rollout
+without semantic and generated-output regression coverage.
 
-## CLI Commands
+### A4. Minecraft-specific optimization — planned
 
-| Command | Status | Description |
-|---------|--------|-------------|
-| `redscript compile` | ✅ | Compile .mcrs files |
-| `redscript build` | ✅ | Build with optimization |
-| `redscript check` | ✅ | Type check only |
-| `redscript fmt` | ✅ | Format source code |
-| `redscript lint` | ✅ | Static analysis (5 rules) |
-| `redscript init` | ✅ | Project scaffold |
-| `redscript watch` | ✅ | Watch mode + hot reload |
-| `redscript publish` | ✅ | Package as .zip datapack |
-| `redscript test` | ✅ | Run @test functions |
-| `redscript upgrade` | ✅ | Check for updates |
-| `redscript repl` | ✅ | HTTP REPL server |
-| `redscript docs` | ✅ | Open stdlib docs in browser |
+Evaluate execute-context factoring, selector reuse and NBT/array access using
+explicit effect and context boundaries. Preserve executor, position, dimension,
+selection multiplicity, failure/result behavior and ordering. Unknown `raw`
+commands remain opaque. Do not change update frequency or assume selectors are
+stable without a contract. Minecraft 26.3 `/compute` work remains deferred.
 
----
+## B. Language and stdlib usability
 
-## Stdlib Modules (50 total)
+### B1. Specify common game APIs through working examples — planned
 
-All 50 modules documented with `///` annotations and en+zh generated docs.
+Start with cooldown/timer, per-player state and collection processing. Record
+awkward source patterns and generated costs together. Define global, per-entity
+and local lifetimes, reload behavior, array copy/mutation semantics and aliasing
+before choosing new syntax. Review Timer's static-ID intrinsic restrictions and
+stdlib stubs against the actual lowering path.
 
-| Category | Modules |
-|----------|---------|
-| Math | math ✅ math_hp ✅ vec ✅ linalg ✅ matrix ✅ quaternion ✅ |
-| DSP / Simulation | fft ✅ ode ✅ signal ✅ easing ✅ noise ✅ |
-| Geometry | geometry ✅ parabola ✅ physics ✅ |
-| Data Structures | sort ✅ heap ✅ bigint ✅ map ✅ set_int ✅ sets ✅ queue ✅ list ✅ |
-| AI / Graph | graph ✅ pathfind ✅ |
-| Game Systems | player ✅ effects ✅ combat ✅ scheduler ✅ state ✅ dialog ✅ timer ✅ cooldown ✅ |
-| MC Specific | bossbar ✅ tags ✅ teams ✅ mobs ✅ spawn ✅ world ✅ interactions ✅ inventory ✅ particles ✅ |
-| ECS | ecs ✅ |
-| Utility | strings ✅ result ✅ bits ✅ color ✅ random ✅ |
-| Advanced | advanced ✅ calculus ✅ expr ✅ events ✅ |
+### B2. Make those APIs reusable across packages — planned
 
----
+Support public struct/enum identities and diagnostics for private types in public
+signatures where the examples require them. Integrate stdlib discovery, imports,
+completion and required runtime initialization with project packages. Prefer
+small composable APIs to hidden copies or broad chainable collection helpers.
 
-## Tooling
+## C. Development and correctness infrastructure
 
-| Tool | Status | Description |
-|------|--------|-------------|
-| VSCode Extension | ✅ v1.3.74 | Syntax highlighting, snippets |
-| LSP Server | ✅ | Hover, completion, goto-def, diagnostics |
-| LSP hover docs | ✅ | Shows `///` comments on hover |
-| LSP lint diagnostics | ✅ | Real-time lint warnings in Problems panel |
-| Playground | ✅ | Web IDE with examples |
-| Playground share | ✅ | URL-encoded shareable links (lz-string URL hash) |
-| REPL server | ✅ | HTTP POST /compile |
-| Doc generator | ✅ | `npm run docs:gen` — 50 modules |
-| CI docs:check | ✅ | PR fails if docs out of sync |
-| Benchmarks suite | ✅ | `benchmarks/` |
-| Source map | ✅ | Trace mcfunction → .mcrs line |
+- [ ] Project-aware `watch`: build the selected target, include resource and
+      manifest changes, and reload only successful output. Full project rebuilds
+      are acceptable before a correct incremental dependency model exists.
+- [ ] Project-level test discovery using the production package compiler.
+- [ ] LSP project resolution and diagnostics, followed by symbol-based references
+      and cross-file rename. Cover unsaved buffers through protocol tests.
+- [ ] Calibrate bounded scoreboard interpreters against Paper for missing scores,
+      signed integer edges, negative division/modulo and command failure.
+      Unsupported behavior must remain unsupported, not silently equivalent.
+- [ ] Make managed core correctness runs reusable without ad-hoc scripts; retain
+      strict online mode, version checks, disposable roots and failure cleanup.
+      A1 now has its own managed, strict correctness command (see below).
+- [x] Cancel managed Paper shutdown timers after exit, including escalation
+      paths, so successful correctness runs do not wait on a stale deadline.
+- [ ] Layer checks: focused pass tests → output/equivalence tests → affected live
+      cases → broader release checks. Do not run the whole live corpus per edit.
+- [ ] Default the harness command API to loopback; require explicit remote setup.
 
----
+## D. Documentation and 4.0.0 release
 
-## Documentation
+- [ ] Document a complete multi-file project, dependencies/lockfiles and targets
+      in English and Chinese, with commands that exercise the current CLI.
+- [ ] Correct testing/plugin examples and compile-check executable examples.
+- [ ] Write migration notes for removed event contracts and invalid helpers.
+- [ ] Align CHANGELOG, release notes, npm metadata and GitHub release with the
+      tested source. Existing published versions are immutable.
+- [ ] Bound release triggers so a compiler commit does not incidentally publish
+      an extension or rebuild the IDE. Validate packed-package consumers.
+- [ ] Publish 4.0.0 only after its selected slices and release gates pass.
+      The roadmap is not a promise to finish every B/C item before this release.
 
-| Doc | Status |
-|-----|--------|
-| Getting started guide (en+zh) | ✅ |
-| Advanced docs (optimization/modules/decorators/cli) | ✅ |
-| Stdlib reference — all 50 modules (en+zh) | ✅ |
-| Type system reference | ✅ |
-| Error reference | ✅ |
-| Blog posts (3) | ✅ |
-| Tutorials (23 en + 23 zh) | ✅ |
+## Delivery order
 
----
+A1 is complete. Next use A2 plus a B1 example to select the next
+optimization/API slice. Maintain
+D alongside implementation so documentation follows tested behavior. Start the
+larger project-tooling work in C as separate verified changes.
 
-## Release
+Record completed slices and their actual checks here. Detailed implementation
+notes belong next to their design or tests, not in a second active roadmap.
 
-| Item | Status |
-|------|--------|
-| redscript-mc v3.0.0 npm publish | ✅ |
-| VSCode marketplace v3.0.0 description update | ✅ |
-| nest-faster-crud npm publish | ✅ |
-| GitHub Release notes | ✅ |
+## Verified slices
+
+### 2026-11-01: scoreboard call effects and managed shutdown
+
+- Added acyclic module-local scoreboard-effect inference and integrated it into
+  the default MIR read pass. Standalone/custom pass lists stay conservative.
+- Fixed cache invalidation across context calls, selector/wildcard aliases and
+  temporary redefinitions. Replacement copies retain their source positions.
+- The shared cooldown fixture in `tests/mc-cases/scoreboard-call-effects.mcrs`
+  emits **8 → 7** non-comment commands in `test_readonly`. Its scoreboard reads
+  fall **2 → 1**. The baseline uses the same compiler without call summaries.
+  These are static output counts for one fixture, not a runtime speed claim.
+- **628 offline checks passed**: 564 optimizer/managed-runtime checks and 64
+  emission/module/syntax checks. The VIR benchmark test was excluded.
+- **12 live checks passed**, no skips, on Paper 1.21.4 build 232: six scenarios
+  with conservative output and the same six with effect-aware output. Scenarios
+  cover transitive helpers, negative and missing scores, explicit writes, raw
+  mutation and context mutation. Initial fixture ID/entrypoint mistakes were
+  corrected and guarded by an offline deployment/entrypoint check.
+- Shutdown deadline cancellation is covered for graceful, SIGTERM and SIGKILL
+  exits. The final live run exited without Jest's open-handle warning. Its
+  disposable world was removed. No benchmarks or load tests ran.
+
+Reproduce the focused live checks with Java 21 and an offline Paper 1.21.4 template:
+
+```sh
+MC_JAVA_BIN=/path/to/java21/bin/java \
+MC_SCORE_EFFECTS_TEMPLATE_DIR=/path/to/paper-1.21.4-template \
+MC_OFFLINE=false npm run test:mc-score-effects:live
+```
+
+The command owns a disposable server, requires free localhost ports 25561/25566,
+fails rather than skipping when prerequisites are missing, and cleans up in the
+test teardown. `TMPDIR` controls where the disposable root is created. These
+checks do not replace the full release build, full corpus or Paper 26.2 gates.

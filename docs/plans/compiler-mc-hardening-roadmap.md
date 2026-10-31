@@ -1,6 +1,6 @@
 # RedScript Compiler + Minecraft Oracle Hardening Roadmap
 
-> **For Hermes:** Use this as the working roadmap before taking implementation slices. Keep tasks incremental, test-backed, and based on `main`.
+> Historical compiler/Minecraft hardening plan and verification record. Use [ROADMAP.md](../../ROADMAP.md) for current work; preserve the design and evidence below as references.
 
 **Goal:** Make RedScript's core compiler logic provably correct against both static validators and a real Minecraft/Paper oracle, then refactor compiler boundaries safely.
 

@@ -16,8 +16,8 @@ RedScript (`redscript-mc`) is a TypeScript compiler/toolchain for a typed high-l
 ## Common commands
 
 ```bash
-npm run build                     # TypeScript build + postbuild shims + VSCode extension packaging
-npm test -- --runInBand           # Full Jest suite; MC integration tests gracefully skip when server is offline
+npm run build                     # TypeScript build + postbuild shims/runtime assets (no VSCode package)
+MC_OFFLINE=true npm test -- --runInBand  # Offline suite; skips are not live MC evidence
 npm test -- -t "name"             # Run tests matching a name
 npm test -- path/to/test.ts       # Run one Jest test file
 npm run validate-mc               # Minecraft command syntax validation tests
@@ -25,11 +25,12 @@ npm run test:mc-lifecycle         # managed Paper P9 gate; explicit [SKIP] offli
 MC_P9_TEMPLATE_DIR=~/mc-test-server npm run test:mc-lifecycle:live  # strict live lifecycle proof
 npm run docs:gen                  # Generate stdlib documentation
 npm run docs:check                # Check generated docs against ~/projects/redscript-docs
-npm run bench                     # Compiler performance benchmarks
+npm run test:optimizer            # Focused optimizer correctness tests (serial)
 ```
 
 Notes:
-- The Jest config currently emits warnings about `retryTimes` and deprecated `ts-jest` `globals` config; do not treat these warnings as failures unless the task is about test config cleanup.
+- Current work does not run performance benchmarks or load tests. Use static generated-command counts and focused correctness checks.
+- `npm run build:package-vscode` is the separate opt-in extension packaging command.
 - Real Paper server integration requires a live server/TestHarnessPlugin at the configured endpoint; offline skips are expected in local runs.
 
 ## Code style
@@ -79,9 +80,11 @@ Follow the priorities from `review-report.md` on branch `codex/comp-harness-offl
 
 ## Active roadmap
 
-The current vNext roadmap is `docs/plans/redscript-vnext-roadmap.md`; the compiler/Minecraft hardening detail roadmap remains `docs/plans/compiler-mc-hardening-roadmap.md`. Follow these documents before starting new implementation slices.
+`ROADMAP.md` owns current priorities and verified progress. `docs/plans/README.md` indexes design contracts and historical evidence. The older vNext and compiler/Minecraft hardening roadmaps are historical baselines, not competing work queues.
 
-Current priority order:
+The first 4.0 slice implements scoreboard-effect-aware read reuse across ordinary helper calls. Keep unknown/raw/context/macro calls and compiler-owned slots conservative, and verify both command shape and observable behavior. See `ROADMAP.md` for its checks and next priorities. The broader 4.0 track covers command quality, language/stdlib usability, project tooling and release/documentation alignment.
+
+Standing verification rules:
 
 1. Harden the core generated Minecraft command logic first: `execute`, `scoreboard`, `function`, `function ... with storage`, `$...` macro bodies, storage/NBT, and load/tick entrypoints.
 2. Use static validators and small golden outputs to pin command/artifact shape.

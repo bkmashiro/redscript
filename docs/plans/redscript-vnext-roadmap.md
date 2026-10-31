@@ -1,6 +1,6 @@
 # RedScript vNext Roadmap
 
-> Source of truth for work after the 2026-06 release-readiness hardening pass. Keep implementation slices bounded, test-backed, and based on `main`.
+> Historical release-hardening baseline. Current priorities and status live in [ROADMAP.md](../../ROADMAP.md). Dated results below apply only to their recorded revisions.
 
 > Architecture continuation: project identity, directory packages, multi-target capability checking, command-sequence output, and general datapack resources are now designed in [`generic-datapack-language-roadmap.md`](generic-datapack-language-roadmap.md). That document is the source of truth for this new product track; this file remains the release/compiler-hardening baseline.
 
