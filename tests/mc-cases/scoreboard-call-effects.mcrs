@@ -22,6 +22,35 @@ fn raw_mutate_cooldown(ticks: int): int {
   return ticks * 3 + 1
 }
 
+@no-inline
+fn scale_cost(value: int, factor: int, offset: int): int {
+  return value * factor + offset
+}
+
+@no-inline
+fn scale_cost_ordered(factor: int, value: int, offset: int): int {
+  return value * factor + offset
+}
+
+fn test_partial_identity() {
+  let value: int = scoreboard_get("#cooldown", "effect_inputs")
+  scoreboard_set("#result", "effect_outputs", scale_cost(value, 1, 0))
+}
+
+fn test_partial_affine() {
+  let value: int = scoreboard_get("#cooldown", "effect_inputs")
+  scoreboard_set("#result", "effect_outputs", scale_cost(value, 3, 7))
+}
+
+fn test_partial_order() {
+  let value: int = scoreboard_get("#cooldown", "effect_inputs")
+  scoreboard_set("#result", "effect_outputs", scale_cost_ordered(3, value, 7))
+}
+
+fn test_i32_product() {
+  scoreboard_set("#result", "effect_outputs", 2147483647 * 2147483647)
+}
+
 fn test_readonly() {
   let before: int = scoreboard_get("#cooldown", "effect_inputs")
   let cost: int = cooldown_cost_chain(before)

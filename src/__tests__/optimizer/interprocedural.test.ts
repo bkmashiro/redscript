@@ -79,7 +79,7 @@ describe('interproceduralConstProp', () => {
     expect(callInstr.args).toHaveLength(0)
   })
 
-  test('does not specialize when args are not all constants', () => {
+  test('does not specialize when no arguments are constants', () => {
     const addFn = mkFn('test:add', ['a', 'b'], [
       mkBlock('entry', [
         { kind: 'add', dst: 'result', a: t('a'), b: t('b') },
@@ -88,7 +88,7 @@ describe('interproceduralConstProp', () => {
 
     const mainFn = mkFn('test:main', [], [
       mkBlock('entry', [
-        { kind: 'call', dst: 't0', fn: 'test:add', args: [t('x'), c(4)] },
+        { kind: 'call', dst: 't0', fn: 'test:add', args: [t('x'), t('y')] },
       ], { kind: 'return', value: t('t0') }),
     ])
 

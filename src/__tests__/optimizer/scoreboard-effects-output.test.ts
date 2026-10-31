@@ -26,10 +26,12 @@ describe('scoreboard effect output through the production compiler', () => {
     expect(new Set(SCORE_EFFECTS_CASES.map(descriptor => descriptor.id)).size).toBe(SCORE_EFFECTS_CASES.length)
     for (const descriptor of SCORE_EFFECTS_CASES) {
       expect(() => resolveCorpusPackPath('/unused-fixture', descriptor.id!)).not.toThrow()
+      const descriptorFiles = descriptor.sourcePath === SCORE_EFFECTS_SOURCE_PATH ? files
+        : compile(fs.readFileSync(descriptor.sourcePath!, 'utf8'), { namespace: descriptor.namespace, filePath: descriptor.sourcePath }).files
       expect(descriptor.entrypoints).toHaveLength(1)
       for (const entry of descriptor.entrypoints ?? []) {
         const path = `data/${descriptor.namespace}/function/${entry.target}.mcfunction`
-        expect(files.some(file => file.path === path)).toBe(true)
+        expect(descriptorFiles.some(file => file.path === path)).toBe(true)
       }
     }
   })

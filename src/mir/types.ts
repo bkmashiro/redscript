@@ -1,10 +1,10 @@
 /**
  * MIR (Mid-level IR) Types — Stage 3 of the RedScript compiler pipeline.
  *
- * MIR is a 3-address, explicit-CFG representation with versioned temporaries.
- * Every instruction produces at most one result into a fresh temporary.
+ * MIR is a 3-address, explicit-CFG representation with function-local temporaries.
+ * Lowering/transforms can redefine a temporary. This is not an SSA guarantee.
  *
- * Spec: docs/compiler-pipeline-redesign.md § "MIR Instruction Set"
+ * Historical design: docs/archive/compiler-pipeline-redesign.md
  */
 
 // A temporary variable — unique within a function, named t0, t1, t2...
@@ -129,6 +129,8 @@ export interface MIRModule {
   inlineFunctions?: Set<string>
   /** Set of fully-qualified function names marked @no-inline. */
   noInlineFunctions?: Set<string>
+  /** Functions whose runtime decorators cannot be bypassed by body cloning. */
+  specializationBarriers?: ReadonlySet<string>
   /**
    * Set of function names that were auto-inlined and whose definitions should
    * still be emitted as separate .mcfunction files (so library callers work).

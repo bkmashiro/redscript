@@ -824,11 +824,15 @@ export function lowerAndOptimizeStages(
       .map(fn => fn.name),
   )
   const reachableLibraryFns = findReachableLibraryFunctions(mir, namespace, incomingLibraryFilePaths)
+  const safeHints = new Set(['inline', 'no-inline', 'deprecated'])
+  const runtimeBoundaries = new Set(hir.functions.filter(fn =>
+    (fn.decorators ?? []).some(decorator => !safeHints.has(decorator.name))).map(fn => fn.name))
+  if (runtimeBoundaries.size > 0) mir.specializationBarriers = runtimeBoundaries
   if (inlineFunctions.size > 0) {
-    mir.inlineFunctions = new Set(inlineFunctions)
+    mir.inlineFunctions = new Set([...inlineFunctions].filter(name => !runtimeBoundaries.has(name)))
   }
-  if (noInlineFunctions.size > 0) {
-    mir.noInlineFunctions = new Set(noInlineFunctions)
+  if (noInlineFunctions.size > 0 || runtimeBoundaries.size > 0) {
+    mir.noInlineFunctions = new Set([...noInlineFunctions, ...runtimeBoundaries])
   }
 
   const mirOpt = optimizeModule(mir)

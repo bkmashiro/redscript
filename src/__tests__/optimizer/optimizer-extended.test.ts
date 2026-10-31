@@ -426,7 +426,7 @@ describe('interproceduralConstProp — uncovered branches', () => {
     expect(call.fn).toBe('test:fib')
   })
 
-  test('rewriteCallSites: call with non-all-const args is not rewritten', () => {
+  test('partially specializes mixed arguments while preserving the dynamic operand', () => {
     const addFn = mirFn('test:add', ['a', 'b'], [
       mirBlock('entry', [
         { kind: 'add', dst: 'r', a: t('a'), b: t('b') },
@@ -445,8 +445,11 @@ describe('interproceduralConstProp — uncovered branches', () => {
 
     const main = result.functions.find(f => f.name === 'test:main')!
     const call = main.blocks[0].instrs.find(i => i.kind === 'call') as Extract<MIRInstr, { kind: 'call' }>
-    // Should remain as 'test:add' (not rewritten)
-    expect(call.fn).toBe('test:add')
+    expect(call.fn).toBe('test:add__partial_x_4')
+    expect(call.args).toEqual([t('x')])
+    const specialized = result.functions.find(f => f.name === call.fn)!
+    expect(specialized.params.map(param => param.name)).toEqual(['a'])
+    expect(specialized.blocks[0].instrs).toContainEqual({ kind: 'add', dst: 'r', a: t('a'), b: c(4) })
   })
 
   test('callee with multiple blocks is not specialized', () => {

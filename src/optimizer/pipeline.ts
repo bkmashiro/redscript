@@ -78,6 +78,14 @@ export function optimizeModule(mod: MIRModule, passes?: Pass[]): MIRModule {
     ...inlined,
     functions: inlined.functions.map(fn => optimizeFunction(fn, modulePasses)),
   }
-  // Module-level pass: interprocedural constant propagation
-  return interproceduralConstProp(perFnOptimized)
+  // Specialization exposes identities and dead values after the first fixpoint.
+  // Reuse the ordinary passes only for new clones, without rerunning inlining or
+  // building an independent optimization path. The original call summaries stay
+  // conservative for newly generated call targets.
+  const specialized = interproceduralConstProp(perFnOptimized)
+  const originalNames = new Set(perFnOptimized.functions.map(fn => fn.name))
+  return {
+    ...specialized,
+    functions: specialized.functions.map(fn => originalNames.has(fn.name) ? fn : optimizeFunction(fn, modulePasses)),
+  }
 }
