@@ -140,6 +140,20 @@ function samePath(left: string, right: string): boolean {
   return path.resolve(left) === path.resolve(right)
 }
 
+async function waitForExit(exited: Promise<number | null>, timeoutMs: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      exited.then(code => ({ kind: 'exit' as const, code })),
+      new Promise<{ kind: 'timeout' }>(resolve => {
+        timer = setTimeout(() => resolve({ kind: 'timeout' }), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
 export class ManagedPaperServer {
   private child?: ChildProcessWithoutNullStreams
   private output = ''
@@ -217,22 +231,13 @@ export class ManagedPaperServer {
     }
     const exited = new Promise<number | null>(resolve => child.once('exit', code => resolve(code)))
     child.stdin.write('stop\n')
-    const result = await Promise.race([
-      exited.then(code => ({ kind: 'exit' as const, code })),
-      new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 60_000)),
-    ])
+    const result = await waitForExit(exited, 60_000)
     if (result.kind === 'timeout') {
       child.kill('SIGTERM')
-      const terminated = await Promise.race([
-        exited.then(code => ({ kind: 'exit' as const, code })),
-        new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 10_000)),
-      ])
+      const terminated = await waitForExit(exited, 10_000)
       if (terminated.kind === 'timeout') {
         child.kill('SIGKILL')
-        const killed = await Promise.race([
-          exited.then(code => ({ kind: 'exit' as const, code })),
-          new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 10_000)),
-        ])
+        const killed = await waitForExit(exited, 10_000)
         if (killed.kind === 'timeout') {
           throw new Error('Paper did not terminate after SIGTERM and SIGKILL')
         }

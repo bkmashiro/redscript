@@ -1,6 +1,9 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
+import childProcess = require('child_process')
+import { EventEmitter } from 'events'
+import { describe, it, expect, jest } from '@jest/globals'
 
 import { MCTestClient } from '../mc-test/client'
 import {
@@ -35,6 +38,50 @@ function makeTemplate(): Fixture {
 }
 
 describe('managed Paper extraction', () => {
+  it.each(['graceful', 'SIGTERM', 'SIGKILL'])('cancels the stop deadline after %s exit', async mode => {
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null,
+      signalCode: null,
+      pid: 123,
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      stdin: { write: (): boolean => {
+        if (mode === 'graceful') child.emit('exit', 0)
+        return true
+      } },
+      kill: jest.fn((signal: NodeJS.Signals): boolean => {
+        if (signal === mode) child.emit('exit', null)
+        return true
+      }),
+    })
+    const spawn = jest.spyOn(childProcess, 'spawn')
+      .mockReturnValue(child as unknown as childProcess.ChildProcessWithoutNullStreams)
+    const client = new MCTestClient('127.0.0.1', 25561)
+    jest.spyOn(client, 'status').mockResolvedValue({
+      online: true, tps_1m: 20, tps_5m: 20, tps_15m: 20,
+      players: 0, playerNames: [], worlds: ['world'], version: 'test',
+    })
+    const managed = new ManagedPaperServer('/unused-disposable-fixture', '/fake-java', client)
+    jest.useFakeTimers()
+    try {
+      await managed.start()
+      const stopping = managed.stop()
+      if (mode === 'graceful') {
+        await stopping
+        expect(child.kill).not.toHaveBeenCalled()
+      } else {
+        const failure = expect(stopping).rejects.toThrow('Paper did not stop gracefully within 60 seconds')
+        await jest.advanceTimersByTimeAsync(mode === 'SIGTERM' ? 60000 : 70000)
+        await failure
+        expect(child.kill).toHaveBeenCalledWith(mode)
+      }
+      expect(jest.getTimerCount()).toBe(0)
+    } finally {
+      spawn.mockRestore()
+      jest.useRealTimers()
+    }
+  })
+
   it('keeps deterministic server properties stable while exposing the configured port', () => {
     expect(createDeterministicServerProperties(25570)).toContain('server-port=25570\n')
     expect(createDeterministicServerProperties(25570)).toContain('generator-settings={"biome":"minecraft:the_void","layers":[{"block":"minecraft:air","height":1}],"structures":{"structures":{}}}\n')
