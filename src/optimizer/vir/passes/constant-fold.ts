@@ -27,15 +27,15 @@ function foldBinary(operation: VIROperation, left: number, right: number): numbe
 
   switch (operation.kind) {
     case 'arith.add':
-      return left + right
+      return (left + right) | 0
     case 'arith.sub':
-      return left - right
+      return (left - right) | 0
     case 'arith.mul':
-      return left * right
+      return Math.imul(left, right)
     case 'arith.div':
-      return Math.trunc(left / right)
+      return Math.trunc(left / right) | 0
     case 'arith.mod':
-      return left % right
+      return (left % right) | 0
     case 'arith.min':
       return Math.min(left, right)
     case 'arith.max':

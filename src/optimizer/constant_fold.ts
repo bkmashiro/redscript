@@ -25,7 +25,7 @@ function foldBlock(block: MIRBlock): MIRBlock {
   const instrs: MIRInstr[] = []
   for (const instr of block.instrs) {
     const folded = tryFold(instr)
-    instrs.push(folded ?? instr)
+    instrs.push(folded && instr.sourceLoc ? { ...folded, sourceLoc: instr.sourceLoc } : folded ?? instr)
   }
   return { ...block, instrs }
 }
@@ -46,7 +46,7 @@ function tryFold(instr: MIRInstr): MIRInstr | null {
       break
     case 'mul':
       if (isConst(instr.a) && isConst(instr.b))
-        return { kind: 'const', dst: instr.dst, value: int32(instr.a.value * instr.b.value) }
+        return { kind: 'const', dst: instr.dst, value: Math.imul(instr.a.value, instr.b.value) }
       break
     case 'div':
       if (isConst(instr.a) && isConst(instr.b) && instr.b.value !== 0)
