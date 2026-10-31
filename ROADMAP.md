@@ -4,10 +4,10 @@ Updated: 2026-11-01. This file owns current priorities and implementation status
 Design contracts and historical validation records are indexed in
 [docs/plans/README.md](docs/plans/README.md).
 
-Execution pointer: A3 bounded partial constant specialization and correctness
-calibration. A2 now reports the production IR and emitted commands. Evaluate existing VIR only
-on a bounded example, without changing the default compiler pipeline. Continue
-through verified slices without requiring confirmation at each checkpoint.
+Execution pointer: resolve the integer-rounding and throttle API contracts in
+[the 4.0 contract review](docs/plans/integer-and-runtime-contracts.md). Reporting,
+bounded partial specialization, numeric wrap fixes and the VIR region experiment
+are implemented. Do not publish while the documented live contract remains red.
 
 ## Goals and constraints
 
@@ -75,7 +75,18 @@ could not be optimized. Separate load and tick work. Dynamic execution estimates
 must state loop bounds/entity-count assumptions and retain an unknown result.
 Do not label static line reductions as measured runtime improvements.
 
-### A3. Stronger call and value optimization — planned
+### A3. Stronger call and value optimization — partial specialization complete
+
+Ordinary single-block helpers can bind some constant parameters while retaining
+dynamic arguments. Generated bodies receive the existing cleanup passes.
+Code-growth guards are engineering choices in `SPECIALIZATION_LIMITS`: 8 clones
+per origin, 64 per module, 64 body instructions, 10 rounds, and a 240-character
+generated-name cap. No new compiler framework was introduced.
+
+New partial specializations reject unknown/raw/context/storage/macro, recursive,
+compiler-register, runtime-decorator and unresolved division/remainder boundaries. Parameter
+redefinitions, generated-name collisions and transitive ABI dependencies are
+covered. Runtime-decorated functions are protected from inlining/body cloning.
 
 Use A1/A2 evidence to choose among partial-constant specialization, a cleanup
 round after specialization, call-site-aware inlining, copy/return-slot removal
@@ -119,11 +130,16 @@ small composable APIs to hidden copies or broad chainable collection helpers.
 - [ ] Calibrate bounded scoreboard interpreters against Paper for missing scores,
       signed integer edges, negative division/modulo and command failure.
       Unsupported behavior must remain unsupported, not silently equivalent.
+      Eleven native arithmetic probes are now pinned. Division/remainder policy
+      is unresolved, so the existing interpreter is still not a complete oracle.
 - [ ] Make managed core correctness runs reusable without ad-hoc scripts; retain
       strict online mode, version checks, disposable roots and failure cleanup.
       A1 now has its own managed, strict correctness command (see below).
 - [x] Cancel managed Paper shutdown timers after exit, including escalation
       paths, so successful correctness runs do not wait on a stale deadline.
+- [x] Add a serial offline correctness command that preserves project ignores
+      while excluding benchmark/performance files. Explicit core-offline mode
+      no longer polls for a server; strict-online/offline conflict fails closed.
 - [ ] Layer checks: focused pass tests → output/equivalence tests → affected live
       cases → broader release checks. Do not run the whole live corpus per edit.
 - [ ] Default the harness command API to loopback; require explicit remote setup.
@@ -143,9 +159,10 @@ small composable APIs to hidden copies or broad chainable collection helpers.
 
 ## Delivery order
 
-A1 is complete. Next use A2 plus a B1 example to select the next
-optimization/API slice. Maintain
-D alongside implementation so documentation follows tested behavior. Start the
+After the contract decisions, fix folding/lowering/oracles and the selected
+cooldown/dispatch API with live regressions. Then continue B1 stdlib examples and
+expand A2 explanations. Keep VIR experimental: the bounded comparison below does
+not justify a new default path. Maintain D alongside implementation and leave
 larger project-tooling work in C as separate verified changes.
 
 Record completed slices and their actual checks here. Detailed implementation
@@ -186,3 +203,32 @@ The command owns a disposable server, requires free localhost ports 25561/25566,
 fails rather than skipping when prerequisites are missing, and cleans up in the
 test teardown. `TMPDIR` controls where the disposable root is created. These
 checks do not replace the full release build, full corpus or Paper 26.2 gates.
+
+### 2026-11-01: reports, specialization and target calibration
+
+- Production stage reports and the real CLI snapshot path were exercised.
+  Reports leave generated files unchanged and keep dynamic cost unknown.
+- Partial-specialization fixture paths (entry plus its single straight-line
+  callee) change **15 → 7** for identity configuration and **15 → 12** for affine
+  and reordered-argument configurations. The fixture pack grows **99 → 109**
+  commands because original externally callable helpers are retained. These are
+  static counts with only specialization disabled in the comparison baseline.
+- MIR large multiplication now uses exact i32 multiplication rather than a
+  rounded JS product. VIR add/subtract/multiply wrap to i32. Folding preserves
+  source locations. BigInt reference checks and native Paper probes cover edges.
+- The [VIR region spike](spikes/001-vir-region/README.md) found **8 → 7** and
+  **2 → 2** after ABI copies. Whole-module ordinary calls are unsupported. No
+  default VIR integration or external compiler dependency was added.
+- Final `npm run test:unit:correctness`: **5738 passed, 45 skipped**, 336 passing
+  suites. Offline core cases report `[SKIP]` and are not live qualification.
+  The script preserves unit project exclusions and excludes performance files.
+- Final managed Paper gate: **31 passed, 2 failed**, with no skipped cases.
+  The two failures pin the pre-existing documented/direct-call throttle mismatch
+  under both conservative and effect-aware output. Do not call this gate green.
+- Division/remainder rounding is independently inconsistent between native
+  operations and current folding. It remains an owner decision, not a verified
+  optimization. See the [contract review](docs/plans/integer-and-runtime-contracts.md).
+
+No benchmark/load test, package publication or release was performed. The full
+release build/package-consumer gates remain pending. Disposable servers and roots
+were cleaned up even on failed live assertions.

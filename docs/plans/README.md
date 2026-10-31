@@ -6,6 +6,8 @@ their old priority lists and completed checkboxes do not supersede that queue.
 
 ## Current design references
 
+- [4.0 integer/runtime contract decisions](integer-and-runtime-contracts.md):
+  native rounding mismatch and the failing documented throttle regression.
 - [Project/package/target architecture](project-package-target-compiler-architecture.md)
   and [implemented architecture track](generic-datapack-language-roadmap.md).
 - [Event runtime boundary](event-runtime-boundary.md).
@@ -16,6 +18,9 @@ their old priority lists and completed checkboxes do not supersede that queue.
 
 ## Existing optimization and release evidence
 
+- [Production optimization inspection](../optimization.md).
+- [Isolated VIR region comparison](../../spikes/001-vir-region/README.md):
+  static comparisons include calling-convention copies; no default integration.
 - [Typed optimizer opportunities](redscript-typed-optimizer-opportunity-report.md):
   bounded offline/static evidence and experimental rollout limits.
 - [Arithmetic exploration](arithmetic-optimization-exploration.md).

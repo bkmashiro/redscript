@@ -17,7 +17,7 @@ RedScript (`redscript-mc`) is a TypeScript compiler/toolchain for a typed high-l
 
 ```bash
 npm run build                     # TypeScript build + postbuild shims/runtime assets (no VSCode package)
-MC_OFFLINE=true npm test -- --runInBand  # Offline suite; skips are not live MC evidence
+npm run test:unit:correctness      # Serial offline, no performance files; skips are not live proof
 npm test -- -t "name"             # Run tests matching a name
 npm test -- path/to/test.ts       # Run one Jest test file
 npm run validate-mc               # Minecraft command syntax validation tests
@@ -83,6 +83,13 @@ Follow the priorities from `review-report.md` on branch `codex/comp-harness-offl
 `ROADMAP.md` owns current priorities and verified progress. `docs/plans/README.md` indexes design contracts and historical evidence. The older vNext and compiler/Minecraft hardening roadmaps are historical baselines, not competing work queues.
 
 The first 4.0 slice implements scoreboard-effect-aware read reuse across ordinary helper calls. Keep unknown/raw/context/macro calls and compiler-owned slots conservative, and verify both command shape and observable behavior. See `ROADMAP.md` for its checks and next priorities. The broader 4.0 track covers command quality, language/stdlib usability, project tooling and release/documentation alignment.
+
+Production stage reports, bounded partial specialization and i32 wrap fixes are
+implemented. The live optimizer gate intentionally exposes a documented throttle
+mismatch (31 pass, 2 fail). Integer division/remainder policy is also unresolved.
+Read `docs/plans/integer-and-runtime-contracts.md` before changing those semantics
+or publishing 4.0. Do not weaken the regressions or treat offline unit success as
+release qualification. VIR remains experimental after the bounded region spike.
 
 Standing verification rules:
 

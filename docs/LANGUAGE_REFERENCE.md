@@ -637,6 +637,13 @@ The compiler generates a `__watch_<fn>` dispatcher registered in `tick.json`. Ea
 
 Rate-limits a function so that it runs at most once every `N` ticks, regardless of how often it is called. Useful on functions registered to high-frequency events.
 
+**Known contract issue:** Current generated code registers a periodic tick
+dispatcher, while direct source calls bypass that dispatcher. The ordinary-call
+rate-limit promise above is not currently satisfied. Use `@tick(rate=N)` for
+explicit periodic work. The cooldown/dispatch contract is a
+[4.0 release decision](./plans/integer-and-runtime-contracts.md), with a failing
+live regression retained until the selected behavior is implemented.
+
 ```rs
 @throttle(ticks=20)
 fn on_player_move() {

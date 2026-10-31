@@ -65,3 +65,38 @@ MC_OFFLINE=false npm run test:mc-score-effects:live
 Use Java 21 and a Paper 1.21.4 offline template as documented in the roadmap. This
 command runs functional checks, not performance benchmarks. Full release builds,
 other runtime versions and unrelated corpus cases are separate gates.
+
+## Partial specialization and size trade-offs
+
+Single-block ordinary helpers can retain dynamic arguments while binding constant
+ones. Their generated bodies receive the same cleanup passes. For the scoring
+fixture, the entry plus its single callee changes 15 → 7 commands for `(x, 1, 0)`
+and 15 → 12 for `(x, 3, 7)`. The whole fixture grows 99 → 109 commands because
+original user functions remain externally callable.
+
+`SPECIALIZATION_LIMITS` in `src/optimizer/interprocedural.ts` bounds clones and
+body/name size. These are engineering guards, not Minecraft standards or tuned
+optima. Unknown/raw/context/storage/macro, recursive, compiler-slot and general
+selector boundaries restrict new partial specialization. Division/remainder
+boundaries propagate through calls until the language rounding policy is settled.
+Runtime-decorated functions are protected from body cloning and inlining.
+
+## Correctness commands and open contracts
+
+```sh
+npm run test:unit:correctness
+MC_OFFLINE=false npm run test:mc-score-effects:live
+```
+
+The offline command preserves Jest's unit-project exclusions, adds a no-performance
+filter, and runs serially. Offline core cases report `[SKIP]`, not live proof.
+Strict-online plus forced-offline settings fail immediately rather than waiting
+for a server. The managed live gate currently has **31 passing and 2 failing**
+checks: the failures pin the documented throttle contract, not a scoreboard-read
+regression. Integer division/remainder also has a confirmed fold/runtime policy
+mismatch. See [the contract review](plans/integer-and-runtime-contracts.md).
+
+The [VIR region spike](../spikes/001-vir-region/README.md) is a separate bounded
+experiment. Including production ABI copies leaves gains of 8 → 7 and 2 → 2 on
+two arithmetic regions, while whole-module calls are unsupported. It does not
+enable a second production compilation path.

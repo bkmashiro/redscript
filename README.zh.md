@@ -217,6 +217,7 @@ import ecs;         // 实体组件系统
 - [更新日志](./CHANGELOG.md)
 - [贡献指南](./CONTRIBUTING.md)
 - [当前路线图](./ROADMAP.md)
+- [优化报告与验证流程](./docs/optimization.md)
 - [设计与验证记录索引](./docs/plans/README.md)
 
 ---
