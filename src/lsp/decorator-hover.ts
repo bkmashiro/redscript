@@ -58,8 +58,8 @@ const DECORATOR_DOCS: Record<string, string> = {
   throttle: [
     '**@throttle**',
     '',
-    'Rate-limits function execution.',
-    '`@throttle(ticks=N)` limits how often this function runs.',
+    '`@throttle(ticks=N)` was removed in 4.0.',
+    'Use `@tick(rate=N)` for periodic work. Use explicit caller-owned `cooldown` deadlines for call suppression.',
     '',
     DECORATOR_HOVER_DISCLAIMER,
   ].join('\n'),

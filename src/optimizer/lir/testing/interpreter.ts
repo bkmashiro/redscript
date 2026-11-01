@@ -1,4 +1,5 @@
 import { SCORE_INT_MAX, SCORE_INT_MIN, type LIRFunction, type LIRInstr, type Slot } from '../../../lir/types'
+import { scoreboardFloorDiv, scoreboardFloorMod } from '../../../types/scoreboard-int'
 
 export type ScoreboardState = Map<string, number>
 
@@ -69,14 +70,14 @@ function runInstr(instr: LIRInstr, state: ScoreboardState): void {
     case 'score_div': {
       const rhs = readSlot(state, instr.src)
       if (rhs === 0) throw new Error('score_div by zero is outside the supported interpreter subset')
-      writeSlot(state, instr.dst, toScoreInt(Math.trunc(readSlot(state, instr.dst) / rhs)))
+      writeSlot(state, instr.dst, scoreboardFloorDiv(readSlot(state, instr.dst), rhs))
       return
     }
 
     case 'score_mod': {
       const rhs = readSlot(state, instr.src)
       if (rhs === 0) throw new Error('score_mod by zero is outside the supported interpreter subset')
-      writeSlot(state, instr.dst, toScoreInt(readSlot(state, instr.dst) % rhs))
+      writeSlot(state, instr.dst, scoreboardFloorMod(readSlot(state, instr.dst), rhs))
       return
     }
 

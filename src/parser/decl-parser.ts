@@ -515,7 +515,7 @@ export class DeclParser extends StmtParser {
 
     for (const part of argsStr.split(',')) {
       const [key, val] = part.split('=').map(s => s.trim())
-      if (key === 'rate') args.rate = parseInt(val, 10)
+      if (key === 'rate') args.rate = Number(val)
       else if (key === 'ticks') args.ticks = parseInt(val, 10)
       else if (key === 'batch') args.batch = parseInt(val, 10)
       else if (key === 'onDone') args.onDone = val.replace(/^["']|["']$/g, '')

@@ -3,6 +3,8 @@
  * Minecraft scoreboards use 32-bit signed integers (Java int).
  */
 
+import { scoreboardFloorDiv } from '../types/scoreboard-int';
+
 export const INT32_MAX = 2147483647;
 export const INT32_MIN = -2147483648;
 
@@ -28,7 +30,7 @@ export function fixedMul(a: number, b: number, scale: number): number {
   const product = a * b;
   if (isOverflow(product)) return Infinity;
   const truncated = i32(product);
-  const divided = truncated / scale;
+  const divided = Math.floor(truncated / scale);
   if (isOverflow(divided)) return Infinity;
   return i32(divided);
 }
@@ -65,5 +67,5 @@ export function safeMul(a: number, b: number): number {
  */
 export function safeDiv(a: number, b: number): number {
   if (b === 0) return Infinity;
-  return i32(a / b);
+  return scoreboardFloorDiv(a, b);
 }

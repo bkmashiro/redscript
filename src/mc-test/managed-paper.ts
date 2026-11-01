@@ -18,6 +18,14 @@ export class ManagedPaperPrerequisiteError extends Error {
 }
 
 export function findHarnessPlugin(templateDir: string): string {
+  const override = process.env.MC_HARNESS_PLUGIN
+  if (override) {
+    const plugin = path.resolve(override)
+    if (!plugin.endsWith('.jar') || !fs.existsSync(plugin) || !fs.statSync(plugin).isFile()) {
+      throw new ManagedPaperPrerequisiteError(`MC_HARNESS_PLUGIN must point to an existing jar: '${plugin}'`)
+    }
+    return plugin
+  }
   const pluginsDir = path.join(templateDir, 'plugins')
   if (!fs.existsSync(pluginsDir)) {
     throw new ManagedPaperPrerequisiteError(`missing Paper plugin directory '${pluginsDir}'`)

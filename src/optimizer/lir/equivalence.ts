@@ -1,5 +1,6 @@
 import type { LIRFunction, LIRInstr, Slot } from '../../lir/types'
 import { slotKey } from './analysis'
+import { scoreboardFloorDiv, scoreboardFloorMod } from '../../types/scoreboard-int'
 
 export type BoundedLirEquivalenceSample = Record<string, number>
 
@@ -33,7 +34,9 @@ export interface BoundedLirEquivalenceResult {
 type ScoreState = Map<string, number>
 
 function readSlot(state: ScoreState, slot: Slot): number {
-  return state.get(slotKey(slot)) ?? 0
+  const value = state.get(slotKey(slot))
+  if (value === undefined) throw new Error(`unsupported uninitialized scoreboard slot ${slot.player} ${slot.obj}`)
+  return value
 }
 
 function writeSlot(state: ScoreState, slot: Slot, value: number): void {
@@ -41,18 +44,8 @@ function writeSlot(state: ScoreState, slot: Slot, value: number): void {
 }
 
 function normalizeScoreboardInt(value: number): number {
-  if (!Number.isFinite(value)) return 0
-  return Math.trunc(value)
-}
-
-function divTowardZero(left: number, right: number): number {
-  if (right === 0) throw new Error('unsupported scoreboard division by zero in bounded equivalence sample')
-  return Math.trunc(left / right)
-}
-
-function modTowardZero(left: number, right: number): number {
-  if (right === 0) throw new Error('unsupported scoreboard modulo by zero in bounded equivalence sample')
-  return left - divTowardZero(left, right) * right
+  if (!Number.isFinite(value)) throw new Error('unsupported non-finite scoreboard value')
+  return value | 0
 }
 
 function cloneSample(sample: BoundedLirEquivalenceSample): ScoreState {
@@ -78,13 +71,13 @@ function executeInstruction(state: ScoreState, instr: LIRInstr): void {
       writeSlot(state, instr.dst, readSlot(state, instr.dst) - readSlot(state, instr.src))
       return
     case 'score_mul':
-      writeSlot(state, instr.dst, readSlot(state, instr.dst) * readSlot(state, instr.src))
+      writeSlot(state, instr.dst, Math.imul(readSlot(state, instr.dst), readSlot(state, instr.src)))
       return
     case 'score_div':
-      writeSlot(state, instr.dst, divTowardZero(readSlot(state, instr.dst), readSlot(state, instr.src)))
+      writeSlot(state, instr.dst, scoreboardFloorDiv(readSlot(state, instr.dst), readSlot(state, instr.src)))
       return
     case 'score_mod':
-      writeSlot(state, instr.dst, modTowardZero(readSlot(state, instr.dst), readSlot(state, instr.src)))
+      writeSlot(state, instr.dst, scoreboardFloorMod(readSlot(state, instr.dst), readSlot(state, instr.src)))
       return
     case 'score_min':
       writeSlot(state, instr.dst, Math.min(readSlot(state, instr.dst), readSlot(state, instr.src)))
@@ -137,8 +130,12 @@ export function checkBoundedLirEquivalence(input: BoundedLirEquivalenceInput): B
     }
 
     for (const slot of observedSlots) {
-      const beforeValue = beforeState.get(slot) ?? 0
-      const afterValue = afterState.get(slot) ?? 0
+      const beforeValue = beforeState.get(slot)
+      const afterValue = afterState.get(slot)
+      if (beforeValue === undefined || afterValue === undefined) {
+        return { name: input.name, status: 'unsupported', samplesChecked: sampleIndex, observedSlots,
+          unsupportedReason: `uninitialized observed scoreboard slot ${slot}` }
+      }
       if (beforeValue !== afterValue) {
         return {
           name: input.name,

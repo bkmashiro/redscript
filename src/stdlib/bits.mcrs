@@ -91,11 +91,11 @@ fn bit_shl(x: int, n: int): int {
     return result;
 }
 
-/// Logical right-shift x by n bits (equivalent to x / 2^n, truncating toward zero).
+/// Arithmetic right-shift x by n bits, using native floor division by 2^n.
 /// @since 1.0.0
 /// @param x  Integer to shift
 /// @param n  Number of bit positions to shift right, range [0, 30]
-/// @returns  x >> n (logical, not arithmetic for positive values)
+/// @returns  x >> n, preserving the sign for negative inputs
 /// @example
 /// let v: int = bit_shr(256, 3)  // result: 32 (256 >> 3)
 fn bit_shr(x: int, n: int): int {

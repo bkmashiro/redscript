@@ -39,8 +39,8 @@ describe('LIR scoreboard interpreter', () => {
       [slotKeyFor('$max')]: SCORE_INT_MIN,
       [slotKeyFor('$min')]: SCORE_INT_MAX,
       [slotKeyFor('$mul')]: Math.imul(50000, 50000),
-      [slotKeyFor('$div')]: -3,
-      [slotKeyFor('$mod')]: -1,
+      [slotKeyFor('$div')]: -4,
+      [slotKeyFor('$mod')]: 1,
     })
   })
 

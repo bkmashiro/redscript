@@ -152,36 +152,32 @@ beforeAll(async () => {
     namespace stdlib_cooldown8_test
 
     fn test_cooldown_start_sets_ticks() {
-      cooldown_start("dash", 6);
-      let ticks: int = scoreboard_get("cooldown_ticks", #rs);
-      scoreboard_set("#cooldown_ticks", #sc8_result, ticks);
+      let deadline: int = cooldown_start(100, 6);
+      scoreboard_set("#cooldown_ticks", #sc8_result, cooldown_remaining(deadline, 100));
     }
 
     fn test_cooldown_ready_after_start() {
-      cooldown_start("dash", 5);
-      let r: int = cooldown_ready("dash");
+      let deadline: int = cooldown_start(100, 5);
+      let r: int = 0;
+      if (cooldown_ready(deadline, 100)) { r = 1; }
       scoreboard_set("#cooldown_ready_start", #sc8_result, r);
     }
 
-    fn test_cooldown_tick_decrements() {
-      cooldown_start("dash", 3);
-      cooldown_tick("dash");
-      let ticks: int = scoreboard_get("cooldown_ticks", #rs);
-      scoreboard_set("#cooldown_after_tick", #sc8_result, ticks);
+    fn test_cooldown_remaining_after_time_advance() {
+      let deadline: int = cooldown_start(100, 3);
+      scoreboard_set("#cooldown_after_tick", #sc8_result, cooldown_remaining(deadline, 101));
     }
 
-    fn test_cooldown_expires_after_tick() {
-      cooldown_start("dash", 1);
-      cooldown_tick("dash");
-      let r: int = cooldown_ready("dash");
+    fn test_cooldown_expires_after_time_advance() {
+      let deadline: int = cooldown_start(100, 1);
+      let r: int = 0;
+      if (cooldown_ready(deadline, 101)) { r = 1; }
       scoreboard_set("#cooldown_expired", #sc8_result, r);
     }
 
     fn test_cooldown_inactive_stays_ready() {
-      scoreboard_set("cooldown_active", #rs, 0);
-      scoreboard_set("cooldown_ticks", #rs, 0);
-      cooldown_tick("dash");
-      let r: int = cooldown_ready("dash");
+      let r: int = 0;
+      if (cooldown_ready(0, 100)) { r = 1; }
       scoreboard_set("#cooldown_inactive", #sc8_result, r);
     }
   `, 'stdlib_cooldown8_test', [COOLDOWN_SRC])
@@ -315,7 +311,7 @@ describe('stdlib coverage 8 — queue', () => {
 })
 
 describe('stdlib coverage 8 — cooldown', () => {
-  test('cooldown_start writes tick count', async () => {
+  test('cooldown_start returns a caller-owned deadline', async () => {
     if (!serverOnline) return
     const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_start_sets_ticks', '#cooldown_ticks')
     expect(r).toBeGreaterThanOrEqual(6)
@@ -329,16 +325,16 @@ describe('stdlib coverage 8 — cooldown', () => {
     expect(r).toBeLessThanOrEqual(0)
   }, 30_000)
 
-  test('cooldown_tick decrements remaining ticks', async () => {
+  test('remaining ticks reflect the caller clock', async () => {
     if (!serverOnline) return
-    const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_tick_decrements', '#cooldown_after_tick')
+    const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_remaining_after_time_advance', '#cooldown_after_tick')
     expect(r).toBeGreaterThanOrEqual(2)
     expect(r).toBeLessThanOrEqual(2)
   }, 30_000)
 
   test('cooldown_ready becomes true after expiry', async () => {
     if (!serverOnline) return
-    const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_expires_after_tick', '#cooldown_expired')
+    const r = await runAndRead('stdlib_cooldown8_test:test_cooldown_expires_after_time_advance', '#cooldown_expired')
     expect(r).toBeGreaterThanOrEqual(1)
     expect(r).toBeLessThanOrEqual(1)
   }, 30_000)

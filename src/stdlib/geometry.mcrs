@@ -20,7 +20,7 @@ module library;
 /// @since 1.0.0
 /// @param a  First coordinate (any unit)
 /// @param b  Second coordinate (any unit)
-/// @returns  (a + b) / 2 (integer truncation)
+/// @returns  (a + b) / 2 (native floor integer division)
 /// @example
 /// let m: int = midpoint(100, 300)  // result: 200
 fn midpoint(a: int, b: int): int {
@@ -147,10 +147,8 @@ fn parabola_land_t(vy0: int): int {
 /// @example
 /// let tile: int = tile_of(250, 100)  // result: 2 (tile index 2)
 fn tile_of(coord: int, tile_size: int): int {
-    if (coord >= 0) {
-        return coord / tile_size;
-    }
-    return (coord - tile_size + 1) / tile_size;
+    // Native integer division already floors, including negative coordinates.
+    return coord / tile_size;
 }
 
 /// Compute the center coordinate of a tile.

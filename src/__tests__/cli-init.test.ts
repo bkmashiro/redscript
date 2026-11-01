@@ -86,6 +86,8 @@ describe('init CLI', () => {
 
     expect(fs.existsSync(path.join(outputDir, 'pack.mcmeta'))).toBe(true)
     expect(loadTag.values).toContain('demo_pack:_root/setup')
-    expect(tickTag.values).toContain('demo_pack:_root/heartbeat')
+    expect(tickTag.values).toContain('demo_pack:__tick_rate__root/heartbeat')
+    expect(tickTag.values).not.toContain('demo_pack:_root/heartbeat')
+    expect(fs.existsSync(path.join(outputDir, 'data/demo_pack/function/__tick_rate__root/heartbeat.mcfunction'))).toBe(true)
   })
 })

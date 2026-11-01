@@ -442,7 +442,6 @@ describe('emit: compile coverage', () => {
 
       @profile
       @benchmark
-      @throttle(ticks=3)
       @retry(max=2)
       @memoize
       fn wrapped(n: int): int { return n; }
@@ -462,7 +461,7 @@ describe('emit: compile coverage', () => {
     expect(metadata.scheduleFunctions).toEqual([{ name: 'scheduled', ticks: 20 }])
     expect(metadata.profiledFunctions).toEqual(['wrapped'])
     expect(metadata.benchmarkFunctions).toEqual(['wrapped'])
-    expect(metadata.throttleFunctions).toEqual([{ name: 'wrapped', ticks: 3 }])
+    expect(metadata.throttleFunctions).toEqual([])
     expect(metadata.retryFunctions).toEqual([{ name: 'wrapped', max: 2 }])
     expect(metadata.memoizeFunctions).toEqual(['wrapped'])
     expect(metadata.eventHandlers.get('PlayerDeath')).toEqual(['metadata_stage_test:death'])
@@ -907,6 +906,7 @@ describe('emit: compile coverage', () => {
       stage: 'runtimeMetadata',
       summary: {
         tickFunctions: ['ticked'],
+        tickRateFunctions: [],
         loadFunctions: [],
         watchFunctions: [],
         inlineFunctions: [],

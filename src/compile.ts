@@ -61,6 +61,12 @@ export function resolveSourceLine(
 
 const IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/
 
+/** Source checkout and installed dist/src share the shipped src/stdlib data. */
+export function getStdlibDir(): string {
+  const candidates = [path.resolve(__dirname, 'stdlib'), path.resolve(__dirname, '..', '..', 'src', 'stdlib')]
+  return candidates.find(dir => fs.existsSync(path.join(dir, 'math.mcrs'))) ?? candidates[0]
+}
+
 /** Returns true if the source file declares `module library;` at its top
  *  (before any non-comment/non-blank lines). */
 function isLibrarySource(source: string): boolean {
@@ -94,7 +100,7 @@ function resolveImportPath(
     // 2. stdlib directory (package root / src / stdlib)
     //    Strip leading 'stdlib/' prefix so `import "stdlib/math"` resolves to
     //    <stdlibDir>/math.mcrs rather than <stdlibDir>/stdlib/math.mcrs.
-    const stdlibDir = path.resolve(__dirname, '..', 'src', 'stdlib')
+    const stdlibDir = getStdlibDir()
     const stdlibCandidate = candidate.replace(/^stdlib\//, '')
     const stdlib = path.resolve(stdlibDir, stdlibCandidate)
     if (fs.existsSync(stdlib)) return stdlib

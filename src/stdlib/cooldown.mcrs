@@ -1,64 +1,44 @@
-// Cooldown helpers.
-//
-// Like timer.mcrs, the `name` parameter is reserved for a future compiler/runtime
-// that can route string literals through user-defined calls. Today this file
-// manages one cooldown slot on the `rs` objective.
+// Explicit, caller-owned cooldown deadlines. No globals and no tick updater.
+// `now` is a shared non-negative, monotonic tick clock in the caller's epoch.
+// Store each returned deadline in your own variable, storage or player score.
+// Reset those deadlines when the clock resets/wraps. A zero deadline is ready.
 
-/// Start (or restart) a cooldown for the given slot.
-/// The cooldown expires after `ticks` game ticks.
-/// @since 1.2.0
-/// @param name Cooldown slot identifier (reserved for future multi-slot support)
-/// @param ticks Duration in game ticks (20 ticks = 1 second)
+/// Create a deadline from a clock value and duration, without owning any state.
+/// Non-positive durations are immediately ready. The deadline saturates at the
+/// signed-i32 maximum rather than overflowing into an already-expired value.
+/// @since 4.0.0
+/// @param now Current tick in the caller's non-negative clock epoch
+/// @param ticks Duration in ticks
+/// @returns Deadline to persist in caller-owned state
 /// @example
-/// cooldown_start("sword", 40); // 2-second cooldown
-fn cooldown_start(name: string, ticks: int) {
-    scoreboard_set("cooldown_ticks", #rs, ticks);
-    scoreboard_set("cooldown_active", #rs, 1);
+/// let sword_ready_at: int = cooldown_start(now, 40);
+fn cooldown_start(now: int, ticks: int) -> int {
+    if (ticks <= 0) {
+        return now;
+    }
+    if (now > 2147483647 - ticks) {
+        return 2147483647;
+    }
+    return now + ticks;
 }
 
-/// Check whether the cooldown has expired (i.e. is ready to fire again).
-/// @since 1.2.0
-/// @param name Cooldown slot identifier (reserved for future multi-slot support)
-/// @returns 1 if the cooldown is ready (inactive or ticks remaining ≤ 0), 0 otherwise
-/// @example
-/// if (cooldown_ready("sword") == 1) { attack(); cooldown_start("sword", 40); }
-fn cooldown_ready(name: string) -> int {
-    let active: int = scoreboard_get("cooldown_active", #rs);
-    let ticks_left: int = scoreboard_get("cooldown_ticks", #rs);
-
-    if (active == 0) {
-        return 1;
-    }
-
-    if (ticks_left <= 0) {
-        return 1;
-    }
-
-    return 0;
+/// Check a caller-owned deadline. A fresh/reset zero deadline is ready.
+/// @since 4.0.0
+/// @param ready_at Persisted deadline for this ability/entity
+/// @param now Current tick in the same clock epoch
+/// @returns true when the deadline has been reached
+fn cooldown_ready(ready_at: int, now: int) -> bool {
+    return now >= ready_at;
 }
 
-/// Advance the cooldown by one tick. Call this every tick from a `@tick` function.
-/// Automatically marks the cooldown inactive when the remaining ticks reach zero.
-/// @since 1.2.0
-/// @param name Cooldown slot identifier (reserved for future multi-slot support)
-/// @example
-/// @tick fn game_tick() { cooldown_tick("sword"); }
-fn cooldown_tick(name: string) {
-    let active: int = scoreboard_get("cooldown_active", #rs);
-    let ticks_left: int = scoreboard_get("cooldown_ticks", #rs);
-
-    if (active == 0) {
-        return;
+/// Remaining ticks for a caller-owned deadline, clamped to zero.
+/// @since 4.0.0
+/// @param ready_at Persisted deadline for this ability/entity
+/// @param now Current tick in the same clock epoch
+/// @returns Zero if ready, otherwise the remaining ticks
+fn cooldown_remaining(ready_at: int, now: int) -> int {
+    if (now >= ready_at) {
+        return 0;
     }
-
-    if (ticks_left > 0) {
-        let next: int = ticks_left - 1;
-        scoreboard_set("cooldown_ticks", #rs, next);
-
-        if (next == 0) {
-            scoreboard_set("cooldown_active", #rs, 0);
-        }
-    } else {
-        scoreboard_set("cooldown_active", #rs, 0);
-    }
+    return ready_at - now;
 }

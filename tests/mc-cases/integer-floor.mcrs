@@ -1,0 +1,17 @@
+import math;
+
+fn test_floor_dynamic() {
+  let a: int = scoreboard_get("#a", "effect_inputs")
+  let b: int = scoreboard_get("#b", "effect_inputs")
+  scoreboard_set("#quotient", "effect_outputs", a / b)
+  scoreboard_set("#remainder", "effect_outputs", a % b)
+  scoreboard_set("#trunc_q", "effect_outputs", div_trunc(a, b))
+  scoreboard_set("#trunc_r", "effect_outputs", mod_trunc(a, b))
+}
+
+fn test_floor_literal() {
+  scoreboard_set("#quotient", "effect_outputs", -7 / 3)
+  scoreboard_set("#remainder", "effect_outputs", -7 % 3)
+  scoreboard_set("#trunc_q", "effect_outputs", div_trunc(-7, 3))
+  scoreboard_set("#trunc_r", "effect_outputs", mod_trunc(-7, 3))
+}

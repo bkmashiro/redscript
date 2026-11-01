@@ -8,6 +8,7 @@
  */
 
 import type { MIRFunction, MIRBlock, MIRInstr, Operand } from '../mir/types'
+import { scoreboardFloorDiv, scoreboardFloorMod } from '../types/scoreboard-int'
 
 /** Wrap a JS number to Java signed int32 (MC scoreboard semantics). */
 function int32(n: number): number {
@@ -50,11 +51,11 @@ function tryFold(instr: MIRInstr): MIRInstr | null {
       break
     case 'div':
       if (isConst(instr.a) && isConst(instr.b) && instr.b.value !== 0)
-        return { kind: 'const', dst: instr.dst, value: int32(Math.trunc(instr.a.value / instr.b.value)) }
+        return { kind: 'const', dst: instr.dst, value: scoreboardFloorDiv(instr.a.value, instr.b.value) }
       break
     case 'mod':
       if (isConst(instr.a) && isConst(instr.b) && instr.b.value !== 0)
-        return { kind: 'const', dst: instr.dst, value: int32(instr.a.value % instr.b.value) }
+        return { kind: 'const', dst: instr.dst, value: scoreboardFloorMod(instr.a.value, instr.b.value) }
       break
     case 'neg':
       if (isConst(instr.src))

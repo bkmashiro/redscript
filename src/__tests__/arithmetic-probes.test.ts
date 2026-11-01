@@ -2377,21 +2377,21 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(residualSummary?.trackAEResidualDiagnostics).toBeDefined()
     expect(residualSummary?.trackAFResidualDiagnostics).toBeDefined()
     // Physical artifact canonicalization removes 20 byte-identical duplicate paths.
-    expect(residualSummary?.trackABResidualDiagnostics?.totalCount).toBe(137)
-    expect(residualSummary?.trackAEResidualDiagnostics?.totalCount).toBe(137)
+    expect(residualSummary?.trackABResidualDiagnostics?.totalCount).toBe(140)
+    expect(residualSummary?.trackAEResidualDiagnostics?.totalCount).toBe(140)
     expect(residualSummary?.trackAFResidualDiagnostics?.totalCount).toBe(
       residualSummary?.trackAEResidualDiagnostics?.byLabel.find(item => item.label === 'insufficient-command-context')?.count ?? 0,
     )
-    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(96)
+    expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(99)
     expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-wider-same-function-window')?.count).toBe(31)
     expect(residualSummary?.trackAEResidualDiagnostics?.topCaseNames.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAEResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.length).toBeGreaterThan(0)
     expect(residualSummary?.trackAGResidualDiagnostics).toBeDefined()
-    expect(residualSummary?.trackAGResidualDiagnostics?.totalCount).toBe(96)
+    expect(residualSummary?.trackAGResidualDiagnostics?.totalCount).toBe(99)
     expect(
       residualSummary?.trackAGResidualDiagnostics?.byLabel.reduce((sum, item) => sum + item.count, 0),
-    ).toBe(96)
+    ).toBe(99)
     expect(residualSummary?.trackAFResidualDiagnostics?.byLabel.find(item => item.label === 'needs-slot-use-def-map')?.count).toBe(
       residualSummary?.trackAGResidualDiagnostics?.byLabel.reduce((sum, item) => sum + item.count, 0) ?? 0,
     )
@@ -2466,8 +2466,8 @@ describe('arithmetic probe benchmark tooling', () => {
     expect(readiness?.requiredGateStatus).toBe('pass')
     expect(readiness?.offlinePackStatus).toBe('pass')
     expect(readiness?.familyReadinessStatus).toBe('pass')
-    expect(readiness?.commandDelta).toBe(-497)
-    expect(readiness?.scoreCopyDelta).toBe(-497)
+    expect(readiness?.commandDelta).toBe(-499)
+    expect(readiness?.scoreCopyDelta).toBe(-499)
     expect(readiness?.commandRegressedCount).toBe(0)
     expect(readiness?.scoreCopyRegressedCount).toBe(0)
     expect(readiness?.notes).toMatch(/does not authorize production default enablement/)

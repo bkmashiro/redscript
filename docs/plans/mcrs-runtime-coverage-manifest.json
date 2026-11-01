@@ -4,8 +4,8 @@
   "ordering": "bytewise",
   "inventory": {
     "modules": 50,
-    "totalFunctionsAndMethods": 717,
-    "publicRuntimeRequired": 659,
+    "totalFunctionsAndMethods": 719,
+    "publicRuntimeRequired": 661,
     "internalFunctionsAndMethods": 58,
     "exportedConstants": 401
   },
@@ -129,8 +129,8 @@
     "stdlib.combat.function.take_damage",
     "stdlib.combat.function.weapon_damage",
     "stdlib.cooldown.function.cooldown_ready",
+    "stdlib.cooldown.function.cooldown_remaining",
     "stdlib.cooldown.function.cooldown_start",
-    "stdlib.cooldown.function.cooldown_tick",
     "stdlib.dialog.function.dialog_actionbar",
     "stdlib.dialog.function.dialog_broadcast",
     "stdlib.dialog.function.dialog_say",
@@ -313,6 +313,7 @@
     "stdlib.math.function.cubic_disc_fx",
     "stdlib.math.function.cubic_newton",
     "stdlib.math.function.div_fx1000",
+    "stdlib.math.function.div_trunc",
     "stdlib.math.function.divfix",
     "stdlib.math.function.exp_fx",
     "stdlib.math.function.factorial",
@@ -330,6 +331,7 @@
     "stdlib.math.function.map",
     "stdlib.math.function.max",
     "stdlib.math.function.min",
+    "stdlib.math.function.mod_trunc",
     "stdlib.math.function.mul_fx1000",
     "stdlib.math.function.mulfix",
     "stdlib.math.function.newton_step",
@@ -1963,8 +1965,72 @@
         "stable-1.21.4",
         "paper-26.2"
       ]
+    },
+    "stdlib.cooldown.function.cooldown_start": {
+      "caseIds": [
+        "score-effects-cooldown-expiry",
+        "score-effects-independent-cooldowns",
+        "score-effects-runtime-boundary"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.cooldown.function.cooldown_ready": {
+      "caseIds": [
+        "score-effects-cooldown-expiry",
+        "score-effects-independent-cooldowns",
+        "score-effects-runtime-boundary"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.cooldown.function.cooldown_remaining": {
+      "caseIds": [
+        "score-effects-independent-cooldowns"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.geometry.function.tile_of": {
+      "caseIds": [
+        "geometry-floor-minimum-integer",
+        "geometry-floor-negative-boundary",
+        "geometry-floor-negative-one",
+        "geometry-floor-negative-past-boundary",
+        "geometry-floor-positive"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.math.function.div_trunc": {
+      "caseIds": [
+        "score-floor-both-negative",
+        "score-floor-literal",
+        "score-floor-negative-dividend",
+        "score-floor-negative-divisor",
+        "score-floor-overflow"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
+    },
+    "stdlib.math.function.mod_trunc": {
+      "caseIds": [
+        "score-floor-both-negative",
+        "score-floor-literal",
+        "score-floor-negative-dividend",
+        "score-floor-negative-divisor",
+        "score-floor-overflow"
+      ],
+      "channels": [
+        "stable-1.21.4"
+      ]
     }
   },
-  "expectedMissingRuntimeCount": 567,
+  "expectedMissingRuntimeCount": 563,
   "expectedMappedRuntimeCount": 92
 }

@@ -74,8 +74,8 @@ describe('bounded partial constant specialization', () => {
     ['raw ABI access', { kind: 'call', fn: '__raw:say $p1', args: [], dst: null }],
     ['unknown calls', { kind: 'call', fn: 'external', args: [], dst: null }],
     ['compiler-owned score reads', { kind: 'score_read', dst: 'abi', player: '$p1', obj: '__partial' }],
-    ['division before rounding policy is resolved', { kind: 'div', dst: 'result', a: t('a'), b: t('b') }],
-    ['modulo before rounding policy is resolved', { kind: 'mod', dst: 'result', a: t('a'), b: t('b') }],
+    ['division pending broader failure modeling', { kind: 'div', dst: 'result', a: t('a'), b: t('b') }],
+    ['modulo pending broader failure modeling', { kind: 'mod', dst: 'result', a: t('a'), b: t('b') }],
   ]
   test.each(boundaries)('leaves partial calls unchanged around %s', (_name, instruction) => {
     const helper = fn('add', ['a', 'b'], [instruction])

@@ -19,17 +19,17 @@ describe('stdlib/cooldown.mcrs', () => {
   })
 
   test('cooldown_start is emitted', () => {
-    const r = compileWith(`@keep fn t() { cooldown_start("skill", 20); }`)
+    const r = compileWith(`@keep fn t() { cooldown_start(100, 20); }`)
     expect(r.files.some(f => f.path.includes('cooldown_start'))).toBe(true)
   })
 
   test('cooldown_ready is emitted', () => {
-    const r = compileWith(`@keep fn t(): int { return cooldown_ready("skill"); }`)
+    const r = compileWith(`@keep fn t(): bool { return cooldown_ready(120, 100); }`)
     expect(r.files.some(f => f.path.includes('cooldown_ready'))).toBe(true)
   })
 
-  test('cooldown_tick is emitted', () => {
-    const r = compileWith(`@keep fn t() { cooldown_tick("skill"); }`)
-    expect(r.files.some(f => f.path.includes('cooldown_tick'))).toBe(true)
+  test('cooldown_remaining is emitted', () => {
+    const r = compileWith(`@keep fn t(): int { return cooldown_remaining(120, 100); }`)
+    expect(r.files.some(f => f.path.includes('cooldown_remaining'))).toBe(true)
   })
 })

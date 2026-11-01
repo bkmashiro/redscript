@@ -122,7 +122,7 @@ fn list_sum4(a: int, b: int, c: int, d: int): int { return a + b + c + d; }
 /// @returns a + b + c
 fn list_sum3(a: int, b: int, c: int): int { return a + b + c; }
 
-/// Integer average of three values (truncates toward zero).
+/// Integer average of three values (native floor division).
 /// @since 1.0.0
 /// @param a Value 1
 /// @param b Value 2
@@ -130,7 +130,7 @@ fn list_sum3(a: int, b: int, c: int): int { return a + b + c; }
 /// @returns (a + b + c) / 3
 fn avg3(a: int, b: int, c: int): int { return (a + b + c) / 3; }
 
-/// Integer average of five values (truncates toward zero).
+/// Integer average of five values (native floor division).
 /// @since 1.0.0
 /// @param a Value 1
 /// @param b Value 2

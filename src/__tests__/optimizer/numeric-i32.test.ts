@@ -2,6 +2,9 @@ import { describe, expect, test } from '@jest/globals'
 import { constantFold } from '../../optimizer/constant_fold'
 import { constantFoldPass } from '../../optimizer/vir/passes/constant-fold'
 import { VIRModuleBuilder } from '../../optimizer/vir/builder'
+import { checkBoundedLirEquivalence } from '../../optimizer/lir/equivalence'
+import { makeScoreboardState, runLIRFunction, readSlot } from '../../optimizer/lir/testing/interpreter'
+import { safeDiv } from '../../tuner/simulator'
 import type { MIRFunction, MIRInstr } from '../../mir/types'
 
 const products: Array<[number, number]> = [
@@ -17,7 +20,7 @@ function foldMir(instr: MIRInstr) {
   return constantFold(fn).blocks[0].instrs[0]
 }
 
-function foldVir(kind: 'arith.add' | 'arith.sub' | 'arith.mul', a: number, b: number) {
+function foldVir(kind: 'arith.add' | 'arith.sub' | 'arith.mul' | 'arith.div' | 'arith.mod', a: number, b: number) {
   const builder = new VIRModuleBuilder('numeric_probe', '__numeric_probe')
   const type = builder.internType('i32')
   const loc = builder.addUnknownLoc()
@@ -31,6 +34,39 @@ function foldVir(kind: 'arith.add' | 'arith.sub' | 'arith.mul', a: number, b: nu
 }
 
 describe('signed i32 constant arithmetic', () => {
+  test('does not equate an uninitialized score with an initialized zero', () => {
+    const slot = { player: '$out', obj: '__floor' }
+    expect(checkBoundedLirEquivalence({
+      name: 'missing', observedSlots: [slot], samples: [{}],
+      before: { name: 'before', isMacro: false, macroParams: [], instructions: [{ kind: 'score_copy', dst: slot, src: { player: '$missing', obj: '__floor' } }] },
+      after: { name: 'after', isMacro: false, macroParams: [], instructions: [{ kind: 'score_set', dst: slot, value: 0 }] },
+    }).status).toBe('unsupported')
+  })
+  const division: Array<[number, number, number, number]> = [
+    [-7, 3, -3, 2], [7, -3, -3, -2], [-7, -3, 2, -1],
+    [7, 3, 2, 1], [-2147483648, -1, -2147483648, 0], [0, -3, 0, 0],
+  ]
+  test.each(division)('uses native floor division/remainder for %i and %i', (a, b, quotient, remainder) => {
+    for (const [kind, expected] of [['div', quotient], ['mod', remainder]] as const) {
+      expect(foldMir({ kind, dst: 'out', a: { kind: 'const', value: a }, b: { kind: 'const', value: b } }))
+        .toEqual({ kind: 'const', dst: 'out', value: expected })
+      expect(foldVir(kind === 'div' ? 'arith.div' : 'arith.mod', a, b))
+        .toMatchObject({ kind: 'arith.constant', value: expected })
+      const left = { player: '$left', obj: '__floor' }
+      const right = { player: '$right', obj: '__floor' }
+      const operation = { kind: kind === 'div' ? 'score_div' as const : 'score_mod' as const, dst: left, src: right }
+      const state = runLIRFunction({ name: 'probe', instructions: [operation], isMacro: false, macroParams: [] },
+        makeScoreboardState([{ slot: left, value: a }, { slot: right, value: b }]))
+      expect(readSlot(state, left)).toBe(expected)
+      expect(checkBoundedLirEquivalence({
+        name: 'floor', observedSlots: [left], samples: [{ [`$left\0__floor`]: a, [`$right\0__floor`]: b }],
+        before: { name: 'before', instructions: [operation], isMacro: false, macroParams: [] },
+        after: { name: 'after', instructions: [{ kind: 'score_set', dst: left, value: expected }], isMacro: false, macroParams: [] },
+      }).status).toBe('equivalent')
+    }
+    expect(safeDiv(a, b)).toBe(quotient)
+  })
+
   test.each(products)('MIR multiplies %i * %i without JS precision loss', (a, b) => {
     const expected = Number(BigInt.asIntN(32, BigInt(a) * BigInt(b)))
     expect(foldMir({ kind: 'mul', dst: 'out', a: { kind: 'const', value: a }, b: { kind: 'const', value: b } }))

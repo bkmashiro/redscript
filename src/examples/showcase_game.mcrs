@@ -254,6 +254,7 @@ fn reset_player_scores() {
     scoreboard_set(@a[tag=cr_joined], #streak, 0);
     scoreboard_set(@a[tag=cr_joined], #alive, 1);
     scoreboard_set(@a[tag=cr_joined], #health, 20);
+    scoreboard_set(@a[tag=cr_joined], #dash_ready, 0);
 }
 
 fn respawn_all_crystals() {
@@ -274,7 +275,7 @@ fn start_game() {
     set_phase(Phase.Playing);
     tp(@a[tag=cr_joined], (0, 65, 0));
     mark_player_spawn_pads();
-    cooldown_start("dash", 0);
+    scoreboard_set(#crystal, #clock, 0);
     title_times(@a, 10, 50, 10);
     title(@a, "Crystal Rush");
     subtitle(@a, "Collect crystals, survive zombies, race to 15");
@@ -298,7 +299,8 @@ fn tick_countdown() {
 }
 
 fn tick_playing() {
-    cooldown_tick("dash");
+    let clock: int = scoreboard_get(#crystal, #clock);
+    scoreboard_set(#crystal, #clock, clock + 1);
 
     foreach (player in @a[tag=cr_joined]) {
         let state: PlayerState = snapshot_player();
@@ -540,13 +542,15 @@ fn crystal_dash() {
         return;
     }
 
-    if (cooldown_ready("dash") == 1) {
+    let now: int = scoreboard_get(#crystal, #clock);
+    let ready_at: int = scoreboard_get(@s, #dash_ready);
+    if (cooldown_ready(ready_at, now)) {
         tp(@s, (^0, ^0, ^3));
-        cooldown_start("dash", DASH_COOLDOWN);
+        scoreboard_set(@s, #dash_ready, cooldown_start(now, DASH_COOLDOWN));
         title(@s, "Crystal Dash");
         subtitle(@s, "You lunged ${DASH_DISTANCE} blocks forward");
     } else {
-        let ticks_left: int = scoreboard_get("cooldown_ticks", #rs);
+        let ticks_left: int = cooldown_remaining(ready_at, now);
         actionbar(@s, "Dash cooling down: ${ticks_left} ticks");
     }
 }

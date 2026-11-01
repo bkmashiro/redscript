@@ -17,6 +17,7 @@ import { mcVersionToPackFormat, McVersion, DEFAULT_MC_VERSION } from '../types/m
 import { getEventHandlerTagId, isEventTypeName } from '../events/types'
 import { emitFunctionHeader, fnNameToPath, formatSourceMarker, humanFunctionName, qualifiedFunctionRef } from './paths'
 import { emitInstr, flattenExecute, isEmitterNoOp } from './command'
+import { isValidTickRate, INVALID_TICK_RATE_MESSAGE } from '../types/tick-rate'
 
 export { flattenExecute } from './command'
 
@@ -33,6 +34,8 @@ export interface WatchFunction {
 export interface EmitOptions {
   namespace: string
   tickFunctions?: string[]
+  /** Periodic tick registration; rate 1 uses the direct hook without a counter. */
+  tickRateFunctions?: Array<{ name: string; rate: number }>
   loadFunctions?: string[]
   scheduleFunctions?: Array<{ name: string; ticks: number }>
   watchFunctions?: WatchFunction[]
@@ -52,7 +55,7 @@ export interface EmitOptions {
   benchmarkFunctions?: string[]
   /** Emit debug-only profiling instrumentation and helpers. */
   enableProfiling?: boolean
-  /** Functions decorated with @throttle. */
+  /** @deprecated Explicit 3.x emitter compatibility only. The 4.0 source decorator is rejected. */
   throttleFunctions?: Array<{ name: string; ticks: number }>
   /** Functions decorated with @retry. */
   retryFunctions?: Array<{ name: string; max: number }>
@@ -103,6 +106,11 @@ export interface EmitOptions {
 export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const { namespace } = options
   const tickFns = options.tickFunctions ?? []
+  const tickRateFns = options.tickRateFunctions ?? []
+  if (tickRateFns.some(entry => !isValidTickRate(entry.rate))) throw new Error(INVALID_TICK_RATE_MESSAGE)
+  const periodicTicks = tickRateFns.filter(entry => entry.rate > 1)
+  const periodicNames = new Set(periodicTicks.map(entry => qualifiedFunctionRef(entry.name, namespace)))
+  if (periodicNames.size !== periodicTicks.length) throw new Error('Duplicate periodic tick registration')
   const loadFns = options.loadFunctions ?? []
   const scheduleFns = options.scheduleFunctions ?? []
   const watchFns = options.watchFunctions ?? []
@@ -113,6 +121,8 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   const retryFns = options.retryFunctions ?? []
   const memoizeFns = options.memoizeFunctions ?? []
   const objective = module.objective
+  const tickRateDispatcherName = (name: string): string => `__tick_rate_${name}`
+  const tickRateCounter = (name: string): string => `#tick_rate/${name.replace(/::/g, '/').toLowerCase()}`
   const genSourceMap = options.generateSourceMap ?? false
   const mcVersion = options.mcVersion ?? DEFAULT_MC_VERSION
   assertMacroVersionSupported(module, mcVersion)
@@ -133,6 +143,7 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   // load.mcfunction — creates the scoreboard objective
   const loadCmds = [
     `scoreboard objectives add ${objective} dummy`,
+    ...periodicTicks.map(entry => `scoreboard players set ${tickRateCounter(entry.name)} ${objective} 0`),
     ...watchFns.map(watch => `scoreboard objectives add ${watchPrevObjective(watch.name)} dummy`),
     ...singletonObjectives.map(obj => `scoreboard objectives add ${obj} dummy`),
     ...(enableProfiling && profiledFns.length > 0
@@ -232,7 +243,25 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
     })
   }
 
-  // @throttle wrapper functions
+  // Periodic registration changes the tick tag, not ordinary calls to the body.
+  for (const entry of periodicTicks) {
+    const wrapper = tickRateDispatcherName(entry.name)
+    const wrapperPath = fnNameToPath(wrapper, namespace)
+    if (module.functions.some(fn => fnNameToPath(fn.name, namespace) === wrapperPath)) {
+      throw new Error(`Generated tick dispatcher '${wrapper}' collides with a source function`)
+    }
+    const score = `${tickRateCounter(entry.name)} ${objective}`
+    files.push({
+      path: wrapperPath,
+      content: [
+        `scoreboard players add ${score} 1`,
+        `execute if score ${score} matches ${entry.rate}.. run function ${qualifiedFunctionRef(entry.name, namespace)}`,
+        `execute if score ${score} matches ${entry.rate}.. run scoreboard players set ${score} 0`,
+      ].join('\n') + '\n',
+    })
+  }
+
+  // Deprecated explicit 3.x emitter metadata, not a 4.0 source decorator.
   for (const { name, ticks } of throttleFns) {
     const obj = throttleObjective(name)
     const inner = `${name}_inner`
@@ -332,13 +361,15 @@ export function emit(module: LIRModule, options: EmitOptions): DatapackFile[] {
   })
 
   const allTickFns = [
-    ...tickFns,
+    ...uniqueValues([...tickFns, ...tickRateFns.map(entry => entry.name)])
+      .filter(name => !periodicNames.has(qualifiedFunctionRef(name, namespace))),
+    ...periodicTicks.map(entry => tickRateDispatcherName(entry.name)),
     ...watchFns.map(watch => watchDispatcherName(watch.name)),
     ...throttleFns.map(t => throttleDispatcherName(t.name)),
     ...retryFns.map(r => retryDispatcherName(r.name)),
   ]
   const tickValues = uniqueValues([
-    ...allTickFns.map(fn => `${namespace}:${fn}`),
+    ...allTickFns.map(fn => qualifiedFunctionRef(fn, namespace)),
     ...(functionTags.get('minecraft:tick') ?? []),
   ])
   functionTags.delete('minecraft:tick')

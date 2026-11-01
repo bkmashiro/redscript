@@ -66,7 +66,7 @@ describe('@throttle decorator', () => {
 fn handler() {}
 `)
     expect(errors.length).toBeGreaterThan(0)
-    expect(errors.some(e => e.message.includes('cannot have multiple @throttle'))).toBe(true)
+    expect(errors.some(e => e.message.includes('@throttle was removed'))).toBe(true)
   })
 
   it('reports error when @throttle ticks is missing or zero', () => {
@@ -76,15 +76,15 @@ fn handler() {}
 fn handler() {}
 `)
     expect(errors.length).toBeGreaterThan(0)
-    expect(errors.some(e => e.message.includes('requires ticks=N'))).toBe(true)
+    expect(errors.some(e => e.message.includes('@throttle was removed'))).toBe(true)
   })
 
-  it('accepts valid @throttle decorator', () => {
+  it('rejects even formerly-valid @throttle syntax', () => {
     const errors = typeCheck(`
 @throttle(ticks=5)
 fn handler() {}
 `)
-    expect(errors).toHaveLength(0)
+    expect(errors.some(error => error.message.includes('@throttle was removed'))).toBe(true)
   })
 })
 

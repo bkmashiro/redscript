@@ -6,6 +6,7 @@ import {
 } from '../types'
 import type { VIROperation, VIRModule } from '../types'
 import type { VIRPassResult } from '../pass-manager'
+import { scoreboardFloorDiv, scoreboardFloorMod } from '../../../types/scoreboard-int'
 
 function asNumber(id: { readonly __brand: string }): number {
   return Number(id)
@@ -33,9 +34,9 @@ function foldBinary(operation: VIROperation, left: number, right: number): numbe
     case 'arith.mul':
       return Math.imul(left, right)
     case 'arith.div':
-      return Math.trunc(left / right) | 0
+      return scoreboardFloorDiv(left, right)
     case 'arith.mod':
-      return (left % right) | 0
+      return scoreboardFloorMod(left, right)
     case 'arith.min':
       return Math.min(left, right)
     case 'arith.max':

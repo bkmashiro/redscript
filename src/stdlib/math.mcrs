@@ -772,3 +772,32 @@ fn asin_approx(x_fx: int): int {
 fn acos_approx(x_fx: int): int {
     return 900000 - asin_approx(x_fx);  // acos = 90° - asin
 }
+
+/// Integer division toward zero, for code migrating from pre-4.0 fold semantics.
+/// Native `/` uses floor division. The divisor must be nonzero.
+/// @since 4.0.0
+/// @param a Dividend
+/// @param b Nonzero divisor
+/// @returns Quotient rounded toward zero
+fn div_trunc(a: int, b: int): int {
+    let quotient: int = a / b;
+    let remainder: int = a % b;
+    if (remainder != 0 && ((a < 0) != (b < 0))) {
+        return quotient + 1;
+    }
+    return quotient;
+}
+
+/// Integer remainder with the dividend's sign (paired with div_trunc).
+/// Native `%` uses floor remainder with the divisor's sign. Nonzero divisor.
+/// @since 4.0.0
+/// @param a Dividend
+/// @param b Nonzero divisor
+/// @returns Remainder with the dividend's sign
+fn mod_trunc(a: int, b: int): int {
+    let remainder: int = a % b;
+    if (remainder != 0 && ((a < 0) != (b < 0))) {
+        return remainder - b;
+    }
+    return remainder;
+}

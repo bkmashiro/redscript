@@ -15,7 +15,7 @@ describe('partial specialization through the production compiler', () => {
   test.each(['@no-inline', '', '@inline'])('does not bypass runtime decorators (hint: %s)', hint => {
     const result = compile(`
       ${hint}
-      @throttle(ticks=5)
+      @retry(max=2)
       fn limited_cost(value: int, factor: int): int { return value * factor }
       fn main() {
         let value: int = scoreboard_get("#input", "inputs")

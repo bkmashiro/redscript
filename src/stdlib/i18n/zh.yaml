@@ -2,6 +2,18 @@
 ## 结构：<模块>.<函数名>.{desc, params.<param>, returns, example_note}
 
 math:
+  div_trunc:
+    desc: 向零取整的整数除法，供需要旧折叠语义的程序显式使用；原生 / 使用向下取整。
+    params:
+      a: 被除数
+      b: 非零除数
+    returns: 向零取整的商
+  mod_trunc:
+    desc: 与 div_trunc 配对、符号跟随被除数的余数；原生 % 的符号跟随除数。
+    params:
+      a: 被除数
+      b: 非零除数
+    returns: 向零取整除法对应的余数
   abs:
     desc: 返回 x 的绝对值（支持泛型 T）
     params:
@@ -900,7 +912,7 @@ geometry:
     params:
       a: 第一个坐标
       b: 第二个坐标
-    returns: (a + b) / 2（整数截断）
+    returns: (a + b) / 2（原生整数向下取整除法）
   aabb_contains:
     desc: 检测三维点是否在轴对齐包围盒（AABB）内
     params:
@@ -1014,7 +1026,7 @@ bits:
       n: "左移位数，范围 [0, 30]"
     returns: x << n
   bit_shr:
-    desc: 逻辑右移 x n 位（等效于 x / 2^n，向零截断）
+    desc: 算术右移 x n 位，使用原生向下取整除法，负数保留符号
     params:
       x: 要移位的整数
       n: "右移位数，范围 [0, 30]"
@@ -2627,21 +2639,23 @@ expr:
 
 cooldown:
   cooldown_start:
-    desc: 启动（或重启）指定槽位的冷却计时，持续 ticks 游戏刻。
+    desc: 计算由调用者保存的冷却到期刻，不创建全局状态，也不注册每刻更新。
     params:
-      name: 冷却槽位标识符（保留，供未来多槽位使用）
-      ticks: 冷却持续时间（游戏刻，20 刻 = 1 秒）
-    returns: 无返回值
+      now: 当前非负、单调时钟的刻数，与到期刻属于同一时钟周期
+      ticks: 持续刻数，非正数立即就绪
+    returns: 到期刻；溢出时饱和到有符号 32 位整数上限
   cooldown_ready:
-    desc: 检查冷却是否已到期（可再次触发）。
+    desc: 检查调用者保存的到期刻是否已达到；新建或重置为零的状态立即就绪。
     params:
-      name: 冷却槽位标识符
-    returns: 1 表示已就绪（非活跃或剩余刻数 ≤ 0），0 表示仍在冷却
-  cooldown_tick:
-    desc: 冷却计时推进一刻，须在 @tick 函数中每刻调用。剩余刻数归零时自动标记为非活跃。
+      ready_at: 调用者保存的技能或实体到期刻
+      now: 同一时钟周期中的当前刻数
+    returns: 已达到到期刻时为 true，否则为 false
+  cooldown_remaining:
+    desc: 计算剩余冷却刻数，已到期时返回零。
     params:
-      name: 冷却槽位标识符
-    returns: 无返回值
+      ready_at: 调用者保存的到期刻
+      now: 同一时钟周期中的当前刻数
+    returns: 非负的剩余刻数
 
 list:
   sort2_min:
@@ -2713,14 +2727,14 @@ list:
       c: 值 3
     returns: a + b + c
   avg3:
-    desc: 三个值的整数均值（向零截断）。
+    desc: 三个值的整数均值（使用原生向下取整除法）。
     params:
       a: 值 1
       b: 值 2
       c: 值 3
     returns: (a + b + c) / 3
   avg5:
-    desc: 五个值的整数均值（向零截断）。
+    desc: 五个值的整数均值（使用原生向下取整除法）。
     params:
       a: 值 1
       b: 值 2

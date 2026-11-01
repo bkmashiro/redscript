@@ -61,6 +61,7 @@ describe('emit/compile mocked branch coverage', () => {
 
       jest.doMock('../../compile', () => ({
         preprocessSourceWithMetadata: jest.fn((source: string) => ({ source })),
+        getStdlibDir: jest.fn(() => '/stdlib'),
       }))
       jest.doMock('fs', () => ({
         existsSync: jest.fn((file: string) => (

@@ -1,0 +1,6 @@
+import geometry;
+
+fn test_tile_floor() {
+  let coord: int = scoreboard_get("#coord", "effect_inputs")
+  scoreboard_set("#tile", "effect_outputs", tile_of(coord, 100))
+}

@@ -194,9 +194,9 @@ describe('safeMul', () => {
 });
 
 describe('safeDiv', () => {
-  test('normal integer division truncates toward zero', () => {
+  test('normal integer division uses native floor semantics', () => {
     expect(safeDiv(10, 3)).toBe(3);
-    expect(safeDiv(-10, 3)).toBe(-3);
+    expect(safeDiv(-10, 3)).toBe(-4);
   });
 
   test('returns Infinity on division by zero', () => {

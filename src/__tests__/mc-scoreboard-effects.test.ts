@@ -5,6 +5,9 @@ import * as net from 'net'
 import * as os from 'os'
 import * as path from 'path'
 import { MCTestClient } from '../mc-test/client'
+import { compile } from '../compile'
+import { McVersion } from '../types/mc-version'
+import { deployCorpusPack, removeCorpusPack } from '../mc-test/corpus-deployer'
 import { runMcCoreCase } from '../mc-test/case-runner'
 import { findHarnessPlugin, findJava, ManagedPaperServer, prepareServerRoot } from '../mc-test/managed-paper'
 import * as effects from '../optimizer/scoreboard-effects'
@@ -33,7 +36,11 @@ describeLive('managed Paper scoreboard call effects', () => {
     await requireFreePort(25566)
     const template = process.env.MC_SCORE_EFFECTS_TEMPLATE_DIR ?? path.join(os.homedir(), 'mc-test-server')
     const java = findJava()
-    root = prepareServerRoot(template, findHarnessPlugin(template))
+    const plugin = findHarnessPlugin(template)
+    if (!process.env.MC_HARNESS_PLUGIN && path.basename(plugin) === 'redscript-testharness-1.2.0.jar') {
+      throw new Error('TestHarness 1.2.0 binds all interfaces. Supply a loopback-only 1.2.1+ jar with MC_HARNESS_PLUGIN; keep the template unchanged.')
+    }
+    root = prepareServerRoot(template, plugin)
     mc = new MCTestClient('127.0.0.1', 25561)
     managed = new ManagedPaperServer(root, java.executable, mc, { sourceTemplateDir: template })
     const started = await managed.start()
@@ -49,6 +56,68 @@ describeLive('managed Paper scoreboard call effects', () => {
     expect(cleanup.failures).toEqual([])
     expect(fs.existsSync(root)).toBe(false)
   }, 30000)
+
+  test('periodic tick cadence, direct calls, reload phase and namespace isolation', async () => {
+    const packs: ReturnType<typeof deployCorpusPack>[] = []
+    const source = fs.readFileSync(path.resolve(__dirname, '../../tests/mc-cases/tick-rate.mcrs'), 'utf8')
+    const alternate = source.replace('@tick(rate=5)', '@tick(rate=7)')
+      .replaceAll('#five', '#alt_five').replaceAll('#three', '#alt_three').replaceAll('#one', '#alt_one')
+    const score = (player: string) => mc.scoreboard(player, 'effect_outputs')
+    const step = async (ticks: number, total: number) => {
+      await mc.tickStep(ticks)
+      await mc.waitForScore('#one', 'effect_outputs', total)
+      await mc.command('scoreboard players add #tick_barrier effect_outputs 0')
+      expect(await score('#alt_one')).toBe(total)
+    }
+    await mc.tickFreeze()
+    try {
+      for (const [namespace, text] of [['tick_primary', source], ['tick_alternate', alternate]]) {
+        packs.push(deployCorpusPack(root, namespace, compile(text, { namespace, mcVersion: McVersion.v1_21_4 }).files))
+      }
+      await mc.reload()
+      // Load tags resume with simulation ticks. Seed only public observation
+      // markers while frozen; emitted load code still owns private counters.
+      for (const player of ['#one', '#three', '#five', '#alt_one', '#alt_three', '#alt_five']) {
+        await mc.command(`scoreboard players set ${player} effect_outputs 0`)
+      }
+      await step(4, 4)
+      expect(await score('#one')).toBe(4)
+      expect(await score('#five')).toBe(0)
+      expect(await score('#three')).toBe(1)
+      expect(await score('#alt_five')).toBe(0)
+      await step(1, 5)
+      expect(await score('#five')).toBe(1)
+      expect(await score('#alt_five')).toBe(0)
+      await step(2, 7)
+      expect(await score('#alt_five')).toBe(1)
+      expect(await score('#three')).toBe(2)
+      await mc.command('function tick_primary:pulse')
+      await mc.command('function tick_primary:pulse')
+      expect(await score('#five')).toBe(3)
+      await step(3, 10)
+      expect(await score('#one')).toBe(10)
+      expect(await score('#five')).toBe(4)
+      expect(await score('#alt_five')).toBe(1)
+      // The alternate counter is at 3/7 here. Reload must restart the phase,
+      // not preserve it and fire after only four ticks in the new epoch.
+      await mc.reload()
+      await step(4, 4)
+      expect(await score('#one')).toBe(4)
+      expect(await score('#five')).toBe(0)
+      expect(await score('#alt_five')).toBe(0)
+      await step(1, 5)
+      expect(await score('#five')).toBe(1)
+      await step(2, 7)
+      expect(await score('#alt_five')).toBe(1)
+    } finally {
+      try {
+        for (const pack of packs) removeCorpusPack(pack.root, pack.caseId)
+        await mc.reload()
+      } finally {
+        await mc.tickUnfreeze()
+      }
+    }
+  }, 60000)
 
   const nativeArithmetic: Array<[string, number, string, number, number]> = [
     ['large product', 2147483647, '*=', 2147483647, 1],

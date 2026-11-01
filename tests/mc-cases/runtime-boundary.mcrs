@@ -1,11 +1,32 @@
-// A runtime wrapper must survive both inlining and constant specialization.
-@throttle(ticks=5)
+import cooldown;
+
+// Clock and deadlines belong to the caller. Nothing runs in the background.
 fn limited_set(value: int, unused: int) {
-  scoreboard_set("#calls", "effect_outputs", value)
+  let now: int = scoreboard_get("#now", "effect_inputs")
+  let ready_at: int = scoreboard_get("#deadline", "effect_outputs")
+  if (cooldown_ready(ready_at, now)) {
+    scoreboard_set("#calls", "effect_outputs", value)
+    scoreboard_set("#deadline", "effect_outputs", cooldown_start(now, 5))
+  }
 }
 
 fn test_runtime_boundary() {
   limited_set(1, 3)
   limited_set(2, 3)
   scoreboard_set("#result", "effect_outputs", scoreboard_get("#calls", "effect_outputs"))
+}
+
+fn test_independent_deadlines() {
+  let sword: int = cooldown_start(100, 40)
+  let bow: int = cooldown_start(100, 10)
+  scoreboard_set("#sword", "effect_outputs", sword)
+  scoreboard_set("#bow", "effect_outputs", bow)
+  scoreboard_set("#remaining", "effect_outputs", cooldown_remaining(sword, 110))
+  if (cooldown_ready(bow, 110)) { scoreboard_set("#bow_ready", "effect_outputs", 1) }
+  else { scoreboard_set("#bow_ready", "effect_outputs", 0) }
+  if (cooldown_ready(sword, 110)) { scoreboard_set("#sword_ready", "effect_outputs", 1) }
+  else { scoreboard_set("#sword_ready", "effect_outputs", 0) }
+  scoreboard_set("#zero", "effect_outputs", cooldown_start(100, 0))
+  scoreboard_set("#negative", "effect_outputs", cooldown_start(100, -5))
+  scoreboard_set("#saturated", "effect_outputs", cooldown_start(2147483640, 40))
 }

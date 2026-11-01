@@ -28,6 +28,7 @@ import { coroutineTransform, type CoroutineInfo } from '../optimizer/coroutine'
 import type { HIRModule, HIRFunction, HIRExpr, HIRStmt, HIRBlock } from '../hir/types'
 import type { Program, FnDecl, Expr, Stmt, Block } from '../ast/types'
 import { TypeChecker } from '../typechecker'
+import { getTickRate, INVALID_TICK_RATE_MESSAGE } from '../typechecker/decorators'
 import type { McVersion } from '../types/mc-version'
 
 type ExportKind = 'function' | 'declaration'
@@ -535,6 +536,7 @@ function compileSingleModule(
 
     // Extract decorator metadata
     const tickFunctions: string[] = []
+    const tickRateFunctions: Array<{ name: string; rate: number }> = []
     const loadFunctions: string[] = []
     const watchFunctions: Array<{ name: string; objective: string }> = []
     const coroutineInfos: CoroutineInfo[] = []
@@ -542,7 +544,12 @@ function compileSingleModule(
     const functionTags = new Map<string, string[]>()
     for (const fn of hir.functions) {
       for (const dec of fn.decorators) {
-        if (dec.name === 'tick') tickFunctions.push(fn.name)
+        if (dec.name === 'tick') {
+          const rate = getTickRate(dec)
+          if (rate === undefined) throw new DiagnosticError('TypeError', INVALID_TICK_RATE_MESSAGE, fn.span ?? { line: 1, col: 1 })
+          tickFunctions.push(fn.name)
+          if (rate > 1) tickRateFunctions.push({ name: fn.name, rate })
+        }
         if (dec.name === 'load') loadFunctions.push(fn.name)
         if (dec.name === 'watch' && dec.args?.objective) {
           watchFunctions.push({ name: fn.name, objective: dec.args.objective })
@@ -565,6 +572,14 @@ function compileSingleModule(
     // Patch the MIR module objective (lowerToMIR computes `__${namespace}` by default)
     const mir = lowerToMIR(hir, filePath)
     mir.objective = objective
+    const safeHints = new Set(['inline', 'no-inline', 'deprecated'])
+    const runtimeBoundaries = new Set(hir.functions.filter(fn =>
+      fn.decorators.some(decorator => !safeHints.has(decorator.name))).map(fn => fn.name))
+    mir.specializationBarriers = runtimeBoundaries
+    mir.noInlineFunctions = new Set([...runtimeBoundaries, ...hir.functions.filter(fn =>
+      fn.decorators.some(decorator => decorator.name === 'no-inline')).map(fn => fn.name)])
+    mir.inlineFunctions = new Set(hir.functions.filter(fn => !runtimeBoundaries.has(fn.name) &&
+      fn.decorators.some(decorator => decorator.name === 'inline')).map(fn => fn.name))
 
     const mirOpt = optimizeModule(mir)
     const coroResult = coroutineTransform(mirOpt, coroutineInfos)
@@ -580,6 +595,7 @@ function compileSingleModule(
       ? emit(lirOpt, {
           namespace,
           tickFunctions,
+          tickRateFunctions,
           loadFunctions,
           watchFunctions,
           scheduleFunctions,

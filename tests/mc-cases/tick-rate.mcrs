@@ -1,0 +1,24 @@
+@load
+fn reset_counts() {
+  scoreboard_set("#five", "effect_outputs", 0)
+  scoreboard_set("#three", "effect_outputs", 0)
+  scoreboard_set("#one", "effect_outputs", 0)
+}
+
+@tick(rate=5)
+fn pulse() {
+  let count: int = scoreboard_get("#five", "effect_outputs")
+  scoreboard_set("#five", "effect_outputs", count + 1)
+}
+
+@tick(rate=3)
+fn every_three() {
+  let count: int = scoreboard_get("#three", "effect_outputs")
+  scoreboard_set("#three", "effect_outputs", count + 1)
+}
+
+@tick(rate=1)
+fn every_one() {
+  let count: int = scoreboard_get("#one", "effect_outputs")
+  scoreboard_set("#one", "effect_outputs", count + 1)
+}

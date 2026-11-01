@@ -161,7 +161,7 @@ describe('emit/index coverage', () => {
         return n + DAMAGE
       }
 
-      @throttle(ticks=4)
+      @tick(rate=4)
       fn slow_fn() {
         say("slow")
       }
@@ -211,12 +211,12 @@ describe('emit/index coverage', () => {
     expect(load).toContain('_s_Game_phase')
     expect(load).toContain('__watch_watch_hp_prev')
     expect(load).toContain('__memo dummy')
-    expect(load).toContain('__throttle_slow_fn dummy')
+    expect(load).not.toContain('__throttle_slow_fn dummy')
     expect(load).toContain('__retry_retry_fn dummy')
     expect(load).toContain('__bench dummy')
 
     expect(getFile(result.files, 'data/fullcov/function/memo_fn.mcfunction')).toContain('function fullcov:memo_fn_impl')
-    expect(getFile(result.files, 'data/fullcov/function/__throttle_slow_fn.mcfunction')).toContain('function fullcov:slow_fn_inner')
+    expect(result.files.some(file => file.path.includes('__throttle_'))).toBe(false)
     expect(getFile(result.files, 'data/fullcov/function/__retry_retry_fn.mcfunction')).toContain('function fullcov:retry_fn')
     expect(getFile(result.files, 'data/fullcov/function/__bench_bench_fn.mcfunction')).toContain('function fullcov:bench_fn_impl')
 
@@ -230,7 +230,7 @@ describe('emit/index coverage', () => {
 
     const tick = JSON.parse(getFile(result.files, 'data/minecraft/tags/function/tick.json'))
     expect(tick.values).toContain('fullcov:__watch_watch_hp')
-    expect(tick.values).toContain('fullcov:__throttle_slow_fn')
+    expect(tick.values).not.toContain('fullcov:__throttle_slow_fn')
     expect(tick.values).toContain('fullcov:__retry_retry_fn')
 
     const map = JSON.parse(getFile(result.files, 'fullcov.sourcemap.json'))

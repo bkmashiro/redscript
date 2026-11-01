@@ -1,5 +1,8 @@
 import * as path from 'path'
 import type { McCoreCaseDescriptor } from '../../src/mc-test/case-runner'
+import { COOLDOWN_CASES } from './runtime-boundary-cases'
+import { INTEGER_FLOOR_CASES } from './integer-floor-cases'
+import { GEOMETRY_FLOOR_CASES } from './geometry-floor-cases'
 
 export const SCORE_EFFECTS_SOURCE_PATH = path.resolve(__dirname, 'scoreboard-call-effects.mcrs')
 export const SCORE_EFFECTS_NAMESPACE = 'score_effects_mc'
@@ -43,11 +46,4 @@ export const SCORE_EFFECTS_CASES: McCoreCaseDescriptor[] = scenarios.map<McCoreC
   ],
   entrypoints: [{ kind: 'function', target: scenario.entry }],
   scoreboardAssertions: [{ player: '#result', obj: 'effect_outputs', value: scenario.expected }],
-})).concat([{
-  id: 'score-effects-runtime-boundary', name: 'runtime throttle boundary',
-  namespace: 'runtime_boundary_mc',
-  sourcePath: path.resolve(__dirname, 'runtime-boundary.mcrs'),
-  setupCommands: ['scoreboard players set #calls effect_outputs 0'],
-  entrypoints: [{ kind: 'function', target: 'test_runtime_boundary' }],
-  scoreboardAssertions: [{ player: '#result', obj: 'effect_outputs', value: 1 }],
-}])
+})).concat(COOLDOWN_CASES, INTEGER_FLOOR_CASES, GEOMETRY_FLOOR_CASES)

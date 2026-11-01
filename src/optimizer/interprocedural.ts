@@ -55,7 +55,7 @@ export function interproceduralConstProp(mod: MIRModule): MIRModule {
           if (callee.blocks[0].instrs.some(op => op.kind === 'score_read' && op.obj === mod.objective)) return instr
           // Partial calls change physical parameter numbering. Limit the first
           // version to proven ordinary helpers, without raw/context/storage ABI
-          // dependencies. Division rounding is a pending language decision.
+          // dependencies. Division/failure cases remain outside this initial partial-specialization slice.
           if (partial && !partialEligible.has(origin)) return instr
 
           const pattern = instr.args.map(arg => arg.kind === 'const' ? arg.value : null)

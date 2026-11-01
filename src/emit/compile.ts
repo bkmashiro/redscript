@@ -8,7 +8,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
-import { preprocessSourceWithMetadata, type PreprocessedSource, type SourceRange } from '../compile'
+import { preprocessSourceWithMetadata, getStdlibDir, type PreprocessedSource, type SourceRange } from '../compile'
 import { CheckFailedError, DiagnosticBundleError, DiagnosticError, parseErrorMessage } from '../diagnostics'
 import { verifyLIR, type LIRVerifyError } from '../lir/verify'
 import { lowerToHIR } from '../hir/lower'
@@ -26,6 +26,7 @@ import type { LIRModule, LIRInstr } from '../lir/types'
 import type { MIRModule } from '../mir/types'
 import { McVersion, DEFAULT_MC_VERSION } from '../types/mc-version'
 import { TypeChecker } from '../typechecker'
+import { REMOVED_THROTTLE_MESSAGE, getTickRate, INVALID_TICK_RATE_MESSAGE } from '../typechecker/decorators'
 import { isEventTypeName } from '../events/types'
 import type { FnDecl, Program } from '../ast/types'
 import type { HIRModule, HIRStruct, HIRFunction, HIRStmt, HIRExpr } from '../hir/types'
@@ -631,6 +632,7 @@ export function mergeRuntimeAssetsStage(
 
 export interface CollectRuntimeMetadataStageResult {
   tickFunctions: string[]
+  tickRateFunctions: Array<{ name: string; rate: number }>
   loadFunctions: string[]
   watchFunctions: Array<{ name: string; objective: string }>
   inlineFunctions: Set<string>
@@ -1057,6 +1059,7 @@ export function collectRuntimeMetadataStage(
   namespace: string,
 ): CollectRuntimeMetadataStageResult {
   const tickFunctions: string[] = []
+  const tickRateFunctions: Array<{ name: string; rate: number }> = []
   const loadFunctions: string[] = []
   const watchFunctions: Array<{ name: string; objective: string }> = []
   const inlineFunctions = new Set<string>()
@@ -1083,7 +1086,12 @@ export function collectRuntimeMetadataStage(
     }
 
     for (const dec of fn.decorators) {
-      if (dec.name === 'tick') tickFunctions.push(fn.name)
+      if (dec.name === 'tick') {
+        const rate = getTickRate(dec)
+        if (rate === undefined) throw new DiagnosticError('TypeError', INVALID_TICK_RATE_MESSAGE, fn.span ?? { line: 1, col: 1 })
+        tickFunctions.push(fn.name)
+        if (rate > 1) tickRateFunctions.push({ name: fn.name, rate })
+      }
       if (dec.name === 'load') loadFunctions.push(fn.name)
       if (dec.name === 'inline') inlineFunctions.add(fn.name)
       if (dec.name === 'no-inline') noInlineFunctions.add(fn.name)
@@ -1103,8 +1111,9 @@ export function collectRuntimeMetadataStage(
       if (dec.name === 'benchmark') {
         benchmarkFunctions.push(fn.name)
       }
-      if (dec.name === 'throttle' && dec.args?.ticks) {
-        throttleFunctions.push({ name: fn.name, ticks: dec.args.ticks })
+      if (dec.name === 'throttle') {
+        // Lenient type checking must not resurrect a retired runtime feature.
+        throw new DiagnosticError('TypeError', REMOVED_THROTTLE_MESSAGE, fn.span ?? { line: 1, col: 1 })
       }
       if (dec.name === 'retry' && dec.args?.max) {
         retryFunctions.push({ name: fn.name, max: dec.args.max })
@@ -1132,6 +1141,7 @@ export function collectRuntimeMetadataStage(
 
   return {
     tickFunctions,
+    tickRateFunctions,
     loadFunctions,
     watchFunctions,
     inlineFunctions,
@@ -1247,6 +1257,7 @@ function summarizeRuntimeAssetsStage(stage: MergeRuntimeAssetsStageResult): Reco
 function summarizeRuntimeMetadataStage(stage: CollectRuntimeMetadataStageResult): Record<string, unknown> {
   return {
     tickFunctions: stage.tickFunctions,
+    tickRateFunctions: stage.tickRateFunctions,
     loadFunctions: stage.loadFunctions,
     watchFunctions: stage.watchFunctions,
     inlineFunctions: [...stage.inlineFunctions],
@@ -1402,7 +1413,7 @@ export function compilePipeline(source: string, options: CompileOptions = {}): C
 
     function resolveModuleFilePath(modName: string, fromFile?: string): string | null {
       const candidates = [`${modName}.mcrs`, modName]
-      const stdlibDir = path.resolve(__dirname, '..', 'src', 'stdlib')
+      const stdlibDir = getStdlibDir()
       for (const candidate of candidates) {
         if (fromFile) {
           const rel = path.resolve(path.dirname(fromFile), candidate)
@@ -1559,6 +1570,7 @@ export function compilePipeline(source: string, options: CompileOptions = {}): C
     recordStageSnapshot(options, 'runtimeMetadata', () => summarizeRuntimeMetadataStage(runtimeMetadata))
     const {
       tickFunctions,
+      tickRateFunctions,
       loadFunctions,
       watchFunctions,
       inlineFunctions,
@@ -1618,6 +1630,7 @@ export function compilePipeline(source: string, options: CompileOptions = {}): C
     const emitted = emitDatapackStage(finalizedLIR, {
       namespace,
       tickFunctions,
+      tickRateFunctions,
       loadFunctions,
       watchFunctions,
       scheduleFunctions,

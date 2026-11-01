@@ -1,5 +1,16 @@
 import type { FnDecl, TypeNode } from '../ast/types'
 import { getEventParamSpecs, isEventTypeName } from '../events/types'
+import { isValidTickRate, INVALID_TICK_RATE_MESSAGE } from '../types/tick-rate'
+export { INVALID_TICK_RATE_MESSAGE } from '../types/tick-rate'
+
+export const REMOVED_THROTTLE_MESSAGE = '@throttle was removed in 4.0. Use @tick(rate=N) for periodic work, or caller-owned cooldown deadlines from stdlib cooldown for call suppression.'
+
+export function getTickRate(decorator: FnDecl['decorators'][number]): number | undefined {
+  if (Object.keys(decorator.args ?? {}).some(key => key !== 'rate')) return undefined
+  const rate = decorator.args?.rate ?? 1
+  // The dispatcher counter is a native signed-i32 score, not an unbounded timer.
+  return isValidTickRate(rate) ? rate : undefined
+}
 
 export interface FunctionDecoratorValidationContext {
   report(message: string, node?: unknown): void
@@ -17,6 +28,16 @@ export function validateFunctionDecorators(
   context: FunctionDecoratorValidationContext,
 ): void {
   const { report, normalizeType, typesMatch, typeToString } = context
+
+  const ticks = fn.decorators.filter(decorator => decorator.name === 'tick')
+  if (ticks.length > 1) {
+    report(`Function '${fn.name}' cannot have multiple @tick decorators`, fn)
+    return
+  }
+  if (ticks.some(decorator => getTickRate(decorator) === undefined)) {
+    report(INVALID_TICK_RATE_MESSAGE, fn)
+    return
+  }
 
   const watchDecorators = fn.decorators.filter(decorator => decorator.name === 'watch')
   if (watchDecorators.length > 1) {
@@ -37,15 +58,9 @@ export function validateFunctionDecorators(
   }
 
   const throttleDecorators = fn.decorators.filter(decorator => decorator.name === 'throttle')
-  if (throttleDecorators.length > 1) {
-    report(`Function '${fn.name}' cannot have multiple @throttle decorators`, fn)
+  if (throttleDecorators.length > 0) {
+    report(REMOVED_THROTTLE_MESSAGE, fn)
     return
-  }
-  if (throttleDecorators.length === 1) {
-    const ticks = throttleDecorators[0].args?.ticks
-    if (ticks === undefined || ticks <= 0) {
-      report(`@throttle on '${fn.name}' requires ticks=N (positive integer)`, fn)
-    }
   }
 
   const retryDecorators = fn.decorators.filter(decorator => decorator.name === 'retry')

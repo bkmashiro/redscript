@@ -38,6 +38,30 @@ function makeTemplate(): Fixture {
 }
 
 describe('managed Paper extraction', () => {
+  it('uses an explicit harness jar without modifying the frozen template and fails closed for a bad override', () => {
+    const fixture = makeTemplate()
+    const override = path.join(fixture.root, 'redscript-testharness-1.2.1.jar')
+    const previous = process.env.MC_HARNESS_PLUGIN
+    let runtimeRoot: string | undefined
+    fs.writeFileSync(override, 'loopback harness sentinel')
+    try {
+      process.env.MC_HARNESS_PLUGIN = override
+      const plugin = findHarnessPlugin(fixture.templateDir)
+      expect(plugin).toBe(override)
+      runtimeRoot = prepareServerRoot(fixture.templateDir, plugin)
+      expect(fs.readFileSync(path.join(runtimeRoot, 'plugins', 'redscript-testharness.jar'), 'utf8')).toBe('loopback harness sentinel')
+      expect(fs.readdirSync(path.join(runtimeRoot, 'plugins')).filter(name => name.endsWith('.jar'))).toEqual(['redscript-testharness.jar'])
+      expect(fs.readFileSync(fixture.harnessPlugin, 'utf8')).toBe('plugin sentinel')
+      process.env.MC_HARNESS_PLUGIN = path.join(fixture.root, 'missing.jar')
+      expect(() => findHarnessPlugin(fixture.templateDir)).toThrow(ManagedPaperPrerequisiteError)
+    } finally {
+      if (previous === undefined) delete process.env.MC_HARNESS_PLUGIN
+      else process.env.MC_HARNESS_PLUGIN = previous
+      if (runtimeRoot) fs.rmSync(runtimeRoot, { recursive: true, force: true })
+      fs.rmSync(fixture.root, { recursive: true, force: true })
+    }
+  })
+
   it.each(['graceful', 'SIGTERM', 'SIGKILL'])('cancels the stop deadline after %s exit', async mode => {
     const child = Object.assign(new EventEmitter(), {
       exitCode: null,
