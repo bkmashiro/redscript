@@ -430,7 +430,7 @@ out = "build/admin.commands.json"
 
       fs.writeFileSync(aPath, 'import "./b.mcrs"\n\nfn from_a() -> int { return 1; }\n')
       fs.writeFileSync(bPath, 'import "./a.mcrs"\n\nfn from_b() -> int { return from_a(); }\n')
-      fs.writeFileSync(mainPath, 'import "./a.mcrs"\n\nfn main() { let value: int = from_b(); }\n')
+      fs.writeFileSync(mainPath, 'import "./a.mcrs"\nimport "./b.mcrs"\n\nfn main() { let value: int = from_b(); }\n')
 
       const source = fs.readFileSync(mainPath, 'utf-8')
       const result = compile(source, { namespace: 'circular', filePath: mainPath })

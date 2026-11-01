@@ -41,7 +41,7 @@ describe('stdlib include path', () => {
     const source = fs.readFileSync(mainPath, 'utf-8')
 
     expect(() => compile(source, { namespace: 'test', filePath: mainPath }))
-      .toThrow(/Cannot import/)
+      .toThrow(/Module 'stdlib\/nonexistent' not found/)
   })
 
   it('--include flag allows importing from custom directory', () => {

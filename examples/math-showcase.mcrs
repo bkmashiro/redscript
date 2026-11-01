@@ -3,10 +3,10 @@
 //
 // Compile:  node dist/cli.js compile examples/math-showcase.mcrs -o <dp> --namespace mathshow
 
-import "../src/stdlib/math.mcrs"
-import "../src/stdlib/vec.mcrs"
-import "../src/stdlib/advanced.mcrs"
-import "../src/stdlib/bigint.mcrs"
+import math;
+import vec;
+import advanced;
+import bigint;
 
 // ─── 1. Trig table — print sin & cos for 0°, 15°, 30° … 90° ────────────────
 // NOTE: sin_fixed/cos_fixed return values in ×1000 space (sin(30°) = 500, not 0.5).
@@ -104,22 +104,28 @@ fn hash_showcase() {
 
 // ─── 7. BigInt Fibonacci — numbers beyond INT32 ─────────────────────────────
 fn bigint_showcase() {
-    say("§e=== BigInt — Arbitrary Precision (base 10000, 8 limbs) ===");
-    bigint_fib(50);
-    let l0: int = bigint_get_a(0);
-    let l1: int = bigint_get_a(1);
-    let l2: int = bigint_get_a(2);
-    say(f"  fib(50)  limbs: [{l2}][{l1}][{l0}]");
-    say(f"           = {l2}×10⁸ + {l1}×10⁴ + {l0}");
-    say(f"           = 12,586,269,025  (verify: l0=9025 l1=8626 l2=125)");
-
-    bigint_fib(70);
-    let m0: int = bigint_get_a(0);
-    let m1: int = bigint_get_a(1);
-    let m2: int = bigint_get_a(2);
-    let m3: int = bigint_get_a(3);
-    say(f"  fib(70)  limbs: [{m3}][{m2}][{m1}][{m0}]");
-    say(f"           = 190,392,490,709,135");
+    say("§e=== BigInt — base 10000, 4 chunks for fib(70) ===");
+    // bigint.mcrs uses big-endian arrays: the last chunk is least significant.
+    let a: int[] = [0, 0, 0, 0];
+    let b: int[] = [0, 0, 0, 1];
+    let next: int[] = [0, 0, 0, 0];
+    let step: int = 0;
+    while (step < 70) {
+        bigint_add(a, b, next, 4);
+        let chunk: int = 0;
+        while (chunk < 4) {
+            a[chunk] = b[chunk];
+            b[chunk] = next[chunk];
+            chunk = chunk + 1;
+        }
+        step = step + 1;
+        if (step == 50) {
+            say(f"  fib(50)  chunks: [{a[1]}][{a[2]}][{a[3]}]");
+            say("           = 12,586,269,025 (125 × 10^8 + 8626 × 10^4 + 9025)");
+        }
+    }
+    say(f"  fib(70)  chunks: [{a[0]}][{a[1]}][{a[2]}][{a[3]}]");
+    say("           = 190,392,490,709,135");
 }
 
 // ─── 8. Mandelbrot / Julia — fractals in integer arithmetic ─────────────────

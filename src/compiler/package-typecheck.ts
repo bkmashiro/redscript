@@ -1,9 +1,9 @@
-import type { Expr, FnDecl, Program } from '../ast/types'
+import type { FnDecl, Program } from '../ast/types'
+import { cloneBoundCalls } from '../resolver/bound-program'
 import type { DiagnosticError } from '../diagnostics'
-import { reachablePackagePaths } from '../project/package-graph'
+import { reachablePackagePaths, type PackageBindingGraph } from '../project/package-graph'
 import { TypeChecker } from '../typechecker'
 import {
-  makePackageSymbolId,
   type ResolvedPackageProgram,
 } from '../resolver/package-symbols'
 
@@ -24,49 +24,6 @@ function cloneAstValue<T>(value: T): T {
   return clone as T
 }
 
-function cloneForSemanticTypecheck<T>(value: T, aliases: ReadonlyMap<string, string>): T {
-  if (Array.isArray(value)) {
-    return value.map(item => cloneForSemanticTypecheck(item, aliases)) as T
-  }
-  if (value === null || typeof value !== 'object') return value
-
-  const record = value as Record<string, unknown>
-  if (record.kind === 'static_call') {
-    const expr = value as unknown as Extract<Expr, { kind: 'static_call' }>
-    const importedPackage = aliases.get(expr.type)
-    if (importedPackage) {
-      const clone: Record<string, unknown> = {
-        kind: 'call',
-        fn: makePackageSymbolId(importedPackage, expr.method),
-        symbolId: makePackageSymbolId(importedPackage, expr.method),
-        args: expr.args.map(argument => cloneForSemanticTypecheck(argument, aliases)),
-      }
-      const span = Object.getOwnPropertyDescriptor(value as object, 'span')
-      if (span) Object.defineProperty(clone, 'span', span)
-      return clone as T
-    }
-  }
-
-  const clone = Object.create(Object.getPrototypeOf(value)) as object
-  for (const key of Reflect.ownKeys(value as object)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value as object, key)!
-    if ('value' in descriptor) {
-      descriptor.value = cloneForSemanticTypecheck(descriptor.value, aliases)
-    }
-    Object.defineProperty(clone, key, descriptor)
-  }
-  return clone as T
-}
-
-function aliasesFor(program: Program): Map<string, string> {
-  const aliases = new Map<string, string>()
-  for (const imported of program.imports) {
-    if (!imported.packagePath) continue
-    aliases.set(imported.alias ?? imported.packagePath.split('/').pop()!, imported.packagePath)
-  }
-  return aliases
-}
-
 function signatureClone(source: FnDecl, name: string): FnDecl {
   const clone = cloneAstValue(source)
   clone.name = name
@@ -79,12 +36,15 @@ function signatureClone(source: FnDecl, name: string): FnDecl {
 }
 
 function aggregateSemanticProgram(
-  linked: ResolvedPackageProgram,
+  linked: ResolvedPackageProgram<PackageBindingGraph>,
   packagePath: string,
 ): Program {
   const loaded = linked.graph.packages.get(packagePath)!
   const transformed = loaded.programs.map(program =>
-    cloneForSemanticTypecheck(program, aliasesFor(program)),
+    cloneBoundCalls(program, linked.packages.get(packagePath)!.bindings, id => {
+      const symbol = linked.symbols.get(id)!
+      return symbol.packagePath === packagePath ? symbol.name : id
+    }),
   )
   const declarations = transformed.flatMap(program => program.declarations)
   const declaredFunctions = transformed.flatMap(program => program.declaredFunctions ?? [])
@@ -129,7 +89,7 @@ function compareDiagnostics(left: DiagnosticError, right: DiagnosticError): numb
  * This is a frontend preflight: it performs no target layout, lowering, or emission.
  */
 export function typecheckResolvedPackageProgram(
-  linked: ResolvedPackageProgram,
+  linked: ResolvedPackageProgram<PackageBindingGraph>,
 ): LinkedPackageTypecheckResult {
   const errors: DiagnosticError[] = []
   const warnings: string[] = []
@@ -137,7 +97,7 @@ export function typecheckResolvedPackageProgram(
   for (const packageId of linked.graph.topologicalOrder) {
     if (!reachable.has(packageId.path)) continue
     const program = aggregateSemanticProgram(linked, packageId.path)
-    const sourceFile = linked.graph.packages.get(packageId.path)?.sourceFiles[0]
+    const sourceFile = linked.graph.packages.get(packageId.path)?.sourceFiles?.[0]
     const checker = new TypeChecker('', sourceFile?.absolutePath)
     errors.push(...checker.check(program))
     warnings.push(...checker.getWarnings())

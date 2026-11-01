@@ -161,7 +161,8 @@ fn _dump_math_phase() {
     say("§eRoots & Powers:");
     say(f"  sqrt_fixed(2) = {sqrt_fixed(2)}  (expect 1414)");
     say(f"  sqrt_fixed(3) = {sqrt_fixed(3)}  (expect 1732)");
-    say(f"  isqrt(360000000000) = {isqrt(360000000000)}  (expect 600000)");
+    // Scalar int inputs use Minecraft's signed 32-bit scoreboard range.
+    say(f"  isqrt(36000000) = {isqrt(36000000)}  (expect 6000)");
     say(f"  pow_int(2, 20) = {pow_int(2, 20)}  (expect 1048576)");
 
     say("§eNumber Theory:");

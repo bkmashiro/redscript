@@ -14,6 +14,7 @@ import * as path from 'path'
 import { FileCache, hashFile } from '../../cache/index'
 import { DependencyGraph, parseImports } from '../../cache/deps'
 import { compileIncremental, resetCompileCache } from '../../cache/incremental'
+import { getStdlibDir } from '../../stdlib/paths'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -263,17 +264,40 @@ describe('Stdlib / shared module caching', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
+  test.each([false, true])('bare module changes invalidate cached output (import after declaration=%s)', late => {
+    const library = writeFile(tmpDir, 'helper.mcrs', 'module helper; export fn helper_work(): void { say("before"); }')
+    const body = 'fn main(): void { helper_work(); }'
+    const entry = writeFile(tmpDir, 'entry.mcrs', late ? `${body}\nimport helper;` : `import helper;\n${body}`)
+    const cache = new FileCache(cacheDir)
+    const graph = new DependencyGraph()
+    const first = compileIncremental([entry], cache, graph, { output: outDir })
+    expect(first.errors.size).toBe(0)
+    expect(first.recompiled).toBe(1)
+    const second = compileIncremental([entry], cache, graph, { output: outDir })
+    expect(second.cached).toBe(1)
+    modifyFile(library, 'module helper; export fn helper_work(): void { say("after"); }')
+    const third = compileIncremental([entry], cache, graph, { output: outDir })
+    expect(third.errors.size).toBe(0)
+    expect(third.recompiled).toBe(1)
+    expect(third.cached).toBe(0)
+    const emitted = [...fs.readdirSync(outDir, { recursive: true })].filter(file => String(file).endsWith('.mcfunction'))
+      .map(file => fs.readFileSync(path.join(outDir, String(file)), 'utf8')).join('\n')
+    expect(emitted).toContain('after')
+    expect(emitted).not.toContain('before')
+  })
+
   test('unchanged stdlib module cached across multiple entry files', () => {
     // Simulate a stdlib module shared by many files
     const stdlib = writeFile(tmpDir, 'stdlib/math.mcrs', 'fn math_add(a: int, b: int): int { return a + b; }')
-    const file1 = writeFile(tmpDir, 'prog1.mcrs', `import "stdlib/math.mcrs";\nfn prog1() { math_add(1, 2); }`)
-    const file2 = writeFile(tmpDir, 'prog2.mcrs', `import "stdlib/math.mcrs";\nfn prog2() { math_add(3, 4); }`)
+    const file1 = writeFile(tmpDir, 'prog1.mcrs', `import "./stdlib/math.mcrs";\nfn prog1() { math_add(1, 2); }`)
+    const file2 = writeFile(tmpDir, 'prog2.mcrs', `import "./stdlib/math.mcrs";\nfn prog2() { math_add(3, 4); }`)
 
     const cache = new FileCache(cacheDir)
     const depGraph = new DependencyGraph()
 
     // First compile — all miss
     const r1 = compileIncremental([file1, file2], cache, depGraph, { output: outDir })
+    expect(r1.errors.size).toBe(0)
     expect(r1.recompiled).toBe(2)
     expect(r1.cached).toBe(0)
 
@@ -288,8 +312,8 @@ describe('Stdlib / shared module caching', () => {
 
   test('stdlib change invalidates all dependents', () => {
     const stdlib = writeFile(tmpDir, 'stdlib/core.mcrs', 'fn core_fn() { let v: int = 1; }')
-    const file1 = writeFile(tmpDir, 'a.mcrs', `import "stdlib/core.mcrs";\nfn a() { core_fn(); }`)
-    const file2 = writeFile(tmpDir, 'b.mcrs', `import "stdlib/core.mcrs";\nfn b() { core_fn(); }`)
+    const file1 = writeFile(tmpDir, 'a.mcrs', `import "./stdlib/core.mcrs";\nfn a() { core_fn(); }`)
+    const file2 = writeFile(tmpDir, 'b.mcrs', `import "./stdlib/core.mcrs";\nfn b() { core_fn(); }`)
     const isolated = writeFile(tmpDir, 'isolated.mcrs', 'fn isolated() { let x: int = 42; }')
 
     const cache = new FileCache(cacheDir)
@@ -382,7 +406,7 @@ describe('DependencyGraph — edge cases', () => {
     const imports = parseImports(fakePath, source)
     expect(imports).toHaveLength(2)
     expect(imports[0]).toBe(path.resolve(tmpDir, 'util.mcrs'))
-    expect(imports[1]).toBe(path.resolve(tmpDir, 'math.mcrs'))
+    expect(imports[1]).toBe(path.join(getStdlibDir(), 'math.mcrs'))
   })
 
   test('cyclic dependency does not cause infinite loop in getTransitiveDeps', () => {
@@ -437,12 +461,12 @@ describe('parseImports — edge cases', () => {
     expect(imports[0]).toBe(path.resolve(tmpDir, 'no-semi.mcrs'))
   })
 
-  test('non-import line after imports stops parsing (does not include later imports)', () => {
-    // A second import block buried inside function body must not be collected
+  test('accepted top-level imports after declarations remain dependencies', () => {
     const source = `import "first.mcrs";\nfn body() {}\nimport "hidden.mcrs";`
     const imports = parseImports(path.join(tmpDir, 'main.mcrs'), source)
-    expect(imports).toHaveLength(1)
+    expect(imports).toHaveLength(2)
     expect(imports[0]).toBe(path.resolve(tmpDir, 'first.mcrs'))
+    expect(imports[1]).toBe(path.resolve(tmpDir, 'hidden.mcrs'))
   })
 
   test('reads file from disk when source is omitted', () => {

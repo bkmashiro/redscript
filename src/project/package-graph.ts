@@ -26,24 +26,34 @@ export interface PackageImport {
   readonly span?: Span
 }
 
-export interface LoadedPackage {
+/** Binding inputs do not require invented filesystem provenance for virtual code. */
+export interface BindingPackage {
   readonly id: PackageId
   readonly name: string
-  readonly dir: string
-  readonly sourceFiles: readonly PackageSourceFile[]
+  readonly sourceFiles?: readonly PackageSourceFile[]
   readonly programs: readonly Program[]
   readonly imports: readonly PackageImport[]
 }
 
-export interface PackageGraph {
+export interface LoadedPackage extends BindingPackage {
+  readonly dir: string
+  readonly sourceFiles: readonly PackageSourceFile[]
+}
+
+/** Semantic graph consumed by binding. Discovery/resource provenance is separate. */
+export interface PackageBindingGraph {
   readonly modulePath: string
+  readonly rootPackages: readonly PackageId[]
+  readonly packages: ReadonlyMap<string, BindingPackage>
+  /** Dependencies precede importers; unrelated packages are path-sorted. */
+  readonly topologicalOrder: readonly PackageId[]
+}
+
+export interface PackageGraph extends PackageBindingGraph {
+  readonly packages: ReadonlyMap<string, LoadedPackage>
   readonly moduleGraph: ProjectModuleGraph
   /** Aggregate dependency content hash for project-level incremental keys. */
   readonly dependencyHash: string
-  readonly rootPackages: readonly PackageId[]
-  readonly packages: ReadonlyMap<string, LoadedPackage>
-  /** Dependencies precede importers; unrelated packages are path-sorted. */
-  readonly topologicalOrder: readonly PackageId[]
 }
 
 export function packageId(modulePath: string, relativePath: string): PackageId {
@@ -56,7 +66,7 @@ export function packageId(modulePath: string, relativePath: string): PackageId {
 }
 
 /** Packages rooted by the selected target entry package(s), plus their explicit import closure. */
-export function reachablePackagePaths(graph: PackageGraph): ReadonlySet<string> {
+export function reachablePackagePaths(graph: PackageBindingGraph): ReadonlySet<string> {
   const reachable = new Set<string>()
   const visit = (packagePath: string): void => {
     if (reachable.has(packagePath)) return

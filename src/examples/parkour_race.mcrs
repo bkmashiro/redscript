@@ -86,7 +86,7 @@ fn race_tick() {
         let running: int = scoreboard_get(p, "pk_running");
         if (running == 1) {
             // Increment time
-            scoreboard_add(p, "pk_time", 1);
+            scoreboard_set(p, "pk_time", scoreboard_get(p, "pk_time") + (1));
             
             // Display current time
             let time: int = scoreboard_get(p, "pk_time");

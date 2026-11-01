@@ -4,8 +4,8 @@
   "ordering": "bytewise",
   "inventory": {
     "modules": 50,
-    "totalFunctionsAndMethods": 719,
-    "publicRuntimeRequired": 661,
+    "totalFunctionsAndMethods": 723,
+    "publicRuntimeRequired": 665,
     "internalFunctionsAndMethods": 58,
     "exportedConstants": 401
   },
@@ -432,6 +432,7 @@
     "stdlib.parabola.function.parabola_x",
     "stdlib.parabola.function.parabola_y",
     "stdlib.parabola.function.parabola_z",
+    "stdlib.particles.function.angry",
     "stdlib.particles.function.angry_at",
     "stdlib.particles.function.draw_circle",
     "stdlib.particles.function.draw_helix",
@@ -439,14 +440,17 @@
     "stdlib.particles.function.end_sparkles_at",
     "stdlib.particles.function.explosion_effect",
     "stdlib.particles.function.flames",
+    "stdlib.particles.function.happy",
     "stdlib.particles.function.happy_at",
     "stdlib.particles.function.hearts_at",
     "stdlib.particles.function.particle_at_fx",
     "stdlib.particles.function.particle_dot",
     "stdlib.particles.function.portal_effect",
     "stdlib.particles.function.smoke",
+    "stdlib.particles.function.sparkles",
     "stdlib.particles.function.sparkles_at",
     "stdlib.particles.function.totem_at",
+    "stdlib.particles.function.totem_effect",
     "stdlib.pathfind.function.pathfind_bfs",
     "stdlib.pathfind.function.pathfind_bfs_coro",
     "stdlib.pathfind.function.pf_heuristic",
@@ -2031,6 +2035,6 @@
       ]
     }
   },
-  "expectedMissingRuntimeCount": 563,
+  "expectedMissingRuntimeCount": 567,
   "expectedMappedRuntimeCount": 92
 }

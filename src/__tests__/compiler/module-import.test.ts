@@ -106,7 +106,7 @@ describe('compiler: whole-module import resolution', () => {
     const dir = makeTmpDir({
       'player_utils.mcrs': `
 module player_utils;
-fn get_health_pct(name: string): int {
+export fn get_health_pct(name: string): int {
   return 75;
 }
 `,
@@ -147,7 +147,7 @@ fn on_tick() {
     const dir = makeTmpDir({
       'utils.mcrs': `
 module utils;
-fn add(a: int, b: int): int {
+export fn add(a: int, b: int): int {
   return a + b;
 }
 `,
@@ -175,7 +175,7 @@ fn compute(): int {
     const dir = makeTmpDir({
       'helper.mcrs': `
 module helper;
-fn internal_fn(): int {
+export fn internal_fn(): int {
   return 42;
 }
 `,
@@ -208,12 +208,12 @@ fn main_run() {
     const dir = makeTmpDir({
       'shared.mcrs': `
 module shared;
-fn shared_fn(): int { return 1; }
+export fn shared_fn(): int { return 1; }
 `,
       'a.mcrs': `
 module a;
 import shared;
-fn use_shared(): int { return shared_fn(); }
+export fn use_shared(): int { return shared_fn(); }
 `,
       'main.mcrs': `
 import a;

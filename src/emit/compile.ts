@@ -8,11 +8,12 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
-import { preprocessSourceWithMetadata, getStdlibDir, type PreprocessedSource, type SourceRange } from '../compile'
+import { preprocessSourceWithMetadata, type PreprocessedSource, type SourceRange } from '../compile'
 import { CheckFailedError, DiagnosticBundleError, DiagnosticError, parseErrorMessage } from '../diagnostics'
 import { verifyLIR, type LIRVerifyError } from '../lir/verify'
 import { lowerToHIR } from '../hir/lower'
 import { monomorphize } from '../hir/monomorphize'
+import { lowerFunctionValues } from '../hir/function-values'
 import { checkDeprecatedCalls } from '../hir/deprecated'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
@@ -32,6 +33,7 @@ import type { FnDecl, Program } from '../ast/types'
 import type { HIRModule, HIRStruct, HIRFunction, HIRStmt, HIRExpr } from '../hir/types'
 import { EVENT_RUNTIME_MANIFESTS, getAllEventRuntimeAssets, type EventRuntimeManifest } from '../events/manifest'
 import { CompilerSession, type CompilerSessionOptions } from '../compiler/session'
+import { prepareSourceProgram } from '../compiler/source-program'
 
 function extractErrorMessage(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err)
@@ -238,6 +240,7 @@ function mergeParsedLibrarySource(
     stopAfterCheck: options.stopAfterCheck,
   })
   const libAst = libParsed.ast
+  ast.imports.push(...libAst.imports)
   warnings.push(...libParsed.warnings)
 
   const existingFnNames = new Set(ast.declarations.map(fn => fn.name))
@@ -261,7 +264,7 @@ function mergeParsedLibrarySource(
 }
 
 function hasLibraryRuntimeRootDecorator(fn: HIRFunction): boolean {
-  return fn.decorators.some(dec =>
+  return fn.isExported === true || fn.decorators.some(dec =>
     dec.name === 'load' ||
     dec.name === 'tick' ||
     dec.name === 'schedule' ||
@@ -299,17 +302,24 @@ function collectRawFunctionReferences(cmd: string): string[] {
   return refs
 }
 
-function collectHIRFunctionCalls(fn: HIRFunction): Set<string> {
+function collectHIRFunctionCalls(fn: HIRFunction, rawOnly = false): Set<string> {
   const calls = new Set<string>()
   const visitBlock = (block: HIRStmt[]): void => {
     for (const stmt of block) visitStmt(stmt)
   }
   const visitExpr = (expr: HIRExpr): void => {
     switch (expr.kind) {
+      case 'ident':
+        if (!rawOnly && expr.symbolId && expr.functionType?.kind === 'function_type') calls.add(expr.name)
+        break
+      case 'lambda':
+        if (Array.isArray(expr.body)) visitBlock(expr.body)
+        else visitExpr(expr.body)
+        break
       case 'call':
         if (expr.fn === 'raw' && expr.args[0]?.kind === 'str_lit') {
           collectRawFunctionReferences(expr.args[0].value).forEach(ref => calls.add(ref))
-        } else {
+        } else if (!rawOnly) {
           calls.add(expr.fn)
         }
         expr.args.forEach(visitExpr)
@@ -319,7 +329,7 @@ function collectHIRFunctionCalls(fn: HIRFunction): Set<string> {
         expr.args.forEach(visitExpr)
         break
       case 'static_call':
-        calls.add(`${expr.type}::${expr.method}`)
+        if (!rawOnly) calls.add(`${expr.type}::${expr.method}`)
         expr.args.forEach(visitExpr)
         break
       case 'binary': {
@@ -330,7 +340,7 @@ function collectHIRFunctionCalls(fn: HIRFunction): Set<string> {
           '/': 'double_div',
         }
         const intrinsic = doubleIntrinsicByOperator[expr.op]
-        if (intrinsic) calls.add(intrinsic)
+        if (intrinsic && !rawOnly) calls.add(intrinsic)
         visitExpr(expr.left)
         visitExpr(expr.right)
         break
@@ -512,9 +522,19 @@ export function lowerToHIRStage(
 ): LowerToHIRStageResult {
   const hirRaw = lowerToHIR(ast)
   const hirMonomorphized = monomorphize(hirRaw)
-  const hir = options.pruneInjectedLibraries
-    ? pruneUnreachableLibraryHIR(hirMonomorphized)
-    : hirMonomorphized
+  // Coroutine callbacks are called by generated continuations, not source call
+  // expressions. Preserve their implementations through all reachability stages.
+  const callbackRoots = new Set(hirMonomorphized.functions.flatMap(fn =>
+    fn.decorators.filter(dec => dec.name === 'coroutine' && dec.args?.onDone)
+      .map(dec => dec.args!.onDone!)))
+  const rootedHIR = callbackRoots.size === 0 ? hirMonomorphized : {
+    ...hirMonomorphized,
+    functions: hirMonomorphized.functions.map(fn => callbackRoots.has(fn.name) ? { ...fn, isExported: true } : fn),
+  }
+  const reachableHIR = options.pruneInjectedLibraries
+    ? pruneUnreachableLibraryHIR(rootedHIR)
+    : rootedHIR
+  const hir = lowerFunctionValues([{ hir: reachableHIR, prefix: '' }])[0]
 
   const libraryFilePaths = new Set(
     options.pruneInjectedLibraries
@@ -680,7 +700,10 @@ function collectExternalLIRFunctionRefs(
   }
   for (const fnName of declaredFunctionNames) refs.add(declaredFunctionRef(namespace, fnName))
   for (const fn of hir.functions) {
-    for (const callee of collectHIRFunctionCalls(fn)) {
+    if (fn.decorators.some(decorator => decorator.name === 'schedule')) refs.add(`${namespace}:_schedule_${fn.name}`)
+    // Only explicitly written raw command references are external contracts.
+    // An unresolved language call must not authorize itself here.
+    for (const callee of collectHIRFunctionCalls(fn, true)) {
       if (!hirFunctionNames.has(callee)) refs.add(declaredFunctionRef(namespace, callee))
     }
   }
@@ -1025,9 +1048,13 @@ export function finalizeRuntimeLIRStage(
     })
   }
 
+  const emitterOwnedWrapperRefs = new Set(allowedFunctionRefs)
   const renameToImpl = (fnName: string): void => {
     const lirFn = finalizedLIR.functions.find(f => f.name === fnName)
     if (!lirFn) return
+    // These wrappers are emitted from the corresponding decorator metadata.
+    // Register only an implementation actually present, not arbitrary missing calls.
+    emitterOwnedWrapperRefs.add(fnName)
     const implName = `${fnName}_impl`
     lirFn.name = implName
 
@@ -1049,7 +1076,7 @@ export function finalizeRuntimeLIRStage(
     renameToImpl(fnName)
   }
 
-  throwOnVerifyLIRFailure(finalizedLIR, filePath, 'finalize-runtime-lir', allowedFunctionRefs, true, allowedExternalRefFunctions)
+  throwOnVerifyLIRFailure(finalizedLIR, filePath, 'finalize-runtime-lir', emitterOwnedWrapperRefs, false, allowedExternalRefFunctions)
 
   return { lir: finalizedLIR, singletonObjectives, warnings }
 }
@@ -1394,145 +1421,15 @@ export function compilePipeline(source: string, options: CompileOptions = {}): C
   } = options
   const warnings: string[] = []
 
-  // Preprocess: resolve import directives, merge imported sources
-  const preprocessed = preprocessSourceStage(source, { filePath, includeDirs })
-  recordStageSnapshot(options, 'preprocess', () => summarizePreprocessStage(preprocessed))
-  const processedSource = preprocessed.processedSource
-
+  // Source text stays in its own unit: imports are discovered/bound, not pasted.
+  const processedSource = source
   try {
-    // Stage 1: Lex + Parse → AST
-    const parsed = parseSourceStage(processedSource, namespace, { filePath, stopAfterCheck })
-    recordStageSnapshot(options, 'parse', () => summarizeParseStage(parsed))
-    const ast = parsed.ast
-    warnings.push(...parsed.warnings)
-
-    // Resolve whole-module file imports: `import player_utils;` (no `::` symbol)
-    // and declaration-only symbol imports: `import player_utils::ext` / `import player_utils::*`.
-    const seenModuleImports = new Set<string>()
-    const parsedImportModules = new Map<string, Program>()
-
-    function resolveModuleFilePath(modName: string, fromFile?: string): string | null {
-      const candidates = [`${modName}.mcrs`, modName]
-      const stdlibDir = getStdlibDir()
-      for (const candidate of candidates) {
-        if (fromFile) {
-          const rel = path.resolve(path.dirname(fromFile), candidate)
-          if (fs.existsSync(rel)) return rel
-        }
-        const stdlib = path.resolve(stdlibDir, candidate)
-        if (fs.existsSync(stdlib)) return stdlib
-        for (const dir of includeDirs ?? []) {
-          const extra = path.resolve(dir, candidate)
-          if (fs.existsSync(extra)) return extra
-        }
-      }
-      return null
-    }
-
-    function parseImportedModule(modFilePath: string): Program {
-      const cached = parsedImportModules.get(modFilePath)
-      if (cached) return cached
-
-      const modSource = fs.readFileSync(modFilePath, 'utf-8')
-      const modPreprocessed = preprocessSourceWithMetadata(modSource, { filePath: modFilePath, includeDirs })
-      const modParsed = parseSourceStage(modPreprocessed.source, namespace, { filePath: modFilePath, stopAfterCheck })
-      warnings.push(...modParsed.warnings)
-      parsedImportModules.set(modFilePath, modParsed.ast)
-      return modParsed.ast
-    }
-
-    function mergeImportedDeclaredSignatures(modFilePath: string, symbol: string): void {
-      const modAst = parseImportedModule(modFilePath)
-      const declaredFunctions = symbol === '*'
-        ? modAst.declaredFunctions ?? []
-        : (modAst.declaredFunctions ?? []).filter(fn => fn.name === symbol)
-      if (declaredFunctions.length > 0) {
-        mergeDeclaredFunctionsByName(ast, declaredFunctions)
-      }
-    }
-
-    let hasInjectedLibraries = false
-
-    function mergeWholeModuleImport(modFilePath: string): void {
-      hasInjectedLibraries = true
-      if (seenModuleImports.has(modFilePath)) return
-      seenModuleImports.add(modFilePath)
-      const modAst = parseImportedModule(modFilePath)
-      const existingFnNames = new Set(ast.declarations.map(fn => fn.name))
-      for (const fn of modAst.declarations) fn.isLibraryFn = true
-      ast.declarations.push(...modAst.declarations)
-      for (const fn of modAst.declarations) {
-        existingFnNames.add(fn.name)
-      }
-      mergeDeclaredFunctions(ast, modAst, existingFnNames)
-      for (const imp of modAst.imports) {
-        if (imp.symbol === undefined) {
-          const nestedPath = resolveModuleFilePath(imp.moduleName, modFilePath)
-          if (!nestedPath) {
-            warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${modFilePath})`)
-            continue
-          }
-          mergeWholeModuleImport(nestedPath)
-          continue
-        }
-
-        const nestedPath = resolveModuleFilePath(imp.moduleName, modFilePath)
-        if (!nestedPath) {
-          warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${modFilePath})`)
-          continue
-        }
-        mergeImportedDeclaredSignatures(nestedPath, imp.symbol)
-      }
-      ast.structs.push(...modAst.structs)
-      ast.implBlocks.push(...modAst.implBlocks)
-      ast.enums.push(...modAst.enums)
-      ast.consts.push(...modAst.consts)
-      ast.globals.push(...modAst.globals)
-    }
-
-    for (const imp of ast.imports) {
-      if (imp.symbol === undefined) {
-        const resolved = resolveModuleFilePath(imp.moduleName, filePath)
-        if (!resolved) {
-          throw new DiagnosticError(
-            'ParseError',
-            `Module '${imp.moduleName}' not found. Make sure '${imp.moduleName}.mcrs' exists relative to this file or in the stdlib.`,
-            imp.span ?? { line: 1, col: 1 },
-          )
-        }
-        mergeWholeModuleImport(resolved)
-        continue
-      }
-
-      const resolved = resolveModuleFilePath(imp.moduleName, filePath)
-      if (!resolved) {
-        const requester = filePath ?? 'source'
-        warnings.push(`[ImportWarning] Module '${imp.moduleName}' not found (imported in ${requester})`)
-        continue
-      }
-      mergeImportedDeclaredSignatures(resolved, imp.symbol)
-    }
-
-    for (const li of preprocessed.libraryImports ?? []) {
-      hasInjectedLibraries = true
-      mergeParsedLibrarySource(ast, li.source, warnings, {
-        filePath: li.filePath,
-        namespace,
-        stopAfterCheck,
-        dedupeDeclarations: false,
-      })
-    }
-
-    if (options.librarySources) {
-      hasInjectedLibraries = true
-      for (const libSrc of options.librarySources) {
-        mergeParsedLibrarySource(ast, libSrc, warnings, {
-          namespace,
-          stopAfterCheck,
-          dedupeDeclarations: false,
-        })
-      }
-    }
+    const prepared = prepareSourceProgram({ source, namespace, filePath, includeDirs, librarySources: options.librarySources, stopAfterCheck })
+    const ast = prepared.ast
+    const hasInjectedLibraries = prepared.hasLibraries
+    warnings.push(...prepared.warnings)
+    recordStageSnapshot(options, 'preprocess', () => summarizePreprocessStage({ processedSource, ranges: [] }))
+    recordStageSnapshot(options, 'parse', () => summarizeParseStage({ ast: prepared.root, warnings: prepared.warnings }))
 
     {
       const plannedRuntimeAssets = mergeRuntimeAssetsStage(ast, {
@@ -1557,7 +1454,9 @@ export function compilePipeline(source: string, options: CompileOptions = {}): C
       return { files: [], warnings, success: true as const }
     }
 
-    const hirStage = lowerToHIRStage(ast, namespace, { pruneInjectedLibraries: hasInjectedLibraries })
+    // Compiling a library source itself preserves its existing partial-module
+    // output contract. Application imports still prune unused library bodies.
+    const hirStage = lowerToHIRStage(ast, namespace, { pruneInjectedLibraries: hasInjectedLibraries && !ast.isLibrary })
     recordStageSnapshot(options, 'lowerToHIR', () => summarizeLowerToHIRStage(hirStage))
     warnings.push(...hirStage.warnings)
 

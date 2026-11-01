@@ -1,4 +1,10 @@
 // stdlib-extra-test.mcrs — MC integration tests for random, bits, list_sort, bigint, math_hp
+import random;
+import bits;
+import list;
+import bigint;
+import math_hp;
+import color;
 
 @load fn __load() {
     raw("scoreboard objectives add rsex dummy");

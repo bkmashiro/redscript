@@ -8,7 +8,7 @@ import * as path from 'path'
 import { compile, type CompileOptions, type CompileResult } from '../emit/compile'
 import type { DatapackFile } from '../emit'
 import { FileCache } from './index'
-import { DependencyGraph, parseImports } from './deps'
+import { DependencyGraph } from './deps'
 
 export interface IncrementalOptions {
   namespace?: string
@@ -61,7 +61,7 @@ export function compileIncremental(
   }
 
   depGraph.clear()
-  const discoveredFiles = discoverDependencyGraph(normalizedEntries, depGraph)
+  const discoveredFiles = discoverDependencyGraph(normalizedEntries, depGraph, options.includeDirs)
   const changedFiles = new Set<string>()
 
   for (const file of discoveredFiles) {
@@ -140,7 +140,7 @@ export function compileIncremental(
   return result
 }
 
-function discoverDependencyGraph(entries: string[], depGraph: DependencyGraph): Set<string> {
+function discoverDependencyGraph(entries: string[], depGraph: DependencyGraph, includeDirs?: readonly string[]): Set<string> {
   const visited = new Set<string>()
   const queue = [...entries]
 
@@ -151,8 +151,8 @@ function discoverDependencyGraph(entries: string[], depGraph: DependencyGraph): 
 
     try {
       const source = fs.readFileSync(current, 'utf-8')
-      depGraph.addFile(current, source)
-      const imports = parseImports(current, source)
+      depGraph.addFile(current, source, { includeDirs })
+      const imports = depGraph.getDirectDeps(current)
       for (const imported of imports) {
         if (!visited.has(imported)) queue.push(imported)
       }

@@ -8,6 +8,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 import { DiagnosticError } from './diagnostics'
+import { resolveSourceImport } from './compiler/source-imports'
 
 // ---------------------------------------------------------------------------
 // Re-export v2 compile
@@ -61,11 +62,8 @@ export function resolveSourceLine(
 
 const IMPORT_RE = /^\s*import\s+"([^"]+)"\s*;?\s*$/
 
-/** Source checkout and installed dist/src share the shipped src/stdlib data. */
-export function getStdlibDir(): string {
-  const candidates = [path.resolve(__dirname, 'stdlib'), path.resolve(__dirname, '..', '..', 'src', 'stdlib')]
-  return candidates.find(dir => fs.existsSync(path.join(dir, 'math.mcrs'))) ?? candidates[0]
-}
+export { getStdlibDir } from './stdlib/paths'
+import { getStdlibDir } from './stdlib/paths'
 
 /** Returns true if the source file declares `module library;` at its top
  *  (before any non-comment/non-blank lines). */
@@ -85,33 +83,8 @@ interface PreprocessOptions {
 }
 
 /** Resolve an import specifier to an absolute file path, trying multiple locations. */
-function resolveImportPath(
-  spec: string,
-  fromFile: string,
-  includeDirs: string[]
-): string | null {
-  const candidates = spec.endsWith('.mcrs') ? [spec] : [spec, spec + '.mcrs']
-
-  for (const candidate of candidates) {
-    // 1. Relative to the importing file
-    const rel = path.resolve(path.dirname(fromFile), candidate)
-    if (fs.existsSync(rel)) return rel
-
-    // 2. stdlib directory (package root / src / stdlib)
-    //    Strip leading 'stdlib/' prefix so `import "stdlib/math"` resolves to
-    //    <stdlibDir>/math.mcrs rather than <stdlibDir>/stdlib/math.mcrs.
-    const stdlibDir = getStdlibDir()
-    const stdlibCandidate = candidate.replace(/^stdlib\//, '')
-    const stdlib = path.resolve(stdlibDir, stdlibCandidate)
-    if (fs.existsSync(stdlib)) return stdlib
-
-    // 3. Extra include dirs
-    for (const dir of includeDirs) {
-      const extra = path.resolve(dir, candidate)
-      if (fs.existsSync(extra)) return extra
-    }
-  }
-  return null
+function resolveImportPath(spec: string, fromFile: string, includeDirs: string[]): string | null {
+  return resolveSourceImport(spec, { fromFile, includeDirs })
 }
 
 function countLines(source: string): number {

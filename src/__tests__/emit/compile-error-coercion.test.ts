@@ -24,7 +24,7 @@ const STANDARD_MOCKS = {
         implBlocks: [],
         enums: [],
         consts: [],
-        globals: [],
+        globals: [], interfaces: [],
       }),
     })),
   }),

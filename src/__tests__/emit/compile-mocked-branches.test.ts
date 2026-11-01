@@ -3,6 +3,7 @@ describe('emit/compile mocked branch coverage', () => {
     jest.resetModules()
     jest.clearAllMocks()
     jest.unmock('../../compile')
+    jest.unmock('../../compiler/source-program')
     jest.unmock('../../lexer')
     jest.unmock('../../parser')
     jest.unmock('../../typechecker')
@@ -20,160 +21,35 @@ describe('emit/compile mocked branch coverage', () => {
     jest.unmock('fs')
   })
 
-  test('whole-module import paths resolve, recurse, skip symbol imports, and warn on missing nested modules', () => {
-    jest.isolateModules(() => {
-      const parseQueue = [
-        {
-          imports: [
-            { moduleName: 'mod', symbol: undefined, span: { line: 1, col: 1 } },
-            { moduleName: 'sym', symbol: 'named', span: { line: 2, col: 1 } },
-          ],
-          declarations: [],
-          structs: [],
-          implBlocks: [],
-          enums: [],
-          consts: [],
-          globals: [],
-        },
-        {
-          imports: [
-            { moduleName: 'nested', symbol: undefined },
-            { moduleName: 'skip_nested', symbol: 'named' },
-            { moduleName: 'missing_nested', symbol: undefined },
-          ],
-          declarations: [{ name: 'helper', decorators: [] }],
-          structs: [],
-          implBlocks: [],
-          enums: [],
-          consts: [],
-          globals: [],
-        },
-        {
-          imports: [],
-          declarations: [{ name: 'nested_helper', decorators: [] }],
-          structs: [],
-          implBlocks: [],
-          enums: [],
-          consts: [],
-          globals: [],
-        },
-      ]
-
-      jest.doMock('../../compile', () => ({
-        preprocessSourceWithMetadata: jest.fn((source: string) => ({ source })),
-        getStdlibDir: jest.fn(() => '/stdlib'),
-      }))
-      jest.doMock('fs', () => ({
-        existsSync: jest.fn((file: string) => (
-          file === '/root/mod.mcrs' ||
-          file === '/root/nested.mcrs'
-        )),
-        readFileSync: jest.fn((file: string) => {
-          if (file === '/root/mod.mcrs') return 'mod-source'
-          if (file === '/root/nested.mcrs') return 'nested-source'
-          return ''
-        }),
-      }))
-      jest.doMock('../../lexer', () => ({
-        Lexer: jest.fn().mockImplementation(() => ({
-          tokenize: () => [],
-        })),
-      }))
-      jest.doMock('../../parser', () => ({
-        Parser: jest.fn().mockImplementation(() => ({
-          warnings: [],
-          parseErrors: [],
-          parse: () => parseQueue.shift(),
-        })),
-      }))
-      jest.doMock('../../typechecker', () => ({
-        TypeChecker: jest.fn().mockImplementation(() => ({
-          check: () => [],
-          getWarnings: () => [],
-        })),
-      }))
-      jest.doMock('../../hir/lower', () => ({ lowerToHIR: jest.fn(() => ({ functions: [], structs: [] })) }))
-      jest.doMock('../../hir/monomorphize', () => ({ monomorphize: jest.fn(x => x) }))
-      jest.doMock('../../hir/deprecated', () => ({ checkDeprecatedCalls: jest.fn(() => []) }))
-      jest.doMock('../../mir/lower', () => ({ lowerToMIR: jest.fn(() => ({ functions: [] })) }))
-      jest.doMock('../../optimizer/pipeline', () => ({ optimizeModule: jest.fn(x => x) }))
-      jest.doMock('../../optimizer/coroutine', () => ({
-        coroutineTransform: jest.fn(module => ({ module, generatedTickFunctions: [], warnings: [] })),
-      }))
-      jest.doMock('../../lir/lower', () => ({ lowerToLIR: jest.fn(() => ({ functions: [] })) }))
-      jest.doMock('../../optimizer/lir/pipeline', () => ({ lirOptimizeModule: jest.fn(x => x) }))
-      jest.doMock('../../lir/budget', () => ({ analyzeBudget: jest.fn(() => []) }))
-      jest.doMock('../../events/types', () => ({ isEventTypeName: jest.fn(() => false) }))
-      jest.doMock('../../emit/index', () => ({ emit: jest.fn(() => []) }))
-
+  test('shared discovery rejects missing nested imports, then closes named and whole-module dependencies', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const os = require('os')
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'source-dependency-'))
+    try {
+      fs.writeFileSync(path.join(root, 'mod.mcrs'), 'module mod; import nested::nested_helper; import missing_nested; export fn helper(): int { return nested_helper(); }')
+      fs.writeFileSync(path.join(root, 'nested.mcrs'), 'module nested; export fn nested_helper(): int { return 5; }')
+      fs.writeFileSync(path.join(root, 'sym.mcrs'), 'module sym; export fn named(): int { return 7; }')
       const { compile } = require('../../emit/compile')
-      const result = compile('source', { namespace: 'mocked', filePath: '/root/main.mcrs' })
-
-      expect(result.warnings).toContain(
-        "[ImportWarning] Module 'missing_nested' not found (imported in /root/mod.mcrs)"
-      )
-    })
+      const source = 'import mod; import sym::named; fn main(): int { return helper() + named(); }'
+      const options = { namespace: 'dependencies', filePath: path.join(root, 'main.mcrs') }
+      expect(() => compile(source, options)).toThrow(/Module 'missing_nested' not found/)
+      fs.writeFileSync(path.join(root, 'missing_nested.mcrs'), 'module missing_nested;')
+      expect(compile(source, options).success).toBe(true)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 
   test('library imports, librarySources, lenient type errors, and decorator extraction flow into emit options', () => {
     jest.isolateModules(() => {
       const emit = jest.fn(() => [])
-      const parseQueue = [
-        {
-          imports: [],
-          declarations: [],
-          structs: [],
-          implBlocks: [],
-          enums: [],
-          consts: [],
-          globals: [],
-        },
-        {
-          imports: [],
-          declarations: [{ name: 'lib_fn', decorators: [] }],
-          structs: [],
-          implBlocks: [],
-          enums: [],
-          consts: [],
-          globals: [],
-        },
-        {
-          declarations: [{ name: 'inline_fn', decorators: [] }],
-          structs: [],
-          implBlocks: [],
-          enums: [],
-          consts: [],
-          globals: [],
-        },
-      ]
-
-      jest.doMock('../../compile', () => ({
-        preprocessSourceWithMetadata: jest.fn((source: string, options?: { filePath?: string }) => {
-          if (options?.filePath === '/root/main.mcrs') {
-            return {
-              source,
-              libraryImports: [{ source: 'module library;\nfn lib_fn(): int { return 1; }', filePath: '/root/lib.mcrs' }],
-            }
-          }
-          return { source }
-        }),
-      }))
-      jest.doMock('fs', () => ({
-        existsSync: jest.fn(() => false),
-        readFileSync: jest.fn(() => ''),
-      }))
-      jest.doMock('../../lexer', () => ({
-        Lexer: jest.fn().mockImplementation(() => ({
-          tokenize: () => [],
-        })),
-      }))
-      jest.doMock('../../parser', () => ({
-        Parser: jest.fn().mockImplementation(() => ({
-          warnings: [],
-          parseErrors: [],
-          parse: () => parseQueue.shift(),
-        })),
-      }))
+      const prepared = {
+        ast: { namespace: 'mocked', imports: [], declarations: [], structs: [], implBlocks: [], enums: [], consts: [], globals: [], interfaces: [] },
+        warnings: [], hasLibraries: true,
+      }
+      const prepareSourceProgram = jest.fn(() => ({ ...prepared, root: prepared.ast }))
+      jest.doMock('../../compiler/source-program', () => ({ prepareSourceProgram }))
       jest.doMock('../../typechecker', () => ({
         TypeChecker: jest.fn().mockImplementation(() => ({
           check: () => [{ location: { line: 3, col: 5 }, message: 'bad types' }],
@@ -184,7 +60,7 @@ describe('emit/compile mocked branch coverage', () => {
         lowerToHIR: jest.fn(() => ({
           functions: [
             {
-              name: 'tick_fn',
+              name: 'tick_fn', params: [], returnType: { kind: 'named', name: 'void' }, body: [],
               decorators: [
                 { name: 'tick' },
                 { name: 'load' },
@@ -194,11 +70,11 @@ describe('emit/compile mocked branch coverage', () => {
               ],
             },
             {
-              name: 'ignored_event',
+              name: 'ignored_event', params: [], returnType: { kind: 'named', name: 'void' }, body: [],
               decorators: [{ name: 'on', args: { eventType: 'NotReal' } }],
             },
           ],
-          structs: [],
+          namespace: 'mocked', globals: [], consts: [], structs: [], implBlocks: [], enums: [],
         })),
       }))
       jest.doMock('../../hir/monomorphize', () => ({ monomorphize: jest.fn(x => x) }))
@@ -228,6 +104,7 @@ describe('emit/compile mocked branch coverage', () => {
         librarySources: ['module library;\nfn inline_fn(): int { return 2; }'],
       })
 
+      expect(prepareSourceProgram).toHaveBeenCalledWith(expect.objectContaining({ librarySources: ['module library;\nfn inline_fn(): int { return 2; }'] }))
       expect(result.warnings).toEqual(expect.arrayContaining([
         'lint warning',
         '[TypeError] line 3, col 5: bad types',

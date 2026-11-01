@@ -7,6 +7,7 @@
 
 import type { Program, FnDecl, Stmt, Expr, TypeNode, Block, EntityTypeName, EntitySelector, InterfaceDecl, InterfaceMethod } from '../ast/types'
 import { DiagnosticError, DiagnosticCollector } from '../diagnostics'
+import { isBuiltinFunction } from '../builtins/callables'
 import { getEventExecutorContext, isEventTypeName } from '../events/types'
 import { expandStructDeclarations } from '../structs/expand'
 import { validateFunctionDecorators } from './decorators'
@@ -45,6 +46,8 @@ const BUILTIN_RESOURCE_ARGUMENTS: Record<string, Record<number, TypeNode>> = {
 }
 
 const BUILTIN_SIGNATURES: Record<string, BuiltinSignature> = {
+  random: { params: [INT_TYPE, INT_TYPE], return: INT_TYPE },
+  random_native: { params: [INT_TYPE, INT_TYPE], return: INT_TYPE },
   assert: {
     params: [{ kind: 'named', name: 'bool' }],
     return: VOID_TYPE,
@@ -156,6 +159,18 @@ export class TypeChecker {
     for (const fn of program.declaredFunctions ?? []) {
       if (!this.functions.has(fn.name)) {
         this.functions.set(fn.name, fn)
+      }
+    }
+
+    // A schedule wrapper is a real compiler-generated callable, not a blanket
+    // permission for arbitrary _schedule_* names.
+    for (const fn of program.declarations) {
+      if (!fn.decorators.some(decorator => decorator.name === 'schedule')) continue
+      const name = `_schedule_${fn.name}`
+      if (this.functions.has(name)) {
+        this.report(`Function '${name}' conflicts with a generated schedule wrapper`, fn)
+      } else {
+        this.functions.set(name, { ...fn, name, params: [], returnType: VOID_TYPE, decorators: [], body: [], isDeclareOnly: true })
       }
     }
 
@@ -434,39 +449,44 @@ export class TypeChecker {
           this.loopDepth--
         }
         break
-      case 'match':
+      case 'match': {
         this.checkExpr(stmt.expr)
+        const subjectType = this.inferType(stmt.expr)
         for (const arm of stmt.arms) {
-          if (arm.pattern.kind === 'PatExpr') {
-            // Legacy: check the wrapped expression against the subject type
-            this.checkExpr(arm.pattern.expr)
-            const subjectType = this.inferType(stmt.expr)
-            const patternType = this.inferType(arm.pattern.expr)
-            // Skip check if either type is unknown (void) — struct field access not yet inferred
-            const isUnknown = (t: TypeNode) => t.kind === 'named' && t.name === 'void'
-            if (!isUnknown(subjectType) && !isUnknown(patternType) &&
-                !this.typesMatch(subjectType, patternType)) {
-              this.report('Match arm pattern type must match subject type', arm.pattern.expr)
+          const savedScope = new Map(this.scope)
+          try {
+            if (arm.pattern.kind === 'PatExpr') {
+              this.checkExpr(arm.pattern.expr)
+              const patternType = this.inferType(arm.pattern.expr)
+              const isUnknown = (t: TypeNode) => t.kind === 'named' && t.name === 'void'
+              if (!isUnknown(subjectType) && !isUnknown(patternType) &&
+                  !this.typesMatch(subjectType, patternType)) {
+                this.report('Match arm pattern type must match subject type', arm.pattern.expr)
+              }
+            } else if (arm.pattern.kind === 'PatSome' || arm.pattern.kind === 'PatNone') {
+              if (subjectType.kind !== 'option') {
+                this.report('Some/None patterns require an Option subject', stmt.expr)
+              }
+              if (arm.pattern.kind === 'PatSome') {
+                this.scope.set(arm.pattern.binding, {
+                  type: subjectType.kind === 'option' ? subjectType.inner : VOID_TYPE,
+                  mutable: false,
+                })
+              }
+            } else if (arm.pattern.kind === 'PatEnum') {
+              const pat = arm.pattern
+              const fields = this.enumPayloads.get(pat.enumName)?.get(pat.variant) ?? []
+              for (let i = 0; i < pat.bindings.length; i++) {
+                this.scope.set(pat.bindings[i], { type: fields[i]?.type ?? INT_TYPE, mutable: false })
+              }
             }
             this.checkBlock(arm.body)
-          } else if (arm.pattern.kind === 'PatEnum') {
-            const pat = arm.pattern
-            const variantPayloads = this.enumPayloads.get(pat.enumName)?.get(pat.variant) ?? []
-            // Bind pattern variables to their declared field types in arm scope
-            const savedScope = new Map(this.scope)
-            for (let i = 0; i < pat.bindings.length; i++) {
-              const fieldDef = variantPayloads[i]
-              const bindingType: TypeNode = fieldDef ? fieldDef.type : { kind: 'named', name: 'int' }
-              this.scope.set(pat.bindings[i], { type: bindingType, mutable: false })
-            }
-            this.checkBlock(arm.body)
+          } finally {
             this.scope = savedScope
-          } else {
-            // PatSome / PatNone / PatInt / PatWild are structurally typed — no extra scope needed
-            this.checkBlock(arm.body)
           }
         }
         break
+      }
       case 'as_block': {
         // as block changes @s to the selector's entity type
         const entityType = this.inferEntityTypeFromSelector(stmt.selector)
@@ -645,11 +665,16 @@ export class TypeChecker {
 
   private checkExpr(expr: Expr, expectedType?: TypeNode): void {
     switch (expr.kind) {
-      case 'ident':
-        if (!this.scope.has(expr.name)) {
+      case 'ident': {
+        const fn = !this.scope.has(expr.name) ? this.functions.get(expr.name) : undefined
+        if (fn) expr.symbolId ??= fn.symbolId ?? fn.name
+        const type = fn ? { kind: 'function_type' as const, params: fn.params.map(param => this.normalizeType(param.type)), return: this.normalizeType(fn.returnType) } : this.scope.get(expr.name)?.type
+        if (type?.kind === 'function_type') expr.functionType = type
+        if (!fn && !this.scope.has(expr.name)) {
           this.report(`Variable '${expr.name}' used before declaration`, expr)
         }
         break
+      }
 
       case 'call':
         this.checkCallExpr(expr)
@@ -883,9 +908,13 @@ export class TypeChecker {
           this.report(`Unquoted resource literal '${expr.value}' is only allowed in typed resource contexts`, expr)
         }
         break
-      case 'type_cast':
+      case 'type_cast': {
         this.checkExpr(expr.expr)
+        const source = this.inferType(expr.expr)
+        const target = this.normalizeType(expr.targetType)
+        if ((source.kind === 'function_type' || target.kind === 'function_type') && !this.typesMatch(target, source)) this.report('Function values cannot be cast to or from a different representation', expr)
         break
+      }
     }
   }
 
@@ -910,17 +939,27 @@ export class TypeChecker {
   }
 
   private checkCallExpr(expr: Extract<Expr, { kind: 'call' }>): void {
-    if (expr.fn === 'tp' || expr.fn === 'tp_to') {
+    const callable = !expr.symbolId && !expr.methodName ? this.scope.get(expr.fn)?.type : undefined
+    if (callable?.kind === 'function_type') {
+      expr.functionType = callable
+      this.checkFunctionCallArgs(expr.args, callable.params, expr.fn, expr)
+      return
+    }
+    if (!expr.symbolId && !expr.methodName && this.scope.has(expr.fn)) {
+      this.report(`Variable '${expr.fn}' is not callable`, expr)
+      return
+    }
+    if (!expr.symbolId && (expr.fn === 'tp' || expr.fn === 'tp_to')) {
       this.checkTpCall(expr)
     }
 
-    const richTextBuiltin = this.richTextBuiltins.get(expr.fn)
+    const richTextBuiltin = expr.symbolId ? undefined : this.richTextBuiltins.get(expr.fn)
     if (richTextBuiltin) {
       this.checkRichTextBuiltinCall(expr, richTextBuiltin.messageIndex)
       return
     }
 
-    const builtinResourceArgs = BUILTIN_RESOURCE_ARGUMENTS[expr.fn]
+    const builtinResourceArgs = expr.symbolId ? undefined : BUILTIN_RESOURCE_ARGUMENTS[expr.fn]
     if (builtinResourceArgs) {
       for (let i = 0; i < expr.args.length; i++) {
         this.checkExpr(expr.args[i], builtinResourceArgs[i])
@@ -928,7 +967,7 @@ export class TypeChecker {
       return
     }
 
-    const builtin = BUILTIN_SIGNATURES[expr.fn]
+    const builtin = expr.symbolId ? undefined : BUILTIN_SIGNATURES[expr.fn]
     if (builtin) {
       if (expr.fn === 'setTimeout' || expr.fn === 'setInterval') {
         if (this.loopDepth > 0) {
@@ -996,6 +1035,7 @@ export class TypeChecker {
 
     const varType = this.scope.get(expr.fn)?.type
     if (varType?.kind === 'function_type') {
+      expr.functionType = varType
       this.checkFunctionCallArgs(expr.args, varType.params, expr.fn, expr)
       return
     }
@@ -1014,7 +1054,9 @@ export class TypeChecker {
     for (const arg of expr.args) {
       this.checkExpr(arg)
     }
-    // Built-in functions are not checked for arg count
+    if (!isBuiltinFunction(expr.fn) && !this.currentFn?.isLibraryFn) {
+      this.report(`Unknown function '${expr.fn}'. Import or declare it before calling it.`, expr)
+    }
   }
 
   private checkRichTextBuiltinCall(expr: Extract<Expr, { kind: 'call' }>, messageIndex: number): void {
@@ -1042,6 +1084,7 @@ export class TypeChecker {
   private checkInvokeExpr(expr: Extract<Expr, { kind: 'invoke' }>): void {
     this.checkExpr(expr.callee)
     const calleeType = this.inferType(expr.callee)
+    if (calleeType.kind === 'function_type') expr.functionType = calleeType
     if (calleeType.kind !== 'function_type') {
       this.report('Attempted to call a non-function value', expr.callee)
       for (const arg of expr.args) {
@@ -1183,6 +1226,8 @@ export class TypeChecker {
     const normalizedExpected = expectedType ? this.normalizeType(expectedType) : undefined
     const expectedFnType = normalizedExpected?.kind === 'function_type' ? normalizedExpected : undefined
     const lambdaType = this.inferLambdaType(expr, expectedFnType)
+    expr.returnType ??= expectedFnType?.return ?? lambdaType.return
+    for (let i = 0; i < expr.params.length; i++) expr.params[i].type ??= expectedFnType?.params[i] ?? lambdaType.params[i]
 
     if (expectedFnType && !this.typesMatch(expectedFnType, lambdaType)) {
       this.report(
@@ -1299,9 +1344,10 @@ export class TypeChecker {
       case 'blockpos':
         return { kind: 'named', name: 'BlockPos' }
       case 'ident':
-        return this.scope.get(expr.name)?.type ?? { kind: 'named', name: 'void' }
+        return expr.functionType ?? this.scope.get(expr.name)?.type ?? { kind: 'named', name: 'void' }
       case 'call': {
-        const builtin = BUILTIN_SIGNATURES[expr.fn]
+        if (expr.functionType?.kind === 'function_type') return expr.functionType.return
+        const builtin = expr.symbolId ? undefined : BUILTIN_SIGNATURES[expr.fn]
         if (builtin) {
           return builtin.return
         }
@@ -1405,7 +1451,7 @@ export class TypeChecker {
             return normalized
           }
         }
-        return { kind: 'named', name: 'void' }
+        return expr.literalType ?? { kind: 'named', name: 'void' }
       case 'tuple_lit':
         return {
           kind: 'tuple',

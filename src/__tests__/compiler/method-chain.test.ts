@@ -4,6 +4,7 @@
  */
 
 import { compile } from '../../emit/compile'
+import { MCRuntime } from '../../runtime'
 
 const VEC2_SRC = `
   struct Vec2 { x: int, y: int }
@@ -22,6 +23,23 @@ const VEC2_SRC = `
 `
 
 describe('method chaining: compile', () => {
+  test('a factory receiver is evaluated once and chained field values are preserved', () => {
+    const result = compile(`${VEC2_SRC}
+      let calls: int = 0;
+      fn make(): Vec2 { calls = calls + 1; return Vec2 { x: 3, y: 4 }; }
+      fn check(): int {
+        let value: int = make().scale(2).add(Vec2 { x: 1, y: 0 }).len_sq();
+        return value * 10 + calls;
+      }`, { namespace: 'chain' })
+    const runtime = new MCRuntime('chain')
+    for (const file of result.files) {
+      const match = file.path.match(/^data\/([^/]+)\/function\/(.+)\.mcfunction$/)
+      if (match) runtime.loadFunction(`${match[1]}:${match[2]}`, file.content.split('\n'))
+    }
+    runtime.execFunction('chain:load')
+    runtime.execFunction('chain:check')
+    expect(runtime.getScore('$ret', '__chain')).toBe(1131)
+  })
   test('simple two-step chain compiles without error', () => {
     const src = `
       ${VEC2_SRC}

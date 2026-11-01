@@ -1,5 +1,34 @@
 // Particle effect helpers
+import math;
 // Usage: import "stdlib/particles.mcrs"
+
+/// Spawns happy villager particles one block above each selected entity.
+fn happy(target: selector) {
+    foreach (entity in target) {
+        at @s { particle("happy_villager", ~0, ~1, ~0); }
+    }
+}
+
+/// Spawns angry villager particles one block above each selected entity.
+fn angry(target: selector) {
+    foreach (entity in target) {
+        at @s { particle("angry_villager", ~0, ~1, ~0); }
+    }
+}
+
+/// Spawns enchantment sparkles one block above each selected entity.
+fn sparkles(target: selector) {
+    foreach (entity in target) {
+        at @s { particle("enchant", ~0, ~1, ~0); }
+    }
+}
+
+/// Spawns totem particles one block above each selected entity.
+fn totem_effect(target: selector) {
+    foreach (entity in target) {
+        at @s { particle("totem_of_undying", ~0, ~1, ~0); }
+    }
+}
 
 /// Spawns heart particles at a block position.
 /// @param x  X coordinate

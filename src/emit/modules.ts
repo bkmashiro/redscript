@@ -17,6 +17,7 @@ import { Parser } from '../parser'
 import { DiagnosticError } from '../diagnostics'
 import { lowerToHIR } from '../hir/lower'
 import { monomorphize } from '../hir/monomorphize'
+import { lowerFunctionValues } from '../hir/function-values'
 import { lowerToMIR } from '../mir/lower'
 import { optimizeModule } from '../optimizer/pipeline'
 import { lowerToLIR } from '../lir/lower'
@@ -29,6 +30,8 @@ import type { HIRModule, HIRFunction, HIRExpr, HIRStmt, HIRBlock } from '../hir/
 import type { Program, FnDecl, Expr, Stmt, Block } from '../ast/types'
 import { TypeChecker } from '../typechecker'
 import { getTickRate, INVALID_TICK_RATE_MESSAGE } from '../typechecker/decorators'
+import { buildCallABI, type CallABIRegistry } from '../compiler/call-abi'
+import { visitScopedExpressions } from '../resolver/scoped-expressions'
 import type { McVersion } from '../types/mc-version'
 
 type ExportKind = 'function' | 'declaration'
@@ -278,6 +281,7 @@ export function compileModulesWithLIR(
   // Track library-eligible file paths for cross-module DCE
   const libraryFilePaths = new Set<string>()
   let packMetaEmitted = false
+  const prepared: Array<{ mod: ModuleInput; hir: HIRModule; objective: string; moduleName?: string; unusedExportedFns: Set<string> }> = []
 
   for (const mod of modules) {
     const ast = parsedModules.get(mod.name)!
@@ -334,18 +338,30 @@ export function compileModulesWithLIR(
     // Named module: `__${namespace}_${moduleName}`, anonymous: `__${namespace}`
     const objective = mod.objective ?? (isNamed ? `__${namespace}_${mod.name}` : `__${namespace}`)
 
-    // Run the pipeline
+    // Resolve and typecheck every unit before constructing call conventions.
     const modSource = parsedModuleSources.get(mod.name) ?? mod.filePath ?? ''
+    const checker = new TypeChecker(modSource, mod.filePath)
+    const errors = checker.check(ast)
+    warnings.push(...checker.getWarnings())
+    if (errors.length > 0) throw errors[0]
+    const hir = monomorphize(lowerToHIR(ast))
+    prepared.push({ mod, hir, objective, moduleName: isNamed ? mod.name : undefined, unusedExportedFns })
+  }
+
+  const callableUnits = lowerFunctionValues(prepared.map(unit => ({ hir: unit.hir, prefix: unit.moduleName ?? '' })))
+  for (let index = 0; index < prepared.length; index++) prepared[index].hir = callableUnits[index]
+  const callABI = buildCallABI(prepared)
+  for (const { mod, hir, objective, moduleName, unusedExportedFns } of prepared) {
     const modFiles = compileSingleModule(
-      ast,
+      hir,
       namespace,
       objective,
-      isNamed ? mod.name : undefined,
+      moduleName,
       mod.filePath,
-      modSource,
       lirOptimizeOptions,
       options.mcVersion,
       options.emitArtifacts !== false,
+      callABI,
     )
     warnings.push(...modFiles.warnings)
     lirModules.push(modFiles.lirModule)
@@ -417,18 +433,19 @@ function scopeNamedLIRFunctions(lir: LIRModule, moduleName: string, namespace: s
   }
 
   if (qualifiedRefs.size === 0) return
-  for (const fn of lir.functions) {
-    for (const instr of fn.instructions) {
-      if ('fn' in instr && typeof instr.fn === 'string') {
-        instr.fn = qualifiedRefs.get(instr.fn) ?? rawRefs.get(instr.fn) ?? instr.fn
-      }
-      if ('cmd' in instr && typeof instr.cmd === 'string') {
-        for (const [original, scoped] of qualifiedRefs) {
-          instr.cmd = instr.cmd.split(original).join(scoped)
-        }
-      }
+  const rewriteInstruction = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(rewriteInstruction); return }
+    if (!value || typeof value !== 'object') return
+    const instr = value as Record<string, unknown>
+    if (typeof instr.fn === 'string') instr.fn = qualifiedRefs.get(instr.fn) ?? rawRefs.get(instr.fn) ?? instr.fn
+    if (typeof instr.cmd === 'string') {
+      for (const [original, scoped] of qualifiedRefs) instr.cmd = (instr.cmd as string).split(original).join(scoped)
+    }
+    for (const child of Object.values(instr)) {
+      if (child && typeof child === 'object') rewriteInstruction(child)
     }
   }
+  for (const fn of lir.functions) rewriteInstruction(fn.instructions)
 }
 
 interface SingleModuleResult {
@@ -509,30 +526,19 @@ function crossModuleDCE(
 }
 
 function compileSingleModule(
-  ast: Program,
+  hir: HIRModule,
   namespace: string,
   objective: string,
   moduleName: string | undefined,
   filePath: string | undefined,
-  source: string,
   lirOptimizeOptions: LIROptimizeOptions,
-  mcVersion?: McVersion,
-  emitArtifacts = true,
+  mcVersion: McVersion | undefined,
+  emitArtifacts: boolean,
+  callABI: CallABIRegistry,
 ): SingleModuleResult {
   const warnings: string[] = []
 
   try {
-    const checker = new TypeChecker(source, filePath)
-    const errors = checker.check(ast)
-    warnings.push(...checker.getWarnings())
-    if (errors.length > 0) {
-      throw errors[0]
-    }
-
-    const hirRaw = lowerToHIR(ast)
-    const hir = monomorphize(hirRaw)
-
-
 
     // Extract decorator metadata
     const tickFunctions: string[] = []
@@ -551,6 +557,11 @@ function compileSingleModule(
           if (rate > 1) tickRateFunctions.push({ name: fn.name, rate })
         }
         if (dec.name === 'load') loadFunctions.push(fn.name)
+        if (dec.name === 'require_on_load') {
+          for (const argument of dec.rawArgs ?? []) {
+            if (argument.kind === 'string' && !loadFunctions.includes(argument.value)) loadFunctions.push(argument.value)
+          }
+        }
         if (dec.name === 'watch' && dec.args?.objective) {
           watchFunctions.push({ name: fn.name, objective: dec.args.objective })
         }
@@ -570,7 +581,7 @@ function compileSingleModule(
     }
 
     // Patch the MIR module objective (lowerToMIR computes `__${namespace}` by default)
-    const mir = lowerToMIR(hir, filePath)
+    const mir = lowerToMIR(hir, filePath, callABI)
     mir.objective = objective
     const safeHints = new Set(['inline', 'no-inline', 'deprecated'])
     const runtimeBoundaries = new Set(hir.functions.filter(fn =>
@@ -586,7 +597,7 @@ function compileSingleModule(
     const mirFinal = coroResult.module
     tickFunctions.push(...coroResult.generatedTickFunctions)
 
-    const lir = lowerToLIR(mirFinal)
+    const lir = lowerToLIR(mirFinal, { callABI })
     if (moduleName) scopeNamedLIRFunctions(lir, moduleName, namespace)
     lir.objective = objective
     const lirOpt = lirOptimizeModule(lir, lirOptimizeOptions)
@@ -698,138 +709,33 @@ function detectCircularImports(parsedModules: Map<string, Program>): void {
 /** Rewrite call expressions in the program AST.
  *  symbolMap: localName → qualifiedName (e.g. "sin" → "math/sin") */
 function rewriteCallsInProgram(program: Program, symbolMap: Map<string, string>): void {
-  for (const fn of program.declarations) {
-    rewriteBlock(fn.body, symbolMap)
-  }
-  for (const ib of program.implBlocks) {
-    for (const m of ib.methods) {
-      rewriteBlock(m.body, symbolMap)
+  for (const fn of [...program.declarations, ...program.implBlocks.flatMap(block => block.methods)]) {
+    for (const decorator of fn.decorators) {
+      if (decorator.name === 'require_on_load') {
+        for (const argument of decorator.rawArgs ?? []) {
+          if (argument.kind === 'string' && symbolMap.has(argument.value)) argument.value = symbolMap.get(argument.value)!
+        }
+      }
+      if (decorator.name === 'coroutine' && decorator.args?.onDone && symbolMap.has(decorator.args.onDone)) {
+        decorator.args = { ...decorator.args, onDone: symbolMap.get(decorator.args.onDone)! }
+      }
     }
   }
-}
-
-function rewriteBlock(block: Block, symbolMap: Map<string, string>): void {
-  for (const stmt of block) {
-    rewriteStmt(stmt, symbolMap)
-  }
-}
-
-function rewriteStmt(stmt: Stmt, symbolMap: Map<string, string>): void {
-  switch (stmt.kind) {
-    case 'let':
-    case 'expr':
-      rewriteExpr(stmt.kind === 'let' ? stmt.init : stmt.expr, symbolMap)
-      break
-    case 'return':
-      if (stmt.value) rewriteExpr(stmt.value, symbolMap)
-      break
-    case 'if':
-      rewriteExpr(stmt.cond, symbolMap)
-      rewriteBlock(stmt.then, symbolMap)
-      if (stmt.else_) rewriteBlock(stmt.else_, symbolMap)
-      break
-    case 'while':
-      rewriteExpr(stmt.cond, symbolMap)
-      rewriteBlock(stmt.body, symbolMap)
-      break
-    case 'for':
-      if (stmt.init) rewriteStmt(stmt.init, symbolMap)
-      rewriteExpr(stmt.cond, symbolMap)
-      rewriteExpr(stmt.step, symbolMap)
-      rewriteBlock(stmt.body, symbolMap)
-      break
-    case 'for_range':
-      rewriteExpr(stmt.start, symbolMap)
-      rewriteExpr(stmt.end, symbolMap)
-      rewriteBlock(stmt.body, symbolMap)
-      break
-    case 'foreach':
-      rewriteExpr(stmt.iterable, symbolMap)
-      rewriteBlock(stmt.body, symbolMap)
-      break
-    case 'match':
-      rewriteExpr(stmt.expr, symbolMap)
-      for (const arm of stmt.arms) {
-        // PatExpr wraps a legacy Expr that may contain symbol refs
-        if (arm.pattern.kind === 'PatExpr') rewriteExpr(arm.pattern.expr, symbolMap)
-        rewriteBlock(arm.body, symbolMap)
+  const values = new Set([...program.globals, ...program.consts].map(value => value.name))
+  visitScopedExpressions(program, (expression, scope) => {
+    if (expression.kind === 'call' && !expression.methodName && !scope.has(expression.fn)) {
+      expression.fn = symbolMap.get(expression.fn) ?? expression.fn
+    } else if (expression.kind === 'ident' && !scope.has(expression.name)) {
+      expression.name = symbolMap.get(expression.name) ?? expression.name
+    } else if (expression.kind === 'static_call') {
+      const callee = symbolMap.get(`${expression.type}::${expression.method}`)
+      if (callee) {
+        Object.assign(expression, { kind: 'call', fn: callee })
+        delete (expression as unknown as Record<string, unknown>).type
+        delete (expression as unknown as Record<string, unknown>).method
       }
-      break
-    case 'as_block':
-    case 'at_block':
-      rewriteBlock(stmt.body, symbolMap)
-      break
-    case 'as_at':
-      rewriteBlock(stmt.body, symbolMap)
-      break
-    case 'execute':
-      rewriteBlock(stmt.body, symbolMap)
-      break
-    case 'let_destruct':
-      rewriteExpr(stmt.init, symbolMap)
-      break
-    case 'labeled_loop':
-      rewriteStmt(stmt.body, symbolMap)
-      break
-    // break, continue, break_label, continue_label, raw: nothing to rewrite
-  }
-}
-
-function rewriteExpr(expr: Expr, symbolMap: Map<string, string>): void {
-  switch (expr.kind) {
-    case 'call': {
-      // Remap the function name if it's an imported symbol
-      const remapped = symbolMap.get(expr.fn)
-      if (remapped) {
-        ; (expr as { fn: string }).fn = remapped
-      }
-      for (const arg of expr.args) rewriteExpr(arg, symbolMap)
-      break
     }
-    case 'assign':
-      rewriteExpr(expr.value, symbolMap)
-      break
-    case 'binary':
-      rewriteExpr(expr.left, symbolMap)
-      rewriteExpr(expr.right, symbolMap)
-      break
-    case 'unary':
-      rewriteExpr(expr.operand, symbolMap)
-      break
-    case 'member':
-      rewriteExpr(expr.obj, symbolMap)
-      break
-    case 'member_assign':
-      rewriteExpr(expr.obj, symbolMap)
-      rewriteExpr(expr.value, symbolMap)
-      break
-    case 'index':
-      rewriteExpr(expr.obj, symbolMap)
-      rewriteExpr(expr.index, symbolMap)
-      break
-    case 'index_assign':
-      rewriteExpr(expr.obj, symbolMap)
-      rewriteExpr(expr.index, symbolMap)
-      rewriteExpr(expr.value, symbolMap)
-      break
-    case 'array_lit':
-      for (const el of expr.elements) rewriteExpr(el, symbolMap)
-      break
-    case 'struct_lit':
-      for (const f of expr.fields) rewriteExpr(f.value, symbolMap)
-      break
-    case 'invoke':
-      rewriteExpr(expr.callee, symbolMap)
-      for (const arg of expr.args) rewriteExpr(arg, symbolMap)
-      break
-    case 'tuple_lit':
-      for (const el of expr.elements) rewriteExpr(el, symbolMap)
-      break
-    case 'static_call':
-      for (const arg of expr.args) rewriteExpr(arg, symbolMap)
-      break
-    // Literals, ident, selector, path_expr, f_string, etc: nothing to rewrite
-  }
+  }, values)
 }
 
 function cloneDeclaredFunctionForModuleImport(fn: FnDecl, qualifiedName: string): FnDecl {

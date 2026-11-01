@@ -8,6 +8,7 @@
 // No vector types — returns each axis independently for MC compatibility.
 
 module library;
+import math;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

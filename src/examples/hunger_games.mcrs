@@ -270,7 +270,7 @@ fn on_player_death(player: selector, killer: selector) {
     scoreboard_set(player, "hg_alive", 0);
     
     // Update kill count
-    scoreboard_add(killer, "hg_kills", 1);
+    scoreboard_set(killer, "hg_kills", scoreboard_get(killer, "hg_kills") + (1));
     
     // Switch to spectator mode
     // gamemode spectator player

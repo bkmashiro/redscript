@@ -99,6 +99,7 @@ interface RewriteCtx {
 }
 
 class Monomorphizer {
+  private readonly functionReturnTypes = new Map<string, TypeNode>()
   private module: HIRModule
   /** Map from function name → HIRFunction for generic functions */
   private genericFns: Map<string, HIRFunction> = new Map()
@@ -109,6 +110,9 @@ class Monomorphizer {
 
   constructor(module: HIRModule) {
     this.module = module
+    for (const fn of module.functions) {
+      if (!fn.typeParams?.length) this.functionReturnTypes.set(fn.name, fn.returnType)
+    }
   }
 
   run(): HIRModule {
@@ -317,6 +321,7 @@ class Monomorphizer {
               this.worklist.push({ fn: genericFn, typeArgs: concreteTypeArgs })
             }
             const name = mangledName(expr.fn, concreteTypeArgs)
+            this.functionReturnTypes.set(name, substType(genericFn.returnType, buildSubst(genericFn.typeParams, concreteTypeArgs)))
             return { ...expr, fn: name, args, typeArgs: undefined }
           }
         }
@@ -430,6 +435,11 @@ class Monomorphizer {
       case 'long_lit':   return { kind: 'named', name: 'long' }
       case 'double_lit': return { kind: 'named', name: 'double' }
       case 'ident':      return ctx.varTypes.get(expr.name) ?? null
+      case 'call': {
+        const variable = ctx.varTypes.get(expr.fn)
+        if (variable?.kind === 'function_type') return variable.return
+        return this.functionReturnTypes.get(expr.fn) ?? null
+      }
       case 'unary':
         // unary minus/not preserves the operand's type
         return this.inferExprType(expr.operand, ctx)

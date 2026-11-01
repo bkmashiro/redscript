@@ -2,7 +2,7 @@
 // Uses NBT-backed array literal for initialization.
 
 @load fn __load() {
-    scoreboard_add("rs");
+    scoreboard_add_objective("rs", "dummy");
 }
 
 @keep fn test_array() {

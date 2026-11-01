@@ -49,6 +49,7 @@ const DATAPACK_CAPABILITIES: readonly TargetCapability[] = Object.freeze([
   'resource-references',
   'function-artifacts',
   'function-tags',
+  'load-dependencies',
   'recursive-calls',
   'generated-helper-functions',
   'persistent-state',

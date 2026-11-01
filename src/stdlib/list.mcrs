@@ -18,6 +18,7 @@
 // The static helpers below work on up to 5 discrete values passed as arguments.
 
 module library;
+import random;
 
 // ─── Static min/max/avg ──────────────────────────────────────────────────────
 

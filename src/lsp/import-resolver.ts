@@ -4,6 +4,8 @@ import * as path from 'path'
 import { Lexer } from '../lexer'
 import { Parser } from '../parser'
 import type { FnDecl, Program } from '../ast/types'
+import { resolveSourceImport, type SourceImportLocation } from '../compiler/source-imports'
+import { loadSourceGraph } from '../compiler/source-graph'
 
 export type ImportKind = 'module' | 'path'
 
@@ -14,53 +16,33 @@ export interface ImportedProgram {
   kind: ImportKind
   prog: Program
   source: string
+  visibleFunctions?: FnDecl[]
 }
 
 const importedCache = new Map<string, { prog: Program; source: string; mtimeMs: number }>()
 
 /** Resolve a relative import path to an absolute file path, or null when unknown. */
-export function resolveImportPath(importStr: string, fromUri: string): string | null {
+function importLocation(fromUri: string): SourceImportLocation {
+  let fromFile: string | undefined
+  const includeDirs: string[] = []
   try {
-    const fromFile = fileURLToPath(fromUri)
-    const fromDir = path.dirname(fromFile)
-
-    const directCandidate = (candidateBase: string): string | null => {
-      const base = path.resolve(fromDir, candidateBase)
-      if (fs.existsSync(base)) return base
-      if (!base.endsWith('.mcrs') && fs.existsSync(base + '.mcrs')) return base + '.mcrs'
-      return null
-    }
-
-    if (importStr.startsWith('.')) {
-      const resolved = path.resolve(fromDir, importStr)
-      if (fs.existsSync(resolved)) return resolved
-      if (!resolved.endsWith('.mcrs') && fs.existsSync(resolved + '.mcrs')) return resolved + '.mcrs'
-    } else {
-      const direct = directCandidate(importStr) || directCandidate(`${importStr}.mcrs`)
-      if (direct) return direct
-
-      let dir = fromDir
-      for (let i = 0; i < 10; i++) {
-        if (fs.existsSync(path.join(dir, 'package.json'))) {
-          const candidate = path.join(dir, 'src', importStr)
-          if (fs.existsSync(candidate)) return candidate
-          if (fs.existsSync(candidate + '.mcrs')) return candidate + '.mcrs'
-
-          const candidate2 = path.join(dir, importStr)
-          if (fs.existsSync(candidate2)) return candidate2
-          if (fs.existsSync(candidate2 + '.mcrs')) return candidate2 + '.mcrs'
-
-          const candidate3 = path.join(dir, 'src', `${importStr}.mcrs`)
-          if (fs.existsSync(candidate3)) return candidate3
-          const candidate4 = path.join(dir, `${importStr}.mcrs`)
-          if (fs.existsSync(candidate4)) return candidate4
-          break
-        }
-        dir = path.dirname(dir)
+    fromFile = fileURLToPath(fromUri)
+    let dir = path.dirname(fromFile)
+    for (let depth = 0; depth < 10; depth++) {
+      if (fs.existsSync(path.join(dir, 'package.json'))) {
+        includeDirs.push(path.join(dir, 'src'), dir)
+        break
       }
+      const parent = path.dirname(dir)
+      if (parent === dir) break
+      dir = parent
     }
-  } catch { /* ignore */ }
-  return null
+  } catch { /* Unsaved non-file documents can still resolve compiler stdlib. */ }
+  return { fromFile, includeDirs }
+}
+
+export function resolveImportPath(importStr: string, fromUri: string): string | null {
+  return resolveSourceImport(importStr, importLocation(fromUri))
 }
 
 function parseImportedProgram(filePath: string): { prog: Program; source: string } | null {
@@ -85,7 +67,7 @@ function parseImportedProgram(filePath: string): { prog: Program; source: string
  * - Path imports: import "foo" style
  * - Module imports: import api, import api::foo, import api::*
  */
-export function getImportedPrograms(
+function getFallbackImportedPrograms(
   source: string,
   fromUri: string,
   parsedProgram: Program | null,
@@ -124,7 +106,7 @@ export function getImportedPrograms(
 
   // 2) Module imports from parser AST: import api; / import api::*; / import api::foo;
   for (const imp of parsedProgram?.imports ?? []) {
-    const resolved = resolveImportPath(imp.moduleName, fromUri)
+    const resolved = resolveImportPath(imp.packagePath ?? imp.moduleName, fromUri)
     if (!resolved || !fs.existsSync(resolved)) continue
     add(imp.moduleName, resolved, imp.symbol, 'module')
   }
@@ -132,11 +114,45 @@ export function getImportedPrograms(
   return result
 }
 
+/** Editor imports use the same discovered source graph as standalone compilation.
+ * Incomplete lexical input retains the old header index until lexer recovery can
+ * supply a partial graph; this fallback is not used to compile or bind programs.
+ */
+export function getImportedPrograms(source: string, fromUri: string, parsedProgram: Program | null): ImportedProgram[] {
+  try {
+    const location = importLocation(fromUri)
+    const graph = loadSourceGraph({ filePath: location.fromFile, uri: fromUri, source, includeDirs: location.includeDirs, allowDiagnostics: true })
+    const normalized = graph.entry.programs[0].imports
+    const result: ImportedProgram[] = []
+    for (let index = 0; index < graph.entryImports.length; index++) {
+      const syntax = graph.entryImports[index]
+      const imported = normalized[index]
+      const loaded = imported.packagePath ? graph.packages.get(imported.packagePath) : undefined
+      if (!loaded || loaded.id.path === graph.entry.id.path || !loaded.sourceFiles?.[0]) continue
+      const candidates = loaded.programs.flatMap(program => [...program.declarations, ...(program.declaredFunctions ?? [])])
+        .filter(fn => fn.isExported)
+      result.push({
+        moduleName: imported.alias ?? imported.moduleName, symbol: syntax.symbol,
+        kind: syntax.packagePath ? 'path' : 'module',
+        // URI presentation follows the user's workspace spelling, while the
+        // source graph keeps the canonical physical identity for deduplication.
+        filePath: resolveImportPath(syntax.packagePath ?? syntax.moduleName, fromUri) ?? loaded.sourceFiles[0].absolutePath,
+        prog: loaded.programs[0], source: loaded.sourceFiles[0].text,
+        visibleFunctions: syntax.symbol && syntax.symbol !== '*' ? candidates.filter(fn => fn.name === syntax.symbol) : candidates,
+      })
+    }
+    return result
+  } catch {
+    return getFallbackImportedPrograms(source, fromUri, parsedProgram)
+  }
+}
+
 /** Pick all callable symbols that should be visible from an imported module entry. */
 export function getImportedFunctions(imported: ImportedProgram): FnDecl[] {
+  if (imported.visibleFunctions) return imported.visibleFunctions
   if (imported.kind === 'module' && imported.symbol) {
     if (imported.symbol === '*') {
-      return imported.prog.declaredFunctions ?? []
+      return [...imported.prog.declarations, ...(imported.prog.declaredFunctions ?? [])]
     }
     return (imported.prog.declaredFunctions ?? []).filter(fn => fn.name === imported.symbol)
   }

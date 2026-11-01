@@ -755,16 +755,30 @@ fn newton_step(x_fx: int, fx: int, dfx: int): int {
 
 // asin_approx(x_fx): arcsin approximation, x_fx ×10000 in [-10000, 10000]
 // Returns degrees ×10000
-// Uses: arcsin(x) = arctan(x / √(1-x²))
+// Invert this module's degree-resolution sine table; no dependency on vec.
+// Result uses the documented ×10000 scale and is quantized to whole degrees.
 fn asin_approx(x_fx: int): int {
     if (x_fx >= 10000) { return 900000; }
     if (x_fx <= -10000) { return -900000; }
-    let x2: int = x_fx * x_fx / 10000;
-    let denom_sq: int = 10000 - x2;  // (1 - x²) ×10000
-    if (denom_sq <= 0) { return 900000; }
-    let denom: int = isqrt(denom_sq * 100) * 100;  // √(1-x²) ×10000
-    if (denom == 0) { return 900000; }
-    return atan2_fixed(x_fx, denom);
+    let negative: bool = x_fx < 0;
+    let magnitude: int = x_fx;
+    if (negative) { magnitude = 0 - magnitude; }
+    let lo: int = 0;
+    let hi: int = 90;
+    while (lo < hi) {
+        let mid: int = (lo + hi) / 2;
+        if (sin_fixed(mid) * 10 < magnitude) { lo = mid + 1; }
+        else { hi = mid; }
+    }
+    let angle: int = lo;
+    if (angle > 0) {
+        let lower: int = sin_fixed(angle - 1) * 10;
+        let upper: int = sin_fixed(angle) * 10;
+        if (magnitude - lower < upper - magnitude) { angle = angle - 1; }
+    }
+    let scaled: int = angle * 10000;
+    if (negative) { return 0 - scaled; }
+    return scaled;
 }
 
 // acos_approx(x_fx): arccos approximation

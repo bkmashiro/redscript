@@ -886,14 +886,19 @@ describe('MIR lower — array literal with dynamic elements', () => {
 
 // ── damage builtin ────────────────────────────────────────────────────────
 
-describe('MIR lower — damage builtin', () => {
-  test('damage command compiles', () => {
-    expect(() => compile(`
-      fn f(): int {
-        damage(@s, "5");
-        return 0;
-      }
-    `, { namespace: 'bidamage' })).not.toThrow()
+describe('MIR lower — native damage interop', () => {
+  test('documented player damage is an imported one-argument library implementation', () => {
+    const result = compile('import player; fn f(): void { damage(5); }', { namespace: 'player_damage' })
+    const commands = result.files.map(file => file.content).join('\n')
+    expect(commands).toContain('scoreboard players get @p health')
+    expect(commands).not.toContain('function player_damage:damage @s')
+  })
+  test('rejects an undeclared language call and emits the explicit native command', () => {
+    expect(() => compile('fn f(): void { damage(@s, "5"); }', { namespace: 'bidamage' })).toThrow(/Unknown function 'damage'/)
+    const result = compile('fn f(): void { raw("damage @s 5"); }', { namespace: 'bidamage' })
+    const commands = result.files.map(file => file.content).join('\n')
+    expect(commands).toContain('damage @s 5')
+    expect(commands).not.toContain('function bidamage:damage')
   })
 })
 
@@ -912,14 +917,13 @@ describe('MIR lower — tp builtin', () => {
 
 // ── enchant builtin ───────────────────────────────────────────────────────
 
-describe('MIR lower — enchant builtin', () => {
-  test('enchant command compiles', () => {
-    expect(() => compile(`
-      fn f(): int {
-        enchant(@s, "sharpness", "5");
-        return 0;
-      }
-    `, { namespace: 'bienchant' })).not.toThrow()
+describe('MIR lower — native enchant interop', () => {
+  test('rejects an undeclared language call and emits the explicit native command', () => {
+    expect(() => compile('fn f(): void { enchant(@s, "minecraft:sharpness", "5"); }', { namespace: 'bienchant' })).toThrow(/Unknown function 'enchant'/)
+    const result = compile('fn f(): void { raw("enchant @s minecraft:sharpness 5"); }', { namespace: 'bienchant' })
+    const commands = result.files.map(file => file.content).join('\n')
+    expect(commands).toContain('enchant @s minecraft:sharpness 5')
+    expect(commands).not.toContain('function bienchant:enchant')
   })
 })
 

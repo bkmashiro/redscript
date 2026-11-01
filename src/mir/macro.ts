@@ -56,7 +56,7 @@ export function detectMacroFunctions(hir: HIRModule): Map<string, MacroFunctionI
   for (const fn of hir.functions) {
     const paramNames = new Set(fn.params.map(p => p.name))
     const macroParams = new Set<string>()
-    scanBlock(fn.body, paramNames, macroParams)
+    scanBlock(fn.body, paramNames, macroParams, selectorParameterNames(fn.params))
     if (macroParams.size > 0) {
       const paramTypes = new Map<string, string>()
       for (const p of fn.params) {
@@ -78,7 +78,7 @@ export function detectMacroFunctions(hir: HIRModule): Map<string, MacroFunctionI
     for (const m of ib.methods) {
       const paramNames = new Set(m.params.map(p => p.name))
       const macroParams = new Set<string>()
-      scanBlock(m.body, paramNames, macroParams)
+      scanBlock(m.body, paramNames, macroParams, selectorParameterNames(m.params))
       if (macroParams.size > 0) {
         const paramTypes = new Map<string, string>()
         for (const p of m.params) {
@@ -104,32 +104,39 @@ export function detectMacroFunctions(hir: HIRModule): Map<string, MacroFunctionI
 // HIR scanning
 // ---------------------------------------------------------------------------
 
-function scanBlock(stmts: HIRBlock, paramNames: Set<string>, macroParams: Set<string>): void {
-  for (const stmt of stmts) scanStmt(stmt, paramNames, macroParams)
+function selectorParameterNames(params: readonly { name: string; type?: { kind: string; name?: string } }[]): Set<string> {
+  return new Set(params.filter(p => p.type?.kind === "selector" || p.type?.kind === "entity" || (p.type?.kind === "named" && p.type.name === "selector")).map(p => p.name))
 }
 
-function scanStmt(stmt: HIRStmt, paramNames: Set<string>, macroParams: Set<string>): void {
+function scanBlock(stmts: HIRBlock, paramNames: Set<string>, macroParams: Set<string>, selectors: Set<string>): void {
+  for (const stmt of stmts) scanStmt(stmt, paramNames, macroParams, selectors)
+}
+
+function scanStmt(stmt: HIRStmt, paramNames: Set<string>, macroParams: Set<string>, selectors: Set<string>): void {
   switch (stmt.kind) {
     case 'expr': scanExpr(stmt.expr, paramNames, macroParams); break
     case 'let': scanExpr(stmt.init, paramNames, macroParams); break
     case 'return': if (stmt.value) scanExpr(stmt.value, paramNames, macroParams); break
     case 'if':
       scanExpr(stmt.cond, paramNames, macroParams)
-      scanBlock(stmt.then, paramNames, macroParams)
-      if (stmt.else_) scanBlock(stmt.else_, paramNames, macroParams)
+      scanBlock(stmt.then, paramNames, macroParams, selectors)
+      if (stmt.else_) scanBlock(stmt.else_, paramNames, macroParams, selectors)
       break
     case 'while':
       scanExpr(stmt.cond, paramNames, macroParams)
-      scanBlock(stmt.body, paramNames, macroParams)
-      if (stmt.step) scanBlock(stmt.step, paramNames, macroParams)
+      scanBlock(stmt.body, paramNames, macroParams, selectors)
+      if (stmt.step) scanBlock(stmt.step, paramNames, macroParams, selectors)
       break
-    case 'foreach': scanBlock(stmt.body, paramNames, macroParams); break
+    case 'foreach':
+      checkMacroArg(stmt.iterable, selectors, macroParams)
+      scanBlock(stmt.body, paramNames, macroParams, selectors)
+      break
     case 'match':
       scanExpr(stmt.expr, paramNames, macroParams)
-      for (const arm of stmt.arms) scanBlock(arm.body, paramNames, macroParams)
+      for (const arm of stmt.arms) scanBlock(arm.body, paramNames, macroParams, selectors)
       break
-    case 'execute': scanBlock(stmt.body, paramNames, macroParams); break
-    case 'labeled_loop': scanStmt(stmt.body, paramNames, macroParams); break
+    case 'execute': scanBlock(stmt.body, paramNames, macroParams, selectors); break
+    case 'labeled_loop': scanStmt(stmt.body, paramNames, macroParams, selectors); break
     case 'raw': break
   }
 }

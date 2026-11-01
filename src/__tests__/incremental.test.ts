@@ -133,14 +133,14 @@ describe('DependencyGraph', () => {
     expect(imports[1]).toBe(path.resolve(tmpDir, 'util.mcrs'))
   })
 
-  test('parseImports stops at non-import line', () => {
+  test('parseImports tracks accepted imports after declarations', () => {
     const f = writeFile(tmpDir, 'main.mcrs', [
       'import "lib.mcrs";',
       'fn main() {}',
-      'import "late.mcrs";',  // should NOT be parsed
+      'import "late.mcrs";',
     ].join('\n'))
     const imports = parseImports(f)
-    expect(imports).toHaveLength(1)
+    expect(imports).toEqual([path.resolve(tmpDir, 'lib.mcrs'), path.resolve(tmpDir, 'late.mcrs')])
   })
 
   test('parseImports skips comments and blank lines in header', () => {

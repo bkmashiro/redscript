@@ -13,6 +13,7 @@
 // Requires: import "stdlib/math" (for sqrt_fx, sin_fixed, cos_fixed, abs)
 
 module library;
+import vec;
 
 // ─── Midpoint ─────────────────────────────────────────────────────────────────
 

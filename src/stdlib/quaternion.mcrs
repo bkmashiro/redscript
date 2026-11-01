@@ -11,6 +11,7 @@
 // Requires: stdlib/math (for sin_fixed, cos_fixed, mulfix, abs, isqrt)
 
 module library;
+import math;
 
 // ─── Constructors ─────────────────────────────────────────────────────────────
 

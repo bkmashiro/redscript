@@ -11,7 +11,14 @@
  * no Minecraft server is required.
  */
 
-import { compile } from '../../emit/compile'
+import { compile as compileSource } from '../../emit/compile'
+
+// This suite observes a caller-supplied accumulation callback, not a language
+// builtin. Give that external function an explicit ABI instead of relying on
+// the old permissive unresolved-call fallback.
+function compile(source: string, options: Parameters<typeof compileSource>[1]) {
+  return compileSource(`declare fn scoreboard_add(player: string, objective: string, value: int): void;\n${source}`, options)
+}
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
   return files.find(f => f.path.includes(pathSubstr))?.content

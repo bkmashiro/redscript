@@ -392,7 +392,7 @@ export class MCCommandValidator {
       return this.validate(tokens.slice(2).join(' '))
     }
 
-    if (!INTEGER_RE.test(tokens[1])) {
+    if (tokens[1] !== 'fail' && !INTEGER_RE.test(tokens[1])) {
       return { valid: false, error: `Invalid return value: ${tokens[1]}` }
     }
 

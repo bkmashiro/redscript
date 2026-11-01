@@ -26,6 +26,7 @@
 //   }
 
 module library;
+import math;
 
 // Internal tag for the helper Marker entity.
 // Do NOT kill or modify entities with this tag.

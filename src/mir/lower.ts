@@ -76,8 +76,11 @@ import type {
   Operand, Temp, CmpOp, ExecuteSubcmd, NBTType, SourceLoc,
 } from './types'
 import { detectMacroFunctions, BUILTIN_SET, type MacroFunctionInfo } from './macro'
+import { createHash } from 'crypto'
 import { DiagnosticError } from '../diagnostics'
+import { isIntrinsicTimerType } from '../compiler/runtime-types'
 import { getEventExecutorContext, isEventTypeName } from '../events/types'
+import type { CallABIRegistry } from '../compiler/call-abi'
 
 function formatTypeNode(type: TypeNode): string {
   switch (type.kind) {
@@ -135,7 +138,7 @@ function formatFunctionSignature(fn: HIRFunction): string {
  * - Specialized (monomorphized) variants of array-parameter functions are
  *   appended after all regular functions so name resolution is stable.
  */
-export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
+export function lowerToMIR(hir: HIRModule, sourceFile?: string, callABI?: CallABIRegistry): MIRModule {
   // Build struct definitions: name → field names and field types
   const structDefs = new Map<string, string[]>()
   const structFieldTypes = new Map<string, Map<string, TypeNode>>()
@@ -194,10 +197,18 @@ export function lowerToMIR(hir: HIRModule, sourceFile?: string): MIRModule {
   }
 
   // Pre-scan for macro functions
+  // Local impl methods still use their local type identity until nominal binding
+  // is migrated; resolved function entries below share the program ABI registry.
   const macroInfo = detectMacroFunctions(hir)
+  for (const entry of callABI?.values() ?? []) {
+    if (entry.macro) macroInfo.set(entry.callee, {
+      macroParams: new Set(entry.macro.macroParams), paramTypes: new Map(entry.macro.paramTypes),
+    })
+  }
 
   // Build function param info for call_macro generation at call sites
   const fnParamInfo = new Map<string, HIRParam[]>()
+  for (const entry of callABI?.values() ?? []) fnParamInfo.set(entry.callee, [...entry.parameters])
   for (const f of hir.functions) {
     fnParamInfo.set(f.name, f.params)
   }
@@ -467,7 +478,7 @@ class FnContext {
   /** Pending label to attach to the next pushLoop call (set by labeled_loop lowering) */
   private pendingLoopLabel: string | undefined = undefined
   /** Extracted helper functions for execute blocks */
-  readonly helperFunctions: MIRFunction[] = []
+  readonly helperFunctions: MIRFunction[]
   private readonly namespace: string
   private readonly fnName: string
   /** Struct definitions: struct name → field names */
@@ -568,7 +579,9 @@ class FnContext {
     enumDefs: Map<string, Map<string, number>> = new Map(),
     timerCounter: { count: number; timerId: number } = { count: 0, timerId: 0 },
     enumPayloads: Map<string, Map<string, { name: string; type: TypeNode }[]>> = new Map(),
+    helperFunctions: MIRFunction[] = [],
   ) {
+    this.helperFunctions = helperFunctions
     this.namespace = namespace
     this.fnName = fnName
     this.structDefs = structDefs
@@ -596,6 +609,7 @@ class FnContext {
       this.enumDefs,
       this.timerCounter,
       this.enumPayloads,
+      this.helperFunctions,
     )
     helperCtx.sourceFile = this.sourceFile
     helperCtx.hirFunctions = this.hirFunctions
@@ -1177,7 +1191,8 @@ function lowerStmt(
         ctx.structVars.set(stmt.name, { typeName: '__option', fields: fieldTemps })
       } else if (stmt.init.kind === 'struct_lit') {
         // Struct literal: create per-field temps
-        const typeName = (stmt.type?.kind === 'struct') ? stmt.type.name : '__anon'
+        const typeName = (stmt.type?.kind === 'struct') ? stmt.type.name
+          : stmt.init.literalType?.kind === 'struct' ? stmt.init.literalType.name : '__anon'
         const fieldTemps = new Map<string, Temp>()
         for (const field of stmt.init.fields) {
           if (field.value.kind === 'struct_lit') {
@@ -1627,6 +1642,8 @@ function lowerStmt(
       // For now, extract body into a helper and emit call_context
       const helperName = `${ctx.getFnName()}__foreach_${ctx.freshTemp()}`
       const subcommands: ExecuteSubcmd[] = []
+      const macroSelector = stmt.iterable.kind === 'ident' && ctx.currentMacroParams.has(stmt.iterable.name)
+        ? stmt.iterable.name : undefined
 
       // The iterable should be a selector expression
       if (stmt.iterable.kind === 'selector') {
@@ -1638,7 +1655,7 @@ function lowerStmt(
 
       // Build helper function body as MIR
       const helperCtx = ctx.createHelperContext(helperName)
-      if (stmt.iterable.kind === 'selector') {
+      if (stmt.iterable.kind === 'selector' || macroSelector) {
         helperCtx.commandArgAliases.set(stmt.binding, '@s')
       }
       const helperScope = new Map(scope)
@@ -1660,7 +1677,12 @@ function lowerStmt(
         sourceSnippet: 'foreach helper',
       })
 
-      ctx.emit({ kind: 'call_context', fn: helperName, subcommands })
+      if (macroSelector) {
+        const at = stmt.executeContext === '@s' ? ' at @s' : ''
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:$execute as $(${macroSelector})${at} run function ${ctx.getNamespace()}:${helperName}`, args: [] })
+      } else {
+        ctx.emit({ kind: 'call_context', fn: helperName, subcommands })
+      }
       break
     }
 
@@ -2116,6 +2138,419 @@ function sanitizeSpecializationKey(value: string): string {
  * Side effects: emits zero or more instructions into `ctx`'s current block
  * and allocates temporaries via `ctx.freshTemp()`.
  */
+function lowerIntrinsicCall(expr: Extract<HIRExpr, { kind: 'call' }>, ctx: FnContext, scope: Map<string, Temp>): Operand | undefined {
+  if (expr.fn === 'random' || expr.fn === 'random_native') {
+    if (expr.args.length !== 2) throw new DiagnosticError('LoweringError', `${expr.fn} expects 2 integer bounds`, expr.span ?? { line: 1, col: 1 })
+    const minimum = lowerExpr(expr.args[0], ctx, scope)
+    const maximum = lowerExpr(expr.args[1], ctx, scope)
+    const helperName = `${ctx.getFnName()}__random_${ctx.freshTemp()}`
+    const helper = ctx.createHelperContext(helperName)
+    const value = helper.freshTemp()
+    helper.emit({ kind: 'call', dst: value, fn: '__raw:\x01random value $(minimum)..$(maximum)', args: [] })
+    helper.terminate({ kind: 'return', value: { kind: 'temp', name: value } })
+    ctx.helperFunctions.push({ name: helperName, params: [], blocks: helper.blocks, entry: 'entry', isMacro: true, sourceSnippet: 'native random bounds' })
+    const result = ctx.freshTemp()
+    // The inclusive singleton is its bound and requires no native draw.
+    ctx.emit({ kind: 'copy', dst: result, src: minimum })
+    const different = ctx.freshTemp()
+    ctx.emit({ kind: 'cmp', dst: different, op: 'ne', a: minimum, b: maximum })
+    const rollBlock = ctx.newBlock('random_roll')
+    const mergeBlock = ctx.newBlock('random_merge')
+    ctx.terminate({ kind: 'branch', cond: { kind: 'temp', name: different }, then: rollBlock.id, else: mergeBlock.id })
+    ctx.switchTo(rollBlock)
+    ctx.emit({ kind: 'call_macro', dst: result, fn: helperName, args: [
+      { name: 'minimum', value: minimum, type: 'int', scale: 1 },
+      { name: 'maximum', value: maximum, type: 'int', scale: 1 },
+    ] })
+    ctx.terminate({ kind: 'jump', target: mergeBlock.id })
+    ctx.switchTo(mergeBlock)
+    return { kind: 'temp', name: result }
+  }
+  // Handle arr.len() — parser desugars obj.len() → call { fn: 'len', args: [obj] }
+  if (expr.fn === 'len' && expr.args.length === 1 && expr.args[0].kind === 'ident') {
+    const arrName = (expr.args[0] as { kind: 'ident'; name: string }).name
+    const arrInfo = ctx.arrayVars.get(arrName)
+    if (arrInfo) {
+      if (arrInfo.knownLen !== undefined) {
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: arrInfo.knownLen })
+        return { kind: 'temp', name: t }
+      }
+      // Dynamic array: read length at runtime via data get
+      const t = ctx.freshTemp()
+      ctx.emit({ kind: 'nbt_list_len', dst: t, ns: arrInfo.ns, path: arrInfo.pathPrefix })
+      return { kind: 'temp', name: t }
+    }
+    // Also check scope (literal array length temp)
+    const lenTemp = scope.get(arrName)
+    if (lenTemp !== undefined) {
+      return { kind: 'temp', name: lenTemp }
+    }
+  }
+
+  // Handle scoreboard_get / score — read from vanilla MC scoreboard
+  if (expr.fn === 'scoreboard_get' || expr.fn === 'score') {
+    const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams, ctx.commandArgAliases)
+    // If the arg is a plain ident (Player variable, not a macro param), use @s —
+    // event handlers are always called via `execute as <player> run function ...`
+    // so @s correctly refers to the player in context.
+    const player = (!playerArg.isMacro && expr.args[0].kind === 'ident')
+      ? '@s'
+      : (playerArg.str || '@s')
+    const obj = hirExprToStringLiteral(expr.args[1])
+    const t = ctx.freshTemp()
+    ctx.emit({ kind: 'score_read', dst: t, player, obj })
+    return { kind: 'temp', name: t }
+  }
+
+  // Handle scoreboard_set — write to vanilla MC scoreboard
+  if (expr.fn === 'scoreboard_set') {
+    const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams, ctx.commandArgAliases)
+    const player = (!playerArg.isMacro && expr.args[0].kind === 'ident')
+      ? '@s'
+      : (playerArg.str || '@s')
+    const obj = hirExprToStringLiteral(expr.args[1])
+    const src = lowerExpr(expr.args[2], ctx, scope)
+    ctx.emit({ kind: 'score_write', player, obj, src })
+    const t = ctx.freshTemp()
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+    return { kind: 'temp', name: t }
+  }
+
+  // Handle storage_set_array(storagePath, fieldName, nbtArrayLiteral)
+  // Writes a literal NBT int array to data storage (used in @load for tables).
+  // Emits: data modify storage <storagePath> <fieldName> set value <nbtArray>
+  if (expr.fn === 'storage_set_array' && expr.args.length >= 3) {
+    const storagePath = hirExprToStringLiteral(expr.args[0])
+    const fieldName = hirExprToStringLiteral(expr.args[1])
+    const nbtLiteral = hirExprToStringLiteral(expr.args[2])
+    ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${storagePath} ${fieldName} set value ${nbtLiteral}`, args: [] })
+    const t = ctx.freshTemp()
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+    return { kind: 'temp', name: t }
+  }
+
+  // Handle storage_get_int(storagePath, fieldName, index) → int
+  // Reads one element from an NBT int-array stored in data storage.
+  // Const index: execute store result score $dst run data get storage <ns> <field>[N] 1
+  // Runtime index: nbt_read_dynamic via macro sub-function
+  if (expr.fn === 'storage_get_int' && expr.args.length >= 3) {
+    const storagePath = hirExprToStringLiteral(expr.args[0])
+    const fieldName = hirExprToStringLiteral(expr.args[1])
+    const indexOp = lowerExpr(expr.args[2], ctx, scope)
+    const t = ctx.freshTemp()
+    if (indexOp.kind === 'const') {
+      ctx.emit({ kind: 'nbt_read', dst: t, ns: storagePath, path: `${fieldName}[${indexOp.value}]`, scale: 1 })
+    } else {
+      ctx.emit({ kind: 'nbt_read_dynamic', dst: t, ns: storagePath, pathPrefix: fieldName, indexSrc: indexOp })
+    }
+    return { kind: 'temp', name: t }
+  }
+
+  // Handle __entity_tag / __entity_untag — entity.tag("name") / entity.untag("name") sugar
+  if (expr.fn === '__entity_tag' || expr.fn === '__entity_untag') {
+    const selArg = expr.args[0]
+    const tagArg = expr.args[1]
+    const tagStr = tagArg.kind === 'str_lit' ? tagArg.value : 'unknown'
+    const selStr = selArg.kind === 'selector'
+      ? selectorToString((selArg as any).sel ?? selArg)
+      : '@s'
+    const op = expr.fn === '__entity_tag' ? 'add' : 'remove'
+    const t = ctx.freshTemp()
+    ctx.emit({ kind: 'call', dst: null, fn: `__raw:tag ${selStr} ${op} ${tagStr}`, args: [] })
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+    return { kind: 'temp', name: t }
+  }
+
+  // Handle __entity_has_tag(entity, tag) — entity.has_tag("vip") sugar
+  // Compiles to: execute store success score $ret __ns if entity <sel>[tag=<name>]
+  // We use $ret as the store target so LIR's dst-copy mechanism picks it up.
+  if (expr.fn === '__entity_has_tag') {
+    const tagArg = expr.args[1]
+    const tagStr = tagArg.kind === 'str_lit' ? tagArg.value : 'unknown'
+    const selArg = expr.args[0]
+    const selStr = selArg.kind === 'selector'
+      ? selectorToString((selArg as any).sel ?? selArg)
+      : '@s'
+    const t = ctx.freshTemp()
+    const ns = ctx.getNamespace()
+    // Store result in $ret — LIR will copy $ret → $t when dst=t
+    ctx.emit({ kind: 'call', dst: t, fn: `__raw:execute store success score $ret __${ns} if entity ${selStr}[tag=${tagStr}]`, args: [] })
+    return { kind: 'temp', name: t }
+  }
+
+  // Handle __array_push(arr, val) — h.push(val) sugar (parser desugars arr.push → __array_push)
+  // Equivalent to list_push but uses the array's known NBT path directly.
+  if (expr.fn === '__array_push') {
+    if (expr.args[0].kind === 'ident') {
+      const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+      if (arrInfo) {
+        const valOp = lowerExpr(expr.args[1], ctx, scope)
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${arrInfo.ns} ${arrInfo.pathPrefix} append value 0`, args: [] })
+        ctx.emit({ kind: 'nbt_write', ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[-1]`, type: 'int', scale: 1, src: valOp })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+    }
+  }
+
+  // Handle __array_pop(arr) — h.pop() sugar
+  if (expr.fn === '__array_pop') {
+    if (expr.args[0].kind === 'ident') {
+      const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+      if (arrInfo) {
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:data remove storage ${arrInfo.ns} ${arrInfo.pathPrefix}[-1]`, args: [] })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+    }
+  }
+
+  // Handle __array_length(arr) — h.length sugar → get array length via data get
+  if (expr.fn === '__array_length') {
+    if (expr.args[0].kind === 'ident') {
+      const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+      if (arrInfo) {
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'nbt_read', dst: t, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}`, scale: 1 })
+        return { kind: 'temp', name: t }
+      }
+    }
+  }
+
+  // Handle list_push(arr_name, val) — append an int to an NBT int array
+  // list_push("rs:lists", "mylist", val) or simpler: uses the array's storage path
+  if (expr.fn === 'list_push') {
+    // list_push(array_var, value)
+    // 1. Append a placeholder 0
+    // 2. Overwrite [-1] with the actual value
+    if (expr.args[0].kind === 'ident') {
+      const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+      if (arrInfo) {
+        const valOp = lowerExpr(expr.args[1], ctx, scope)
+        // Step 1: append placeholder
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${arrInfo.ns} ${arrInfo.pathPrefix} append value 0`, args: [] })
+        // Step 2: overwrite last element with actual value
+        ctx.emit({ kind: 'nbt_write', ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[-1]`, type: 'int', scale: 1, src: valOp })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+    }
+  }
+
+  // Handle list_pop(arr_var) — remove last element from NBT int array
+  if (expr.fn === 'list_pop') {
+    if (expr.args[0].kind === 'ident') {
+      const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+      if (arrInfo) {
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:data remove storage ${arrInfo.ns} ${arrInfo.pathPrefix}[-1]`, args: [] })
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+    }
+  }
+
+  // Handle list_len(arr_var) — get length of NBT int array
+  if (expr.fn === 'list_len') {
+    if (expr.args[0].kind === 'ident') {
+      const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
+      if (arrInfo) {
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'nbt_read', dst: t, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}`, scale: 1 })
+        return { kind: 'temp', name: t }
+      }
+    }
+  }
+
+  // Handle setTimeout/setInterval: lift lambda arg to a named helper function
+  if ((expr.fn === 'setTimeout' || expr.fn === 'setInterval') && expr.args.length === 2) {
+    const ticksArg = expr.args[0]
+    const callbackArg = expr.args[1]
+    const ns = ctx.getNamespace()
+    const id = ctx.timerCounter.count++
+    const callbackName = `__timeout_callback_${id}`
+
+    // Extract ticks value for the schedule command. Minecraft schedule
+    // durations are command literals here; dynamic scoreboard-backed delays
+    // are rejected instead of pretending to schedule with a 1t fallback.
+    if (ticksArg.kind !== 'int_lit') {
+      throw new DiagnosticError(
+        'LoweringError',
+        `${expr.fn}() requires a literal tick duration; dynamic tick values are not supported.`,
+        ctx.currentSourceLoc ?? { line: 1, col: 1 },
+      )
+    }
+    const ticksLiteral = ticksArg.value
+
+    // Build the callback MIRFunction from the lambda body
+    if (callbackArg.kind === 'lambda') {
+      const cbCtx = ctx.createHelperContext(callbackName)
+
+      const cbBody = Array.isArray(callbackArg.body) ? callbackArg.body : [{ kind: 'expr' as const, expr: callbackArg.body }]
+
+      // For setInterval: reschedule at end of body
+      const bodyStmts: typeof cbBody = [...cbBody]
+      if (expr.fn === 'setInterval' && ticksLiteral !== null) {
+        // Append: raw `schedule function ns:callbackName ticksT`
+        bodyStmts.push({
+          kind: 'raw' as const,
+          cmd: `schedule function ${ns}:${callbackName} ${ticksLiteral}t`,
+        } as any)
+      }
+
+      lowerBlock(bodyStmts, cbCtx, new Map())
+      const cbCur = cbCtx.current()
+      if (isPlaceholderTerm(cbCur.term)) {
+        cbCtx.terminate({ kind: 'return', value: null })
+      }
+      const cbReachable = computeReachable(cbCtx.blocks, 'entry')
+      const cbLiveBlocks = cbCtx.blocks.filter(b => cbReachable.has(b.id))
+      computePreds(cbLiveBlocks)
+      const cbFn: MIRFunction = {
+        name: callbackName,
+        params: [],
+        blocks: cbLiveBlocks,
+        entry: 'entry',
+        isMacro: false,
+      }
+      ctx.helperFunctions.push(cbFn)
+    }
+
+    // Emit: schedule function ns:callbackName ticksT
+    ctx.emit({ kind: 'call', dst: null, fn: `__raw:schedule function ${ns}:${callbackName} ${ticksLiteral}t`, args: [] })
+
+    // setTimeout returns void (0), setInterval returns an int ID (0 for now)
+    const t = ctx.freshTemp()
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+    return { kind: 'temp', name: t }
+  }
+
+  // Handle int_to_str / bool_to_str — identity functions for scoreboard int/bool → string
+  // In f-string context these are handled by precomputeFStringParts; outside that, just
+  // evaluate the argument and return it (integer stays as integer for scoreboard purposes).
+  if (expr.fn === 'int_to_str' || expr.fn === 'bool_to_str') {
+    if (expr.args.length === 1) {
+      return lowerExpr(expr.args[0], ctx, scope)
+    }
+    const t = ctx.freshTemp()
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+    return { kind: 'temp', name: t }
+  }
+
+  // Handle assert(cond[, message]) — test framework builtin
+  if (expr.fn === 'assert') {
+    const condArg = expr.args[0]
+    const msgArg = expr.args[1]
+    const condOp = condArg ? lowerExpr(condArg, ctx, scope) : { kind: 'const' as const, value: 0 }
+    // Evaluate condition to a temp
+    let condTemp: string
+    if (condOp.kind === 'temp') {
+      condTemp = condOp.name
+    } else {
+      condTemp = ctx.freshTemp()
+      ctx.emit({ kind: 'const', dst: condTemp, value: condOp.value })
+    }
+    // Get message string
+    let msgStr = 'assert failed'
+    if (msgArg && msgArg.kind === 'str_lit') {
+      msgStr = msgArg.value
+    }
+    const obj = `__${ctx.getNamespace()}`
+    // emit: execute unless score $condTemp <obj> matches 1 run tellraw @a "FAIL: <msg>"
+    const failMsg = JSON.stringify({ text: `FAIL: ${msgStr}`, color: 'red' })
+    ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute unless score $${ctx.getFnName()}_${condTemp} ${obj} matches 1 run tellraw @a ${failMsg}`, args: [] })
+    ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute unless score $${ctx.getFnName()}_${condTemp} ${obj} matches 1 run scoreboard players add rs.test_failed rs.meta 1`, args: [] })
+    const t = ctx.freshTemp()
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+    return { kind: 'temp', name: t }
+  }
+
+  // Handle builtin calls → raw MC commands
+  if (BUILTIN_SET.has(expr.fn)) {
+    // Special case: say() with f_string → MC macro function ($say template)
+    // MC `say` is plain text and cannot reference scoreboards directly;
+    // use function macros (MC 1.20.2+) to interpolate variables.
+    if (expr.fn === 'say' && expr.args[0]?.kind === 'f_string') {
+      const fstr = expandDisplayFString(expr.args[0], ctx)
+      if (fstr.kind === 'f_string') {
+        const ns = ctx.getNamespace()
+        const helperName = `${ctx.getFnName()}__say_macro_${ctx.freshTemp()}`
+        const captureRoot = `c_${createHash('sha256').update(helperName).digest('hex')}`
+        const storage = `${ns}:text`
+        let template = 'say '
+        let index = 0
+        for (const part of fstr.parts) {
+          if (part.kind === 'text') { template += part.value; continue }
+          let inner = part.expr
+          const literal = getStaticStringLiteral(inner, ctx)
+          if (literal !== undefined) { template += literal; continue }
+          if (inner.kind === 'int_lit') { template += String(inner.value); continue }
+          if (inner.kind === 'bool_lit') { template += String(inner.value); continue }
+          if (inner.kind === 'call' && !inner.symbolId && ['int_to_str', 'bool_to_str'].includes(inner.fn) && inner.args.length === 1) inner = inner.args[0]
+          const key = `value_${index++}`
+          template += `$(${key})`
+          const stringPath = lowerStringExprToPath(inner, ctx, scope, 'text_capture')
+          if (stringPath) {
+            ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${storage} ${captureRoot}.${key} set from storage rs:strings ${stringPath}`, args: [] })
+          } else {
+            // Preserve the use as MIR data, so DCE, substitution and LIR slot
+            // allocation see the actual operand rather than text resembling one.
+            const value = lowerExpr(inner, ctx, scope)
+            ctx.emit({ kind: 'nbt_write', ns: storage, path: `${captureRoot}.${key}`, type: 'int', scale: 1, src: value })
+          }
+        }
+
+        if (index === 0) {
+          ctx.emit({ kind: 'call', dst: null, fn: `__raw:${template}`, args: [] })
+          return { kind: 'const', value: 0 }
+        }
+        // Build helper MIR function with isMacro: true
+        const helperCtx = new FnContext(ns, helperName, ctx.structDefs, ctx.structFieldTypes, ctx.implMethods)
+        helperCtx.emit({ kind: 'call', dst: null, fn: `__raw:$${template}`, args: [] })
+        helperCtx.terminate({ kind: 'return', value: null })
+        const helperReachable = computeReachable(helperCtx.blocks, 'entry')
+        const helperBlocks = helperCtx.blocks.filter(b => helperReachable.has(b.id))
+        computePreds(helperBlocks)
+        ctx.helperFunctions.push({
+          name: helperName,
+          params: [],
+          blocks: helperBlocks,
+          entry: 'entry',
+          isMacro: true,
+          sourceSnippet: 'say macro helper',
+        })
+
+        // Emit: function <helper> with storage rs:macro_args
+        ctx.emit({ kind: 'call', dst: null, fn: `__raw:function ${ns}:${helperName} with storage ${storage} ${captureRoot}`, args: [] })
+
+        const t = ctx.freshTemp()
+        ctx.emit({ kind: 'const', dst: t, value: 0 })
+        return { kind: 'temp', name: t }
+      }
+    }
+
+    // For text builtins with f-string args, precompute complex expressions to temp vars
+    const TEXT_BUILTINS_SET = new Set(['tell', 'tellraw', 'title', 'subtitle', 'actionbar', 'announce'])
+    let resolvedArgs = expr.args
+    if (TEXT_BUILTINS_SET.has(expr.fn)) {
+      resolvedArgs = expr.args.map(arg =>
+        arg.kind === 'f_string' ? precomputeFStringParts(arg, ctx, scope) : arg
+      )
+    }
+    const cmd = formatBuiltinCall(expr.fn, resolvedArgs, ctx.currentMacroParams, ctx.getNamespace(), ctx.commandArgAliases)
+    ctx.emit({ kind: 'call', dst: null, fn: `__raw:${cmd}`, args: [] })
+    const t = ctx.freshTemp()
+    ctx.emit({ kind: 'const', dst: t, value: 0 })
+    return { kind: 'temp', name: t }
+  }
+
+  return undefined
+}
+
 function lowerExpr(
   expr: HIRExpr,
   ctx: FnContext,
@@ -2213,7 +2648,6 @@ function lowerExpr(
       if (ctx.globalVarNames.has(expr.name)) {
         const t = ctx.freshTemp()
         ctx.emit({ kind: 'score_read', dst: t, player: expr.name, obj: `__${ctx.getNamespace()}` })
-        scope.set(expr.name, t)
         return { kind: 'temp', name: t }
       }
       // Legacy event executor aliases are command-context values (`@s`), not
@@ -2364,13 +2798,10 @@ function lowerExpr(
         return val
       }
       // Global variable assignment: write to scoreboard (score_write has side effects, DCE-safe)
-      if (ctx.globalVarNames.has(expr.target)) {
+      if (ctx.globalVarNames.has(expr.target) && !scope.has(expr.target)) {
         const globalObj = `__${ctx.getNamespace()}`
         ctx.emit({ kind: 'score_write', player: expr.target, obj: globalObj, src: val })
-        // Also update scope temp so subsequent reads in this function see the new value
-        const t = ctx.freshTemp()
-        ctx.emit({ kind: 'score_read', dst: t, player: expr.target, obj: globalObj })
-        scope.set(expr.target, t)
+        // Globals are locations, not lexical cached values: calls may mutate them.
         return val
       }
       // Reuse the existing temp for this variable so that updates inside
@@ -2514,412 +2945,26 @@ function lowerExpr(
     }
 
     case 'call': {
-      // Handle arr.len() — parser desugars obj.len() → call { fn: 'len', args: [obj] }
-      if (expr.fn === 'len' && expr.args.length === 1 && expr.args[0].kind === 'ident') {
-        const arrName = (expr.args[0] as { kind: 'ident'; name: string }).name
-        const arrInfo = ctx.arrayVars.get(arrName)
-        if (arrInfo) {
-          if (arrInfo.knownLen !== undefined) {
-            const t = ctx.freshTemp()
-            ctx.emit({ kind: 'const', dst: t, value: arrInfo.knownLen })
-            return { kind: 'temp', name: t }
-          }
-          // Dynamic array: read length at runtime via data get
-          const t = ctx.freshTemp()
-          ctx.emit({ kind: 'nbt_list_len', dst: t, ns: arrInfo.ns, path: arrInfo.pathPrefix })
-          return { kind: 'temp', name: t }
-        }
-        // Also check scope (literal array length temp)
-        const lenTemp = scope.get(arrName)
-        if (lenTemp !== undefined) {
-          return { kind: 'temp', name: lenTemp }
-        }
-      }
-
-      // Handle scoreboard_get / score — read from vanilla MC scoreboard
-      if (expr.fn === 'scoreboard_get' || expr.fn === 'score') {
-        const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams, ctx.commandArgAliases)
-        // If the arg is a plain ident (Player variable, not a macro param), use @s —
-        // event handlers are always called via `execute as <player> run function ...`
-        // so @s correctly refers to the player in context.
-        const player = (!playerArg.isMacro && expr.args[0].kind === 'ident')
-          ? '@s'
-          : (playerArg.str || '@s')
-        const obj = hirExprToStringLiteral(expr.args[1])
-        const t = ctx.freshTemp()
-        ctx.emit({ kind: 'score_read', dst: t, player, obj })
-        return { kind: 'temp', name: t }
-      }
-
-      // Handle scoreboard_set — write to vanilla MC scoreboard
-      if (expr.fn === 'scoreboard_set') {
-        const playerArg = exprToCommandArg(expr.args[0], ctx.currentMacroParams, ctx.commandArgAliases)
-        const player = (!playerArg.isMacro && expr.args[0].kind === 'ident')
-          ? '@s'
-          : (playerArg.str || '@s')
-        const obj = hirExprToStringLiteral(expr.args[1])
-        const src = lowerExpr(expr.args[2], ctx, scope)
-        ctx.emit({ kind: 'score_write', player, obj, src })
-        const t = ctx.freshTemp()
-        ctx.emit({ kind: 'const', dst: t, value: 0 })
-        return { kind: 'temp', name: t }
-      }
-
-      // Handle storage_set_array(storagePath, fieldName, nbtArrayLiteral)
-      // Writes a literal NBT int array to data storage (used in @load for tables).
-      // Emits: data modify storage <storagePath> <fieldName> set value <nbtArray>
-      if (expr.fn === 'storage_set_array' && expr.args.length >= 3) {
-        const storagePath = hirExprToStringLiteral(expr.args[0])
-        const fieldName = hirExprToStringLiteral(expr.args[1])
-        const nbtLiteral = hirExprToStringLiteral(expr.args[2])
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${storagePath} ${fieldName} set value ${nbtLiteral}`, args: [] })
-        const t = ctx.freshTemp()
-        ctx.emit({ kind: 'const', dst: t, value: 0 })
-        return { kind: 'temp', name: t }
-      }
-
-      // Handle storage_get_int(storagePath, fieldName, index) → int
-      // Reads one element from an NBT int-array stored in data storage.
-      // Const index: execute store result score $dst run data get storage <ns> <field>[N] 1
-      // Runtime index: nbt_read_dynamic via macro sub-function
-      if (expr.fn === 'storage_get_int' && expr.args.length >= 3) {
-        const storagePath = hirExprToStringLiteral(expr.args[0])
-        const fieldName = hirExprToStringLiteral(expr.args[1])
-        const indexOp = lowerExpr(expr.args[2], ctx, scope)
-        const t = ctx.freshTemp()
-        if (indexOp.kind === 'const') {
-          ctx.emit({ kind: 'nbt_read', dst: t, ns: storagePath, path: `${fieldName}[${indexOp.value}]`, scale: 1 })
-        } else {
-          ctx.emit({ kind: 'nbt_read_dynamic', dst: t, ns: storagePath, pathPrefix: fieldName, indexSrc: indexOp })
-        }
-        return { kind: 'temp', name: t }
-      }
-
-      // Handle __entity_tag / __entity_untag — entity.tag("name") / entity.untag("name") sugar
-      if (expr.fn === '__entity_tag' || expr.fn === '__entity_untag') {
-        const selArg = expr.args[0]
-        const tagArg = expr.args[1]
-        const tagStr = tagArg.kind === 'str_lit' ? tagArg.value : 'unknown'
-        const selStr = selArg.kind === 'selector'
-          ? selectorToString((selArg as any).sel ?? selArg)
-          : '@s'
-        const op = expr.fn === '__entity_tag' ? 'add' : 'remove'
-        const t = ctx.freshTemp()
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:tag ${selStr} ${op} ${tagStr}`, args: [] })
-        ctx.emit({ kind: 'const', dst: t, value: 0 })
-        return { kind: 'temp', name: t }
-      }
-
-      // Handle __entity_has_tag(entity, tag) — entity.has_tag("vip") sugar
-      // Compiles to: execute store success score $ret __ns if entity <sel>[tag=<name>]
-      // We use $ret as the store target so LIR's dst-copy mechanism picks it up.
-      if (expr.fn === '__entity_has_tag') {
-        const tagArg = expr.args[1]
-        const tagStr = tagArg.kind === 'str_lit' ? tagArg.value : 'unknown'
-        const selArg = expr.args[0]
-        const selStr = selArg.kind === 'selector'
-          ? selectorToString((selArg as any).sel ?? selArg)
-          : '@s'
-        const t = ctx.freshTemp()
-        const ns = ctx.getNamespace()
-        // Store result in $ret — LIR will copy $ret → $t when dst=t
-        ctx.emit({ kind: 'call', dst: t, fn: `__raw:execute store success score $ret __${ns} if entity ${selStr}[tag=${tagStr}]`, args: [] })
-        return { kind: 'temp', name: t }
-      }
-
-      // Handle __array_push(arr, val) — h.push(val) sugar (parser desugars arr.push → __array_push)
-      // Equivalent to list_push but uses the array's known NBT path directly.
-      if (expr.fn === '__array_push') {
-        if (expr.args[0].kind === 'ident') {
-          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
-          if (arrInfo) {
-            const valOp = lowerExpr(expr.args[1], ctx, scope)
-            ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${arrInfo.ns} ${arrInfo.pathPrefix} append value 0`, args: [] })
-            ctx.emit({ kind: 'nbt_write', ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[-1]`, type: 'int', scale: 1, src: valOp })
-            const t = ctx.freshTemp()
-            ctx.emit({ kind: 'const', dst: t, value: 0 })
-            return { kind: 'temp', name: t }
-          }
-        }
-      }
-
-      // Handle __array_pop(arr) — h.pop() sugar
-      if (expr.fn === '__array_pop') {
-        if (expr.args[0].kind === 'ident') {
-          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
-          if (arrInfo) {
-            ctx.emit({ kind: 'call', dst: null, fn: `__raw:data remove storage ${arrInfo.ns} ${arrInfo.pathPrefix}[-1]`, args: [] })
-            const t = ctx.freshTemp()
-            ctx.emit({ kind: 'const', dst: t, value: 0 })
-            return { kind: 'temp', name: t }
-          }
-        }
-      }
-
-      // Handle __array_length(arr) — h.length sugar → get array length via data get
-      if (expr.fn === '__array_length') {
-        if (expr.args[0].kind === 'ident') {
-          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
-          if (arrInfo) {
-            const t = ctx.freshTemp()
-            ctx.emit({ kind: 'nbt_read', dst: t, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}`, scale: 1 })
-            return { kind: 'temp', name: t }
-          }
-        }
-      }
-
-      // Handle list_push(arr_name, val) — append an int to an NBT int array
-      // list_push("rs:lists", "mylist", val) or simpler: uses the array's storage path
-      if (expr.fn === 'list_push') {
-        // list_push(array_var, value)
-        // 1. Append a placeholder 0
-        // 2. Overwrite [-1] with the actual value
-        if (expr.args[0].kind === 'ident') {
-          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
-          if (arrInfo) {
-            const valOp = lowerExpr(expr.args[1], ctx, scope)
-            // Step 1: append placeholder
-            ctx.emit({ kind: 'call', dst: null, fn: `__raw:data modify storage ${arrInfo.ns} ${arrInfo.pathPrefix} append value 0`, args: [] })
-            // Step 2: overwrite last element with actual value
-            ctx.emit({ kind: 'nbt_write', ns: arrInfo.ns, path: `${arrInfo.pathPrefix}[-1]`, type: 'int', scale: 1, src: valOp })
-            const t = ctx.freshTemp()
-            ctx.emit({ kind: 'const', dst: t, value: 0 })
-            return { kind: 'temp', name: t }
-          }
-        }
-      }
-
-      // Handle list_pop(arr_var) — remove last element from NBT int array
-      if (expr.fn === 'list_pop') {
-        if (expr.args[0].kind === 'ident') {
-          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
-          if (arrInfo) {
-            ctx.emit({ kind: 'call', dst: null, fn: `__raw:data remove storage ${arrInfo.ns} ${arrInfo.pathPrefix}[-1]`, args: [] })
-            const t = ctx.freshTemp()
-            ctx.emit({ kind: 'const', dst: t, value: 0 })
-            return { kind: 'temp', name: t }
-          }
-        }
-      }
-
-      // Handle list_len(arr_var) — get length of NBT int array
-      if (expr.fn === 'list_len') {
-        if (expr.args[0].kind === 'ident') {
-          const arrInfo = ctx.arrayVars.get((expr.args[0] as { kind: 'ident'; name: string }).name)
-          if (arrInfo) {
-            const t = ctx.freshTemp()
-            ctx.emit({ kind: 'nbt_read', dst: t, ns: arrInfo.ns, path: `${arrInfo.pathPrefix}`, scale: 1 })
-            return { kind: 'temp', name: t }
-          }
-        }
-      }
-
-      // Handle setTimeout/setInterval: lift lambda arg to a named helper function
-      if ((expr.fn === 'setTimeout' || expr.fn === 'setInterval') && expr.args.length === 2) {
-        const ticksArg = expr.args[0]
-        const callbackArg = expr.args[1]
-        const ns = ctx.getNamespace()
-        const id = ctx.timerCounter.count++
-        const callbackName = `__timeout_callback_${id}`
-
-        // Extract ticks value for the schedule command. Minecraft schedule
-        // durations are command literals here; dynamic scoreboard-backed delays
-        // are rejected instead of pretending to schedule with a 1t fallback.
-        if (ticksArg.kind !== 'int_lit') {
-          throw new DiagnosticError(
-            'LoweringError',
-            `${expr.fn}() requires a literal tick duration; dynamic tick values are not supported.`,
-            ctx.currentSourceLoc ?? { line: 1, col: 1 },
-          )
-        }
-        const ticksLiteral = ticksArg.value
-
-        // Build the callback MIRFunction from the lambda body
-        if (callbackArg.kind === 'lambda') {
-          const cbCtx = new FnContext(
-            ns,
-            callbackName,
-            ctx.structDefs,
-            ctx.structFieldTypes,
-            ctx.implMethods,
-            ctx.macroInfo,
-            ctx.fnParamInfo,
-            ctx.enumDefs,
-            ctx.timerCounter,
-          )
-          cbCtx.sourceFile = ctx.sourceFile
-
-          const cbBody = Array.isArray(callbackArg.body) ? callbackArg.body : [{ kind: 'expr' as const, expr: callbackArg.body }]
-
-          // For setInterval: reschedule at end of body
-          const bodyStmts: typeof cbBody = [...cbBody]
-          if (expr.fn === 'setInterval' && ticksLiteral !== null) {
-            // Append: raw `schedule function ns:callbackName ticksT`
-            bodyStmts.push({
-              kind: 'raw' as const,
-              cmd: `schedule function ${ns}:${callbackName} ${ticksLiteral}t`,
-            } as any)
-          }
-
-          lowerBlock(bodyStmts, cbCtx, new Map())
-          const cbCur = cbCtx.current()
-          if (isPlaceholderTerm(cbCur.term)) {
-            cbCtx.terminate({ kind: 'return', value: null })
-          }
-          const cbReachable = computeReachable(cbCtx.blocks, 'entry')
-          const cbLiveBlocks = cbCtx.blocks.filter(b => cbReachable.has(b.id))
-          computePreds(cbLiveBlocks)
-          const cbFn: MIRFunction = {
-            name: callbackName,
-            params: [],
-            blocks: cbLiveBlocks,
-            entry: 'entry',
-            isMacro: false,
-          }
-          ctx.helperFunctions.push(cbFn, ...cbCtx.helperFunctions)
-        }
-
-        // Emit: schedule function ns:callbackName ticksT
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:schedule function ${ns}:${callbackName} ${ticksLiteral}t`, args: [] })
-
-        // setTimeout returns void (0), setInterval returns an int ID (0 for now)
-        const t = ctx.freshTemp()
-        ctx.emit({ kind: 'const', dst: t, value: 0 })
-        return { kind: 'temp', name: t }
-      }
-
-      // Handle int_to_str / bool_to_str — identity functions for scoreboard int/bool → string
-      // In f-string context these are handled by precomputeFStringParts; outside that, just
-      // evaluate the argument and return it (integer stays as integer for scoreboard purposes).
-      if (expr.fn === 'int_to_str' || expr.fn === 'bool_to_str') {
-        if (expr.args.length === 1) {
-          return lowerExpr(expr.args[0], ctx, scope)
-        }
-        const t = ctx.freshTemp()
-        ctx.emit({ kind: 'const', dst: t, value: 0 })
-        return { kind: 'temp', name: t }
-      }
-
-      // Handle assert(cond[, message]) — test framework builtin
-      if (expr.fn === 'assert') {
-        const condArg = expr.args[0]
-        const msgArg = expr.args[1]
-        const condOp = condArg ? lowerExpr(condArg, ctx, scope) : { kind: 'const' as const, value: 0 }
-        // Evaluate condition to a temp
-        let condTemp: string
-        if (condOp.kind === 'temp') {
-          condTemp = condOp.name
-        } else {
-          condTemp = ctx.freshTemp()
-          ctx.emit({ kind: 'const', dst: condTemp, value: condOp.value })
-        }
-        // Get message string
-        let msgStr = 'assert failed'
-        if (msgArg && msgArg.kind === 'str_lit') {
-          msgStr = msgArg.value
-        }
-        const obj = `__${ctx.getNamespace()}`
-        // emit: execute unless score $condTemp <obj> matches 1 run tellraw @a "FAIL: <msg>"
-        const failMsg = JSON.stringify({ text: `FAIL: ${msgStr}`, color: 'red' })
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute unless score $${ctx.getFnName()}_${condTemp} ${obj} matches 1 run tellraw @a ${failMsg}`, args: [] })
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:execute unless score $${ctx.getFnName()}_${condTemp} ${obj} matches 1 run scoreboard players add rs.test_failed rs.meta 1`, args: [] })
-        const t = ctx.freshTemp()
-        ctx.emit({ kind: 'const', dst: t, value: 0 })
-        return { kind: 'temp', name: t }
-      }
-
-      // Handle builtin calls → raw MC commands
-      if (BUILTIN_SET.has(expr.fn)) {
-        // Special case: say() with f_string → MC macro function ($say template)
-        // MC `say` is plain text and cannot reference scoreboards directly;
-        // use function macros (MC 1.20.2+) to interpolate variables.
-        if (expr.fn === 'say' && expr.args[0]?.kind === 'f_string') {
-          const fstr = precomputeFStringParts(expr.args[0], ctx, scope)
-          if (fstr.kind === 'f_string') {
-            const ns = ctx.getNamespace()
-            const obj = `__${ns}`
-            const helperName = `${ctx.getFnName()}__say_macro_${ctx.freshTemp()}`
-
-            // Build macro template: "text $(var) more text"
-            let template = 'say '
-            const macroVarNames: string[] = []
-            for (const part of fstr.parts) {
-              if (part.kind === 'text') {
-                template += part.value
-              } else {
-                const inner = part.expr as HIRExpr
-                if (inner.kind === 'ident') {
-                  // Strip leading $ from temp names for macro param names
-                  const varName = inner.name.startsWith('$') ? inner.name.slice(1) : inner.name
-                  template += `$(${varName})`
-                  macroVarNames.push(inner.name)
-                } else if (inner.kind === 'int_lit') {
-                  template += String(inner.value)
-                } else {
-                  template += '?'
-                }
-              }
-            }
-
-            // Emit: copy each scoreboard var to rs:macro_args storage
-            for (const varName of macroVarNames) {
-              const cleanName = varName.startsWith('$') ? varName.slice(1) : varName
-              ctx.emit({
-                kind: 'call', dst: null,
-                fn: `__raw:execute store result storage rs:macro_args ${cleanName} int 1 run scoreboard players get ${varName} ${obj}`,
-                args: [],
-              })
-            }
-
-            // Build helper MIR function with isMacro: true
-            const helperCtx = new FnContext(ns, helperName, ctx.structDefs, ctx.structFieldTypes, ctx.implMethods)
-            helperCtx.emit({ kind: 'call', dst: null, fn: `__raw:$${template}`, args: [] })
-            helperCtx.terminate({ kind: 'return', value: null })
-            const helperReachable = computeReachable(helperCtx.blocks, 'entry')
-            const helperBlocks = helperCtx.blocks.filter(b => helperReachable.has(b.id))
-            computePreds(helperBlocks)
-            ctx.helperFunctions.push({
-              name: helperName,
-              params: [],
-              blocks: helperBlocks,
-              entry: 'entry',
-              isMacro: true,
-              sourceSnippet: 'say macro helper',
-            })
-
-            // Emit: function <helper> with storage rs:macro_args
-            ctx.emit({ kind: 'call', dst: null, fn: `__raw:function ${ns}:${helperName} with storage rs:macro_args`, args: [] })
-
-            const t = ctx.freshTemp()
-            ctx.emit({ kind: 'const', dst: t, value: 0 })
-            return { kind: 'temp', name: t }
-          }
-        }
-
-        // For text builtins with f-string args, precompute complex expressions to temp vars
-        const TEXT_BUILTINS_SET = new Set(['tell', 'tellraw', 'title', 'subtitle', 'actionbar', 'announce'])
-        let resolvedArgs = expr.args
-        if (TEXT_BUILTINS_SET.has(expr.fn)) {
-          resolvedArgs = expr.args.map(arg =>
-            arg.kind === 'f_string' ? precomputeFStringParts(arg, ctx, scope) : arg
-          )
-        }
-        const cmd = formatBuiltinCall(expr.fn, resolvedArgs, ctx.currentMacroParams, ctx.getNamespace(), ctx.commandArgAliases)
-        ctx.emit({ kind: 'call', dst: null, fn: `__raw:${cmd}`, args: [] })
-        const t = ctx.freshTemp()
-        ctx.emit({ kind: 'const', dst: t, value: 0 })
-        return { kind: 'temp', name: t }
+      // Binding is authoritative: only unbound calls enter intrinsic dispatch.
+      if (!expr.symbolId) {
+        const intrinsic = lowerIntrinsicCall(expr, ctx, scope)
+        if (intrinsic !== undefined) return intrinsic
       }
 
       // Check for struct instance method call: parser desugars v.method() → call('method', [v, ...])
       // Some method names are remapped by the parser (e.g. add→set_add for set builtins).
       // We reverse-map them here to support impl methods with those names.
-      const PARSER_METHOD_REMAP: Record<string, string> = {
-        'set_add': 'add', 'set_contains': 'contains', 'set_remove': 'remove', 'set_clear': 'clear',
-        '__array_push': 'push', '__array_pop': 'pop',
-        '__entity_tag': 'tag', '__entity_untag': 'untag', '__entity_has_tag': 'has_tag',
+      if (!expr.symbolId && expr.args.length > 0 && expr.args[0].kind !== 'ident') {
+        const receiverType = inferStructReturnType(expr.args[0], ctx)
+        if (receiverType && lookupImplMethod(ctx, receiverType, expr.fn)?.hasSelf) {
+          let receiverName: string
+          do { receiverName = `__method_receiver_${ctx.freshTemp()}` }
+          while (scope.has(receiverName) || ctx.structVars.has(receiverName))
+          lowerStmt({ kind: 'let', name: receiverName, type: { kind: 'struct', name: receiverType }, init: expr.args[0] }, ctx, scope)
+          return lowerExpr({ ...expr, args: [{ kind: 'ident', name: receiverName }, ...expr.args.slice(1)] }, ctx, scope)
+        }
       }
-      if (expr.args.length > 0 && expr.args[0].kind === 'ident') {
+      if (!expr.symbolId && expr.args.length > 0 && expr.args[0].kind === 'ident') {
         const sv = ctx.structVars.get(expr.args[0].name)
         if (sv) {
           // Intercept Display::to_string() calls — inlined at f-string call sites; return 0 otherwise
@@ -2938,9 +2983,9 @@ function lowerExpr(
             return lowerTimerMethod(expr.fn, timerId, sv, ctx, scope, expr.args.slice(1))
           }
           // Try direct name, then try reverse-mapped name (for parser-remapped builtins)
-          const originalMethodName = PARSER_METHOD_REMAP[expr.fn] ?? expr.fn
-          const methodInfo = ctx.implMethods.get(sv.typeName)?.get(expr.fn)
-            ?? ctx.implMethods.get(sv.typeName)?.get(originalMethodName)
+          const originalMethodName = ctx.implMethods.get(sv.typeName)?.has(expr.fn)
+            ? expr.fn : PARSER_METHOD_REMAP.get(expr.fn) ?? expr.fn
+          const methodInfo = lookupImplMethod(ctx, sv.typeName, expr.fn)
           if (methodInfo?.hasSelf) {
             // Build args: self fields first, then remaining explicit args
             const fields = ctx.structDefs.get(sv.typeName) ?? []
@@ -2950,7 +2995,7 @@ function lowerExpr(
             })
             // Flatten struct args field-by-field; primitives as single operand
             const explicitArgs: Operand[] = []
-            for (const argExpr of expr.args.slice(1)) {
+            for (const [argumentIndex, argExpr] of expr.args.slice(1).entries()) {
               if (argExpr.kind === 'ident') {
                 const argSv = ctx.structVars.get(argExpr.name)
                 if (argSv) {
@@ -2964,6 +3009,19 @@ function lowerExpr(
                   }
                   continue
                 }
+              }
+              const paramType = ctx.fnParamInfo.get(`${sv.typeName}::${originalMethodName}`)?.[argumentIndex + 1]?.type
+              const argumentType = paramType?.kind === 'struct' ? paramType.name : inferStructReturnType(argExpr, ctx)
+              if (argumentType && ctx.structDefs.has(argumentType)) {
+                let argumentName: string
+                do { argumentName = `__method_argument_${ctx.freshTemp()}` }
+                while (scope.has(argumentName) || ctx.structVars.has(argumentName))
+                lowerStmt({ kind: 'let', name: argumentName, type: { kind: 'struct', name: argumentType }, init: argExpr }, ctx, scope)
+                const materialized = ctx.structVars.get(argumentName)!
+                for (const fieldName of ctx.structDefs.get(argumentType)!) {
+                  explicitArgs.push({ kind: 'temp', name: materialized.fields.get(fieldName)! })
+                }
+                continue
               }
               explicitArgs.push(lowerExpr(argExpr, ctx, scope))
             }
@@ -3236,7 +3294,20 @@ function lowerExpr(
 
       // Generic call: expand struct args field-by-field (same as method-call paths above)
       const args: Operand[] = []
-      for (const a of expr.args) {
+      for (const [index, argument] of expr.args.entries()) {
+        let a = argument
+        if (a.kind !== 'ident' || !ctx.structVars.has(a.name)) {
+          const expected = ctx.fnParamInfo.get(expr.fn)?.[index]?.type
+          const expectedName = expected && (expected.kind === 'named' || expected.kind === 'struct') && ctx.structDefs.has(expected.name) ? expected.name : undefined
+          const typeName = expectedName ?? inferStructReturnType(a, ctx)
+          if (typeName && ctx.structDefs.has(typeName)) {
+            let name: string
+            do { name = `__call_argument_${ctx.freshTemp()}` }
+            while (scope.has(name) || ctx.structVars.has(name))
+            lowerStmt({ kind: 'let', name, type: { kind: 'struct', name: typeName }, init: a }, ctx, scope)
+            a = { kind: 'ident', name }
+          }
+        }
         if (a.kind === 'ident') {
           const sv = ctx.structVars.get(a.name)
           if (sv) {
@@ -3675,7 +3746,7 @@ function requireStaticTimerId(method: string, idTemp: Temp | undefined, ctx: FnC
 }
 
 function isIntrinsicTimerStruct(sv: { typeName: string; fields: Map<string, Temp> }): boolean {
-  return sv.typeName === 'Timer' && sv.fields.has('_id') && sv.fields.has('_duration')
+  return isIntrinsicTimerType(sv.typeName, sv.fields.keys())
 }
 
 /**
@@ -3684,13 +3755,33 @@ function isIntrinsicTimerStruct(sv: { typeName: string; fields: Map<string, Temp
  * function calls and existing invoke-chain inference, but does not invent new
  * object/reference semantics.
  */
+const PARSER_METHOD_REMAP = new Map([
+  ['set_add', 'add'], ['set_contains', 'contains'], ['set_remove', 'remove'], ['set_clear', 'clear'],
+  ['__array_push', 'push'], ['__array_pop', 'pop'],
+  ['__entity_tag', 'tag'], ['__entity_untag', 'untag'], ['__entity_has_tag', 'has_tag'],
+])
+
+function lookupImplMethod(ctx: FnContext, typeName: string, method: string) {
+  return ctx.implMethods.get(typeName)?.get(method)
+    ?? ctx.implMethods.get(typeName)?.get(PARSER_METHOD_REMAP.get(method) ?? method)
+}
+
 function inferStructReturnType(
   expr: HIRExpr,
   ctx: FnContext,
 ): string | undefined {
+  if (expr.kind === 'struct_lit' && expr.literalType?.kind === 'struct') return expr.literalType.name
   if (expr.kind === 'call') {
     const fn = ctx.hirFunctions.get(expr.fn)
-    return fn?.returnType.kind === 'struct' ? fn.returnType.name : undefined
+    if (fn?.returnType.kind === 'struct') return fn.returnType.name
+    const receiver = expr.args[0]
+    const receiverType = receiver?.kind === 'ident'
+      ? ctx.structVars.get(receiver.name)?.typeName
+      : receiver ? inferStructReturnType(receiver, ctx) : undefined
+    return receiverType ? lookupImplMethod(ctx, receiverType, expr.fn)?.returnStructName : undefined
+  }
+  if (expr.kind === 'static_call') {
+    return lookupImplMethod(ctx, expr.type, expr.method)?.returnStructName
   }
   return inferInvokeReturnStructType(expr, ctx)
 }
@@ -3968,6 +4059,28 @@ const MACRO_SENTINEL = '\x01'
  * Pre-evaluate complex f-string expression parts to MIR temp vars,
  * returning a rewritten HIRExpr where each complex part is replaced by a simple ident.
  */
+/** Expand the Display receiver binding without turning values into textual
+ * temp names. Plain-say capture lowering still sees real HIR operands. */
+function expandDisplayFString(expr: HIRExpr, ctx: FnContext): HIRExpr {
+  if (expr.kind !== 'f_string') return expr
+  const parts: HIRFStringPart[] = []
+  for (const part of expr.parts) {
+    const call = part.kind === 'expr' ? part.expr : undefined
+    const receiver = call?.kind === 'call' && !call.symbolId && call.fn === 'to_string' && call.args.length === 1 && call.args[0].kind === 'ident' ? call.args[0].name : undefined
+    const info = receiver ? ctx.structVars.get(receiver) : undefined
+    const display = info && ctx.displayImpls.get(info.typeName)
+    if (!receiver || !display) { parts.push(part); continue }
+    const replaceSelf = (value: any): any => {
+      if (Array.isArray(value)) return value.map(replaceSelf)
+      if (!value || typeof value !== 'object') return value
+      if (value.kind === 'ident' && value.name === 'self') return { ...value, name: receiver }
+      return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, key === 'span' ? child : replaceSelf(child)]))
+    }
+    parts.push(...display.map(replaceSelf))
+  }
+  return { ...expr, parts }
+}
+
 function precomputeFStringParts(
   expr: HIRExpr,
   ctx: FnContext,

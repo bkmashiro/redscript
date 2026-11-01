@@ -13,7 +13,7 @@ import "../src/stdlib/vec.mcrs"
 // ─── Load ──────────────────────────────────────────────────────────────────────
 
 @load fn __load() {
-    scoreboard_add("mathdemo");
+    scoreboard_add_objective("mathdemo", "dummy");
 }
 
 // ─── Math functions demo ───────────────────────────────────────────────────────

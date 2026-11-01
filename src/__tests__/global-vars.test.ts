@@ -12,6 +12,7 @@
  */
 
 import { compile } from '../emit/compile'
+import { MCRuntime } from '../runtime'
 
 // Helper: find a function's body by name
 function getFunctionBody(
@@ -167,5 +168,34 @@ describe('Global variable: f-string interpolation', () => {
     expect(body).toContain('score_val')
     // Must be a dynamic read, not a constant
     expect(body).not.toMatch(/say Score: \d+/)
+  })
+
+  it('captures locals, expressions and strings without nested text calls clobbering fields', () => {
+    const source = 'let count: int = 7; fn label(): string { say(f"nested={count}"); return "ok"; } fn announce(x: int): void { let y: int = x + 1; say(f"x={x}, y={y}, sum={x + y}, label={label()}"); } fn main(): void { announce(5); }'
+    const { files } = compile(source, { namespace: 'test' })
+    const runtime = new MCRuntime('test')
+    for (const file of files) {
+      const match = file.path.match(/^data\/([^/]+)\/function\/(.+)\.mcfunction$/)
+      if (match) runtime.loadFunction(`${match[1]}:${match[2]}`, file.content.split('\n'))
+    }
+    for (const name of JSON.parse(files.find(file => file.path === 'data/minecraft/tags/function/load.json')!.content).values) runtime.execFunction(name)
+    runtime.execFunction('test:main')
+    const captures = Object.values(runtime.getStorage('test:text') as Record<string, Record<string, unknown>>)
+    expect(captures.find(value => value.value_3 === 'ok')).toEqual({ value_0: 5, value_1: 6, value_2: 11, value_3: 'ok' })
+    expect(captures.some(value => value.value_0 === 7)).toBe(true)
+  })
+
+  it('captures the actual runtime global value rather than an unallocated temp name', () => {
+    const { files } = compile(src, { namespace: 'test' })
+    const runtime = new MCRuntime('test')
+    for (const file of files) {
+      const match = file.path.match(/^data\/([^/]+)\/function\/(.+)\.mcfunction$/)
+      if (match) runtime.loadFunction(`${match[1]}:${match[2]}`, file.content.split('\n'))
+    }
+    for (const name of JSON.parse(files.find(file => file.path === 'data/minecraft/tags/function/load.json')!.content).values) runtime.execFunction(name)
+    runtime.setScore('score_val', '__test', 23)
+    runtime.execFunction('test:announce')
+    const captures = runtime.getStorage('test:text') as Record<string, Record<string, unknown>>
+    expect(Object.values(captures).map(value => value.value_0)).toContain(23)
   })
 })

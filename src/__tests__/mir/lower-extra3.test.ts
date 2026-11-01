@@ -24,6 +24,7 @@ import { lowerToMIR } from '../../mir/lower'
 import { verifyMIR } from '../../mir/verify'
 import type { MIRModule } from '../../mir/types'
 import { compile } from '../../emit/compile'
+import { MCRuntime } from '../../runtime'
 
 function compileMIR(source: string): MIRModule {
   const tokens = new Lexer(source).tokenize()
@@ -321,14 +322,29 @@ describe('MIR lower — if_let_some general case', () => {
   })
 })
 
-// ── scoreboard_add ────────────────────────────────────────────────────────
+// ── Scoreboard increment contract ─────────────────────────────────────────
 
-describe('MIR lower — scoreboard_add builtin', () => {
-  test('scoreboard_add emits delta score_write', () => {
-    expect(() => compile(`
-      fn f(n: int): void {
-        scoreboard_add("player", "rs", 5);
-      }
-    `, { namespace: 'scoreadd' })).not.toThrow()
+describe('MIR lower — scoreboard increment', () => {
+  test('supported scoreboard read/write APIs emit a real native increment', () => {
+    const result = compile(`fn f(): void {
+      scoreboard_set("player", "rs", scoreboard_get("player", "rs") + 5);
+    }`, { namespace: 'scoreadd' })
+    const commands = result.files.map(file => file.content).join('\n')
+    expect(commands).toContain('scoreboard players get player rs')
+    expect(commands).toContain('player rs')
+    expect(commands).not.toContain('function scoreadd:scoreboard_add')
+    const runtime = new MCRuntime('scoreadd')
+    for (const file of result.files) {
+      const match = file.path.match(/^data\/([^/]+)\/function\/(.+)\.mcfunction$/)
+      if (match) runtime.loadFunction(`${match[1]}:${match[2]}`, file.content.split('\n'))
+    }
+    runtime.setScore('player', 'rs', 7)
+    runtime.execFunction('scoreadd:load')
+    runtime.execFunction('scoreadd:f')
+    expect(runtime.getScore('player', 'rs')).toBe(12)
+  })
+
+  test('an unimplemented scoreboard_add name is not silently authorized', () => {
+    expect(() => compile('fn f(): void { scoreboard_add("player", "rs", 5); }', { namespace: 'scoreadd' })).toThrow(/Unknown function 'scoreboard_add'/)
   })
 })

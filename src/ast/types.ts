@@ -164,16 +164,16 @@ export type Expr =
   | FStringExpr
   | { kind: 'range_lit';  range: RangeExpr; span?: Span }
   | (BlockPosExpr & { span?: Span })
-  | { kind: 'ident';      name: string; span?: Span }
+  | { kind: 'ident'; name: string; symbolId?: string; functionType?: TypeNode; span?: Span }
   | { kind: 'selector';   raw: string; isSingle: boolean; sel: EntitySelector; span?: Span }
   | { kind: 'binary';     op: BinOp | CmpOp | '&&' | '||'; left: Expr; right: Expr; span?: Span }
   | { kind: 'is_check';   expr: Expr; entityType: EntityTypeName; span?: Span }
   | { kind: 'unary';      op: '!' | '-'; operand: Expr; span?: Span }
   | { kind: 'assign';     target: string; op: AssignOp; value: Expr; span?: Span }
-  | { kind: 'call';       fn: string; symbolId?: string; args: Expr[]; typeArgs?: TypeNode[]; span?: Span }
-  | { kind: 'invoke';     callee: Expr; args: Expr[]; span?: Span }
+  | { kind: 'call'; fn: string; functionType?: TypeNode; methodName?: string; symbolId?: string; args: Expr[]; typeArgs?: TypeNode[]; span?: Span }
+  | { kind: 'invoke'; functionType?: TypeNode; callee: Expr; args: Expr[]; span?: Span }
   | { kind: 'member';     obj: Expr; field: string; span?: Span }
-  | { kind: 'struct_lit'; fields: { name: string; value: Expr }[]; span?: Span }
+  | { kind: 'struct_lit'; literalType?: TypeNode; fields: { name: string; value: Expr }[]; span?: Span }
   | { kind: 'member_assign'; obj: Expr; field: string; op: AssignOp; value: Expr; span?: Span }
   | { kind: 'index';      obj: Expr; index: Expr; span?: Span }
   | { kind: 'index_assign'; obj: Expr; index: Expr; op: AssignOp; value: Expr; span?: Span }

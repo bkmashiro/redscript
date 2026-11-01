@@ -1,4 +1,5 @@
 import { createHash } from 'crypto'
+import { cloneBoundCalls } from '../resolver/bound-program'
 import path from 'path'
 import { DiagnosticError } from '../diagnostics'
 import type { Expr, ImportDecl, Program } from '../ast/types'
@@ -70,61 +71,6 @@ function targetEntry(target: BuildTarget): { packagePath: string; symbol: string
 }
 
 
-function cloneForBackend<T>(
-  value: T,
-  aliases: ReadonlyMap<string, string>,
-  backendPaths: ReadonlyMap<string, string>,
-): T {
-  if (Array.isArray(value)) {
-    return value.map(item => cloneForBackend(item, aliases, backendPaths)) as T
-  }
-  if (value === null || typeof value !== 'object') return value
-
-  const record = value as Record<string, unknown>
-  if (record.kind === 'static_call') {
-    const expr = value as unknown as Extract<Expr, { kind: 'static_call' }>
-    const targetPackagePath = aliases.get(expr.type)
-    if (targetPackagePath) {
-      const targetBackendPath = backendPaths.get(targetPackagePath)
-      if (!targetBackendPath) {
-        throw new DiagnosticError(
-          'LoweringError',
-          `No backend layout exists for imported package '${targetPackagePath}'`,
-          { file: expr.span?.file, line: expr.span?.line ?? 1, col: expr.span?.col ?? 1 },
-        )
-      }
-      const clone: Record<string, unknown> = {
-        kind: 'call',
-        fn: `${targetBackendPath}/${expr.method}`,
-        symbolId: makePackageSymbolId(targetPackagePath, expr.method),
-        args: expr.args.map(arg => cloneForBackend(arg, aliases, backendPaths)),
-      }
-      const span = Object.getOwnPropertyDescriptor(value as object, 'span')
-      if (span) Object.defineProperty(clone, 'span', span)
-      return clone as T
-    }
-  }
-
-  const clone = Object.create(Object.getPrototypeOf(value)) as object
-  for (const key of Reflect.ownKeys(value as object)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value as object, key)!
-    if ('value' in descriptor) {
-      descriptor.value = cloneForBackend(descriptor.value, aliases, backendPaths)
-    }
-    Object.defineProperty(clone, key, descriptor)
-  }
-  return clone as T
-}
-
-function packageAliases(program: Program): Map<string, string> {
-  const aliases = new Map<string, string>()
-  for (const imported of program.imports) {
-    if (!imported.packagePath) continue
-    aliases.set(imported.alias ?? imported.packagePath.split('/').pop()!, imported.packagePath)
-  }
-  return aliases
-}
-
 function legacyImportsForPackage(
   loaded: LoadedPackage,
   linked: ResolvedPackageProgram,
@@ -157,8 +103,12 @@ function aggregatePackageProgram(
   namespace: string,
 ): Program {
   const transformed = loaded.programs.map(program => {
-    const aliases = packageAliases(program)
-    const clone = cloneForBackend(program, aliases, backendPaths)
+    const clone = cloneBoundCalls(program, linked.packages.get(loaded.id.path)!.bindings, id => {
+      const symbol = linked.symbols.get(id)!
+      const layout = backendPaths.get(symbol.packagePath)
+      if (!layout) throw new DiagnosticError('LoweringError', `No backend layout exists for imported package '${symbol.packagePath}'`, symbol.span ?? { line: 1, col: 1 })
+      return `${layout}/${symbol.name}`
+    })
     for (const declaration of [...clone.declarations, ...(clone.declaredFunctions ?? [])]) {
       declaration.symbolId = makePackageSymbolId(loaded.id.path, declaration.name)
     }

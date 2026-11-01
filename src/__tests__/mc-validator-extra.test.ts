@@ -283,6 +283,11 @@ describe('MCCommandValidator — extended coverage', () => {
     expect(result.error).toContain('Invalid return value')
   })
 
+  test('return fail follows the Brigadier literal and rejects trailing tokens', () => {
+    expect(v.validate('return fail').valid).toBe(true)
+    expect(v.validate('return fail 1').valid).toBe(false)
+  })
+
   test('return run <command> is valid', () => {
     const result = v.validate('return run scoreboard players set x __rs 0')
     expect(result.valid).toBe(true)

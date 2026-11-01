@@ -21,6 +21,7 @@ import type {
   HIRFStringPart,
 } from './types'
 import { expandStructDeclarations } from '../structs/expand'
+import { lowerGlobalState } from './global-state'
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -35,7 +36,7 @@ export function lowerToHIR(program: Program): HIRModule {
     span: s.span,
   }))
 
-  return {
+  return lowerGlobalState({
     namespace: program.namespace,
     globals: program.globals.map(lowerGlobal),
     functions: program.declarations.map(lowerFunction),
@@ -58,7 +59,7 @@ export function lowerToHIR(program: Program): HIRModule {
       span: c.span,
     })),
     isLibrary: program.isLibrary,
-  }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -565,7 +566,7 @@ function lowerExpr(expr: Expr): HIRExpr {
       return expr as HIRExpr
 
     case 'ident':
-      return { kind: 'ident', name: expr.name, span: expr.span }
+      return { kind: 'ident', name: expr.name, symbolId: expr.symbolId, functionType: expr.functionType, span: expr.span }
 
     case 'selector':
       return { kind: 'selector', raw: expr.raw, isSingle: expr.isSingle, sel: expr.sel, span: expr.span }
@@ -576,6 +577,7 @@ function lowerExpr(expr: Expr): HIRExpr {
     case 'struct_lit':
       return {
         kind: 'struct_lit',
+        ...(expr.literalType ? { literalType: expr.literalType } : {}),
         fields: expr.fields.map(f => ({ name: f.name, value: lowerExpr(f.value) })),
         span: expr.span,
       }
@@ -699,13 +701,15 @@ function lowerExpr(expr: Expr): HIRExpr {
         kind: 'call',
         fn: expr.fn,
         ...(expr.symbolId ? { symbolId: expr.symbolId } : {}),
+        ...(expr.methodName ? { methodName: expr.methodName } : {}),
+        ...(expr.functionType ? { functionType: expr.functionType } : {}),
         args: expr.args.map(lowerExpr),
         typeArgs: expr.typeArgs,
         span: expr.span,
       }
 
     case 'invoke':
-      return { kind: 'invoke', callee: lowerExpr(expr.callee), args: expr.args.map(lowerExpr), span: expr.span }
+      return { kind: 'invoke', functionType: expr.functionType, callee: lowerExpr(expr.callee), args: expr.args.map(lowerExpr), span: expr.span }
 
     case 'static_call':
       return {

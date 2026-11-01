@@ -17,6 +17,7 @@
 // Requires: stdlib/math (for mulfix)
 
 module library;
+import math;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

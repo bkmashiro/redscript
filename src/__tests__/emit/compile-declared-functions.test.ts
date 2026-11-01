@@ -344,7 +344,7 @@ describe('emit: declared-function boundary behavior', () => {
     expect(err!.diagnostics[0].message).toContain("Function 'ext' expects 2 arguments, got 1")
   })
 
-  test('nested whole-module imports propagate declared function signatures for arity validation', () => {
+  test('directly imported declarations validate arity alongside nested dependencies', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rscript-decl-import-nested-bad-'))
     const apiPath = path.join(tmpDir, 'api.mcrs')
     const utilPath = path.join(tmpDir, 'util.mcrs')
@@ -352,7 +352,7 @@ describe('emit: declared-function boundary behavior', () => {
 
     fs.writeFileSync(apiPath, 'module api;\ndeclare fn ext(x: int, y: int): int;\n')
     fs.writeFileSync(utilPath, 'module util;\nimport api;\n')
-    fs.writeFileSync(mainPath, 'import util;\nfn main(): int { return ext(1); }\n')
+    fs.writeFileSync(mainPath, 'import util;\nimport api;\nfn main(): int { return ext(1); }\n')
 
     let err: CheckFailedError | undefined
     try {
@@ -379,7 +379,7 @@ describe('emit: declared-function boundary behavior', () => {
     const mainPath = path.join(tmpDir, 'main.mcrs')
 
     fs.writeFileSync(apiPath, 'module api;\ndeclare fn ext(x: int): int;\n')
-    fs.writeFileSync(utilPath, 'module util;\nimport api;\nfn ext(x: string): int { return 1; }\n')
+    fs.writeFileSync(utilPath, 'module util;\nimport api;\nexport fn ext(x: string): int { return 1; }\n')
     fs.writeFileSync(mainPath, 'import util;\nfn main(): int { return ext("ok"); }\n')
 
     let result: ReturnType<typeof compile>

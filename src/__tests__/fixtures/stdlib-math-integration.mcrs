@@ -1,8 +1,10 @@
 // stdlib math integration test
-// Uses librarySources so no import needed
+// Explicit imports keep this fixture usable through both the CLI and API.
+import math;
+import advanced;
 
 @load fn __load() {
-    scoreboard_add("rs");
+    scoreboard_add_objective("rs", "dummy");
 }
 
 @keep fn test_math_basic() {

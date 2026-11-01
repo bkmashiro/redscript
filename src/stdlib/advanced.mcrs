@@ -8,6 +8,10 @@
 // Category 4: Fractals 🤯    — mandelbrot_iter (fixed-point complex arithmetic)
 
 module library;
+import math;
+import vec;
+import bigint;
+import sort;
 
 // ─── Category 1: Number theory ───────────────────────────────────────────────
 

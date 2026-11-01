@@ -9,6 +9,7 @@
 //   - Curve length approximation
 
 module library;
+import math;
 
 // ─── Differentiation ─────────────────────────────────────────────────────────
 

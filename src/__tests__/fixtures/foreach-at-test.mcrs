@@ -1,7 +1,7 @@
 // Foreach with execute context modifiers test
 
 @load fn setup() {
-    scoreboard_add("rs");
+    scoreboard_add_objective("rs", "dummy");
     scoreboard_set("#foreach_count", #rs, 0);
     scoreboard_set("#foreach_at_count", #rs, 0);
 }

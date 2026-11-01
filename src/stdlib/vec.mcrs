@@ -12,6 +12,7 @@
 // Phase 3: 3D geometry (dot, cross, length, distance, manhattan, chebyshev)
 
 module library;
+import math;
 
 // ─── Phase 1: 2D geometry ────────────────────────────────────────────────────
 

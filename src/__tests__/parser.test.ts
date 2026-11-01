@@ -777,6 +777,7 @@ impl Point {
         expect(parseExpr('arr.push(4)')).toEqual({
           kind: 'call',
           fn: '__array_push',
+          methodName: 'push',
           args: [
             { kind: 'ident', name: 'arr' },
             { kind: 'int_lit', value: 4 },
@@ -788,6 +789,7 @@ impl Point {
         expect(parseExpr('arr.pop()')).toEqual({
           kind: 'call',
           fn: '__array_pop',
+          methodName: 'pop',
           args: [
             { kind: 'ident', name: 'arr' },
           ],

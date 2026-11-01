@@ -1,6 +1,6 @@
 @load fn setup() {
-    scoreboard_add("armor_stands");
-    scoreboard_add("items");
+    scoreboard_add_objective("armor_stands", "dummy");
+    scoreboard_add_objective("items", "dummy");
 }
 
 // Test is-check type narrowing using armor_stands (don't despawn without players)

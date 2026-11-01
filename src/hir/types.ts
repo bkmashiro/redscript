@@ -61,7 +61,7 @@ export type HIRExpr =
   | { kind: 'str_lit'; value: string; span?: Span }
   | { kind: 'range_lit'; range: RangeExpr; span?: Span }
   | { kind: 'array_lit'; elements: HIRExpr[]; span?: Span }
-  | { kind: 'struct_lit'; fields: { name: string; value: HIRExpr }[]; span?: Span }
+  | { kind: 'struct_lit'; literalType?: TypeNode; fields: { name: string; value: HIRExpr }[]; span?: Span }
   // MC-specific literals
   | { kind: 'rel_coord'; value: string; span?: Span }
   | { kind: 'local_coord'; value: string; span?: Span }
@@ -72,7 +72,7 @@ export type HIRExpr =
   | { kind: 'str_interp'; parts: Array<string | HIRExpr>; span?: Span }
   | { kind: 'f_string'; parts: HIRFStringPart[]; span?: Span }
   // Identifiers
-  | { kind: 'ident'; name: string; span?: Span }
+  | { kind: 'ident'; name: string; symbolId?: string; functionType?: TypeNode; span?: Span }
   // Operators — && and || preserved (control-flow lowering happens in MIR)
   | { kind: 'binary'; op: BinOp | CmpOp | '&&' | '||'; left: HIRExpr; right: HIRExpr; span?: Span }
   | { kind: 'unary'; op: '!' | '-'; operand: HIRExpr; span?: Span }
@@ -85,8 +85,8 @@ export type HIRExpr =
   | { kind: 'member'; obj: HIRExpr; field: string; span?: Span }
   | { kind: 'index'; obj: HIRExpr; index: HIRExpr; span?: Span }
   // Calls
-  | { kind: 'call'; fn: string; symbolId?: string; args: HIRExpr[]; typeArgs?: TypeNode[]; span?: Span }
-  | { kind: 'invoke'; callee: HIRExpr; args: HIRExpr[]; span?: Span }
+  | { kind: 'call'; fn: string; functionType?: TypeNode; methodName?: string; symbolId?: string; args: HIRExpr[]; typeArgs?: TypeNode[]; span?: Span }
+  | { kind: 'invoke'; functionType?: TypeNode; callee: HIRExpr; args: HIRExpr[]; span?: Span }
   | { kind: 'static_call'; type: string; method: string; args: HIRExpr[]; span?: Span }
   // Enum variant path
   | { kind: 'path_expr'; enumName: string; variant: string; span?: Span }

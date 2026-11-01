@@ -49,6 +49,7 @@
 //   // dominant frequency = dft_freq_bin(4, 4, dominant_k)  → 1 Hz
 
 module library;
+import math;
 
 /// Default no-op completion callback for `dft_coro`. Does nothing.
 ///

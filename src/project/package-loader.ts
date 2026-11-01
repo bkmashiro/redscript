@@ -6,6 +6,7 @@ import { SourceManager } from '../compiler/source-manager'
 import type { Program, Span } from '../ast/types'
 import type { BuildTarget, LoadedProject } from './model'
 import { loadProjectModuleGraph } from './module-graph'
+import { StdlibPackageProvider, normalizeStdlibImport } from './stdlib-provider'
 import {
   packageId,
   type LoadedPackage,
@@ -202,6 +203,7 @@ export function loadPackageGraph(
 ): PackageGraph {
   const selectedTarget = selectTarget(project, target)
   const sourceManager = options.sourceManager ?? new SourceManager({ cwd: project.rootDir })
+  const stdlib = new StdlibPackageProvider(sourceManager)
   const parsedByFile = new Map<string, ParsedSource>()
 
   const moduleGraph = loadProjectModuleGraph(project)
@@ -260,6 +262,8 @@ export function loadPackageGraph(
     const aliases = new Map<string, string>()
     for (const source of sources) {
       for (const declaration of source.program.imports) {
+        const standardModule = normalizeStdlibImport(declaration)
+        if (standardModule) stdlib.load(standardModule)
         if (!declaration.packagePath) {
           throw packageDiagnostic(
             `Import '${declaration.moduleName}' must use a canonical package path in strict project mode`,
@@ -267,7 +271,8 @@ export function loadPackageGraph(
             source.file.absolutePath,
           )
         }
-        const importedModulePath = validateCanonicalImport(source, declaration.packagePath, declaration.span)
+        const importedModulePath = standardModule ? 'stdlib'
+          : validateCanonicalImport(source, declaration.packagePath, declaration.span)
         const alias = declaration.alias ?? declaration.packagePath.split('/').pop()!
         const previous = aliases.get(alias)
         if (previous && previous !== declaration.packagePath) {
@@ -302,6 +307,11 @@ export function loadPackageGraph(
     }))
   }
 
+  for (const [canonical, loaded] of stdlib.packages) {
+    if (packages.has(canonical)) throw packageDiagnostic(`Package '${canonical}' conflicts with the compiler-owned standard library`)
+    packages.set(canonical, loaded)
+  }
+
   for (const loaded of packages.values()) {
     for (const dependency of loaded.imports) {
       if (!packages.has(dependency.path)) {
@@ -326,7 +336,7 @@ export function loadPackageGraph(
   return Object.freeze({
     modulePath: project.manifest.project.modulePath,
     moduleGraph,
-    dependencyHash: moduleGraph.dependencyHash,
+    dependencyHash: stdlib.packages.size ? stdlib.dependencyHash(moduleGraph.dependencyHash) : moduleGraph.dependencyHash,
     rootPackages: Object.freeze([root.id]),
     packages,
     topologicalOrder: Object.freeze(buildTopologicalOrder(packages)),

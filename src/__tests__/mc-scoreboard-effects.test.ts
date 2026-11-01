@@ -6,6 +6,9 @@ import * as os from 'os'
 import * as path from 'path'
 import { MCTestClient } from '../mc-test/client'
 import { compile } from '../compile'
+import { createCompilerSession } from '../emit/compile'
+import { compileModules } from '../emit/modules'
+import { loadProject, resolveBuildTarget } from '../project/manifest'
 import { McVersion } from '../types/mc-version'
 import { deployCorpusPack, removeCorpusPack } from '../mc-test/corpus-deployer'
 import { runMcCoreCase } from '../mc-test/case-runner'
@@ -116,6 +119,268 @@ describeLive('managed Paper scoreboard call effects', () => {
       } finally {
         await mc.tickUnfreeze()
       }
+    }
+  }, 60000)
+
+  test('project stdlib package initialization and cross-package numeric calls on Paper', async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'redscript-stdlib-project-live-'))
+    const namespace = 'dx_project'
+    let pack: ReturnType<typeof deployCorpusPack> | undefined
+    try {
+      fs.mkdirSync(path.join(projectRoot, 'src'))
+      fs.writeFileSync(path.join(projectRoot, 'redscript.toml'), `[project]
+name = "demo"
+module = "local/demo"
+namespace = "${namespace}"
+source-roots = ["src"]
+mc-version = "1.21.4"
+[target.pack]
+kind = "datapack"
+entry = "local/demo::main"
+out = "dist"
+`)
+      fs.writeFileSync(path.join(projectRoot, 'src/main.mcrs'), `package demo; import math;
+        export fn main(): void { scoreboard_set("#project_sin", "effect_outputs", math::sin_fixed(scoreboard_get("#dx_input", "effect_inputs"))); }`)
+      const project = loadProject(projectRoot)!
+      const result = createCompilerSession({ project, target: resolveBuildTarget(project) }).compileProject()
+      if (result.kind !== 'datapack') throw new Error('Expected datapack')
+      const entry = result.files.find(file => file.path.endsWith('/main.mcfunction'))!
+      const resource = entry.path.match(/^data\/([^/]+)\/function\/(.+)\.mcfunction$/)!
+      pack = deployCorpusPack(root, namespace, result.files)
+      await mc.reload()
+      for (const [degrees, expected] of [[30, 500], [90, 1000], [-30, -500]]) {
+        await mc.command(`scoreboard players set #dx_input effect_inputs ${degrees}`)
+        expect((await mc.command(`function ${resource[1]}:${resource[2]}`)).ok).toBe(true)
+        expect(await mc.scoreboard('#project_sin', 'effect_outputs')).toBe(expected)
+      }
+    } finally {
+      if (pack) { removeCorpusPack(pack.root, pack.caseId); await mc.reload() }
+      fs.rmSync(projectRoot, { recursive: true, force: true })
+    }
+  }, 60000)
+
+  test('typed function values execute selected callbacks across module objectives on Paper', async () => {
+    const namespace = 'dx_fv'
+    const modules = [
+      { name: 'app', source: 'module app; import lib::apply; export fn main(): void { let double: (int) -> int = (x: int) => x * 2; let square: (int) -> int = (x: int) => x * x; scoreboard_set("#function_values", "effect_outputs", apply(double, 7) * 100 + apply(square, 9)); }' },
+      { name: 'lib', source: 'module lib; export fn apply(f: (int) -> int, x: int): int { return f(x); }' },
+    ]
+    for (const inputs of [modules, [...modules].reverse()]) {
+      const result = compileModules(inputs, { namespace, entryFunctions: ['app/main'] })
+      const pack = deployCorpusPack(root, namespace, result.files)
+      try {
+        await mc.reload()
+        await mc.command(`function ${namespace}:app/main`)
+        expect(await mc.scoreboard('#function_values', 'effect_outputs')).toBe(1481)
+      } finally {
+        removeCorpusPack(pack.root, pack.caseId)
+        await mc.reload()
+      }
+    }
+  }, 60000)
+
+  test('module globals initialize before user load hooks and preserve independent mutable receivers on Paper', async () => {
+    const namespace = 'dx_globals'
+    const source = `struct Counter { value: int }
+impl Counter {
+  fn bump(self): int { self.value = self.value + 1; return self.value; }
+  fn reset(self): void { self.value = 0; }
+}
+let first: Counter = { value: 5 };
+let second: Counter = { value: 8 };
+let count: int = 7;
+fn read_first(): int { return first.value; }
+fn inc(): int { count = count + 1; return count; }
+fn read_count(): int { return count; }
+fn fresh_read(): void { let before: int = count; inc(); scoreboard_set("#fresh_read", "effect_outputs", before * 100 + count * 10 + count); }
+fn scalar_shadow(): void { let count: int = 1; count = count + 1; scoreboard_set("#scalar_shadow", "effect_outputs", count * 100 + read_count()); }
+@load fn observe_initial(): void { scoreboard_set("#initial", "effect_outputs", first.value * 100 + second.value * 10 + count); say(f"initial={first.value}"); }
+fn shadow(): void { let first: Counter = Counter { value: 1 }; scoreboard_set("#shadow", "effect_outputs", first.bump() * 10 + read_first()); }
+fn exercise(): void {
+  let a: int = first.bump(); let b: int = first.bump(); let c: int = second.bump(); first.reset();
+  scoreboard_set("#globals", "effect_outputs", a * 1000 + b * 100 + c * 10 + first.value);
+  scoreboard_set("#scalar", "effect_outputs", inc() * 10 + inc());
+}`
+    const compiled = compile(source, { namespace })
+    const capture = compiled.files.find(file => file.path.endsWith('/observe_initial.mcfunction'))!.content.match(/with storage dx_globals:text (c_[a-f0-9]+)/)![1]
+    const pack = deployCorpusPack(root, namespace, compiled.files)
+    try {
+      await mc.reload()
+      expect(await mc.scoreboard('#initial', 'effect_outputs')).toBe(587)
+      await mc.command(`execute store result score #text_capture effect_outputs run data get storage ${namespace}:text ${capture}.value_0`)
+      expect(await mc.scoreboard('#text_capture', 'effect_outputs')).toBe(5)
+      await mc.command(`function ${namespace}:shadow`)
+      expect(await mc.scoreboard('#shadow', 'effect_outputs')).toBe(25)
+      await mc.command(`function ${namespace}:exercise`)
+      expect(await mc.scoreboard('#globals', 'effect_outputs')).toBe(6790)
+      expect(await mc.scoreboard('#scalar', 'effect_outputs')).toBe(89)
+      await mc.command(`function ${namespace}:exercise`)
+      expect(await mc.scoreboard('#globals', 'effect_outputs')).toBe(1300)
+      expect(await mc.scoreboard('#scalar', 'effect_outputs')).toBe(111)
+      await mc.command(`function ${namespace}:fresh_read`)
+      expect(await mc.scoreboard('#fresh_read', 'effect_outputs')).toBe(1232)
+      await mc.command(`function ${namespace}:scalar_shadow`)
+      expect(await mc.scoreboard('#scalar_shadow', 'effect_outputs')).toBe(212)
+      await mc.reload()
+      expect(await mc.scoreboard('#initial', 'effect_outputs')).toBe(587)
+      await mc.command(`function ${namespace}:exercise`)
+      expect(await mc.scoreboard('#globals', 'effect_outputs')).toBe(6790)
+    } finally {
+      removeCorpusPack(pack.root, pack.caseId)
+      await mc.reload()
+    }
+  }, 60000)
+
+  test('standalone selected imports preserve separate private callees on Paper', async () => {
+    const directory = fs.mkdtempSync(path.join(root, 'bound-source-'))
+    fs.writeFileSync(path.join(directory, 'left.mcrs'), 'module left; fn hidden(): int { return 5; } export fn left_value(): int { return hidden(); }')
+    fs.writeFileSync(path.join(directory, 'right.mcrs'), 'module right; fn hidden(): int { return 8; } export fn right_value(): int { return hidden(); }')
+    const namespace = 'dx_bound'
+    const result = compile('import left::left_value; import right::right_value; fn main(): void { scoreboard_set("#bound_result", "effect_outputs", left_value() + right_value()); }', {
+      namespace, filePath: path.join(directory, 'main.mcrs'),
+    })
+    const pack = deployCorpusPack(root, namespace, result.files)
+    try {
+      await mc.reload()
+      expect((await mc.command(`function ${namespace}:main`)).ok).toBe(true)
+      expect(await mc.scoreboard('#bound_result', 'effect_outputs')).toBe(13)
+    } finally {
+      removeCorpusPack(pack.root, pack.caseId)
+      fs.rmSync(directory, { recursive: true, force: true })
+      await mc.reload()
+    }
+  }, 60000)
+
+  test('math showcase uses the actual array bigint API for Fibonacci values on Paper', async () => {
+    const filePath = path.resolve(__dirname, '../../examples/math-showcase.mcrs')
+    let source = fs.readFileSync(filePath, 'utf8')
+    const at50 = 'say(f"  fib(50)  chunks: [{a[1]}][{a[2]}][{a[3]}]");'
+    const at70 = 'say(f"  fib(70)  chunks: [{a[0]}][{a[1]}][{a[2]}][{a[3]}]");'
+    expect(source).toContain(at50)
+    expect(source).toContain(at70)
+    // Replace only presentation with an independent scoreboard observation.
+    source = source.replace(at50, [1, 2, 3].map(i => `scoreboard_set("#fib50_${i}", "effect_outputs", a[${i}]);`).join('\n'))
+    source = source.replace(at70, [0, 1, 2, 3].map(i => `scoreboard_set("#fib70_${i}", "effect_outputs", a[${i}]);`).join('\n'))
+    const namespace = 'dx_bigint'
+    const result = compile(source, { namespace, filePath })
+    const pack = deployCorpusPack(root, namespace, result.files)
+    try {
+      await mc.reload()
+      expect((await mc.command(`function ${namespace}:bigint_showcase`)).ok).toBe(true)
+      let left = 0n, right = 1n
+      for (let step = 1; step <= 70; step++) {
+        ;[left, right] = [right, left + right]
+        if (step === 50 || step === 70) {
+          const count = step === 50 ? 3 : 4
+          for (let index = 0; index < count; index++) {
+            const chunk = Number(left / (10000n ** BigInt(count - index - 1)) % 10000n)
+            expect(await mc.scoreboard(`#fib${step}_${index + (step === 50 ? 1 : 0)}`, 'effect_outputs')).toBe(chunk)
+          }
+        }
+      }
+    } finally {
+      removeCorpusPack(pack.root, pack.caseId)
+      await mc.reload()
+    }
+  }, 60000)
+
+  test.each(['random', 'random_native'])('%s returns native values for literal and dynamic bounds on Paper', async name => {
+    const namespace = 'dx_random'
+    const result = compile(`fn main(): void {
+      scoreboard_set("#fixed", "effect_outputs", ${name}(7, 7));
+      let low: int = scoreboard_get("#rng_low", "effect_inputs");
+      let high: int = scoreboard_get("#rng_high", "effect_inputs");
+      scoreboard_set("#bounded", "effect_outputs", ${name}(low, high));
+    }`, { namespace })
+    const pack = deployCorpusPack(root, namespace, result.files)
+    try {
+      await mc.reload()
+      for (const [low, high] of [[2, 5], [4, 4], [-5, -2], [-3, -3]]) {
+        await mc.command(`scoreboard players set #rng_low effect_inputs ${low}`)
+        await mc.command(`scoreboard players set #rng_high effect_inputs ${high}`)
+        expect((await mc.command(`function ${namespace}:main`)).ok).toBe(true)
+        expect(await mc.scoreboard('#fixed', 'effect_outputs')).toBe(7)
+        const bounded = await mc.scoreboard('#bounded', 'effect_outputs')
+        expect(bounded).toBeGreaterThanOrEqual(low)
+        expect(bounded).toBeLessThanOrEqual(high)
+      }
+    } finally {
+      removeCorpusPack(pack.root, pack.caseId)
+      await mc.reload()
+    }
+  }, 60000)
+
+  test('cross-module selector and string ABI marks only selected entities on Paper', async () => {
+    const namespace = 'dx_abi'
+    const result = compileModules([
+      { name: 'app', objective: '__abi_app', source: 'module app; import lib::mark; export fn main(): void { mark(@e[tag=dx_abi_chosen], "dx_abi_marked"); }' },
+      { name: 'lib', objective: '__abi_lib', source: 'module lib; export fn mark(target: selector, label: string): void { tag_add(target, label); }' },
+    ], { namespace, entryFunctions: ['app/main'] })
+    const pack = deployCorpusPack(root, namespace, result.files)
+    try {
+      await mc.reload()
+      for (const x of [0, 1]) expect((await mc.command(`summon minecraft:marker ${x} 64 0 {Tags:["dx_abi_chosen"]}`)).ok).toBe(true)
+      expect((await mc.command('summon minecraft:marker 2 64 0 {Tags:["dx_abi_control"]}')).ok).toBe(true)
+      await mc.command('scoreboard players set #abi_hits effect_outputs 0')
+      expect((await mc.command(`function ${namespace}:app/main`)).ok).toBe(true)
+      await mc.command('execute as @e[tag=dx_abi_marked] run scoreboard players add #abi_hits effect_outputs 1')
+      expect(await mc.scoreboard('#abi_hits', 'effect_outputs')).toBe(2)
+    } finally {
+      await mc.command('kill @e[tag=dx_abi_chosen]')
+      await mc.command('kill @e[tag=dx_abi_control]')
+      removeCorpusPack(pack.root, pack.caseId)
+      await mc.reload()
+    }
+  }, 60000)
+
+  test('selector parameter iteration executes for the selected entities on Paper', async () => {
+    const namespace = 'dx_selector'
+    const result = compile(`
+      fn visit(target: selector): void {
+        foreach (p in target) { scoreboard_set("#selector_hits", "effect_outputs", scoreboard_get("#selector_hits", "effect_outputs") + 1); }
+      }
+      fn main(): void { visit(@e[tag=dx_selector_chosen]); }
+    `, { namespace })
+    const pack = deployCorpusPack(root, namespace, result.files)
+    try {
+      await mc.reload()
+      await mc.command('summon minecraft:marker 0 64 0 {Tags:["dx_selector_chosen"]}')
+      await mc.command('summon minecraft:marker 1 64 0 {Tags:["dx_selector_chosen"]}')
+      await mc.command('scoreboard players set #selector_hits effect_outputs 0')
+      expect((await mc.command(`function ${namespace}:main`)).ok).toBe(true)
+      expect(await mc.scoreboard('#selector_hits', 'effect_outputs')).toBe(2)
+    } finally {
+      await mc.command('kill @e[tag=dx_selector_chosen]')
+      removeCorpusPack(pack.root, pack.caseId)
+      await mc.reload()
+    }
+  }, 60000)
+
+  test('inverse trig scale, signs and Option payload binding on Paper', async () => {
+    const namespace = 'dx_numeric'
+    const source = `import math;
+      fn evaluate(): void {
+        let x: int = scoreboard_get("#dx_input", "effect_inputs");
+        scoreboard_set("#dx_asin", "effect_outputs", asin_approx(x));
+        scoreboard_set("#dx_acos", "effect_outputs", acos_approx(x));
+        let option: Option<int> = Some(x);
+        let result: int = 0;
+        match option { Some(value) => { result = value + 1; } None => { result = -1; } }
+        scoreboard_set("#dx_option", "effect_outputs", result);
+      }`
+    const pack = deployCorpusPack(root, namespace, compile(source, { namespace, mcVersion: McVersion.v1_21_4 }).files)
+    try {
+      await mc.reload()
+      for (const [input, expected] of [[-20000, -900000], [-10000, -900000], [-5000, -300000], [0, 0], [5000, 300000], [10000, 900000], [20000, 900000]]) {
+        await mc.command(`scoreboard players set #dx_input effect_inputs ${input}`)
+        expect((await mc.command(`function ${namespace}:evaluate`)).ok).toBe(true)
+        expect(await mc.scoreboard('#dx_asin', 'effect_outputs')).toBe(expected)
+        expect(await mc.scoreboard('#dx_acos', 'effect_outputs')).toBe(900000 - expected)
+        expect(await mc.scoreboard('#dx_option', 'effect_outputs')).toBe(input + 1)
+      }
+    } finally {
+      removeCorpusPack(pack.root, pack.caseId)
+      await mc.reload()
     }
   }, 60000)
 

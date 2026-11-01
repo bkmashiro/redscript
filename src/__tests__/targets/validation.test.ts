@@ -236,10 +236,24 @@ fn secondary(): void { raw("say secondary"); }
     expect(existsSync(path.join(root, 'build'))).toBe(false)
   })
 
+  test('project load dependencies emit the initializer instead of being rejected as unsupported', () => {
+    const root = makeProject(`package cmd;
+      fn init(): void { raw("say initialized"); }
+      export @require_on_load("init") fn main(): void { raw("say main"); }
+    `, 'datapack')
+    roots.push(root)
+    const project = loadProject(root)!
+    const session = createCompilerSession({ project, target: project.targets.build })
+    expect(session.analyzeProject().diagnostics).toEqual([])
+    const result = session.compileProject()
+    expect(result.files.some(file => file.path.endsWith('/init.mcfunction'))).toBe(true)
+    const tag = result.files.find(file => file.path === 'data/minecraft/tags/function/load.json')!
+    expect(JSON.parse(tag.content).values.some((value: string) => value.endsWith('/init'))).toBe(true)
+  })
+
   test.each([
     ['@on_trigger("ready")', 'RST2009'],
     ['@profile', 'RST2010'],
-    ['@require_on_load("init")', 'RST2011'],
   ])('rejects unsupported project decorator %s before datapack emission', (decorator, code) => {
     const root = makeProject(`
 package cmd;

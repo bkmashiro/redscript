@@ -6,6 +6,7 @@
 // Requires: import "stdlib/math" for sin_fixed, cos_fixed, sqrt_fx, abs
 
 module library;
+import math;
 
 // ─── Token encoding ───────────────────────────────────────────────────────────
 //

@@ -3,6 +3,7 @@ import * as os from 'os'
 import * as path from 'path'
 
 import { compile } from '../../emit/compile'
+import { MCRuntime } from '../../runtime'
 
 function getFile(files: { path: string; content: string }[], pathSubstr: string): string | undefined {
   return files.find(f => f.path.includes(pathSubstr))?.content
@@ -23,6 +24,7 @@ describe('emit/compile branch coverage', () => {
       [
         'import util;',
         'import util;',
+        'import nested;',
         'fn main(): int {',
         '  return helper() + nested_value();',
         '}',
@@ -46,23 +48,25 @@ describe('emit/compile branch coverage', () => {
       ].join('\n')
     )
 
-    const result = compile(fs.readFileSync(mainPath, 'utf-8'), {
-      namespace: 'emit_files',
-      filePath: mainPath,
-      includeDirs: [includeDir],
-    })
-
-    expect(result.warnings).toContain(
-      `[ImportWarning] Module 'missing_dep' not found (imported in ${nestedPath})`
-    )
-    expect(result.files.filter(file => file.path.includes('helper.mcfunction'))).toHaveLength(1)
-    expect(result.files.filter(file => file.path.includes('nested_value.mcfunction'))).toHaveLength(1)
-    // After auto-inline small functions may be inlined; verify result is correct (1+2=3)
-    const mainContent = getFile(result.files, 'main.mcfunction') ?? ''
-    expect(
-      mainContent.includes('function emit_files:helper') ||
-      mainContent.includes('set') // constant-folded result or inlined code present
-    ).toBe(true)
+    const source = fs.readFileSync(mainPath, 'utf-8')
+    const options = { namespace: 'emit_files', filePath: mainPath, includeDirs: [includeDir] }
+    try {
+      expect(() => compile(source, options)).toThrow(/Module 'missing_dep' not found/)
+      fs.writeFileSync(path.join(includeDir, 'missing_dep.mcrs'), '')
+      const result = compile(source, options)
+      expect(result.files.filter(file => file.path.includes('helper.mcfunction')).length).toBeLessThanOrEqual(1)
+      expect(result.files.filter(file => file.path.includes('nested_value.mcfunction')).length).toBeLessThanOrEqual(1)
+      const runtime = new MCRuntime('emit_files')
+      for (const file of result.files) {
+        const match = file.path.match(/^data\/([^/]+)\/function\/(.+)\.mcfunction$/)
+        if (match) runtime.loadFunction(`${match[1]}:${match[2]}`, file.content.split('\n'))
+      }
+      runtime.execFunction('emit_files:load')
+      runtime.execFunction('emit_files:main')
+      expect(runtime.getScore('$ret', '__emit_files')).toBe(3)
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
   })
 
   test('throws a diagnostic when a whole-module import cannot be resolved', () => {

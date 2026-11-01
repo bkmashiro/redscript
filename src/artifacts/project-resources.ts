@@ -30,6 +30,7 @@ export function collectProjectResourceArtifacts(
   for (const packageId of graph.topologicalOrder) {
     if (!reachable.has(packageId.path)) continue
     const loaded = graph.packages.get(packageId.path)!
+    if (loaded.programs.every(program => !(program.resourceDeclarations?.length))) continue
     const moduleProject = graph.moduleGraph.modules.get(loaded.id.modulePath)?.project
     if (!moduleProject) {
       throw new ArtifactGraphError(`No project provenance exists for module '${loaded.id.modulePath}'`)

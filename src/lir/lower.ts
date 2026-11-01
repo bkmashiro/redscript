@@ -22,8 +22,15 @@ import type {
 // Public API
 // ---------------------------------------------------------------------------
 
-export function lowerToLIR(mir: MIRModule): LIRModule {
-  const ctx = new LoweringContext(mir.namespace, mir.objective)
+import type { CallABIRegistry } from '../compiler/call-abi'
+
+export interface LIRLoweringOptions {
+  /** Resolved callee layout shared with MIR argument lowering. */
+  callABI?: CallABIRegistry
+}
+
+export function lowerToLIR(mir: MIRModule, options: LIRLoweringOptions = {}): LIRModule {
+  const ctx = new LoweringContext(mir.namespace, mir.objective, options.callABI)
   for (const fn of mir.functions) {
     lowerFunction(fn, ctx)
   }
@@ -55,9 +62,14 @@ class LoweringContext {
   /** Track generated dynamic array write helper functions: key → fn name */
   private dynWrtHelpers = new Map<string, string>()
 
-  constructor(namespace: string, objective: string) {
+  constructor(namespace: string, objective: string, private readonly callABI: CallABIRegistry = new Map()) {
     this.namespace = namespace
     this.objective = objective
+  }
+
+  callObjective(fn: string): string {
+    const localPath = fn.startsWith(`${this.namespace}:`) ? fn.slice(this.namespace.length + 1) : fn
+    return this.callABI.get(localPath)?.objective ?? this.objective
   }
 
   slot(temp: Temp): Slot {
@@ -547,26 +559,35 @@ function lowerInstrInner(
     case 'call': {
       // Set parameter slots $p0, $p1, ...
       for (let i = 0; i < instr.args.length; i++) {
-        const paramSlot: Slot = { player: `$p${i}`, obj: ctx.objective }
+        const paramSlot: Slot = { player: `$p${i}`, obj: ctx.callObjective(instr.fn) }
         lowerOperandToSlotDirect(paramSlot, instr.args[i], ctx, instrs)
       }
 
       // Handle raw commands embedded in call
       if (instr.fn.startsWith('__raw:')) {
         const cmd = instr.fn.slice(6)
-        if (cmd.startsWith('\x01')) {
-          // Macro sentinel → emit as macro_line ($ prefix added by emit)
-          instrs.push({ kind: 'macro_line', template: cmd.slice(1) })
+        const native = cmd.startsWith('\x01') ? cmd.slice(1) : cmd
+        if (instr.dst) {
+          const dst = ctx.slot(instr.dst)
+          if (cmd.startsWith('\x01')) {
+            instrs.push({ kind: 'macro_line', template: `execute store result score ${dst.player} ${dst.obj} run ${native}` })
+          } else {
+            instrs.push({ kind: 'store_cmd_to_score', dst, cmd: { kind: 'raw', cmd: native } })
+          }
+        } else if (cmd.startsWith('\x01')) {
+          instrs.push({ kind: 'macro_line', template: native })
         } else {
-          instrs.push({ kind: 'raw', cmd })
+          instrs.push({ kind: 'raw', cmd: native })
         }
+        // Native command results do not use the language function $ret register.
+        break
       } else {
         instrs.push({ kind: 'call', fn: ctx.qualifiedName(instr.fn) })
       }
 
       // Copy return value to dst if needed
       if (instr.dst) {
-        const retSlot: Slot = { player: '$ret', obj: ctx.objective }
+        const retSlot: Slot = { player: '$ret', obj: ctx.callObjective(instr.fn) }
         instrs.push({ kind: 'score_copy', dst: ctx.slot(instr.dst), src: retSlot })
       }
       break
@@ -590,7 +611,7 @@ function lowerInstrInner(
 
       // Copy return value to dst if needed
       if (instr.dst) {
-        const retSlot: Slot = { player: '$ret', obj: ctx.objective }
+        const retSlot: Slot = { player: '$ret', obj: ctx.callObjective(instr.fn) }
         instrs.push({ kind: 'score_copy', dst: ctx.slot(instr.dst), src: retSlot })
       }
       break

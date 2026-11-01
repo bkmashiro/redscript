@@ -189,7 +189,7 @@ export class ExprParser extends TypeParser {
             const args = this.parseArgs()
             this.expect(')')
             expr = this.withLoc(
-              { kind: 'call', fn: internalFn, args: [expr.obj, ...args] },
+              { kind: 'call', fn: internalFn, methodName: expr.field, args: [expr.obj, ...args] },
               this.getLocToken(expr) ?? openParenToken
             )
             continue
@@ -197,7 +197,7 @@ export class ExprParser extends TypeParser {
           const args = this.parseArgs()
           this.expect(')')
           expr = this.withLoc(
-            { kind: 'call', fn: expr.field, args: [expr.obj, ...args] },
+            { kind: 'call', fn: expr.field, methodName: expr.field, args: [expr.obj, ...args] },
             this.getLocToken(expr) ?? openParenToken
           )
           continue
@@ -391,7 +391,9 @@ export class ExprParser extends TypeParser {
     if (token.kind === 'ident' && this.peek(1).kind === '{' &&
         this.peek(2).kind === 'ident' && this.peek(3).kind === ':') {
       this.advance()
-      return this.parseStructLit()
+      const literal = this.parseStructLit()
+      if (literal.kind === 'struct_lit') literal.literalType = { kind: 'struct', name: token.value }
+      return literal
     }
 
     if (token.kind === 'ident' && token.value === 'Some' && this.peek(1).kind === '(') {
