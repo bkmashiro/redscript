@@ -87,7 +87,7 @@ Drop `my-datapack/` into your world's `datapacks/` folder and run `/reload`.
 RedScript can drive live Minecraft effects from regular typed code. This demo computes a moving sine ribbon at runtime, then lowers the math into vanilla scoreboard and macro commands for particle rendering.
 
 ```rs
-import "../src/stdlib/math.mcrs"
+import math;
 
 let phase: int = 0;
 let running: bool = false;
@@ -107,7 +107,7 @@ fn draw_point(y: fixed) {
 }
 ```
 
-Run the full version locally:
+From a source checkout, run the full version locally:
 
 ```bash
 redscript compile examples/hero-demo.mcrs -o /tmp/redscript-hero --namespace rsdemo
@@ -141,7 +141,7 @@ It demonstrates runtime `sin_fixed` / `cos_fixed` math, fixed-point macro parame
 | Enums | `enum State { Lobby, Playing, Ended }` |
 | Option / Result | `Some(5)`, `Ok(42)` |
 | F-strings | `say(f"Score: {points}");` |
-| Modules | `import math; math::sin(45);` |
+| Modules | `import math; sin_fixed(45);` |
 
 ### Minecraft integration
 
@@ -219,7 +219,7 @@ redscript tune --adapter sqrt-newton --range 10000:400000 --samples 128 --out tu
 RedScript ships with stdlib modules for math, data structures, game systems, and MC-specific helpers:
 
 ```rs
-import math;        // sin, cos, sqrt, interpolation, fixed-scale helpers
+import math;        // sin_fixed, cos_fixed, isqrt, interpolation, fixed-scale helpers
 import math_hp;     // higher-precision numeric helpers
 import vec;         // 2D/3D vectors, dot, cross, normalize
 import random;      // random generators

@@ -11,6 +11,12 @@ Publication is bounded to version tags or explicit manual input (default dry-run
 See the completed release record below and [release procedure](docs/RELEASING.md).
 This release operation is complete; IDE/extension/harness publication was excluded.
 
+New developer-experience audit: [stdlib/syntax findings](docs/plans/stdlib-dx-audit.md).
+Public 4.0.0 has unresolved project/stdlib integration, module-qualified-call and
+strict unknown-call gaps. README examples are corrected and protected by three
+outside-checkout compile regressions; the compiler gaps are not claimed fixed.
+Agree on module binding/conflict rules before changing package resolution.
+
 ## Goals and constraints
 
 - Reduce generated Minecraft commands without changing observable game behavior.

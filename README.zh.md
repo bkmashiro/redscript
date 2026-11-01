@@ -94,7 +94,7 @@ redscript build hello.mcrs -o ./my-datapack
 | Option 类型 | `let item: Option<int> = Some(5);` |
 | Result 类型 | `let r: Result<int, string> = Ok(42);` |
 | 格式字符串 | `say(f"分数: {points}");` |
-| 模块 | `import math; math::sin(45);` |
+| 模块 | `import math; sin_fixed(45);` |
 
 ### Minecraft 集成
 
@@ -174,7 +174,7 @@ redscript docs [module]    # 打开标准库文档
 50 个模块，覆盖数学、数据结构、游戏系统和 MC 特定功能：
 
 ```rs
-import math;        // sin, cos, sqrt, pow, abs
+import math;        // sin_fixed、cos_fixed、isqrt、pow_int、abs
 import vec;         // 2D/3D 向量, dot, cross, normalize
 import random;      // LCG/PCG 随机数生成器
 import pathfind;    // A* 寻路
