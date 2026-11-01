@@ -84,12 +84,17 @@ Follow the priorities from `review-report.md` on branch `codex/comp-harness-offl
 
 The first 4.0 slice implements scoreboard-effect-aware read reuse across ordinary helper calls. Keep unknown/raw/context/macro calls and compiler-owned slots conservative, and verify both command shape and observable behavior. See `ROADMAP.md` for its checks and next priorities. The broader 4.0 track covers command quality, language/stdlib usability, project tooling and release/documentation alignment.
 
-Production stage reports, bounded partial specialization and i32 wrap fixes are
-implemented. The live optimizer gate intentionally exposes a documented throttle
-mismatch (31 pass, 2 fail). Integer division/remainder policy is also unresolved.
-Read `docs/plans/integer-and-runtime-contracts.md` before changing those semantics
-or publishing 4.0. Do not weaken the regressions or treat offline unit success as
-release qualification. VIR remains experimental after the bounded region spike.
+Production reports and bounded partial specialization are implemented. The owner
+approved native floor division/remainder and retirement of source `@throttle`.
+Explicit caller-owned cooldown deadlines replace its call-suppression use;
+`@tick(rate=N)` has real periodic registration, not just parser support. Read
+`docs/MIGRATION_4.md` and `ROADMAP.md` for the verified scope and next gate.
+VIR remains experimental. This maintenance cycle stays controller-owned.
+
+Use a loopback-only TestHarness 1.2.1+ JAR with `MC_HARNESS_PLUGIN` for managed
+oracles; do not modify frozen templates. A fresh SDK build and packed-consumer
+qualification remain required. The old `dist` cannot establish current behavior.
+The publication file policy excludes agent plans and unit artifacts.
 
 Standing verification rules:
 

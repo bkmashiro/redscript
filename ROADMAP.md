@@ -4,10 +4,12 @@ Updated: 2026-11-01. This file owns current priorities and implementation status
 Design contracts and historical validation records are indexed in
 [docs/plans/README.md](docs/plans/README.md).
 
-Execution pointer: resolve the integer-rounding and throttle API contracts in
-[the 4.0 contract review](docs/plans/integer-and-runtime-contracts.md). Reporting,
-bounded partial specialization, numeric wrap fixes and the VIR region experiment
-are implemented. Do not publish while the documented live contract remains red.
+Execution pointer: obtain a fresh TypeScript SDK build, then rerun the unchanged
+compiled-CLI corpus and installed-consumer gates. The host command scanner
+previously refused the large vendor tsc entrypoint; existing `dist` is stale.
+Source/API and live validation below are supplementary, not fresh SDK proof.
+The [approved 4.0 contracts](docs/plans/integer-and-runtime-contracts.md) are implemented.
+Continue with remaining release docs and intentional publication after those gates.
 
 ## Goals and constraints
 
@@ -84,7 +86,7 @@ per origin, 64 per module, 64 body instructions, 10 rounds, and a 240-character
 generated-name cap. No new compiler framework was introduced.
 
 New partial specializations reject unknown/raw/context/storage/macro, recursive,
-compiler-register, runtime-decorator and unresolved division/remainder boundaries. Parameter
+compiler-register, runtime-decorator and division/failure-model boundaries. Parameter
 redefinitions, generated-name collisions and transitive ABI dependencies are
 covered. Runtime-decorated functions are protected from inlining/body cloning.
 
@@ -104,9 +106,16 @@ stable without a contract. Minecraft 26.3 `/compute` work remains deferred.
 
 ## B. Language and stdlib usability
 
-### B1. Specify common game APIs through working examples — planned
+### B1. Common game APIs — cooldown baseline complete
 
-Start with cooldown/timer, per-player state and collection processing. Record
+`cooldown_start(now, ticks)` returns a caller-owned deadline;
+`cooldown_ready(deadline, now)` and `cooldown_remaining` have no hidden global slot
+or per-instance tick work. The caller owns a shared monotonic clock epoch and
+state storage/reset. `@throttle` source syntax is rejected. `@tick(rate=N)` now
+has real periodic registration with reset-on-load, module-owned counters, while
+direct calls remain ordinary calls. Rates currently require integer literals.
+
+Continue with timer, per-player state and collection processing. Record
 awkward source patterns and generated costs together. Define global, per-entity
 and local lifetimes, reload behavior, array copy/mutation semantics and aliasing
 before choosing new syntax. Review Timer's static-ID intrinsic restrictions and
@@ -130,8 +139,9 @@ small composable APIs to hidden copies or broad chainable collection helpers.
 - [ ] Calibrate bounded scoreboard interpreters against Paper for missing scores,
       signed integer edges, negative division/modulo and command failure.
       Unsupported behavior must remain unsupported, not silently equivalent.
-      Eleven native arithmetic probes are now pinned. Division/remainder policy
-      is unresolved, so the existing interpreter is still not a complete oracle.
+      Native floor and signed-i32 folding/interpreters are aligned; explicit
+      truncation helpers are available. The bounded checker declines missing or
+      non-finite scores. Broader command-failure/alias semantics still need work.
 - [ ] Make managed core correctness runs reusable without ad-hoc scripts; retain
       strict online mode, version checks, disposable roots and failure cleanup.
       A1 now has its own managed, strict correctness command (see below).
@@ -142,7 +152,9 @@ small composable APIs to hidden copies or broad chainable collection helpers.
       no longer polls for a server; strict-online/offline conflict fails closed.
 - [ ] Layer checks: focused pass tests → output/equivalence tests → affected live
       cases → broader release checks. Do not run the whole live corpus per edit.
-- [ ] Default the harness command API to loopback; require explicit remote setup.
+- [x] TestHarness 1.2.1 binds the command API to IPv4 loopback. The managed runner
+      can select a new JAR through `MC_HARNESS_PLUGIN` without modifying templates.
+      The optimizer gate refuses known all-interface 1.2.0 defaults.
 
 ## D. Documentation and 4.0.0 release
 
@@ -159,9 +171,10 @@ small composable APIs to hidden copies or broad chainable collection helpers.
 
 ## Delivery order
 
-After the contract decisions, fix folding/lowering/oracles and the selected
-cooldown/dispatch API with live regressions. Then continue B1 stdlib examples and
-expand A2 explanations. Keep VIR experimental: the bounded comparison below does
+The selected contracts are implemented and live-checked. After fresh SDK gates,
+continue B1 stdlib examples and expand A2 explanations. Prioritize modulo range
+facts and use-def/liveness on real hot paths. Keep query/NBT context and mutation
+barriers explicit; source text similarity is not a reuse proof. Keep VIR experimental: the bounded comparison below does
 not justify a new default path. Maintain D alongside implementation and leave
 larger project-tooling work in C as separate verified changes.
 
@@ -232,3 +245,67 @@ checks do not replace the full release build, full corpus or Paper 26.2 gates.
 No benchmark/load test, package publication or release was performed. The full
 release build/package-consumer gates remain pending. Disposable servers and roots
 were cleaned up even on failed live assertions.
+
+### 2026-11-01: approved numeric/lifecycle contracts and publication hygiene
+
+- Native integer floor division/remainder now agree across MIR/VIR folding,
+  test interpreters and tuning arithmetic. Explicit `math.div_trunc` and
+  `mod_trunc` preserve toward-zero algorithms. The bounded checker declines
+  missing/non-finite score proofs. This is not a complete command-failure model.
+- `@throttle` is retired in source, including lenient compilation. Cooldown
+  helpers now use caller-owned integer deadlines, with no shared named slot or
+  per-instance updater. Source/installed-layout stdlib discovery shares one resolver.
+- `@tick(rate=N)` previously only parsed its rate. It now registers a periodic
+  dispatcher in both source and named-module compilation. Native controlled
+  ticks prove 3/5/7 cadence, first firing, direct-call behavior, reload phase and
+  namespace isolation. Bare tick and rate 1 add no dispatcher counter.
+- `tile_of` no longer applies a second negative-coordinate correction. Its
+  generated family changes **3 functions / 16 commands → 1 function / 5 commands**.
+  Negative boundaries and minimum-i32 coordinates pass in Paper. This includes
+  correcting an invalid old algorithm, not equivalence of that old program.
+- Final source-scoped unit run: **5663 passed, 70 skipped**, 340 passing suites.
+  The two existing compiled-CLI corpus suites were explicitly not qualified:
+  their SDK is stale. They remain in the normal gate and are not waived.
+- Final managed Paper 1.21.4 gate: **58 passed, zero skipped**, using TestHarness
+  **1.2.1** (`redscript-testharness` source `6d4a3a1`) built with Java 21 / Gradle 8.5. Harness JVM tests: **15 passed**.
+  OS listener inspection confirmed `127.0.0.1:25561`, not wildcard binding.
+  The new JAR is selected through `MC_HARNESS_PLUGIN`; original templates/worlds
+  are not replaced. The temporary Gradle distribution was removed.
+- Publication files now exclude agent plans and unit artifacts. The prior local
+  packlist included agent plans; no 4.0 package was published. Existing-dist dry
+  inventories change **8.73 → 1.46 MB compressed**, **26.15 → 8.98 MB unpacked**
+  (decimal MB). All 128 existing static relative dependencies reachable from the
+  three public JS entrypoints remain included. This is not fresh SDK/install proof.
+- npm package smoke understands keyed metadata output, checks current numeric,
+  cooldown, periodic and retirement contracts in an installed consumer, and cleans
+  owned temporary directories on failure. New parser/policy/smoke tests pass; the
+  actual installed-consumer run still awaits the fresh SDK build.
+- Runtime coverage inventory is **719 functions/methods**, **661 public runtime
+  entries**, **98 mapped**, **563 still unmapped**. The new six stdlib function
+  mappings are based on this Paper 1.21.4 run only. Historical mappings remain
+  historical evidence. Regeneration now preserves them instead of resetting them.
+- Bilingual docs were generated/checked and the VitePress build passed. The
+  **48-file draft** is signed locally on `redscript-docs` branch
+  `release/4.0-docs` (`a77be8c`), held from deployment until package alignment.
+
+The current `dist` dates to 2026-08-11 and lacks the new resolver/tick-rate module.
+A prior direct tsc attempt was rejected by the host's 1 MiB command-scan limit
+(the vendor `_tsc.js` is 6,213,092 bytes). A normal fresh SDK build must happen in
+an allowed execution context before the compiled-CLI corpus and real packed
+consumer can qualify 4.0. Source CLI/API output and dry pack inventories do not
+replace those gates. No release/tag/npm publication, manual CI run or performance
+benchmark was performed.
+
+Next efficiency work should preserve these contracts:
+
+1. Feed modulo range facts into MIR to remove provably unreachable branches,
+   then use def-use/liveness to remove copies without breaking ABI slots.
+2. Select selector/NBT/context work from real game fixtures and typed effects.
+   Unknown/raw mutations and nondeterministic selections remain barriers.
+3. Improve reload readiness before shortening waits. Each scenario currently
+   performs two reloads, each waiting 40 server ticks. Across 46 scenario runs
+   that is a nominal **184 seconds at 20 TPS**, plus the cadence test's reloads.
+   The last functional suite took about 249 seconds. Distinguish resources-ready
+   from load-tag execution, especially while simulation ticks are frozen.
+4. Make SDK freshness explicit before slow compiled-CLI corpus checks; do not
+   let file existence stand in for a build of current source.

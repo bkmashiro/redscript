@@ -4,6 +4,13 @@ Import: `import math;`
 
 Integer and fixed-point math helpers for RedScript datapacks. Fixed-point convention: scale = 1000 (1.0 → 1000, 3.14 → 3140) unless noted. Includes basic helpers (abs, sign, min, max, clamp, lerp), iterative algorithms (isqrt, sqrt_fixed, pow_int, gcd, lcm), trigonometry via a lookup table, fixed-point arithmetic helpers, easing (smoothstep/smootherstep), logarithms, exponential, cubic root, combinatorics, linear equation solvers, numerical integration steps, and arc trig approximations.
 
+## Integer rounding in 4.0
+
+Native integer `/` and `%` use Minecraft floor semantics: `-7 / 3 == -3` and
+`-7 % 3 == 2`. `div_trunc(a: int, b: int): int` and
+`mod_trunc(a: int, b: int): int` explicitly provide toward-zero arithmetic.
+Their divisor must be nonzero. See [4.0 migration](../MIGRATION_4.md).
+
 ## Functions
 
 ### `abs<T>(x: T): T`

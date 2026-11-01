@@ -1,77 +1,68 @@
 # Integer and runtime contracts for 4.0
 
-Status: owner decisions required before release. Preserve these counterexamples
-and make the chosen behavior pass on real Paper. Do not hide the mismatch by
-skipping tests or redefining their expected output to the current bug.
+Status: the owner approved native floor arithmetic and retirement of `@throttle`.
+Both source contracts are implemented. Fresh SDK build/consumer qualification is
+still pending. See [ROADMAP.md](../../ROADMAP.md) for current gate results.
 
 ## Integer division and remainder
 
-Paper 1.21.4 build 232 was queried through the native scoreboard commands:
+Paper 1.21.4 build 232 confirmed native scoreboard behavior:
 
-- `-7 /= 3` yields `-3`; `-7 %= 3` yields `2`.
-- `7 /= -3` yields `-3`; `7 %= -3` yields `-2`.
-- `-7 /= -3` yields `2`; `-7 %= -3` yields `-1`.
-- Signed i32 overflow wraps, including `2147483647 * 2147483647 → 1` and
+- `-7 / 3 → -3`, `-7 % 3 → 2`.
+- `7 / -3 → -3`, `7 % -3 → -2`.
+- `-7 / -3 → 2`, `-7 % -3 → -1`.
+- Signed i32 operations wrap, including `2147483647 * 2147483647 → 1` and
   `-2147483648 / -1 → -2147483648`.
 
-The compiler currently emits `scoreboard players set #value numeric -2` for the
-literal expression `-7 / 3`. MIR/VIR folding and some bounded evaluation tools use
-toward-zero division/remainder. The archived language design and several stdlib
-comments also describe toward-zero behavior. Merely changing one folder would
-leave constant and dynamic paths, stdlib assumptions and test tools inconsistent.
+MIR/VIR folding, the LIR test interpreters and tuning division now share floor
+semantics. The bounded equivalence checker declines uninitialized score reads
+and observations instead of treating absence as zero. Division by zero remains
+outside its supported proof subset. Explicit `div_trunc` / `mod_trunc` helpers in
+`math` provide toward-zero arithmetic for algorithms that require it.
 
-Choices:
+The stdlib `tile_of` helper had a manual negative-coordinate correction for a
+truncating division model. With native division it produced wrong negative tile
+indices and could overflow before dividing. It now uses the native division
+alone. That is an API correctness fix plus simpler output, not equivalence of the
+old incorrect program.
 
-1. Adopt native floor division/remainder for scoreboard integers in 4.0. This
-   keeps dynamic lowering small. Align folders/interpreters/docs and provide an
-   explicit toward-zero helper where a program needs it.
-2. Keep toward-zero language semantics. Correct native dynamic lowering with
-   explicit sign/remainder adjustment, account for the extra commands, and
-   retain matching constant-fold/interpreter behavior.
+## Periodic work and call suppression
 
-The current implementation does not make that choice. New partial-specialization
-eligibility excludes division/remainder transitively. Full existing folds remain
-subject to the known mismatch. Independent multiply/add/subtract i32 issues were
-fixed and checked against exact BigInt arithmetic and native Paper operations.
+`@throttle` previously registered a tick dispatcher but left direct source calls
+unrestricted. The old regression expected `1` and observed `2`. The owner chose
+to retire the ambiguous decorator, rather than redefine that result as success.
+Source compilation rejects it with migration guidance, even in lenient mode.
+Explicit low-level emitter metadata remains deprecated 3.x compatibility only.
 
-## `@throttle` dispatch and state lifetime
+`@tick(rate=N)` now implements periodic registration, instead of only parsing the
+attribute. It uses module-owned counters, starts after N simulation ticks from
+the load epoch, and resets phase on load. Bare tick and rate 1 have no counter.
+Rates are positive integer literals within the signed-i32 counter range. Direct
+calls to the function remain ordinary calls. Named constants in rate attributes
+are not yet supported.
 
-The language reference promises that a decorated function runs at most once per
-N ticks regardless of call frequency. The emitter currently creates an automatic
-tick dispatcher, counts dispatcher invocations, and leaves direct source calls
-pointing to the undecorated body.
+The controlled live regression steps a frozen server and checks 3/5/7-tick
+cadence, direct calls, reloading and two namespaces with identical function
+names. Load tags resume with simulation ticks. The test seeds public observation
+markers while frozen, never the private scheduler counters.
 
-`tests/mc-cases/runtime-boundary.mcrs` calls `limited_set` twice in one function.
-The documented cooldown contract expects the first value (`1`). Actual Paper
-output is the second value (`2`) with both conservative and effect-aware output.
-This is independent of the new read-reuse optimization. The new compiler keeps
-runtime-decorated bodies out of inlining/specialization so those transforms cannot
-introduce another bypass, but that does not repair the pre-existing dispatcher.
+The replacement `cooldown` module returns integer deadlines owned by its caller.
+It has no global ability slot or per-instance tick work. Callers supply a shared
+non-negative monotonic clock epoch and persist/reset deadlines themselves.
+Non-positive durations are immediately ready; deadline addition saturates at the
+i32 maximum. See [4.0 migration](../MIGRATION_4.md) and
+[the cooldown API](../stdlib/cooldown.md).
 
-Choices:
+## Artifact and runtime boundaries
 
-1. Implement the documented call-site cooldown: route direct calls through the
-   guard, define first-call behavior, return values, parameter storage, reload,
-   and global/per-entity lifetime. Do not automatically schedule arbitrary
-   decorated functions unless scheduling is requested.
-2. Deprecate/remove the ambiguous decorator in 4.0. Use existing `@tick(rate=N)`
-   for periodic work and design an explicit stdlib cooldown/state API for call
-   suppression, with visible lifetime and storage ownership.
+The managed oracle uses disposable worlds. `MC_HARNESS_PLUGIN` selects a current
+loopback-only harness JAR without editing frozen templates. TestHarness 1.2.1
+binds the HTTP command API to `127.0.0.1`; known all-interface 1.2.0 defaults are
+refused by the strict optimizer gate unless an explicit artifact is selected.
 
-Changing only documentation to describe the current accidental combination is
-not a complete usability fix. Tick dispatch and call suppression are different
-contracts. The existing live regression deliberately remains failing until the
-selected contract is implemented or the source feature is explicitly retired.
-
-## Verification boundary
-
-`npm run test:unit:correctness` preserves project exclusions, skips benchmark/
-performance files, runs serially and forces offline mode. Passing it does not
-qualify live behavior. `npm run test:mc-score-effects:live` owns a disposable
-Paper 1.21.4 server and currently exposes the throttle failure: 31 checks pass,
-2 fail. The passing checks include 11 native arithmetic probes and the paired
-compiler scenarios for effects, partial specialization and i32 multiplication.
-
-The integer policy is a separate unresolved equivalence issue, not a failing
-assertion silently accepted as proof. Do not publish 4.0 as fully qualified until
-both decisions, their implementation and relevant live gates are closed.
+Source/API tests, source-CLI smoke and live Paper checks do not establish that
+the existing `dist` or an npm tarball is fresh. The two compiled-CLI corpus gates
+remain required. Do not publish 4.0 before a fresh TypeScript SDK build, packed
+consumer checks and the remaining release/documentation gates pass. Existing
+historical coverage mappings are retained, not reclassified as new full-corpus
+qualification.

@@ -4,6 +4,15 @@ All notable changes to RedScript will be documented in this file.
 
 ## [Unreleased]
 
+### 4.0 preparation
+
+- **Breaking:** integer `/` and `%` use native Minecraft floor semantics in both constant and dynamic paths. `math.div_trunc` and `mod_trunc` provide explicit toward-zero arithmetic.
+- **Breaking:** source `@throttle` is retired. Periodic work uses working `@tick(rate=N)` registration; call suppression uses caller-owned cooldown deadlines. The old ignored string-name cooldown API is replaced.
+- **Compiler:** reuse user-score reads across proven preserving helpers, specialize bounded constant arguments, clean generated bodies, and expose production optimization reports through stage snapshots.
+- **Correctness:** exact i32 folds and evaluator alignment, source-position preservation, native negative-coordinate tile division, and consistent stdlib discovery across source/installed layouts.
+- **Release tooling:** explicit publication files exclude agent plans/unit artifacts. Package smoke handles keyed npm output, checks 4.0 semantics and runtime data, and cleans temporary consumers on failure.
+- [Migration details](docs/MIGRATION_4.md) and [current verification/release status](ROADMAP.md). These changes are not published as 4.0 yet.
+
 ### Added
 
 #### Tooling

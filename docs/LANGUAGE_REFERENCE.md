@@ -633,25 +633,12 @@ fn on_kill_change() {
 
 The compiler generates a `__watch_<fn>` dispatcher registered in `tick.json`. Each tick it compares the current value against the stored previous value per player, calling the handler only when a change is detected.
 
-### `@throttle(ticks=N)`
+### Retired: `@throttle(ticks=N)`
 
-Rate-limits a function so that it runs at most once every `N` ticks, regardless of how often it is called. Useful on functions registered to high-frequency events.
-
-**Known contract issue:** Current generated code registers a periodic tick
-dispatcher, while direct source calls bypass that dispatcher. The ordinary-call
-rate-limit promise above is not currently satisfied. Use `@tick(rate=N)` for
-explicit periodic work. The cooldown/dispatch contract is a
-[4.0 release decision](./plans/integer-and-runtime-contracts.md), with a failing
-live regression retained until the selected behavior is implemented.
-
-```rs
-@throttle(ticks=20)
-fn on_player_move() {
-    say("moved");
-}
-```
-
-The compiler generates a `__throttle_<fn>` dispatcher and a `__throttle` scoreboard objective.
+Removed in 4.0. Use `@tick(rate=N)` for periodic work and the explicit stdlib
+[cooldown deadline API](stdlib/cooldown.md) for call suppression. The old tick
+dispatcher did not enforce the documented direct-call limit. Compilation now
+reports a migration error, including in lenient mode. See [4.0 migration](MIGRATION_4.md).
 
 ### `@retry(max=N)`
 

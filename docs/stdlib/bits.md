@@ -80,7 +80,7 @@ let v: int = bit_shl(1, 4);  // 16
 
 > **Cost:** O(n)
 
-Logical right shift `x` by `n` bits (`x >> n`). Divides by 2^n, truncating toward zero. `n ∈ [0, 30]`.
+Arithmetic right shift `x` by `n` bits (`x >> n`). Uses native floor division by 2^n and preserves the sign of negative inputs. `n ∈ [0, 30]`.
 
 **Example:**
 ```rs

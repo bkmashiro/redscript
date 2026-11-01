@@ -62,7 +62,8 @@ the required second input read. Its managed correctness command is:
 MC_OFFLINE=false npm run test:mc-score-effects:live
 ```
 
-Use Java 21 and a Paper 1.21.4 offline template as documented in the roadmap. This
+Use Java 21, a Paper 1.21.4 offline template and a current loopback-only harness
+JAR selected with `MC_HARNESS_PLUGIN`, as documented in the roadmap. This
 command runs functional checks, not performance benchmarks. Full release builds,
 other runtime versions and unrelated corpus cases are separate gates.
 
@@ -78,7 +79,7 @@ original user functions remain externally callable.
 body/name size. These are engineering guards, not Minecraft standards or tuned
 optima. Unknown/raw/context/storage/macro, recursive, compiler-slot and general
 selector boundaries restrict new partial specialization. Division/remainder
-boundaries propagate through calls until the language rounding policy is settled.
+boundaries remain conservative while broader command-failure modeling is pending.
 Runtime-decorated functions are protected from body cloning and inlining.
 
 ## Correctness commands and open contracts
@@ -91,10 +92,11 @@ MC_OFFLINE=false npm run test:mc-score-effects:live
 The offline command preserves Jest's unit-project exclusions, adds a no-performance
 filter, and runs serially. Offline core cases report `[SKIP]`, not live proof.
 Strict-online plus forced-offline settings fail immediately rather than waiting
-for a server. The managed live gate currently has **31 passing and 2 failing**
-checks: the failures pin the documented throttle contract, not a scoreboard-read
-regression. Integer division/remainder also has a confirmed fold/runtime policy
-mismatch. See [the contract review](plans/integer-and-runtime-contracts.md).
+for a server. The managed live gate now checks native floor arithmetic, explicit trunc helpers,
+periodic registration and independent cooldown deadlines. The old throttle
+regression is resolved by source-language retirement plus an explicit replacement
+program that produces the intended result. See [the approved contracts](plans/integer-and-runtime-contracts.md)
+and the current results in [the roadmap](../ROADMAP.md).
 
 The [VIR region spike](../spikes/001-vir-region/README.md) is a separate bounded
 experiment. Including production ABI copies leaves gains of 8 → 7 and 2 → 2 on

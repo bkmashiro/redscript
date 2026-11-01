@@ -6,8 +6,8 @@ their old priority lists and completed checkboxes do not supersede that queue.
 
 ## Current design references
 
-- [4.0 integer/runtime contract decisions](integer-and-runtime-contracts.md):
-  native rounding mismatch and the failing documented throttle regression.
+- [Approved 4.0 integer/runtime contracts](integer-and-runtime-contracts.md):
+  native floor arithmetic, periodic callbacks and caller-owned cooldown state.
 - [Project/package/target architecture](project-package-target-compiler-architecture.md)
   and [implemented architecture track](generic-datapack-language-roadmap.md).
 - [Event runtime boundary](event-runtime-boundary.md).
