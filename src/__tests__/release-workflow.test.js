@@ -25,4 +25,6 @@ test('only the publication job receives OIDC and it consumes the verified artifa
   expect(checkout.with.ref).toBe('${{ needs.verify.outputs.sha }}')
   const download = jobs.publish.steps.find(step => step.uses?.startsWith('actions/download-artifact@'))
   expect(download.with.name).toBe('${{ needs.verify.outputs.artifact_name }}')
+  const publication = jobs.publish.steps.find(step => step.run === 'node scripts/release-package.js publish')
+  expect(publication.env?.NODE_AUTH_TOKEN).toBe('')
 })
