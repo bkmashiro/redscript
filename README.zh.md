@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./logo.png" alt="RedScript Logo" width="64" />
+<img src="https://raw.githubusercontent.com/bkmashiro/redscript/main/logo.png" alt="RedScript Logo" width="64" />
 
 # RedScript
 

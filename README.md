@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./logo.png" alt="RedScript Logo" width="72" />
+<img src="https://raw.githubusercontent.com/bkmashiro/redscript/main/logo.png" alt="RedScript Logo" width="72" />
 
 # RedScript
 
@@ -122,7 +122,7 @@ It demonstrates runtime `sin_fixed` / `cos_fixed` math, fixed-point macro parame
 
 <!-- Optional media slot:
 <p align="center">
-  <img src="./docs/assets/redscript-hero-demo.gif" alt="RedScript live particle demo in Minecraft" width="720" />
+  <img src="https://raw.githubusercontent.com/bkmashiro/redscript/main/docs/assets/redscript-hero-demo.gif" alt="RedScript live particle demo in Minecraft" width="720" />
 </p>
 -->
 

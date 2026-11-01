@@ -4,17 +4,16 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const childProcess = require('node:child_process')
+const { readPackEntry, assertPackFilePolicy } = require('./npm-pack-entry')
 
 const PROGRAM = '@load fn init() { say("release smoke"); }'
 const NAMESPACE = 'release_smoke'
 const NPM_CACHE_DIR = path.join(os.tmpdir(), 'redscript-smoke-npm-cache')
 
-fs.mkdirSync(NPM_CACHE_DIR, { recursive: true })
-
 function fail(message, error) {
   if (error?.message) console.error(error.message)
   console.error(message)
-  process.exit(1)
+  process.exitCode = 1
 }
 
 function runCommand(command, args, options = {}) {
@@ -59,9 +58,9 @@ function packPackage() {
       entries = [{ filename: fallback[1] }]
     }
 
-    if (!Array.isArray(entries)) entries = [entries]
-    const filename = entries[0]?.filename
-    if (!filename) throw new Error('`npm pack` returned no tarball filename')
+    const entry = readPackEntry(entries)
+    assertPackFilePolicy(entry)
+    const { filename } = entry
     return { tarballPath: path.join(packDir, filename), cleanupDir: packDir }
   } catch (error) {
     fs.rmSync(packDir, { recursive: true, force: true })
@@ -89,7 +88,30 @@ function hasRequiredFiles(files) {
   }
 }
 
+function assertV4CompilerContracts(compile) {
+  const numeric = extractFiles(compile('@load fn init() { scoreboard_set("#value", "package_numeric", -7 / 3); }', { namespace: 'package_numeric' }))
+  const init = numeric.find(file => file.path === 'data/package_numeric/function/init.mcfunction')
+  if (!init?.content.includes('#value package_numeric -3')) throw new Error('Installed compiler has stale integer division semantics')
+  const cooldown = extractFiles(compile('import cooldown; fn probe(now: int): bool { return cooldown_ready(cooldown_start(now, 5), now); }', { namespace: 'package_cooldown' }))
+  if (!cooldown.some(file => file.path.endsWith('/probe.mcfunction'))) throw new Error('Installed stdlib cooldown did not compile')
+  const periodic = extractFiles(compile('@tick(rate=5) fn pulse() { say("tick"); }', { namespace: 'package_periodic' }))
+  const tag = periodic.find(file => file.path === 'data/minecraft/tags/function/tick.json')
+  const roots = tag ? JSON.parse(tag.content).values : []
+  if (!Array.isArray(roots) || roots.length !== 1 || typeof roots[0] !== 'string'
+    || !roots[0].startsWith('package_periodic:') || roots.includes('package_periodic:pulse')
+    || !periodic.some(file => file.path === `data/package_periodic/function/${roots[0].split(':')[1]}.mcfunction`)) {
+    throw new Error('Installed compiler ignores periodic tick rates or omitted its dispatcher')
+  }
+  for (const lenient of [false, true]) {
+    let rejected = false
+    try { compile('@throttle(ticks=5) fn old() {}', { namespace: 'package_retirement', lenient }) }
+    catch (error) { if (!String(error).includes('@throttle was removed')) throw error; rejected = true }
+    if (!rejected) throw new Error('Installed compiler still accepts retired @throttle syntax')
+  }
+}
+
 function main() {
+  fs.mkdirSync(NPM_CACHE_DIR, { recursive: true })
   const tempDir = makeTempDir('redscript-smoke-project-')
   const projectDir = path.join(tempDir, 'project')
   fs.mkdirSync(projectDir, { recursive: true })
@@ -124,6 +146,7 @@ function main() {
     }
 
     hasRequiredFiles(files)
+    assertV4CompilerContracts(compile)
 
     const requiredArtifactExports = [
       'createDatapackArtifactGraph',
@@ -232,4 +255,5 @@ function main() {
   }
 }
 
-main()
+if (require.main === module) main()
+module.exports = { assertV4CompilerContracts, main }

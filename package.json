@@ -3,6 +3,21 @@
   "version": "3.0.4",
   "description": "A high-level programming language that compiles to Minecraft datapacks",
   "main": "dist/src/index.js",
+  "files": [
+    "dist",
+    "src",
+    "builtins.d.mcrs",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "!**/__tests__/**",
+    "!dist/tests/**",
+    "!src/test_programs/**",
+    "!**/.hermes/**",
+    "!**/.claude/**",
+    "!**/AGENTS.md",
+    "!**/CLAUDE.md"
+  ],
   "bin": {
     "redscript": "dist/src/cli.js",
     "rsc": "dist/src/cli.js",
