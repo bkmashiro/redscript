@@ -4,14 +4,12 @@ Updated: 2026-11-01. This file owns current priorities and implementation status
 Design contracts and historical validation records are indexed in
 [docs/plans/README.md](docs/plans/README.md).
 
-Execution pointer: the owner approved npm `redscript-mc@4.0.0`, GitHub `v4.0.0`
-and aligned documentation deployment. The release workflow now uses explicit
-version tags or manual input (dry-run by default), binds tag/main/checkout identity,
-and publishes the exact consumer-tested tarball via a separate OIDC-only job.
-Local build, release/CLI/package regressions and actionlint passed. Next: merge the
-release candidate, exercise the release workflow, and verify registry, assets and
-public docs. Do not treat prepared automation as a completed publication.
-The former execution-scanner blocker was repaired by the operator and is resolved.
+Execution pointer: **4.0.0 is published** on npm (`latest`) and GitHub, and the
+English/Chinese 4.0 documentation is deployed. Registry integrity, provenance,
+public CJS/ESM/CLI consumption and live documentation pages were verified.
+Publication is bounded to version tags or explicit manual input (default dry-run).
+See the completed release record below and [release procedure](docs/RELEASING.md).
+This release operation is complete; IDE/extension/harness publication was excluded.
 
 ## Goals and constraints
 
@@ -344,3 +342,34 @@ Before merging the version bump, confirm the intended npm/GitHub/docs publicatio
 scope and whether to replace that automatic trigger with an intentional version
 tag plus dry-run-default manual execution. No manual CI run was triggered during
 candidate preparation.
+
+
+### 2026-11-01: 4.0.0 published and documentation deployed
+
+- **npm:** `redscript-mc@4.0.0`, with `latest=4.0.0`. Public registry metadata
+  identifies a Trusted Publisher and SLSA provenance. A fresh independent public
+  installation passed CJS/ESM compiler contracts, installed CLI version, project
+  init/build and lockfile-integrity checks.
+- **GitHub:** [v4.0.0](https://github.com/bkmashiro/redscript/releases/tag/v4.0.0)
+  is a published stable release on the unchanged signed tag at `3c61c49`.
+  Its tarball, release manifest and SHA256SUMS are uploaded. The tarball's GitHub
+  digest and npm integrity match the exact consumer-tested Linux CI artifact.
+- **Release CI:** [41283281455](https://github.com/bkmashiro/redscript/actions/runs/41283281455)
+  finished successfully. Verification passed **5802 tests / 344 suites**, with
+  **70 tests / 1 suite skipped**. No performance or live-Paper rerun was added.
+- The initial publication job was blocked before writing by setup-node's dummy
+  token; step-level empty auth fixed that without permitting token fallback.
+  The subsequent OIDC write returned a success receipt, but asynchronous npm
+  processing exceeded the old 16-second read window. Only after exact public
+  integrity was confirmed was the failed job rerun, taking its already-published
+  skip path. There was one accepted npm publication, not two uploads.
+- Future confirmation uses a ten-minute target read window with per-request
+  timeouts and a 15-minute job budget. Those are engineering budgets, not npm
+  service guarantees. Read failures never trigger another automatic write.
+- **Docs:** `redscript-docs` main `0dceba1` deployed through
+  [41284045194](https://github.com/bkmashiro/redscript-docs/actions/runs/41284045194).
+  The deployment is `https://87ba380e.redscript-docs.pages.dev`.
+  Production English/Chinese homepages, project workflows and cooldown reference
+  pages returned 200 with the current 4.0 content.
+- Standalone IDE, VS Code and TestHarness release assets were not published.
+  Existing private/untracked user plans were not staged or packed.

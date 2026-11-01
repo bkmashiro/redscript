@@ -1,9 +1,9 @@
 # Integer and runtime contracts for 4.0
 
 Status: the owner approved native floor arithmetic and retirement of `@throttle`.
-Both source contracts are implemented. The 4.0.0 candidate passed fresh SDK build,
+Both source contracts are implemented. The 4.0.0 release passed fresh SDK build,
 full non-performance unit/CLI corpus and real installed-consumer qualification.
-Publication is pending. See [ROADMAP.md](../../ROADMAP.md) for current gate results.
+Published on npm/GitHub with aligned docs. See [ROADMAP.md](../../ROADMAP.md) for the release record.
 
 ## Integer division and remainder
 

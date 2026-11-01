@@ -93,7 +93,7 @@ VIR remains experimental. This maintenance cycle stays controller-owned.
 
 Use a loopback-only TestHarness 1.2.1+ JAR with `MC_HARNESS_PLUGIN` for managed
 oracles; do not modify frozen templates. A fresh SDK build and packed-consumer
-qualification remain required for releases. The 4.0.0 candidate has now passed
+qualification remain required for releases. The published 4.0.0 release passed
 those gates after the operator repaired the scanner. Read the current execution
 pointer in `ROADMAP.md`; do not reintroduce the former build blocker.
 The publication file policy excludes agent plans and unit artifacts.

@@ -118,17 +118,22 @@ async function main() {
   requireOidc()
   // Never retry this write automatically. A failed follow-up read can be registry propagation.
   run('npm', [...args, '--provenance'])
-  for (let attempt = 0; attempt < 8; attempt++) {
+  // npm can accept a publish before asynchronous processing makes the version visible.
+  // Engineering confirmation window: ten minutes; individual requests retain their timeouts.
+  // No registry write is retried while npm processes the accepted package.
+  const confirmationDeadline = Date.now() + 10 * 60 * 1000
+  while (Date.now() < confirmationDeadline) {
     const metadata = await publishedVersion(ctx.name, ctx.version)
     if (metadata) {
       if (metadata.dist?.integrity !== receipt.integrity) throw new Error('Published registry integrity differs from the verified tarball')
       const response = await fetch(`${REGISTRY}/-/package/${ctx.name}/dist-tags`, { signal: AbortSignal.timeout(20000) })
       if (!response.ok) throw new Error(`Dist-tag verification failed: HTTP ${response.status}`)
-      if ((await response.json()).latest !== ctx.version) throw new Error('Published version is not npm latest')
-      console.log(`REGISTRY VERIFIED ${ctx.name}@${ctx.version} latest, integrity=${receipt.integrity}`)
-      return
+      if ((await response.json()).latest === ctx.version) {
+        console.log(`REGISTRY VERIFIED ${ctx.name}@${ctx.version} latest, integrity=${receipt.integrity}`)
+        return
+      }
     }
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    await new Promise(resolve => setTimeout(resolve, 10000))
   }
   throw new Error('Publish returned success, but registry reads have not converged; do not republish blindly')
 }
