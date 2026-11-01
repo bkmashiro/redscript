@@ -11,6 +11,12 @@ describe('CLI API', () => {
   const cliPath = path.resolve(__dirname, '..', 'cli.ts')
   const cliRunner = [require.resolve('ts-node/register/transpile-only')]
 
+  it('reports the manifest release version in help output', () => {
+    const version = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8')).version
+    const help = execFileSync(process.execPath, ['-r', ...cliRunner, cliPath, '--help'], { encoding: 'utf8' })
+    expect(help).toContain(`RedScript Compiler v${version}`)
+  })
+
   describe('parseArgs', () => {
     it('parses --experimental-lir-local-copy-rewrite for compile', () => {
       const parsed = parseArgs(['compile', 'file.mcrs', '--experimental-lir-local-copy-rewrite'])

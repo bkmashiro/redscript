@@ -1,8 +1,8 @@
 # 4.0 numeric and cooldown migration
 
 These changes are implemented in the upcoming 4.0 source. They are not part of
-npm 3.0.4. Package/release publication still requires the fresh build and consumer
-gates in the roadmap.
+npm 3.0.4. The 4.0.0 candidate has passed fresh build and consumer checks;
+package/release publication is still pending the explicit release step.
 
 ## Integer division and remainder follow Minecraft
 
@@ -74,6 +74,24 @@ See [the cooldown reference](stdlib/cooldown.md).
 Remove `cooldown_tick` calls. Legacy single-source compilation permits undeclared
 external function calls, so successful compilation alone does not establish that
 an old stdlib symbol still exists. The shipped cooldown API no longer defines it.
+
+## Removed legacy contracts
+
+`@on(ItemUse)` and `@on(BlockBreak)` are no longer accepted as general native
+events. Use item/block-specific scoreboard or advancement assets and explicit
+`@function_tag` handlers. `PlayerJoin`, `PlayerDeath` and `EntityKill` remain the
+registered static events; registration does not imply a universal vanilla event
+bus.
+
+The unsupported `strings` module and `str_len`, `str_concat`, `str_contains`,
+`str_slice` helpers were removed. Use supported f-strings/text components for
+rendering. There is no advertised drop-in general runtime string API replacing
+those helpers.
+
+Project builds now have explicit package identities, targets, dependency locks
+and declaration surfaces. Watch, test and LSP project-awareness have not all
+migrated to that resolver. Cross-package public struct/enum exports remain planned.
+Do not infer those capabilities from a working project compile.
 
 ## Verification performed
 

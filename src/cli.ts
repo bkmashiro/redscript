@@ -47,7 +47,7 @@ const args = process.argv.slice(2)
 
 function printUsage(): void {
   console.log(`
-RedScript Compiler v2
+RedScript Compiler v${getLocalVersion()}
 
 Usage:
   redscript compile <file> [-o <out>] [--namespace <ns>] [--incremental]

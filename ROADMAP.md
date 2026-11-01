@@ -4,12 +4,13 @@ Updated: 2026-11-01. This file owns current priorities and implementation status
 Design contracts and historical validation records are indexed in
 [docs/plans/README.md](docs/plans/README.md).
 
-Execution pointer: obtain a fresh TypeScript SDK build, then rerun the unchanged
-compiled-CLI corpus and installed-consumer gates. The host command scanner
-previously refused the large vendor tsc entrypoint; existing `dist` is stale.
-Source/API and live validation below are supplementary, not fresh SDK proof.
-The [approved 4.0 contracts](docs/plans/integer-and-runtime-contracts.md) are implemented.
-Continue with remaining release docs and intentional publication after those gates.
+Execution pointer: 4.0.0 is prepared on `release/4.0` with fresh build, full
+non-performance unit/compiled-CLI corpus and real installed API/CLI smoke passing.
+The operator repaired the execution scanner; the former build blocker is resolved.
+Confirm publication scope and bounded release triggers before merging/tagging.
+The current npm workflow auto-publishes after main CI and checks out latest main;
+that boundary needs an explicit release decision, not an accidental version push.
+The [approved contracts](docs/plans/integer-and-runtime-contracts.md) are implemented.
 
 ## Goals and constraints
 
@@ -309,3 +310,36 @@ Next efficiency work should preserve these contracts:
    from load-tag execution, especially while simulation ticks are frozen.
 4. Make SDK freshness explicit before slow compiled-CLI corpus checks; do not
    let file existence stand in for a build of current source.
+
+### 2026-11-01: build blocker resolved and 4.0.0 candidate verified
+
+The operator repaired the execution scanner. The agent then ran the original
+standard `npm run build` successfully, without changing Hermes or using another
+execution entrypoint. The previous scanner blocker is historical, not current.
+
+- Package manifest and lockfile are prepared as **4.0.0** on `release/4.0`.
+- The CLI help banner now uses the installed manifest version instead of a
+  hardcoded v2 label. The regression failed first and then passed.
+- Final candidate `npm run test:unit:correctness`: **5783 passed, 70 skipped**,
+  **342 passing suites**, including both previously pending compiled-CLI corpus
+  and static command-validation gates. Offline cases are not extra live proof.
+- Fresh TypeScript build/postbuild and real tarball installation passed. The
+  installed package checks numeric/periodic/retirement contracts, bare stdlib
+  resolution, API/resource exports, versioned CLI help, and init → project
+  inspection → project compilation from an unrelated consumer directory.
+- Version-only/help changes do not alter the earlier **58/58 Paper 1.21.4**
+  qualification; that live run is not relabeled as a new Paper run.
+- Release notes and migration details now cover the candidate and prior
+  unpublished package/target/resource work, removed legacy events and unsupported
+  string helpers. Remaining project-aware IDE/watch/test limitations are explicit.
+- Bilingual project workflow documentation is based on commands exercised through
+  the installed CLI. The documentation build passed. The docs branch remains a
+  draft pending aligned publication.
+
+No npm version, release tag or GitHub release has been published for 4.0.0.
+The existing npm workflow currently publishes after any successful main CI and
+checks out the latest main head rather than explicitly binding that tested SHA.
+Before merging the version bump, confirm the intended npm/GitHub/docs publication
+scope and whether to replace that automatic trigger with an intentional version
+tag plus dry-run-default manual execution. No manual CI run was triggered during
+candidate preparation.

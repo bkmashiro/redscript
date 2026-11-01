@@ -1,74 +1,89 @@
-# RedScript v3.0.0 — Release Notes
+# RedScript 4.0.0 release candidate
 
-## Highlights
+Prepared for review; npm publication, the release tag and documentation deployment
+have not been performed.
 
-RedScript v3.0.0 is a major release that brings a comprehensive optimization pipeline, new language features, improved tooling, and complete stdlib documentation.
+## Highlights since npm 3.0.4
 
-## What's New
+### Project, package and target builds
 
-### 🚀 Optimizer Pipeline (7 new passes)
+- First-class `redscript.toml` manifests and a reusable compiler session.
+- Directory packages, function exports and declaration-only `.d.mcrs` surfaces.
+- Local dependencies and reproducible Git dependencies recorded in `redscript.lock`.
+- Target capability validation, datapack output and the finite `commands` backend.
+- Typed resource categories, contextual resource literals and selected typed
+  builders for tags, recipes, loot and other supported resource artifacts.
 
-| Pass | Description |
-|------|-------------|
-| Tail Call Optimization (TCO) | Converts tail-recursive functions to loops, avoiding MC's ~512-depth call limit |
-| Common Subexpression Elimination (CSE) | Caches repeated expressions, eliminating redundant computation |
-| Auto-Inline | Automatically inlines functions ≤5 MIR instructions |
-| Execute Chain Optimization | Merges `execute if A run execute if B` → `execute if A if B` |
-| Strength Reduction | `x * 2` → `x + x`, algebraic simplifications |
-| Scoreboard Read Batching | Deduplicates redundant scoreboard reads within a block |
-| NBT Write Coalescing | Removes overwritten NBT writes (backward analysis) |
+Project builds use the package resolver. Project-aware watch, test and LSP flows,
+and public struct/enum exports across package boundaries, remain roadmap work.
+The command validator uses the Minecraft 1.21.4 command tree; accepting a year-based
+Minecraft target does not establish complete validation for that runtime.
 
-### 🆕 Language Features
+### Command quality
 
-- **`struct extends`** — compile-time field inheritance, zero runtime overhead
-- **`break <label>` / `continue <label>`** — jump out of nested loops
-- **`@memoize`** — LRU-1 function result caching for single-arg int functions
-- **`@throttle(ticks)`** — rate-limit function execution to once per N ticks
-- **`@retry(max)`** — auto-retry on failure, up to N times
+- User-score reads can be reused across ordinary helpers proven not to mutate them.
+- Bounded partial constant-argument specialization retains dynamic parameters and
+  runs generated bodies through the existing cleanup passes.
+- Stage snapshots expose per-function MIR changes, conservative call barriers,
+  LIR pass deltas, emitted command counts and direct lifecycle roots.
+- Exact signed-i32 folding avoids host-language multiplication precision loss.
+- Native tile division removes an incorrect negative-coordinate correction.
 
-### 🛠️ CLI Commands
+Fixture evidence includes an 8 → 7 command read-reuse case and straight-line
+entry-plus-callee specialization paths of 15 → 7 and 15 → 12 commands. Cloning
+can increase total pack size. These are static counts, not server speed claims.
+VIR and experimental local-copy rewrites are not new default compiler paths.
 
-| Command | Description |
-|---------|-------------|
-| `redscript test` | Run `@test`-annotated functions with built-in `assert` |
-| `redscript publish` | Package compiled output as standard Minecraft datapack `.zip` |
-| `redscript docs [module]` | Open stdlib documentation in browser |
-| `redscript lint` | 5 static analysis rules (unused-var, magic-number, dead-branch, ...) |
-| `redscript.toml` | Project configuration file — replaces CLI flags |
+### Explicit game lifecycle contracts
 
-### 🔧 Tooling & LSP
+- Integer `/` and `%` follow native scoreboard floor semantics in constant and
+  dynamic paths. `math.div_trunc` and `mod_trunc` explicitly provide toward-zero
+  arithmetic for algorithms that need it.
+- `@tick(rate=N)` now implements periodic registration, including reload phase
+  reset and module-owned counters. Bare tick and rate 1 use the direct hook.
+  Direct function calls remain ordinary calls. Rates currently require positive
+  integer literals within the signed-i32 range.
+- Cooldown helpers return caller-owned deadlines instead of ignoring a string
+  name and sharing one global slot. They do not schedule per-instance tick work.
 
-- **LSP hover**: Shows `///` doc comments on hover (description, @param, @returns)
-- **LSP diagnostics**: Lint warnings pushed to editor Problems panel in real-time
-- **Source map**: Generated `.sourcemap.json` traces `.mcfunction` back to `.mcrs` lines
-- **Playground share**: URL-encoded shareable links via lz-string compression
+### Tooling and distribution
 
-### 📚 Stdlib (50 modules, complete documentation)
+- Declaration generation, contextual resource hints and editor diagnostics were
+  expanded since the last npm release.
+- Bare and quoted stdlib discovery share source/installed-layout resolution.
+- Published files exclude agent plans and unit artifacts while retaining runtime
+  code/data. README images use repository URLs rather than requiring bundled media.
+- Package smoke handles npm's keyed metadata format, checks current compiler
+  semantics in an isolated installed consumer and cleans temporary consumers on failure.
+- Managed Paper validation uses disposable roots and supports an explicit
+  `MC_HARNESS_PLUGIN` JAR without editing frozen templates. Companion TestHarness
+  1.2.1 binds its unauthenticated command API to loopback.
 
-All 50 stdlib modules now have:
-- `///` doc comment annotations with `@since`, `@param`, `@returns`, `@example`
-- Auto-generated English + Chinese documentation
-- VitePress `<Badge>` version tags
+The independently distributed VS Code extension, web IDE and harness release
+assets are not published by this compiler release preparation.
 
-New modules added: `queue`, `map`, `set_int`, `sets`
+## Breaking changes
 
-### 🧪 Testing
+- Negative integer division/remainder now follow native floor rules consistently.
+- Source `@throttle` is rejected, including in lenient compilation. Use periodic
+  registration or explicit cooldown state according to the desired behavior.
+- The cooldown string-name API and `cooldown_tick` implementation are removed.
+- Legacy `@on(ItemUse)` and `@on(BlockBreak)` contracts are removed. Use explicit
+  item/block-specific scoreboard or advancement assets and `@function_tag` handlers.
+- Unsupported `strings` helpers (`str_len`, `str_concat`, `str_contains`,
+  `str_slice`) and their module were removed rather than advertised as working
+  general-purpose string operations.
 
-- **3,886 unit tests passing**, 0 failing
-- **430 MC integration tests** (with live Minecraft server)
-- Overall branch coverage: **81.5%**
+See [4.0 migration](docs/MIGRATION_4.md) and [the full changelog](CHANGELOG.md).
 
-## Breaking Changes
+## Verification boundary
 
-- `format_string` type is now unified as `string` — remove any `as string` workarounds
-- `arr.len()` for literal arrays returns compile-time constants — some dynamic expectations changed
+The local gate includes a fresh TypeScript build, the complete non-performance
+unit selection (including compiled-CLI corpus and static command validation),
+and a real packed-install consumer smoke. Exact current results are recorded in
+[ROADMAP.md](ROADMAP.md).
 
-## Migration from v2.x
-
-1. Update package: `npm install redscript-mc@3.0.0`
-2. Replace `as string` on format strings (no longer needed)
-3. Add `redscript.toml` to your project (optional, run `redscript init` to generate)
-
-## Full Changelog
-
-See [CHANGELOG.md](./CHANGELOG.md) for detailed commit history.
+New numeric, cooldown, grid and cadence scenarios passed 58 checks on managed
+Paper 1.21.4 with no skips. Earlier dual-Paper qualification remains historical
+evidence; this preparation does not claim that the full changed corpus has been
+requalified on Paper 26.2. No runtime performance benchmark was run.

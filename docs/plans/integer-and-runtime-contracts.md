@@ -1,8 +1,9 @@
 # Integer and runtime contracts for 4.0
 
 Status: the owner approved native floor arithmetic and retirement of `@throttle`.
-Both source contracts are implemented. Fresh SDK build/consumer qualification is
-still pending. See [ROADMAP.md](../../ROADMAP.md) for current gate results.
+Both source contracts are implemented. The 4.0.0 candidate passed fresh SDK build,
+full non-performance unit/CLI corpus and real installed-consumer qualification.
+Publication is pending. See [ROADMAP.md](../../ROADMAP.md) for current gate results.
 
 ## Integer division and remainder
 

@@ -148,6 +148,25 @@ function main() {
     hasRequiredFiles(files)
     assertV4CompilerContracts(compile)
 
+    const installedManifest = JSON.parse(fs.readFileSync(path.join(redscriptPath, 'package.json'), 'utf8'))
+    const cliPath = path.join(redscriptPath, installedManifest.bin.redscript)
+    const help = runCommandCapture(process.execPath, [cliPath, '--help'], { cwd: projectDir })
+    if (!help.includes(`RedScript Compiler v${installedManifest.version}`)) throw new Error('Installed CLI help has a stale version')
+    const demoDir = path.join(projectDir, 'project-smoke')
+    runCommand(process.execPath, [cliPath, 'init', demoDir], { cwd: projectDir, stdio: 'pipe' })
+    JSON.parse(runCommandCapture(process.execPath, [cliPath, 'project', demoDir, '--format', 'json'], { cwd: projectDir }))
+    runCommand(process.execPath, [cliPath, 'compile', path.join(demoDir, 'src', 'main.mcrs')], { cwd: projectDir, stdio: 'pipe' })
+    const generatedFunctions = []
+    const walkDemo = dir => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const file = path.join(dir, entry.name)
+        if (entry.isDirectory()) walkDemo(file)
+        else if (file.endsWith('.mcfunction')) generatedFunctions.push(file)
+      }
+    }
+    walkDemo(demoDir)
+    if (generatedFunctions.length === 0) throw new Error('Installed CLI did not build the initialized project')
+
     const requiredArtifactExports = [
       'createDatapackArtifactGraph',
       'createResourceArtifact',
