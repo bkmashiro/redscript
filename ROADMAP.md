@@ -4,13 +4,14 @@ Updated: 2026-11-01. This file owns current priorities and implementation status
 Design contracts and historical validation records are indexed in
 [docs/plans/README.md](docs/plans/README.md).
 
-Execution pointer: 4.0.0 is prepared on `release/4.0` with fresh build, full
-non-performance unit/compiled-CLI corpus and real installed API/CLI smoke passing.
-The operator repaired the execution scanner; the former build blocker is resolved.
-Confirm publication scope and bounded release triggers before merging/tagging.
-The current npm workflow auto-publishes after main CI and checks out latest main;
-that boundary needs an explicit release decision, not an accidental version push.
-The [approved contracts](docs/plans/integer-and-runtime-contracts.md) are implemented.
+Execution pointer: the owner approved npm `redscript-mc@4.0.0`, GitHub `v4.0.0`
+and aligned documentation deployment. The release workflow now uses explicit
+version tags or manual input (dry-run by default), binds tag/main/checkout identity,
+and publishes the exact consumer-tested tarball via a separate OIDC-only job.
+Local build, release/CLI/package regressions and actionlint passed. Next: merge the
+release candidate, exercise the release workflow, and verify registry, assets and
+public docs. Do not treat prepared automation as a completed publication.
+The former execution-scanner blocker was repaired by the operator and is resolved.
 
 ## Goals and constraints
 

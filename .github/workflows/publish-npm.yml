@@ -1,38 +1,111 @@
 name: Publish npm Package
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
+  push:
+    tags: ['v[0-9]*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to validate or publish (blank validates current ref only)
+        type: string
+        required: false
+        default: ''
+      publish:
+        description: Publish the verified tagged tarball (otherwise dry-run)
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release-redscript-mc
+  cancel-in-progress: false
 
 jobs:
-  publish:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      tag: ${{ steps.plan.outputs.tag }}
+      publish: ${{ steps.plan.outputs.publish }}
+      needs_release: ${{ steps.plan.outputs.needs_release }}
+      artifact_name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+      RELEASE_PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+      REDSCRIPT_PACKAGE_VSCODE: '0'
+      NODE_AUTH_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm install --global npm@12.0.2 --ignore-scripts
+      - name: Validate exact release identity and registry state
+        id: plan
+        run: node scripts/release-package.js plan
+      - if: steps.plan.outputs.needs_release == 'true'
+        run: npm ci
+      - if: steps.plan.outputs.needs_release == 'true'
+        run: npm run build
+      - if: steps.plan.outputs.needs_release == 'true'
+        run: npm run test:unit:correctness
+      - name: Pack the immutable candidate
+        id: pack
+        if: steps.plan.outputs.needs_release == 'true'
+        run: node scripts/release-package.js pack
+      - name: Install and exercise that exact tarball
+        if: steps.plan.outputs.needs_release == 'true'
+        env:
+          REDSCRIPT_SMOKE_TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: npm run smoke:package
+      - name: Check npm dry-run metadata without writing the registry
+        if: steps.plan.outputs.needs_release == 'true'
+        run: node scripts/release-package.js check
+      - uses: actions/upload-artifact@v4
+        if: steps.plan.outputs.needs_release == 'true'
+        with:
+          name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/redscript-release/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: verify
+    if: needs.verify.outputs.needs_release == 'true' && needs.verify.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       id-token: write
-
+    env:
+      RELEASE_TAG: ${{ needs.verify.outputs.tag }}
+      RELEASE_PUBLISH: 'true'
+      RELEASE_EXPECTED_SHA: ${{ needs.verify.outputs.sha }}
+      NODE_AUTH_TOKEN: ''
     steps:
       - uses: actions/checkout@v6
-
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: '24'
           registry-url: https://registry.npmjs.org
-          cache: npm
-
-      - run: npm ci
-      - run: npm run build
-
-      - name: Publish redscript-mc
-        run: |
-          PKG_VER=$(node -p "require('./package.json').version")
-          if npm view "redscript-mc@${PKG_VER}" version &>/dev/null 2>&1; then
-            echo "redscript-mc@${PKG_VER} already exists on npm; skipping publish"
-            exit 0
-          fi
-
-          npm publish --access public --provenance
+      - run: npm install --global npm@12.0.2 --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.verify.outputs.artifact_name }}
+          path: ${{ runner.temp }}/redscript-release
+      - name: Publish verified bytes via OIDC and read registry back
+        run: node scripts/release-package.js publish

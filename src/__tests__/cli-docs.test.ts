@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process'
 import * as path from 'path'
+import * as fs from 'fs'
 import { buildDocsUrl, STDLIB_MODULES, docsCommand, DOCS_BASE_URL } from '../docs'
 
 const cliPath = path.resolve(__dirname, '..', 'cli.ts')
@@ -17,6 +18,16 @@ function runCli(...args: string[]) {
 }
 
 describe('redscript docs command', () => {
+  it('uses the deployed canonical documentation origin', () => {
+    expect(DOCS_BASE_URL).toBe('https://redscript-docs.pages.dev')
+  })
+
+  it('lists the shipped stdlib modules without retired or missing entries', () => {
+    const names = fs.readdirSync(path.resolve(__dirname, '../stdlib'))
+      .filter(name => name.endsWith('.mcrs') && !name.endsWith('.d.mcrs') && !name.startsWith('_'))
+      .map(name => name.slice(0, -5)).sort()
+    expect([...STDLIB_MODULES].sort()).toEqual(names)
+  })
   // 1. Basic command parsing — exits 0, prints URL
   it('opens the stdlib index when no module is given', () => {
     const opened: string[] = []

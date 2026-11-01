@@ -117,17 +117,23 @@ function main() {
   fs.mkdirSync(projectDir, { recursive: true })
 
   let packagePath
-  let finalCleanupDir = tempDir
+  let packageCleanupDir
 
   try {
     runCommand('npm', ['init', '-y'], { cwd: projectDir, stdio: 'ignore' })
 
-    const { tarballPath } = packPackage()
-    packagePath = tarballPath
+    if (process.env.REDSCRIPT_SMOKE_TARBALL) {
+      packagePath = path.resolve(process.env.REDSCRIPT_SMOKE_TARBALL)
+      if (!packagePath.endsWith('.tgz') || !fs.statSync(packagePath).isFile()) throw new Error('REDSCRIPT_SMOKE_TARBALL must name an existing tarball')
+    } else {
+      const prepared = packPackage()
+      packagePath = prepared.tarballPath
+      packageCleanupDir = prepared.cleanupDir
+    }
 
     runCommand(
       'npm',
-      ['install', '--no-save', '--no-audit', '--no-fund', tarballPath],
+      ['install', '--no-save', '--no-audit', '--no-fund', '--ignore-scripts', packagePath],
       { cwd: projectDir },
     )
 
@@ -267,8 +273,8 @@ function main() {
   } catch (error) {
     fail('package smoke failed', error)
   } finally {
-    if (packagePath) {
-      fs.rmSync(path.dirname(packagePath), { recursive: true, force: true })
+    if (packageCleanupDir) {
+      fs.rmSync(packageCleanupDir, { recursive: true, force: true })
     }
     fs.rmSync(tempDir, { recursive: true, force: true })
   }

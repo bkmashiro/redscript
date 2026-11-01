@@ -1,7 +1,7 @@
-# RedScript 4.0.0 release candidate
+# RedScript 4.0.0
 
-Prepared for review; npm publication, the release tag and documentation deployment
-have not been performed.
+Release notes for the project/package compiler and explicit game lifecycle contracts.
+See ROADMAP.md for the current publication and verification state.
 
 ## Highlights since npm 3.0.4
 

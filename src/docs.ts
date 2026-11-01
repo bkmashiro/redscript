@@ -7,28 +7,28 @@
 import { execSync } from 'child_process'
 
 /** Base URL for the hosted RedScript documentation site. */
-export const DOCS_BASE_URL = 'https://bkmashiro.github.io/redscript-docs'
+export const DOCS_BASE_URL = 'https://redscript-docs.pages.dev'
 
 /**
- * All stdlib module names, ordered by category (mirrors the VitePress sidebar).
+ * All shipped stdlib module names, grouped for CLI display.
  */
 export const STDLIB_MODULES: string[] = [
   // Mathematics
-  'math', 'math_hp', 'bits', 'bigint', 'calculus',
+  'math', 'math_hp', 'bits', 'bigint', 'calculus', 'linalg', 'ode', 'fft',
   // Data Structures
-  'list', 'sets', 'matrix', 'vec', 'quaternion',
+  'list', 'sets', 'set_int', 'map', 'queue', 'heap', 'graph', 'sort', 'result', 'matrix', 'vec', 'quaternion',
   // Randomness & Statistics
   'random', 'noise',
   // Signal Processing
   'signal', 'expr',
   // Geometry & Graphics
-  'geometry', 'advanced', 'parabola', 'easing', 'particles', 'color',
+  'geometry', 'advanced', 'parabola', 'easing', 'particles', 'color', 'pathfind',
   // Physics
   'physics',
   // Minecraft Mechanics
   'player', 'mobs', 'combat', 'effects', 'spawn', 'interactions',
   'inventory', 'bossbar', 'cooldown', 'state', 'timer', 'tags',
-  'teams', 'strings', 'world',
+  'teams', 'world', 'ecs', 'events', 'dialog', 'scheduler',
 ]
 
 /**

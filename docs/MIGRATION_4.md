@@ -1,8 +1,7 @@
 # 4.0 numeric and cooldown migration
 
-These changes are implemented in the upcoming 4.0 source. They are not part of
-npm 3.0.4. The 4.0.0 candidate has passed fresh build and consumer checks;
-package/release publication is still pending the explicit release step.
+This guide covers 4.0 changes relative to npm 3.0.4. Fresh build and installed
+consumer checks passed. See ROADMAP.md for publication state.
 
 ## Integer division and remainder follow Minecraft
 
