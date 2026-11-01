@@ -68,6 +68,7 @@ export class Parser extends DeclParser {
     while (!this.check('eof')) {
       const doc = this.consumeDocComment()
       if (this.check('eof')) break
+      const declarationStart = this.peek()
       try {
         if (this.check('decorator') && this.peek().value.startsWith('@config')) {
           const decorToken = this.advance()
@@ -149,6 +150,9 @@ export class Parser extends DeclParser {
       } catch (err) {
         if (err instanceof DiagnosticError) {
           this.parseErrors.push(err)
+          // Recovery may stop at a declaration/header keyword. If this attempt
+          // consumed nothing, advance first or malformed input repeats forever.
+          if (this.peek() === declarationStart && !this.check('eof')) this.advance()
           this.syncToNextDecl()
         } else {
           throw err
